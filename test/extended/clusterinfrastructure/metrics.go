@@ -92,7 +92,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		var patchstr string
 		platform := clusterinfra.CheckPlatform(oc)
 		switch platform {
-		case "aws":
+		case "aws", "alibabacloud":
 			patchstr = `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"instanceType":"invalid"}}}}}}`
 		case "gcp":
 			patchstr = `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"invalid"}}}}}}`
