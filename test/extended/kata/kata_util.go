@@ -150,3 +150,15 @@ func getRandomString() string {
 	}
 	return string(buffer)
 }
+
+func deleteKataConfig(oc *exutil.CLI, kcName, opNamespace string) bool {
+    g.By("DELETING KATACONFIG - Hold on")
+    msg,err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("kataconfig", kcName).Output()
+    o.Expect(err).NotTo(o.HaveOccurred())
+    e2e.Logf("err %v, msg %v", err, msg)
+    kataStatus,err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig").Output()
+    o.Expect(err).NotTo(o.HaveOccurred())
+    o.Expect(kataStatus).To(o.ContainSubstring("No resources found"))
+    return true
+
+}

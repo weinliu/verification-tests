@@ -24,6 +24,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		// Team - for specific kataconfig and pod, please define and create them in g.It.
 		testDataDir  = exutil.FixturePath("testdata", "kata")
 		iaasPlatform string
+		commonKc = filepath.Join(testDataDir, "kataconfig.yaml")
 	)
 
 	g.BeforeEach(func() {
@@ -34,7 +35,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		ns := filepath.Join(testDataDir, "namespace.yaml")
 		og := filepath.Join(testDataDir, "operatorgroup.yaml")
 		sub := filepath.Join(testDataDir, "subscription.yaml")
-		commonKc := filepath.Join(testDataDir, "kataconfig.yaml")
+		
 
 		createIfNoOperator(oc, opNamespace, ns, og, sub)
 		createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName)
@@ -232,6 +233,16 @@ var _ = g.Describe("[sig-kata] Kata", func() {
         o.Expect(opMarketplace).To(o.ContainSubstring("Red Hat Operators"))
         g.By("SUCCESS -  'sandboxed-containers-operator' is present in packagemanifests")
         
+    })
+
+	g.It("Longduration-NonPreRelease-Author:abhbaner-High-43523-Monitor Kataconfig deletion[Disruptive]", func() {
+        g.By("Install Common kataconfig and verify it")
+        deleteKataConfig(oc, commonKataConfigName, opNamespace)
+        e2e.Logf("common kataconfig %v was deleted", commonKataConfigName)
+        g.By("SUCCESSS - kata runtime deleted successfully")
+	g.By("Creating kataconfig for the remaining test cases")
+    	createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName)
+
     })
 
 })
