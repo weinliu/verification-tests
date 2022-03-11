@@ -324,6 +324,23 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Don't find the value")
+
+		// Add retry check when imagepruner job failed https://bugzilla.redhat.com/show_bug.cgi?id=1990125
+		g.By("Check if imagepruner retry after failed")
+		defer oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"ignoreInvalidImageReferences":true}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"ignoreInvalidImageReferences":false}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		foundPruneLog = false
+		err = wait.PollImmediate(10*time.Second, 2*time.Minute, func() (bool, error) {
+			foundPruneLog = imagePruneLog(oc, `attempt #1 has failed (exit code 1), going to make another attempt`)
+			if foundPruneLog != true {
+				e2e.Logf("wait for next round")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Imagepruner doesn't retry")
 	})
 
 	//Author: xiuwang@redhat.com
