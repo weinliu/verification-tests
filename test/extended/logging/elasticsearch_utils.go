@@ -185,6 +185,14 @@ func (es externalES) deploy(oc *exutil.CLI) {
 			cmPatch = append(cmPatch, "-p", "CLIENT_AUTH=none")
 		}
 	}
+	// set xpack.ml.enable to false when testing ES 6.8 on arm64 cluster
+	if es.version == "6.8" {
+		nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if nodes.Items[0].Status.NodeInfo.Architecture == "arm64" {
+			cmPatch = append(cmPatch, "-p", "MACHINE_LEARNING=false")
+		}
+	}
 	cm.applyFromTemplate(oc, cmPatch...)
 
 	// create deployment and expose svc
