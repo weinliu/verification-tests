@@ -4,6 +4,7 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	ci "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -26,12 +27,21 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		nto_realtime_file                = exutil.FixturePath("testdata", "psap", "nto", "realtime.yaml")
 		nto_mcp_file                     = exutil.FixturePath("testdata", "psap", "nto", "machine-config-pool.yaml")
 		ips_file                         = exutil.FixturePath("testdata", "psap", "nto", "ips.yaml")
+		pao_performance_file             = exutil.FixturePath("testdata", "psap", "pao", "pao-performanceprofile.yaml")
+		pao_performance_patch_file       = exutil.FixturePath("testdata", "psap", "pao", "pao-performance-patch.yaml")
+		pao_performance_fixpatch_file    = exutil.FixturePath("testdata", "psap", "pao", "pao-performance-fixpatch.yaml")
+		pao_workercnf_mcp_file           = exutil.FixturePath("testdata", "psap", "pao", "pao-workercnf-mcp.yaml")
 		isNTO                            bool
+		isPAOInstalled                   bool
+		paoNamespace                     = "openshift-performance-addon-operator"
+		iaasPlatform                     string
 	)
 
 	g.BeforeEach(func() {
 		// ensure NTO operator is installed
 		isNTO = isPodInstalled(oc, ntoNamespace)
+		// get IaaS platform
+		iaasPlatform = ci.CheckPlatform(oc)
 	})
 
 	// author: nweinber@redhat.com
@@ -306,7 +316,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(ntoPodLogs).To(o.ContainSubstring("profiles openshift-control-plane/openshift-node-performance-hp-performanceprofile have the same priority 30, please use a different priority for your custom profiles!"))
 
 		g.By("Patch priority for openshift-node-performance-hp-performanceprofile tuned to 20")
-		err = patchTunedPriority(oc, ntoNamespace, "openshift-node-performance-hp-performanceprofile", hp_performanceprofile_patch_file)
+		err = patchTunedProfile(oc, ntoNamespace, "openshift-node-performance-hp-performanceprofile", hp_performanceprofile_patch_file)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		tunedPriority, err := getTunedPriority(oc, ntoNamespace, "openshift-node-performance-hp-performanceprofile")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1079,5 +1089,128 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Current profile for each node: \n%v", output)
+	})
+	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-39123-NTO Operator will update tuned after changing included profile [Disruptive] [Slow]", func() {
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		isPAOInOperatorHub := exutil.IsPAOInOperatorHub(oc)
+		if !isPAOInOperatorHub {
+			g.Skip("PAO is not in OperatorHub - skipping test ...")
+		}
+
+		isPAOInstalled = exutil.IsPAOInstalled(oc)
+		if isPAOInstalled {
+			e2e.Logf("PAO has been installed and continue to execute test case")
+		} else {
+			exutil.InstallPAO(oc, paoNamespace)
+		}
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "performance-patch", "-n", ntoNamespace, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("PerformanceProfile", "performance", "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("mcp", "worker-cnf", "--ignore-not-found").Execute()
+
+		//Use the first worker node as labeled node
+		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-cnf-").Execute()
+
+		g.By("Label the node with node-role.kubernetes.io/worker-cnf=")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-cnf=", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// currently test is only supported on AWS, GCP, and Azure
+		if iaasPlatform == "aws" || iaasPlatform == "gcp" {
+			//Only GCP and AWS support realtime-kenel
+			g.By("Apply performance profile")
+			exutil.ApplyClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pao_performance_file, "-p", "ISENABLED=true")
+		} else {
+			g.By("Apply performance profile")
+			exutil.ApplyClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pao_performance_file, "-p", "ISENABLED=false")
+		}
+
+		g.By("Apply work-cnf machineconfigpool")
+		exutil.ApplyOperatorResourceByYaml(oc, paoNamespace, pao_workercnf_mcp_file)
+
+		g.By("Assert if the MCP has been successfully applied ...")
+		assertIfMCPChangesAppliedByName(oc, "worker-cnf", 600)
+
+		g.By("Check if new profile in rendered tuned")
+		renderCheck, err := getTunedRender(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).To(o.ContainSubstring("openshift-node-performance-performance"))
+
+		g.By("Check if new NTO profile was applied")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-node-performance-performance")
+
+		g.By("Check if profile openshift-node-performance-performance applied on nodes")
+		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeProfileName).To(o.ContainSubstring("openshift-node-performance-performance"))
+
+		g.By("Check if tuned pod logs contains openshift-node-performance-performance on labeled nodes")
+		assertNTOTunedLogsLastLines(oc, ntoNamespace, tunedPodName, "2", "openshift-node-performance-performance")
+
+		g.By("Check if the linux kernel parameter as vm.stat_interval = 10")
+		compareSpecifiedValueByNameOnLabelNode(oc, tunedNodeName, "vm.stat_interval", "10")
+
+		g.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Apply performance-patch profile")
+		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, pao_performance_patch_file)
+
+		g.By("Assert if the MCP worker-cnf is ready after node rebooted ...")
+		assertIfMCPChangesAppliedByName(oc, "worker-cnf", 600)
+
+		g.By("Check if new profile performance-patch in rendered tuned")
+		renderCheck, err = getTunedRender(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).To(o.ContainSubstring("performance-patch"))
+
+		g.By("Check current profile for each node")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Check if profile what's active profile applied on nodes")
+		nodeProfileName, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeProfileName).To(o.ContainSubstring("openshift-node-performance-performance"))
+
+		g.By("Check if tuned pod logs contains Cannot find profile 'openshift-node-performance-example-performanceprofile' on labeled nodes")
+		assertNTOTunedLogsLastLines(oc, ntoNamespace, tunedPodName, "2", "Cannot find profile")
+
+		g.By("Check if the linux kernel parameter as vm.stat_interval = 1")
+		compareSpecifiedValueByNameOnLabelNode(oc, tunedNodeName, "vm.stat_interval", "1")
+
+		g.By("Patch include to include=openshift-node-performance-performance")
+		err = patchTunedProfile(oc, ntoNamespace, "performance-patch", pao_performance_fixpatch_file)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Assert if the MCP worker-cnf is ready after node rebooted ...")
+		assertIfMCPChangesAppliedByName(oc, "worker-cnf", 600)
+
+		g.By("Check if new NTO profile performance-patch was applied")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "performance-patch")
+
+		g.By("Check if contains static tuning from profile 'performance-patch' applied in tuned pod logs on labeled nodes")
+		assertNTOTunedLogsLastLines(oc, ntoNamespace, tunedPodName, "2", "static tuning from profile 'performance-patch' applied")
+
+		g.By("Check current profile for each node")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Check if the linux kernel parameter as vm.stat_interval = 10")
+		compareSpecifiedValueByNameOnLabelNode(oc, tunedNodeName, "vm.stat_interval", "10")
 	})
 })

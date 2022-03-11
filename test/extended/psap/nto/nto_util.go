@@ -66,7 +66,7 @@ func getTunedPriority(oc *exutil.CLI, namespace string, tunedName string) (strin
 
 // patchTunedPriority will patch the priority of the specified tuned to that specified in a given YAML or JSON file
 // we cannot directly patch the value since it is nested within a list, thus the need for a patch file for this function
-func patchTunedPriority(oc *exutil.CLI, namespace string, tunedName string, patchFile string) error {
+func patchTunedProfile(oc *exutil.CLI, namespace string, tunedName string, patchFile string) error {
 	return oc.AsAdmin().WithoutNamespace().Run("patch").Args("tuned", tunedName, "--patch-file="+patchFile, "--type", "merge", "-n", namespace).Execute()
 }
 
@@ -201,19 +201,14 @@ func getKernelPidMaxValue(kernel string) string {
 }
 
 //Compare if the sysctl parameter is equal to specified value on all the node
-func compareSpecifiedValueByName(oc *exutil.CLI, sysctlparm, specifiedvalue string) {
-	nodeList, err := exutil.GetAllNodesbyOSType(oc, "linux")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	nodeListSize := len(nodeList)
+func compareSpecifiedValueByNameOnLabelNode(oc *exutil.CLI, labelNodeName, sysctlparm, specifiedvalue string) {
 
 	regexpstr, _ := regexp.Compile(sysctlparm + ".*")
-	for i := 0; i < nodeListSize; i++ {
-		output, err := exutil.DebugNodeWithChroot(oc, nodeList[i], "sysctl", sysctlparm)
-		conntrack_max := regexpstr.FindString(output)
-		e2e.Logf("The value is %v on %v", conntrack_max, nodeList[i])
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
-	}
+	output, err := exutil.DebugNodeWithChroot(oc, labelNodeName, "sysctl", sysctlparm)
+	conntrack_max := regexpstr.FindString(output)
+	e2e.Logf("The value is %v on %v", conntrack_max, labelNodeName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(output).To(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
 
 }
 
@@ -516,7 +511,7 @@ func assertNTOTunedLogsLastLines(oc *exutil.CLI, namespace string, ntoTunedPod s
 		isMatch := regTunedPodLogs.MatchString(ntoTunedLogs)
 		if isMatch {
 			loglines := regTunedPodLogs.FindAllString(ntoTunedLogs, -1)
-			e2e.Logf("The logs of tuned pod %v is: %v", ntoTunedPod, loglines[0])
+			e2e.Logf("The logs of tuned pod %v is: \n%v", ntoTunedPod, loglines[0])
 			return true, nil
 		} else {
 			return false, nil

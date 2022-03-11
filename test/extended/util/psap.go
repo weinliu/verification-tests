@@ -332,3 +332,78 @@ func WaitForNoPodsAvailableByKind(oc *CLI, kind string, name string, namespace s
 	})
 	AssertWaitPollNoErr(err, "No pod was found ...")
 }
+
+// installPAO attempts to install the Performance Add-On operator and verify that it is running
+func InstallPAO(oc *CLI, paoNamespace string) {
+	var (
+		pao_namespace_file     = FixturePath("testdata", "psap", "pao", "pao-namespace.yaml")
+		pao_operatorgroup_file = FixturePath("testdata", "psap", "pao", "pao-operatorgroup.yaml")
+		pao_sub_file           = FixturePath("testdata", "psap", "pao", "pao-subscription.yaml")
+	)
+	// check if PAO namespace already exists
+	nsName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", paoNamespace).Output()
+	// if namespace exists, check if PAO is installed - exit if it is, continue with installation otherwise
+	// if an error is thrown, namespace does not exist, create and continue with installation
+	if strings.Contains(nsName, "NotFound") || strings.Contains(nsName, "No resources") || err != nil {
+		e2e.Logf("PAO namespace not found - creating namespace and installing PAO ...")
+		CreateClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pao_namespace_file)
+	} else {
+		e2e.Logf("PAO namespace found - checking if PAO is installed ...")
+	}
+
+	ogName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("OperatorGroup", "openshift-performance-addon-operator", "-n", paoNamespace).Output()
+	if strings.Contains(ogName, "NotFound") || strings.Contains(ogName, "No resources") || err != nil {
+		// create PAO operator group from template
+		ApplyNsResourceFromTemplate(oc, paoNamespace, "--ignore-unknown-parameters=true", "-f", pao_operatorgroup_file)
+	} else {
+		e2e.Logf("PAO operatorgroup found - continue to check subscription ...")
+	}
+
+	// get default channel and create subscription from template
+	channel, err := GetOperatorPKGManifestDefaultChannel(oc, "performance-addon-operator", "openshift-marketplace")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Channel: %v", channel)
+	// get default channel and create subscription from template
+	source, err := GetOperatorPKGManifestSource(oc, "performance-addon-operator", "openshift-marketplace")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Source: %v", source)
+
+	subName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("Subscription", "-n", paoNamespace).Output()
+	if strings.Contains(subName, "NotFound") || strings.Contains(subName, "No resources") || !strings.Contains(subName, "performance-operator") || err != nil {
+		// create PAO operator group from template
+		ApplyNsResourceFromTemplate(oc, paoNamespace, "--ignore-unknown-parameters=true", "-f", pao_sub_file, "-p", "CHANNEL="+channel, "SOURCE="+source)
+	} else {
+		e2e.Logf("PAO subscription found - continue to check pod status ...")
+	}
+
+	//Wait for PAO controller manager is ready
+	WaitOprResourceReady(oc, "deployment", "performance-operator", paoNamespace, false, false)
+}
+
+func IsPAOInstalled(oc *CLI) bool {
+	var isInstalled bool
+	deployments, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-A").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(deployments, "performance-operator") {
+		isInstalled = true
+		return isInstalled
+	} else {
+		e2e.Logf("PAO doesn't installed - will install pao ...")
+		isInstalled = false
+		return isInstalled
+	}
+}
+
+func IsPAOInOperatorHub(oc *CLI) bool {
+	var havePAO bool
+	packagemanifest, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-A").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(packagemanifest, "performance-addon-operator") {
+		havePAO = true
+		return havePAO
+	} else {
+		e2e.Logf("No PAO packagemanifet detect in operatorhub - skip ...")
+		havePAO = false
+		return havePAO
+	}
+}
