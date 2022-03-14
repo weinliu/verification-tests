@@ -1018,9 +1018,9 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			defer ocJsonPatch(oc, "", "clusterversion/version", []JSONp{{"remove", "/spec/overrides", nil}})
 
 			e2e.Logf("Wait for Upgradeable=false...")
-			err = waitForCondition(30, 180, "False",
+			err = waitForCondition(30, 300, "False",
 				"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"Upgradeable\").status'")
-			exutil.AssertWaitPollNoErr(err, "Upgradeable condition is not false in 3m")
+			exutil.AssertWaitPollNoErr(err, "Upgradeable condition is not false in 5m")
 
 			e2e.Logf("Wait for Progressing=false...")
 			//to workaround the fake upgrade by cv.overrrides, refer to https://issues.redhat.com/browse/OTA-586
