@@ -16,7 +16,7 @@ class BugzillaClient:
         self.session = requests.Session()
         self.session.headers["Content-type"] = "application/json"
         self.session.headers["Accept"] = "application/json"
-        self.session.headers["Authorization"] = "bearer {0}".format(args.apikey)
+        self.session.headers["Authorization"] = "Bearer {0}".format(args.apikey)
         self.session.verify = False
         retry = Retry(connect=3, backoff_factor=0.5)
         adapter = HTTPAdapter(max_retries=retry)
@@ -34,10 +34,9 @@ class BugzillaClient:
 
     def updateByID(self, bid, attr_key, attr_value):
         try:
-            params = { "api_key": self.args.apikey,}
             datas = { attr_key: attr_value}
 
-            r = self.session.put(url=self.bug_url+"/"+str(bid), params=params, json=datas)
+            r = self.session.put(url=self.bug_url+"/"+str(bid), json=datas)
             # print(r.status_code)
             # print(r.text)
             if (r.status_code != 200) and (r.status_code != 201):
@@ -50,9 +49,8 @@ class BugzillaClient:
 
     def updateQaWhiteBoard(self, bid, contents):
         try:
-            params = {"api_key": self.args.apikey,}
 
-            r = self.session.get(url=self.bug_url+"/"+str(bid)+"?include_fields=_default", params=params)
+            r = self.session.get(url=self.bug_url+"/"+str(bid)+"?include_fields=_default")
             if (r.status_code != 200) and (r.status_code != 201):
                 raise Exception("get bug error in updateQaWhiteBoard: {0}".format(r.text))
 
@@ -64,9 +62,8 @@ class BugzillaClient:
 
     def removeNotifyWhiteBoard(self, bid):
         try:
-            params = {"api_key": self.args.apikey,}
 
-            r = self.session.get(url=self.bug_url+"/"+str(bid)+"?include_fields=_default", params=params)
+            r = self.session.get(url=self.bug_url+"/"+str(bid)+"?include_fields=_default")
             if (r.status_code != 200) and (r.status_code != 201):
                 raise Exception("get bug error in removeNotifyWhiteBoard: {0}".format(r.text))
             cf_qa_whiteboard = r.json()["bugs"][0]["cf_qa_whiteboard"]
@@ -88,11 +85,10 @@ class BugzillaClient:
 
     def getByID(self, bid):
         try:
-            params = {"api_key": self.args.apikey,}
             include_fields = "id,cf_verified,cf_qa_whiteboard,last_change_time,external_bugs,keywords,qa_contact,status,assigned_to"
 
             # r = self.session.get(url=self.bug_url+"/"+str(bid)+"?include_fields=_extra,_default", params=params)
-            r = self.session.get(url=self.bug_url+"/"+str(bid)+"?include_fields="+include_fields, params=params)
+            r = self.session.get(url=self.bug_url+"/"+str(bid)+"?include_fields="+include_fields)
             # print(r.status_code)
             # print(r.text)
             if (r.status_code != 200) and (r.status_code != 201):
@@ -118,9 +114,8 @@ class BugzillaClient:
 
     def getCommentsById(self, bid):
         try:
-            params = {"api_key": self.args.apikey,}
 
-            r = self.session.get(url=self.bug_url+"/"+str(bid)+"/comment", params=params)
+            r = self.session.get(url=self.bug_url+"/"+str(bid)+"/comment")
             # print(r.status_code)
             # print(r.text)
             if (r.status_code != 200) and (r.status_code != 201):
@@ -139,7 +134,6 @@ class BugzillaClient:
 
     def getByFilter(self, filters):
         try:
-            params = {"api_key": self.args.apikey,}
             bug_list = []
 
             # status = "bug_status=NEW&bug_status=ASSIGNED&bug_status=POST&bug_status=MODIFIED&bug_status=ON_DEV&bug_status=ON_QA"
@@ -158,7 +152,7 @@ class BugzillaClient:
             product = "product=OpenShift%20Container%20Platform"
             search_filter = status+"&"+classification+"&"+keywords+"&"+product
 
-            r = self.session.get(url=self.bug_url+"?"+search_filter+"&"+"include_fields=id", params=params)
+            r = self.session.get(url=self.bug_url+"?"+search_filter+"&"+"include_fields=id")
             # print(r.status_code)
             # print(r.text)
             if (r.status_code != 200) and (r.status_code != 201):
