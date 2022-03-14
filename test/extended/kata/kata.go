@@ -236,7 +236,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
     })
 
 	g.It("Longduration-NonPreRelease-Author:abhbaner-High-43523-Monitor Kataconfig deletion[Disruptive]", func() {
-        g.By("Install Common kataconfig and verify it")
+        g.By("Delete Common kataconfig and verify it")
         deleteKataConfig(oc, commonKataConfigName, opNamespace)
         e2e.Logf("common kataconfig %v was deleted", commonKataConfigName)
         g.By("SUCCESSS - kata runtime deleted successfully")
@@ -244,5 +244,28 @@ var _ = g.Describe("[sig-kata] Kata", func() {
     	createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName)
 
     })
+ 
+	g.It("Longduration-NonPreRelease-Author:abhbaner-High-41813-Build Acceptance test[Disruptive]", func() {
+        //This test will install operator,kataconfig,pod with kata - delete pod, delete kataconfig
+	commonPodName := "example"
+	commonPod := filepath.Join(testDataDir, "example.yaml")
+
+	oc.SetupProject()
+	podNs := oc.Namespace()
+
+	g.By("Deploying pod with kata runtime and verify it")
+	newPodName := createKataPod(oc, podNs, commonPod, commonPodName)
+	checkKataPodStatus(oc, podNs, newPodName)
+	e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
+	deleteKataPod(oc, podNs, newPodName)
+	g.By("Kata Pod deleted - now deleting kataconfig")
+        deleteKataConfig(oc, commonKataConfigName, opNamespace)
+        e2e.Logf("common kataconfig %v was deleted", commonKataConfigName)
+        g.By("SUCCESSS - build acceptance passed")
+	g.By("Creating kataconfig for the remaining test cases")
+    	createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName)
+
+    })
+
 
 })
