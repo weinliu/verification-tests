@@ -54,20 +54,24 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 			e2e.Failf("Failed to check Windows %s and Linux %s kubelet version should be the same", windowsKubeletVersion, linuxKubeletVersion)
 		}
 
-		g.By("Check worker label is applied to Windows node")
-		msg, err := oc.WithoutNamespace().Run("get").Args("nodes", "-l=kubernetes.io/os=windows").Output()
+		g.By("Check worker label is applied to Windows nodes")
+		msg, err := oc.WithoutNamespace().Run("get").Args("nodes", "--no-headers", "-l=kubernetes.io/os=windows").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(msg, "worker") {
-			e2e.Failf("Failed to check worker label is applied to Windows node %s", msg)
+		for _, node := range strings.Split(msg, "\n") {
+			if !strings.Contains(node, "worker") {
+				e2e.Failf("Failed to check worker label is applied to Windows node %s", node)
+			}
 		}
 
-		g.By("Check version annotation is applied to Windows node")
+		g.By("Check version annotation is applied to Windows nodes")
 		// Note: Case 33536 also is covered
-		windowsHostName := getWindowsHostNames(oc)[0]
-		retcode, err := checkVersionAnnotationReady(oc, windowsHostName)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !retcode {
-			e2e.Failf("Failed to check version annotation is applied to Windows node %s", msg)
+		windowsHostName := getWindowsHostNames(oc)
+		for _, host := range windowsHostName {
+			retcode, err := checkVersionAnnotationReady(oc, host)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !retcode {
+				e2e.Failf("Failed to check version annotation is applied to Windows node %s", host)
+			}
 		}
 
 		g.By("Check dockerfile prepare required binaries in operator image")
@@ -108,12 +112,14 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		}
 
 		bastionHost := getSSHBastionHost(oc)
-		winInternalIP := getWindowsInternalIPs(oc)[0]
-		for _, svc := range svcs {
-			g.By(fmt.Sprintf("Check %v service is running", svc))
-			msg, _ = runPSCommand(bastionHost, winInternalIP, fmt.Sprintf("Get-Service %v", svc), privateKey, iaasPlatform)
-			if !strings.Contains(msg, "Running") {
-				e2e.Failf("Failed to check %v service is running: %s", svc, msg)
+		winInternalIP := getWindowsInternalIPs(oc)
+		for _, winhost := range winInternalIP {
+			for _, svc := range svcs {
+				g.By(fmt.Sprintf("Check %v service is running in worker %v", svc, winhost))
+				msg, _ = runPSCommand(bastionHost, winhost, fmt.Sprintf("Get-Service %v", svc), privateKey, iaasPlatform)
+				if !strings.Contains(msg, "Running") {
+					e2e.Failf("Failed to check %v service is running in %v: %s", svc, winhost, msg)
+				}
 			}
 		}
 	})
@@ -309,7 +315,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		// which are not equivelant with the WMCO log
 		// waitUntilStatusChanged(oc, "instance has been deconfigured")
 		time.Sleep(12 * time.Minute)
-		//  check services are not running
+		// check services are not running
 		g.By("Check services are not running after deleting the Windows Node")
 		runningServices, err := getWinSVCs(bastionHost, address[0], privateKey, iaasPlatform)
 		o.Expect(err).NotTo(o.HaveOccurred())
