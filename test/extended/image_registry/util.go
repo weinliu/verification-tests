@@ -75,7 +75,7 @@ func ListPodStartingWith(prefix string, oc *exutil.CLI, namespace string) (pod [
 		return nil
 	}
 	for _, pod := range podList.Items {
-		if strings.HasPrefix(pod.Name, prefix) {
+		if strings.HasPrefix(pod.Name, prefix) && pod.Status.Phase != "ContainerCreating" {
 			podsToAll = append(podsToAll, pod)
 		}
 	}
@@ -495,10 +495,9 @@ func (icspsrc *icspSource) delete(oc *exutil.CLI) {
 }
 
 func getRegistryDefaultRoute(oc *exutil.CLI) (defaultroute string) {
-	err := wait.Poll(2*time.Second, 6*time.Second, func() (bool, error) {
-		defroute, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("route/default-route", "-n", "openshift-image-registry", "-o=jsonpath={.spec.host}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(defroute) == 0 {
+	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+		defroute, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("route", "-n", "openshift-image-registry", "default-route", "-o=jsonpath={.spec.host}").Output()
+		if len(defroute) == 0 || err != nil {
 			e2e.Logf("Continue to next round")
 			return false, nil
 		} else {
@@ -506,7 +505,7 @@ func getRegistryDefaultRoute(oc *exutil.CLI) (defaultroute string) {
 			return true, nil
 		}
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Did not find registry route"))
+	exutil.AssertWaitPollNoErr(err, "Did not find registry route")
 	return defaultroute
 }
 
@@ -526,7 +525,7 @@ func setImageregistryConfigs(oc *exutil.CLI, pathinfo string, matchlogs string) 
 			return false, nil
 		}
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("No image registry error info found"))
+	exutil.AssertWaitPollNoErr(err, "No image registry error info found")
 	return foundInfo
 }
 
@@ -544,7 +543,7 @@ func recoverRegistrySwiftSet(oc *exutil.CLI) {
 			return false, nil
 		}
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Image registry is degrade"))
+	exutil.AssertWaitPollNoErr(err, "Image registry is degrade")
 }
 
 type podSource struct {
@@ -601,7 +600,7 @@ func checkRegistryFunctionFine(oc *exutil.CLI, bcname string, namespace string) 
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Image registry is broken, can't pull image"))
+	exutil.AssertWaitPollNoErr(err, "Image registry is broken, can't pull image")
 }
 
 func checkRegistryDegraded(oc *exutil.CLI) bool {
@@ -904,7 +903,7 @@ func createSimpleRunPod(oc *exutil.CLI, image, expectInfo string) {
 			return false, nil
 		}
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Pod doesn't pull expected image"))
+	exutil.AssertWaitPollNoErr(err, "Pod doesn't pull expected image")
 }
 
 func newAppUseImageStream(oc *exutil.CLI, ns, imagestream, expectInfo string) {
@@ -929,4 +928,24 @@ func saveGeneration(oc *exutil.CLI, ns, resource string) string {
 	num, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "-n", ns, "-o=jsonpath={.metadata.generation}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return num
+}
+
+//Create route to expose the registry
+func createRouteExposeRegistry(oc *exutil.CLI) {
+	//Don't forget to restore the environment use func restoreRouteExposeRegistry
+	output, err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"defaultRoute":true}}`, "--type=merge").Output()
+	if err != nil {
+		e2e.Logf(output)
+	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(output).To(o.ContainSubstring("patched"))
+}
+
+func restoreRouteExposeRegistry(oc *exutil.CLI) {
+	output, err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"defaultRoute":false}}`, "--type=merge").Output()
+	if err != nil {
+		e2e.Logf(output)
+	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(output).To(o.ContainSubstring("patched"))
 }

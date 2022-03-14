@@ -618,15 +618,16 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("Author:wewang-Medium-23583-Registry should not try to pullthrough himself by any name [Serial]", func() {
-		g.By("Create additional routes by populating spec.Routes with additional routes")
-		defer oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"defaultRoute":false}}`, "--type=merge").Execute()
-		err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"defaultRoute":true}}`, "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Create route to expose the registry")
+		defer restoreRouteExposeRegistry(oc)
+		createRouteExposeRegistry(oc)
+
+		g.By("Get server host")
 		defroute := getRegistryDefaultRoute(oc)
 		userroute := strings.Replace(defroute, "default", "extra", 1)
 		patchInfo := fmt.Sprintf("{\"spec\":{\"routes\":[{\"hostname\": \"%s\", \"name\":\"extra-image-registry\", \"secretName\":\"\"}]}}", userroute)
 		defer oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"routes":null}}`, "--type=merge").Execute()
-		err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", patchInfo, "--type=merge").Execute()
+		err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", patchInfo, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Get token from secret")
@@ -689,19 +690,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			e2e.Logf(output)
 		}
 
-		g.By("Create route")
-		defer oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"defaultRoute":false}}`, "--type=merge").Execute()
-		output, err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"defaultRoute":true}}`, "--type=merge").Output()
-		if err != nil {
-			e2e.Logf(output)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("patched"))
+		g.By("Create route to expose the registry")
+		defer restoreRouteExposeRegistry(oc)
+		createRouteExposeRegistry(oc)
 
 		g.By("Get server host")
-		host, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "-n", "openshift-image-registry", "default-route", "-o=jsonpath={.spec.host}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf(host)
+		host := getRegistryDefaultRoute(oc)
 
 		g.By("Get token from secret")
 		oc.SetupProject()
@@ -1440,21 +1434,15 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	g.It("Author:jitli-Critical-48959-Should be able to get public images connect to the server and have basic auth credentials [Serial]", func() {
 
 		g.By("Create route to expose the registry")
-		defer oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"defaultRoute":false}}`, "--type=merge").Execute()
-		output, err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"defaultRoute":true}}`, "--type=merge").Output()
-		if err != nil {
-			e2e.Logf(output)
-		}
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("patched"))
+		defer restoreRouteExposeRegistry(oc)
+		createRouteExposeRegistry(oc)
 
 		g.By("Get server host")
-		host, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "-n", "openshift-image-registry", "default-route", "-o=jsonpath={.spec.host}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		host := getRegistryDefaultRoute(oc)
 
 		g.By("Grant public access to the openshift namespace")
 		defer oc.AsAdmin().WithoutNamespace().Run("policy").Args("remove-role-from-group", "system:image-puller", "system:unauthenticated", "--namespace", "openshift").Execute()
-		output, err = oc.AsAdmin().WithoutNamespace().Run("policy").Args("add-role-to-group", "system:image-puller", "system:unauthenticated", "--namespace", "openshift").Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("policy").Args("add-role-to-group", "system:image-puller", "system:unauthenticated", "--namespace", "openshift").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("clusterrole.rbac.authorization.k8s.io/system:image-puller added: \"system:unauthenticated\""))
 
