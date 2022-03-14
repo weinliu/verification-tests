@@ -32,6 +32,36 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: jiazha@redhat.com
+	g.It("VMonly-Author:jiazha-High-48980-oc adm catalog mirror image to local", func() {
+		mirroredImage := "quay.io/olmqe/sriov-fec:v4.9"
+
+		g.By("1) get the cluster auth")
+		tokenDir := "/tmp/olm-48980"
+		err := os.MkdirAll(tokenDir, os.ModePerm)
+		defer os.RemoveAll(tokenDir)
+		if err != nil {
+			e2e.Failf("fail to create the token folder:%s", tokenDir)
+		}
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", tokenDir), "--confirm").Output()
+		if err != nil {
+			e2e.Failf("Fail to get the cluster auth %v", err)
+		}
+		g.By("2) mirror image to local")
+		defer os.RemoveAll("v2/")
+		defer exec.Command("bash", "-c", "rm -rf manifests-sriov-fec-*").Output()
+		logs, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("catalog", "mirror", mirroredImage, "file:///local/index", "-a", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
+		if err != nil || strings.Contains(logs, "error mirroring image") {
+			e2e.Failf("Fail to mirror image to local, error:%v, logs:%v", err, logs)
+		}
+		g.By("3) mirror local image to the docker registry")
+		defer os.RemoveAll("manifests-index/")
+		logs, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("catalog", "mirror", "file://local/index/olmqe/sriov-fec:v4.9", "localhost:5000/test", "-a", "/home/cloud-user/auth.json").Output()
+		if err != nil || strings.Contains(logs, "error mirroring image") {
+			e2e.Failf("Fail to mirror image to localhost:5000, error:%v, logs:%v", err, logs)
+		}
+	})
+
+	// author: jiazha@redhat.com
 	g.It("ConnectedOnly-Author:jiazha-High-46964-Disable Copied CSVs Toggle [Serial]", func() {
 		g.By("1) Subscribe to etcdoperator v0.9.4 with AllNamespaces mode")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
