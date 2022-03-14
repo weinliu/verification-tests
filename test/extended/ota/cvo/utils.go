@@ -16,10 +16,17 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
+
+type JSONp struct {
+	Oper string      `json:"op"`
+	Path string      `json:"path"`
+	Valu interface{} `json:"value,omitempty"`
+}
 
 // GetDeploymentsYaml dumps out deployment in yaml format in specific namespace
 func GetDeploymentsYaml(oc *exutil.CLI, deployment_name string, namespace string) (string, error) {
@@ -457,15 +464,15 @@ func getRandomString() string {
 
 // get clusterversion version object values by jsonpath.
 // Returns: object_value(string), error
-func getCVOdata(oc *exutil.CLI, jsonpath string) (string, error) {
+func getCVObyJP(oc *exutil.CLI, jsonpath string) (string, error) {
 	return oc.AsAdmin().WithoutNamespace().Run("get").
 		Args("clusterversion", "version",
 			"-o", fmt.Sprintf("jsonpath={%s}", jsonpath)).Output()
 }
 
-// find arg in CVO deployment (by arg name).
+// find argument index in CVO container args in deployment (by arg name).
 // Returns: arg_value(string), arg_index(int), error
-func getCVOdepArg(oc *exutil.CLI, argQuery string) (string, int, error) {
+func getCVOcontArg(oc *exutil.CLI, argQuery string) (string, int, error) {
 	depArgs, err := oc.AsAdmin().WithoutNamespace().Run("get").
 		Args("-n", "openshift-cluster-version",
 			"deployment", "cluster-version-operator",
@@ -497,25 +504,32 @@ func getCVOdepArg(oc *exutil.CLI, argQuery string) (string, int, error) {
 
 // patch resource (namespace - use "" if none, resource_name, patch).
 // Returns: result(string), error
-func jsonPatch(oc *exutil.CLI, namespace string, resource string, patch string) (patchOutput string, err error) {
+func ocJsonPatch(oc *exutil.CLI, namespace string, resource string, patch []JSONp) (patchOutput string, err error) {
+	p, err := json.Marshal(patch)
+	if err != nil {
+		e2e.Logf("ocJsonPatch Error - json.Marshal: '%v'", err)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
 	if namespace != "" {
 		patchOutput, err = oc.AsAdmin().WithoutNamespace().Run("patch").
-			Args("-n", namespace, resource, "--type=json", "--patch", patch).Output()
+			Args("-n", namespace, resource, "--type=json", "--patch", string(p)).Output()
 	} else {
 		patchOutput, err = oc.AsAdmin().WithoutNamespace().Run("patch").
-			Args(resource, "--type=json", "--patch", patch).Output()
+			Args(resource, "--type=json", "--patch", string(p)).Output()
 	}
-	e2e.Logf("jsonPatch: %s", patchOutput)
+	e2e.Logf("patching '%s'\nwith '%s'\nresult '%s'", resource, string(p), patchOutput)
 	return
 }
 
-// patch CVO container args (arg_index, arg_value)
+// patch CVO container argument (arg_index, arg_value)
 // Returns: result(string), error
-func patchCVODeployment(oc *exutil.CLI, index int, value string) (string, error) {
-	patch := fmt.Sprintf("[{\"op\": \"replace\", "+
-		"\"path\": \"/spec/template/spec/containers/0/args/%d\", "+
-		"\"value\": \"%s\"}]", index, value)
-	return jsonPatch(oc,
+func patchCVOcontArg(oc *exutil.CLI, index int, value string) (string, error) {
+	patch := []JSONp{
+		{"replace",
+			fmt.Sprintf("/spec/template/spec/containers/0/args/%d", index),
+			value},
+	}
+	return ocJsonPatch(oc,
 		"openshift-cluster-version",
 		"deployment/cluster-version-operator",
 		patch)
