@@ -148,4 +148,110 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("Deleting EgressIP object and recreating it works!!! ")
 	})
 
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-Medium-47272-Pods will not be affected by the egressIP set on other netnamespace. [Serial]", func() {
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod.yaml")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2.yaml")
+
+		g.By("1.1 Label EgressIP node")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		egressNode := nodeList.Items[0].Name
+		g.By("1.2 Apply EgressLabel Key to one node.")
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, egressNodeLabel, "true")
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, egressNodeLabel)
+
+		g.By("2.1 Create first egressip object")
+		sub1 := getIfaddrFromNode(egressNode, oc)
+		freeIps := findUnUsedIPsOnNode(oc, egressNode, sub1, 2)
+		o.Expect(len(freeIps) == 2).Should(o.BeTrue())
+		egressip1 := egressIPResource1{
+			name:          "egressip-47272-1",
+			template:      egressIP2Template,
+			egressIP1:     freeIps[0],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "pink",
+		}
+		egressip1.createEgressIPObject2(oc)
+		defer egressip1.deleteEgressIPObject1(oc)
+
+		g.By("2.2 Create second egressip object")
+		egressip2 := egressIPResource1{
+			name:          "egressip-47272-2",
+			template:      egressIP2Template,
+			egressIP1:     freeIps[1],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "blue",
+		}
+		egressip2.createEgressIPObject2(oc)
+		defer egressip2.deleteEgressIPObject1(oc)
+
+		g.By("3.1 create first namespace")
+		oc.SetupProject()
+		ns1 := oc.Namespace()
+
+		g.By("3.2 Apply a label to first namespace")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org=qe").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org-").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("3.3 Create a pod in first namespace. ")
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns1,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod1.name, "-n", pod1.namespace).Execute()
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		g.By("3.4 Apply label to pod in first namespace")
+		err = exutil.LabelPod(oc, ns1, pod1.name, "color=pink")
+		defer exutil.LabelPod(oc, ns1, pod1.name, "color-")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("4.1 create second namespace")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		g.By("4.2 Apply a label to second namespace")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "org=qe").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "org-").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("4.3 Create a pod in second namespace ")
+		pod2 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns2,
+			template:  pingPodTemplate,
+		}
+		pod2.createPingPod(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod2.name, "-n", pod2.namespace).Execute()
+		waitPodReady(oc, pod2.namespace, pod2.name)
+
+		g.By("4.4 Apply label to pod in second namespace")
+		err = exutil.LabelPod(oc, ns2, pod2.name, "color=blue")
+		defer exutil.LabelPod(oc, ns2, pod2.name, "color-")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("5.1 Check source IP in first namespace using first egressip object")
+		e2e.Logf("\n ipEchoUrl is %v\n", ipEchoUrl)
+		sourceIp, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoUrl+" --connect-timeout 5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIp).Should(o.Equal(freeIps[0]))
+
+		g.By("5.2 Check source IP in second namespace using second egressip object")
+		sourceIp, err = e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s "+ipEchoUrl+" --connect-timeout 5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIp).Should(o.Equal(freeIps[1]))
+
+		g.By("Pods will not be affected by the egressIP set on other netnamespace.!!! ")
+	})
+
 })

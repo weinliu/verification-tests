@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"os/exec"
 	"os"
-	"strings"
+	"os/exec"
 	"regexp"
+	"strings"
 	"time"
 
 	o "github.com/onsi/gomega"
@@ -23,10 +23,14 @@ type pingPodResource struct {
 }
 
 type egressIPResource1 struct {
-	name      string
-	template  string
-	egressIP1 string
-	egressIP2 string
+	name          string
+	template      string
+	egressIP1     string
+	egressIP2     string
+	nsLabelKey    string
+	nsLabelValue  string
+	podLabelKey   string
+	podLabelValue string
 }
 
 type egressFirewall1 struct {
@@ -86,6 +90,18 @@ func (egressIP *egressIPResource1) createEgressIPObject1(oc *exutil.CLI) {
 
 func (egressIP *egressIPResource1) deleteEgressIPObject1(oc *exutil.CLI) {
 	removeResource(oc, true, true, "egressip", egressIP.name)
+}
+
+func (egressIP *egressIPResource1) createEgressIPObject2(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", egressIP.template, "-p", "NAME="+egressIP.name, "EGRESSIP1="+egressIP.egressIP1, "NSLABELKEY="+egressIP.nsLabelKey, "NSLABELVALUE="+egressIP.nsLabelValue, "PODLABELKEY="+egressIP.podLabelKey, "PODLABELVALUE="+egressIP.podLabelValue)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create EgressIP %v", egressIP.name))
 }
 
 func (egressFirewall *egressFirewall1) createEgressFWObject1(oc *exutil.CLI) {
@@ -545,12 +561,12 @@ func checkNetworkOperatorDEGRADEDState(oc *exutil.CLI) {
 			e2e.Logf("Fail to get clusteroperator network, error:%s. Trying again", err)
 			return false, nil
 		}
-        matched, _ := regexp.MatchString("True.*False.*False", output)
+		matched, _ := regexp.MatchString("True.*False.*False", output)
 		e2e.Logf("Network operator state is:%s", output)
-        o.Expect(matched).To(o.BeTrue())
+		o.Expect(matched).To(o.BeTrue())
 		return false, nil
 	})
-    o.Expect(errCheck.Error()).To(o.ContainSubstring("timed out waiting for the condition"))
+	o.Expect(errCheck.Error()).To(o.ContainSubstring("timed out waiting for the condition"))
 }
 
 func getNodeIPv4(oc *exutil.CLI, namespace string, nodeName string) string {
