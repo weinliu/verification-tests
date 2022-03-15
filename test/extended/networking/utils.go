@@ -620,3 +620,12 @@ func checkSDNMetrics(oc *exutil.CLI, url string, metrics string) {
 	})
 	exutil.AssertWaitPollNoErr(metrics_err, fmt.Sprintf("Fail to get metric and the error is:%s", metrics_err))
 }
+
+func getPodName(oc *exutil.CLI, namespace string, label string) []string {
+	var podName []string
+	podNameAll, err := oc.AsAdmin().Run("get").Args("-n", namespace, "pod", "-l", label, "-ojsonpath={.items..metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	podName = strings.Split(podNameAll, " ")
+	e2e.Logf("The pod(s) are  %v ", podName)
+	return podName
+}

@@ -174,7 +174,8 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			template:    sriovTestPodTemplate,
 		}
 		sriovTestPod.createSriovTestPod(oc)
-		waitForPodWithLabelReady(oc, oc.Namespace(), "name=sriov-dpdk")
+		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=sriov-dpdk")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=sriov-dpdk not ready")
 
 		g.By("Check testpmd running well")
 		pciAddress := getPciAddress(sriovTestPod.namespace, sriovTestPod.name)
