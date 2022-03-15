@@ -24,7 +24,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		// Team - for specific kataconfig and pod, please define and create them in g.It.
 		testDataDir  = exutil.FixturePath("testdata", "kata")
 		iaasPlatform string
-		commonKc = filepath.Join(testDataDir, "kataconfig.yaml")
+		commonKc     = filepath.Join(testDataDir, "kataconfig.yaml")
 	)
 
 	g.BeforeEach(func() {
@@ -35,7 +35,6 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		ns := filepath.Join(testDataDir, "namespace.yaml")
 		og := filepath.Join(testDataDir, "operatorgroup.yaml")
 		sub := filepath.Join(testDataDir, "subscription.yaml")
-		
 
 		createIfNoOperator(oc, opNamespace, ns, og, sub)
 		createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName)
@@ -222,18 +221,18 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("Success")
 
 	})
-	
-	g.It("Author:abhbaner-High-43516-operator is available in CatalogSource"    , func() {
-        
-        g.By("Checking catalog source for the operator")
-        opMarketplace,err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifests", "-n", "openshift-marketplace").Output()
-        o.Expect(err).NotTo(o.HaveOccurred())
-        o.Expect(opMarketplace).NotTo(o.BeEmpty())
-        o.Expect(opMarketplace).To(o.ContainSubstring("sandboxed-containers-operator"))
-        o.Expect(opMarketplace).To(o.ContainSubstring("Red Hat Operators"))
-        g.By("SUCCESS -  'sandboxed-containers-operator' is present in packagemanifests")
-        
-    })
+
+	g.It("Author:abhbaner-High-43516-operator is available in CatalogSource", func() {
+
+		g.By("Checking catalog source for the operator")
+		opMarketplace, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifests", "-n", "openshift-marketplace").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(opMarketplace).NotTo(o.BeEmpty())
+		o.Expect(opMarketplace).To(o.ContainSubstring("sandboxed-containers-operator"))
+		o.Expect(opMarketplace).To(o.ContainSubstring("Red Hat Operators"))
+		g.By("SUCCESS -  'sandboxed-containers-operator' is present in packagemanifests")
+
+	})
 
 	g.It("Longduration-NonPreRelease-Author:abhbaner-High-43523-Monitor Kataconfig deletion[Disruptive]", func() {
         g.By("Delete Common kataconfig and verify it")
@@ -243,7 +242,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	g.By("Creating kataconfig for the remaining test cases")
     	createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName)
 
-    })
+  })
  
 	g.It("Longduration-NonPreRelease-Author:abhbaner-High-41813-Build Acceptance test[Disruptive]", func() {
         //This test will install operator,kataconfig,pod with kata - delete pod, delete kataconfig
@@ -265,7 +264,34 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	g.By("Creating kataconfig for the remaining test cases")
     	createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName)
 
-    })
+  })
 
+	// author: tbuskey@redhat.com
+	g.It("Author:tbuskey-High-46235-Kata Metrics Verify that Namespace is labeled to enable monitoring", func() {
+		var (
+			err        error
+			msg        string
+			s          string
+			label      = ""
+			hasMetrics = false
+		)
+
+		g.By("Get labels of openshift-sandboxed-containers-operator namespace to check for monitoring")
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "openshift-sandboxed-containers-operator", "-o=jsonpath={.metadata.labels}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, s = range strings.SplitAfter(msg, ",") {
+			if strings.Contains(s, "openshift.io/cluster-monitoring") {
+				label = s
+				if strings.Contains(strings.SplitAfter(s, ":")[1], "true") {
+					hasMetrics = true
+				}
+			}
+		}
+		o.Expect(strings.Contains(msg, "openshift.io/cluster-monitoring")).To(o.BeTrue())
+		e2e.Logf("Label is %v", label)
+		o.Expect(hasMetrics).To(o.BeTrue())
+
+		g.By("Success")
+	})
 
 })
