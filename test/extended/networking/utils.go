@@ -621,6 +621,38 @@ func checkSDNMetrics(oc *exutil.CLI, url string, metrics string) {
 	exutil.AssertWaitPollNoErr(metrics_err, fmt.Sprintf("Fail to get metric and the error is:%s", metrics_err))
 }
 
+func getEgressCIDRs(oc *exutil.CLI, node string) string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostsubnet", node, "-o=jsonpath={.egressCIDRs}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("egressCIDR for hostsubnet node %v is: %v", node, output)
+	return output
+}
+
+func getEgressIPonSDNHost(oc *exutil.CLI, node string) ([]string, error) {
+	var ip = []string{}
+	iplist, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostsubnet", node, "-o=jsonpath={.egressIPs}").Output()
+	if iplist == "" || err != nil {
+		err = wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
+			iplist, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("hostsubnet", node, "-o=jsonpath={.egressIPs}").Output()
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if iplist != "" {
+				e2e.Logf("Found egressIP list for node %v is: %v", node, iplist)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("EgressIP not found"))
+	}
+	// get egressIp list in format of ["10.0.247.116","10.0.156.51"] as an example from the output of command "oc get hostsubnet <node> -o=jsonpath={.egressIPs}"
+	// convert the iplist into an array of ip addresses
+	substr := iplist[2 : len(iplist)-2]
+	ip = strings.Split(substr, "\",\"")
+	return ip, nil
+}
+
 func getPodName(oc *exutil.CLI, namespace string, label string) []string {
 	var podName []string
 	podNameAll, err := oc.AsAdmin().Run("get").Args("-n", namespace, "pod", "-l", label, "-ojsonpath={.items..metadata.name}").Output()
