@@ -1349,3 +1349,11 @@ func CheckUpgradeStatus(oc *exutil.CLI, expectedStatus string) {
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Upgradeable status of the OLM %s is not expected", expectedStatus))
 }
+
+func SkipARM64(oc *exutil.CLI) {
+	e2e.Logf("get architecture")
+	version := exutil.GetClusterArchitecture(oc)
+	if version == "arm64" {
+		g.Skip("Skip for arm64")
+	}
+}

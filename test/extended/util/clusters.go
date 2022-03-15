@@ -43,3 +43,12 @@ func GetClusterPrefixName(oc *CLI) string {
 	}
 	return strings.Split(output, ".")[2]
 }
+
+func GetClusterArchitecture(oc *CLI) string {
+	output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("nodes", "-o=jsonpath={.items[0].status.nodeInfo.architecture}").Output()
+	if err != nil {
+		e2e.Logf("Get nodes failed with err %v .", err)
+		return ""
+	}
+	return output
+}
