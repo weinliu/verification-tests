@@ -32,6 +32,18 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: jiazha@redhat.com
+	g.It("VMonly-Author:jiazha-High-25966-offline mirroring support", func() {
+		// This is a basic test, you can find images mirroring for disconnected cluster
+		// in: https://gitlab.cee.redhat.com/aosqe/flexy-templates/-/blob/master/functionality-testing/aos-4_10/hosts/sync_index_images_to_qe_registry.sh
+		g.By("1) mirroring an index image to the localhost registry")
+		defer os.RemoveAll("etcd-mirror/")
+		logs, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("catalog", "mirror", "quay.io/openshifttest/etcd-index:latest", "localhost:5000", "-a", "/home/cloud-user/auth.json", "--index-filter-by-os='.*'", "--to-manifests=etcd-mirror").Output()
+		if err != nil || strings.Contains(logs, "error") {
+			e2e.Failf("Fail to mirror image to localhost:5000, error:%v, logs:%v", err, logs)
+		}
+	})
+
+	// author: jiazha@redhat.com
 	g.It("VMonly-Author:jiazha-High-48980-oc adm catalog mirror image to local", func() {
 		mirroredImage := "quay.io/olmqe/sriov-fec:v4.9"
 
