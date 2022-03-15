@@ -2275,6 +2275,26 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		newCheck("expect", asUser, withoutNamespace, contain, "red-hat-camel-k-operator", ok, []string{"csv", "-n", sub.namespace}).check(oc)
 	})
 
+	// author: bandrade@redhat.com
+	g.It("ConnectedOnly-Author:bandrade-Medium-49130-Default CatalogSources deployed by marketplace do not have toleration for tainted nodes", func() {
+
+		podNameCertifiedOP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-marketplace", "-l", "olm.catalogSource=certified-operators", "-o", "name").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		podNameCommunityOP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-marketplace", "-l", "olm.catalogSource=community-operators", "-o", "name").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		podNameRedhatOP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-marketplace", "-l", "olm.catalogSource=redhat-operators", "-o", "name").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		podNames := []string{podNameCertifiedOP, podNameCommunityOP, podNameRedhatOP}
+
+		for _, name := range podNames {
+			newCheck("expect", asAdmin, withoutNamespace, contain, "node-role.kubernetes.io/master", ok, []string{name, "-o=jsonpath={.spec.tolerations}", "-n", "openshift-marketplace"}).check(oc)
+			newCheck("expect", asAdmin, withoutNamespace, contain, "tolerationSeconds\":120", ok, []string{name, "-o=jsonpath={.spec.tolerations}", "-n", "openshift-marketplace"}).check(oc)
+		}
+	})
+
 	// author: jiazha@redhat.com
 	g.It("Author:jiazha-High-32559-catalog operator crashed", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
