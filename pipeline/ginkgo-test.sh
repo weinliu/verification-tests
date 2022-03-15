@@ -52,7 +52,7 @@ function config_env_for_vm {
   echo 'export GOROOT=${GOINSTALLPATH}' >> ${WORKSPACE}/.bash_profile && \
   echo 'export GOPATH=${WORKSPACE}/goproject' >> ${WORKSPACE}/.bash_profile && \
   echo 'export GOCACHE=${WORKSPACE}/gocache' >> ${WORKSPACE}/.bash_profile && \
-  echo 'export PATH=$PATH:${GOINSTALLPATH}/bin:${WORKSPACE}/tool_tmp' >> ${WORKSPACE}/.bash_profile && \
+  echo 'export PATH=$PATH:${GOINSTALLPATH}/bin:${WORKSPACE}/tool_tmp:/opt/OpenShift4-tools' >> ${WORKSPACE}/.bash_profile && \
   source ${WORKSPACE}/.bash_profile
   echo 'unset http_proxy https_proxy no_proxy'
   unset http_proxy https_proxy
@@ -73,7 +73,7 @@ function config_env_for_cluster {
   echo 'export GOROOT=/usr/local/go' >> ~/.bash_profile && \
   echo 'export GOPATH=/goproject' >> ~/.bash_profile && \
   echo 'export GOCACHE=/gocache' >> ~/.bash_profile && \
-  echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bash_profile && \
+  echo 'export PATH=$PATH:/usr/local/go/bin:/opt/OpenShift4-tools' >> ~/.bash_profile && \
   source ~/.bash_profile
   echo "configure kubeconfig, azure authentication or client proxy for the cluster"
   source ${PIPELINESCRIPT_DIR}"/occe4c" ${WORKSPACE} "null"${FLEXY_BUILD} "${CONFIG}"
