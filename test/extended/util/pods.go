@@ -110,6 +110,11 @@ func RemoteShPodWithBash(oc *CLI, namespace string, podName string, cmd ...strin
 	return remoteShPod(oc, namespace, podName, true, false, "", cmd...)
 }
 
+// RemoteShPodWithBashSpecifyContainer creates a remote shell of the pod with bash specifying container name
+func RemoteShPodWithBashSpecifyContainer(oc *CLI, namespace string, podName string, containerName string, cmd ...string) (string, error) {
+        return remoteShPod(oc, namespace, podName, true, false, containerName, cmd...)
+}
+
 // WaitAndGetSpecificPodLogs wait and return the pod logs by the specific filter
 func WaitAndGetSpecificPodLogs(oc *CLI, namespace string, container string, podName string, filter string) (string, error) {
 	logs, err := GetSpecificPodLogs(oc, namespace, container, podName, filter)

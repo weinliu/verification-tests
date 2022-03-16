@@ -2,7 +2,10 @@ package node
 
 import (
 	"path/filepath"
+
 	g "github.com/onsi/ginkgo"
+	o "github.com/onsi/gomega"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	//e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -12,15 +15,16 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	defer g.GinkgoRecover()
 
 	var (
-		oc                  = exutil.NewCLI("node-"+getRandomString(), exutil.KubeConfigPath())
-		buildPruningBaseDir = exutil.FixturePath("testdata", "node")
-		customTemp          = filepath.Join(buildPruningBaseDir, "pod-modify.yaml")
-		podTerminationTemp  = filepath.Join(buildPruningBaseDir, "pod-termination.yaml")
-		podOOMTemp          = filepath.Join(buildPruningBaseDir, "pod-oom.yaml")
-		podInitConTemp      = filepath.Join(buildPruningBaseDir, "pod-initContainer.yaml")
-		podSleepTemp        = filepath.Join(buildPruningBaseDir, "sleepPod46306.yaml")
-		kubeletConfigTemp   = filepath.Join(buildPruningBaseDir, "kubeletconfig-hardeviction.yaml")
-		memHogTemp          = filepath.Join(buildPruningBaseDir, "mem-hog-ocp11600.yaml")
+		oc                   = exutil.NewCLI("node-"+getRandomString(), exutil.KubeConfigPath())
+		buildPruningBaseDir  = exutil.FixturePath("testdata", "node")
+		customTemp           = filepath.Join(buildPruningBaseDir, "pod-modify.yaml")
+		podTerminationTemp   = filepath.Join(buildPruningBaseDir, "pod-termination.yaml")
+		podOOMTemp           = filepath.Join(buildPruningBaseDir, "pod-oom.yaml")
+		podInitConTemp       = filepath.Join(buildPruningBaseDir, "pod-initContainer.yaml")
+		podSleepTemp         = filepath.Join(buildPruningBaseDir, "sleepPod46306.yaml")
+		kubeletConfigTemp    = filepath.Join(buildPruningBaseDir, "kubeletconfig-hardeviction.yaml")
+		memHogTemp           = filepath.Join(buildPruningBaseDir, "mem-hog-ocp11600.yaml")
+		podTwoContainersTemp = filepath.Join(buildPruningBaseDir, "pod-with-two-containers.yaml")
 
 		podModify = podModifyDescription{
 			name:          "",
@@ -36,21 +40,21 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		}
 
 		podTermination = podTerminationDescription{
-			name:              "",
-			namespace:         "",
-			template:          podTerminationTemp,
+			name:      "",
+			namespace: "",
+			template:  podTerminationTemp,
 		}
 
 		podOOM = podOOMDescription{
-			name:              "",
-			namespace:         "",
-			template:          podOOMTemp,
+			name:      "",
+			namespace: "",
+			template:  podOOMTemp,
 		}
 
 		podInitCon38271 = podInitConDescription{
-			name:        "",
-			namespace:   "",
-			template:    podInitConTemp,
+			name:      "",
+			namespace: "",
+			template:  podInitConTemp,
 		}
 
 		podSleep = podSleepDescription{
@@ -59,21 +63,26 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		}
 
 		kubeletConfig = kubeletConfigDescription{
-			name:         "",
-			labelkey:     "",
-			labelvalue:   "",
-			template:     kubeletConfigTemp,
+			name:       "",
+			labelkey:   "",
+			labelvalue: "",
+			template:   kubeletConfigTemp,
 		}
 
 		memHog = memHogDescription{
-			name:         "",
-			namespace:    "",
-			labelkey:     "",
-			labelvalue:   "",
-			template:     memHogTemp,
+			name:       "",
+			namespace:  "",
+			labelkey:   "",
+			labelvalue: "",
+			template:   memHogTemp,
+		}
+
+		podTwoContainers = podTwoContainersDescription{
+			name:      "",
+			namespace: "",
+			template:  podTwoContainersTemp,
 		}
 	)
-
 	// author: pmali@redhat.com
 	g.It("Author:pmali-High-12893-Init containers with restart policy Always", func() {
 		oc.SetupProject()
@@ -261,7 +270,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		oc.SetupProject()
 		podInitCon38271.name = "initcon-pod"
 		podInitCon38271.namespace = oc.Namespace()
-		
+
 		g.By("Create a pod with init container")
 		podInitCon38271.create(oc)
 		defer podInitCon38271.delete(oc)
@@ -283,8 +292,8 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		exutil.AssertWaitPollNoErr(err, "init container restart")
 	})
 
-		// author: pmali@redhat.com
-		g.It("Author:pmali-Medium-40558-oom kills must be monitored and logged", func() {
+	// author: pmali@redhat.com
+	g.It("Author:pmali-Medium-40558-oom kills must be monitored and logged", func() {
 
 		oc.SetupProject()
 		podOOM.name = "pod-oom"
@@ -307,8 +316,8 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 
 		g.By("Get Worker Node and Add label app=sleep\n")
 		workerNodeName := getSingleWorkerNode(oc)
-                addLabelToNode(oc, "app=sleep", workerNodeName, "nodes")
-		defer removeLabelFromNode(oc, "app-",workerNodeName, "nodes" )
+		addLabelToNode(oc, "app=sleep", workerNodeName, "nodes")
+		defer removeLabelFromNode(oc, "app-", workerNodeName, "nodes")
 
 		g.By("Create a 50 pods on the same node\n")
 		for i := 0; i < 50; i++ {
@@ -337,7 +346,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		exutil.AssertWaitPollNoErr(err, "Logs Found, Test Failed")
 	})
 
-	 // author: pmali@redhat.com
+	// author: pmali@redhat.com
 	g.It("Longduration-NonPreRelease-Author:pmali-Medium-11600-kubelet will evict pod immediately when met hard eviction threshold memory [Disruptive][Slow]", func() {
 
 		oc.SetupProject()
@@ -346,13 +355,13 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		kubeletConfig.labelvalue = "hard-eviction"
 
 		memHog.name = "mem-hog-ocp11600"
-		memHog.namespace =  oc.Namespace()
+		memHog.namespace = oc.Namespace()
 		memHog.labelkey = kubeletConfig.labelkey
 		memHog.labelvalue = kubeletConfig.labelvalue
 
 		g.By("Get Worker Node and Add label custom-kubelet-ocp11600=hard-eviction\n")
 		addLabelToNode(oc, "custom-kubelet-ocp11600=hard-eviction", "worker", "mcp")
-		defer removeLabelFromNode(oc, "custom-kubelet-ocp11600-", "worker","mcp")
+		defer removeLabelFromNode(oc, "custom-kubelet-ocp11600-", "worker", "mcp")
 
 		g.By("Create Kubelet config \n")
 		kubeletConfig.create(oc)
@@ -361,7 +370,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 
 		g.By("Make sure Worker mcp is Updated correctly\n")
 		err := getmcpStatus(oc, "worker")
-                exutil.AssertWaitPollNoErr(err, "mcp is not updated")
+		exutil.AssertWaitPollNoErr(err, "mcp is not updated")
 
 		g.By("Create a 10 pods on the same node\n")
 		for i := 0; i < 10; i++ {
@@ -373,5 +382,35 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		workerNodeName := getSingleWorkerNode(oc)
 		err = getWorkerNodeDescribe(oc, workerNodeName)
 		exutil.AssertWaitPollNoErr(err, "Logs did not Found memory pressure, Test Failed")
+	})
+
+	// author: weinliu@redhat.com
+	g.It("Author:weinliu-Critical-11055-/dev/shm can be automatically shared among all of a pod's containers", func() {
+		g.By("Test for case OCP-11055")
+		oc.SetupProject()
+		podTwoContainers.name = "pod-twocontainers"
+		podTwoContainers.namespace = oc.Namespace()
+		g.By("Create a pod with two containers")
+		podTwoContainers.create(oc)
+		defer podTwoContainers.delete(oc)
+		g.By("Check pod status")
+		err := podStatus(oc)
+		exutil.AssertWaitPollNoErr(err, "pod is not running")
+		g.By("Enter container 1 and write files")
+		_, err = exutil.RemoteShPodWithBashSpecifyContainer(oc, podTwoContainers.namespace, podTwoContainers.name, "hello-openshift", "echo 'written_from_container1' > /dev/shm/c1")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Enter container 2 and check whether it can share container 1 shared files")
+		containerFile1, err := exutil.RemoteShPodWithBashSpecifyContainer(oc, podTwoContainers.namespace, podTwoContainers.name, "hello-openshift-fedora", "cat /dev/shm/c1")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Container1 File Content is: %v", containerFile1)
+		o.Expect(containerFile1).To(o.Equal("written_from_container1"))
+		g.By("Enter container 2 and write files")
+		_, err = exutil.RemoteShPodWithBashSpecifyContainer(oc, podTwoContainers.namespace, podTwoContainers.name, "hello-openshift-fedora", "echo 'written_from_container2' > /dev/shm/c2")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Enter container 1 and check whether it can share container 2 shared files")
+		containerFile2, err := exutil.RemoteShPodWithBashSpecifyContainer(oc, podTwoContainers.namespace, podTwoContainers.name, "hello-openshift", "cat /dev/shm/c2")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Container2 File Content is: %v", containerFile2)
+		o.Expect(containerFile2).To(o.Equal("written_from_container2"))
 	})
 })

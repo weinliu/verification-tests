@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"math/rand"
 	"os/exec"
-	"strings"
-	"strconv"
-	"time"
 	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -29,10 +30,10 @@ type podModifyDescription struct {
 
 type podLivenessProbe struct {
 	name                  string
-	namespace             string 
-	overridelivenessgrace string 
+	namespace             string
+	overridelivenessgrace string
 	terminationgrace      int
-	failurethreshold      int 
+	failurethreshold      int
 	periodseconds         int
 	template              string
 }
@@ -62,15 +63,15 @@ type objectTableRefcscope struct {
 }
 
 type podTerminationDescription struct {
-	name             string
-	namespace        string
-	template         string
+	name      string
+	namespace string
+	template  string
 }
 
 type podOOMDescription struct {
-	name             string
-	namespace        string
-	template         string
+	name      string
+	namespace string
+	template  string
 }
 
 type podInitConDescription struct {
@@ -85,18 +86,24 @@ type podSleepDescription struct {
 }
 
 type kubeletConfigDescription struct {
-	name        string
-	labelkey    string
-	labelvalue  string
-	template    string
+	name       string
+	labelkey   string
+	labelvalue string
+	template   string
 }
 
 type memHogDescription struct {
-	name        string
-	namespace   string
-	labelkey    string
-	labelvalue  string
-	template    string
+	name       string
+	namespace  string
+	labelkey   string
+	labelvalue string
+	template   string
+}
+
+type podTwoContainersDescription struct {
+	name      string
+	namespace string
+	template  string
 }
 
 func (kubeletConfig *kubeletConfigDescription) create(oc *exutil.CLI) {
@@ -257,7 +264,7 @@ func podStatus(oc *exutil.CLI) error {
 			e2e.Failf("the result of ReadFile:%v", err)
 			return false, nil
 		}
-		if strings.Contains(status, "Running") && !strings.Contains(status, "Pending"){
+		if strings.Contains(status, "Running") && !strings.Contains(status, "Pending") {
 			e2e.Logf("Pod status is : %s", status)
 			return true, nil
 		}
@@ -265,7 +272,7 @@ func podStatus(oc *exutil.CLI) error {
 	})
 }
 
-func podEvent(oc *exutil.CLI, timeout int, keyword string) error{
+func podEvent(oc *exutil.CLI, timeout int, keyword string) error {
 	return wait.Poll(10*time.Second, time.Duration(timeout)*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", oc.Namespace()).Output()
 		if err != nil {
@@ -280,12 +287,12 @@ func podEvent(oc *exutil.CLI, timeout int, keyword string) error{
 	})
 }
 
-func kubeletNotPromptDupErr(oc *exutil.CLI, keyword string, name string) error{
+func kubeletNotPromptDupErr(oc *exutil.CLI, keyword string, name string) error {
 	return wait.Poll(10*time.Second, 3*time.Minute, func() (bool, error) {
 		re := regexp.MustCompile(keyword)
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeletconfig", name, "-o=jsonpath={.status.conditions[*]}").Output()
-        	if err != nil {
-                	e2e.Logf("Can't get kubeletconfig status, error: %s. Trying again", err)
+		if err != nil {
+			e2e.Logf("Can't get kubeletconfig status, error: %s. Trying again", err)
 			return false, nil
 		}
 		found := re.FindAllString(output, -1)
@@ -298,7 +305,7 @@ func kubeletNotPromptDupErr(oc *exutil.CLI, keyword string, name string) error{
 		} else {
 			e2e.Logf("error: kubelet not prompt [%s]", keyword)
 			return false, nil
-		} 
+		}
 	})
 }
 
@@ -400,7 +407,7 @@ func (podTermination *podTerminationDescription) getTerminationGrace(oc *exutil.
 		e2e.Logf("The containerID is %v", containerID)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if nodeStatus == "Ready" {
-			terminationGrace, err := oc.AsAdmin().Run("debug").Args(`node/`+fmt.Sprintf("%s", nodename), "--", "chroot", "/host", "systemctl", "show", fmt.Sprintf("%s",containerID)).Output()
+			terminationGrace, err := oc.AsAdmin().Run("debug").Args(`node/`+fmt.Sprintf("%s", nodename), "--", "chroot", "/host", "systemctl", "show", fmt.Sprintf("%s", containerID)).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(string(terminationGrace), "TimeoutStopUSec=1min 30s") {
 				e2e.Logf("\nTERMINATION GRACE PERIOD IS SET CORRECTLY")
@@ -432,7 +439,7 @@ func (podOOM *podOOMDescription) podOOMStatus(oc *exutil.CLI) error {
 
 func (podInitCon *podInitConDescription) containerExit(oc *exutil.CLI) error {
 	return wait.Poll(2*time.Second, 2*time.Minute, func() (bool, error) {
-		initConStatus, err :=oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].status.initContainerStatuses[0].state.terminated.reason}", "-n", podInitCon.namespace).Output()
+		initConStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].status.initContainerStatuses[0].state.terminated.reason}", "-n", podInitCon.namespace).Output()
 		e2e.Logf("The initContainer status is %v", initConStatus)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(string(initConStatus), "Completed") {
@@ -457,7 +464,7 @@ func (podInitCon *podInitConDescription) deleteInitContainer(oc *exutil.CLI) err
 	return oc.AsAdmin().Run("debug").Args(`node/`+fmt.Sprintf("%s", nodename), "--", "chroot", "/host", "crictl", "rm", initContainerID).Execute()
 }
 
-func (podInitCon *podInitConDescription) initContainerNotRestart(oc *exutil.CLI) error { 
+func (podInitCon *podInitConDescription) initContainerNotRestart(oc *exutil.CLI) error {
 	return wait.Poll(3*time.Minute, 6*time.Minute, func() (bool, error) {
 		re := regexp.MustCompile("running")
 		podname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-n", podInitCon.namespace).Output()
@@ -466,7 +473,7 @@ func (podInitCon *podInitConDescription) initContainerNotRestart(oc *exutil.CLI)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		found := re.FindAllString(output, -1)
 		if lenStr := len(found); lenStr > 1 {
-			e2e.Logf("initContainer restart %d times.", (lenStr-1))
+			e2e.Logf("initContainer restart %d times.", (lenStr - 1))
 			return false, nil
 		} else if lenStr == 1 {
 			e2e.Logf("initContainer not restart")
@@ -478,15 +485,15 @@ func (podInitCon *podInitConDescription) initContainerNotRestart(oc *exutil.CLI)
 
 func checkNodeStatus(oc *exutil.CLI, workerNodeName string) error {
 	return wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
-			nodeStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", workerNodeName, "-o=jsonpath={.status.conditions[3].type}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("\nNode Status is %s\n", nodeStatus)
-			if nodeStatus == "Ready" {
-				e2e.Logf("\n WORKER NODE IS READY\n ")
-			} else {
-				e2e.Logf("\n WORKERNODE IS NOT READY\n ")
-				return false, nil
-			}
+		nodeStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", workerNodeName, "-o=jsonpath={.status.conditions[3].type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\nNode Status is %s\n", nodeStatus)
+		if nodeStatus == "Ready" {
+			e2e.Logf("\n WORKER NODE IS READY\n ")
+		} else {
+			e2e.Logf("\n WORKERNODE IS NOT READY\n ")
+			return false, nil
+		}
 		return true, nil
 	})
 }
@@ -532,10 +539,10 @@ func masterNodeLog(oc *exutil.CLI, masterNode string) error {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(status, "layer not known") {
 			e2e.Logf("\nTest successfully executed")
-		}  else {
-		   e2e.Logf("\nTest fail executed, and try next")
-		   return false, nil
-	 }
+		} else {
+			e2e.Logf("\nTest fail executed, and try next")
+			return false, nil
+		}
 		return true, nil
 	})
 }
@@ -547,24 +554,32 @@ func getmcpStatus(oc *exutil.CLI, nodeName string) error {
 		e2e.Logf("\nCurrent mcp UPDATING Status is %s\n", status)
 		if strings.Contains(status, "False") {
 			e2e.Logf("\nmcp updated successfully ")
-		}  else {
-		   e2e.Logf("\nmcp is still in UPDATING state")
-		   return false, nil
-	 }
+		} else {
+			e2e.Logf("\nmcp is still in UPDATING state")
+			return false, nil
+		}
 		return true, nil
 	})
 }
 
 func getWorkerNodeDescribe(oc *exutil.CLI, workerNodeName string) error {
 	return wait.Poll(3*time.Second, 1*time.Minute, func() (bool, error) {
-			nodeStatus, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("node", workerNodeName ).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(nodeStatus, "EvictionThresholdMet") {
-				e2e.Logf("\n WORKER NODE MET EVICTION THRESHOLD\n ")
-			} else {
-				e2e.Logf("\n WORKER NODE DO NOT HAVE MEMORY PRESSURE\n ")
-				return false, nil
-			}
+		nodeStatus, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("node", workerNodeName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(nodeStatus, "EvictionThresholdMet") {
+			e2e.Logf("\n WORKER NODE MET EVICTION THRESHOLD\n ")
+		} else {
+			e2e.Logf("\n WORKER NODE DO NOT HAVE MEMORY PRESSURE\n ")
+			return false, nil
+		}
 		return true, nil
 	})
+}
+
+func (podTwoContainers *podTwoContainersDescription) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podTwoContainers.template, "-p", "NAME="+podTwoContainers.name, "NAMESPACE="+podTwoContainers.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+func (podTwoContainers *podTwoContainersDescription) delete(oc *exutil.CLI) error {
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", podTwoContainers.namespace, "pod", podTwoContainers.name).Execute()
 }
