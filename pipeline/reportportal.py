@@ -15,7 +15,7 @@ import urllib.parse
 class ReportPortalClient:
     subteam = [
                 "SDN","STORAGE","Developer_Experience","User_Interface","PerfScale", "Service_Development_B","NODE","Logging",
-                "Apiserver_and_Auth","Workloads","Metering","Cluster_Observability","Quay/Quay.io","Cluster_Infrastructure",
+                "Workloads","Metering","Cluster_Observability","Quay/Quay.io","Cluster_Infrastructure",
                 "Multi-Cluster","Cluster_Operator","Azure","Network_Edge","ETCD","Installer","Portfolio_Integration",
                 "Service_Development_A","OLM","Operator_SDK","App_Migration","Windows_Containers","Security_and_Compliance",
                 "KNI","Openshift_Jenkins","RHV","ISV_Operators","PSAP","Multi-Cluster-Networking","OTA","Kata","Build_API",

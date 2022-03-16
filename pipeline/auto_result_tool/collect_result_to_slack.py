@@ -21,7 +21,6 @@ class SummaryClient:
                 "Service_Development_B":"",
                 "NODE":"",
                 "Logging":"",
-                "Apiserver_and_Auth":"",
                 "Workloads":"",
                 "Metering":"",
                 "Cluster_Observability":"",
