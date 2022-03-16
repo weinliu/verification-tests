@@ -24,7 +24,9 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		// Team - for specific kataconfig and pod, please define and create them in g.It.
 		testDataDir  = exutil.FixturePath("testdata", "kata")
 		iaasPlatform string
-		commonKc     = filepath.Join(testDataDir, "kataconfig.yaml")
+		commonKc = filepath.Join(testDataDir, "kataconfig.yaml")
+		defaultDeployment = filepath.Join(testDataDir, "deployment-example.yaml")
+
 	)
 
 	g.BeforeEach(func() {
@@ -221,50 +223,51 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("Success")
 
 	})
+	
+	g.It("Author:abhbaner-High-43516-operator is available in CatalogSource"    , func() {
+        
+        	g.By("Checking catalog source for the operator")
+        	opMarketplace,err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifests", "-n", "openshift-marketplace").Output()
+        	o.Expect(err).NotTo(o.HaveOccurred())
+        	o.Expect(opMarketplace).NotTo(o.BeEmpty())
+        	o.Expect(opMarketplace).To(o.ContainSubstring("sandboxed-containers-operator"))
+        	o.Expect(opMarketplace).To(o.ContainSubstring("Red Hat Operators"))
+        	g.By("SUCCESS -  'sandboxed-containers-operator' is present in packagemanifests")
+        
+    })
 
-	g.It("Author:abhbaner-High-43516-operator is available in CatalogSource", func() {
-
-		g.By("Checking catalog source for the operator")
-		opMarketplace, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifests", "-n", "openshift-marketplace").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(opMarketplace).NotTo(o.BeEmpty())
-		o.Expect(opMarketplace).To(o.ContainSubstring("sandboxed-containers-operator"))
-		o.Expect(opMarketplace).To(o.ContainSubstring("Red Hat Operators"))
-		g.By("SUCCESS -  'sandboxed-containers-operator' is present in packagemanifests")
-
-	})
 
 	g.It("Longduration-NonPreRelease-Author:abhbaner-High-43523-Monitor Kataconfig deletion[Disruptive]", func() {
-        g.By("Delete Common kataconfig and verify it")
-        deleteKataConfig(oc, commonKataConfigName, opNamespace)
-        e2e.Logf("common kataconfig %v was deleted", commonKataConfigName)
-        g.By("SUCCESSS - kata runtime deleted successfully")
-	g.By("Creating kataconfig for the remaining test cases")
-    	createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName)
+        	g.By("Delete Common kataconfig and verify it")
+        	deleteKataConfig(oc, commonKataConfigName, opNamespace)
+        	e2e.Logf("common kataconfig %v was deleted", commonKataConfigName)
+        	g.By("SUCCESSS - kata runtime deleted successfully")
+		g.By("Creating kataconfig for the remaining test cases")
+    		createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName)
 
   })
  
 	g.It("Longduration-NonPreRelease-Author:abhbaner-High-41813-Build Acceptance test[Disruptive]", func() {
         //This test will install operator,kataconfig,pod with kata - delete pod, delete kataconfig
-	commonPodName := "example"
-	commonPod := filepath.Join(testDataDir, "example.yaml")
+		commonPodName := "example"
+		commonPod := filepath.Join(testDataDir, "example.yaml")
 
-	oc.SetupProject()
-	podNs := oc.Namespace()
+		oc.SetupProject()
+		podNs := oc.Namespace()
 
-	g.By("Deploying pod with kata runtime and verify it")
-	newPodName := createKataPod(oc, podNs, commonPod, commonPodName)
-	checkKataPodStatus(oc, podNs, newPodName)
-	e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
-	deleteKataPod(oc, podNs, newPodName)
-	g.By("Kata Pod deleted - now deleting kataconfig")
-        deleteKataConfig(oc, commonKataConfigName, opNamespace)
-        e2e.Logf("common kataconfig %v was deleted", commonKataConfigName)
-        g.By("SUCCESSS - build acceptance passed")
-	g.By("Creating kataconfig for the remaining test cases")
-    	createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName)
+		g.By("Deploying pod with kata runtime and verify it")
+		newPodName := createKataPod(oc, podNs, commonPod, commonPodName)
+		checkKataPodStatus(oc, podNs, newPodName)
+		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
+		deleteKataPod(oc, podNs, newPodName)
+		g.By("Kata Pod deleted - now deleting kataconfig")
+    deleteKataConfig(oc, commonKataConfigName, opNamespace)
+    e2e.Logf("common kataconfig %v was deleted", commonKataConfigName)
+    g.By("SUCCESSS - build acceptance passed")
+		g.By("Creating kataconfig for the remaining test cases")
+    createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName)
+    })
 
-  })
 
 	// author: tbuskey@redhat.com
 	g.It("Author:tbuskey-High-46235-Kata Metrics Verify that Namespace is labeled to enable monitoring", func() {
@@ -293,5 +296,37 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 		g.By("Success")
 	})
+  
+   
+	g.It("Author:abhbaner-High-43524-Existing deployments (with runc) should restart normally after kata runtime install", func() {
+		g.By("Creating a deployment")
+
+		oc.SetupProject()
+		ns := oc.Namespace()
+		newDeployName := "dep-43524"
+		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+newDeployName).OutputToFile(getRandomString() + "dep-common.json")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		deployMsg,err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns,"-o=jsonpath={..name}").Output()
+		e2e.Logf(" get pods for ns %v, output - %v",ns,deployMsg)
+		o.Expect(deployMsg).To(o.ContainSubstring(newDeployName))
+		
+		defaultPodName:= strings.Split(deployMsg, " example")[0]
+		//deleting pod from the deployment and checking its status
+		e2e.Logf("delete pod %s in namespace %s", defaultPodName, "%s ns", ns)
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", defaultPodName, "-n" , ns).Execute()
+		errCheck := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
+			deployAfterDeleteMsg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment","-n" , ns).Output()
+			if strings.Contains(deployAfterDeleteMsg, "3/3") {
+				return true, nil
+			}   
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Pod replica could not be restarted"))
+		g.By("SUCCESSS - kataconfig installed and post that pod with runc successfully restarted ")
+	})
+
 
 })
