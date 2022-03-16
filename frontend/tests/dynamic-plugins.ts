@@ -3,7 +3,7 @@ import { checkErrors } from '../upstream/support';
 import { nav } from '../upstream/views/nav';
 import { Overview } from '../views/overview';
 
-describe('Allow dynamic plugins to proxy to services on the cluster (OCP-45629, admin)', () => {
+describe.skip('Allow dynamic plugins to proxy to services on the cluster (OCP-45629, admin)', () => {
     before(() => {
         // deploy plugin manifests
         cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
