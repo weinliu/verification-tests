@@ -8061,10 +8061,18 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.AssertWaitPollNoErr(waitErr, "cannot get expected installplan status")
 
 		g.By("Check sub for the same message")
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace(), sub.subName, "-o=jsonpath={.status.conditions..message}").Output()
-		o.Expect(strings.Contains(msg, errorText)).To(o.BeTrue())
-		e2e.Logf("subscription also has the expected error")
-
+		waitErr = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace(), sub.subName, "-o=jsonpath={.status.conditions..message}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(msg, errorText) {
+				e2e.Logf("subscription has the expected error")
+				return true, nil
+			} else {
+				e2e.Logf("subscription doesn't have the expected error:" + msg)
+				return false, nil
+			}
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "subscription doesn't have the expected error")
 		g.By("Finished")
 
 	})
