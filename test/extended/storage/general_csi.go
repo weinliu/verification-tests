@@ -2013,6 +2013,62 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 		}
 	})
+
+	// OCP-48666 - [CSI Driver] [Statefulset] [Filesystem] volumes should store data and allow exec of files on the volume
+	g.It("Author:ropatil-High-48666-[CSI Driver] [Statefulset] [Filesystem default] volumes should store data and allow exec of files on the volume", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "diskplugin.csi.alibabacloud.com", "vpc.block.csi.ibm.io"}
+
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
+			stsTemplate         = filepath.Join(storageTeamBaseDir, "sts-template.yaml")
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+		)
+		if cloudProvider == "aws" && !checkCSIDriverInstalled(oc, []string{"efs.csi.aws.com"}) {
+			supportProvisioners = deleteElement(supportProvisioners, "efs.csi.aws.com")
+		}
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		// Set up a specified project share for all the phases
+		g.By("0. Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			// Get the present scName and check it is installed or no
+			scName := getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			checkStorageclassExists(oc, scName)
+
+			// Set the resource definition for the scenario
+			sts := newSts(setStsTemplate(stsTemplate), setStsReplicasNumber("2"))
+
+			g.By("# Create StatefulSet with the preset csi storageclass")
+			sts.scname = scName
+			e2e.Logf("%s", sts.scname)
+			sts.create(oc)
+			defer sts.deleteAsAdmin(oc)
+
+			g.By("# Wait for Statefulset to Ready")
+			sts.waitReady(oc)
+
+			g.By("# Check for StatefulSet in Running state")
+			checkPodStatusByLabel(oc, sts.namespace, "app="+sts.applabel, "Running")
+
+			g.By("# Check the no of pvc matched to StatefulSet replicas number")
+			o.Expect(sts.matchPvcNumWithReplicasNo(oc)).Should(o.BeTrue())
+
+			g.By("# Check the pod volume can be read and write")
+			sts.checkMountedVolumeCouldRW(oc)
+
+			g.By("# Check the pod volume have the exec right")
+			sts.checkMountedVolumeHaveExecRight(oc)
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
 })
 
 // Performing test steps for Online Volume Resizing

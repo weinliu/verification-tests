@@ -332,6 +332,17 @@ func restoreVsphereCSIcredential(oc *exutil.CLI, pwdKey string, originPwd string
 	return nil
 }
 
+// Delete string list's specified string element
+func deleteElement(list []string, element string) []string {
+	result := make([]string, 0)
+	for _, v := range list {
+		if v != element {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
 // Get Cluster Storage Operator specified status value
 func getCSOspecifiedStatusValue(oc *exutil.CLI, specifiedStatus string) (string, error) {
 	status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/storage", "-o=jsonpath={.status.conditions[?(.type=='"+specifiedStatus+"')].status}").Output()

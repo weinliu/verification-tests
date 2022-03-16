@@ -3,6 +3,7 @@ package storage
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -379,24 +380,33 @@ func getPodDetailsByLabel(oc *exutil.CLI, namespace string, labelName string) (s
 }
 
 // Get the pods List by label
-func getPodsListByLabel(oc *exutil.CLI, namespace string, labelName string) ([]string, error) {
-	podsOp, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", labelName, "-o=jsonpath={.items[*].metadata.name}").Output()
+func getPodsListByLabel(oc *exutil.CLI, namespace string, selectorLabel string) ([]string, error) {
+	podsOp, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", selectorLabel, "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	return strings.Fields(podsOp), err
+	return strings.Split(podsOp, " "), err
+}
+
+// Get the pvcName from the pod
+func getPvcNameFromPod(oc *exutil.CLI, podName string) string {
+	pvcName, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", oc.Namespace(), "-o=jsonpath={.spec.volumes[*].persistentVolumeClaim.claimName}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return pvcName
 }
 
 // Get the pod status by label, Checking status for n numbers of deployments
-func checkPodStatusByLabel(oc *exutil.CLI, namespace string, labelName string, expectedstatus string) {
+func checkPodStatusByLabel(oc *exutil.CLI, namespace string, selectorLabel string, expectedstatus string) {
 	var podDescribe string
-	podsList, _ := getPodsListByLabel(oc, namespace, labelName)
-	e2e.Logf("PodLabelName \"%s\", expected status is \"%s\", podsList=%s", labelName, expectedstatus, podsList)
+	var pvcList []string
+	podsList, _ := getPodsListByLabel(oc, namespace, selectorLabel)
+	e2e.Logf("PodLabelName \"%s\", expected status is \"%s\", podsList=%s", selectorLabel, expectedstatus, podsList)
 	err := wait.Poll(3*time.Second, 120*time.Second, func() (bool, error) {
 		podflag := 0
-		for _, pod := range podsList {
-			podstatus, err := oc.WithoutNamespace().Run("get").Args("pod", pod, "-n", namespace, "-o=jsonpath={.status.phase}").Output()
+		for _, podName := range podsList {
+			podstatus, err := oc.WithoutNamespace().Run("get").Args("pod", podName, "-n", namespace, "-o=jsonpath={.status.phase}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if matched, _ := regexp.MatchString(expectedstatus, podstatus); !matched {
-				podDescribe = describePod(oc, namespace, pod)
+				podDescribe = describePod(oc, namespace, podName)
+				pvcList = append(pvcList, getPvcNameFromPod(oc, podName))
 				podflag = 1
 			}
 		}
@@ -409,8 +419,11 @@ func checkPodStatusByLabel(oc *exutil.CLI, namespace string, labelName string, e
 	})
 	if err != nil && podDescribe != "" {
 		e2e.Logf(podDescribe)
+		for _, pvcName := range pvcList {
+			describePersistentVolumeClaim(oc, oc.Namespace(), pvcName)
+		}
 	}
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod with label %s not ready", labelName))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod with label %s not ready", selectorLabel))
 }
 
 //  Specified pod exec the bash CLI
@@ -711,4 +724,219 @@ func (dep *deployment) checkDataBlockType(oc *exutil.CLI) {
 	_, err := execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "/bin/dd if="+dep.mpath+" of=/tmp/testfile bs=512 count=1")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat /tmp/testfile | grep 'test data' ")).To(o.ContainSubstring("matches"))
+}
+
+// Statefulset workload related functions
+type statefulset struct {
+	name       string
+	namespace  string
+	replicasno string
+	applabel   string
+	mpath      string
+	pvcname    string
+	template   string
+	volumetype string
+	typepath   string
+	capacity   string
+	scname     string
+}
+
+// function option mode to change the default value of Statefulset parameters,eg. name, replicasno, mpath
+type statefulsetOption func(*statefulset)
+
+// Replace the default value of Statefulset name parameter
+func setStsName(name string) statefulsetOption {
+	return func(this *statefulset) {
+		this.name = name
+	}
+}
+
+// Replace the default value of Statefulset template parameter
+func setStsTemplate(template string) statefulsetOption {
+	return func(this *statefulset) {
+		this.template = template
+	}
+}
+
+// Replace the default value of Statefulset namespace parameter
+func setStsNamespace(namespace string) statefulsetOption {
+	return func(this *statefulset) {
+		this.namespace = namespace
+	}
+}
+
+// Replace the default value of Statefulset replicasno parameter
+func setStsReplicasNumber(replicasno string) statefulsetOption {
+	return func(this *statefulset) {
+		this.replicasno = replicasno
+	}
+}
+
+// Replace the default value of Statefulset app label
+func setStsApplabel(applabel string) statefulsetOption {
+	return func(this *statefulset) {
+		this.applabel = applabel
+	}
+}
+
+// Replace the default value of Statefulset mountpath parameter
+func setStsMountpath(mpath string) statefulsetOption {
+	return func(this *statefulset) {
+		this.mpath = mpath
+	}
+}
+
+// Replace the default value of Statefulset volname parameter
+func setStsVolName(pvcname string) statefulsetOption {
+	return func(this *statefulset) {
+		this.pvcname = pvcname
+	}
+}
+
+// Replace the default value of Statefulset volume type parameter
+func setStsVolumeType(volumetype string) statefulsetOption {
+	return func(this *statefulset) {
+		this.volumetype = volumetype
+	}
+}
+
+// Replace the default value of Statefulset volume type path parameter
+func setStsVolumeTypePath(typepath string) statefulsetOption {
+	return func(this *statefulset) {
+		this.typepath = typepath
+	}
+}
+
+// Replace the default value of Statefulset size parameter
+func setStsVolumeCapacity(capacity string) statefulsetOption {
+	return func(this *statefulset) {
+		this.capacity = capacity
+	}
+}
+
+// Replace the default value of Statefulset size parameter
+func setStsSCName(scname string) statefulsetOption {
+	return func(this *statefulset) {
+		this.scname = scname
+	}
+}
+
+//  Create a new customized Statefulset object
+func newSts(opts ...statefulsetOption) statefulset {
+	var defaultVolSize string
+	switch cloudProvider {
+	// AlibabaCloud minimum volume size is 20Gi
+	case "alibabacloud":
+		defaultVolSize = strconv.FormatInt(getRandomNum(20, 30), 10) + "Gi"
+	// IBMCloud minimum volume size is 10Gi
+	case "ibmcloud":
+		defaultVolSize = strconv.FormatInt(getRandomNum(10, 20), 10) + "Gi"
+	// Other Clouds(AWS GCE Azure OSP vSphere) minimum volume size is 1Gi
+	default:
+		defaultVolSize = strconv.FormatInt(getRandomNum(1, 10), 10) + "Gi"
+	}
+	defaultStatefulset := statefulset{
+		name:       "my-sts-" + getRandomString(),
+		template:   "sts-template.yaml",
+		namespace:  "",
+		replicasno: "2",
+		applabel:   "myapp-" + getRandomString(),
+		mpath:      "/mnt/local",
+		pvcname:    "stsvol-" + getRandomString(),
+		volumetype: "volumeMounts",
+		typepath:   "mountPath",
+		capacity:   defaultVolSize,
+		scname:     "gp2-csi",
+	}
+
+	for _, o := range opts {
+		o(&defaultStatefulset)
+	}
+
+	return defaultStatefulset
+}
+
+// Create new Statefulset with customized parameters
+func (sts *statefulset) create(oc *exutil.CLI) {
+	if sts.namespace == "" {
+		sts.namespace = oc.Namespace()
+	}
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", sts.template, "-p", "STSNAME="+sts.name, "STSNAMESPACE="+sts.namespace, "VOLUMENAME="+sts.pvcname, "REPLICASNUM="+sts.replicasno, "APPLABEL="+sts.applabel, "MPATH="+sts.mpath, "VOLUMETYPE="+sts.volumetype, "TYPEPATH="+sts.typepath, "CAPACITY="+sts.capacity, "SCNAME="+sts.scname)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+//  Delete the Statefulset from the namespace
+func (sts *statefulset) delete(oc *exutil.CLI) {
+	err := oc.WithoutNamespace().Run("delete").Args("sts", sts.name, "-n", sts.namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+//  Delete the Statefulset from the namespace
+func (sts *statefulset) deleteAsAdmin(oc *exutil.CLI) {
+	oc.WithoutNamespace().AsAdmin().Run("delete").Args("sts", sts.name, "-n", sts.namespace).Execute()
+
+}
+
+//  Describe Statefulset
+func (sts *statefulset) describeSTS(oc *exutil.CLI) {
+	output, err := oc.WithoutNamespace().Run("describe").Args("sts", "-n", sts.namespace, sts.name).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("****** The STS  %s in namespace %s with detail info: ******\n %s", sts.name, sts.namespace, output)
+}
+
+// Check pvc counts matches with STS replicas no
+func (sts *statefulset) matchPvcNumWithReplicasNo(oc *exutil.CLI) bool {
+	return checkPvcNumWithLabel(oc, "app="+sts.applabel, sts.replicasno)
+}
+
+// Waiting the Statefulset become ready
+func (sts *statefulset) waitReady(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		stsReady, err := sts.checkReady(oc)
+		if err != nil {
+			return stsReady, err
+		}
+		if !stsReady {
+			return stsReady, nil
+		}
+		e2e.Logf(sts.name + " availableReplicas is as expected")
+		return stsReady, nil
+	})
+
+	if err != nil {
+		sts.describeSTS(oc)
+	}
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Deployment %s not ready", sts.name))
+}
+
+// Check the Statefulset ready
+func (sts *statefulset) checkReady(oc *exutil.CLI) (bool, error) {
+	readyReplicas, err := oc.WithoutNamespace().Run("get").Args("sts", sts.name, "-n", sts.namespace, "-o", "jsonpath={.status.availableReplicas}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if sts.replicasno == "0" && readyReplicas == "" {
+		readyReplicas = "0"
+	}
+	return strings.EqualFold(sts.replicasno, readyReplicas), err
+}
+
+//  Check the pod mounted volume could read and write
+func (sts *statefulset) checkMountedVolumeCouldRW(oc *exutil.CLI) {
+	podList, _ := getPodsListByLabel(oc, sts.namespace, "app="+sts.applabel)
+	for _, podName := range podList {
+		content := "storage test " + getRandomString()
+		randomFileName := "/testfile_" + getRandomString()
+		_, err := execCommandInSpecificPod(oc, sts.namespace, podName, "echo "+content+">"+sts.mpath+randomFileName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(execCommandInSpecificPod(oc, sts.namespace, podName, "cat "+sts.mpath+randomFileName)).To(o.ContainSubstring(content))
+	}
+}
+
+//  Check the pod mounted volume have exec right
+func (sts *statefulset) checkMountedVolumeHaveExecRight(oc *exutil.CLI) {
+	podList, _ := getPodsListByLabel(oc, sts.namespace, "app="+sts.applabel)
+	for _, podName := range podList {
+		_, err := execCommandInSpecificPod(oc, sts.namespace, podName, "cp hello "+sts.mpath)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(execCommandInSpecificPod(oc, sts.namespace, podName, sts.mpath+"/hello")).To(o.ContainSubstring("Hello OpenShift Storage"))
+	}
 }

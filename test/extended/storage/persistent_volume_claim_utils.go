@@ -297,6 +297,24 @@ func getPersistentVolumeClaimStatusMatch(oc *exutil.CLI, namespace string, pvcNa
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The volume:%v, did not reached expected status.", err))
 }
 
+// Get pvc list using selector label
+func getPvcListWithLabel(oc *exutil.CLI, selectorLabel string) []string {
+	pvcList, err := oc.WithoutNamespace().Run("get").Args("pvc", "-n", oc.Namespace(), "-l", selectorLabel, "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The pvc list is %s", pvcList)
+	return strings.Split(pvcList, " ")
+}
+
+// Check pvc counts matches with expected number
+func checkPvcNumWithLabel(oc *exutil.CLI, selectorLabel string, expectednum string) bool {
+	if strconv.Itoa(cap(getPvcListWithLabel(oc, selectorLabel))) == expectednum {
+		e2e.Logf("The pvc counts matched to expected replicas number: %s ", expectednum)
+		return true
+	}
+	e2e.Logf("The pvc counts did not matched to expected replicas number: %s", expectednum)
+	return false
+}
+
 // Wait persistentVolumeClaim status becomes to expected status
 func (pvc *persistentVolumeClaim) waitStatusAsExpected(oc *exutil.CLI, expectedStatus string) {
 	var (
