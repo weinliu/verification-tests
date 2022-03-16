@@ -735,7 +735,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		featuregateTotalNum, _ := exec.Command("bash", "-c", fmt.Sprintf(
 			"grep -r 'release.openshift.io/feature-gate' %s|wc -l", manifestDir)).Output()
 		featuregateNoUpgradeNum, _ := exec.Command("bash", "-c", fmt.Sprintf(
-			"grep -r 'release.openshift.io/feature-gate: \"TechPreviewNoUpgrade\"' %s|wc -l", manifestDir)).Output()
+			"grep -r 'release.openshift.io/feature-gate: .*TechPreviewNoUpgrade.*' %s|wc -l", manifestDir)).Output()
 		o.Expect(featuregateNoUpgradeNum).To(o.Equal(featuregateTotalNum))
 
 		g.By("Check no TP operator cluster-api installed by default.")
