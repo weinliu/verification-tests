@@ -140,6 +140,20 @@ func WaitForMachineFailed(oc *exutil.CLI, machineSetName string) {
 	exutil.AssertWaitPollNoErr(err, "Check machine phase failed")
 }
 
+func WaitForMachineProvisioned(oc *exutil.CLI, machineSetName string) {
+	e2e.Logf("Wait for machine to go into Provisioned phase")
+	err := wait.Poll(60*time.Second, 300*time.Second, func() (bool, error) {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=jsonpath={.items[0].status.phase}").Output()
+		if output != "Provisioned" {
+			e2e.Logf("machine is not in Provisioned phase and waiting up to 60 seconds ...")
+			return false, nil
+		}
+		e2e.Logf("machine is in Provisioned phase")
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "Check machine phase failed")
+}
+
 func CheckPlatform(oc *exutil.CLI) string {
 	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 	return strings.ToLower(output)

@@ -244,4 +244,37 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			o.Expect(machineProviderID).Should(o.Equal(nodeProviderID))
 		}
 	})
+
+	// author: huliu@redhat.com
+	g.It("Longduration-NonPreRelease-Author:huliu-High-35513-Windows machine should successfully provision for aws [Disruptive]", func() {
+		if clusterinfra.CheckPlatform(oc) == "aws" {
+			g.By("Create a new machineset")
+			machinesetName := "machineset-35513"
+			ms := clusterinfra.MachineSetDescription{machinesetName, 0}
+			defer ms.DeleteMachineSet(oc)
+			ms.CreateMachineSet(oc)
+			region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			var amiId string
+			switch region {
+			case "us-east-1", "us-iso-east-1":
+				amiId = "ami-0d9cdd823beb0f50b"
+			case "us-east-2":
+				amiId = "ami-0e05cb5a56f9043da"
+			case "cn-north-1":
+				amiId = "ami-07a0c9b547ce24896"
+			case "us-gov-west-1":
+				amiId = "ami-0fc1f8653c0f1c371"
+			default:
+				e2e.Logf("Not support region for the case for now.")
+				g.Skip("Not support region for the case for now.")
+			}
+			g.By("Update machineset with windows ami")
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"metadata":{"labels":{"machine.openshift.io/os-id": "Windows"}},"spec":{"providerSpec":{"value":{"ami":{"id":"`+amiId+`"}}}}}}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			clusterinfra.WaitForMachineProvisioned(oc, machinesetName)
+		}
+		e2e.Logf("Only aws platform supported for the test")
+	})
 })
