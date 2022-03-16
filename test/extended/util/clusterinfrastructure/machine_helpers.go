@@ -55,24 +55,32 @@ func (ms *MachineSetDescription) DeleteMachineSet(oc *exutil.CLI) error {
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("machineset", ms.Name, "-n", machineAPINamespace).Execute()
 }
 
-// ListWorkerMachineSets list all worker machineSets
-func ListWorkerMachineSets(oc *exutil.CLI) []string {
-	e2e.Logf("Listing all MachineSets ...")
-	machineSetNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return strings.Split(machineSetNames, " ")
-}
-
-// ListWorkerMachines list all worker machines
-func ListWorkerMachines(oc *exutil.CLI) []string {
+// ListAllMachineNames list all machines
+func ListAllMachineNames(oc *exutil.CLI) []string {
 	e2e.Logf("Listing all Machines ...")
 	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strings.Split(machineNames, " ")
 }
 
-// GetMachinesFromMachineSet get all Machines in a Machineset
-func GetMachinesFromMachineSet(oc *exutil.CLI, machineSetName string) []string {
+// ListWorkerMachineSetNames list all worker machineSets
+func ListWorkerMachineSetNames(oc *exutil.CLI) []string {
+	e2e.Logf("Listing all MachineSets ...")
+	machineSetNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Split(machineSetNames, " ")
+}
+
+// ListWorkerMachineNames list all worker machines
+func ListWorkerMachineNames(oc *exutil.CLI) []string {
+	e2e.Logf("Listing all Machines ...")
+	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-o=jsonpath={.items[*].metadata.name}", "-l", "machine.openshift.io/cluster-api-machine-type=worker", "-n", machineAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Split(machineNames, " ")
+}
+
+// GetMachineNamesFromMachineSet get all Machines in a Machineset
+func GetMachineNamesFromMachineSet(oc *exutil.CLI, machineSetName string) []string {
 	e2e.Logf("Getting all Machines in a Machineset ...")
 	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-o=jsonpath={.items[*].metadata.name}", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -89,7 +97,7 @@ func GetNodeNameFromMachine(oc *exutil.CLI, machineName string) string {
 // GetRandomMachineSetName get a random MachineSet name
 func GetRandomMachineSetName(oc *exutil.CLI) string {
 	e2e.Logf("Getting a random MachineSet ...")
-	return ListWorkerMachineSets(oc)[0]
+	return ListWorkerMachineSetNames(oc)[0]
 }
 
 // ScaleMachineSet scale a MachineSet by replicas

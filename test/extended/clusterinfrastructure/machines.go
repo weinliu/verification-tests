@@ -230,4 +230,18 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 		e2e.Logf("Only gcp platform supported for the test")
 	})
+
+	// author: zhsun@redhat.com
+	g.It("Author:zhsun-Medium-48363-Machine providerID should be consistent with node providerID", func() {
+		g.By("Check machine providerID and node providerID are consistent")
+		machineList := clusterinfra.ListAllMachineNames(oc)
+		for _, machineName := range machineList {
+			nodeName := clusterinfra.GetNodeNameFromMachine(oc, machineName)
+			machineProviderID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", machineName, "-o=jsonpath={.spec.providerID}", "-n", machineAPINamespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			nodeProviderID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.spec.providerID}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(machineProviderID).Should(o.Equal(nodeProviderID))
+		}
+	})
 })

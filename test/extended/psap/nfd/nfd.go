@@ -47,7 +47,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		}
 
 		g.By("Get existing machinesets in cluster")
-		oc_get_machineset := ci.ListWorkerMachineSets(oc)
+		oc_get_machineset := ci.ListWorkerMachineSetNames(oc)
 		e2e.Logf("Existing machinesets:\n%v", oc_get_machineset)
 
 		g.By("Get name of first machineset in existing machineset list")

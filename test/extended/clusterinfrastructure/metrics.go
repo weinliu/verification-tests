@@ -67,7 +67,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		mhc.createMhc(oc)
 
 		g.By("Delete the node attached to the machine")
-		machineName := clusterinfra.GetMachinesFromMachineSet(oc, "machineset-43764")[0]
+		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, "machineset-43764")[0]
 		nodeName := clusterinfra.GetNodeNameFromMachine(oc, machineName)
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("node", nodeName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
