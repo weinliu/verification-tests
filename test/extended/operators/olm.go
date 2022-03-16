@@ -44,7 +44,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("VMonly-Author:jiazha-High-48980-oc adm catalog mirror image to local", func() {
+	g.It("VMonly-ConnectedOnly-Author:jiazha-High-48980-oc adm catalog mirror image to local", func() {
 		mirroredImage := "quay.io/olmqe/sriov-fec:v4.9"
 
 		g.By("1) get the cluster auth")
