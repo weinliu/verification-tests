@@ -114,4 +114,33 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(kcm).To(o.ContainSubstring("\"cloud-provider\":[\"external\"]"))
 	})
+
+	// author: zhsun@redhat.com
+	g.It("Author:zhsun-Medium-42879-Cloud-config configmap should be copied and kept in sync within the CCCMO namespace [Disruptive]", func() {
+		if !(iaasPlatform == "azure" || iaasPlatform == "vsphere") {
+			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
+		}
+
+		g.By("Check if cloud-config cm is copied to openshift-cloud-controller-manager namespace")
+		ccmCM, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(ccmCM).To(o.ContainSubstring("cloud-conf"))
+
+		g.By("Check if the sync is working correctly")
+		cmBeforePatch, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/cloud-conf", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.data.cloud\\.conf}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("cm/cloud-conf", "-n", "openshift-cloud-controller-manager", "-p", `{"data":{"cloud.conf": "invalid"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmAfterPatch, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/cloud-conf", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.data.cloud\\.conf}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(cmBeforePatch).Should(o.Equal(cmAfterPatch))
+
+		cccmoPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-cloud-controller-manager-operator", "-l", "k8s-app=cloud-manager-operator", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cccmoPodLogs, err := oc.AsAdmin().Run("logs").Args(cccmoPodName, "-n", "openshift-cloud-controller-manager-operator", "-c", "config-sync-controllers").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(cccmoPodLogs).Should(o.And(
+			o.ContainSubstring("syncing cloud-conf ConfigMap"),
+			o.ContainSubstring("source and target cloud-config content are equal, no sync needed")))
+	})
 })
