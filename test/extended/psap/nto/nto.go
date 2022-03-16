@@ -30,11 +30,15 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		pao_performance_file             = exutil.FixturePath("testdata", "psap", "pao", "pao-performanceprofile.yaml")
 		pao_performance_patch_file       = exutil.FixturePath("testdata", "psap", "pao", "pao-performance-patch.yaml")
 		pao_performance_fixpatch_file    = exutil.FixturePath("testdata", "psap", "pao", "pao-performance-fixpatch.yaml")
+		pao_performance_optimize_file    = exutil.FixturePath("testdata", "psap", "pao", "pao-performance-optimize.yaml")
+		pao_include_performance_profile  = exutil.FixturePath("testdata", "psap", "pao", "pao-include-performance-profile.yaml")
 		pao_workercnf_mcp_file           = exutil.FixturePath("testdata", "psap", "pao", "pao-workercnf-mcp.yaml")
-		isNTO                            bool
-		isPAOInstalled                   bool
-		paoNamespace                     = "openshift-performance-addon-operator"
-		iaasPlatform                     string
+		pao_workeroptimize_mcp_file      = exutil.FixturePath("testdata", "psap", "pao", "pao-workeroptimize-mcp.yaml")
+
+		isNTO          bool
+		isPAOInstalled bool
+		paoNamespace   = "openshift-performance-addon-operator"
+		iaasPlatform   string
 	)
 
 	g.BeforeEach(func() {
@@ -1212,5 +1216,117 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("Check if the linux kernel parameter as vm.stat_interval = 10")
 		compareSpecifiedValueByNameOnLabelNode(oc, tunedNodeName, "vm.stat_interval", "10")
+	})
+
+	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-45686-NTO Creating tuned profile with references to not yet existing Performance Profile configuration.[Disruptive] [Slow]", func() {
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		isPAOInOperatorHub := exutil.IsPAOInOperatorHub(oc)
+		if !isPAOInOperatorHub {
+			g.Skip("PAO is not in OperatorHub - skipping test ...")
+		}
+
+		isPAOInstalled = exutil.IsPAOInstalled(oc)
+		if isPAOInstalled {
+			e2e.Logf("PAO has been installed and continue to execute test case")
+		} else {
+			exutil.InstallPAO(oc, paoNamespace)
+		}
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "include-performance-profile", "-n", ntoNamespace, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("PerformanceProfile", "optimize", "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("mcp", "worker-optimize", "--ignore-not-found").Execute()
+
+		//Use the first worker node as labeled node
+		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Get the tuned pod name in the labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-optimize-").Execute()
+
+		g.By("Label the node with node-role.kubernetes.io/worker-optimize=")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-optimize=", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Apply worker-optimize machineconfigpool")
+		exutil.ApplyOperatorResourceByYaml(oc, paoNamespace, pao_workeroptimize_mcp_file)
+
+		g.By("Assert if the MCP has been successfully applied ...")
+		assertIfMCPChangesAppliedByName(oc, "worker-optimize", 600)
+
+		isSNO := isSNOCluster(oc)
+		if isSNO {
+			g.By("Apply include-performance-profile tuned profile")
+			exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", pao_include_performance_profile, "-p", "ROLENAME=master")
+			g.By("Assert if the mcp is ready after server has been successfully rebooted...")
+			assertIfMCPChangesAppliedByName(oc, "master", 600)
+
+		} else {
+			g.By("Apply include-performance-profile tuned profile")
+			exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", pao_include_performance_profile, "-p", "ROLENAME=worker-optimize")
+
+			g.By("Assert if the mcp is ready after server has been successfully rebooted...")
+			assertIfMCPChangesAppliedByName(oc, "worker-optimize", 600)
+		}
+
+		g.By("Check if new profile include-performance-profile in rendered tuned")
+		renderCheck, err := getTunedRender(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).To(o.ContainSubstring("include-performance-profile"))
+
+		g.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Check if profile what's active profile applied on nodes")
+		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if isSNO {
+			o.Expect(nodeProfileName).To(o.ContainSubstring("openshift-control-plane"))
+		} else {
+			o.Expect(nodeProfileName).To(o.ContainSubstring("openshift-node"))
+		}
+
+		g.By("Check if tuned pod logs contains Cannot find profile 'openshift-node-performance-optimize' on labeled nodes")
+		assertNTOTunedLogsLastLines(oc, ntoNamespace, tunedPodName, "2", "Cannot find profile 'openshift-node-performance-optimize'")
+
+		if isSNO {
+			g.By("Apply performance optimize profile")
+			exutil.ApplyClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pao_performance_optimize_file, "-p", "ROLENAME=master")
+			g.By("Assert if the mcp is ready after server has been successfully rebooted...")
+			assertIfMCPChangesAppliedByName(oc, "master", 600)
+		} else {
+			g.By("Apply performance optimize profile")
+			exutil.ApplyClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pao_performance_optimize_file, "-p", "ROLENAME=worker-optimize")
+			g.By("Assert if the mcp is ready after server has been successfully rebooted...")
+			assertIfMCPChangesAppliedByName(oc, "worker-optimize", 600)
+		}
+
+		g.By("Check performance profile tuned profile should be automatically created")
+		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNames).To(o.ContainSubstring("openshift-node-performance-optimize"))
+
+		g.By("Check current profile for each node")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Check if new NTO profile performance-patch was applied")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "include-performance-profile")
+
+		g.By("Check if profile what's active profile applied on nodes")
+		nodeProfileName, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeProfileName).To(o.ContainSubstring("include-performance-profile"))
+
+		g.By("Check if contains static tuning from profile 'include-performance-profile' applied in tuned pod logs on labeled nodes")
+		assertNTOTunedLogsLastLines(oc, ntoNamespace, tunedPodName, "2", "static tuning from profile 'include-performance-profile' applied")
 	})
 })
