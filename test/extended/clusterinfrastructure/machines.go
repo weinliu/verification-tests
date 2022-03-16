@@ -277,4 +277,34 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 		e2e.Logf("Only aws platform supported for the test")
 	})
+
+	// author: huliu@redhat.com
+	g.It("Longduration-NonPreRelease-Author:huliu-Medium-48012-Change AWS EBS GP3 IOPS in MachineSet should take affect on aws [Disruptive]", func() {
+		if clusterinfra.CheckPlatform(oc) == "aws" {
+			g.By("Create a new machineset")
+			machinesetName := "machineset-48012"
+			ms := clusterinfra.MachineSetDescription{machinesetName, 0}
+			defer ms.DeleteMachineSet(oc)
+			ms.CreateMachineSet(oc)
+			g.By("Update machineset with gp3 iops 5000")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"blockDevices":[{"ebs":{"volumeType":"gp3","iops":5000}}]}}}}}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
+
+			g.By("Check on aws instance with gp3 iops 5000")
+			instanceId, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-o=jsonpath={.items[0].status.providerStatus.instanceId}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			c2sConfigPrefix, stsConfigPrefix := clusterinfra.GetAwsCredentialFromCluster(oc)
+			defer clusterinfra.DeleteAwsCredentialTmpFile(c2sConfigPrefix, stsConfigPrefix)
+
+			volumeInfo, err := clusterinfra.GetAwsVolumeInfoAttachedToInstanceId(instanceId)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			e2e.Logf("volumeInfo:%s", volumeInfo)
+			o.Expect(strings.Contains(volumeInfo, "\"Iops\":5000") && strings.Contains(volumeInfo, "\"VolumeType\":\"gp3\"")).To(o.BeTrue())
+		}
+		e2e.Logf("Only aws platform supported for the test")
+	})
 })
