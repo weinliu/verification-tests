@@ -32,6 +32,18 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: jiazha@redhat.com
+	g.It("Author:jiazha-High-49167-fatal error", func() {
+		g.By("1) Check OLM related resources' logs")
+		deps := []string{"catalog-operator", "olm-operator", "package-server-manager", "packageserver"}
+		for _, value := range deps {
+			logs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(fmt.Sprintf("deployment/%s", value), "-n", "openshift-operator-lifecycle-manager").Output()
+			if err != nil || strings.Contains(logs, "fatal error") {
+				e2e.Failf("error:%v, %s get fatal error:%v", err, value, logs)
+			}
+		}
+	})
+
+	// author: jiazha@redhat.com
 	g.It("VMonly-Author:jiazha-High-25966-offline mirroring support", func() {
 		// This is a basic test, you can find images mirroring for disconnected cluster
 		// in: https://gitlab.cee.redhat.com/aosqe/flexy-templates/-/blob/master/functionality-testing/aos-4_10/hosts/sync_index_images_to_qe_registry.sh
