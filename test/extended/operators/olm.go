@@ -3667,7 +3667,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			"redhat-operators":    "Red Hat Operators",
 			"redhat-marketplace":  "Red Hat Marketplace"}
 
-		err := wait.Poll(60*time.Second, 360*time.Second, func() (bool, error) {
+		err := wait.Poll(30*time.Second, 360*time.Second, func() (bool, error) {
 			catsrcS := getResource(oc, asAdmin, withoutNamespace, "catsrc", "-n", "openshift-marketplace", "-o=jsonpath={..metadata.name}")
 			packages := getResource(oc, asAdmin, withoutNamespace, "packagemanifests")
 			if catsrcS == "" || packages == "" {
@@ -3680,9 +3680,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 					continue
 				}
 				if !strings.Contains(packages, catalogstrings[catsrcIndex]) {
-					catsrcStatus := getResource(oc, asAdmin, withoutNamespace, "catsrc", catsrcIndex, "-n", "openshift-marketplace", "-o", "yaml")
+					getResource(oc, asAdmin, withoutNamespace, "catsrc", catsrcIndex, "-n", "openshift-marketplace", "-o=jsonpath={.spec.image} {.status}")
+					getResource(oc, asAdmin, withoutNamespace, "pod", "-n", "openshift-marketplace")
 					e2e.Logf("cannot get packagemanifests for %s", catsrcIndex)
-					e2e.Logf("catsrc %s status is %s", catsrcIndex, catsrcStatus)
 					return false, nil
 				}
 			}
@@ -3711,7 +3711,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			"redhat-operators":    "Red Hat Operators",
 			"redhat-marketplace":  "Red Hat Marketplace"}
 
-		err := wait.Poll(60*time.Second, 360*time.Second, func() (bool, error) {
+		err := wait.Poll(30*time.Second, 360*time.Second, func() (bool, error) {
 			catsrcS := getResource(oc, asAdmin, withoutNamespace, "catsrc", "-n", "openshift-marketplace", "-o=jsonpath={..metadata.name}")
 			packages := getResource(oc, asAdmin, withoutNamespace, "packagemanifests")
 			if catsrcS == "" || packages == "" {
@@ -3724,9 +3724,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 					continue
 				}
 				if !strings.Contains(packages, catalogstrings[catsrcIndex]) {
-					catsrcStatus := getResource(oc, asAdmin, withoutNamespace, "catsrc", catsrcIndex, "-n", "openshift-marketplace", "-o", "yaml")
+					getResource(oc, asAdmin, withoutNamespace, "catsrc", catsrcIndex, "-n", "openshift-marketplace", "-o=jsonpath={.spec.image} {.status}")
+					getResource(oc, asAdmin, withoutNamespace, "pod", "-n", "openshift-marketplace")
 					e2e.Logf("cannot get packagemanifests for %s", catsrcIndex)
-					e2e.Logf("catsrc %s status is %s", catsrcIndex, catsrcStatus)
 					return false, nil
 				}
 			}
