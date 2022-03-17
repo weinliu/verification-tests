@@ -1329,4 +1329,29 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if contains static tuning from profile 'include-performance-profile' applied in tuned pod logs on labeled nodes")
 		assertNTOTunedLogsLastLines(oc, ntoNamespace, tunedPodName, "2", "static tuning from profile 'include-performance-profile' applied")
 	})
+
+	g.It("Author:liqcui-Medium-36152-NTO Get metrics and alerts", func() {
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+		//Get NTO Operator Pod Name
+		ntoOperatorPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ntoNamespace, "-l", "name=cluster-node-tuning-operator", "-o=jsonpath={.items[].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Get NTO metrics data
+		g.By("Get NTO metrics informaton ...")
+		metricsOutput, err := exutil.RemoteShPod(oc, ntoNamespace, ntoOperatorPod, "curl", "--insecure", "https://localhost:60000/metrics")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The metrics information of NTO as below: \n%v", metricsOutput)
+
+		//Assert the key metrics
+		g.By("Check if all metrics exist as expected...")
+		o.Expect(metricsOutput).To(o.And(
+			o.ContainSubstring("nto_build_info"),
+			o.ContainSubstring("nto_pod_labels_used_info"),
+			o.ContainSubstring("nto_degraded_info"),
+			o.ContainSubstring("nto_profile_calculated_total")))
+
+	})
 })
