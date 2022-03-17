@@ -157,6 +157,10 @@ if [ "${pipelinetype}" != "None" ] && [ "${pipelinetype}" != "failtogetvalue" ] 
       echo "it is telco pipeline"
       profiletype="telco"
       ;;
+    vecipipeline)
+      echo "it is veci pipeline"
+      profiletype="ve"
+      ;;
     *)
       echo "it is prerelease pipeline"
       profiletype="ci"
@@ -205,7 +209,7 @@ if [ "X${LAUNCHID}X" != "XX" ]; then
     else
       existing=`ls ${WORKSPACE}"/cip/"${VERSION}"/"|grep "${PROFILENAME}"".test"|grep "test_run.yaml"|wc -l|xargs`
     fi
-  elif [ "X${profiletype}X" == "XstageX" ]; then
+  elif [[ "X${profiletype}X" == "XstageX" ]] || [[ "X${profiletype}X" == "XveX" ]]; then
     existing=`ls ${WORKSPACE}"/cip/"${profiletype}"/"${VERSION}"/"|grep "${PROFILENAME}"".test"|grep "test_run.yaml"|wc -l|xargs`
   elif [ "X${profiletype}X" == "XupgradeX" ]; then
     if [ -d "${WORKSPACE}/cip/${VERSION}/upgrade/upgradetestrun" ]; then
@@ -248,7 +252,7 @@ if [ "X${LAUNCHID}X" != "XX" ]; then
       else
         ppath="../cip/"${VERSION}"/"
       fi
-    elif [ "X${profiletype}X" == "XstageX" ]; then
+    elif [[ "X${profiletype}X" == "XstageX" ]] || [[ "X${profiletype}X" == "XveX" ]]; then
       ppath="../cip/"${profiletype}"/"${VERSION}"/"
     elif [ "X${profiletype}X" == "XupgradeX" ]; then
       ppath="../cip/"${VERSION}"/upgrade/upgradetestrun/"
