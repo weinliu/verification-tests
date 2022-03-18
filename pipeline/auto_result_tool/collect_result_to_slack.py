@@ -13,23 +13,23 @@ import os
 
 class SummaryClient:
     SUBTEAM_OWNER = {
-                "SDN":"",
-                "STORAGE":"",
+                "SDN":"@sdn-ovn-qe-team ",
+                "STORAGE":"@storage-qe-team ",
                 "Developer_Experience":"",
                 "User_Interface":"",
                 "PerfScale":"", 
                 "Service_Development_B":"",
                 "NODE":"",
-                "Logging":"",
-                "Workloads":"",
+                "Logging":"@logging-qe-team ",
+                "Workloads":"@workloads-qe-team ",
                 "Metering":"",
-                "Cluster_Observability":"",
+                "Cluster_Observability":"@monitoring-qe-team ",
                 "Quay/Quay.io":"",
                 "Cluster_Infrastructure":"",
                 "Multi-Cluster":"",
                 "Cluster_Operator":"",
                 "Azure":"",
-                "Network_Edge":"",
+                "Network_Edge":"@ne-qe-team ",
                 "ETCD":"",
                 "Installer":"",
                 "Portfolio_Integration":"",
@@ -42,8 +42,8 @@ class SummaryClient:
                 "KNI":"",
                 "Openshift_Jenkins":"",
                 "RHV":"",
-                "ISV_Operators":"",
-                "PSAP":"",
+                "ISV_Operators":"@psap-qe-team ",
+                "PSAP":"@psap-qe-team ",
                 "Multi-Cluster-Networking":"",
                 "OTA":"",
                 "Kata":"",
@@ -51,10 +51,10 @@ class SummaryClient:
                 "Image_Registry":"@imageregistry-qe-team ",
                 "Container_Engine_Tools":"",
                 "MCO":"@rioliu ",
-                "API_Server":"",
-                "Authentication":"",
+                "API_Server":"@apiserver-qe-team ",
+                "Authentication":"@auth-qe-team ",
                 "Hypershift":"",
-                "Network_Observability":""
+                "Network_Observability":"@no-qe-team "
             }
     def __init__(self, args):
         token = args.token
