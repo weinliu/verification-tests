@@ -265,17 +265,28 @@ func execCommandInSpecificPod(oc *exutil.CLI, namespace string, podName string, 
 	return msg, nil
 }
 
-func execCommandInOVNPod(oc *exutil.CLI, command string) (string, error) {
-	ovnPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-ovn-kubernetes", "-l", "app=ovnkube-node", "-o=jsonpath={.items[0].metadata.name}").Output()
-	if err != nil {
-		e2e.Logf("Cannot get onv-kubernetes pods, errors: %v", err)
-		return "", err
+func execCommandInNetworkingPod(oc *exutil.CLI, command string) (string, error) {
+	networkType := checkNetworkType(oc)
+	var cmd []string
+	if strings.Contains(networkType, "ovn") {
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-ovn-kubernetes", "-l", "app=ovnkube-node", "-o=jsonpath={.items[0].metadata.name}").Output()
+		if err != nil {
+			e2e.Logf("Cannot get onv-kubernetes pods, errors: %v", err)
+			return "", err
+		}
+		cmd = []string{"-n", "openshift-ovn-kubernetes", "-c", "ovnkube-node", podName, "--", "/bin/sh", "-c", command}
+	} else if strings.Contains(networkType, "sdn") {
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-sdn", "-l", "app=sdn", "-o=jsonpath={.items[0].metadata.name}").Output()
+		if err != nil {
+			e2e.Logf("Cannot get openshift-sdn pods, errors: %v", err)
+			return "", err
+		}
+		cmd = []string{"-n", "openshift-sdn", "-c", "sdn", podName, "--", "/bin/sh", "-c", command}
 	}
-	ovnCmd := []string{"-n", "openshift-ovn-kubernetes", "-c", "ovnkube-node", ovnPodName, "--", "/bin/sh", "-c", command}
 
-	msg, err := oc.WithoutNamespace().AsAdmin().Run("exec").Args(ovnCmd...).Output()
+	msg, err := oc.WithoutNamespace().AsAdmin().Run("exec").Args(cmd...).Output()
 	if err != nil {
-		e2e.Logf("Execute ovn command failed with  err:%v .", err)
+		e2e.Logf("Execute command failed with  err:%v .", err)
 		return "", err
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -284,7 +295,7 @@ func execCommandInOVNPod(oc *exutil.CLI, command string) (string, error) {
 
 func getDefaultInterface(oc *exutil.CLI) (string, error) {
 	getDefaultInterfaceCmd := "/usr/sbin/ip -4 route show default"
-	int1, err := execCommandInOVNPod(oc, getDefaultInterfaceCmd)
+	int1, err := execCommandInNetworkingPod(oc, getDefaultInterfaceCmd)
 	if err != nil {
 		e2e.Logf("Cannot get default interface, errors: %v", err)
 		return "", err
@@ -297,7 +308,7 @@ func getDefaultInterface(oc *exutil.CLI) (string, error) {
 func getDefaultSubnet(oc *exutil.CLI) (string, error) {
 	int1, _ := getDefaultInterface(oc)
 	getDefaultSubnetCmd := "/usr/sbin/ip -4 -brief a show " + int1
-	subnet1, err := execCommandInOVNPod(oc, getDefaultSubnetCmd)
+	subnet1, err := execCommandInNetworkingPod(oc, getDefaultSubnetCmd)
 	if err != nil {
 		e2e.Logf("Cannot get default subnet, errors: %v", err)
 		return "", err
@@ -337,9 +348,9 @@ func findUnUsedIPs(oc *exutil.CLI, cidr string, number int) []string {
 	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(ipRange), func(i, j int) { ipRange[i], ipRange[j] = ipRange[j], ipRange[i] })
 	for _, ip := range ipRange {
-		if len(ipUnused) <= number {
+		if len(ipUnused) < number {
 			pingCmd := "ping -c4 -t1 " + ip
-			_, err := execCommandInOVNPod(oc, pingCmd)
+			_, err := execCommandInNetworkingPod(oc, pingCmd)
 			if err != nil {
 				e2e.Logf("%s is not used!\n", ip)
 				ipUnused = append(ipUnused, ip)
@@ -369,7 +380,7 @@ func checkNetworkType(oc *exutil.CLI) string {
 func getDefaultIPv6Subnet(oc *exutil.CLI) (string, error) {
 	int1, _ := getDefaultInterface(oc)
 	getDefaultSubnetCmd := "/usr/sbin/ip -6 -brief a show " + int1
-	subnet1, err := execCommandInOVNPod(oc, getDefaultSubnetCmd)
+	subnet1, err := execCommandInNetworkingPod(oc, getDefaultSubnetCmd)
 	if err != nil {
 		e2e.Logf("Cannot get default ipv6 subnet, errors: %v", err)
 		return "", err
@@ -396,7 +407,7 @@ func findUnUsedIPv6(oc *exutil.CLI, cidr string, number int) ([]string, error) {
 		}
 		//Start to detect the IPv6 adress is used or not
 		pingCmd := "ping -c4 -t1 -6 " + ip.String()
-		_, err := execCommandInOVNPod(oc, pingCmd)
+		_, err := execCommandInNetworkingPod(oc, pingCmd)
 		if err != nil && i < number {
 			e2e.Logf("%s is not used!\n", ip)
 			ips = append(ips, ip.String())
