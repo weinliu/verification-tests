@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"net"
 	"path/filepath"
 
 	g "github.com/onsi/ginkgo"
@@ -59,6 +60,76 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(digOutput).Should(o.ContainSubstring("Got answer"))
 		o.Expect(digOutput).ShouldNot(o.ContainSubstring("connection timed out"))
+
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-Critical-49186-[Bug 2035336] Networkpolicy egress rule should work for statefulset pods.", func() {
+		var (
+			buildPruningBaseDir  = exutil.FixturePath("testdata", "networking")
+			testPodFile          = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			helloStatefulsetFile = filepath.Join(buildPruningBaseDir, "statefulset-hello.yaml")
+			egressTypeFile       = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-egress-red.yaml")
+		)
+		g.By("1. Create first namespace")
+		oc.SetupProject()
+		ns1 := oc.Namespace()
+
+		g.By("2. Create a statefulset pod in first namespace.")
+		createResourceFromFile(oc, ns1, helloStatefulsetFile)
+		err := waitForPodWithLabelReady(oc, ns1, "app=hello")
+		exutil.AssertWaitPollNoErr(err, "this pod with label app=hello not ready")
+		helloPodName := getPodName(oc, ns1, "app=hello")
+
+		g.By("3. Create networkpolicy with egress rule in first namespace.")
+		createResourceFromFile(oc, ns1, egressTypeFile)
+		output, err := oc.Run("get").Args("networkpolicy").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("allow-egress-to-red"))
+
+		g.By("4. Create second namespace.")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		g.By("5. Create test pods in second namespace.")
+		createResourceFromFile(oc, ns2, testPodFile)
+		err = waitForPodWithLabelReady(oc, oc.Namespace(), "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+
+		g.By("6. Add label to first test pod in second namespace.")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "team=qe").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		testPodName := getPodName(oc, ns2, "name=test-pods")
+		err = exutil.LabelPod(oc, ns2, testPodName[0], "type=red")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("6. Get IP of the test pods in second namespace.")
+		testPodIP1 := getPodIPv4(oc, ns2, testPodName[0])
+		testPodIP2 := getPodIPv4(oc, ns2, testPodName[1])
+
+		g.By("7. Check networkpolicy works.")
+		output, err = e2e.RunHostCmd(ns1, helloPodName[0], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIP1, "8080"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+		output, err = e2e.RunHostCmd(ns1, helloPodName[0], "curl --connect-timeout 5  -s "+net.JoinHostPort(testPodIP2, "8080"))
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
+
+		g.By("8. Delete statefulset pod for a couple of times.")
+		for i := 0; i < 5; i++ {
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", helloPodName[0], "-n", ns1).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err := waitForPodWithLabelReady(oc, ns1, "app=hello")
+			exutil.AssertWaitPollNoErr(err, "this pod with label app=hello not ready")
+		}
+
+		g.By("9. Again checking networkpolicy works.")
+		output, err = e2e.RunHostCmd(ns1, helloPodName[0], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIP1, "8080"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+		output, err = e2e.RunHostCmd(ns1, helloPodName[0], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIP2, "8080"))
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
 
 	})
 
