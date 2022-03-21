@@ -3346,6 +3346,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		var buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 		var Sub = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		var og1 = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+		var catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 
 		oc.SetupProject()
 		namespace := oc.Namespace()
@@ -3353,6 +3354,20 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		itName := g.CurrentGinkgoTestDescription().TestText
 		dr.addIr(itName)
 
+		catsrc := catalogSourceDescription{
+			name:        "catsrc-41565-operator",
+			namespace:   namespace,
+			displayName: "Test Catsrc 41565 Operators",
+			publisher:   "Red Hat",
+			sourceType:  "grpc",
+			address:     "quay.io/olmqe/ditto-index:41565",
+			template:    catsrcImageTemplate,
+		}
+
+		g.By("Create catsrc")
+		catsrc.createWithCheck(oc, itName, dr)
+
+		g.By("Create og")
 		og := operatorGroupDescription{
 			name:      "test-operators-og",
 			namespace: namespace,
@@ -3361,13 +3376,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		og.createwithCheck(oc, itName, dr)
 
 		sub := subscriptionDescription{
-			subName:                "hive-operator",
+			subName:                "sub-41565",
 			namespace:              namespace,
-			catalogSourceName:      "community-operators",
-			catalogSourceNamespace: "openshift-marketplace",
+			catalogSourceName:      catsrc.name,
+			catalogSourceNamespace: catsrc.namespace,
 			channel:                "alpha",
 			ipApproval:             "Automatic",
-			operatorPackage:        "hive-operator",
+			operatorPackage:        "ditto-operator",
 			singleNamespace:        true,
 			template:               Sub,
 		}
@@ -3375,25 +3390,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer sub.deleteCSV(itName, dr)
 		sub.create(oc, itName, dr)
 
-		e2e.Logf("Check 1 operator")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-
-		sub = subscriptionDescription{
-			subName:                "assisted-service-operator",
-			namespace:              namespace,
-			catalogSourceName:      "community-operators",
-			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "alpha",
-			ipApproval:             "Automatic",
-			operatorPackage:        "assisted-service-operator",
-			singleNamespace:        true,
-			template:               Sub,
-		}
-		defer sub.delete(itName, dr)
-		defer sub.deleteCSV(itName, dr)
-		sub.create(oc, itName, dr)
-
-		e2e.Logf("Check 2 operator")
+		e2e.Logf("Check operator")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 		e2e.Logf("Check event in failed")
@@ -6844,13 +6841,13 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				template:  ogSingleTemplate,
 			}
 			sub = subscriptionDescription{
-				subName:                "hive-40534-operator",
+				subName:                "redis-40534-operator",
 				namespace:              namespaceName,
 				catalogSourceName:      "community-operators",
 				catalogSourceNamespace: "openshift-marketplace",
-				channel:                "alpha",
+				channel:                "stable",
 				ipApproval:             "Automatic",
-				operatorPackage:        "hive-operator",
+				operatorPackage:        "redis-operator",
 				singleNamespace:        true,
 				template:               subTemplate,
 			}
@@ -6862,16 +6859,16 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		g.By("STEP 2: create sub")
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "hive-operator", ok, []string{"deployment", "-n", sub.namespace}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "redis-operator", ok, []string{"deployment", "-n", sub.namespace}).check(oc)
 
 		g.By("STEP 3: check OPERATOR_CONDITION_NAME")
-		cpuCSV := getResource(oc, asAdmin, withoutNamespace, "csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={..containers[?(@.name==\"hive-operator\")].resources.requests.cpu}")
+		cpuCSV := getResource(oc, asAdmin, withoutNamespace, "csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={..containers[?(@.name==\"manager\")].resources.requests.cpu}")
 		o.Expect(cpuCSV).NotTo(o.BeEmpty())
-		memoryCSV := getResource(oc, asAdmin, withoutNamespace, "csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={..containers[?(@.name==\"hive-operator\")].resources.requests.memory}")
+		memoryCSV := getResource(oc, asAdmin, withoutNamespace, "csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={..containers[?(@.name==\"manager\")].resources.requests.memory}")
 		o.Expect(memoryCSV).NotTo(o.BeEmpty())
-		cpuDeployment := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..containers[?(@.name==\"hive-operator\")].resources.requests.cpu}")
+		cpuDeployment := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..containers[?(@.name==\"manager\")].resources.requests.cpu}")
 		o.Expect(cpuDeployment).To(o.Equal(cpuDeployment))
-		memoryDeployment := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..containers[?(@.name==\"hive-operator\")].resources.requests.memory}")
+		memoryDeployment := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..containers[?(@.name==\"manager\")].resources.requests.memory}")
 		o.Expect(memoryDeployment).To(o.Equal(memoryCSV))
 
 	})
@@ -6890,13 +6887,13 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				template:  ogSingleTemplate,
 			}
 			sub = subscriptionDescription{
-				subName:                "hive-40532-operator",
+				subName:                "redis-40532-operator",
 				namespace:              namespaceName,
 				catalogSourceName:      "community-operators",
 				catalogSourceNamespace: "openshift-marketplace",
-				channel:                "alpha",
+				channel:                "stable",
 				ipApproval:             "Automatic",
-				operatorPackage:        "hive-operator",
+				operatorPackage:        "redis-operator",
 				singleNamespace:        true,
 				template:               subTemplate,
 			}
