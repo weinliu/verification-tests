@@ -89,6 +89,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("NonPreRelease-Author:huliu-High-36989-mapi_instance_create_failed metrics should work [Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
 		var patchstr string
 		platform := clusterinfra.CheckPlatform(oc)
 		switch platform {

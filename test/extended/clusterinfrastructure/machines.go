@@ -33,6 +33,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-45377-Enable accelerated network via MachineSets on Azure [Serial]", func() {
 		g.By("Create a new machineset with acceleratedNetworking: true")
+		clusterinfra.SkipConditionally(oc)
 		if clusterinfra.CheckPlatform(oc) == "azure" {
 			machinesetName := "machineset-45377"
 			ms := clusterinfra.MachineSetDescription{machinesetName, 0}
@@ -57,6 +58,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-46967-Implement Ephemeral OS Disks - OS cache placement on Azure [Disruptive]", func() {
 		g.By("Create a new machineset with Ephemeral OS Disks - OS cache placement")
+		clusterinfra.SkipConditionally(oc)
 		if clusterinfra.CheckPlatform(oc) == "azure" {
 			machinesetName := "machineset-46967"
 			ms := clusterinfra.MachineSetDescription{machinesetName, 0}
@@ -79,6 +81,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-46303-Availability sets could be created when needed for Azure [Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
 		if clusterinfra.CheckPlatform(oc) == "azure" {
 			defaultWorkerMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
 			region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset/"+defaultWorkerMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
@@ -100,10 +103,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 				g.By("Update machineset with availabilitySet already created for the default worker machineset")
 				/*
-				 If the available set is not created for the default worker machineset,
+				 If the availability set is not created for the default worker machineset,
 				 the machine will create failed and error message shows "Availability Set cannot be found".
-				 Therefore, if machine created successfully with the available set,
-				 then it can prove that the available set has been created when the default worker machineset is created.
+				 Therefore, if machine created successfully with the availability set,
+				 then it can prove that the availability set has been created when the default worker machineset is created.
 				*/
 				err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"availabilitySet":"`+availabilitySetName+`"}}}}}}`, "--type=merge").Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -124,6 +127,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-47177-Medium-47201-[MDH] Machine Deletion Hooks appropriately block lifecycle phases [Disruptive]", func() {
 		g.By("Create a new machineset with lifecycle hook")
+		clusterinfra.SkipConditionally(oc)
 		machinesetName := "machineset-47177-47201"
 		ms := clusterinfra.MachineSetDescription{machinesetName, 0}
 		defer ms.DeleteMachineSet(oc)
@@ -169,6 +173,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-47230-[MDH] Negative lifecycle hook validation [Disruptive]", func() {
 		g.By("Create a new machineset")
+		clusterinfra.SkipConditionally(oc)
 		machinesetName := "machineset-47230"
 		ms := clusterinfra.MachineSetDescription{machinesetName, 1}
 		defer ms.DeleteMachineSet(oc)
@@ -205,6 +210,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-44977-Machine with GPU is supported on gcp [Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
 		if clusterinfra.CheckPlatform(oc) == "gcp" {
 			g.By("Create a new machineset")
 			machinesetName := "machineset-44977"
@@ -247,6 +253,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-High-35513-Windows machine should successfully provision for aws [Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
 		if clusterinfra.CheckPlatform(oc) == "aws" {
 			g.By("Create a new machineset")
 			machinesetName := "machineset-35513"
@@ -280,6 +287,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-48012-Change AWS EBS GP3 IOPS in MachineSet should take affect on aws [Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
 		if clusterinfra.CheckPlatform(oc) == "aws" {
 			g.By("Create a new machineset")
 			machinesetName := "machineset-48012"
