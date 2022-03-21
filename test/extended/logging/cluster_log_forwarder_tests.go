@@ -2,6 +2,7 @@ package logging
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -210,9 +212,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForEFKPodsToBeReady(oc, cloNS)
 
 			g.By("Check audit index in ES pod")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "audit-00")
+			waitForIndexAppear(oc, cloNS, esPods.Items[0].Name, "audit-00")
 
 			g.By("Create a test project, enable OVN network log collection on it, add the OVN log app and network policies for the project")
 			oc.SetupProject()
@@ -224,12 +226,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForDeploymentPodsToBeReady(oc, ovn_proj, ovn.name)
 
 			g.By("Access the OVN app pod from another pod in the same project to generate OVN ACL messages")
-			podList, err = oc.AdminKubeClient().CoreV1().Pods(ovn_proj).List(metav1.ListOptions{LabelSelector: "app=ovn-app"})
+			ovnPods, err := oc.AdminKubeClient().CoreV1().Pods(ovn_proj).List(metav1.ListOptions{LabelSelector: "app=ovn-app"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			podIP := podList.Items[0].Status.PodIP
+			podIP := ovnPods.Items[0].Status.PodIP
 			e2e.Logf("Pod IP is %s ", podIP)
 			ovn_curl := "curl " + podIP + ":8080"
-			_, err = e2e.RunHostCmdWithRetries(ovn_proj, podList.Items[1].Name, ovn_curl, 3*time.Second, 30*time.Second)
+			_, err = e2e.RunHostCmdWithRetries(ovn_proj, ovnPods.Items[1].Name, ovn_curl, 3*time.Second, 30*time.Second)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Check for the generated OVN audit logs on the OpenShift cluster nodes")
@@ -238,10 +240,21 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(nodeLogs).Should(o.ContainSubstring(ovn_proj), "The OVN logs doesn't contain logs from project %s", ovn_proj)
 
 			g.By("Check for the generated OVN audit logs in Elasticsearch")
-			podList, err = oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "audit", "{\"query\":{\"query_string\":{\"query\":\"verdict=allow AND severity=alert AND tcp,vlan_tci AND tcp_flags=ack\",\"default_field\":\"message\"}}}")
-			o.Expect(logs.Hits.Total).Should(o.BeNumerically(">", 0))
+			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+				cmd := "es_util --query=audit*/_search?format=JSON -d '{\"query\":{\"query_string\":{\"query\":\"verdict=allow AND severity=alert AND tcp,vlan_tci AND tcp_flags=ack\",\"default_field\":\"message\"}}}'"
+				stdout, err := e2e.RunHostCmdWithRetries(cloNS, esPods.Items[0].Name, cmd, 3*time.Second, 30*time.Second)
+				if err != nil {
+					return false, err
+				}
+				res := SearchResult{}
+				json.Unmarshal([]byte(stdout), &res)
+				if res.Hits.Total > 0 {
+					return true, nil
+				} else {
+					return false, nil
+				}
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprint("The ovn audit logs are not collected", ""))
 		})
 
 		// author qitang@redhat.com

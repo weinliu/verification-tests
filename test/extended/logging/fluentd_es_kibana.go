@@ -3,6 +3,7 @@ package logging
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo"
@@ -450,6 +451,51 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch 
 		stdout, err := e2e.RunHostCmdWithRetries(app_proj, podList.Items[0].Name, cmd, 5*time.Second, 60*time.Second)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stdout).Should(o.ContainSubstring("You Know, for Search"))
+	})
+
+	g.It("CPaasrunOnly-Author:qitang-Medium-49099-Be upgraded successfully when the tolerations enabled[Serial][Slow]", func() {
+		// create clusterlogging instance
+		g.By("deploy EFK pods")
+		sc, err := getStorageClassName(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")
+		cl := resource{"clusterlogging", "instance", cloNS}
+		defer cl.deleteClusterLogging(oc)
+		tolerations := "[{\"effect\": \"NoSchedule\", \"operator\": \"Exists\"}]"
+		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "TOLERATIONS="+tolerations, "-p", "ES_NODE_COUNT=3", "-p", "REDUNDANCY_POLICY=SingleRedundancy")
+		g.By("waiting for the EFK pods to be ready...")
+		WaitForEFKPodsToBeReady(oc, cloNS)
+
+		g.By("update log store configurations to make ES pods do rolling-upgrade")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("cl/instance", "-n", cloNS, "-p", "{\"spec\": {\"logStore\": {\"elasticsearch\": {\"resources\": {\"requests\": {\"memory\": \"2Gi\"}}}}}}", "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkResource(oc, true, true, "2Gi", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.spec.nodeSpec.resources.requests.memory}"})
+
+		g.By("wait for ES pods complete rolling upgrade, the ES cluster health should be green")
+		// make sure the upgrade starts
+		checkResource(oc, false, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.status.cluster.status}"})
+		//rolling upgrade, the es health status will be green temporarily, so here compare the ready pods with the pod names in es/elasticsearch
+		err = wait.Poll(3*time.Second, 300*time.Second, func() (done bool, err error) {
+			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			if err != nil {
+				return false, err
+			}
+			esMasterReadyPods, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.status.pods.master.ready}").Output()
+			if err != nil {
+				return false, err
+			}
+			match := true
+			for _, pod := range esPods.Items {
+				if !strings.Contains(esMasterReadyPods, pod.Name) {
+					match = false
+				}
+			}
+			return match, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprint("The ES pods are not updated", ""))
+		// make sure ES cluster health is green in the end
+		checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.status.cluster.status}"})
+		checkResource(oc, false, false, "preparationComplete", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.status.nodes[*].upgradeStatus.upgradePhase}"})
 	})
 
 })
