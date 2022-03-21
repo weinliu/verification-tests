@@ -40,14 +40,14 @@ func waitWindowsNodesReady(oc *exutil.CLI, nodesNumber int, interval time.Durati
 		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "kubernetes.io/os=windows", "--no-headers").Output()
 		nodesReady := strings.Count(msg, "Ready")
 		if nodesReady != nodesNumber {
-			e2e.Logf("Expected %v Windows nodes are not ready yet and waiting up to %v minutes ...", nodesNumber, timeout)
+			e2e.Logf("Expected %v Windows nodes are not ready yet. Waiting %v seconds more ...", nodesNumber, interval)
 			return false, nil
 		}
 		e2e.Logf("Expected %v Windows nodes are ready", nodesNumber)
 		return true, nil
 	})
 	if pollErr != nil {
-		e2e.Failf("Expected %v Windows nodes are not ready after waiting up to %v minutes ...", nodesNumber, timeout)
+		e2e.Failf("Expected %v Windows nodes are not ready after waiting up to %v seconds ...", nodesNumber, timeout)
 	}
 }
 
@@ -72,7 +72,7 @@ func waitVersionAnnotationReady(oc *exutil.CLI, windowsNodeName string, interval
 		retcode, err := checkVersionAnnotationReady(oc, windowsNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !retcode {
-			e2e.Logf("Version annotation is not applied to Windows node %s yet", windowsNodeName)
+			e2e.Logf("Version annotation is not applied to Windows node %s yet. Waiting %v more seconds", windowsNodeName, interval)
 			return false, nil
 		}
 		e2e.Logf("Version annotation is applied to Windows node %s", windowsNodeName)
@@ -151,7 +151,8 @@ func runPSCommand(bastionHost string, windowsHost string, command string, privat
 }
 
 func checkLinuxWorkloadCreated(oc *exutil.CLI, namespace string) bool {
-	msg, _ := oc.WithoutNamespace().Run("get").Args("deployment", "linux-webserver", "-o=jsonpath={.status.readyReplicas}", "-n", namespace).Output()
+	msg, err := oc.WithoutNamespace().Run("get").Args("deployment", "linux-webserver", "-o=jsonpath={.status.readyReplicas}", "-n", namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
 	if msg != "1" {
 		e2e.Logf("Linux workload is not created yet")
 		return false
@@ -164,20 +165,22 @@ func createLinuxWorkload(oc *exutil.CLI, namespace string) {
 	// Wait up to 3 minutes for Linux workload ready
 	oc.WithoutNamespace().Run("create").Args("-f", linuxWebServer, "-n", namespace).Output()
 	poolErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
-		return checkLinuxWorkloadCreated(oc, namespace), nil
+		return checkWorkloadCreated(oc, "linux-webserver", namespace, 1), nil
 	})
 	if poolErr != nil {
 		e2e.Failf("Linux workload is not ready after waiting up to 3 minutes ...")
 	}
 }
 
-func checkWindowsWorkloadScaled(oc *exutil.CLI, deploymentName string, namespace string, replicas int) bool {
-	msg, _ := oc.WithoutNamespace().Run("get").Args("deployment", deploymentName, "-o=jsonpath={.status.readyReplicas}", "-n", namespace).Output()
+func checkWorkloadCreated(oc *exutil.CLI, deploymentName string, namespace string, replicas int) bool {
+	msg, err := oc.WithoutNamespace().Run("get").Args("deployment", deploymentName, "-o=jsonpath={.status.readyReplicas}", "-n", namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
 	workloads := strconv.Itoa(replicas)
 	if msg != workloads {
-		e2e.Logf("Deployment " + deploymentName + " did not scaled to " + workloads)
+		e2e.Logf("Deployment " + deploymentName + " did not scale to " + workloads)
 		return false
 	}
+	e2e.Logf("Deployment " + deploymentName + " created successfuly.")
 	return true
 }
 
@@ -189,28 +192,11 @@ func createWindowsWorkload(oc *exutil.CLI, namespace string, workloadFile string
 	oc.WithoutNamespace().Run("create").Args("-f", tempFileName, "-n", namespace).Output()
 	// Wait up to 30 minutes for Windows workload ready in case of Windows image is not pre-pulled
 	poolErr := wait.Poll(30*time.Second, 30*time.Minute, func() (bool, error) {
-		return checkWindowsWorkloadScaled(oc, "win-webserver", namespace, 1), nil
+		return checkWorkloadCreated(oc, "win-webserver", namespace, 1), nil
 	})
 	if poolErr != nil {
 		e2e.Failf("Windows workload is not ready after waiting up to 30 minutes ...")
 	}
-}
-
-func createWinWorkloadsSimple(oc *exutil.CLI, namespace string, workloadsFile string, deadTime int) bool {
-	retcode := false
-	oc.WithoutNamespace().Run("new-project").Args(namespace).Output()
-	windowsWebServer := getFileContent("winc", workloadsFile)
-	ioutil.WriteFile("availWindowsWebServer2004", []byte(windowsWebServer), 0644)
-	oc.WithoutNamespace().Run("create").Args("-f", "availWindowsWebServer2004", "-n", namespace).Output()
-	// Wait up to 30 minutes for Windows workload ready
-	poolErr := wait.Poll(15*time.Second, time.Duration(deadTime)*time.Minute, func() (bool, error) {
-		retcode = true
-		return checkWindowsWorkloadScaled(oc, "win-webserver", namespace, 1), nil
-	})
-	if poolErr != nil {
-		retcode = false
-	}
-	return retcode
 }
 
 // Get an external IP of loadbalancer service
@@ -250,10 +236,10 @@ func scaleDeployment(oc *exutil.CLI, os string, replicas int, namespace string) 
 	deploymentName := getWorkloadName(os)
 	_, err := oc.WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), "deployment", deploymentName, "-n", namespace).Output()
 	poolErr := wait.Poll(60*time.Second, 300*time.Second, func() (bool, error) {
-		return checkWindowsWorkloadScaled(oc, deploymentName, namespace, replicas), nil
+		return checkWorkloadCreated(oc, deploymentName, namespace, replicas), nil
 	})
 	if poolErr != nil {
-		e2e.Failf("Workload did not scaled after waiting up to 5 minutes ...")
+		e2e.Failf("Workload did not scale after waiting up to 5 minutes ...")
 	}
 	return err
 }
@@ -361,7 +347,7 @@ func waitForMachinesetReady(oc *exutil.CLI, machinesetName string, deadTime int,
 		msg, err := oc.WithoutNamespace().Run("get").Args("machineset", machinesetName, "-o=jsonpath={.status.readyReplicas}", "-n", "openshift-machine-api").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if msg != strconv.Itoa(expectedReplicas) {
-			e2e.Logf("Windows machine is not provisioned yet and waiting up to %v minutes ...", deadTime)
+			e2e.Logf("Windows machine is not provisioned yet. Waiting 15 seconds more ...")
 			return false, nil
 		}
 		e2e.Logf("Windows machine is provisioned")

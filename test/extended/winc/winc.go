@@ -351,7 +351,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		address := fetchAddress(oc, addressType, machineset)
 		defer oc.WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", "openshift-windows-machine-config-operator").Output()
 		setConfigmap(oc, address[0], user, "config-map.yaml")
-		waitForMachinesetReady(oc, machineset, 10, 1)
+		waitForMachinesetReady(oc, machineset, 15, 1)
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
 		createWindowsWorkload(oc, namespace, "windows_web_server_byoh.yaml", getConfigMapData(oc, "windows_container_image"))
