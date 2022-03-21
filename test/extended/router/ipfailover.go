@@ -1,7 +1,6 @@
 package router
 
 import (
-	"fmt"
 	"path/filepath"
 	"time"
 
@@ -18,7 +17,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// author: hongli@redhat.com
 	// might conflict with other ipfailover cases so set it as Serial
-	g.It("Author:hongli-ConnectedOnly-Critical-41025-support to deploy ipfailover [Flaky]", func() {
+	g.It("Author:hongli-ConnectedOnly-Critical-41025-support to deploy ipfailover [Serial] [Flaky]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ipfailover.yaml")
 		var (
@@ -38,8 +37,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ipf.create(oc, oc.Namespace())
 		err := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		exutil.AssertWaitPollNoErr(err, "the pod with ipfailover=hello-openshift Ready status not met")
-		err = waitForIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("label %s no ipfailover pod is in MASTER state", "ipfailover=hello-openshift"))
+		ensureIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
 	})
 
 	// author: mjoseph@redhat.com
@@ -88,8 +86,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("verify the HA virtual ip ENV variable")
 		err1 := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		exutil.AssertWaitPollNoErr(err1, "the pod with ipfailover=hello-openshift Ready status not met")
-		err2 := waitForIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
-		exutil.AssertWaitPollNoErr(err2, fmt.Sprintf("label %s no ipfailover pod is in MASTER state", "ipfailover=hello-openshift"))
+		ensureIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		newPodName := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		checkenv := readPodEnv(oc, newPodName[0], oc.Namespace(), "OPENSHIFT_HA_VIRTUAL_IPS")
 		o.Expect(checkenv).To(o.ContainSubstring("OPENSHIFT_HA_VIRTUAL_IPS=" + virtualIP))
@@ -137,13 +134,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("add some VIP configuration for the failover group")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_VRRP_ID_OFFSET=0")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_VIP_GROUPS=255")
-		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `OPENSHIFT_HA_VIRTUAL_IPS=172.31.248.1-255`)
+		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `OPENSHIFT_HA_VIRTUAL_IPS=192.168.254.1-255`)
 
 		g.By("verify from the ipfailover pod, the 255 VIPs are added")
 		err1 := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		exutil.AssertWaitPollNoErr(err1, "the pod with ipfailover=hello-openshift Ready status not met")
-		err2 := waitForIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
-		exutil.AssertWaitPollNoErr(err2, fmt.Sprintf("label %s no ipfailover pod is in MASTER state", "ipfailover=hello-openshift"))
+		ensureIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		newPodName := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		checkenv := readPodEnv(oc, newPodName[0], oc.Namespace(), "OPENSHIFT_HA_VIP_GROUPS")
 		o.Expect(checkenv).To(o.ContainSubstring("OPENSHIFT_HA_VIP_GROUPS=255"))
@@ -170,8 +166,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ipf.create(oc, oc.Namespace())
 		err := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		exutil.AssertWaitPollNoErr(err, "the pod with ipfailover=hello-openshift Ready status not met")
-		err2 := waitForIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
-		exutil.AssertWaitPollNoErr(err2, fmt.Sprintf("label %s no ipfailover pod is in MASTER state", "ipfailover=hello-openshift"))
+		ensureIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
 
 		g.By("set the HA virtual IP for the failover group")
 		podNames := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
@@ -182,8 +177,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("verify the HA virtual ip ENV variable")
 		err1 := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		exutil.AssertWaitPollNoErr(err1, "the pod with ipfailover=hello-openshift Ready status not met")
-		err3 := waitForIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
-		exutil.AssertWaitPollNoErr(err3, fmt.Sprintf("label %s no ipfailover pod is in MASTER state", "ipfailover=hello-openshift"))
+		ensureIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		newPodName := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		checkenv := readPodEnv(oc, newPodName[0], oc.Namespace(), "OPENSHIFT_HA_VIRTUAL_IPS")
 		o.Expect(checkenv).To(o.ContainSubstring("OPENSHIFT_HA_VIRTUAL_IPS=" + virtualIP))
@@ -220,8 +214,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ipf.create(oc, oc.Namespace())
 		err := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		exutil.AssertWaitPollNoErr(err, "the pod with ipfailover=hello-openshift Ready status not met")
-		err2 := waitForIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
-		exutil.AssertWaitPollNoErr(err2, fmt.Sprintf("label %s no ipfailover pod is in MASTER state", "ipfailover=hello-openshift"))
+		ensureIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
 
 		g.By("set the HA virtual IP for the failover group")
 		podNames := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
@@ -233,8 +226,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("verify the HA virtual ip ENV variable")
 		err1 := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		exutil.AssertWaitPollNoErr(err1, "the pod with ipfailover=hello-openshift Ready status not met")
-		err3 := waitForIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
-		exutil.AssertWaitPollNoErr(err3, fmt.Sprintf("label %s no ipfailover pod is in MASTER state", "ipfailover=hello-openshift"))
+		ensureIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		newPodName := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		checkenv := readPodEnv(oc, newPodName[0], oc.Namespace(), "OPENSHIFT_HA_VIRTUAL_IPS")
 		o.Expect(checkenv).To(o.ContainSubstring("OPENSHIFT_HA_VIRTUAL_IPS=" + virtualIP))

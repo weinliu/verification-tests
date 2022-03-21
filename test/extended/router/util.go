@@ -242,20 +242,25 @@ func (ipf *ipfailoverDescription) create(oc *exutil.CLI, ns string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func waitForIpfailoverEnterMaster(oc *exutil.CLI, ns, label string) error {
-	return wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
+func ensureLogsContainString(oc *exutil.CLI, ns, label, match string) {
+	waitErr := wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
 		log, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ns, "-l", label).Output()
 		e2e.Logf("the logs of labeled pods are: %v", log)
 		if err != nil || log == "" {
 			e2e.Logf("failed to get logs: %v, retrying...", err)
 			return false, nil
 		}
-		if !strings.Contains(log, "Entering MASTER STATE") {
-			e2e.Logf("no ipfailover pod is in MASTER state, retrying...")
+		if !strings.Contains(log, match) {
+			e2e.Logf("cannot find the matched string in the logs, retrying...")
 			return false, nil
 		}
 		return true, nil
 	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but cannot find the string in the logs."))
+}
+
+func ensureIpfailoverEnterMaster(oc *exutil.CLI, ns, label string) {
+	ensureLogsContainString(oc, ns, label, "Entering MASTER STATE")
 }
 
 // For collecting information from router pod [usage example: readRouterPodData(oc, podname, executeCmd, "search string")] .
