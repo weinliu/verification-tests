@@ -786,7 +786,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
 		namespace := oc.Namespace()
-		_, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/k8sevent-bundle:v4.10", "-n", namespace, "--timeout", "5m").Output()
+		_, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/k8sevent-bundle:v"+ocpversion, "-n", namespace, "--timeout", "5m").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", "system:serviceaccount:"+namespace+":k8sevent-controller-manager").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -803,6 +803,48 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get k8s event test-name in %s", namespace))
+	})
+
+	// author: jfan@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-48359-SDK init plugin about hybird helm operator", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
+		var hybirdtest = filepath.Join(buildPruningBaseDir, "cache_v1_hybirdtest.yaml")
+		var memcachedbackup = filepath.Join(buildPruningBaseDir, "cache_v1_memcachedbackup.yaml")
+		operatorsdkCLI.showInfo = true
+		oc.SetupProject()
+		namespace := oc.Namespace()
+		defer operatorsdkCLI.Run("cleanup").Args("hybird-operator", "-n", namespace).Output()
+		_, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/hybird-bundle:v"+ocpversion, "-n", namespace, "--timeout", "5m").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		createHybird, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", hybirdtest, "-p", "NAME=hybirdtest-sample").OutputToFile("config-48359.json")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		createMemback, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", memcachedbackup, "-p", "NAME=memcachedbackup-sample").OutputToFile("config-backup-48359.json")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "anyuid", "system:serviceaccount:"+namespace+":memcached-sample").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createHybird, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace).Output()
+			if strings.Contains(msg, "hybirdtest-sample") {
+				e2e.Logf("hybirdtest created success")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get hybirdtest helm type pods in %s", namespace))
+
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createMemback, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace).Output()
+			if strings.Contains(msg, "memcachedbackup-sample") {
+				e2e.Logf("memcachedbackup-sample created success")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get hybirdtest go type pods in %s", namespace))
 	})
 
 	// author: chuo@redhat.com
