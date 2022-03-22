@@ -280,6 +280,45 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: aiyengar@redhat.com
+	g.It("Author:aiyengar-Medium-43111-The tcp client/server and tunnel timeouts for ingresscontroller will remain unchanged for negative values", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+		var (
+			ingctrl = ingctrlNodePortDescription{
+				name:      "43111",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		g.By("Create a custom ingresscontroller, and get its router name")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		routerpod := getRouterPod(oc, ingctrl.name)
+
+		g.By("Patch ingresscontroller with negative values for the tuningOptions settings and check the ingress operator config post the change")
+		ingctrlResource := "ingresscontrollers/" + ingctrl.name
+		//defer patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"tuningOptions\" : null}}")
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"tuningOptions\" :{\"clientFinTimeout\": \"-7s\",\"clientTimeout\": \"-33s\",\"serverFinTimeout\": \"-3s\",\"serverTimeout\": \"-27s\",\"tlsInspectDelay\": \"-11s\",\"tunnelTimeout\": \"-1h\"}}}")
+		output := getIngressOperatordata(oc, ingctrl.name, ".spec.tuningOptions")
+		o.Expect(output).To(o.ContainSubstring("{\"clientFinTimeout\":\"-7s\",\"clientTimeout\":\"-33s\",\"serverFinTimeout\":\"-3s\",\"serverTimeout\":\"-27s\",\"tlsInspectDelay\":\"-11s\",\"tunnelTimeout\":\"-1h\"}"))
+
+		g.By("Check the timeout option set in the haproxy pods post the changes applied")
+		checktimeout := readRouterPodData(oc, routerpod, "cat haproxy.config", "timeout")
+		o.Expect(checktimeout).To(o.ContainSubstring("timeout connect 5s"))
+		o.Expect(checktimeout).To(o.ContainSubstring("timeout client 30s"))
+		o.Expect(checktimeout).To(o.ContainSubstring("timeout client-fin 1s"))
+		o.Expect(checktimeout).To(o.ContainSubstring("timeout server 30s"))
+		o.Expect(checktimeout).To(o.ContainSubstring("timeout server-fin 1s"))
+		o.Expect(checktimeout).To(o.ContainSubstring("timeout tunnel 1h"))
+	})
+
+	// author: aiyengar@redhat.com
 	g.It("Author:aiyengar-Critical-43414-The logEmptyRequests ingresscontroller parameter set to Ignore add the dontlognull option in the haproxy configuration", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")

@@ -165,6 +165,14 @@ func setEnvVariable(oc *exutil.CLI, ns, resource, envstring string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// Fetch jsonpath data from the ingress operator configuration for evaluation
+func getIngressOperatordata(oc *exutil.CLI, icname, searchline string) string {
+	searchLine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingresscontroller/"+icname, "-o=jsonpath={"+searchline+"}", "-n", "openshift-ingress-operator").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("the searchline has result:%v", searchLine)
+	return searchLine
+}
+
 // for collecting a single pod name for general use.
 //usage example: podname := getRouterPod(oc, "default/labelname")
 func getRouterPod(oc *exutil.CLI, icname string) string {
