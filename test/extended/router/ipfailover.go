@@ -251,4 +251,46 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		time.Sleep(60 * time.Second)
 		waitForPreemptPod(oc, oc.Namespace(), futurePrimary_pod[0], virtualIP)
 	})
+
+	// author: mjoseph@redhat.com
+	// might conflict with other ipfailover cases so set it as Serial
+	g.It("Author:mjoseph-ConnectedOnly-Medium-49214-Excluding the existing VRRP cluster ID from ipfailover deployments [Serial]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ipfailover.yaml")
+		var (
+			ipf = ipfailoverDescription{
+				name:      "ipf-49214",
+				namespace: "",
+				image:     "",
+				template:  customTemp,
+			}
+		)
+
+		g.By("get pull spec of ipfailover image from payload")
+		oc.SetupProject()
+		ipf.image = getImagePullSpecFromPayload(oc, "keepalived-ipfailover")
+		ipf.namespace = oc.Namespace()
+		g.By("create ipfailover deployment and ensure one of pod enter MASTER state")
+		ipf.create(oc, oc.Namespace())
+		err := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
+		exutil.AssertWaitPollNoErr(err, "the pod with ipfailover=hello-openshift Ready status not met")
+
+		g.By("add 254 VIPs for the failover group")
+		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `OPENSHIFT_HA_VIRTUAL_IPS=192.168.254.1-254`)
+
+		g.By("Exclude VIP '9' from the ipfailover group")
+		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `HA_EXCLUDED_VRRP_IDS=9`)
+
+		g.By("verify from the ipfailover pod, the excluded VRRP_ID is configured")
+		err1 := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
+		exutil.AssertWaitPollNoErr(err1, "the pod with ipfailover=hello-openshift Ready status not met")
+		ensureIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
+		newPodName := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
+		checkenv := readPodEnv(oc, newPodName[0], oc.Namespace(), "HA_EXCLUDED_VRRP_IDS")
+		o.Expect(checkenv).To(o.ContainSubstring("HA_EXCLUDED_VRRP_IDS=9"))
+
+		g.By("verify the excluded VIP is removed from the router_ids of ipfailover pods")
+		router_Ids := readPodData(oc, newPodName[0], oc.Namespace(), `cat /etc/keepalived/keepalived.conf`, `virtual_router_id`)
+		o.Expect(router_Ids).NotTo(o.ContainSubstring(`virtual_router_id 9`))
+	})
 })

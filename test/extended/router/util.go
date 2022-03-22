@@ -266,10 +266,7 @@ func ensureIpfailoverEnterMaster(oc *exutil.CLI, ns, label string) {
 // For collecting information from router pod [usage example: readRouterPodData(oc, podname, executeCmd, "search string")] .
 // NOTE: This requires getRouterPod function to collect the podname variable first!
 func readRouterPodData(oc *exutil.CLI, routername, executeCmd string, searchString string) string {
-	cmd := fmt.Sprintf("%s | grep \"%s\"", executeCmd, searchString)
-	output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routername, "--", "bash", "-c", cmd).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("The output from the search: %v", output)
+	output := readPodData(oc, routername, "openshift-ingress", executeCmd, searchString)
 	return output
 }
 
@@ -564,4 +561,13 @@ func waitForPreemptPod(oc *exutil.CLI, ns string, pod string, vip string) {
 		}
 	})
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached, pod failed to become Primary"))
+}
+
+//this function will search the specific data from the given pod
+func readPodData(oc *exutil.CLI, podname string, ns string, executeCmd string, searchString string) string {
+	cmd := fmt.Sprintf("%s | grep \"%s\"", executeCmd, searchString)
+	output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, podname, "--", "bash", "-c", cmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("the matching part is: %s", output)
+	return output
 }
