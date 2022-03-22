@@ -468,10 +468,13 @@ func checkPodsRunningWithLabel(oc *exutil.CLI, namespace string, label string, n
 		if len(podList.Items) != number {
 			e2e.Logf("the pod number is not %s, Continue to next round", number)
 			return false, nil
-		} else if podList.Items[0].Status.Phase != corev1.PodRunning {
-			e2e.Logf("the pod status is not running, continue to next round")
-			return false, nil
 		} else {
+			for _, pod := range podList.Items {
+				if pod.Status.Phase != corev1.PodRunning {
+					e2e.Logf("Continue to next round")
+					return false, nil
+				}
+			}
 			return true, nil
 		}
 	})
