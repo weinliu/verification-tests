@@ -11,7 +11,7 @@ objects:
   spec:
     containers:
     - name: hello-pod-ocp48876
-      image: quay.io/openshifttest/hello-pod
+      image: quay.io/openshifttest/hello-openshift:multiarch
       securityContext:
         privileged: true
         capabilities:
@@ -22,7 +22,7 @@ objects:
             command:
             - sh
             - -c
-            - yum install iputils iproute  -y
+            - apk add --no-cache iputils iproute2
       command: ['sh', '-c', 'echo "Hello, world!" && sleep 3600']
 parameters:      
 - name: NAME

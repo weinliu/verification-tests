@@ -300,7 +300,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			podsrc               = podSource{
 				name:      "pod-pull-with-invalid-image",
 				namespace: "",
-				image:     "quay.io/openshifttest/hello-pod@",
+				image:     "quay.io/openshifttest/hello-openshift:multiarch@",
 				template:  podFile,
 			}
 		)
@@ -316,7 +316,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		podsrc.create(oc)
 		foundPruneLog := false
 		err = wait.PollImmediate(10*time.Second, 2*time.Minute, func() (bool, error) {
-			foundPruneLog = imagePruneLog(oc, `"quay.io/openshifttest/hello-pod@": invalid reference format - skipping`)
+			foundPruneLog = imagePruneLog(oc, `"quay.io/openshifttest/hello-openshift:multiarch@": invalid reference format - skipping`)
 			if foundPruneLog != true {
 				e2e.Logf("wait for next round")
 				return false, nil
