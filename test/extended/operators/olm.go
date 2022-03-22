@@ -3665,6 +3665,102 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 	})
 
+	// author: jiazha@redhat.com
+	g.It("NonPreRelease-PreChkUpgrade-Author:jiazha-High-22615-prepare to check the OLM status", func() {
+		g.By("1) check version of the OLM related resource")
+		olmRelatedResource := []string{"operator-lifecycle-manager", "operator-lifecycle-manager-catalog", "operator-lifecycle-manager-packageserver"}
+		clusterversion := getResource(oc, asAdmin, withoutNamespace, "clusterversion", "version", "-o=jsonpath={.status.desired.version}")
+		for _, resource := range olmRelatedResource {
+			version := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", resource, "-o=jsonpath={.status.versions[?(@.name==\"operator\")].version}")
+			o.Expect(version).NotTo(o.BeEmpty())
+			o.Expect(clusterversion).To(o.Equal(version))
+		}
+		g.By("2) subscribe to an operator, for example, etcd-operator")
+		dr := make(describerResrouce)
+		itName := g.CurrentGinkgoTestDescription().TestText
+		dr.addIr(itName)
+
+		// Create a project here so that it can be keeped after this prepare case done.
+		_, err := oc.AsAdmin().WithoutNamespace().Run("new-project").Args("olm-upgrade-22615").Output()
+		if err != nil {
+			e2e.Failf("Fail to create project, error:%v", err)
+		}
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+		og := operatorGroupDescription{
+			name:      "og-22615",
+			namespace: "olm-upgrade-22615",
+			template:  ogSingleTemplate,
+		}
+		og.createwithCheck(oc, itName, dr)
+
+		g.By("2-1) subscribe to the etcdoperator v0.9.4 with Automatic approval")
+		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+		sub := subscriptionDescription{
+			subName:                "sub-22615",
+			namespace:              "olm-upgrade-22615",
+			catalogSourceName:      "community-operators",
+			catalogSourceNamespace: "openshift-marketplace",
+			channel:                "singlenamespace-alpha",
+			ipApproval:             "Automatic",
+			operatorPackage:        "etcd",
+			startingCSV:            "etcdoperator.v0.9.4",
+			singleNamespace:        true,
+			template:               subTemplate,
+		}
+		// defer sub.delete(itName, dr), keep the resource so that checking it after upgrading
+		sub.create(oc, itName, dr)
+		// defer sub.deleteCSV(itName, dr), keep the resource so that checking it after upgrading
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.4", "-n", "olm-upgrade-22615", "-o=jsonpath={.status.phase}"}).check(oc)
+
+		//This step cover a upgrade bug: https://bugzilla.redhat.com/show_bug.cgi?id=2015950
+		g.By("3) Create 300 secret in openshift-operator-lifecycle-manager project")
+		for i := 1; i <= 300; i++ {
+			logs, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", fmt.Sprintf("test%d", i), "-n", "openshift-operator-lifecycle-manager").Output()
+			if err != nil && !strings.Contains(logs, "already exists") {
+				e2e.Failf("Fail to create secret: %s, error:%v", fmt.Sprintf("test%d", i), err)
+			}
+		}
+		g.By("4) check status of OLM cluster operators")
+		for _, resource := range olmRelatedResource {
+			newCheck("expect", asAdmin, withoutNamespace, compare, "TrueFalseFalse", ok, []string{"clusteroperator", resource, "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"}).check(oc)
+			upgradeableStatus := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", resource, "-o=jsonpath={.status.conditions[?(@.type==\"Upgradeable\")].status}")
+			o.Expect(upgradeableStatus).To(o.Equal("True"))
+		}
+
+	})
+	// author: jiazha@redhat.com
+	g.It("NonPreRelease-PstChkUpgrade-Author:jiazha-High-22615-Post check the OLM status", func() {
+		g.By("1) check version of the OLM related resource")
+		olmRelatedResource := []string{"operator-lifecycle-manager", "operator-lifecycle-manager-catalog", "operator-lifecycle-manager-packageserver"}
+		clusterversion := getResource(oc, asAdmin, withoutNamespace, "clusterversion", "version", "-o=jsonpath={.status.desired.version}")
+		for _, resource := range olmRelatedResource {
+			version := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", resource, "-o=jsonpath={.status.versions[?(@.name==\"operator\")].version}")
+			o.Expect(version).NotTo(o.BeEmpty())
+			o.Expect(clusterversion).To(o.Equal(version))
+		}
+		g.By("2) check status of OLM cluster operators")
+		for _, resource := range olmRelatedResource {
+			newCheck("expect", asAdmin, withoutNamespace, compare, "TrueFalseFalse", ok, []string{"clusteroperator", resource, "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"}).check(oc)
+			upgradeableStatus := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", resource, "-o=jsonpath={.status.conditions[?(@.type==\"Upgradeable\")].status}")
+			o.Expect(upgradeableStatus).To(o.Equal("True"))
+		}
+		g.By("3) Check the installed operator status")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.4", "-n", "olm-upgrade-22615", "-o=jsonpath={.status.phase}"}).check(oc)
+		_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", "olm-upgrade-22615").Output()
+		if err != nil {
+			e2e.Failf("Fail to delete project, error:%v", err)
+		}
+		g.By("4) Remove those 300 secrets in openshift-operator-lifecycle-manager project")
+		for i := 1; i <= 300; i++ {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", fmt.Sprintf("test%d", i), "-n", "openshift-operator-lifecycle-manager").Output()
+			if err != nil {
+				e2e.Failf("Fail to delete secret %s, error:%v", fmt.Sprintf("test%d", i), err)
+			}
+		}
+	})
+
 	// author: xzha@redhat.com
 	g.It("NonPreRelease-PreChkUpgrade-Author:xzha-High-22618-prepare to check the marketplace status", func() {
 		g.By("1) check version of marketplace operator")
