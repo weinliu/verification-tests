@@ -1,0 +1,14 @@
+{
+  "apiVersion": "operators.coreos.com/v1alpha1",
+  "kind": "CatalogSource",
+  "metadata": {
+    "name": "custom-catalogsource",
+    "namespace": "openshift-marketplace"
+  },
+  "spec": {
+    "sourceType": "grpc",
+    "image": "quay.io/openshifttest/ui-auto-operators:latest",
+    "displayName": "Custom-Auto-Source",
+    "publisher": "OpenShift UI QE"
+  }
+}
