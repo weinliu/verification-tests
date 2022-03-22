@@ -13,6 +13,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 type podModifyDescription struct {
@@ -80,6 +81,12 @@ type podInitConDescription struct {
 	template  string
 }
 
+type podUserNSDescription struct {
+	name      string
+	namespace string 
+	template  string
+}
+
 type podSleepDescription struct {
 	namespace string
 	template  string
@@ -104,6 +111,16 @@ type podTwoContainersDescription struct {
 	name      string
 	namespace string
 	template  string
+}
+
+func (podUserNS *podUserNSDescription) createPodUserNS(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podUserNS.template, "-p", "NAME="+podUserNS.name, "NAMESPACE="+podUserNS.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (podUserNS *podUserNSDescription) deletePodUserNS(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", podUserNS.namespace, "pod", podUserNS.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func (kubeletConfig *kubeletConfigDescription) create(oc *exutil.CLI) {
@@ -582,4 +599,80 @@ func (podTwoContainers *podTwoContainersDescription) create(oc *exutil.CLI) {
 }
 func (podTwoContainers *podTwoContainersDescription) delete(oc *exutil.CLI) error {
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", podTwoContainers.namespace, "pod", podTwoContainers.name).Execute()
+}
+
+func (podUserNS *podUserNSDescription) crioWorkloadConfigExist(oc *exutil.CLI) error {
+	return wait.Poll(1*time.Second, 3*time.Second, func() (bool, error) {
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodename := nodeList.Items[0].Name	
+		workloadString, err := oc.AsAdmin().Run("debug").Args(`node/`+nodename, "--", "chroot", "/host", "cat", "/etc/crio/crio.conf.d/00-default").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(string(workloadString), "crio.runtime.workloads.openshift-builder") && strings.Contains(string(workloadString), "io.kubernetes.cri-o.userns-mode") && strings.Contains(string(workloadString), "io.kubernetes.cri-o.Devices"){
+			e2e.Logf("the crio workload exist in /etc/crio/crio.conf.d/00-default")
+		} else {
+			e2e.Logf("the crio workload not exist in /etc/crio/crio.conf.d/00-default")
+			return false, nil
+		}
+		return true, nil
+	})
+}
+
+func (podUserNS *podUserNSDescription) userContainersExistForNS(oc *exutil.CLI) error {
+	return wait.Poll(1*time.Second, 3*time.Second, func() (bool, error) {
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodename := nodeList.Items[0].Name
+		userContainers, err := oc.AsAdmin().Run("debug").Args(`node/`+nodename, "--", "chroot", "/host", "cat", "/etc/subuid").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		groupContainers, err := oc.AsAdmin().Run("debug").Args(`node/`+nodename, "--", "chroot", "/host", "cat", "/etc/subgid").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(string(userContainers), "containers") && strings.Contains(string(groupContainers), "containers"){
+			e2e.Logf("the user containers exist in /etc/subuid and /etc/subgid")
+		} else {
+			e2e.Logf("the user containers not exist in /etc/subuid and /etc/subgid")
+			return false, nil
+		}
+		return true, nil
+	})
+}
+
+func (podUserNS *podUserNSDescription) podRunInUserNS(oc *exutil.CLI) error {
+	return wait.Poll(1*time.Second, 3*time.Second, func() (bool, error) {
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-n", podUserNS.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		idString, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", podUserNS.namespace, podName, "id").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(string(idString), "uid=0(root) gid=0(root) groups=0(root)"){
+			e2e.Logf("the user id in pod is root")
+			podUserNSstr, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", podUserNS.namespace, podName, "lsns", "-o", "NS", "-t", "user").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("string(podUserNS) is : %s", string(podUserNSstr))
+			podNS := strings.Fields(string(podUserNSstr))
+			e2e.Logf("pod user namespace : %s",podNS[1])
+
+			nodename, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].spec.nodeName}", "-n", podUserNS.namespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			nodeUserNS, err := oc.AsAdmin().Run("debug").Args(`node/`+string(nodename), "--", "chroot", "/host", "lsns", "-t", "user").Output() 
+			o.Expect(err).NotTo(o.HaveOccurred())
+			nodeNSstr := strings.Split(string(nodeUserNS), "\n")
+			e2e.Logf("host ns string : %s",nodeNSstr[3])
+			if strings.Contains(nodeNSstr[3], "/usr/lib/systemd/systemd") {
+				nodeNS := strings.Fields(nodeNSstr[3])
+				e2e.Logf("host user namespace : %s",nodeNS[0])
+				if nodeNS[0] == podNS[1] {
+					e2e.Logf("pod run in the same user namespace with host")
+					return false, nil
+				}
+			} else {
+				e2e.Logf("root user not found from cmd 'lsns -t user' on host")
+				return false, nil
+			}
+			e2e.Logf("pod run in different user namespace with host")
+			return true, nil
+		} else {
+			e2e.Logf("the user id in pod is not root")
+			return false, nil
+		}
+	})
 }

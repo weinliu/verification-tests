@@ -25,6 +25,13 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		kubeletConfigTemp    = filepath.Join(buildPruningBaseDir, "kubeletconfig-hardeviction.yaml")
 		memHogTemp           = filepath.Join(buildPruningBaseDir, "mem-hog-ocp11600.yaml")
 		podTwoContainersTemp = filepath.Join(buildPruningBaseDir, "pod-with-two-containers.yaml")
+		podUserNSTemp        = filepath.Join(buildPruningBaseDir, "pod-user-namespace.yaml")
+
+		podUserNS47663 = podUserNSDescription{
+			name:      "",
+			namespace: "",
+			template:  podUserNSTemp,
+		}
 
 		podModify = podModifyDescription{
 			name:          "",
@@ -412,5 +419,33 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Container2 File Content is: %v", containerFile2)
 		o.Expect(containerFile2).To(o.Equal("written_from_container2"))
+	})
+	
+	// author: minmli@redhat.com
+	g.It("Author:minmli-High-47663-run pods in user namespaces via crio workload annotation", func() {
+		oc.SetupProject()
+		g.By("Test for case OCP-47663")
+		podUserNS47663.name = "userns-47663"
+		podUserNS47663.namespace = oc.Namespace()
+
+		g.By("Check workload of openshift-builder exist in crio config")
+		err := podUserNS47663.crioWorkloadConfigExist(oc)
+		exutil.AssertWaitPollNoErr(err, "crio workload config not exist")
+
+		g.By("Check user containers exist in /etc/sub[ug]id")
+		err = podUserNS47663.userContainersExistForNS(oc)
+		exutil.AssertWaitPollNoErr(err, "user containers not exist for user namespace")
+
+		g.By("Create a pod with annotation of openshift-builder workload")
+		podUserNS47663.createPodUserNS(oc)
+		defer podUserNS47663.deletePodUserNS(oc)
+
+		g.By("Check pod status")
+		err = podStatus(oc)
+		exutil.AssertWaitPollNoErr(err, "pod is not running")
+
+		g.By("Check pod run in user namespace")
+		err = podUserNS47663.podRunInUserNS(oc)
+		exutil.AssertWaitPollNoErr(err, "pod not run in user namespace")		
 	})
 })
