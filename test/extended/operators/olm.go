@@ -2821,26 +2821,46 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: scolange@redhat.com
 	g.It("Author:scolange-Medium-42041-Available=False despite unavailableReplicas <= maxUnavailable", func() {
-		maxUnavailableInCsv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={..install.spec.deployments[0].spec.strategy.rollingUpdate.maxUnavailable}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(maxUnavailableInCsv).NotTo(o.BeEmpty())
-		maxSurgeInCsv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={..install.spec.deployments[0].spec.strategy.rollingUpdate.maxSurge}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(maxSurgeInCsv).NotTo(o.BeEmpty())
+		g.By("get the cluster infrastructure")
+		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
+		if err != nil {
+			e2e.Failf("Fail to get the cluster infra")
+		}
+		if infra == "SingleReplica" {
+			e2e.Logf("This is a SNO cluster")
+			maxUnavailable, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.spec.strategy.rollingUpdate.maxUnavailable}").Output()
+			e2e.Logf(maxUnavailable)
+			o.Expect(err1).NotTo(o.HaveOccurred())
+			o.Expect(maxUnavailable).NotTo(o.BeEmpty())
 
-		_, err1 := oc.AsAdmin().WithoutNamespace().Run("patch").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager",
-			"--type=json", "--patch", "[{\"op\": \"add\",\"path\": \"/spec/install/spec/deployments/0/spec/template/metadata/annotations\", \"value\": { \"custom.csv\": \"custom csv value\"} }]").Output()
-		o.Expect(err1).NotTo(o.HaveOccurred())
+			maxSurge, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.spec.strategy.rollingUpdate.maxSurge}").Output()
+			e2e.Logf(maxSurge)
+			o.Expect(err1).NotTo(o.HaveOccurred())
+			o.Expect(maxSurge).NotTo(o.BeEmpty())
 
-		maxUnavailable, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.spec.strategy.rollingUpdate.maxUnavailable}").Output()
-		e2e.Logf(maxUnavailable)
-		o.Expect(err1).NotTo(o.HaveOccurred())
-		o.Expect(maxUnavailable).To(o.Equal(maxUnavailableInCsv))
+		} else {
 
-		maxSurge, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.spec.strategy.rollingUpdate.maxSurge}").Output()
-		e2e.Logf(maxSurge)
-		o.Expect(err1).NotTo(o.HaveOccurred())
-		o.Expect(maxSurge).To(o.Equal(maxSurgeInCsv))
+			maxUnavailableInCsv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={..install.spec.deployments[0].spec.strategy.rollingUpdate.maxUnavailable}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(maxUnavailableInCsv).NotTo(o.BeEmpty())
+			maxSurgeInCsv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={..install.spec.deployments[0].spec.strategy.rollingUpdate.maxSurge}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(maxSurgeInCsv).NotTo(o.BeEmpty())
+
+			_, err1 := oc.AsAdmin().WithoutNamespace().Run("patch").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager",
+				"--type=json", "--patch", "[{\"op\": \"add\",\"path\": \"/spec/install/spec/deployments/0/spec/template/metadata/annotations\", \"value\": { \"custom.csv\": \"custom csv value\"} }]").Output()
+			o.Expect(err1).NotTo(o.HaveOccurred())
+
+			maxUnavailable, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.spec.strategy.rollingUpdate.maxUnavailable}").Output()
+			e2e.Logf(maxUnavailable)
+			o.Expect(err1).NotTo(o.HaveOccurred())
+			o.Expect(maxUnavailable).To(o.Equal(maxUnavailableInCsv))
+
+			maxSurge, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.spec.strategy.rollingUpdate.maxSurge}").Output()
+			e2e.Logf(maxSurge)
+			o.Expect(err1).NotTo(o.HaveOccurred())
+			o.Expect(maxSurge).To(o.Equal(maxSurgeInCsv))
+		}
 	})
 
 	// author: scolange@redhat.com
