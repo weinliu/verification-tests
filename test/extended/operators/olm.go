@@ -3775,11 +3775,6 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		o.Expect(upgradeableStatus).To(o.Equal("True"))
 
 		g.By("3) check status of marketplace operator")
-		catalogstrings := map[string]string{"certified-operators": "Certified Operators",
-			"community-operators": "Community Operators",
-			"redhat-operators":    "Red Hat Operators",
-			"redhat-marketplace":  "Red Hat Marketplace"}
-
 		err := wait.Poll(30*time.Second, 360*time.Second, func() (bool, error) {
 			catsrcS := getResource(oc, asAdmin, withoutNamespace, "catsrc", "-n", "openshift-marketplace", "-o=jsonpath={..metadata.name}")
 			packages := getResource(oc, asAdmin, withoutNamespace, "packagemanifests")
@@ -3787,11 +3782,57 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				e2e.Logf("get catsrc or packagemanifests failed")
 				return false, nil
 			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "check packagemanifests failed")
+		g.By("4) upgrade prepare 22618 SUCCESS")
+	})
+
+	// author: xzha@redhat.com
+	g.It("ConnectedOnly-NonPreRelease-PreChkUpgrade-Author:xzha-High-22618-prepare to check the catalogsource status of catalogsource", func() {
+		g.By("1) Create a CatalogSource in the openshift-marketplace project")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		cs := catalogSourceDescription{
+			name:        "cs-22618",
+			namespace:   "openshift-marketplace",
+			displayName: "22618 Operators",
+			publisher:   "OLM QE",
+			sourceType:  "grpc",
+			address:     "quay.io/olmqe/etcd-index:v1-4.8",
+			template:    csImageTemplate,
+		}
+		dr := make(describerResrouce)
+		itName := g.CurrentGinkgoTestDescription().TestText
+		dr.addIr(itName)
+		cs.create(oc, itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", cs.name, "-n", "openshift-marketplace", "-o=jsonpath={.status..lastObservedState}"}).check(oc)
+
+		g.By("2) check status of marketplace operator")
+		catalogstrings := map[string]string{"certified-operators": "Certified Operators",
+			"community-operators": "Community Operators",
+			"redhat-operators":    "Red Hat Operators",
+			"redhat-marketplace":  "Red Hat Marketplace",
+			"cs-22618":            "22618 Operators"}
+
+		err := wait.Poll(30*time.Second, 360*time.Second, func() (bool, error) {
+			catsrcS := getResource(oc, asAdmin, withoutNamespace, "catsrc", "-n", "openshift-marketplace", "-o=jsonpath={..metadata.name}")
+			if catsrcS == "" {
+				e2e.Logf("get catsrc failed")
+				return false, nil
+			}
 			for catsrcIndex := range catalogstrings {
 				if !strings.Contains(catsrcS, catsrcIndex) {
 					e2e.Logf("cannot get catsrc for %s", catsrcIndex)
-					continue
+					return false, nil
 				}
+			}
+			packages := getResource(oc, asAdmin, withoutNamespace, "packagemanifests")
+			if packages == "" {
+				e2e.Logf("get catsrc or packagemanifests failed")
+				return false, nil
+			}
+			for catsrcIndex := range catalogstrings {
 				if !strings.Contains(packages, catalogstrings[catsrcIndex]) {
 					getResource(oc, asAdmin, withoutNamespace, "catsrc", catsrcIndex, "-n", "openshift-marketplace", "-o=jsonpath={.spec.image} {.status}")
 					getResource(oc, asAdmin, withoutNamespace, "pod", "-n", "openshift-marketplace")
@@ -3802,7 +3843,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "check packagemanifests failed")
-		g.By("4) upgrade prepare 22618 SUCCESS")
+		g.By("3) upgrade prepare 22618 SUCCESS")
 	})
 
 	// author: xzha@redhat.com
@@ -3819,11 +3860,6 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		o.Expect(upgradeableStatus).To(o.Equal("True"))
 
 		g.By("3) check status of marketplace operator")
-		catalogstrings := map[string]string{"certified-operators": "Certified Operators",
-			"community-operators": "Community Operators",
-			"redhat-operators":    "Red Hat Operators",
-			"redhat-marketplace":  "Red Hat Marketplace"}
-
 		err := wait.Poll(30*time.Second, 360*time.Second, func() (bool, error) {
 			catsrcS := getResource(oc, asAdmin, withoutNamespace, "catsrc", "-n", "openshift-marketplace", "-o=jsonpath={..metadata.name}")
 			packages := getResource(oc, asAdmin, withoutNamespace, "packagemanifests")
@@ -3831,11 +3867,39 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				e2e.Logf("get catsrc or packagemanifests failed")
 				return false, nil
 			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "check packagemanifests failed")
+		g.By("4) post check upgrade 22618 SUCCESS")
+	})
+
+	// author: xzha@redhat.com
+	g.It("ConnectedOnly-NonPreRelease-PstChkUpgrade-Author:xzha-High-22618-Post check the catalogsource status of catalogsource", func() {
+		g.By("1) check status of marketplace operator")
+		catalogstrings := map[string]string{"certified-operators": "Certified Operators",
+			"community-operators": "Community Operators",
+			"redhat-operators":    "Red Hat Operators",
+			"redhat-marketplace":  "Red Hat Marketplace",
+			"cs-22618":            "22618 Operators"}
+
+		err := wait.Poll(30*time.Second, 360*time.Second, func() (bool, error) {
+			catsrcS := getResource(oc, asAdmin, withoutNamespace, "catsrc", "-n", "openshift-marketplace", "-o=jsonpath={..metadata.name}")
+			if catsrcS == "" {
+				e2e.Logf("get catsrc failed")
+				return false, nil
+			}
 			for catsrcIndex := range catalogstrings {
 				if !strings.Contains(catsrcS, catsrcIndex) {
 					e2e.Logf("cannot get catsrc for %s", catsrcIndex)
-					continue
+					return false, nil
 				}
+			}
+			packages := getResource(oc, asAdmin, withoutNamespace, "packagemanifests")
+			if packages == "" {
+				e2e.Logf("get catsrc or packagemanifests failed")
+				return false, nil
+			}
+			for catsrcIndex := range catalogstrings {
 				if !strings.Contains(packages, catalogstrings[catsrcIndex]) {
 					getResource(oc, asAdmin, withoutNamespace, "catsrc", catsrcIndex, "-n", "openshift-marketplace", "-o=jsonpath={.spec.image} {.status}")
 					getResource(oc, asAdmin, withoutNamespace, "pod", "-n", "openshift-marketplace")
@@ -3846,7 +3910,12 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "check packagemanifests failed")
-		g.By("4) post check upgrade 22618 SUCCESS")
+
+		g.By("2) delete catsrc cs-22618")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("catsrc", "cs-22618", "-n", "openshift-marketplace").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("3) 22618 Post check SUCCESS")
 	})
 
 	// author: xzha@redhat.com
