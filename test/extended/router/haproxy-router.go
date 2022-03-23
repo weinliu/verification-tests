@@ -303,9 +303,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("Patch ingresscontroller with negative values for the tuningOptions settings and check the ingress operator config post the change")
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
-		//defer patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"tuningOptions\" : null}}")
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"tuningOptions\" :{\"clientFinTimeout\": \"-7s\",\"clientTimeout\": \"-33s\",\"serverFinTimeout\": \"-3s\",\"serverTimeout\": \"-27s\",\"tlsInspectDelay\": \"-11s\",\"tunnelTimeout\": \"-1h\"}}}")
-		output := getIngressOperatordata(oc, ingctrl.name, ".spec.tuningOptions")
+		output := fetchJsonPathValue(oc, "openshift-ingress-operator", "ingresscontroller/"+ingctrl.name, ".spec.tuningOptions")
 		o.Expect(output).To(o.ContainSubstring("{\"clientFinTimeout\":\"-7s\",\"clientTimeout\":\"-33s\",\"serverFinTimeout\":\"-3s\",\"serverTimeout\":\"-27s\",\"tlsInspectDelay\":\"-11s\",\"tunnelTimeout\":\"-1h\"}"))
 
 		g.By("Check the timeout option set in the haproxy pods post the changes applied")
