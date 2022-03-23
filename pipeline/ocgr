@@ -203,7 +203,7 @@ if [ "X${LAUNCHID}X" != "XX" ]; then
   else
     LAUNCHIDVALID=false
   fi
-  if [[ "X${profiletype}X" == "XciX" ]] || [[ "X${profiletype}X" == "XtelcoX" ]]; then
+  if [[ "X${profiletype}X" == "XciX" ]] || [[ "X${profiletype}X" == "XtelcoX" ]] || [[ "X${profiletype}X" == "XupgradeX" ]]; then
     if [ "X${buildversiontype}X" == "Xarm64X" ]; then
       existing=`ls ${WORKSPACE}"/cip/"${VERSION}"/arm/"|grep "${PROFILENAME}"".test"|grep "test_run.yaml"|wc -l|xargs`
     else
@@ -211,12 +211,6 @@ if [ "X${LAUNCHID}X" != "XX" ]; then
     fi
   elif [[ "X${profiletype}X" == "XstageX" ]] || [[ "X${profiletype}X" == "XveX" ]]; then
     existing=`ls ${WORKSPACE}"/cip/"${profiletype}"/"${VERSION}"/"|grep "${PROFILENAME}"".test"|grep "test_run.yaml"|wc -l|xargs`
-  elif [ "X${profiletype}X" == "XupgradeX" ]; then
-    if [ -d "${WORKSPACE}/cip/${VERSION}/upgrade/upgradetestrun" ]; then
-      existing=`ls ${WORKSPACE}"/cip/"${VERSION}"/upgrade/upgradetestrun"|grep "${PROFILENAME}"".test"|grep "test_run.yaml"|wc -l|xargs`
-    else
-      existing="0"
-    fi
   else
     existing=`ls ${WORKSPACE}"/misc/jenkins/"${profiletype}"/"${VERSION}"/"|grep "${PROFILENAME}"".test"|grep "test_run.yaml"|wc -l|xargs`
   fi
@@ -246,7 +240,7 @@ if [ "X${LAUNCHID}X" != "XX" ]; then
   for subteamfile in `ls import-*.xml`; do
     subteam=${subteamfile:7:-4}
     eval zip -r "${LAUNCHID}.zip" "${subteamfile}"
-    if [[ "X${profiletype}X" == "XciX" ]] || [[ "X${profiletype}X" == "XtelcoX" ]]; then
+    if [[ "X${profiletype}X" == "XciX" ]] || [[ "X${profiletype}X" == "XtelcoX" ]] || [[ "X${profiletype}X" == "XupgradeX" ]]; then
       if [ "X${buildversiontype}X" == "Xarm64X" ]; then
         ppath="../cip/"${VERSION}"/arm/"
       else
@@ -254,8 +248,6 @@ if [ "X${LAUNCHID}X" != "XX" ]; then
       fi
     elif [[ "X${profiletype}X" == "XstageX" ]] || [[ "X${profiletype}X" == "XveX" ]]; then
       ppath="../cip/"${profiletype}"/"${VERSION}"/"
-    elif [ "X${profiletype}X" == "XupgradeX" ]; then
-      ppath="../cip/"${VERSION}"/upgrade/upgradetestrun/"
     else
       ppath="../misc/jenkins/"${profiletype}"/"${VERSION}"/"
     fi
