@@ -676,6 +676,32 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(output).To(o.ContainSubstring("v1beta1 CustomResourceDefinitions will be removed in the future"))
 	})
 
+	// OCP-43641 author: jitli@redhat.com
+	g.It("Author:jitli-ConnectedOnly-VMonly-Medium-43641-opm index add fails during image extraction", func() {
+		bundleImage := "quay.io/olmqe/etcd:0.9.4-43641"
+		indexImage := "quay.io/olmqe/etcd-index:v1-4.8"
+		opmBaseDir := exutil.FixturePath("testdata", "opm")
+		TestDataPath := filepath.Join(opmBaseDir, "temp")
+		opmCLI.ExecCommandPath = TestDataPath
+		defer DeleteDir(TestDataPath, "fixture-testdata")
+		err := os.Mkdir(TestDataPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step: checking user account is no-root")
+		user, err := exec.Command("bash", "-c", "whoami").Output()
+		e2e.Logf("User:%s", user)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Compare(string(user), "root") == -1 {
+			g.By("step: opm index add")
+			output1, err := opmCLI.Run("index").Args("add", "--generate", "--bundles", bundleImage, "--from-index", indexImage, "--overwrite-latest").Output()
+			e2e.Logf(output1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			g.By("test case 43641 SUCCESS")
+		} else {
+			e2e.Logf("User is %s. the case should login as no-root account", user)
+		}
+	})
+
 	// author: xzha@redhat.com
 	g.It("Author:xzha-ConnectedOnly-VMonly-Medium-25955-opm Ability to generate scaffolding for Operator Bundle", func() {
 		var podmanCLI = container.NewPodmanCLI()
