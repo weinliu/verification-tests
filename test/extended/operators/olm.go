@@ -32,6 +32,28 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: jiazha@redhat.com
+	g.It("Author:jiazha-Medium-49352-SNO Leader election conventions for cluster topology", func() {
+		g.By("1) get the cluster topology")
+		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
+		if err != nil {
+			e2e.Failf("Fail to get the cluster infra: %s, error:%v", infra, err)
+		}
+		g.By("2) get the annotation of the packageserver-controller-lock")
+		annotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "packageserver-controller-lock", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.metadata.annotations}").Output()
+		if err != nil {
+			e2e.Failf("Fail to get the annotation: %s, error:%v", annotation, err)
+		}
+		if infra == "SingleReplica" {
+			e2e.Logf("This is a SNO cluster")
+			if !strings.Contains(annotation, "270") {
+				e2e.Failf("The lease duration is not as expected: %s", annotation)
+			}
+		} else {
+			e2e.Logf("This is a HA cluster, skip.")
+		}
+	})
+
+	// author: jiazha@redhat.com
 	g.It("Author:jiazha-High-49167-fatal error", func() {
 		g.By("1) Check OLM related resources' logs")
 		deps := []string{"catalog-operator", "olm-operator", "package-server-manager", "packageserver"}
