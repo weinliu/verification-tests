@@ -15,6 +15,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/docker/docker v0.7.3-0.20190327010347-be7ac8be2ae0
 	github.com/fsouza/go-dockerclient v0.0.0-20171004212419-da3951ba2e9e
+	github.com/go-git/go-git/v5 v5.4.2
 	github.com/google/go-github v17.0.0+incompatible
 	github.com/mattn/go-sqlite3 v1.14.6
 	github.com/onsi/ginkgo v1.10.1
@@ -32,7 +33,7 @@ require (
 	github.com/tidwall/gjson v1.11.0
 	github.com/tidwall/pretty v1.2.0
 	github.com/tidwall/sjson v1.2.3
-	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
+	golang.org/x/crypto v0.0.0-20210421170649-83a5a9bb288b
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
 	golang.org/x/tools v0.1.4 // indirect
 	k8s.io/api v0.17.1

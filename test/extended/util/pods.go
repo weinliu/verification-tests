@@ -162,7 +162,7 @@ func (pod *Pod) Delete(oc *CLI) error {
 }
 
 func AssertPodToBeReady(oc *CLI, podName string, namespace string) {
-	err := wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
+	err := wait.Poll(10*time.Second, 3*time.Minute, func() (bool, error) {
 		stdout, err := oc.AsAdmin().Run("get").Args("pod", podName, "-n", namespace, "-o", "jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}'").Output()
 		if err != nil {
 			e2e.Logf("the err:%v, and try next round", err)
@@ -220,4 +220,32 @@ func GetPodNodeName(oc *CLI, namespace string, podName string) (string, error) {
 // LabelPod labels a given pod with a given label in a given namespace
 func LabelPod(oc *CLI, namespace string, podName string, label string) error {
 	return oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", namespace, "pod", podName, label).Execute()
+}
+
+// get array of all pods for a given namespace and label
+func GetAllPodsWithLabel(oc *CLI, namespace string, label string) ([]string, error) {
+	pods, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-l", label).Template("{{range .items}}{{.metadata.name}}{{\" \"}}{{end}}").Output()
+
+	return strings.Split(pods, " "), err
+}
+
+// assert all pods in NS are in ready state until timeout in a given namespace
+func AssertAllPodsToBeReady(oc *CLI, namespace string) {
+	err := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+
+		// get the status flag for all pods
+		// except the ones which are in Complete Status.
+		// it use 'ne' operator which is only compatible with 4.10+ oc versions
+		template := "'{{- range .items -}}{{- range .status.conditions -}}{{- if ne .reason \"PodCompleted\" -}}{{- if eq .type \"Ready\" -}}{{- .status}} {{\" \"}}{{- end -}}{{- end -}}{{- end -}}{{- end -}}'"
+		stdout, err := oc.AsAdmin().Run("get").Args("pods", "-n", namespace).Template(template).Output()
+		if err != nil {
+			e2e.Logf("the err:%v, and try next round", err)
+			return false, nil
+		}
+		if strings.Contains(stdout, "False") {
+			return false, nil
+		}
+		return true, nil
+	})
+	AssertWaitPollNoErr(err, fmt.Sprintf("Some Pods are not ready in NS %s!", namespace))
 }
