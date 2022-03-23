@@ -150,16 +150,6 @@ func runPSCommand(bastionHost string, windowsHost string, command string, privat
 	return string(msg), err
 }
 
-func checkLinuxWorkloadCreated(oc *exutil.CLI, namespace string) bool {
-	msg, err := oc.WithoutNamespace().Run("get").Args("deployment", "linux-webserver", "-o=jsonpath={.status.readyReplicas}", "-n", namespace).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if msg != "1" {
-		e2e.Logf("Linux workload is not created yet")
-		return false
-	}
-	return true
-}
-
 func createLinuxWorkload(oc *exutil.CLI, namespace string) {
 	linuxWebServer := filepath.Join(exutil.FixturePath("testdata", "winc"), "linux_web_server.yaml")
 	// Wait up to 3 minutes for Linux workload ready
@@ -462,7 +452,7 @@ func getSVCsDescription(bastionHost string, addr string, privateKey string, iaas
 	if err != nil {
 		e2e.Failf("error running SSH job")
 	}
-	svcSplit := strings.SplitAfterN(msg, "\"Name\",\"Description\"\r\n", 2)	
+	svcSplit := strings.SplitAfterN(msg, "\"Name\",\"Description\"\r\n", 2)
 	svcTrimmed := strings.TrimSpace(svcSplit[1])
 	services := make(map[string]string)
 	lines := strings.Split(svcTrimmed, "\r\n")
@@ -475,7 +465,6 @@ func getSVCsDescription(bastionHost string, addr string, privateKey string, iaas
 	}
 	return services, nil
 }
-
 
 func checkRunningServicesOnWindowsNode(bastionHost string, winInternalIP string, svcs map[int]string, winServices map[string]string, privateKey string, iaasPlatform string) (expectedService bool, svc string) {
 	for _, svc = range svcs {

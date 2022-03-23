@@ -220,27 +220,26 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	// author: sgao@redhat.com refactored:v1
 	g.It("Author:sgao-Critical-32273-Configure kube proxy and external networking check", func() {
 		if iaasPlatform == "vsphere" {
-			e2e.Logf("vSphere does not support LB, skip it ...")
-		} else {
-			namespace := "winc-32273"
-			defer deleteProject(oc, namespace)
-			createProject(oc, namespace)
-			createWindowsWorkload(oc, namespace, "windows_web_server.yaml", getConfigMapData(oc, "windows_container_image"))
-			externalIP, err := getExternalIP(iaasPlatform, oc, "windows", namespace)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			// Load balancer takes about 3 minutes to work, set timeout as 5 minutes
-			pollErr := wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
-				msg, _ := exec.Command("bash", "-c", "curl "+externalIP).Output()
-				if !strings.Contains(string(msg), "Windows Container Web Server") {
-					e2e.Logf("Load balancer is not ready yet and waiting up to 5 minutes ...")
-					return false, nil
-				}
-				e2e.Logf("Load balancer is ready")
-				return true, nil
-			})
-			if pollErr != nil {
-				e2e.Failf("Load balancer is not ready after waiting up to 5 minutes ...")
+			g.Skip("vSphere does not support Load balancer, skipping")
+		}
+		namespace := "winc-32273"
+		defer deleteProject(oc, namespace)
+		createProject(oc, namespace)
+		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", getConfigMapData(oc, "windows_container_image"))
+		externalIP, err := getExternalIP(iaasPlatform, oc, "windows", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// Load balancer takes about 3 minutes to work, set timeout as 5 minutes
+		pollErr := wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
+			msg, _ := exec.Command("bash", "-c", "curl "+externalIP).Output()
+			if !strings.Contains(string(msg), "Windows Container Web Server") {
+				e2e.Logf("Load balancer is not ready yet and waiting up to 5 minutes ...")
+				return false, nil
 			}
+			e2e.Logf("Load balancer is ready")
+			return true, nil
+		})
+		if pollErr != nil {
+			e2e.Failf("Load balancer is not ready after waiting up to 5 minutes ...")
 		}
 	})
 
@@ -650,22 +649,25 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 
 		g.By("Check after reconciled Windows node should be Ready")
 		waitVersionAnnotationReady(oc, windowsHostName, 60*time.Second, 1200*time.Second)
-
 		g.By("Check LB service works well")
-		externalIP, err := getExternalIP(iaasPlatform, oc, "windows", namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		// Load balancer takes about 3 minutes to work, set timeout as 5 minutes
-		pollErr := wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
-			msg, _ := exec.Command("bash", "-c", "curl "+externalIP).Output()
-			if !strings.Contains(string(msg), "Windows Container Web Server") {
-				e2e.Logf("Load balancer is not ready yet and waiting up to 5 minutes ...")
-				return false, nil
+		if iaasPlatform != "vsphere" {
+			externalIP, err := getExternalIP(iaasPlatform, oc, "windows", namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			// Load balancer takes about 3 minutes to work, set timeout as 5 minutes
+			pollErr := wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
+				msg, _ := exec.Command("bash", "-c", "curl "+externalIP).Output()
+				if !strings.Contains(string(msg), "Windows Container Web Server") {
+					e2e.Logf("Load balancer is not ready yet and waiting up to 5 minutes ...")
+					return false, nil
+				}
+				e2e.Logf("Load balancer is ready")
+				return true, nil
+			})
+			if pollErr != nil {
+				e2e.Failf("Load balancer is not ready after waiting up to 5 minutes ...")
 			}
-			e2e.Logf("Load balancer is ready")
-			return true, nil
-		})
-		if pollErr != nil {
-			e2e.Failf("Load balancer is not ready after waiting up to 5 minutes ...")
+		} else {
+			e2e.Logf("Skipped step Check LB service works, not supported on vSphere")
 		}
 	})
 
@@ -706,6 +708,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	})
 	// author: rrasouli@redhat.com
 	g.It("Author:rrasouli-High-38186-[wmco] Windows LB service [Slow]", func() {
+		if iaasPlatform == "vsphere" {
+			g.Skip("vSphere does not support Load balancer, skipping")
+		}
 		namespace := "winc-test"
 		// we determine range of 20
 		attempts := 20
