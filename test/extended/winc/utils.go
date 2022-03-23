@@ -293,10 +293,16 @@ func getMachineset(oc *exutil.CLI, iaasPlatform, winVersion string, machineSetNa
 		windowsMachineSet = getFileContent("winc", fileName)
 		infrastructureID, err = oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
 		// TODO fetch region/zone from configmap
-		region := "us-east-2"
-		zone := "us-east-2a"
-		region, err = oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
-		zone, err = oc.WithoutNamespace().Run("get").Args("machines", "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+		region, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
+		if err != nil {
+			e2e.Logf("Using default AWS region: us-east-2")
+			region = "us-east-2"
+		}
+		zone, err := oc.WithoutNamespace().Run("get").Args("machines", "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+		if err != nil {
+			e2e.Logf("Using default AWS zone: us-east-2a")
+			zone = "us-east-2a"
+		}
 		windowsAMI := getConfigMapData(oc, "windows_container_ami")
 		if winVersion == "20H2" {
 			windowsAMI = getConfigMapData(oc, "windows_container_ami_20H2")
@@ -308,9 +314,13 @@ func getMachineset(oc *exutil.CLI, iaasPlatform, winVersion string, machineSetNa
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<windows_image_with_container_runtime_installed>", windowsAMI)
 		windowsMachineSetName = infrastructureID + "-" + machineSetName + "-worker-" + zone
 	} else if iaasPlatform == "azure" {
-		windowsMachineSet = getFileContent("winc", "azure_windows_machineset.yaml")
+		windowsMachineSet = getFileContent("winc", fileName)
 		infrastructureID, err = oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
-		location := "centralus"
+		location, err := oc.WithoutNamespace().Run("get").Args("nodes", "-o=jsonpath=\"{.items[0].metadata.labels.topology\\.kubernetes\\.io\\/region}\"").Output()
+		if err != nil {
+		    e2e.Logf("Using default Azure region: centralus")
+		    location = "centralus"
+		}
 		sku := "2019-Datacenter-with-Containers"
 		if winVersion == "2004" {
 			sku = "datacenter-core-2004-with-containers-smalldisk"
