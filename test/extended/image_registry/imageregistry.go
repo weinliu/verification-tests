@@ -1219,6 +1219,19 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("NonPreRelease-ConnectedOnly-Author:wewang-Medium-43731-Image registry pods should have anti-affinity rules [Disruptive]", func() {
+		g.By("Check platforms")
+		platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		platforms := map[string]bool{
+			"AWS":       true,
+			"Azure":     true,
+			"GCP":       true,
+			"OpenStack": true,
+		}
+		if !platforms[platformtype] {
+			g.Skip("Skip for non-supported platform")
+		}
+
 		g.By("Check pods anti-affinity match requiredDuringSchedulingIgnoredDuringExecution rule when replicas is 2")
 		foundrequiredRules := false
 		foundrequiredRules = foundAffinityRules(oc, requireRules)
@@ -1226,7 +1239,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Set image registry replica to 3")
 		defer recoverRegistryDefaultReplicas(oc)
-		err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"replicas":3}}`, "--type=merge").Execute()
+		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"replicas":3}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Confirm 3 pods scaled up")
 		err = wait.Poll(30*time.Second, 2*time.Minute, func() (bool, error) {
