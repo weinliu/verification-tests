@@ -1,7 +1,10 @@
 package clusterinfrastructure
 
 import (
+	"fmt"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -121,5 +124,78 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		podsStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", machineAPINamespace, "-l", "k8s-app=cluster-autoscaler-operator", "-o=jsonpath={.items[0].status.phase}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(podsStatus).To(o.ContainSubstring("Running"))
+	})
+
+	//author: huliu@redhat.com
+	g.It("Longduration-NonPreRelease-Author:huliu-Medium-47656-[CAO] Cluster autoscaler could scale down based on scale down utilization threshold [Slow][Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
+		machinesetName := "machineset-47656"
+		utilThreshold := "0.08"
+		utilThresholdNum := 8
+		clusterAutoscalerTemplate = filepath.Join(autoscalerBaseDir, "clusterautoscalerutil.yaml")
+		clusterAutoscaler = clusterAutoscalerDescription{
+			maxNode:              100,
+			minCore:              0,
+			maxCore:              320000,
+			minMemory:            0,
+			maxMemory:            6400000,
+			utilizationThreshold: utilThreshold,
+			template:             clusterAutoscalerTemplate,
+		}
+		machineAutoscaler = machineAutoscalerDescription{
+			name:           "machineautoscaler-47656",
+			namespace:      "openshift-machine-api",
+			maxReplicas:    3,
+			minReplicas:    1,
+			template:       machineAutoscalerTemplate,
+			machineSetName: machinesetName,
+		}
+
+		g.By("Create a new machineset")
+		ms := clusterinfra.MachineSetDescription{machinesetName, 1}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		g.By("Create clusterautoscaler")
+		defer clusterAutoscaler.deleteClusterAutoscaler(oc)
+		clusterAutoscaler.createClusterAutoscaler(oc)
+
+		g.By("Create MachineAutoscaler")
+		defer machineAutoscaler.deleteMachineAutoscaler(oc)
+		machineAutoscaler.createMachineAutoscaler(oc)
+
+		g.By("Create workload")
+		defer workLoad.deleteWorkLoad(oc)
+		workLoad.createWorkLoad(oc)
+
+		g.By("Check machine could be created successful")
+		clusterinfra.WaitForMachinesRunning(oc, 3, "machineset-47656")
+		workLoad.deleteWorkLoad(oc)
+		/*
+			Refer to autoscaler use case OCP-28108.
+			Wait five minutes after deleting workload, the machineset will scale down,
+			so wait five minutes here, then check whether the machineset is scaled down based on utilizationThreshold.
+		*/
+		time.Sleep(300 * time.Second)
+		g.By("Check machineset could scale down based on utilizationThreshold")
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", machinesetName, "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
+		machinesRunning, _ := strconv.Atoi(out)
+
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-o=jsonpath={.items[0].status.nodeRef.name}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeInfoFile, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("node", nodeName, "-n", machineAPINamespace).OutputToFile("OCP-47656-nodeinfo.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		getUtilCmd := fmt.Sprintf(`grep -A 10 "Allocated resources:" %s |egrep "cpu|memory"|awk -F"[(%%]" 'BEGIN{util=0} $2>util{util=$2} END{print util}'`, nodeInfoFile)
+		util, err := exec.Command("bash", "-c", getUtilCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		utilNum, err := strconv.Atoi(strings.TrimSpace(string(util)))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("utilNum:%s utilThresholdNum:%s", utilNum, utilThresholdNum)
+		if utilNum < utilThresholdNum {
+			o.Expect(machinesRunning).Should(o.Equal(1))
+		} else {
+			o.Expect(machinesRunning).Should(o.Equal(3))
+		}
 	})
 })

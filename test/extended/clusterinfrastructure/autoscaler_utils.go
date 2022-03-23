@@ -10,12 +10,13 @@ import (
 )
 
 type clusterAutoscalerDescription struct {
-	maxNode   int
-	minCore   int
-	maxCore   int
-	minMemory int
-	maxMemory int
-	template  string
+	maxNode              int
+	minCore              int
+	maxCore              int
+	minMemory            int
+	maxMemory            int
+	utilizationThreshold string
+	template             string
 }
 
 type machineAutoscalerDescription struct {
@@ -35,7 +36,13 @@ type workLoadDescription struct {
 
 func (clusterAutoscaler *clusterAutoscalerDescription) createClusterAutoscaler(oc *exutil.CLI) {
 	e2e.Logf("Creating clusterautoscaler ...")
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", clusterAutoscaler.template, "-p", "MAXNODE="+strconv.Itoa(clusterAutoscaler.maxNode), "MINCORE="+strconv.Itoa(clusterAutoscaler.minCore), "MAXCORE="+strconv.Itoa(clusterAutoscaler.maxCore), "MINMEMORY="+strconv.Itoa(clusterAutoscaler.minMemory), "MAXMEMORY="+strconv.Itoa(clusterAutoscaler.maxMemory))
+	var err error
+	if clusterAutoscaler.utilizationThreshold == "" {
+		err = applyResourceFromTemplate(oc, "-f", clusterAutoscaler.template, "-p", "MAXNODE="+strconv.Itoa(clusterAutoscaler.maxNode), "MINCORE="+strconv.Itoa(clusterAutoscaler.minCore), "MAXCORE="+strconv.Itoa(clusterAutoscaler.maxCore), "MINMEMORY="+strconv.Itoa(clusterAutoscaler.minMemory), "MAXMEMORY="+strconv.Itoa(clusterAutoscaler.maxMemory))
+
+	} else {
+		err = applyResourceFromTemplate(oc, "-f", clusterAutoscaler.template, "-p", "MAXNODE="+strconv.Itoa(clusterAutoscaler.maxNode), "MINCORE="+strconv.Itoa(clusterAutoscaler.minCore), "MAXCORE="+strconv.Itoa(clusterAutoscaler.maxCore), "MINMEMORY="+strconv.Itoa(clusterAutoscaler.minMemory), "MAXMEMORY="+strconv.Itoa(clusterAutoscaler.maxMemory), "UTILIZATIONTHRESHOLD="+clusterAutoscaler.utilizationThreshold)
+	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

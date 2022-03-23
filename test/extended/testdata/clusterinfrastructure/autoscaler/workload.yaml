@@ -25,8 +25,8 @@ objects:
           value: mapi_test
           effect: NoSchedule
       backoffLimit: 4
-      completions: 20
-      parallelism: 20
+      completions: 100
+      parallelism: 100
 parameters:
 - name: NAME
 - name: NAMESPACE

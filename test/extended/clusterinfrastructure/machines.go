@@ -31,7 +31,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("Longduration-NonPreRelease-Author:huliu-Medium-45377-Enable accelerated network via MachineSets on Azure [Serial]", func() {
+	g.It("Longduration-NonPreRelease-Author:huliu-Medium-45377-Enable accelerated network via MachineSets on Azure [Disruptive]", func() {
 		g.By("Create a new machineset with acceleratedNetworking: true")
 		clusterinfra.SkipConditionally(oc)
 		if clusterinfra.CheckPlatform(oc) == "azure" {
