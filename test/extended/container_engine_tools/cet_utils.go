@@ -220,7 +220,7 @@ func (ctrcfg *ctrcfgDescription) checkCtrcfgParameters(oc *exutil.CLI) error {
 				e2e.Logf(`\nCRI-O PARAMETER ON THE WORKER NODE :` + fmt.Sprintf("%s", v))
 				e2e.Logf("\ncrio config file path is  %v", criostatus)
 
-				wait.Poll(3*time.Minute, 4*time.Minute, func() (bool, error) {
+				wait.Poll(3*time.Minute, 10*time.Minute, func() (bool, error) {
 					result, err1 := exec.Command("bash", "-c", "cat "+criostatus+" | egrep 'pids_limit|log_level'").Output()
 					if err1 != nil {
 						e2e.Failf("the result of ReadFile:%v", err1)

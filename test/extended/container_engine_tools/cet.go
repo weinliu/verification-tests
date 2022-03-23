@@ -109,7 +109,7 @@ var _ = g.Describe("[sig-node] Container_Engine_Tools crio,scc", func() {
 	g.It("Author:pmali-High-43086-nodejs s2i build failure: 'error reading blob from source image' should not occur.", func() {
 
 		oc.SetupProject()
-		newapp.appname = "https://github.com/sclorg/nodejs-ex"
+		newapp.appname = "openshift/nodejs~https://github.com/openshift/nodejs-ex.git"
 		g.By("Create New Node-js Application \n")
 		newapp.createNewApp(oc)
 		g.By("Check pod status\n")
