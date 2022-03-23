@@ -1467,5 +1467,26 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring(host + "/openshift/tools:latest"))
 
 	})
+	// author: yyou@redhat.com
+	g.It("VMonly-NonPreRelease-Author:yyou-Critical-44037-Could configure swift authentication using application credentials [Disruptive]", func() {
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "OpenStack") {
+			g.Skip("Skip for non-supported platform")
+		}
+
+		g.By("Configure image-registry-private-configuration  secret to use new application credentials")
+		defer oc.AsAdmin().WithoutNamespace().Run("set").Args("data", "secret/image-registry-private-configuration", "--from-literal=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALID='' ", "--from-literal=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALNAME='' ", "--from-literal=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALSECRET='' ", "-n", "openshift-image-registry").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("set").Args("data", "secret/image-registry-private-configuration", "--from-file=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALID=/root/auto/44037/applicationid", "--from-file=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALNAME=/root/auto/44037/applicationname", "--from-file=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALSECRET=/root/auto/44037/applicationsecret", "-n", "openshift-image-registry").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check image registry pod")
+		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", 2)
+
+		g.By("push/pull image to registry")
+		oc.SetupProject()
+		checkRegistryFunctionFine(oc, "test-44037", oc.Namespace())
+
+	})
 
 })
