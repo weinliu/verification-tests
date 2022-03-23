@@ -333,11 +333,9 @@ func assertNTOOperatorLogs(oc *exutil.CLI, namespace string, ntoOperatorPod stri
 	o.Expect(ntoOperatorLogs).To(o.ContainSubstring(profileName))
 }
 
-func isAllInOneCluster(oc *exutil.CLI) bool {
+func isOneMasterNode(oc *exutil.CLI) bool {
 	masterNodes, _ := exutil.GetClusterNodesBy(oc, "master")
-	workerNodes, _ := exutil.GetClusterNodesBy(oc, "worker")
-
-	if len(masterNodes) == 3 && len(workerNodes) == 3 && masterNodes[0] == workerNodes[0] {
+	if len(masterNodes) == 1 {
 		return true
 	} else {
 		return false
@@ -501,21 +499,87 @@ func AssertTunedAppliedToNode(oc *exutil.CLI, tunedNodeName string, filter strin
 	return isMatch
 }
 
-func assertNTOTunedLogsLastLines(oc *exutil.CLI, namespace string, ntoTunedPod string, lineN string, filter string) {
-	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
-		ntoTunedLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", namespace, ntoTunedPod, "--tail="+lineN).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+func assertNTOPodLogsLastLines(oc *exutil.CLI, namespace string, ntoPod string, lineN string, timeDurationSec int, filter string) {
+	err := wait.Poll(15*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
 
-		regTunedPodLogs, err := regexp.Compile(".*" + filter + ".*")
+		//Remove err assert for SNO, the OCP will can not access temporily when master node restart or certificate key removed
+		ntoPodLogs, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", namespace, ntoPod, "--tail="+lineN).Output()
+
+		regNTOPodLogs, err := regexp.Compile(".*" + filter + ".*")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		isMatch := regTunedPodLogs.MatchString(ntoTunedLogs)
+		isMatch := regNTOPodLogs.MatchString(ntoPodLogs)
 		if isMatch {
-			loglines := regTunedPodLogs.FindAllString(ntoTunedLogs, -1)
-			e2e.Logf("The logs of tuned pod %v is: \n%v", ntoTunedPod, loglines[0])
+			loglines := regNTOPodLogs.FindAllString(ntoPodLogs, -1)
+			e2e.Logf("The logs of nto pod %v is: \n%v", ntoPod, loglines[0])
 			return true, nil
 		} else {
+			e2e.Logf("The keywords of nto pod isn't found, try next ...")
 			return false, nil
 		}
 	})
 	exutil.AssertWaitPollNoErr(err, "The tuned pod's log doesn't contain the keywords, please check")
+}
+
+func getServiceENDPoint(oc *exutil.CLI, namespace string) string {
+	serviceOutput, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", namespace, "service/node-tuning-operator").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	endPointReg, _ := regexp.Compile(".*Endpoints.*")
+	endPointIPStr := endPointReg.FindString(serviceOutput)
+	endPointIPStrNoSpace := strings.ReplaceAll(endPointIPStr, " ", "")
+	endPointIPArr := strings.Split(endPointIPStrNoSpace, ":")
+	endPointIP := endPointIPArr[1] + ":" + endPointIPArr[2]
+	return endPointIP
+}
+
+func AssertNTOCertificateRotate(oc *exutil.CLI, ntoNamespace string, tunedNodeName string, encodeBase64OpenSSLOutputBefore string, encodeBase64OpenSSLExpireDateBefore string) {
+
+	metricEndpoint := getServiceENDPoint(oc, ntoNamespace)
+	err := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
+
+		openSSLOutputAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		openSSLExpireDateAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null  | openssl x509 -noout -dates")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("The openSSL Expired Date information of NTO openSSL after rotate as below: \n%v", openSSLExpireDateAfter)
+
+		encodeBase64OpenSSLOutputAfter := exutil.StringToBASE64(openSSLOutputAfter)
+		encodeBase64OpenSSLExpireDateAfter := exutil.StringToBASE64(openSSLExpireDateAfter)
+
+		if encodeBase64OpenSSLOutputBefore != encodeBase64OpenSSLOutputAfter && encodeBase64OpenSSLExpireDateBefore != encodeBase64OpenSSLExpireDateAfter {
+			e2e.Logf("The certificate has been updated ...")
+			return true, nil
+		} else {
+			e2e.Logf("The certificate isn't updated, try next round ...")
+			return false, nil
+		}
+	})
+	exutil.AssertWaitPollNoErr(err, "The NTO certificate isn't rotate, please check")
+}
+
+func compareCertificateBetweenOpenSSLandTlsSecret(oc *exutil.CLI, ntoNamespace string, tunedNodeName string) {
+
+	metricEndpoint := getServiceENDPoint(oc, ntoNamespace)
+	err := wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
+
+		//Extract certificate from openssl that nto operator service endpoint
+		openSSLOutputAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p'")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Extract tls.crt from secret node-tuning-operator-tls
+		encodeBase64tlsCertOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "secret", "node-tuning-operator-tls", `-ojsonpath='{ .data.tls\.crt }'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		tmpTlsCertOutput := strings.Trim(encodeBase64tlsCertOutput, "'")
+		tlsCertOutput := exutil.BASE64DecodeStr(tmpTlsCertOutput)
+
+		if strings.Contains(tlsCertOutput, openSSLOutputAfter) {
+			e2e.Logf("The certificate is the same ...")
+			return true, nil
+		} else {
+			e2e.Logf("The certificate is different, try next round ...")
+			return false, nil
+		}
+	})
+	exutil.AssertWaitPollNoErr(err, "The certificate is different, please check")
 }

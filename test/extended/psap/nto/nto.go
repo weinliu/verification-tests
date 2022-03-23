@@ -1071,7 +1071,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Assert DuplicateError in tuned pod log")
-		assertNTOTunedLogsLastLines(oc, ntoNamespace, tunedPodName, "2", "DuplicateError|already exists")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 60, "DuplicateError|already exists")
 
 		g.By("Apply ips patch profile")
 		//Remove duplicated parameter and value
@@ -1086,8 +1086,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "ips-host")
 
 		g.By("Assert ips-host in tuned pod log")
-		assertNTOTunedLogsLastLines(oc, ntoNamespace, tunedPodName, "1", "ips-host")
-		assertNTOTunedLogsLastLines(oc, ntoNamespace, tunedPodName, "1", "active and recommended profile")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "1", 60, "ips-host")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "1", 60, "active and recommended profile")
 
 		g.By("Check current profile for each node")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
@@ -1159,7 +1159,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(nodeProfileName).To(o.ContainSubstring("openshift-node-performance-performance"))
 
 		g.By("Check if tuned pod logs contains openshift-node-performance-performance on labeled nodes")
-		assertNTOTunedLogsLastLines(oc, ntoNamespace, tunedPodName, "2", "openshift-node-performance-performance")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 60, "openshift-node-performance-performance")
 
 		g.By("Check if the linux kernel parameter as vm.stat_interval = 10")
 		compareSpecifiedValueByNameOnLabelNode(oc, tunedNodeName, "vm.stat_interval", "10")
@@ -1191,7 +1191,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(nodeProfileName).To(o.ContainSubstring("openshift-node-performance-performance"))
 
 		g.By("Check if tuned pod logs contains Cannot find profile 'openshift-node-performance-example-performanceprofile' on labeled nodes")
-		assertNTOTunedLogsLastLines(oc, ntoNamespace, tunedPodName, "2", "Cannot find profile")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 60, "Cannot find profile")
 
 		g.By("Check if the linux kernel parameter as vm.stat_interval = 1")
 		compareSpecifiedValueByNameOnLabelNode(oc, tunedNodeName, "vm.stat_interval", "1")
@@ -1207,7 +1207,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "performance-patch")
 
 		g.By("Check if contains static tuning from profile 'performance-patch' applied in tuned pod logs on labeled nodes")
-		assertNTOTunedLogsLastLines(oc, ntoNamespace, tunedPodName, "2", "static tuning from profile 'performance-patch' applied")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 60, "static tuning from profile 'performance-patch' applied")
 
 		g.By("Check current profile for each node")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
@@ -1294,7 +1294,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		}
 
 		g.By("Check if tuned pod logs contains Cannot find profile 'openshift-node-performance-optimize' on labeled nodes")
-		assertNTOTunedLogsLastLines(oc, ntoNamespace, tunedPodName, "2", "Cannot find profile 'openshift-node-performance-optimize'")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 60, "Cannot find profile 'openshift-node-performance-optimize'")
 
 		if isSNO {
 			g.By("Apply performance optimize profile")
@@ -1327,7 +1327,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(nodeProfileName).To(o.ContainSubstring("include-performance-profile"))
 
 		g.By("Check if contains static tuning from profile 'include-performance-profile' applied in tuned pod logs on labeled nodes")
-		assertNTOTunedLogsLastLines(oc, ntoNamespace, tunedPodName, "2", "static tuning from profile 'include-performance-profile' applied")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 60, "static tuning from profile 'include-performance-profile' applied")
 	})
 
 	g.It("Author:liqcui-Medium-36152-NTO Get metrics and alerts", func() {
@@ -1353,5 +1353,52 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			o.ContainSubstring("nto_degraded_info"),
 			o.ContainSubstring("nto_profile_calculated_total")))
 
+	})
+
+	g.It("Author:liqcui-Medium-49265-NTO support automatically rotate ssl certificate. [Disruptive]", func() {
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		//Use the first worker node as labeled node
+		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Get NTO operator pod name
+		ntoOperatorPod, err := getNTOPodName(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		metricEndpoint := getServiceENDPoint(oc, ntoNamespace)
+
+		g.By("Get information about the certificate the metrics server in NTO")
+		openSSLOutputBefore, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Get information about the creation and expiration date of the certificate")
+		openSSLExpireDateBefore, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null  | openssl x509 -noout -dates")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The openSSL Expired Date information of NTO openSSL before rotate as below: \n%v", openSSLExpireDateBefore, openSSLExpireDateBefore)
+
+		encodeBase64OpenSSLOutputBefore := exutil.StringToBASE64(openSSLOutputBefore)
+		encodeBase64OpenSSLExpireDateBefore := exutil.StringToBASE64(openSSLExpireDateBefore)
+
+		g.By("Delete secret/signing-key to automate to create a new one certificate")
+		isOneMaster := isOneMasterNode(oc)
+		if isOneMaster {
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ntoNamespace, "secret/node-tuning-operator-tls").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-service-ca", "secret/signing-key").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		g.By("Assert NTO logs to match key words restarting metrics server to rotate certificates")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, ntoOperatorPod, "4", 300, "restarting metrics server to rotate certificates")
+
+		g.By("Assert if NTO rotate certificates ...")
+		AssertNTOCertificateRotate(oc, ntoNamespace, tunedNodeName, encodeBase64OpenSSLOutputBefore, encodeBase64OpenSSLExpireDateBefore)
+
+		g.By("The certificate extracted from the openssl command should match the first certificate from the tls.crt file in the secret")
+		compareCertificateBetweenOpenSSLandTlsSecret(oc, ntoNamespace, tunedNodeName)
 	})
 })

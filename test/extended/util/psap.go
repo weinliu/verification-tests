@@ -1,6 +1,7 @@
 package util
 
 import (
+	"encoding/base64"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -406,4 +407,20 @@ func IsPAOInOperatorHub(oc *CLI) bool {
 		havePAO = false
 		return havePAO
 	}
+}
+
+// Base64 Encode
+func StringToBASE64(src string) string {
+	// plaintext, err := base64.StdEncoding.DecodeString(src)
+	stdEnc := base64.StdEncoding.EncodeToString([]byte(src))
+	return string(stdEnc)
+}
+
+// Base64 Decode
+func BASE64DecodeStr(src string) string {
+	plaintext, err := base64.StdEncoding.DecodeString(src)
+	if err != nil {
+		return ""
+	}
+	return string(plaintext)
 }
