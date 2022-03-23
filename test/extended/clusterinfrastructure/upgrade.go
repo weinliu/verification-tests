@@ -10,7 +10,7 @@ import (
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc           = exutil.NewCLI("cluster_infrastructure_upgrade", exutil.KubeConfigPath())
+		oc           = exutil.NewCLI("cluster-infrastructure-upgrade", exutil.KubeConfigPath())
 		iaasPlatform string
 	)
 
