@@ -14,12 +14,16 @@ import (
 
 var _ = g.Describe("[sig-storage] STORAGE", func() {
 	defer g.GinkgoRecover()
-	var oc = exutil.NewCLI("storage-general-csi", exutil.KubeConfigPath())
+	var (
+		oc                               = exutil.NewCLI("storage-general-csi", exutil.KubeConfigPath())
+		cloudProviderSupportProvisioners []string
+	)
 
 	// aws-csi test suite cloud provider support check
 	g.BeforeEach(func() {
 		cloudProvider = getCloudProvider(oc)
 		generalCsiSupportCheck(cloudProvider)
+		cloudProviderSupportProvisioners = getSupportProvisionersByCloudProvider(oc)
 	})
 
 	// author: pewang@redhat.com
@@ -40,7 +44,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				"parameters":           storageClassParameters,
 				"allowVolumeExpansion": true,
 			}
-			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -118,7 +122,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
 			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
-			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -162,7 +166,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
 			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
-			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -234,7 +238,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				"allowVolumeExpansion": true,
 				"mountOptions":         mountOption,
 			}
-			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner in " + cloudProvider + "!!!")
@@ -322,7 +326,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				"parameters":           storageClassParameters,
 				"allowVolumeExpansion": true,
 			}
-			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -399,7 +403,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
 			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
-			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -480,7 +484,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
 			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
-			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -538,7 +542,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
 			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
-			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -607,7 +611,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
 			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
-			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -686,7 +690,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
 			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
-			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -748,7 +752,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
 			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
-			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -819,7 +823,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageTeamBaseDir                   = exutil.FixturePath("testdata", "storage")
 			pvcTemplate                          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			deploymentTemplate                   = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
-			supportProvisioners                  = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners                  = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 			schedulableWorkersWithSameAz, azName = getSchedulableWorkersWithSameAz(oc)
 		)
 		if len(supportProvisioners) == 0 {
@@ -887,7 +891,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
 			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
-			supportProvisioners  = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners  = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -949,7 +953,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			podTemplate          = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
 			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
-			supportProvisioners  = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners  = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -1054,7 +1058,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
 			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			deploymentTemplate  = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
-			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -1087,7 +1091,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
 			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			deploymentTemplate  = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
-			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -1120,7 +1124,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
 			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			deploymentTemplate  = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
-			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -1153,7 +1157,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
 			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			deploymentTemplate  = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
-			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -1186,7 +1190,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
 			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
-			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 
 		if len(supportProvisioners) == 0 {
@@ -1258,7 +1262,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("Author:wduan-Critical-48911-[CSI Driver] [fsgroup] should be updated with new defined value when volume attach to another pod", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
-		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
@@ -1335,7 +1339,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("Author:wduan-Critical-47879-[CSI Driver] [Snapshot] [Filesystem default] provisioning should provision storage with snapshot data source and restore it succesffully", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com"}
-		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
@@ -1408,7 +1412,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("Author:wduan-Critical-47930-[CSI Driver] [Snapshot] [Filesystem ext4] provisioning should provision storage with snapshot data source and restore it succesffully", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com"}
-		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
@@ -1498,7 +1502,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("Author:wduan-Critical-47931-[CSI Driver] [Snapshot] [Filesystem xfs] provisioning should provision storage with snapshot data source and restore it succesffully", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com"}
-		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
@@ -1587,7 +1591,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("Author:chaoyang-Critical-48723-[CSI Driver] [Snapshot] [block] provisioning should provision storage with snapshot data source and restore it succesffully", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com"}
-		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
@@ -1659,7 +1663,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("Author:chaoyang-Medium-48913-[CSI Driver] [Snapshot] [Filesystem ext4] provisioning should provision storage with snapshot data source larger than original volume", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com"}
-		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
@@ -1751,7 +1755,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("Author:chaoyang-Medium-48933-[CSI Driver] [Snapshot] [Filesystem xfs] provisioning should provision storage with snapshot data source larger than original volume", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com"}
-		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
@@ -1842,7 +1846,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("Author:chaoyang-Medium-48934-[CSI Driver] [Snapshot] [Raw Block] provisioning should provision storage with snapshot data source larger than original volume", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com"}
-		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
@@ -1926,7 +1930,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"efs.csi.aws.com"}
-		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
@@ -1954,8 +1958,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		oc.SetupProject() //create new project
 
 		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			for _, volumeBindingMode := range volumeBindingModes {
-				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+				g.By("****** volumeBindingMode: \"" + volumeBindingMode + "\" parameter test start ******")
 
 				// Get the present scName and check it is installed or no
 				scName := getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
@@ -1984,7 +1989,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				storageClass.createWithExtraParameters(oc, extraParameters)
 				defer storageClass.deleteAsAdmin(oc)
 
-				g.By("# Create a pvc with the preset csi storageclass")
+				g.By("# Create a pvc with the csi storageclass")
 				pvc.scname = storageClass.name
 				e2e.Logf("%s", pvc.scname)
 				pvc.create(oc)
@@ -1992,7 +1997,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 				if volumeBindingMode == "Immediate" {
 					g.By("# Check the pvc status to Bound")
-					o.Expect(getPersistentVolumeClaimStatus(oc, pvc.namespace, pvc.name)).To(o.Equal("Bound"))
+					pvc.waitStatusAsExpected(oc, "Bound")
 				} else {
 					g.By("# Check the pvc status to Pending")
 					pvc.waitPvcStatusToTimer(oc, "Pending")
@@ -2009,8 +2014,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				g.By("# Check the pod volume have the exec right")
 				pod.checkMountedVolumeHaveExecRight(oc)
 
-				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+				g.By("****** volumeBindingMode: \"" + volumeBindingMode + "\" parameter test finish ******")
 			}
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
 	})
 
@@ -2023,11 +2029,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		var (
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
 			stsTemplate         = filepath.Join(storageTeamBaseDir, "sts-template.yaml")
-			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(cloudProvider))
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
-		if cloudProvider == "aws" && !checkCSIDriverInstalled(oc, []string{"efs.csi.aws.com"}) {
-			supportProvisioners = deleteElement(supportProvisioners, "efs.csi.aws.com")
-		}
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}

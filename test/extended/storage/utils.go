@@ -235,6 +235,26 @@ func sliceIntersect(slice1, slice2 []string) []string {
 	return sliceResult
 }
 
+// Convert String Slice to Map: map[string]struct{}
+func convertStrSliceToMap(strSlice []string) map[string]struct{} {
+	set := make(map[string]struct{}, len(strSlice))
+	for _, v := range strSlice {
+		set[v] = struct{}{}
+	}
+	return set
+}
+
+// Judge whether the map contains specified key
+func isInMap(inputMap map[string]struct{}, inputString string) bool {
+	_, ok := inputMap[inputString]
+	return ok
+}
+
+// Judge whether the String Slice contains specified element, return bool
+func strSliceContains(sl []string, element string) bool {
+	return isInMap(convertStrSliceToMap(sl), element)
+}
+
 // Common csi cloud provider support check
 func generalCsiSupportCheck(cloudProvider string) {
 	generalCsiSupportMatrix, err := ioutil.ReadFile(filepath.Join(exutil.FixturePath("testdata", "storage"), "general-csi-support-provisioners.json"))
@@ -247,7 +267,7 @@ func generalCsiSupportCheck(cloudProvider string) {
 }
 
 // Get common csi provisioners by cloudplatform
-func getSupportProvisionersByCloudProvider(cloudProvider string) []string {
+func getSupportProvisionersByCloudProvider(oc *exutil.CLI) []string {
 	csiCommonSupportMatrix, err := ioutil.ReadFile(filepath.Join(exutil.FixturePath("testdata", "storage"), "general-csi-support-provisioners.json"))
 	o.Expect(err).NotTo(o.HaveOccurred())
 	supportProvisioners := []string{}
@@ -255,6 +275,10 @@ func getSupportProvisionersByCloudProvider(cloudProvider string) []string {
 	e2e.Logf("%s support provisioners are : %v", cloudProvider, supportProvisionersResult)
 	for i := 0; i < len(supportProvisionersResult); i++ {
 		supportProvisioners = append(supportProvisioners, gjson.GetBytes(csiCommonSupportMatrix, "support_Matrix.platforms.#(name="+cloudProvider+").provisioners.#.name|@flatten."+strconv.Itoa(i)).String())
+	}
+	if cloudProvider == "aws" && !checkCSIDriverInstalled(oc, []string{"efs.csi.aws.com"}) {
+		supportProvisioners = deleteElement(supportProvisioners, "efs.csi.aws.com")
+		e2e.Logf("***%s \"efs csi driver\" not installed update support provisioners to : %v***", cloudProvider, supportProvisioners)
 	}
 	return supportProvisioners
 }

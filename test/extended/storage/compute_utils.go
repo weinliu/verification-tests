@@ -158,3 +158,20 @@ func uncordonSpecificNode(oc *exutil.CLI, nodeName string) error {
 	e2e.Logf("oc adm uncordon nodes/" + nodeName)
 	return oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", "nodes/"+nodeName).Execute()
 }
+
+// Waiting specified node avaiable: scheduleable and ready
+func waitNodeAvaiable(oc *exutil.CLI, nodeName string) {
+	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		nodeInfo, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes/"+nodeName, "-o", "json").Output()
+		if err != nil {
+			e2e.Logf("Err Occurred: %v", err)
+			return false, err
+		}
+		if !gjson.Get(nodeInfo, `spec.unschedulable`).Exists() && gjson.Get(nodeInfo, `status.conditions.#(type=Ready).status`).String() == "True" {
+			e2e.Logf("Node: \"%s\" is ready to use", nodeName)
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting Node: \"%s\" become ready to use timeout", nodeName))
+}

@@ -120,13 +120,18 @@ func getAwsVolumeStatusByVolumeId(volumeId string) (string, error) {
 func deleteBackendVolumeByVolumeId(oc *exutil.CLI, volumeId string) (string, error) {
 	switch cloudProvider {
 	case "aws":
-		mySession := session.Must(session.NewSession())
-		svc := ec2.New(mySession, aws.NewConfig())
-		deleteVolumeID := &ec2.DeleteVolumeInput{
-			VolumeId: &volumeId,
+		if strings.Contains(volumeId, "::") {
+			e2e.Logf("Delete EFS volume: \"%s\" access_points is under development", volumeId)
+			return "under development now", nil
+		} else {
+			mySession := session.Must(session.NewSession())
+			svc := ec2.New(mySession, aws.NewConfig())
+			deleteVolumeID := &ec2.DeleteVolumeInput{
+				VolumeId: &volumeId,
+			}
+			req, resp := svc.DeleteVolumeRequest(deleteVolumeID)
+			return interfaceToString(resp), req.Send()
 		}
-		req, resp := svc.DeleteVolumeRequest(deleteVolumeID)
-		return interfaceToString(resp), req.Send()
 	case "vsphere":
 		e2e.Logf("Delete %s backend volume is under development", cloudProvider)
 		return "under development now", nil
@@ -163,18 +168,22 @@ func checkVolumeDeletedOnBackend(volumeId string) (bool, error) {
 func waitVolumeAvaiableOnBackend(oc *exutil.CLI, volumeId string) {
 	switch cloudProvider {
 	case "aws":
-		err := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
-			volumeStatus, errinfo := checkVolumeAvaiableOnBackend(volumeId)
-			if errinfo != nil {
-				e2e.Logf("the err:%v, wait for volume %v to become avaiable.", errinfo, volumeId)
-				return volumeStatus, errinfo
-			}
-			if !volumeStatus {
+		if strings.Contains(volumeId, "::") {
+			e2e.Logf("Get EFS volume: \"%s\" status is under development", volumeId)
+		} else {
+			err := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+				volumeStatus, errinfo := checkVolumeAvaiableOnBackend(volumeId)
+				if errinfo != nil {
+					e2e.Logf("the err:%v, wait for volume %v to become avaiable.", errinfo, volumeId)
+					return volumeStatus, errinfo
+				}
+				if !volumeStatus {
+					return volumeStatus, nil
+				}
 				return volumeStatus, nil
-			}
-			return volumeStatus, nil
-		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The volume:%v, is not avaiable.", volumeId))
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The volume:%v, is not avaiable.", volumeId))
+		}
 	case "vsphere":
 		e2e.Logf("Get %s backend volume status is under development", cloudProvider)
 	case "gcp":
@@ -192,18 +201,22 @@ func waitVolumeAvaiableOnBackend(oc *exutil.CLI, volumeId string) {
 func waitVolumeDeletedOnBackend(oc *exutil.CLI, volumeId string) {
 	switch cloudProvider {
 	case "aws":
-		err := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
-			volumeStatus, errinfo := checkVolumeDeletedOnBackend(volumeId)
-			if errinfo != nil {
-				e2e.Logf("the err:%v, wait for volume %v to be deleted.", errinfo, volumeId)
-				return volumeStatus, errinfo
-			}
-			if !volumeStatus {
+		if strings.Contains(volumeId, "::") {
+			e2e.Logf("Get EFS volume: \"%s\" status is under development", volumeId)
+		} else {
+			err := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+				volumeStatus, errinfo := checkVolumeDeletedOnBackend(volumeId)
+				if errinfo != nil {
+					e2e.Logf("the err:%v, wait for volume %v to be deleted.", errinfo, volumeId)
+					return volumeStatus, errinfo
+				}
+				if !volumeStatus {
+					return volumeStatus, nil
+				}
 				return volumeStatus, nil
-			}
-			return volumeStatus, nil
-		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The volume:%v, still exist.", volumeId))
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The volume:%v, still exist.", volumeId))
+		}
 	case "vsphere":
 		e2e.Logf("Get %s backend volume status is under development", cloudProvider)
 	case "gcp":
