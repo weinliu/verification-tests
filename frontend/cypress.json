@@ -10,7 +10,8 @@
   "supportFile": "cypress/support/",
   "pluginsFile": "plugins/index.js",
   "fixturesFolder": "fixtures",
-  "defaultCommandTimeout": 30000,
+  "defaultCommandTimeout": 300000,
+  "pageLoadTimeout": 300000,
   "retries": {
     "runMode": 1,
     "openMode": 0
