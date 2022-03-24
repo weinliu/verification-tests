@@ -2072,6 +2072,74 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
 	})
+	//author: chaoyang@redhat.com
+	//OCP-49372 - [CSI Driver] [Snapshot] [Delete deletionPolicy] delete snapshotcontent after the snapshot deletion
+	g.It("Author:chaoyang-Medium-49372-[CSI Driver] [Snapshot] [Delete deletionPolicy] delete snapshotcontent after the snapshot deletion", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com"}
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+		var (
+			storageTeamBaseDir          = exutil.FixturePath("testdata", "storage")
+			pvcTemplate                 = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate                 = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			storageClassTemplate        = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			volumesnapshotTemplate      = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
+			volumeSnapshotClassTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshotclass-template.yaml")
+
+			storageClassParameters = map[string]string{
+				"csi.storage.k8s.io/fstype": "ext4",
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
+			pvc_ori := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+			pod_ori := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_ori.name))
+
+			g.By("Create a csi storageclass with parameter 'csi.storage.k8s.io/fstype': 'ext4'")
+			storageClass.provisioner = provisioner
+			storageClass.createWithExtraParameters(oc, extraParameters)
+			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+			g.By("Create a pvc with the csi storageclass")
+			pvc_ori.scname = storageClass.name
+			pvc_ori.create(oc)
+			defer pvc_ori.deleteAsAdmin(oc)
+
+			g.By("Create pod with the created pvc and wait for the pod ready")
+			pod_ori.create(oc)
+			defer pod_ori.deleteAsAdmin(oc)
+			pod_ori.waitReady(oc)
+
+			g.By("Create volumesnapshot with the Delete deletionpolicy volumesnapshotclass and wait it ready to use")
+			volumesnapshotClass := newVolumeSnapshotClass(setVolumeSnapshotClassTemplate(volumeSnapshotClassTemplate), setVolumeSnapshotClassDriver(provisioner), setVolumeSnapshotDeletionpolicy("Delete"))
+			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvc_ori.name), setVolumeSnapshotVscname(volumesnapshotClass.name))
+			volumesnapshotClass.create(oc)
+			volumesnapshot.create(oc)
+			defer volumesnapshot.delete(oc)
+			defer volumesnapshotClass.deleteAsAdmin(oc)
+			volumesnapshot.waitReadyToUse(oc)
+
+			g.By("Delete volumesnapshot and check volumesnapshotcontent is deleted accordingly")
+			vscontent := getVSContentByVSname(oc, volumesnapshot.namespace, volumesnapshot.name)
+			volumesnapshot.delete(oc)
+			output, _ := oc.AsAdmin().Run("get").Args("volumesnapshotcontent", vscontent).Output()
+			o.Expect(output).To(o.ContainSubstring("Error from server (NotFound): volumesnapshotcontents.snapshot.storage.k8s.io"))
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+
+		}
+
+	})
 })
 
 // Performing test steps for Online Volume Resizing

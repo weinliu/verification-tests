@@ -20,6 +20,13 @@ type volumeSnapshot struct {
 	sourcepvcname string
 }
 
+type volumeSnapshotClass struct {
+	name           string
+	driver         string
+	template       string
+	deletionPolicy string
+}
+
 // function option mode to change the default values of VolumeSnapshot parameters, e.g. name, namespace, volumesnapshotclassname, source.pvcname etc.
 type volumeSnapshotOption func(*volumeSnapshot)
 
@@ -117,4 +124,72 @@ func (vs *volumeSnapshot) waitReadyToUse(oc *exutil.CLI) {
 		e2e.Logf("oc describe volumesnapshot %s:\n%s", vs.name, vsDescribe)
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Volumeshapshot %s is not ready_to_use", vs.name))
+}
+
+type volumeSnapshotClassOption func(*volumeSnapshotClass)
+
+// Replace the default value of VolumeSnapshotClass name parameter
+func setVolumeSnapshotClassName(name string) volumeSnapshotClassOption {
+	return func(this *volumeSnapshotClass) {
+		this.name = name
+	}
+}
+
+// Replace the default value of VolumeSnapshotClass template parameter
+func setVolumeSnapshotClassTemplate(template string) volumeSnapshotClassOption {
+	return func(this *volumeSnapshotClass) {
+		this.template = template
+	}
+}
+
+// Replace the default value of VolumeSnapshotClass driver parameter
+func setVolumeSnapshotClassDriver(driver string) volumeSnapshotClassOption {
+	return func(this *volumeSnapshotClass) {
+		this.driver = driver
+	}
+}
+
+// Replace the default value of VolumeSnapshotClass deletionPolicy parameter
+func setVolumeSnapshotDeletionpolicy(deletionPolicy string) volumeSnapshotClassOption {
+	return func(this *volumeSnapshotClass) {
+		this.deletionPolicy = deletionPolicy
+	}
+}
+
+// Create a new customized VolumeSnapshotClass object
+func newVolumeSnapshotClass(opts ...volumeSnapshotClassOption) volumeSnapshotClass {
+	defaultVolumeSnapshotClass := volumeSnapshotClass{
+		name:           "my-snapshotclass-" + getRandomString(),
+		template:       "volumesnapshotclass-template.yaml",
+		driver:         "ebs.csi.aws.com",
+		deletionPolicy: "Retain",
+	}
+	for _, o := range opts {
+		o(&defaultVolumeSnapshotClass)
+	}
+
+	return defaultVolumeSnapshotClass
+}
+
+// Create new VolumeSnapshotClass with customized parameters
+func (vsc *volumeSnapshotClass) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplateAsAdmin(oc, "--ignore-unknown-parameters=true", "-f", vsc.template, "-p", "VSCNAME="+vsc.name, "DRIVER="+vsc.driver, "DELETIONPOLICY="+vsc.deletionPolicy)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+//  Delete the VolumeSnapshotClass
+func (vsc *volumeSnapshotClass) deleteAsAdmin(oc *exutil.CLI) {
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("volumesnapshotclass", vsc.name).Execute()
+}
+
+func getVSContentByVSname(oc *exutil.CLI, namespace string, vsName string) string {
+	vscontentName, err := oc.WithoutNamespace().Run("get").Args("volumesnapshot", "-n", namespace, vsName, "-o=jsonpath={.status.boundVolumeSnapshotContentName}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return vscontentName
+}
+
+func getVSContentDeletionPolicy(oc *exutil.CLI, vscontentName string) string {
+	vscontentDeletionPolicy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("volumesnapshotcontent", vscontentName, "-o=jsonpath={.spec.deletionPolicy}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return vscontentDeletionPolicy
 }
