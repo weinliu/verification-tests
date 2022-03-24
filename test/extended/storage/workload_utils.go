@@ -533,6 +533,13 @@ func setDeploymentVolumeTypePath(typepath string) deployOption {
 	}
 }
 
+// Replace the default value of Deployment replicas number
+func setDeploymentReplicasNo(replicasno string) deployOption {
+	return func(this *deployment) {
+		this.replicasno = replicasno
+	}
+}
+
 //  Create a new customized Deployment object
 func newDeployment(opts ...deployOption) deployment {
 	defaultDeployment := deployment{
@@ -561,6 +568,36 @@ func (dep *deployment) create(oc *exutil.CLI) {
 	}
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", dep.template, "-p", "DNAME="+dep.name, "DNAMESPACE="+dep.namespace, "PVCNAME="+dep.pvcname, "REPLICASNUM="+dep.replicasno, "DLABEL="+dep.applabel, "MPATH="+dep.mpath, "VOLUMETYPE="+dep.volumetype, "TYPEPATH="+dep.typepath)
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Create new Deployment with extra parameters
+func (dep *deployment) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
+	if dep.namespace == "" {
+		dep.namespace = oc.Namespace()
+	}
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", dep.template, "-p", "DNAME="+dep.name, "DNAMESPACE="+dep.namespace, "PVCNAME="+dep.pvcname, "REPLICASNUM="+dep.replicasno, "DLABEL="+dep.applabel, "MPATH="+dep.mpath, "VOLUMETYPE="+dep.volumetype, "TYPEPATH="+dep.typepath)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Create new deployment with extra parameters for topologySpreadConstraints
+func (dep *deployment) createWithTopologySpreadConstraints(oc *exutil.CLI) {
+	if dep.namespace == "" {
+		dep.namespace = oc.Namespace()
+	}
+	matchLabels := map[string]interface{}{
+		"app": dep.applabel,
+	}
+	labelSelector := map[string]interface{}{
+		"matchLabels": matchLabels,
+	}
+	extraParameters := map[string]interface{}{
+		"jsonPath":          `items.0.spec.template.spec.topologySpreadConstraints.0.`,
+		"maxSkew":           1,
+		"topologyKey":       "kubernetes.io/hostname",
+		"whenUnsatisfiable": "DoNotSchedule",
+		"labelSelector":     labelSelector,
+	}
+	dep.createWithExtraParameters(oc, extraParameters)
 }
 
 // Create new deployment with extra parameters for nodeSelector

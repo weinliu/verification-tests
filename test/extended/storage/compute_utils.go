@@ -119,6 +119,32 @@ func getWorkersInfo(oc *exutil.CLI) string {
 	return workersInfo
 }
 
+func getWorkersList(oc *exutil.CLI) []string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker", "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Split(output, " ")
+}
+
+// Get schedulable worker node list
+func getSchedulableWorkersList(oc *exutil.CLI) []string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker,kubernetes.io/os=linux", "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Split(output, " ")
+}
+
+// Get schedulable worker node number
+func getSchedulablerWorkersNub(oc *exutil.CLI) int {
+	workersNub := len(getSchedulableWorkersList(oc))
+	unschedulableWorkersInfo, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker,kubernetes.io/os=linux", "-o=jsonpath={.items[*].spec.taints[?(@.effect==\"NoSchedule\")].key}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if len(unschedulableWorkersInfo) == 0 {
+		return workersNub
+	} else {
+		unschedulableWorkersNub := len(strings.Split(unschedulableWorkersInfo, " "))
+		return workersNub - unschedulableWorkersNub
+	}
+}
+
 // Get the cluster schedulable woker nodes names with the same avaiable zone
 func getSchedulableWorkersWithSameAz(oc *exutil.CLI) (schedulableWorkersWithSameAz []string, azName string) {
 	var (
@@ -174,4 +200,30 @@ func waitNodeAvaiable(oc *exutil.CLI, nodeName string) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting Node: \"%s\" become ready to use timeout", nodeName))
+}
+
+// Get Region info
+func getClusterRegion(oc *exutil.CLI) string {
+	node := getWorkersList(oc)[0]
+	region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node, "-o=jsonpath={.metadata.labels.failure-domain\\.beta\\.kubernetes\\.io\\/region}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return region
+}
+
+// Check zoned or unzonded nodes in cluster, currently works for azure only
+func checkNodeZoned(oc *exutil.CLI) bool {
+	// https://kubernetes-sigs.github.io/cloud-provider-azure/topics/availability-zones/#node-labels
+	if cloudProvider == "azure" {
+		node := getWorkersList(oc)[0]
+		zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node, "-o=jsonpath={.metadata.labels.failure-domain\\.beta\\.kubernetes\\.io\\/zone}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		region := getClusterRegion(oc)
+		e2e.Logf("The zone is %s", zone)
+		e2e.Logf("The region is %s", region)
+		//if len(zone) == 1 {
+		if !strings.Contains(zone, region) {
+			return false
+		}
+	}
+	return true
 }
