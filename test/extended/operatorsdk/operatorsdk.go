@@ -1155,6 +1155,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
+		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
+		dataPath := filepath.Join(buildPruningBaseDir, "ocp-44295-data")
 		quayCLI := container.NewQuayCLI()
 		imageTag := "quay.io/olmqe/memcached-operator:44295-" + getRandomString()
 		tmpBasePath := "/tmp/ocp-44295-" + getRandomString()
@@ -1185,7 +1187,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(output).To(o.ContainSubstring("Next"))
 
 		g.By("step: update API")
-		err = copy("test/extended/util/operatorsdk/ocp-44295-data/memcached_types.go", filepath.Join(tmpPath, "api", "v1alpha1", "memcached_types.go"))
+		err = copy(filepath.Join(dataPath, "memcached_types.go"), filepath.Join(tmpPath, "api", "v1alpha1", "memcached_types.go"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = makeCLI.Run("generate").Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1201,7 +1203,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/name: system/name: system-ocp44295/g' `grep -rl \"name: system\" %s`", tmpPath)).Output()
 		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/namespace: system/namespace: %s/g'  `grep -rl \"namespace: system\" %s`", nsSystem, tmpPath)).Output()
 		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/namespace: memcached-operator-system/namespace: %s/g'  `grep -rl \"namespace: memcached-operator-system\" %s`", nsOperator, tmpPath)).Output()
-		err = copy("test/extended/util/operatorsdk/ocp-44295-data/memcached_controller.go", filepath.Join(tmpPath, "controllers", "memcached_controller.go"))
+		err = copy(filepath.Join(dataPath, "memcached_controller.go"), filepath.Join(tmpPath, "controllers", "memcached_controller.go"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("step: Build the operator image")
