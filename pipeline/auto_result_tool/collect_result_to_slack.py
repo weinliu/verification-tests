@@ -192,22 +192,25 @@ class SummaryClient:
                         caseAuthor = ret["name"].split(":")[1]
                         caseidList.append(caseids[0][4:]+"-"+caseAuthor)
             if len(caseidList) == 0:
-                raise Exception("ERROR: can not find matched case ID. maybe your case title has no case ID")
+                return ""
             separator = '|'
             return separator.join(caseidList)
         except BaseException as e:
             print(e)
 
-    def notifyToSlack(self, notification=""):
+    def notifyToSlack(self, notificationList=[]):
         try:
-            msg = {"blocks": [{"type": "section","text": {"type":"mrkdwn","text": notification}}]}
+            msgList = []
+            for notification in notificationList:
+                msgList.append({"type": "section","text": {"type":"mrkdwn","text": notification}})
+            msg = {"blocks": msgList}
             r = self.session.post(url=self.slack_url, json=msg)
             if (r.status_code != 200) and (r.status_code != 201):
                 raise Exception("send slack message error: {0}".format(r.text))
             return r.status_code 
         except BaseException as e:
             print(e)
-            print("\\n")
+            print("\n")
             return None
 
     def collectResult(self, launchname):
@@ -237,14 +240,17 @@ class SummaryClient:
     def collectResultToSlack(self, launchname):
         result = self.collectResult(launchname)
         for testrun in result.keys():
-            notification=[]
-            notification.append("****************************************************************")
-            notification.append("******      golang test result:"+testrun+"                      ******")
-            notification.append("profile:"+result[testrun]["profilename"])
-            notification.append("build_version:"+result[testrun]["build_version"])
-            notification.append("gbuildnum:"+result[testrun]["gbuildnum"])
+            notificationList = []
+            notificationHeader=[]
+            notificationHeader.append("****************************************************************")
+            notificationHeader.append("******      golang test result:"+testrun+"                      ******")
+            notificationHeader.append("profile:"+result[testrun]["profilename"])
+            notificationHeader.append("build_version:"+result[testrun]["build_version"])
+            notificationHeader.append("gbuildnum:"+result[testrun]["gbuildnum"])
+            notificationList.append("\n".join(notificationHeader))
             faildTeamOwner =""
             for subteam in result[testrun]["caseResult"].keys():
+                notificationSub=[]
                 failedNumber = result[testrun]["caseResult"][subteam]["failed"]
                 if failedNumber == 0:
                    continue 
@@ -252,24 +258,27 @@ class SummaryClient:
                 skipped =result[testrun]["caseResult"][subteam]["skipped"]
                 toInvestigateNumber = result[testrun]["caseResult"][subteam]["to_investigate"]
                 link = self.ui_url +str(result[testrun]["caseResult"][subteam]["launchID"])
-                notification.append("---------- subteam: "+subteam+" -------------")
-                notification.append("total: {0}, failed: {1}, skipped: {2}, to_investigate: {3}, {4} ".format(total, failedNumber, skipped, toInvestigateNumber, link))
-                notification.append("Failed Cases: "+result[testrun]["caseResult"][subteam]["faildCase"])
+                notificationSub.append("---------- subteam: "+subteam+" -------------")
+                notificationSub.append("total: {0}, failed: {1}, skipped: {2}, to_investigate: {3}, {4} ".format(total, failedNumber, skipped, toInvestigateNumber, link))
+                notificationSub.append("Failed Cases: "+result[testrun]["caseResult"][subteam]["faildCase"])
                 if "No fail case" not in result[testrun]["caseResult"][subteam]["faildCase"]:
                     if subteam in self.SUBTEAM_OWNER.keys():
                         faildTeamOwner = faildTeamOwner + self.SUBTEAM_OWNER[subteam]
+                notificationList.append("\n".join(notificationSub))
+            notificationEnd = []
             self.number = self.number+1
             if not self.silence:
                 debugMsg = "{0} Please debug failed cases, thanks!".format(faildTeamOwner)
                 if self.cluster:
                     debugMsg = debugMsg + " Cluster:{0}{1}".format(self.jenkins_url, self.cluster)
-                notification.append(debugMsg)
+                notificationEnd.append(debugMsg)
             if self.additional_message:
-                notification.append(self.additional_message)
-            notification.append("\n")
-            print("\n".join(notification))
+                notificationEnd.append(self.additional_message)
+            notificationEnd.append("\n")
+            notificationList.append("\n".join(notificationEnd))
+            print("\n".join(notificationList))
             if self.slack_url:
-                self.notifyToSlack("\n".join(notification))
+                self.notifyToSlack(notificationList)
 
     def collectAllResultToSlack(self):
         for launchname in self.launchnames.split(":"):
