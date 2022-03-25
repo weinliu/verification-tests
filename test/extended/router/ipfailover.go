@@ -15,9 +15,24 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	var oc = exutil.NewCLI("router-ipfailover", exutil.KubeConfigPath())
 
+	g.BeforeEach(func() {
+		g.By("Check platforms")
+		platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		platforms := map[string]bool{
+			// 'None' for Baremetal
+			"None":      true,
+			"VSphere":   true,
+			"OpenStack": true,
+		}
+		if !platforms[platformtype] {
+			g.Skip("Skip for non-supported platform")
+		}
+	})
+
 	// author: hongli@redhat.com
 	// might conflict with other ipfailover cases so set it as Serial
-	g.It("Author:hongli-ConnectedOnly-Critical-41025-support to deploy ipfailover [Serial] [Flaky]", func() {
+	g.It("Author:hongli-ConnectedOnly-Critical-41025-support to deploy ipfailover [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ipfailover.yaml")
 		var (
@@ -76,11 +91,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_MONITOR_PORT=30061")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_VRRP_ID_OFFSET=2")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_REPLICA_COUNT=3")
-		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `OPENSHIFT_HA_USE_UNICAST="true"`)
-		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `OPENSHIFT_HA_IPTABLES_CHAIN="OUTPUT"`)
-		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `OPENSHIFT_HA_NOTIFY_SCRIPT="/etc/keepalive/mynotifyscript.sh"`)
-		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `OPENSHIFT_HA_CHECK_SCRIPT="/etc/keepalive/mycheckscript.sh"`)
-		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `OPENSHIFT_HA_PREEMPTION="preempt_delay 600"`)
+		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `OPENSHIFT_HA_USE_UNICAST=true`)
+		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `OPENSHIFT_HA_IPTABLES_CHAIN=OUTPUT`)
+		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `OPENSHIFT_HA_NOTIFY_SCRIPT=/etc/keepalive/mynotifyscript.sh`)
+		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `OPENSHIFT_HA_CHECK_SCRIPT=/etc/keepalive/mycheckscript.sh`)
+		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `OPENSHIFT_HA_PREEMPTION=preempt_delay 600`)
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_CHECK_INTERVAL=3")
 
 		g.By("verify the HA virtual ip ENV variable")
@@ -99,11 +114,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(result).To(o.ContainSubstring("OPENSHIFT_HA_MONITOR_PORT:       30061"))
 		o.Expect(result).To(o.ContainSubstring("OPENSHIFT_HA_VRRP_ID_OFFSET:     2"))
 		o.Expect(result).To(o.ContainSubstring("OPENSHIFT_HA_REPLICA_COUNT:      3"))
-		o.Expect(result).To(o.ContainSubstring(`OPENSHIFT_HA_USE_UNICAST:        "true"`))
-		o.Expect(result).To(o.ContainSubstring(`OPENSHIFT_HA_IPTABLES_CHAIN:     "OUTPUT"`))
-		o.Expect(result).To(o.ContainSubstring(`OPENSHIFT_HA_NOTIFY_SCRIPT:      "/etc/keepalive/mynotifyscript.sh"`))
-		o.Expect(result).To(o.ContainSubstring(`OPENSHIFT_HA_CHECK_SCRIPT:       "/etc/keepalive/mycheckscript.sh"`))
-		o.Expect(result).To(o.ContainSubstring(`OPENSHIFT_HA_PREEMPTION:         "preempt_delay 600"`))
+		o.Expect(result).To(o.ContainSubstring(`OPENSHIFT_HA_USE_UNICAST:        true`))
+		o.Expect(result).To(o.ContainSubstring(`OPENSHIFT_HA_IPTABLES_CHAIN:     OUTPUT`))
+		o.Expect(result).To(o.ContainSubstring(`OPENSHIFT_HA_NOTIFY_SCRIPT:      /etc/keepalive/mynotifyscript.sh`))
+		o.Expect(result).To(o.ContainSubstring(`OPENSHIFT_HA_CHECK_SCRIPT:       /etc/keepalive/mycheckscript.sh`))
+		o.Expect(result).To(o.ContainSubstring(`OPENSHIFT_HA_PREEMPTION:         preempt_delay 600`))
 		o.Expect(result).To(o.ContainSubstring("OPENSHIFT_HA_CHECK_INTERVAL:     3"))
 		o.Expect(result).To(o.ContainSubstring("OPENSHIFT_HA_VIRTUAL_IPS:        " + virtualIP))
 	})
@@ -133,7 +148,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("add some VIP configuration for the failover group")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_VRRP_ID_OFFSET=0")
-		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_VIP_GROUPS=255")
+		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_VIP_GROUPS=238")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `OPENSHIFT_HA_VIRTUAL_IPS=192.168.254.1-255`)
 
 		g.By("verify from the ipfailover pod, the 255 VIPs are added")
@@ -142,7 +157,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ensureIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		newPodName := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		checkenv := readPodEnv(oc, newPodName[0], oc.Namespace(), "OPENSHIFT_HA_VIP_GROUPS")
-		o.Expect(checkenv).To(o.ContainSubstring("OPENSHIFT_HA_VIP_GROUPS=255"))
+		o.Expect(checkenv).To(o.ContainSubstring("OPENSHIFT_HA_VIP_GROUPS=238"))
 	})
 
 	// author: mjoseph@redhat.com
