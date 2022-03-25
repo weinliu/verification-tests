@@ -27,6 +27,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		nto_realtime_file                = exutil.FixturePath("testdata", "psap", "nto", "realtime.yaml")
 		nto_mcp_file                     = exutil.FixturePath("testdata", "psap", "nto", "machine-config-pool.yaml")
 		ips_file                         = exutil.FixturePath("testdata", "psap", "nto", "ips.yaml")
+		worker_stack_file                = exutil.FixturePath("testdata", "psap", "nto", "worker-stack-tuned.yaml")
 		pao_performance_file             = exutil.FixturePath("testdata", "psap", "pao", "pao-performanceprofile.yaml")
 		pao_performance_patch_file       = exutil.FixturePath("testdata", "psap", "pao", "pao-performance-patch.yaml")
 		pao_performance_fixpatch_file    = exutil.FixturePath("testdata", "psap", "pao", "pao-performance-fixpatch.yaml")
@@ -1400,5 +1401,67 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("The certificate extracted from the openssl command should match the first certificate from the tls.crt file in the secret")
 		compareCertificateBetweenOpenSSLandTlsSecret(oc, ntoNamespace, tunedNodeName)
+	})
+
+	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-49371-NTO will restart tuned daemon when profile application take too long [Disruptive] [Slow]", func() {
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		//Use the first worker node as labeled node
+		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "worker-stuck-").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "openshift-profile-stuck", "-n", ntoNamespace, "--ignore-not-found").Execute()
+
+		g.By("Label the node with worker-stack=")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "worker-stuck=", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create openshift-profile-stuck profile")
+		//Define duplicated parameter and value
+		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, worker_stack_file)
+
+		g.By("Check if new profile in in rendered tuned")
+		renderCheck, err := getTunedRender(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).To(o.ContainSubstring("openshift-profile-stuck"))
+
+		g.By("Check openshift-profile-stuck tuned profile should be automatically created")
+		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNames).To(o.ContainSubstring("openshift-profile-stuck"))
+
+		g.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Assert active and recommended profile (openshift-profile-stuck) match in tuned pod log")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 300, `active and recommended profile \(openshift-profile-stuck\) match`)
+
+		g.By("Check if new NTO profile openshift-profile-stuck was applied")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-profile-stuck")
+
+		g.By("Check if profile what's active profile applied on nodes")
+		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeProfileName).To(o.ContainSubstring("openshift-profile-stuck"))
+
+		g.By("Check current profile for each node")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Assert timeout (120) to apply TuneD profile; restarting TuneD daemon in tuned pod log")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "18", 60, `timeout \(120\) to apply TuneD profile; restarting TuneD daemon`)
+
+		g.By("Assert error waiting for tuned: signal: terminated in tuned pod log")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "18", 60, `error waiting for tuned: signal: terminated`)
 	})
 })
