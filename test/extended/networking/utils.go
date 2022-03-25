@@ -590,16 +590,32 @@ func getNodeIPv4(oc *exutil.CLI, namespace string, nodeName string) string {
 	return nodeipv4
 }
 
-func getLeaderNodeIP(oc *exutil.CLI, namespace string, cmName string) string {
-	output1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-n", namespace, "-o=jsonpath={.metadata.annotations.control-plane\\.alpha\\.kubernetes\\.io/leader}").OutputToFile("oc_describe_nodes.txt")
-	o.Expect(err1).NotTo(o.HaveOccurred())
-	output2, err2 := exec.Command("bash", "-c", "cat "+output1+" |  jq -r .holderIdentity").Output()
-	o.Expect(err2).NotTo(o.HaveOccurred())
-	leaderNodeName := strings.Trim(strings.TrimSpace(string(output2)), "\"")
-	e2e.Logf("The node name is %s", leaderNodeName)
-	leaderNodeIP := getNodeIPv4(oc, namespace, leaderNodeName)
-	e2e.Logf("The leaderPodIP is: %v", leaderNodeIP)
-	return leaderNodeIP
+func getLeaderInfo(oc *exutil.CLI, namespace string, cmName string, networkType string) string {
+	if networkType == "ovnkubernetes" {
+	    output1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-n", namespace, "-o=jsonpath={.metadata.annotations.control-plane\\.alpha\\.kubernetes\\.io/leader}").OutputToFile("oc_describe_nodes.txt")
+	    o.Expect(err1).NotTo(o.HaveOccurred())
+	    output2, err2 := exec.Command("bash", "-c", "cat "+output1+" |  jq -r .holderIdentity").Output()
+	    o.Expect(err2).NotTo(o.HaveOccurred())
+	    leaderNodeName := strings.Trim(strings.TrimSpace(string(output2)), "\"")
+	    e2e.Logf("The leader node name is %s", leaderNodeName)
+	    leaderNodeIP := getNodeIPv4(oc, namespace, leaderNodeName)
+	    e2e.Logf("The leader node's IP is: %v", leaderNodeIP)
+		return leaderNodeIP
+	} else {
+	    output1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-n", namespace, "-o=jsonpath={.metadata.annotations.control-plane\\.alpha\\.kubernetes\\.io/leader}").OutputToFile("oc_describe_nodes.txt")
+	    o.Expect(err1).NotTo(o.HaveOccurred())
+	    output2, err2 := exec.Command("bash", "-c", "cat "+output1+" |  jq -r .holderIdentity").Output()
+	    o.Expect(err2).NotTo(o.HaveOccurred())
+	    leaderNodeName := strings.Trim(strings.TrimSpace(string(output2)), "\"")
+	    e2e.Logf("The leader node name is %s", leaderNodeName)
+		oc_get_pods, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-sdn", "pod", "-l app=sdn", "-o=wide").OutputToFile("ocgetpods.txt")
+		o.Expect(err3).NotTo(o.HaveOccurred())
+		raw_grep_output, err3 := exec.Command("bash", "-c", "cat "+oc_get_pods+" | grep "+leaderNodeName+" | awk '{print $1}'").Output()
+		o.Expect(err3).NotTo(o.HaveOccurred())
+		leaderPodName := strings.TrimSpace(string(raw_grep_output))
+		e2e.Logf("The leader Pod's name: %v", leaderPodName)
+		return leaderPodName
+	}
 }
 
 func checkSDNMetrics(oc *exutil.CLI, url string, metrics string) {
@@ -672,3 +688,36 @@ func getPodName(oc *exutil.CLI, namespace string, label string) []string {
 	e2e.Logf("The pod(s) are  %v ", podName)
 	return podName
 }
+
+func getSDNMetrics(oc *exutil.CLI, podName string) string {
+	var metrics_log string
+	metrics_err := wait.Poll(5*time.Second, 10*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-sdn", fmt.Sprintf("%s", podName), "--", "curl", "localhost:29100/metrics").OutputToFile("metrics.txt")
+		if err != nil {
+			e2e.Logf("Can't get metrics and try again, the error is:%s", err)
+			return false, nil
+		}
+		metrics_log = output
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(metrics_err, fmt.Sprintf("Fail to get metric and the error is:%s", metrics_err))
+	return metrics_log
+}
+
+func getOVNMetrics(oc *exutil.CLI, url string) string {
+	var metrics_log string
+	olmToken, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	metrics_err := wait.Poll(5*time.Second, 10*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), fmt.Sprintf("%s", url)).OutputToFile("metrics.txt")
+		if err != nil {
+			e2e.Logf("Can't get metrics and try again, the error is:%s", err)
+			return false, nil
+		}
+		metrics_log = output
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(metrics_err, fmt.Sprintf("Fail to get metric and the error is:%s", metrics_err))
+	return metrics_log
+}
+
