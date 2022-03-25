@@ -111,7 +111,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 			}
 		}
 
-		bastionHost := getSSHBastionHost(oc)
+		bastionHost := getSSHBastionHost(oc, iaasPlatform)
 		winInternalIP := getWindowsInternalIPs(oc)
 		for _, winhost := range winInternalIP {
 			for _, svc := range svcs {
@@ -286,7 +286,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 
 	// author rrasouli@redhat.com
 	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-42496-byoh-Configure Windows instance with DNS [Slow] [Disruptive]", func() {
-		bastionHost := getSSHBastionHost(oc)
+		bastionHost := getSSHBastionHost(oc, iaasPlatform)
 		// use config map to fetch the actual Windows version
 		winVersion := "2019"
 		machinesetName := "byoh"
@@ -318,7 +318,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		g.By("Check services are not running after deleting the Windows Node")
 		runningServices, err := getWinSVCs(bastionHost, address[0], privateKey, iaasPlatform)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		svcBool, svc := checkRunningServicesOnWindowsNode(bastionHost, address[0], *&svcs, runningServices, privateKey, iaasPlatform)
+		svcBool, svc := checkRunningServicesOnWindowsNode(*&svcs, runningServices)
 		if svcBool {
 			e2e.Failf("Service %v still running on Windows node after deconfiguration", svc)
 		}
@@ -815,19 +815,21 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 
 	// author: rrasouli@redhat.com refactored:v1
 	g.It("Author:rrasouli-Critical-48873-Add description OpenShift managed to Openshift services", func() {
-		bastionHost := getSSHBastionHost(oc)
+		bastionHost := getSSHBastionHost(oc, iaasPlatform)
 		// use config map to fetch the actual Windows version
 		machineset := getWindowsMachineSetName(oc)
 		address := fetchAddress(oc, "IP", machineset)
-		svcDescription, err := getSVCsDescription(bastionHost, address[0], privateKey, iaasPlatform)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, machineIP := range address {
+			svcDescription, err := getSVCsDescription(bastionHost, machineIP, privateKey, iaasPlatform)
+			o.Expect(err).NotTo(o.HaveOccurred())
 
-		for _, svc := range svcs {
-			svcDesc := svcDescription[svc]
-			e2e.Logf("Service is %v", svcDesc)
+			for _, svc := range svcs {
+				svcDesc := svcDescription[svc]
+				e2e.Logf("Service is %v", svcDesc)
 
-			if !strings.Contains(svcDesc, "OpenShift managed") {
-				e2e.Failf("Description is missing on service %v", svc)
+				if !strings.Contains(svcDesc, "OpenShift managed") {
+					e2e.Failf("Description is missing on service %v", svc)
+				}
 			}
 		}
 	})

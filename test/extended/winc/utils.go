@@ -111,14 +111,18 @@ func getWindowsInternalIPs(oc *exutil.CLI) []string {
 	return strings.Split(winInternalIPs, " ")
 }
 
-func getSSHBastionHost(oc *exutil.CLI) string {
-	// TODO parameterize bastion per platform, need to have different values for vSphere bastion host
-	msg, err := oc.WithoutNamespace().Run("get").Args("service", "--all-namespaces", "-l=run=ssh-bastion", "-o=go-template='{{ with (index (index .items 0).status.loadBalancer.ingress 0) }}{{ or .hostname .ip }}{{end}}'").Output()
-	if err != nil || msg == "" {
-		e2e.Failf("SSH bastion is not installed yet")
+func getSSHBastionHost(oc *exutil.CLI, iaasPlatform string) string {
+
+	if iaasPlatform == "vsphere" {
+		return "bastion.vmc.ci.openshift.org"
+	} else {
+	    msg, err := oc.WithoutNamespace().Run("get").Args("service", "--all-namespaces", "-l=run=ssh-bastion", "-o=go-template='{{ with (index (index .items 0).status.loadBalancer.ingress 0) }}{{ or .hostname .ip }}{{end}}'").Output()
+	    if err != nil || msg == "" {
+			e2e.Failf("SSH bastion is not installed yet")
+	    }
+	    msg = removeOuterQuotes(msg)
+	    return (msg)
 	}
-	msg = removeOuterQuotes(msg)
-	return (msg)
 }
 
 // A private function to translate the workload/pod/deployment name
@@ -142,10 +146,18 @@ func getAdministratorNameByPlatform(iaasPlatform string) (admin string) {
 	return "Administrator"
 }
 
+func getBastionSSHUser(iaasPlatform string) (user string) {
+	if iaasPlatform == "vsphere" {
+		return "openshift-qe"
+	} else {
+		return "core"
+	}
+}
+
 func runPSCommand(bastionHost string, windowsHost string, command string, privateKey string, iaasPlatform string) (result string, err error) {
 	windowsUser := getAdministratorNameByPlatform(iaasPlatform)
 	command = "\"" + command + "\""
-	cmd := "chmod 600 " + privateKey + "; ssh -i " + privateKey + " -t -o StrictHostKeyChecking=no -o ProxyCommand=\"ssh -i " + privateKey + " -A -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -W %h:%p core@" + bastionHost + "\" " + windowsUser + "@" + windowsHost + " 'powershell " + command + "'"
+	cmd := "chmod 600 " + privateKey + "; ssh -i " + privateKey + " -t -o StrictHostKeyChecking=no -o ProxyCommand=\"ssh -i " + privateKey + " -A -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -W %h:%p " + getBastionSSHUser(iaasPlatform) + "@" + bastionHost + "\" " + windowsUser + "@" + windowsHost + " 'powershell " + command + "'"
 	msg, err := exec.Command("bash", "-c", cmd).CombinedOutput()
 	return string(msg), err
 }
@@ -400,15 +412,15 @@ func fetchAddress(oc *exutil.CLI, addressType string, machinesetName string) []s
 	} else {
 		addressType = "InternalIP"
 	}
-	machineAddress := ""
+	machineAddresses := ""
 	poolErr := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
 		var err error
-		machineAddress, err = oc.WithoutNamespace().Run("get").Args("machine", "-ojsonpath={.items[?(@.metadata.labels.machine\\.openshift\\.io\\/cluster-api-machineset==\""+machinesetName+"\")].status.addresses[?(@.type==\""+addressType+"\")].address}", "-n", "openshift-machine-api").Output()
+		machineAddresses, err = oc.WithoutNamespace().Run("get").Args("machine", "-ojsonpath={.items[?(@.metadata.labels.machine\\.openshift\\.io\\/cluster-api-machineset==\""+machinesetName+"\")].status.addresses[?(@.type==\""+addressType+"\")].address}", "-n", "openshift-machine-api").Output()
 		if err != nil {
 			e2e.Logf("trying next round")
 			return false, nil
 		}
-		if machineAddress == "" {
+		if machineAddresses == "" {
 			e2e.Logf("Did not get address, trying next round")
 			return false, nil
 		}
@@ -417,8 +429,27 @@ func fetchAddress(oc *exutil.CLI, addressType string, machinesetName string) []s
 	if poolErr != nil {
 		e2e.Failf("Failed to get address")
 	}
-	e2e.Logf("Machine Address is %v", machineAddress)
-	return strings.Split(string(machineAddress), " ")
+	// Filter out any IPv6 address which could have been configured in the machine
+	ipv4MachineAddresses := []string{}
+	for _, machineAddress := range strings.Split(string(machineAddresses), " ") {
+		if ip4or6(machineAddress) == "version 4" {
+			ipv4MachineAddresses = append(ipv4MachineAddresses, machineAddress)
+		}
+	}
+	e2e.Logf("Machine Address is %v", ipv4MachineAddresses)
+	return ipv4MachineAddresses
+}
+
+func ip4or6(s string) string {
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '.':
+			return "version 4"
+		case ':':
+			return "version 6"
+	    }
+	}
+	return "unknown"
 }
 
 func setConfigmap(oc *exutil.CLI, address string, administrator string, configMapFile string) error {
@@ -476,7 +507,7 @@ func getSVCsDescription(bastionHost string, addr string, privateKey string, iaas
 	return services, nil
 }
 
-func checkRunningServicesOnWindowsNode(bastionHost string, winInternalIP string, svcs map[int]string, winServices map[string]string, privateKey string, iaasPlatform string) (expectedService bool, svc string) {
+func checkRunningServicesOnWindowsNode(svcs map[int]string, winServices map[string]string) (expectedService bool, svc string) {
 	for _, svc = range svcs {
 		_, expectedService := winServices[svc]
 		if !expectedService {
