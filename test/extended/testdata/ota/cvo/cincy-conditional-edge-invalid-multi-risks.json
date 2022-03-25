@@ -9,6 +9,9 @@
       "payload": "targetpayload"
     }
   ],
+  "edges": [
+    [0,1]
+  ],
   "conditionalEdges":[
     {
       "edges": [

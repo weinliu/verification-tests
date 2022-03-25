@@ -27,6 +27,63 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	oc := exutil.NewCLIWithoutNamespace(project_name)
 
 	//author: yanyang@redhat.com
+	g.It("ConnectedOnly-Author:yanyang-Low-46422-cvo drops invalid conditional edges [Serial]", func() {
+		orgUpstream, _ := getCVObyJP(oc, ".spec.upstream")
+
+		defer restoreCVSpec(orgUpstream, "nochange", oc)
+
+		g.By("Patch upstream")
+		projectID := "openshift-qe"
+		ctx := context.Background()
+		client, err := storage.NewClient(ctx)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer client.Close()
+
+		graphURL, bucket, object, _, _, err := buildGraph(client, oc, projectID, "cincy-conditional-edge-invalid-null-node.json")
+		defer DeleteBucket(client, bucket)
+		defer DeleteObject(client, bucket, object)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		_, err = ocJsonPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check CVO prompts correct reason and message")
+		expString := "warning: Cannot display available updates:\n" +
+			"  Reason: ResponseInvalid\n" +
+			"  Message: Unable to retrieve available updates: no node for conditional update"
+		err = wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
+			cmdOut, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf(cmdOut)
+			if strings.Contains(cmdOut, expString) {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Test on empty target node failed")
+
+		graphURL, bucket, object, _, _, err = buildGraph(client, oc, projectID, "cincy-conditional-edge-invalid-multi-risks.json")
+		defer DeleteBucket(client, bucket)
+		defer DeleteObject(client, bucket, object)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		_, err = ocJsonPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check no updates")
+		err = wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
+			cmdOut, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf(cmdOut)
+			if strings.Contains(cmdOut, "No updates available") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Test on multiple invalid risks failed")
+	})
+
+	//author: yanyang@redhat.com
 	g.It("ConnectedOnly-Author:yanyang-Low-47175-upgrade cluster when current version is in the upstream but there are not update paths [Serial]", func() {
 		orgUpstream, _ := getCVObyJP(oc, ".spec.upstream")
 
