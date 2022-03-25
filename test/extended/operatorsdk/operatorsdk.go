@@ -1235,15 +1235,21 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("deployment.apps/memcached-operator-controller-manager"))
 
-		g.By("step: Create the resource")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", nsOperator).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
-			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
+			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(msg, "memcached-operator-controller-manager") {
-				e2e.Logf("found pod memcached-operator-controller-manager")
-				return true, nil
+			lines := strings.Split(podList, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "memcached-operator-controller-manager") {
+					e2e.Logf("found pod memcached-operator-controller-manager")
+					if strings.Contains(line, "Running") {
+						e2e.Logf("the status of pod memcached-operator-controller-manager is Running")
+						return true, nil
+					} else {
+						e2e.Logf("the status of pod memcached-operator-controller-manager is not Running")
+						return false, nil
+					}
+				}
 			}
 			return false, nil
 		})
@@ -1252,7 +1258,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("Starting workers"))
 
-		g.By("step: check deployment")
+		g.By("step: Create the resource")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", nsOperator).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1263,9 +1271,22 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached-sample in project %s", nsOperator))
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/memcached-sample", "-n", nsOperator).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(msg).To(o.ContainSubstring("3 desired | 3 updated | 3 total | 3 available | 0 unavailable"))
+
+		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/memcached-sample", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(msg, "3 desired | 3 updated | 3 total | 3 available | 0 unavailable") {
+				e2e.Logf("deployment/memcached-sample is created successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		if waitErr != nil {
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/memcached-sample", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf(msg)
+		}
+		exutil.AssertWaitPollNoErr(waitErr, "the status of deployment/memcached-sample is wrong")
 
 		g.By("OCP 44295 SUCCESS")
 	})
