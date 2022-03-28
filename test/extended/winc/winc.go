@@ -44,7 +44,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	})
 
 	// author: sgao@redhat.com
-	g.It("Author:sgao-Critical-33612-Windows node basic check", func() {
+	g.It("Smokerun-Author:sgao-Critical-33612-Windows node basic check", func() {
 		g.By("Check Windows worker nodes run the same kubelet version as other Linux worker nodes")
 		linuxKubeletVersion, err := oc.WithoutNamespace().Run("get").Args("nodes", "-l=kubernetes.io/os=linux", "-o=jsonpath={.items[0].status.nodeInfo.kubeletVersion}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -125,7 +125,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	})
 
 	// author: sgao@redhat.com
-	g.It("Author:sgao-Critical-32615-Generate userData secret [Serial]", func() {
+	g.It("Smokerun-Author:sgao-Critical-32615-Generate userData secret [Serial]", func() {
 		g.By("Check secret windows-user-data generated and contain correct public key")
 		output, err := exec.Command("bash", "-c", "cat "+publicKey+"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -191,7 +191,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	})
 
 	// author: sgao@redhat.com refactored:v1
-	g.It("Author:sgao-Critical-28632-Windows and Linux east west network during a long time", func() {
+	g.It("Smokerun-Author:sgao-Critical-28632-Windows and Linux east west network during a long time", func() {
 		// Note: Flexy alredy created workload in winc-test, here we check it still works after a long time
 		namespace := "winc-test"
 		g.By("Check communication: Windows pod <--> Linux pod")
@@ -218,7 +218,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	})
 
 	// author: sgao@redhat.com refactored:v1
-	g.It("Author:sgao-Critical-32273-Configure kube proxy and external networking check", func() {
+	g.It("Smokerun-Author:sgao-Critical-32273-Configure kube proxy and external networking check", func() {
 		if iaasPlatform == "vsphere" {
 			g.Skip("vSphere does not support Load balancer, skipping")
 		}
@@ -244,8 +244,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	})
 
 	// author rrasouli@redhat.com
-	g.It("Longduration-Author:rrasouli-NonPreRelease-High-37096-Schedule Windows workloads with cluster running multiple Windows OS variants [Slow][Disruptive]", func() {
-
+	g.It("Smokerun-Longduration-Author:rrasouli-NonPreRelease-High-37096-Schedule Windows workloads with cluster running multiple Windows OS variants [Slow][Disruptive]", func() {
+		// TODO remove skip line when more OS variants are supported
+		g.Skip("Test is not in use, no multiple OS variants supported")
 		// we assume 2 Windows Nodes created with the default server 2019 image, here we create new server
 		namespace := "winc-37096"
 		winVersion := "20H2"
@@ -361,7 +362,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	})
 
 	// author rrasouli@redhat.com
-	g.It("Author:rrasouli-NonPreRelease-High-39451-Access Windows workload through clusterIP [Slow][Disruptive]", func() {
+	g.It("Smokerun-Author:rrasouli-NonPreRelease-High-39451-Access Windows workload through clusterIP [Slow][Disruptive]", func() {
 		namespace := "winc-39451"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
@@ -446,7 +447,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	})
 
 	// author: sgao@redhat.com
-	g.It("Author:sgao-Critical-31276-Configure CNI and internal networking check", func() {
+	g.It("Smokerun-Author:sgao-Critical-31276-Configure CNI and internal networking check", func() {
 		namespace := "winc-31276"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
@@ -540,7 +541,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	})
 
 	// author: sgao@redhat.com
-	g.It("Author:sgao-Critical-33779-Retrieving Windows node logs", func() {
+	g.It("Smokerun-Author:sgao-Critical-33779-Retrieving Windows node logs", func() {
 		g.By("Check a cluster-admin can retrieve kubelet logs")
 		msg, err := oc.WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=kubelet/kubelet.log").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -582,7 +583,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	})
 
 	// author: sgao@redhat.com
-	g.It("Author:sgao-NonPreRelease-Critical-33783-Enable must gather on Windows node [Slow][Disruptive]", func() {
+	g.It("Smokerun-Author:sgao-NonPreRelease-Critical-33783-Enable must gather on Windows node [Slow][Disruptive]", func() {
 		g.By("Check must-gather on Windows node")
 		// Note: Marked as [Disruptive] in case of /tmp folder full
 		msg, err := oc.WithoutNamespace().Run("adm").Args("must-gather", "--dest-dir=/tmp/must-gather-33783").Output()
@@ -612,7 +613,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	})
 
 	// author: sgao@redhat.com
-	g.It("Author:sgao-NonPreRelease-High-33794-Watch cloud private key secret [Slow][Disruptive]", func() {
+	g.It("Smokerun-Author:sgao-NonPreRelease-High-33794-Watch cloud private key secret [Slow][Disruptive]", func() {
 		g.By("Check watch cloud-private-key secret")
 		oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", "openshift-windows-machine-config-operator").Output()
 		defer oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", "openshift-windows-machine-config-operator").Output()
@@ -639,7 +640,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	})
 
 	// author: sgao@redhat.com
-	g.It("Author:sgao-NonPreRelease-Medium-37472-Idempotent check of service running in Windows node [Slow][Disruptive]", func() {
+	g.It("Smokerun-Author:sgao-NonPreRelease-Medium-37472-Idempotent check of service running in Windows node [Slow][Disruptive]", func() {
 		namespace := "winc-37472"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
@@ -707,7 +708,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 
 	})
 	// author: rrasouli@redhat.com
-	g.It("Author:rrasouli-High-38186-[wmco] Windows LB service [Slow]", func() {
+	g.It("Smokerun-Author:rrasouli-High-38186-[wmco] Windows LB service [Slow]", func() {
 		if iaasPlatform == "vsphere" {
 			g.Skip("vSphere does not support Load balancer, skipping")
 		}
@@ -735,7 +736,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	})
 
 	// author: sgao@redhat.com refactored:v1
-	g.It("Author:sgao-Critical-25593-Prevent scheduling non Windows workloads on Windows nodes", func() {
+	g.It("Smokerun-Author:sgao-Critical-25593-Prevent scheduling non Windows workloads on Windows nodes", func() {
 		namespace := "winc-25593"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
@@ -773,7 +774,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	})
 
 	// author: rrasouli@redhat.com refactored:v1
-	g.It("Author:rrasouli-Medium-42204-Create Windows pod with a Projected Volume", func() {
+	g.It("Smokerun-Author:rrasouli-Medium-42204-Create Windows pod with a Projected Volume", func() {
 		namespace := "winc-42204"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
@@ -814,7 +815,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	})
 
 	// author: rrasouli@redhat.com refactored:v1
-	g.It("Author:rrasouli-Critical-48873-Add description OpenShift managed to Openshift services", func() {
+	g.It("Smokerun-Author:rrasouli-Critical-48873-Add description OpenShift managed to Openshift services", func() {
 		bastionHost := getSSHBastionHost(oc, iaasPlatform)
 		// use config map to fetch the actual Windows version
 		machineset := getWindowsMachineSetName(oc)
