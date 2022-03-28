@@ -566,6 +566,7 @@ type PrometheusQueryResult struct {
 				PodName           string `json:"podname,omitempty"`
 				Service           string `json:"service,omitempty"`
 				ExportedNamespace string `json:"exported_namespace,omitempty"`
+				State             string `json:"state,omitempty"`
 			} `json:"metric"`
 			Value []interface{} `json:"value"`
 		} `json:"result"`

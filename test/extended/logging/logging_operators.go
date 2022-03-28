@@ -423,6 +423,68 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
+	// author qitang@redhat.com
+	g.It("CPaasrunOnly-Author:qitang-Medium-49211-bz 1923788 Elasticsearch operator should always update ES cluster after secret changed[Serial][Slow]", func() {
+		g.By("deploy EFK pods")
+		sc, err := getStorageClassName(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")
+		cl := resource{"clusterlogging", "instance", cloNS}
+		defer cl.deleteClusterLogging(oc)
+		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "ES_NODE_COUNT=3", "-p", "REDUNDANCY_POLICY=SingleRedundancy")
+		g.By("waiting for the EFK pods to be ready...")
+		WaitForEFKPodsToBeReady(oc, cloNS)
+		esPODs, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=elasticsearch"})
+		signingES := resource{"secret", "signing-elasticsearch", cloNS}
+		esSVC := "https://elasticsearch." + cloNS + ".svc:9200"
+
+		g.By("remove secret/signing-elasticsearch, and wait for it to be recreated")
+		signingES.clear(oc)
+		signingES.WaitForResourceToAppear(oc)
+		resource{"pod", esPODs.Items[0].Name, cloNS}.WaitUntilResourceIsGone(oc)
+
+		g.By("remove secret/signing-elasticsearch again, then wait for the logging pods to be recreated")
+		signingES.clear(oc)
+		signingES.WaitForResourceToAppear(oc)
+		waitForPodReadyWithLabel(oc, cloNS, "component=elasticsearch")
+		checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.status.cluster.status}"})
+
+		g.By("test if kibana and collector pods can connect to ES again")
+		collectorPODs, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=collector"})
+		output, err := e2e.RunHostCmdWithRetries(cloNS, collectorPODs.Items[0].Name, "curl --cacert /var/run/ocp-collector/secrets/collector/ca-bundle.crt --cert /var/run/ocp-collector/secrets/collector/tls.crt --key /var/run/ocp-collector/secrets/collector/tls.key "+esSVC, 5*time.Second, 30*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("You Know, for Search"))
+		kibanaPods, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=kibana"})
+		output, err = e2e.RunHostCmdWithRetries(cloNS, kibanaPods.Items[0].Name, "curl -s --cacert /etc/kibana/keys/ca --cert /etc/kibana/keys/cert --key /etc/kibana/keys/key "+esSVC, 5*time.Second, 30*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("You Know, for Search"))
+	})
+
+	// author qitang@redhat.com
+	g.It("CPaasrunOnly-Author:qitang-High-49209-Elasticsearch operator should expose metrics", func() {
+		// create clusterlogging instance
+		g.By("deploy EFK pods")
+		sc, err := getStorageClassName(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")
+		cl := resource{"clusterlogging", "instance", cloNS}
+		cl.applyFromTemplate(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc)
+		g.By("waiting for the EFK pods to be ready...")
+		WaitForEFKPodsToBeReady(oc, cloNS)
+
+		g.By("check metrics exposed by EO")
+		metrics, err := queryPrometheus(oc, "", "/api/v1/query?", "eo_es_cluster_management_state_info", "GET")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, metric := range metrics.Data.Result {
+			value, _ := strconv.Atoi(metric.Value[1].(string))
+			if metric.Metric.State == "managed" {
+				o.Expect(value == 1).Should(o.BeTrue())
+			} else if metric.Metric.State == "unmanged" {
+				o.Expect(value == 0).Should(o.BeTrue())
+			}
+		}
+	})
+
 })
 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgrade testing", func() {

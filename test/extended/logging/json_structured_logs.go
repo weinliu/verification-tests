@@ -194,6 +194,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(logs_1.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
 
 			for _, proj := range []string{app_proj_1, app_proj_2} {
+				waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, proj, "app-00")
 				check_log_2 := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + proj + "\"}}}"
 				logs_2 := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-00", check_log_2)
 				o.Expect(logs_2.Hits.DataHits[0].Source.Structured.Message).Should(o.BeEmpty())

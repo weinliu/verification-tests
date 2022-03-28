@@ -314,6 +314,59 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			// 3 x 1024 x 1024 x 1024 https://github.com/openshift/cluster-logging-operator/blob/c34520fd1a42151453b2d0a41e7e0cb14dce0d83/pkg/components/fluentd/run_script.go#L80
 			pl.checkLogsFromRs(oc, "3221225472", "collector")
 		})
+
+		// author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-Medium-49212-Logging should work as usual when secrets deleted or regenerated[Serial]", func() {
+			g.By("deploy EFK pods")
+			sc, err := getStorageClassName(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "ES_NODE_COUNT=3", "-p", "REDUNDANCY_POLICY=SingleRedundancy")
+			g.By("waiting for the EFK pods to be ready...")
+			WaitForEFKPodsToBeReady(oc, cloNS)
+
+			elasticsearch := resource{"secret", "elasticsearch", cloNS}
+			collector := resource{"secret", "collector", cloNS}
+			signingES := resource{"secret", "signing-elasticsearch", cloNS}
+			g.By("remove secrets elasticsearch and collector, then check if theses secrets can be recreated or not")
+			elasticsearch.clear(oc)
+			collector.clear(oc)
+			elasticsearch.WaitForResourceToAppear(oc)
+			collector.WaitForResourceToAppear(oc)
+			WaitForEFKPodsToBeReady(oc, cloNS)
+			esSVC := "https://elasticsearch." + cloNS + ".svc:9200"
+
+			g.By("test connections between collector/kibana and ES")
+			collectorPODs, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=collector"})
+			output, err := e2e.RunHostCmdWithRetries(cloNS, collectorPODs.Items[0].Name, "curl --cacert /var/run/ocp-collector/secrets/collector/ca-bundle.crt --cert /var/run/ocp-collector/secrets/collector/tls.crt --key /var/run/ocp-collector/secrets/collector/tls.key "+esSVC, 5*time.Second, 30*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring("You Know, for Search"))
+			kibanaPods, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=kibana"})
+			output, err = e2e.RunHostCmdWithRetries(cloNS, kibanaPods.Items[0].Name, "curl -s --cacert /etc/kibana/keys/ca --cert /etc/kibana/keys/cert --key /etc/kibana/keys/key "+esSVC, 5*time.Second, 30*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring("You Know, for Search"))
+
+			g.By("remove secret/signing-elasticsearch, then wait for the logging pods to be recreated")
+			esPods, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=elasticsearch"})
+			signingES.clear(oc)
+			signingES.WaitForResourceToAppear(oc)
+			//should recreate ES and Kibana pods
+			resource{"pod", esPods.Items[0].Name, cloNS}.WaitUntilResourceIsGone(oc)
+			resource{"pod", kibanaPods.Items[0].Name, cloNS}.WaitUntilResourceIsGone(oc)
+			WaitForEFKPodsToBeReady(oc, cloNS)
+
+			g.By("test if kibana and collector pods can connect to ES again")
+			collectorPODs, _ = oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=collector"})
+			output, err = e2e.RunHostCmdWithRetries(cloNS, collectorPODs.Items[0].Name, "curl --cacert /var/run/ocp-collector/secrets/collector/ca-bundle.crt --cert /var/run/ocp-collector/secrets/collector/tls.crt --key /var/run/ocp-collector/secrets/collector/tls.key "+esSVC, 5*time.Second, 30*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring("You Know, for Search"))
+			kibanaPods, _ = oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=kibana"})
+			output, err = e2e.RunHostCmdWithRetries(cloNS, kibanaPods.Items[0].Name, "curl -s --cacert /etc/kibana/keys/ca --cert /etc/kibana/keys/cert --key /etc/kibana/keys/key "+esSVC, 5*time.Second, 30*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring("You Know, for Search"))
+		})
 	})
 })
 
