@@ -645,20 +645,19 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	//author: jiajliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:jiajliu-Medium-41736-cvo alert ClusterOperatorDown on unavailable operators [Disruptive][Slow]", func() {
-
-		masterNode, err := oc.AsAdmin().WithoutNamespace().Run("get").
-			Args("pod", "-n", "openshift-authentication-operator",
-				"-o=jsonpath={.items[].spec.nodeName}").Output()
+		g.By("Check trustedCA in a live cluster.")
+		valueProxyTrustCA, err := oc.AsAdmin().WithoutNamespace().Run("get").
+			Args("proxy", "cluster", "-o=jsonpath={.spec.trustedCA.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Enable ClusterOperatorDown alert")
-		err = oc.AsAdmin().Run("label").Args("node", masterNode, "kubernetes.io/os-").Execute()
+		_, err = ocJsonPatch(oc, "", "proxy/cluster", []JSONp{{"replace", "/spec/trustedCA/name", "osus-ca"}})
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().Run("label").Args("node", masterNode, "kubernetes.io/os=linux").Execute()
+		defer ocJsonPatch(oc, "", "proxy/cluster", []JSONp{{"replace", "/spec/trustedCA/name", valueProxyTrustCA}})
 
 		g.By("Check ClusterOperatorDown condition...")
-		err = waitForCondition(60, 300, "False", "oc get co authentication -ojson|jq -r '.status.conditions[]|select(.type==\"Available\").status'")
-		exutil.AssertWaitPollNoErr(err, "authentication operator is not down in 5m")
+		err = waitForCondition(60, 300, "False", "oc get co machine-config -ojson|jq -r '.status.conditions[]|select(.type==\"Available\").status'")
+		exutil.AssertWaitPollNoErr(err, "machine-config operator is not down in 5m")
 
 		g.By("Check ClusterOperatorDown alert is fired correctly")
 		err = wait.Poll(100*time.Second, 600*time.Second, func() (bool, error) {
@@ -671,13 +670,13 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			o.Expect(alertDown["annotations"].(map[string]interface{})["summary"].(string)).
 				To(o.ContainSubstring("Cluster operator has not been available for 10 minutes."))
 			o.Expect(alertDown["annotations"].(map[string]interface{})["description"].(string)).
-				To(o.ContainSubstring("The authentication operator may be down or disabled"))
+				To(o.ContainSubstring("The machine-config operator may be down or disabled"))
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "ClusterOperatorDown alert is not fired in 10m")
 
 		g.By("Disable ClusterOperatorDown alert")
-		err = oc.AsAdmin().Run("label").Args("node", masterNode, "kubernetes.io/os=linux").Execute()
+		_, err = ocJsonPatch(oc, "", "proxy/cluster", []JSONp{{"replace", "/spec/trustedCA/name", valueProxyTrustCA}})
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check alert is disabled")
