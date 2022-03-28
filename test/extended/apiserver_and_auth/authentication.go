@@ -1,6 +1,8 @@
 package apiserver_and_auth
 
 import (
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -314,5 +316,63 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 			return false, err
 		})
 		exutil.AssertWaitPollNoErr(err, "Cert data not updated after waiting for 5 mins")
+	})
+
+	// author : rugong@redhat.com
+	// It is destructive case, will change scc restricted, so adding [Disruptive]
+	g.It("Author:rugong-Medium-20052-New field forbiddenSysctls for SCC [Disruptive]", func() {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("scc", "restricted", "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		re := regexp.MustCompile("(?m)[\r\n]+^.*(uid|resourceVersion).*$")
+		output = re.ReplaceAllString(output, "")
+		path := "/tmp/scc_restricted_20052.yaml"
+		err = ioutil.WriteFile(path, []byte(output), 0644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.Remove(path)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted", "-p", `{"allowedUnsafeSysctls":["kernel.msg*"]}`, "--type=merge").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			g.By("Restoring the restricted SCC before exiting the scenario")
+			err = oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", path).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		oc.SetupProject()
+		BaseDir := exutil.FixturePath("testdata", "apiserver_and_auth")
+		podYaml := filepath.Join(BaseDir, "pod_with_sysctls.yaml")
+		err = oc.Run("create").Args("-f", podYaml).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted", "-p", `{"forbiddenSysctls":["kernel.msg*"]}`, "--type=merge").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("sysctl overlaps with kernel.msg"))
+		e2e.Logf("oc patch scc failed, this is expected.")
+
+		err = oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", path).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Restore the SCC successfully.")
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted", "-p", `{"forbiddenSysctls":["kernel.msg*"]}`, "--type=merge").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err = oc.Run("delete").Args("po", "busybox").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("create").Args("-f", podYaml).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted", "-p", `{"allowedUnsafeSysctls":["kernel.msg*"]}`, "--type=merge").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		e2e.Logf("oc patch scc failed, this is expected.")
+
+		err = oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", path).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Restore the SCC successfully.")
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted", "-p", `{"forbiddenSysctls":["kernel.shm_rmid_forced"]}`, "--type=merge").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err = oc.Run("delete").Args("po", "busybox").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err = oc.Run("create").Args("-f", podYaml).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("unable to validate against any security context constraint"))
+		e2e.Logf("Failed to create pod, this is expected.")
 	})
 })
