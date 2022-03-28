@@ -475,6 +475,55 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		e2e.Logf("OCP 30189 SUCCESS")
 	})
 
+	// author: xzha@redhat.com
+	g.It("ConnectedOnly-Author:xzha-Medium-47335-opm should validate the constraint type for bundle", func() {
+		opmBaseDir := exutil.FixturePath("testdata", "opm")
+		tmpPath := filepath.Join(opmBaseDir, "temp"+getRandomString())
+		defer DeleteDir(tmpPath, "fixture-testdata")
+		g.By("step: mkdir with mode 0755")
+		err := os.MkdirAll(tmpPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		opmCLI.ExecCommandPath = tmpPath
+
+		g.By("opm validate quay.io/olmqe/etcd-bundle:v0.9.2-47335-1")
+		output, err := opmCLI.Run("alpha").Args("bundle", "validate", "-t", "quay.io/olmqe/etcd-bundle:v0.9.2-47335-1", "-b", "podman").Output()
+		if err != nil {
+			e2e.Logf(output)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("opm validate quay.io/olmqe/etcd-bundle:v0.9.2-47335-2")
+		output, err = opmCLI.Run("alpha").Args("bundle", "validate", "-t", "quay.io/olmqe/etcd-bundle:v0.9.2-47335-2", "-b", "podman").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(string(output)).To(o.ContainSubstring("Bundle validation errors: Invalid CEL expression: ERROR"))
+		o.Expect(string(output)).To(o.ContainSubstring("Syntax error: missing"))
+
+		g.By("opm validate quay.io/olmqe/etcd-bundle:v0.9.2-47335-3")
+		output, err = opmCLI.Run("alpha").Args("bundle", "validate", "-t", "quay.io/olmqe/etcd-bundle:v0.9.2-47335-3", "-b", "podman").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(string(output)).To(o.ContainSubstring("Bundle validation errors: The CEL expression is missing"))
+
+		g.By("opm validate quay.io/olmqe/etcd-bundle:v0.9.2-47335-4")
+		output, err = opmCLI.Run("alpha").Args("bundle", "validate", "-t", "quay.io/olmqe/etcd-bundle:v0.9.2-47335-4", "-b", "podman").Output()
+		if err != nil {
+			e2e.Logf(output)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("opm validate quay.io/olmqe/etcd-bundle:v0.9.2-47335-5")
+		output, err = opmCLI.Run("alpha").Args("bundle", "validate", "-t", "quay.io/olmqe/etcd-bundle:v0.9.2-47335-5", "-b", "podman").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(string(output)).To(o.ContainSubstring("Bundle validation errors: Invalid CEL expression: ERROR"))
+		o.Expect(string(output)).To(o.ContainSubstring("undeclared reference to 'semver_compares'"))
+
+		g.By("opm validate quay.io/olmqe/etcd-bundle:v0.9.2-47335-6")
+		output, err = opmCLI.Run("alpha").Args("bundle", "validate", "-t", "quay.io/olmqe/etcd-bundle:v0.9.2-47335-6", "-b", "podman").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(string(output)).To(o.ContainSubstring("Bundle validation errors: Invalid CEL expression: cel expressions must have type Bool"))
+
+		g.By("47335 SUCCESS")
+	})
+
 	// author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-43096-opm alpha diff support heads only", func() {
 
