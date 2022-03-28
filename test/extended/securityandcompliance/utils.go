@@ -83,6 +83,14 @@ func getOneWorkerNodeName(oc *exutil.CLI) string {
 	return nodeName
 }
 
+func getOneMasterNodeName(oc *exutil.CLI) string {
+	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l node-role.kubernetes.io/master=",
+		"-o=jsonpath={.items[0].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("the result of nodename:%v", nodeName)
+	return nodeName
+}
+
 func (fi1 *fileintegrity) getOneFioPodName(oc *exutil.CLI) string {
 	fioPodName, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l file-integrity.openshift.io/pod=",
 		"-n", fi1.namespace, "-o=jsonpath={.items[0].metadata.name}").Output()

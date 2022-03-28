@@ -348,6 +348,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 					name:         "ocp4-cis-custom",
 					namespace:    "",
 					extends:      "ocp4-cis",
+					title:        "new profile from scratch",
+					description:  "new profile with specific rules",
 					enrulename1:  "ocp4-scc-limit-root-containers",
 					enrulename2:  "ocp4-scheduler-no-bind-address",
 					disrulename1: "ocp4-api-server-encryption-provider-cipher",

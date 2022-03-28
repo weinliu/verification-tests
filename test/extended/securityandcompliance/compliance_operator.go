@@ -2571,7 +2571,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
 
 			g.By("Check the total number of CIS Manual rules.. !!!\n")
-			checkResourceNumber(oc, 25, "compliancecheckresult", "-l", "compliance.openshift.io/check-status=MANUAL", "--no-headers", "-n", subD.namespace)
+			checkResourceNumber(oc, 24, "compliancecheckresult", "-l", "compliance.openshift.io/check-status=MANUAL", "--no-headers", "-n", subD.namespace)
 			checkCisRulesInstruction(oc)
 
 			g.By("Verify the nodeName shows in target & fact:identifier elements of complianceScan XCCDF format result.. !!!\n")
@@ -3496,7 +3496,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 			g.By("Verify the ntp settings from node contents.. !!!\n")
 			contList := []string{"server 0.pool.ntp.org minpoll 4 maxpoll 10", "server 1.pool.ntp.org minpoll 4 maxpoll 10", "server 2.pool.ntp.org minpoll 4 maxpoll 10", "server 3.pool.ntp.org minpoll 4 maxpoll 10"}
-			checkNodeContents(oc, workerNodeName, contList, "/etc/chrony.d/ntp-server.conf", csuiteCD.namespace)
+			checkNodeContents(oc, workerNodeName, contList, "cat", "-n", "/etc/chrony.d/ntp-server.conf", "server")
 		})
 
 		// author: pdhamdhe@redhat.com
@@ -4321,6 +4321,54 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				"new-profile-node-worker-accounts-restrict-service-account-tokens", "-n", ssbN.namespace, "-o=jsonpath={.status}"}).check(oc)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
 				"new-profile-platform-api-server-admission-control-plugin-alwaysadmit", "-n", ssbP.namespace, "-o=jsonpath={.status}"}).check(oc)
+		})
+
+		// author: pdhamdhe@redhat.com
+		g.It("Author:pdhamdhe-Medium-47148-Check file and directory permissions for apiserver audit logs [Slow]", func() {
+			var (
+				ssb = scanSettingBindingDescription{
+					name:            "ocp4-moderate-test",
+					namespace:       "",
+					profilekind1:    "Profile",
+					profilename1:    "ocp4-moderate-node",
+					scansettingname: "default",
+					template:        scansettingbindingSingleTemplate,
+				}
+				itName = g.CurrentGinkgoTestDescription().TestText
+			)
+
+			defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssb.name})
+
+			g.By("Check for default profile 'ocp4-moderate-node' .. !!!\n")
+			subD.getProfileName(oc, "ocp4-moderate-node")
+
+			g.By("Create scansettingbinding !!!\n")
+			ssb.namespace = subD.namespace
+			ssb.create(oc, itName, dr)
+			newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
+				"-o=jsonpath={.items[0].metadata.name}"}).check(oc)
+			g.By("Check ComplianceSuite status and result.. !!!\n")
+			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", ssb.namespace,
+				"-o=jsonpath={.status.phase}"}).check(oc)
+			subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
+
+			auditRules := []string{"master-directory-permissions-var-log-kube-audit", "master-directory-permissions-var-log-oauth-audit", "master-directory-permissions-var-log-ocp-audit",
+				"master-file-ownership-var-log-kube-audit", "master-file-ownership-var-log-oauth-audit", "master-file-ownership-var-log-ocp-audit", "master-file-permissions-var-log-kube-audit",
+				"master-file-permissions-var-log-oauth-audit", "master-file-permissions-var-log-ocp-audit"}
+
+			g.By("Check audit rules status !!!\n")
+			getRuleStatus(oc, auditRules, "PASS", ssb.profilename1, ssb.namespace)
+			g.By("Get one master node.. !!!\n")
+			masterNodeName := getOneMasterNodeName(oc)
+			contList1 := []string{"drwx------.  2 root        root ", "kube-apiserver"}
+			contList2 := []string{"drwx------.  2 root        root ", "oauth-apiserver"}
+			contList3 := []string{"drwx------.  2 root        root ", "openshift-apiserver"}
+			contList4 := []string{"-rw-------", "audit.log"}
+			checkNodeContents(oc, masterNodeName, contList1, "ls", "-l", "/var/log", "kube-apiserver")
+			checkNodeContents(oc, masterNodeName, contList2, "ls", "-l", "/var/log", "oauth-apiserver")
+			checkNodeContents(oc, masterNodeName, contList3, "ls", "-l", "/var/log", "openshift-apiserver")
+			checkNodeContents(oc, masterNodeName, contList4, "ls", "-l", "/var/log/kube-apiserver", "audit.log")
+			checkNodeContents(oc, masterNodeName, contList4, "ls", "-l", "/var/log/oauth-apiserver", "audit.log")
 		})
 	})
 })
