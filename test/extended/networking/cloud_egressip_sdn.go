@@ -107,13 +107,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("3. Find an unused IP on the node, use it as egressIP address, add it to netnamespace of the first project")
 		freeIps := findUnUsedIPsOnNode(oc, egressNode, sub1, 1)
 		o.Expect(len(freeIps) == 1).Should(o.BeTrue())
+
 		patchResourceAsAdmin(oc, "netnamespace/"+pod1.namespace, "{\"egressIPs\":[\""+freeIps[0]+"\"]}")
 		defer patchResourceAsAdmin(oc, "netnamespace/"+pod1.namespace, "{\"egressIPs\":[]}")
 
 		g.By("4. Verify egressCIDRs and egressIPs on the node")
 		output := getEgressCIDRs(oc, egressNode)
 		o.Expect(output).To(o.ContainSubstring(sub1))
-		ip, err := getEgressIPonSDNHost(oc, nodeList.Items[0].Name)
+		ip, err := getEgressIPonSDNHost(oc, nodeList.Items[0].Name, 1)
 		e2e.Logf("\n\n\n got egressIP as -->%v<--\n\n\n", ip)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(freeIps[0]).Should(o.BeElementOf(ip))
@@ -143,7 +144,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer patchResourceAsAdmin(oc, "netnamespace/"+pod2.namespace, "{\"egressIPs\":[]}")
 
 		g.By("7. check egressIP again after second netnamespace is patched with same egressIP")
-		ip, err = getEgressIPonSDNHost(oc, nodeList.Items[0].Name)
+		ip, err = getEgressIPonSDNHost(oc, nodeList.Items[0].Name, 1)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(freeIps[0]).Should(o.BeElementOf(ip))
 
@@ -152,8 +153,66 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).To(o.HaveOccurred())
 
 		g.By("9.Check source IP again from second project, curl command should not succeed, error is expected")
-		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoUrl+" --connect-timeout 5")
+		_, err = e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s "+ipEchoUrl+" --connect-timeout 5")
 		o.Expect(err).To(o.HaveOccurred())
+	})
+
+	// author: jechen@redhat.com
+	g.It("Author:jechen-High-46709-Master balance egressIPs across nodes when there are multiple nodes handling egressIP. [Disruptive]", func() {
+		g.By("1. Get list of nodes, get subnet from two worker nodes that have same subnet, add egressCIDRs to them")
+		var egressNode1, egressNode2 string
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("Not enough nodes available for the test, skip the case!!")
+		}
+		switch ci.CheckPlatform(oc) {
+		case "aws":
+			e2e.Logf("find the two nodes that have same subnet")
+			check, nodes := findTwoNodesWithSameSubnet(oc, nodeList)
+			if check {
+				egressNode1 = nodes[0]
+				egressNode2 = nodes[1]
+			} else {
+				g.Skip("Did not get two worker nodes with same subnet, skip the case!!")
+			}
+		case "gcp":
+			e2e.Logf("since GCP worker nodes all have same subnet, just pick first two nodes as egress nodes")
+			egressNode1 = nodeList.Items[0].Name
+			egressNode2 = nodeList.Items[1].Name
+		default:
+			g.Skip("Not support cloud provider for this case, skip the test.")
+		}
+
+		sub := getIfaddrFromNode(egressNode1, oc)
+
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[\""+sub+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[\""+sub+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[]}")
+
+		g.By("2. Find 6 unused IPs from one egress node")
+		freeIps := findUnUsedIPsOnNode(oc, egressNode1, sub, 6)
+		o.Expect(len(freeIps) == 6).Should(o.BeTrue())
+
+		g.By("3. Create 6 namespaces, apply one egressIP from the freeIPs to each namespace")
+		var ns = [6]string{}
+		for i := 0; i < 6; i++ {
+			oc.SetupProject()
+			ns[i] = oc.Namespace()
+			patchResourceAsAdmin(oc, "netnamespace/"+ns[i], "{\"egressIPs\":[\""+freeIps[i]+"\"]}")
+			defer patchResourceAsAdmin(oc, "netnamespace/"+ns[i], "{\"egressIPs\":[]}")
+		}
+
+		g.By("4. check egressIP for each node, each node should have 3 egressIP addresses assigned from the pool")
+		ip1, err := getEgressIPonSDNHost(oc, egressNode1, 3)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ip2, err := getEgressIPonSDNHost(oc, egressNode2, 3)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for i := 0; i < 3; i++ {
+			o.Expect(ip1[i]).Should(o.BeElementOf(freeIps))
+			o.Expect(ip2[i]).Should(o.BeElementOf(freeIps))
+		}
 	})
 
 })

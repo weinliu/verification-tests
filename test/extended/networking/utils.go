@@ -12,6 +12,7 @@ import (
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -655,28 +656,34 @@ func getEgressCIDRs(oc *exutil.CLI, node string) string {
 	return output
 }
 
-func getEgressIPonSDNHost(oc *exutil.CLI, node string) ([]string, error) {
+// get egressIP from a node
+// When they are multiple egressIPs on the node, egressIp list is in format of ["10.0.247.116","10.0.156.51"]
+// as an example from the output of command "oc get hostsubnet <node> -o=jsonpath={.egressIPs}"
+// convert the iplist into an array of ip addresses
+func getEgressIPonSDNHost(oc *exutil.CLI, node string, expectedNum int) ([]string, error) {
 	var ip = []string{}
 	iplist, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostsubnet", node, "-o=jsonpath={.egressIPs}").Output()
-	if iplist == "" || err != nil {
+	if iplist != "" {
+		ip = strings.Split(iplist[2:len(iplist)-2], "\",\"")
+	}
+	if iplist == "" || len(ip) < expectedNum || err != nil {
 		err = wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
 			iplist, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("hostsubnet", node, "-o=jsonpath={.egressIPs}").Output()
-			if err != nil {
-				e2e.Logf("the err:%v, and try next round", err)
+			if iplist != "" {
+				ip = strings.Split(iplist[2:len(iplist)-2], "\",\"")
+			}
+			if len(ip) < expectedNum || err != nil {
+				e2e.Logf("only got %d egressIP, or have err:%v, and try next round", len(ip), err)
 				return false, nil
 			}
-			if iplist != "" {
+			if iplist != "" && len(ip) == expectedNum {
 				e2e.Logf("Found egressIP list for node %v is: %v", node, iplist)
 				return true, nil
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("EgressIP not found"))
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("EgressIP not found, or did not get expected number of egressIPs"))
 	}
-	// get egressIp list in format of ["10.0.247.116","10.0.156.51"] as an example from the output of command "oc get hostsubnet <node> -o=jsonpath={.egressIPs}"
-	// convert the iplist into an array of ip addresses
-	substr := iplist[2 : len(iplist)-2]
-	ip = strings.Split(substr, "\",\"")
 	return ip, nil
 }
 
@@ -687,6 +694,25 @@ func getPodName(oc *exutil.CLI, namespace string, label string) []string {
 	podName = strings.Split(podNameAll, " ")
 	e2e.Logf("The pod(s) are  %v ", podName)
 	return podName
+}
+
+// starting from first node, compare its subnet with subnet of subsequent nodes in the list
+// until two nodes with same subnet found, otherwise, return false to indicate that no two nodes with same subnet found
+func findTwoNodesWithSameSubnet(oc *exutil.CLI, nodeList *v1.NodeList) (bool, [2]string) {
+	var nodes [2]string
+	for i := 0; i < (len(nodeList.Items) - 1); i++ {
+		for j := i + 1; j < len(nodeList.Items); j++ {
+			firstSub := getIfaddrFromNode(nodeList.Items[i].Name, oc)
+			secondSub := getIfaddrFromNode(nodeList.Items[j].Name, oc)
+			if firstSub == secondSub {
+				e2e.Logf("Found nodes with same subnet.")
+				nodes[0] = nodeList.Items[i].Name
+				nodes[1] = nodeList.Items[j].Name
+				return true, nodes
+			}
+		}
+	}
+	return false, nodes
 }
 
 func getSDNMetrics(oc *exutil.CLI, podName string) string {
