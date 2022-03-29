@@ -318,12 +318,12 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		exutil.AssertWaitPollNoErr(err, "Cert data not updated after waiting for 5 mins")
 	})
 
-	// author : rugong@redhat.com
+	// author: rugong@redhat.com
 	// It is destructive case, will change scc restricted, so adding [Disruptive]
 	g.It("Author:rugong-Medium-20052-New field forbiddenSysctls for SCC [Disruptive]", func() {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("scc", "restricted", "-o", "yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		re := regexp.MustCompile("(?m)[\r\n]+^.*(uid|resourceVersion).*$")
+		re := regexp.MustCompile("(?m)[\r\n]+^  (uid|resourceVersion):.*$")
 		output = re.ReplaceAllString(output, "")
 		path := "/tmp/scc_restricted_20052.yaml"
 		err = ioutil.WriteFile(path, []byte(output), 0644)
@@ -374,5 +374,37 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("unable to validate against any security context constraint"))
 		e2e.Logf("Failed to create pod, this is expected.")
+	})
+
+	// author: rugong@redhat.com
+	// It is destructive case, will change scc restricted, so adding [Disruptive]
+	g.It("Author:rugong-Medium-20050-New field allowedUnsafeSysctls for SCC [Disruptive]", func() {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("scc", "restricted", "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// uid and resourceVersion must be removed, otherwise "Operation cannot be fulfilled" error will occur when running oc replace in later steps
+		re := regexp.MustCompile("(?m)[\r\n]+^  (uid|resourceVersion):.*$")
+		output = re.ReplaceAllString(output, "")
+		path := "/tmp/scc_restricted_20050.yaml"
+		err = ioutil.WriteFile(path, []byte(output), 0644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.Remove(path)
+
+		oc.SetupProject()
+		BaseDir := exutil.FixturePath("testdata", "apiserver_and_auth")
+		podYaml := filepath.Join(BaseDir, "pod-with-msgmax.yaml")
+		output, err = oc.Run("create").Args("-f", podYaml).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`unsafe sysctl "kernel.msgmax" is not allowed`))
+		e2e.Logf("Failed to create pod, this is expected.")
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted", `--type=json`, `-p=[{"op": "add", "path": "/allowedUnsafeSysctls", "value":["kernel.msg*"]}]`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			g.By("Restoring the restricted SCC before exiting the scenario")
+			err = oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", path).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		output, err = oc.Run("create").Args("-f", podYaml).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 })
