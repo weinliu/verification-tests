@@ -35,6 +35,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		pao_include_performance_profile  = exutil.FixturePath("testdata", "psap", "pao", "pao-include-performance-profile.yaml")
 		pao_workercnf_mcp_file           = exutil.FixturePath("testdata", "psap", "pao", "pao-workercnf-mcp.yaml")
 		pao_workeroptimize_mcp_file      = exutil.FixturePath("testdata", "psap", "pao", "pao-workeroptimize-mcp.yaml")
+		hugepage_100m_pod_file           = exutil.FixturePath("testdata", "psap", "nto", "hugepage-100m-pod.yaml")
+		hugepage_mcp_file                = exutil.FixturePath("testdata", "psap", "nto", "hugepage-mcp.yaml")
+		hugepage_tuned_boottime_file     = exutil.FixturePath("testdata", "psap", "nto", "hugepage-tuned-boottime.yaml")
 
 		isNTO          bool
 		isPAOInstalled bool
@@ -1384,15 +1387,12 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		encodeBase64OpenSSLOutputBefore := exutil.StringToBASE64(openSSLOutputBefore)
 		encodeBase64OpenSSLExpireDateBefore := exutil.StringToBASE64(openSSLExpireDateBefore)
 
-		g.By("Delete secret/signing-key to automate to create a new one certificate")
-		isOneMaster := isOneMasterNode(oc)
-		if isOneMaster {
-			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ntoNamespace, "secret/node-tuning-operator-tls").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		} else {
-			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-service-ca", "secret/signing-key").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
+		//To improve the sucessful rate, execute oc delete secret/node-tuning-operator-tls instead of oc -n openshift-service-ca secret/signing-key
+		//The last one "oc -n openshift-service-ca secret/signing-key" take more time to complete, but need to manually execute once failed.
+		g.By("Delete secret/node-tuning-operator-tls to automate to create a new one certificate")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ntoNamespace, "secret/node-tuning-operator-tls").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		g.By("Assert NTO logs to match key words restarting metrics server to rotate certificates")
 		assertNTOPodLogsLastLines(oc, ntoNamespace, ntoOperatorPod, "4", 300, "restarting metrics server to rotate certificates")
 
@@ -1424,7 +1424,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create openshift-profile-stuck profile")
-		//Define duplicated parameter and value
 		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, worker_stack_file)
 
 		g.By("Check if new profile in in rendered tuned")
@@ -1463,5 +1462,90 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("Assert error waiting for tuned: signal: terminated in tuned pod log")
 		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "18", 60, `error waiting for tuned: signal: terminated`)
+	})
+
+	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-49370-NTO add huge pages to boot time via bootloader [Disruptive] [Slow]", func() {
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		//Use the first worker node as labeled node
+		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-hp-").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "hugepages", "-n", ntoNamespace, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("mcp", "worker-hp", "-n", ntoNamespace, "--ignore-not-found").Execute()
+
+		g.By("Label the node with node-role.kubernetes.io/worker-hp=")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-hp=", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create hugepages tuned profile")
+		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, hugepage_tuned_boottime_file)
+
+		g.By("Check if new profile in in rendered tuned")
+		renderCheck, err := getTunedRender(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).To(o.ContainSubstring("hugepages"))
+
+		g.By("Check hugepages tuned profile should be automatically created")
+		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNames).To(o.ContainSubstring("hugepages"))
+
+		g.By("Create worker-hp machineconfigpool ...")
+		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, hugepage_mcp_file)
+
+		g.By("Assert if the MCP has been successfully applied ...")
+		assertIfMCPChangesAppliedByName(oc, "worker-hp", 600)
+
+		g.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Check if new NTO profile was applied")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-node-hugepages")
+
+		g.By("Check if profile openshift-node-hugepages applied on nodes")
+		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeProfileName).To(o.ContainSubstring("openshift-node-hugepages"))
+
+		g.By("Check current profile for each node")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Check value of allocatable.hugepages-2Mi in labled node ")
+		nodeHugePagesOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.status.allocatable.hugepages-2Mi}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeHugePagesOutput).To(o.ContainSubstring("100M"))
+
+		oc.SetupProject()
+		ntoTestNS := oc.Namespace()
+
+		//Create a hugepages-app application pod
+		g.By("Create a hugepages-app pod to consume hugepage in nto temp namespace")
+		exutil.ApplyOperatorResourceByYaml(oc, ntoTestNS, hugepage_100m_pod_file)
+
+		//Check if hugepages-appis ready
+		g.By("Check if a hugepages-app pod is ready ...")
+		exutil.AssertPodToBeReady(oc, "hugepages-app", ntoTestNS)
+
+		g.By("Check the value of /etc/podinfo/hugepages_2M_request, the value expected is 105 ...")
+		podInfo, err := exutil.RemoteShPod(oc, ntoTestNS, "hugepages-app", "cat", "/etc/podinfo/hugepages_2M_request")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podInfo).To(o.ContainSubstring("105"))
+
+		g.By("Check the value of REQUESTS_HUGEPAGES in env on pod ...")
+		envInfo, err := exutil.RemoteShPodWithBash(oc, ntoTestNS, "hugepages-app", "env | grep REQUESTS_HUGEPAGES")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(envInfo).To(o.ContainSubstring("REQUESTS_HUGEPAGES_2Mi=104857600"))
 	})
 })
