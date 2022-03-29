@@ -37,10 +37,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		platforms := map[string]bool{
-			"AWS":       true,
-			"Azure":     true,
-			"GCP":       true,
-			"OpenStack": true,
+			"AWS":          true,
+			"Azure":        true,
+			"GCP":          true,
+			"OpenStack":    true,
+			"AlibabaCloud": true,
+			"IBMCloud":     true,
 		}
 		if !platforms[platformtype] {
 			g.Skip("Skip for non-supported platform")

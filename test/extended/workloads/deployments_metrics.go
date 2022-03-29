@@ -33,7 +33,11 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 			foundAvaliableDc := false
 			foundFailDc := false
 			foundCancelDc := false
-			results, err := getBearerTokenURLViaPod(ns, p.Name, fmt.Sprintf("https://%s:%s/metrics", p.Status.PodIP, hostport), token)
+			//https://access.redhat.com/solutions/5356961
+			//cURL to NO_PROXY CIDR addresses are not working as expected, it's not openshift issue.
+			//Change to use 127.0.0.1, so it could work on proxy cluster.
+			results, err := getBearerTokenURLViaPod(ns, p.Name, fmt.Sprintf("https://%s:%s/metrics", "127.0.0.1", hostport), token)
+
 			o.Expect(err).NotTo(o.HaveOccurred())
 			foundAvaliableDc = strings.Contains(string(results), "openshift_apps_deploymentconfigs_complete_rollouts_total{phase=\"available\"}")
 			foundFailDc = strings.Contains(string(results), "openshift_apps_deploymentconfigs_complete_rollouts_total{phase=\"cancelled\"}")

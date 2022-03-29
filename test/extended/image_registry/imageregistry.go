@@ -51,8 +51,17 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		if !strings.Contains(output, "AWS") {
 			g.Skip("Skip for non-supported platform")
 		}
+		g.By("Skip test when the cluster is with STS credential")
+		token, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("-n", "openshift-monitoring", "get-token", "prometheus-k8s").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		result, err := getBearerTokenURLViaPod(monitoringns, promPod, queryCredentialMode, token)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(result, "manualpodidentity") {
+			g.Skip("Skip for the aws cluster with STS credential")
+		}
+
 		g.By("Check AWS secret and access key inside image registry pod")
-		result, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-image-registry", "deployment.apps/image-registry", "cat", "/var/run/secrets/cloud/credentials").Output()
+		result, err = oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-image-registry", "deployment.apps/image-registry", "cat", "/var/run/secrets/cloud/credentials").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.ContainSubstring("aws_access_key_id"))
 		o.Expect(result).To(o.ContainSubstring("aws_secret_access_key"))
@@ -157,10 +166,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		platforms := map[string]bool{
-			"AWS":       true,
-			"Azure":     true,
-			"GCP":       true,
-			"OpenStack": true,
+			"AWS":          true,
+			"Azure":        true,
+			"GCP":          true,
+			"OpenStack":    true,
+			"AlibabaCloud": true,
+			"IBMCloud":     true,
 		}
 		if !platforms[platformtype] {
 			g.Skip("Skip for non-supported platform")
@@ -370,7 +381,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		switch platformtype {
-		case "AWS", "Azure", "GCP", "OpenStack":
+		case "AWS", "Azure", "GCP", "OpenStack", "AlibabaCloud", "IBMCloud":
 			podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(metav1.ListOptions{LabelSelector: "docker-registry=default"})
 			o.Expect(len(podList.Items)).To(o.Equal(2))
 			oc.SetupProject()
@@ -445,10 +456,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		platforms := map[string]bool{
-			"AWS":       true,
-			"Azure":     true,
-			"GCP":       true,
-			"OpenStack": true,
+			"AWS":          true,
+			"Azure":        true,
+			"GCP":          true,
+			"OpenStack":    true,
+			"AlibabaCloud": true,
+			"IBMCloud":     true,
 		}
 		if !platforms[platformtype] {
 			g.Skip("Skip for non-supported platform")
@@ -1223,10 +1236,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		platforms := map[string]bool{
-			"AWS":       true,
-			"Azure":     true,
-			"GCP":       true,
-			"OpenStack": true,
+			"AWS":          true,
+			"Azure":        true,
+			"GCP":          true,
+			"OpenStack":    true,
+			"AlibabaCloud": true,
+			"IBMCloud":     true,
 		}
 		if !platforms[platformtype] {
 			g.Skip("Skip for non-supported platform")
