@@ -68,6 +68,7 @@ $ ./bin/extended-platform-tests run all --dry-run|grep "23440"|./bin/extended-pl
 ```
 
 ### Debugging
+#### Keep generated temporary project
 Sometime, we want to **keep the generated namespace for debugging**. Just add the Env Var: `export DELETE_NAMESPACE=false`. These random namespaces will be kept, like below:
 ```console
 ...
@@ -84,6 +85,25 @@ e2e-test-olm-a-a92jyymd-lmgj6                      Active   4m28s
 e2e-test-olm-a-a92jyymd-pr8hx                      Active   4m29s
 ...
 ```
+#### Print cluster event on Terminal
+When you execute cases, there are some cluster event which is printed to the terminal, like
+```console
+Timeline:
+
+Mar 30 03:57:36.435 I ns/openshift-kube-controller-manager pod/kube-controller-manager-ip-10-0-190-60.ec2.internal created SCC ranges for e2e-test-olm-common-l21c9cfo-g6xwx namespace
+Mar 30 03:57:47.894 W ns/openshift-marketplace pod/marketplace-operator-5cf7b79dd4-xsffg node/ip-10-0-247-215.ec2.internal graceful deletion within 30s
+Mar 30 03:57:48.097 I ns/openshift-marketplace pod/marketplace-operator-5cf7b79dd4-xsffg Stopping container marketplace-operator
+...
+```
+Someone does not want it on the terminal, but someone wants it for debugging.
+
+So, we add environment variable ENABLE_PRINT_EVENT_STDOUT to enable it.
+
+In default, it does not print the cluster event on the terminal when you execute the case on your terminal.
+
+if you want it for debugging, **please set `export ENABLE_PRINT_EVENT_STDOUT=true` before executing the case.**
+
+Note: if you execute the case with jenkins job, the job prints the cluster event in default.
 ### Running test cases on GCP
 You will get the below error when running the test cases on GCP platform. 
 ```

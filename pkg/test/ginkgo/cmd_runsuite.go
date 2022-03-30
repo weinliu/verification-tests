@@ -275,7 +275,9 @@ func (opt *Options) Run(args []string) error {
 			})
 		}
 
-		opt.Out.Write(buf.Bytes())
+		if strings.EqualFold(os.Getenv("ENABLE_PRINT_EVENT_STDOUT"), "true") {
+			opt.Out.Write(buf.Bytes())
+		}
 	}
 
 	// attempt to retry failures to do flake detection
