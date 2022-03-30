@@ -27,6 +27,82 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	oc := exutil.NewCLIWithoutNamespace(project_name)
 
 	//author: yanyang@redhat.com
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:yanyang-Medium-45879-check update info with oc adm upgrade --include-not-recommended [Serial][Slow]", func() {
+		orgUpstream, err := getCVObyJP(oc, ".spec.upstream")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		orgChannel, err := getCVObyJP(oc, ".spec.channel")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer restoreCVSpec(orgUpstream, orgChannel, oc)
+
+		g.By("Patch upstream")
+		projectID := "openshift-qe"
+		ctx := context.Background()
+		client, err := storage.NewClient(ctx)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer client.Close()
+
+		graphURL, bucket, object, _, _, err := buildGraph(client, oc, projectID, "cincy-conditional-edge.json")
+		defer DeleteBucket(client, bucket)
+		defer DeleteObject(client, bucket, object)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		_, err = ocJsonPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check oc adm upgrade when there are not-recommended updates")
+		expUpdate := "Additional updates which are not recommended based on your cluster " +
+			"configuration are available, to view those re-run the command with " +
+			"--include-not-recommended"
+		found := checkUpdates(oc, false, 5, 15, "No updates available", expUpdate)
+		o.Expect(found).To(o.BeTrue())
+
+		g.By("Check risk type=Always updates present")
+		expUpdate = "Version: 4.88.888888\n  " +
+			"Image: registry.ci.openshift.org/ocp/release@sha256:" +
+			"8888888888888888888888888888888888888888888888888888888888888888\n  " +
+			"Recommended: False\n  " +
+			"Reason: ReleaseIsRejected\n  " +
+			"Message: Too many CI failures on this release, so do not update to it"
+		found = checkUpdates(oc, true, 5, 15, "No updates available", "Supported but not recommended updates", expUpdate)
+		o.Expect(found).To(o.BeTrue())
+
+		g.By("Check 2 risks updates present")
+		expUpdate = "Version: 4.77.777777\n  " +
+			"Image: registry.ci.openshift.org/ocp/release@sha256:" +
+			"7777777777777777777777777777777777777777777777777777777777777777\n  " +
+			"Recommended: False\n  " +
+			"Reason: SomeInvokerThing\n  " +
+			"Message: On clusters on default invoker user, this imaginary bug can happen. https://bug.example.com/a"
+		found = checkUpdates(oc, true, 60, 15*60, "No updates available", "Supported but not recommended updates", expUpdate)
+		o.Expect(found).To(o.BeTrue())
+
+		g.By("Check recommended update present")
+		expUpdate = "Recommended updates:\n\n  " +
+			"VERSION     IMAGE\n  " +
+			"4.99.999999 registry.ci.openshift.org/ocp/release@sha256:" +
+			"9999999999999999999999999999999999999999999999999999999999999999"
+		found = checkUpdates(oc, true, 60, 15*60, expUpdate)
+		o.Expect(found).To(o.BeTrue())
+
+		g.By("Check multiple reason conditional update present")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel", "buggy").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		expUpdate = "Version: 4.77.777777\n  " +
+			"Image: registry.ci.openshift.org/ocp/release@sha256:" +
+			"7777777777777777777777777777777777777777777777777777777777777777\n  " +
+			"Recommended: False\n  " +
+			"Reason: MultipleReasons\n  " +
+			"Message: On clusters on default invoker user, this imaginary bug can happen. " +
+			"https://bug.example.com/a\n  \n  " +
+			"On clusters with the channel set to 'buggy', this imaginary bug can happen. " +
+			"https://bug.example.com/b"
+		found = checkUpdates(oc, true, 300, 65*60, expUpdate)
+		o.Expect(found).To(o.BeTrue())
+	})
+
+	//author: yanyang@redhat.com
 	g.It("ConnectedOnly-Author:yanyang-Low-46422-cvo drops invalid conditional edges [Serial]", func() {
 		orgUpstream, _ := getCVObyJP(oc, ".spec.upstream")
 

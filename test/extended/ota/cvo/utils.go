@@ -534,3 +534,31 @@ func patchCVOcontArg(oc *exutil.CLI, index int, value string) (string, error) {
 		"deployment/cluster-version-operator",
 		patch)
 }
+
+// Get updates by using "oc adm upgrade ..." command in the given timeout
+// Check expStrings in the result of the updates
+// Returns: true - found, false - not found
+func checkUpdates(oc *exutil.CLI, conditional bool, interval time.Duration, timeout time.Duration, expStrings ...string) bool {
+	var (
+		cmdOut string
+		err    error
+	)
+	if pollErr := wait.Poll(interval*time.Second, timeout*time.Second, func() (bool, error) {
+		if conditional {
+			cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "--include-not-recommended").Output()
+		} else {
+			cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, str := range expStrings {
+			if !strings.Contains(cmdOut, str) {
+				return false, nil
+			}
+		}
+		return true, nil
+	}); pollErr != nil {
+		e2e.Logf(cmdOut)
+		return false
+	}
+	return true
+}
