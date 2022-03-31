@@ -102,7 +102,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		}
 
 		g.By("create apps")
-		err = oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:424e57db1f2e8e8ac9087d2f5e8faea6d73811f0b6f96301bc94293680897073", "-n", oc.Namespace()).Execute()
+		err = oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("check the imagestream in the project")
 		output, err = oc.WithoutNamespace().Run("get").Args("imagestream", "-n", oc.Namespace()).Output()
@@ -156,7 +156,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		defer oc.WithoutNamespace().Run("delete").Args("project", "p43092-1").Execute()
 
 		g.By("Create app in the frist project")
-		err = oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:aaea76ff622d2f8bcb32e538e7b3cd0ef6d291953f3e7c9f556c1ba5baf47e2e", "-n", "p43092-1").Execute()
+		err = oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e", "-n", "p43092-1").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Get the rs references")
@@ -209,7 +209,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		defer oc.WithoutNamespace().Run("delete").Args("project", "p43099").Execute()
 
 		g.By("Create app in the frist project")
-		err = oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:aaea76ff622d2f8bcb32e538e7b3cd0ef6d291953f3e7c9f556c1ba5baf47e2e", "-n", "p43099").Execute()
+		err = oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e", "-n", "p43099").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Get the rs references")

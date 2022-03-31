@@ -872,7 +872,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		g.By("Create test project")
 		oc.SetupProject()
 
-		err = oc.Run("create").Args("deployment", "ocp43277", "--image", "quay.io/openshifttest/hello-openshift@sha256:aaea76ff622d2f8bcb32e538e7b3cd0ef6d291953f3e7c9f556c1ba5baf47e2e").Execute()
+		err = oc.Run("create").Args("deployment", "ocp43277", "--image", "quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check all the pods should running")
