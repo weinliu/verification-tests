@@ -131,12 +131,11 @@ export const DemoPluginConsolePlugin = {
         {
            "type": "Service",
            "alias": "demoplugin",
-           "name": "thanos-querier",
+           "authorize": true
            "service": {
               "name": "thanos-querier",
               "namespace": "openshift-monitoring",
-              "port": 9091,
-              "authorize": true
+              "port": 9091
            }
         }
      ]
