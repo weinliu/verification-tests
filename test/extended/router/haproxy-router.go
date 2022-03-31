@@ -57,7 +57,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			}
 		)
 
-		g.By("Create a NP ingresscontroller with PROXY protocol set")
+		g.By("check whether there are more than two worker nodes present for testing hostnetwork")
+		workerNodeCount, _ := exactNodeDetails(oc)
+		if workerNodeCount <= 2 {
+			g.Skip("Skipping as we need more than two worker nodes")
+		}
+
+		g.By("Create a hostNetwork ingresscontroller with PROXY protocol set")
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)

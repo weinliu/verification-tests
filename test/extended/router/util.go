@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -53,7 +54,21 @@ func getBaseDomain(oc *exutil.CLI) string {
 	return basedomain
 }
 
+// to exact available worker node count and details
+func exactNodeDetails(oc *exutil.CLI) (int, string) {
+	workerNodeDetails, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	nodeCount := int(strings.Count(workerNodeDetails, "Ready")) - (int(strings.Count(workerNodeDetails, "SchedulingDisabled")) + int(strings.Count(workerNodeDetails, "NotReady")))
+	e2e.Logf("Worker node details are: %v", workerNodeDetails)
+	e2e.Logf("Available worker node count is: %v", nodeCount)
+	return nodeCount, workerNodeDetails
+}
+
 func (ingctrl *ingctrlNodePortDescription) create(oc *exutil.CLI) {
+	availableWorkerNode, _ := exactNodeDetails(oc)
+	if availableWorkerNode < 1 {
+		g.Skip("Skipping as there is no enough worker nodes")
+	}
 	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ingctrl.template, "-p", "NAME="+ingctrl.name, "NAMESPACE="+ingctrl.namespace, "DOMAIN="+ingctrl.domain)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
