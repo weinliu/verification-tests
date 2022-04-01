@@ -3,6 +3,7 @@ package logging
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"os"
 	"os/exec"
@@ -100,6 +101,37 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(events).Should(o.ContainSubstring("reason FileMissing type Regenerate"))
 		o.Expect(events).Should(o.ContainSubstring("reason ExpiredOrMissing type Regenerate"))
+	})
+
+	// author qitang@redhat.com
+	g.It("CPaasrunOnly-Author:qitang-Medium-49440-[LOG-1415] Allow users to set fluentd read_lines_limit.[Serial]", func() {
+		clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
+		clf := resource{"clusterlogforwarder", "instance", cloNS}
+		defer clf.clear(oc)
+		err := clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("deploy EFK pods")
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+		cl := resource{"clusterlogging", "instance", cloNS}
+		defer cl.deleteClusterLogging(oc)
+		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
+		patch := "{\"spec\": {\"forwarder\": {\"fluentd\": {\"inFile\": {\"readLinesLimit\": 50}}}}}"
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", cloNS, "cl/instance", "-p", patch, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		WaitForEFKPodsToBeReady(oc, cloNS)
+
+		// extract fluent.conf from cm/collector
+		baseDir := exutil.FixturePath("testdata", "logging")
+		TestDataPath := filepath.Join(baseDir, "temp-"+getRandomString())
+		defer exec.Command("rm", "-r", TestDataPath).Output()
+		err = os.MkdirAll(TestDataPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", cloNS, "cm/collector", "--confirm", "--to="+TestDataPath).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		data, _ := ioutil.ReadFile(filepath.Join(TestDataPath, "fluent.conf"))
+		o.Expect(string(data)).Should(o.ContainSubstring("read_lines_limit 50"))
 	})
 
 })

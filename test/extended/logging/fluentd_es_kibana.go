@@ -506,7 +506,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch 
 		o.Expect(stdout).Should(o.ContainSubstring("You Know, for Search"))
 	})
 
-	g.It("CPaasrunOnly-Author:qitang-Medium-49099-Be upgraded successfully when the tolerations enabled[Serial][Slow]", func() {
+	g.It("CPaasrunOnly-Author:qitang-Medium-49099-Elasticsearch should be upgraded successfully when the tolerations enabled[Serial][Slow]", func() {
 		// create clusterlogging instance
 		g.By("deploy EFK pods")
 		sc, err := getStorageClassName(oc)
