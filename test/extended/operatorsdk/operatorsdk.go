@@ -911,40 +911,144 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 	// author: chuo@redhat.com
 	g.It("ConnectedOnly-VMonly-Author:chuo-High-34427-Ensure that Ansible Based Operators creation is working", func() {
-		operatorsdkCLI.showInfo = true
-		exec.Command("bash", "-c", "mkdir -p /tmp/ocp-34427/memcached-operator && cd /tmp/ocp-34427/memcached-operator && operator-sdk init --plugins=ansible --domain example.com").Output()
-		defer exec.Command("bash", "-c", "rm -rf /tmp/ocp-34427").Output()
-		defer exec.Command("bash", "-c", "cd /tmp/ocp-34427/memcached-operator && make undeploy").Output()
-		exec.Command("bash", "-c", "cd /tmp/ocp-34427/memcached-operator && operator-sdk create api --group cache --version v1alpha1 --kind Memcached --generate-role").Output()
-		exec.Command("bash", "-c", "cp test/extended/util/operatorsdk/ocp-34427-data/roles/memcached/tasks/main.yml /tmp/ocp-34427/memcached-operator/roles/memcached/tasks/main.yml").Output()
-		exec.Command("bash", "-c", "cp test/extended/util/operatorsdk/ocp-34427-data/roles/memcached/defaults/main.yml /tmp/ocp-34427/memcached-operator/roles/memcached/defaults/main.yml").Output()
-		exec.Command("bash", "-c", "sed -i '$d' /tmp/ocp-34427/memcached-operator/config/samples/cache_v1alpha1_memcached.yaml").Output()
-		exec.Command("bash", "-c", "sed -i '$a\\  size: 3' /tmp/ocp-34427/memcached-operator/config/samples/cache_v1alpha1_memcached.yaml").Output()
-		exec.Command("bash", "-c", "sed -i 's/v4.10/v4.9/g' /tmp/ocp-34427/memcached-operator/config/default/manager_auth_proxy_patch.yaml").Output()
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture != "amd64" && architecture != "arm64" {
+			g.Skip("Do not support " + architecture)
+		}
+		imageTag := "quay.io/olmqe/memcached-operator-ansible-base:v" + ocpversion + getRandomString()
+		if architecture == "arm64" {
+			imageTag = "quay.io/olmqe/memcached-operator-ansible-base:v4.11-34427"
+		}
+		nsSystem := "system-ocp34427" + getRandomString()
+		nsOperator := "nginx-operator-system-ocp34427" + getRandomString()
+
+		tmpBasePath := "/tmp/ocp-34427-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "memcached-operator")
+		err := os.MkdirAll(tmpPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
+
+		if imageTag != "quay.io/olmqe/memcached-operator-ansible-base:v4.11-34427" {
+			quayCLI := container.NewQuayCLI()
+			defer quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
+		}
+
+		defer func() {
+			g.By("step: undeploy")
+			_, err = makeCLI.Run("undeploy").Args().Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("step: init Ansible Based Operator")
+		output, err := operatorsdkCLI.Run("init").Args("--plugins=ansible", "--domain", "example.com").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Next"))
+
+		g.By("step: Create API.")
+		output, err = operatorsdkCLI.Run("create").Args("api", "--group", "cache", "--version", "v1alpha1", "--kind", "Memcached34427", "--generate-role").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Writing kustomize manifests"))
+
+		dataPath := "test/extended/util/operatorsdk/ocp-34427-data/roles/memcached/"
+		err = copy(filepath.Join(dataPath, "tasks", "main.yml"), filepath.Join(tmpPath, "roles", "memcached34427", "tasks", "main.yml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = copy(filepath.Join(dataPath, "defaults", "main.yml"), filepath.Join(tmpPath, "roles", "memcached34427", "defaults", "main.yml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exec.Command("bash", "-c", fmt.Sprintf("sed -i '$d' %s/config/samples/cache_v1alpha1_memcached34427.yaml", tmpPath)).Output()
+		exec.Command("bash", "-c", fmt.Sprintf("sed -i '$a\\  size: 3' %s/config/samples/cache_v1alpha1_memcached34427.yaml", tmpPath)).Output()
 
 		// to replace namespace memcached-operator-system with memcached-operator-system-ocp34427
-		exec.Command("bash", "-c", "sed -i 's/name: system/name: system-ocp34427/g' `grep -rl \"name: system\" /tmp/ocp-34427/memcached-operator`").Output()
-		exec.Command("bash", "-c", "sed -i 's/namespace: system/namespace: system-ocp34427/g'  `grep -rl \"namespace: system\" /tmp/ocp-34427/memcached-operator`").Output()
-		exec.Command("bash", "-c", "sed -i 's/namespace: memcached-operator-system/namespace: memcached-operator-system-ocp34427/g'  `grep -rl \"namespace: memcached-operator-system\" /tmp/ocp-34427/memcached-operator`").Output()
+		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/name: system/name: %s/g' `grep -rl \"name: system\" %s`", nsSystem, tmpPath)).Output()
+		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/namespace: system/namespace: %s/g'  `grep -rl \"namespace: system\" %s`", nsSystem, tmpPath)).Output()
+		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/namespace: memcached-operator-system/namespace: %s/g'  `grep -rl \"namespace: memcached-operator-system\" %s`", nsOperator, tmpPath)).Output()
 
-		exec.Command("bash", "-c", "cd /tmp/ocp-34427/memcached-operator && make install").Output()
-		exec.Command("bash", "-c", "cd /tmp/ocp-34427/memcached-operator && make deploy IMG=quay.io/olmqe/memcached-operator-ansible-base:v4.10").Output()
-
-		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", "/tmp/ocp-34427/memcached-operator/config/samples/cache_v1alpha1_memcached.yaml", "-n", "memcached-operator-system-ocp34427").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
-			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "memcached-operator-system-ocp34427").Output()
+		g.By("step: Push the operator image")
+		switch architecture {
+		case "amd64":
+			e2e.Logf("platfrom is amd64")
+			output, err = makeCLI.Run("docker-build").Args("docker-push", "IMG="+imageTag).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(msg, "memcached-sample") {
-				e2e.Logf("found pod memcached-sample")
+			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+		case "arm64":
+			e2e.Logf("platfrom is arm64, IMG is " + imageTag)
+		default:
+			g.Skip("do not support platfrom: " + architecture)
+		}
+
+		g.By("step: Install the CRD")
+		output, err = makeCLI.Run("install").Args().Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("memcached34427s.cache.example.com created"))
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("crd", "memcached34427s.cache.example.com").Output()
+		e2e.Logf(output)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).NotTo(o.ContainSubstring("NotFound"))
+
+		g.By("step: Deploy the operator")
+		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("deployment.apps/memcached-operator-controller-manager"))
+
+		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lines := strings.Split(podList, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "memcached-operator-controller-manager") {
+					e2e.Logf("found pod memcached-operator-controller-manager")
+					if strings.Contains(line, "Running") {
+						e2e.Logf("the status of pod memcached-operator-controller-manager is Running")
+						return true, nil
+					} else {
+						e2e.Logf("the status of pod memcached-operator-controller-manager is not Running")
+						return false, nil
+					}
+				}
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "No memcached-operator-controller-manager")
+
+		g.By("step: Create the resource")
+		filePath := filepath.Join(tmpPath, "config", "samples", "cache_v1alpha1_memcached34427.yaml")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", filePath, "-n", nsOperator).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(msg, "memcached34427-sample") {
+				e2e.Logf("found pod memcached34427-sample")
 				return true, nil
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached-sample in project memcached-operator-system-ocp34427"))
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/memcached-sample-memcached", "-n", "memcached-operator-system-ocp34427").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(msg).To(o.ContainSubstring("3 desired | 3 updated | 3 total | 3 available | 0 unavailable"))
+		exutil.AssertWaitPollNoErr(waitErr, "No pod memcached34427-sample")
+		switch architecture {
+		case "amd64":
+			waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+				msg, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/memcached34427-sample-memcached", "-n", nsOperator).Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if strings.Contains(msg, "3 desired | 3 updated | 3 total | 3 available | 0 unavailable") {
+					e2e.Logf("deployment/memcached34427-sample-memcached is created successfully")
+					return true, nil
+				}
+				return false, nil
+			})
+			if waitErr != nil {
+				msg, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("memcached34427-sample-memcached", "-n", nsOperator).Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				e2e.Logf(msg)
+			}
+			exutil.AssertWaitPollNoErr(waitErr, "the status of deployment/memcached34427-sample-memcached is wrong")
+		case "arm64":
+			e2e.Logf("skip check the pod status")
+		default:
+			e2e.Logf("skip check the pod status")
+		}
+		g.By("34427 SUCCESS")
+
 	})
 	// author: chuo@redhat.com
 	g.It("ConnectedOnly-VMonly-Author:chuo-Medium-34366-change ansible operator flags from maxWorkers using env MAXCONCURRENTRECONCILES ", func() {
@@ -1102,44 +1206,147 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: chuo@redhat.com
-	g.It("ConnectedOnly-Author:chuo-High-34426-Ensure that Helm Based Operators creation is working ", func() {
-		operatorsdkCLI.showInfo = true
-		exec.Command("bash", "-c", "mkdir -p /tmp/ocp-34426/nginx-operator && cd /tmp/ocp-34426/nginx-operator && operator-sdk init --plugins=helm").Output()
-		defer exec.Command("bash", "-c", "rm -rf /tmp/ocp-34426").Output()
-		defer exec.Command("bash", "-c", "cd /tmp/ocp-34426/nginx-operator && make undeploy").Output()
-		exec.Command("bash", "-c", "cd /tmp/ocp-34426/nginx-operator && operator-sdk create api --group demo --version v1 --kind Nginx").Output()
-		exec.Command("bash", "-c", "sed -i 's/v4.10/v4.9/g' /tmp/ocp-34426/nginx-operator/config/default/manager_auth_proxy_patch.yaml").Output()
+	g.It("ConnectedOnly-VMonly-Author:chuo-High-34426-Ensure that Helm Based Operators creation is working ", func() {
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture != "amd64" && architecture != "arm64" {
+			g.Skip("Do not support " + architecture)
+		}
+		imageTag := "quay.io/olmqe/nginx-operator-base:v" + ocpversion + getRandomString()
+		nsSystem := "system-ocp34426" + getRandomString()
+		nsOperator := "nginx-operator-system-ocp34426" + getRandomString()
 
-		// to replace namespace memcached-operator-system with nginx-operator-system-34426
-		exec.Command("bash", "-c", "sed -i 's/name: system/name: system-ocp34426/g' `grep -rl \"name: system\" /tmp/ocp-34426/nginx-operator`").Output()
-		exec.Command("bash", "-c", "sed -i 's/namespace: system/namespace: system-ocp34426/g'  `grep -rl \"namespace: system\" /tmp/ocp-34426/nginx-operator`").Output()
-		exec.Command("bash", "-c", "sed -i 's/namespace: nginx-operator-system/namespace: nginx-operator-system-ocp34426/g'  `grep -rl \"namespace: nginx-operator-system\" /tmp/ocp-34426/nginx-operator`").Output()
-
-		exec.Command("bash", "-c", "cd /tmp/ocp-34426/nginx-operator && make install").Output()
-		exec.Command("bash", "-c", "cd /tmp/ocp-34426/nginx-operator && make deploy IMG=quay.io/olmqe/nginx-operator-base:v4.10").Output()
-
-		_, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-user", "anyuid", "system:serviceaccount:nginx-operator-system-ocp34426:nginx-sample").Output()
+		tmpBasePath := "/tmp/ocp-34426-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "nginx-operator")
+		err := os.MkdirAll(tmpPath, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
 
-		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", "/tmp/ocp-34426/nginx-operator/config/samples/demo_v1_nginx.yaml", "-n", "nginx-operator-system-ocp34426").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if imageTag != "quay.io/olmqe/nginx-operator-base::v4.11" {
+			quayCLI := container.NewQuayCLI()
+			defer quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
+		}
 
-		waitErr := wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
-			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "nginx-operator-system-ocp34426").Output()
-			if strings.Contains(msg, "nginx-sample") {
+		defer func() {
+			g.By("delete nginx-sample")
+			filePath := filepath.Join(tmpPath, "config", "samples", "demo_v1_nginx.yaml")
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", filePath, "-n", nsOperator).Output()
+			waitErr := wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+				output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("nginx", "-n", nsOperator).Output()
+				if strings.Contains(output, "nginx-sample") {
+					e2e.Logf("nginx-sample still exists")
+					return false, nil
+				}
 				return true, nil
+			})
+			if waitErr != nil {
+				e2e.Logf("delete nginx-sample failed, still try to run make undeploy")
+			}
+			g.By("step: run make undeploy")
+			_, err = makeCLI.Run("undeploy").Args().Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		g.By("step: init Helm Based Operators")
+		output, err := operatorsdkCLI.Run("init").Args("--plugins=helm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Next: define a resource with"))
+
+		g.By("step: Create API.")
+		output, err = operatorsdkCLI.Run("create").Args("api", "--group", "demo", "--version", "v1", "--kind", "Nginx").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("nginx"))
+
+		g.By("step: modify namespace")
+		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/name: system/name: %s/g' `grep -rl \"name: system\" %s`", nsSystem, tmpPath)).Output()
+		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/namespace: system/namespace: %s/g'  `grep -rl \"namespace: system\" %s`", nsSystem, tmpPath)).Output()
+		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/namespace: nginx-operator-system/namespace: %s/g'  `grep -rl \"namespace: nginx-operator-system\" %s`", nsOperator, tmpPath)).Output()
+
+		g.By("step: build and Push the operator image")
+		switch architecture {
+		case "amd64":
+			output, err = makeCLI.Run("docker-build").Args("docker-push", "IMG="+imageTag).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+		case "arm64":
+			podmanCLI := container.NewPodmanCLI()
+			podmanCLI.ExecCommandPath = tmpPath
+			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "arm64", "--tag", imageTag).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("Successfully"))
+			output, err = podmanCLI.Run("push").Args(imageTag).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+		}
+
+		output, err = makeCLI.Run("docker-build").Args("docker-push", "IMG="+imageTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+
+		g.By("step: Install the CRD")
+		output, err = makeCLI.Run("install").Args().Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("nginxes.demo.my.domain"))
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("crd", "nginxes.demo.my.domain").Output()
+		e2e.Logf(output)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).NotTo(o.ContainSubstring("NotFound"))
+
+		g.By("step: Deploy the operator")
+		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("deployment.apps/nginx-operator-controller-manager created"))
+		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lines := strings.Split(podList, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "nginx-operator-controller-manager") {
+					e2e.Logf("found pod nginx-operator-controller-manager")
+					if strings.Contains(line, "Running") {
+						e2e.Logf("the status of pod nginx-operator-controller-manager is Running")
+						return true, nil
+					} else {
+						e2e.Logf("the status of pod nginx-operator-controller-manager is not Running")
+						return false, nil
+					}
+				}
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No nginx-sample in project nginx-operator-system-ocp34426"))
-		waitErr = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
-			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "nginx-operator-system-ocp34426", "-o=jsonpath={.items[1].status.phase}").Output()
-			if strings.Contains(msg, "Running") {
-				return true, nil
+		exutil.AssertWaitPollNoErr(waitErr, "No nginx-operator-controller-manager")
+
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-user", "anyuid", fmt.Sprintf("system:serviceaccount:%s:nginx-sample", nsOperator)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step: Create the resource")
+		filePath := filepath.Join(tmpPath, "config", "samples", "demo_v1_nginx.yaml")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", filePath, "-n", nsOperator).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(podList, "nginx-sample") {
+				e2e.Logf("No nginx-sample")
+				return false, nil
+			}
+			lines := strings.Split(podList, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "nginx-sample") {
+					e2e.Logf("found pod nnginx-sample")
+					if strings.Contains(line, "Running") {
+						e2e.Logf("the status of pod nginx-sample is Running")
+						return true, nil
+					} else {
+						e2e.Logf("the status of pod nginx-sample is not Running")
+						return false, nil
+					}
+				}
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No nginx-sample in project nginx-operator-system-ocp34426 is in Running status"))
+		exutil.AssertWaitPollNoErr(waitErr, "No nginx-sample is in Running status")
 	})
 
 	// author: xzha@redhat.com
