@@ -847,6 +847,41 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get hybirdtest go type pods in %s", namespace))
 	})
 
+	// author: jfan@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-48366-SDK add ansible prometheus metrics", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
+		var metrics = filepath.Join(buildPruningBaseDir, "metrics_v1_testmetrics.yaml")
+		operatorsdkCLI.showInfo = true
+		oc.SetupProject()
+		namespace := oc.Namespace()
+		defer operatorsdkCLI.Run("cleanup").Args("ansiblemetrics", "-n", namespace).Output()
+		_, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/testmetrics-bundle:v"+ocpversion, "-n", namespace, "--timeout", "5m").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		createMetrics, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", metrics, "-p", "NAME=metrics-sample").OutputToFile("config-48366.json")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createMetrics, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace).Output()
+			if strings.Contains(msg, "metrics-sample") {
+				e2e.Logf("metrics created success")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get metrics samples in %s", namespace))    	
+		promeToken, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		promeEp, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ep", "ansiblemetrics-controller-manager-metrics-service", "-o=jsonpath={.subsets[0].addresses[0].ip}", "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		metricsMsg, err := exec.Command("bash", "-c", "oc exec deployment/ansiblemetrics-controller-manager -n "+namespace+" -- curl -k -H \"Authorization: Bearer "+promeToken+"\" 'https://"+promeEp+":8443/metrics' | grep -E \"Observe|gague|my_counter\"").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(metricsMsg).To(o.ContainSubstring("my gague and set it to 2"))
+		o.Expect(metricsMsg).To(o.ContainSubstring("counter"))
+		o.Expect(metricsMsg).To(o.ContainSubstring("Observe my histogram"))
+		o.Expect(metricsMsg).To(o.ContainSubstring("Observe my summary"))
+	})
+
 	// author: chuo@redhat.com
 	g.It("Author:chuo-Medium-27718-scorecard remove version flag", func() {
 		operatorsdkCLI.showInfo = true
