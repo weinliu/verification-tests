@@ -38,6 +38,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		hugepage_100m_pod_file           = exutil.FixturePath("testdata", "psap", "nto", "hugepage-100m-pod.yaml")
 		hugepage_mcp_file                = exutil.FixturePath("testdata", "psap", "nto", "hugepage-mcp.yaml")
 		hugepage_tuned_boottime_file     = exutil.FixturePath("testdata", "psap", "nto", "hugepage-tuned-boottime.yaml")
+		stalld_tuned_file                = exutil.FixturePath("testdata", "psap", "nto", "stalld-tuned.yaml")
 
 		isNTO          bool
 		isPAOInstalled bool
@@ -1547,5 +1548,86 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		envInfo, err := exutil.RemoteShPodWithBash(oc, ntoTestNS, "hugepages-app", "env | grep REQUESTS_HUGEPAGES")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(envInfo).To(o.ContainSubstring("REQUESTS_HUGEPAGES_2Mi=104857600"))
+	})
+
+	g.It("Author:liqcui-Medium-49439-NTO can start and stop stalld when relying on Tuned '[service]' plugin.[Disruptive]", func() {
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		//Use the first worker node as labeled node
+		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-stalld-").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "openshift-stalld", "-n", ntoNamespace, "--ignore-not-found").Execute()
+
+		g.By("Label the node with node-role.kubernetes.io/worker-stalld=")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-stalld=", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create openshift-stalld tuned profile")
+		exutil.CreateNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", stalld_tuned_file, "-p", "STALLD_STATUS=start,enable")
+
+		g.By("Check if new profile in in rendered tuned")
+		renderCheck, err := getTunedRender(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).To(o.ContainSubstring("openshift-stalld"))
+
+		g.By("Check openshift-stalld tuned profile should be automatically created")
+		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNames).To(o.ContainSubstring("openshift-stalld"))
+
+		g.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Check if new NTO profile was applied")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-stalld")
+
+		g.By("Check if profile openshift-stalld applied on nodes")
+		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeProfileName).To(o.ContainSubstring("openshift-stalld"))
+
+		g.By("Check current profile for each node")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Check if stalld service is running ...")
+		stalldStatus, err := exutil.DebugNodeWithChroot(oc, tunedNodeName, "systemctl", "status", "stalld")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(stalldStatus).To(o.ContainSubstring("active (running)"))
+
+		g.By("Apply openshift-stalld with stop,disable tuned profile")
+		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", stalld_tuned_file, "-p", "STALLD_STATUS=stop,disable")
+
+		g.By("Check if new NTO profile was applied")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-stalld")
+
+		g.By("Check if stalld service is inactive and stopped ...")
+		//Return an error when the systemctl status stalld is inactive, so err for o.Expect as expected.
+		stalldStatus, err = exutil.DebugNodeWithChroot(oc, tunedNodeName, "systemctl", "status", "stalld")
+		e2e.Logf("The service stalld status:\n%v", stalldStatus)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(stalldStatus).To(o.ContainSubstring("inactive (dead)"))
+
+		g.By("Apply openshift-stalld with start,enable tuned profile")
+		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", stalld_tuned_file, "-p", "STALLD_STATUS=start,enable")
+
+		g.By("Check if new NTO profile was applied")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-stalld")
+
+		g.By("Check if stalld service is running again ...")
+		stalldStatus, err = exutil.DebugNodeWithChroot(oc, tunedNodeName, "systemctl", "status", "stalld")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(stalldStatus).To(o.ContainSubstring("active (running)"))
 	})
 })
