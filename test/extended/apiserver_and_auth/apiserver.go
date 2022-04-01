@@ -704,4 +704,265 @@ spec:
 			e2e.Logf("Test pass: No errors found from KAS operator, KAS logs/audit logs")
 		}
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("PreChkUpgrade-NonPreRelease-Author:rgangwar-Critical-40667-Prepare Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
+		var (
+			dirname     =   "/tmp/-OCP-40667/"
+			exceptions  =   "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
+			keywords    =   "body: net/http: request canceled (Client.Timeout|panic"
+			// Creating below variable for clusterbuster commands "N" argument parameter.
+			namespace_count = 0
+		)
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		g.By("Check the configuration of priority level")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "workload-low", "-o", `jsonpath={.spec.limited.assuredConcurrencyShares}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.Equal(`100`))
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "global-default", "-o", `jsonpath={.spec.limited.assuredConcurrencyShares}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.Equal(`20`))
+
+		g.By("Checking cluster worker load before running clusterbuster")
+		cpu_avg_val, mem_avg_val := check_cluster_load(oc, "worker", "OCP-40667/nodes.log")
+		node, err := exutil.GetAllNodes(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Number of nodes are %d", len(node))
+		no_of_nodes :=  len(node)
+		if no_of_nodes > 1 &&  cpu_avg_val < 50 &&  mem_avg_val < 50 {
+			e2e.Logf("Cluster has load normal..CPU %d %% and Memory %d %%...So using value of N=20", cpu_avg_val, mem_avg_val)
+			namespace_count = 20
+		} else if no_of_nodes == 1 &&  cpu_avg_val < 60 &&  mem_avg_val < 60 {
+			e2e.Logf("Cluster is SNO...CPU %d %% and Memory %d %%....So using value of N=3", cpu_avg_val, mem_avg_val)
+			namespace_count = 3
+		} else {
+			e2e.Logf("Cluster has slighty high load...CPU %d %% and Memory %d %%....So using value of N=6", cpu_avg_val, mem_avg_val)
+			namespace_count = 6
+		}
+
+		g.By("Stress the cluster")
+		cmd := fmt.Sprintf(`clusterbuster -P server -b 5 -p 10 -D .01 -M 1 -N %d -r 4 -d 2 -c 10 -m 1000 -v -s 20 -x > %v`, namespace_count, dirname+"clusterbuster.log")
+		_, err = exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd = fmt.Sprintf(`cat %v | grep -iE '%s' || true`, dirname+"clusterbuster.log", keywords)
+		buster_logs, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(buster_logs) > 0 {
+			e2e.Logf("%s", buster_logs)
+			e2e.Logf("Found some panic or timeout errors, if errors are  potential bug then file a bug.")
+		} else {
+			e2e.Logf("No errors found in clusterbuster logs")
+		}
+
+		g.By("Check the abnormal pods")
+		var pod_logs []byte
+		err_pod := wait.Poll(15*time.Second, 600*time.Second, func() (bool, error) {
+			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile("OCP-40667/pod.log")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			cmd = fmt.Sprintf(`cat %v | grep -i 'clusterbuster' | grep -ivE 'Running|Completed|namespace' || true`, dirname+"pod.log")
+			pod_logs, err = exec.Command("bash", "-c", cmd).Output()
+			 o.Expect(err).NotTo(o.HaveOccurred())
+			if len(pod_logs) > 0 {
+				e2e.Logf("clusterbuster pods are not still running and completed")
+				return false, nil
+			} else {
+				e2e.Logf("No abnormality found in pods...")
+				return true, nil
+			}
+		})
+		if err_pod != nil {
+			e2e.Logf("%s", pod_logs)
+		}
+		exutil.AssertWaitPollNoErr(err_pod, "Abnormality found in clusterbuster pods.")
+
+		g.By("Check the abnormal nodes")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--no-headers").OutputToFile("OCP-40667/node.log")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd = fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, dirname+"node.log")
+		node_logs, err := exec.Command("bash", "-c", cmd).Output()
+		e2e.Logf("%s", node_logs)
+		if len(node_logs) > 0 {
+			e2e.Logf("Some nodes are NotReady or SchedulingDisabled...Please check")
+			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			e2e.Logf("Nodes are normal...")
+			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		g.By("Check the abnormal operators")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--no-headers").OutputToFile("OCP-40667/co.log")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd = fmt.Sprintf(`cat %v | grep -v '.True.*False.*False' || true`, dirname+"co.log")
+		co_logs, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(co_logs) > 0 {
+			e2e.Logf("%s", co_logs)
+			e2e.Logf("Found abnormal cluster operators, if errors are  potential bug then file a bug.")
+		} else {
+			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("No abnormality found in cluster operators...")
+		}
+
+		g.By("Checking KAS logs")
+		master_node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		master_name := strings.Fields(master_node)
+		for i := 0; i < len(master_name); i++ {
+			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+master_name[i]).OutputToFile("OCP-40667/kas.log."+master_name[i])
+			o.Expect(errlog).NotTo(o.HaveOccurred())
+		}
+		cmd = fmt.Sprintf(`cat %v | grep -iE 'apf_controller.go|apf_filter.go' | grep 'no route' || true`, dirname+"kas.log.*")
+		no_routelogs, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd = fmt.Sprintf(`cat %v | grep -i 'panic' | grep -Ev "%s" || true`, dirname+"kas.log.*", exceptions)
+		panic_logs, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(no_routelogs) > 0 || len(panic_logs) > 0 {
+			e2e.Logf("%s", panic_logs)
+			e2e.Logf("%s", no_routelogs)
+			e2e.Logf("Found some panic or no route errors, if errors are  potential bug then file a bug.")
+		} else {
+			e2e.Logf("No errors found in KAS logs")
+		}
+
+		g.By("Check the all worker nodes workload are normal")
+		cpu_avg_val, mem_avg_val = check_cluster_load(oc, "worker", "OCP-40667/nodes_new.log")
+		if cpu_avg_val > 75 || mem_avg_val > 75 {
+			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
+			o.Expect(errlog).NotTo(o.HaveOccurred())
+			e2e.Logf("Nodes CPU avg %d %% and Memory avg %d %% consumption is high, please investigate the consumption...", cpu_avg_val, mem_avg_val)
+		} else {
+			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
+			o.Expect(errlog).NotTo(o.HaveOccurred())
+			e2e.Logf("Node CPU %d %% and Memory %d %% consumption is normal....", cpu_avg_val, mem_avg_val)
+		}
+
+		g.By("Summary of resources used")
+		resource_details := check_resources(oc, "OCP-40667/resources.log")
+		for key, value := range resource_details {
+			e2e.Logf("Number of %s is %v\n", key, value)
+		}
+
+		if cpu_avg_val > 75 || mem_avg_val > 75 || len(no_routelogs) > 0 || len(panic_logs) > 0 || len(co_logs) > 0 || len(node_logs) > 0 || len(buster_logs) > 0 {
+			e2e.Failf("Prechk Test case: Failed.....Check above errors in case run logs.")
+		} else {
+			e2e.Logf("Prechk Test case: Passed.....There is no error abnormaliy found..")
+		}
+	})
+
+	// author: rgangwar@redhat.com
+	g.It("PstChkUpgrade-NonPreRelease-Author:rgangwar-Critical-40667-Post Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
+		var (
+			dirname     =   "/tmp/-OCP-40667/"
+			exceptions  =   "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
+		)
+		defer os.RemoveAll(dirname)
+		defer func() {
+			cmd := fmt.Sprintf(`clusterbuster --cleanup`)
+			_, err := exec.Command("bash", "-c", cmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err := os.MkdirAll(dirname, 0755)
+		g.By("Check the configuration of priority level")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "workload-low", "-o", `jsonpath={.spec.limited.assuredConcurrencyShares}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.Equal(`100`))
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "global-default", "-o", `jsonpath={.spec.limited.assuredConcurrencyShares}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.Equal(`20`))
+
+		g.By("Check the abnormal nodes")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--no-headers").OutputToFile("OCP-40667/node.log")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd := fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, dirname+"node.log")
+		node_logs, err := exec.Command("bash", "-c", cmd).Output()
+		e2e.Logf("%s", node_logs)
+		if len(node_logs) > 0 {
+			e2e.Logf("Some nodes are NotReady or SchedulingDisabled...Please check")
+			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			e2e.Logf("Nodes are normal...")
+			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		g.By("Check the abnormal operators")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--no-headers").OutputToFile("OCP-40667/co.log")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd = fmt.Sprintf(`cat %v | grep -v '.True.*False.*False' || true`, dirname+"co.log")
+		co_logs, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(co_logs) > 0 {
+			e2e.Logf("%s", co_logs)
+			e2e.Logf("Found abnormal cluster operators, if errors are  potential bug then file a bug.")
+		} else {
+			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("No abnormality found in cluster operators...")
+		}
+
+		g.By("Check the abnormal pods")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile("OCP-40667/pod.log")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd = fmt.Sprintf(`cat %v | grep -i 'clusterbuster' |grep -ivE 'Running|Completed|namespace' || true`, dirname+"pod.log")
+		pod_logs, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(pod_logs) > 0 {
+			e2e.Logf("%s", pod_logs)
+			e2e.Logf("Found abnormal pods, if errors are  potential bug then file a bug.")
+		} else {
+			e2e.Logf("No abnormality found in pods...")
+		}
+
+		g.By("Checking KAS logs")
+		master_node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		master_name := strings.Fields(master_node)
+		for i := 0; i < len(master_name); i++ {
+			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+master_name[i]).OutputToFile("OCP-40667/kas.log."+master_name[i])
+			o.Expect(errlog).NotTo(o.HaveOccurred())
+		}
+		cmd = fmt.Sprintf(`cat %v | grep -iE 'apf_controller.go|apf_filter.go' | grep 'no route' || true`, dirname+"kas.log.*")
+		no_routelogs, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd = fmt.Sprintf(`cat %v | grep -i 'panic' | grep -Ev "%s" || true`, dirname+"kas.log.*", exceptions)
+		panic_logs, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(no_routelogs) > 0 || len(panic_logs) > 0 {
+			e2e.Logf("%s", panic_logs)
+			e2e.Logf("%s", no_routelogs)
+			e2e.Logf("Found some panic or no route errors, if errors are  potential bug then file a bug.")
+		} else {
+			e2e.Logf("No errors found in KAS logs")
+		}
+
+		g.By("Check the all worker nodes workload are normal")
+		cpu_avg_val, mem_avg_val := check_cluster_load(oc, "worker", "OCP-40667/nodes_new.log")
+		if cpu_avg_val > 75 || mem_avg_val > 75 {
+			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
+			o.Expect(errlog).NotTo(o.HaveOccurred())
+			e2e.Logf("Nodes CPU avg %d %% and Memory avg %d %% consumption is high, please investigate the consumption...", cpu_avg_val, mem_avg_val)
+		} else {
+			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
+			o.Expect(errlog).NotTo(o.HaveOccurred())
+			e2e.Logf("Node CPU %d %% and Memory %d %% consumption is normal....", cpu_avg_val, mem_avg_val)
+		}
+
+		g.By("Summary of resources used")
+		resource_details := check_resources(oc, "OCP-40667/resources.log")
+		for key, value := range resource_details {
+			e2e.Logf("Number of %s is %v\n", key, value)
+		}
+
+		if cpu_avg_val > 75 || mem_avg_val > 75 || len(no_routelogs) > 0 || len(panic_logs) > 0 || len(co_logs) > 0 || len(node_logs) > 0 {
+			e2e.Failf("Postchk Test case: Failed.....Check above errors in case run logs.")
+		} else {
+			e2e.Logf("Postchk Test case: Passed.....There is no error abnormaliy found..")
+		}
+	})
 })

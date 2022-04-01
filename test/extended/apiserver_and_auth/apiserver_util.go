@@ -200,3 +200,36 @@ func restore_cluster_ocp_41899(oc *exutil.CLI) {
 		e2e.Logf("Cluster configmap not changed from default values")
 	}
 }
+
+func check_cluster_load(oc *exutil.CLI, node_type, dirname string) (int, int) {
+	tmp_path, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "nodes", "-l", "node-role.kubernetes.io/"+node_type, "--no-headers").OutputToFile(dirname)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	cmd := fmt.Sprintf(`cat %v | awk '{print $3}'|awk -F '%%' '{ sum += $1 } END { print(sum / NR) }'|cut -d "." -f1`, tmp_path)
+	cpu_avg, err := exec.Command("bash", "-c", cmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	cmd = fmt.Sprintf(`cat %v | awk '{print $5}'|awk -F'%%' '{ sum += $1 } END { print(sum / NR) }'|cut -d "." -f1`, tmp_path)
+	mem_avg, err := exec.Command("bash", "-c", cmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	re, _ := regexp.Compile(`[^\w]`)
+	cpu_avgs := string(cpu_avg)
+	mem_avgs := string(mem_avg)
+	cpu_avgs = re.ReplaceAllString(cpu_avgs, "")
+	mem_avgs = re.ReplaceAllString(mem_avgs, "")
+	cpu_avg_val, _ := strconv.Atoi(cpu_avgs)
+	mem_avg_val, _ := strconv.Atoi(mem_avgs)
+	return cpu_avg_val, mem_avg_val
+}
+
+func check_resources(oc *exutil.CLI, dirname string) map[string]string {
+	res_used_det := make(map[string]string)
+	res_used := []string{"secrets", "deployments", "namespaces", "pods"}
+	for _, key := range res_used {
+		tmp_path, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(key, "-A", "--no-headers").OutputToFile(dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd := fmt.Sprintf(`cat %v | wc -l | awk '{print $1}'`, tmp_path)
+		output, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		res_used_det[key] = string(output)
+	}
+	return res_used_det
+}
