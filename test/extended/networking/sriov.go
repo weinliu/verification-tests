@@ -142,6 +142,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			numVfs:       2,
 			resourceName: "intel710dpdk",
 			template:     sriovNetworkNodePolicyTemplate,
+			namespace:    sriovOpNs,
 		}
 
 		g.By("check the sriov operator is running")
@@ -161,6 +162,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			resourceName:     sriovPolicy.resourceName,
 			networkNamespace: oc.Namespace(),
 			template:         sriovNeworkTemplate,
+			namespace:        sriovOpNs,
 		}
 		sriovnetwork.createSriovNetwork(oc)
 		defer rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
@@ -184,5 +186,38 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(testpmdOutput).Should(o.MatchRegexp("forwards packets on 1 streams"))
 
+	})
+
+	g.It("Author:zzhao-Medium-Longduration-49213- VF with large number can be inited for intel card [Disruptive]", func() {
+		var (
+			buildPruningBaseDir            = exutil.FixturePath("testdata", "networking/sriov")
+			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovNetworkPolicy.yaml")
+			sriovOpNs                      = "openshift-sriov-network-operator"
+			sriovNodeLabel                 = "feature.node.kubernetes.io/sriov-capable=true"
+		)
+		sriovPolicy := sriovNetworkNodePolicy{
+			policyName:   "intel710",
+			deviceType:   "netdevice",
+			pfName:       "ens1f0",
+			vondor:       "8086",
+			numVfs:       40,
+			resourceName: "intel710net",
+			template:     sriovNetworkNodePolicyTemplate,
+			namespace:    sriovOpNs,
+		}
+
+		g.By("check the sriov operator is running")
+		chkSriovOperatorStatus(oc, sriovOpNs)
+
+		g.By("Create sriovnetworkpolicy to init VF and check they are inited successfully")
+		sriovPolicy.createPolicy(oc)
+		defer rmSriovNetworkPolicy(oc, sriovPolicy.policyName, sriovOpNs)
+		waitForSriovPolicyReady(oc, sriovOpNs)
+
+		g.By("check the link show the correct VF")
+		sriovNode := getSriovNode(oc, sriovOpNs, sriovNodeLabel)
+		output, err := exutil.DebugNodeWithChroot(oc, sriovNode, "bash", "-c", "ip l | grep ens1f0v | wc -l")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("40"))
 	})
 })

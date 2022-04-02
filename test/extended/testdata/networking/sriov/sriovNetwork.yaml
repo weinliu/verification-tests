@@ -7,7 +7,7 @@ objects:
   apiVersion: sriovnetwork.openshift.io/v1
   metadata:
     name: ${SRIOVNETNAME}
-    namespace: openshift-sriov-network-operator
+    namespace: ${NAMESPACE}
   spec:
     spoofChk: "off"
     trust: "on"
@@ -18,3 +18,4 @@ parameters:
 - name: SRIOVNETNAME 
 - name: TARGETNS
 - name: SRIOVNETPOLICY
+- name: NAMESPACE

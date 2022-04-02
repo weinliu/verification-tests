@@ -3,6 +3,7 @@ package networking
 import (
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,6 +29,7 @@ type sriovNetworkNodePolicy struct {
 	numVfs       int
 	resourceName string
 	template     string
+	namespace    string
 }
 
 type sriovNetwork struct {
@@ -35,6 +37,7 @@ type sriovNetwork struct {
 	resourceName     string
 	networkNamespace string
 	template         string
+	namespace        string
 }
 
 type sriovTestPod struct {
@@ -243,7 +246,7 @@ func (pod *sriovPod) sendHTTPRequest(oc *exutil.CLI, user, cmd string) {
 }
 func (sriovPolicy *sriovNetworkNodePolicy) createPolicy(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sriovPolicy.template, "-p", "SRIOVNETPOLICY="+sriovPolicy.policyName, "DEVICETYPE="+sriovPolicy.deviceType, "PFNAME="+sriovPolicy.pfName, "VENDOR="+sriovPolicy.vondor, "RESOURCENAME="+sriovPolicy.resourceName)
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sriovPolicy.template, "-p", "NAMESPACE="+sriovPolicy.namespace, "SRIOVNETPOLICY="+sriovPolicy.policyName, "DEVICETYPE="+sriovPolicy.deviceType, "PFNAME="+sriovPolicy.pfName, "VENDOR="+sriovPolicy.vondor, "NUMVFS="+strconv.Itoa(sriovPolicy.numVfs), "RESOURCENAME="+sriovPolicy.resourceName)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
@@ -255,7 +258,7 @@ func (sriovPolicy *sriovNetworkNodePolicy) createPolicy(oc *exutil.CLI) {
 
 func (sriovNetwork *sriovNetwork) createSriovNetwork(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sriovNetwork.template, "-p", "SRIOVNETNAME="+sriovNetwork.name, "TARGETNS="+sriovNetwork.networkNamespace, "SRIOVNETPOLICY="+sriovNetwork.resourceName)
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sriovNetwork.template, "-p", "NAMESPACE="+sriovNetwork.namespace, "SRIOVNETNAME="+sriovNetwork.name, "TARGETNS="+sriovNetwork.networkNamespace, "SRIOVNETPOLICY="+sriovNetwork.resourceName)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
@@ -286,4 +289,23 @@ func getPciAddress(namespace string, podName string) string {
 	pciAddress := strings.Split(pciAddressEnv, "=")
 	e2e.Logf("Get the pciAddress is: %s", pciAddress[1])
 	return strings.TrimSuffix(pciAddress[1], "\n")
+}
+
+//Get the sriov worker which the policy is used
+func getSriovNode(oc *exutil.CLI, namespace string, label string) string {
+	sriovNodeName := ""
+	nodeNamesAll, err := oc.AsAdmin().Run("get").Args("-n", namespace, "node", "-l", label, "-ojsonpath={.items..metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	nodeNames := strings.Split(nodeNamesAll, " ")
+	for _, nodeName := range nodeNames {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sriovnetworknodestates", nodeName, "-n", namespace, "-ojsonpath={.spec.interfaces}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if output != "" {
+			sriovNodeName = nodeName
+			break
+		}
+	}
+	e2e.Logf("The sriov node is  %v ", sriovNodeName)
+	o.Expect(sriovNodeName).NotTo(o.BeEmpty())
+	return sriovNodeName
 }

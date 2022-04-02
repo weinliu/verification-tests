@@ -6,8 +6,8 @@ objects:
 - kind: SriovNetworkNodePolicy
   apiVersion: sriovnetwork.openshift.io/v1
   metadata:
+    namespace: ${NAMESPACE}
     name: ${SRIOVNETPOLICY}
-    namespace: openshift-sriov-network-operator
   spec:
     deviceType: ${DEVICETYPE}
     nicSelector:
@@ -16,11 +16,13 @@ objects:
       vendor: ${VENDOR}
     nodeSelector:
       feature.node.kubernetes.io/sriov-capable: 'true'
-    numVfs: 3
+    numVfs: "${{NUMVFS}}"
     resourceName: ${RESOURCENAME}
 parameters:
 - name: SRIOVNETPOLICY 
 - name: PFNAME
 - name: DEVICETYPE
 - name: VENDOR
-- name: RESOURCENAME  
+- name: RESOURCENAME
+- name: NUMVFS
+- name: NAMESPACE
