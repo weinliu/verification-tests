@@ -476,7 +476,7 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("ConnectedOnly-Author:xzha-Medium-47335-opm should validate the constraint type for bundle", func() {
+	g.It("ConnectedOnly-VMonly-Author:xzha-Medium-47335-opm should validate the constraint type for bundle", func() {
 		opmBaseDir := exutil.FixturePath("testdata", "opm")
 		tmpPath := filepath.Join(opmBaseDir, "temp"+getRandomString())
 		defer DeleteDir(tmpPath, "fixture-testdata")
