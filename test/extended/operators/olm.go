@@ -7709,9 +7709,9 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ip of sub %v is not Failed", sub.subName))
 		conditions := getResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.conditions}")
-		o.Expect(conditions).To(o.ContainSubstring("DeadlineExceeded"))
-		o.Expect(conditions).To(o.ContainSubstring("Job was active longer than specified deadline"))
-		o.Expect(conditions).To(o.ContainSubstring("Bundle unpacking failed"))
+		o.Expect(strings.ToLower(conditions)).To(o.ContainSubstring("deadlineexceeded"))
+		o.Expect(strings.ToLower(conditions)).To(o.ContainSubstring("job was active longer than specified deadline"))
+		o.Expect(strings.ToLower(conditions)).To(o.ContainSubstring("bundle unpacking failed"))
 	})
 
 	//author:xzha@redhat.com
