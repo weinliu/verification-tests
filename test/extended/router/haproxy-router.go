@@ -478,4 +478,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		output2, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "cat haproxy.config | grep compression").Output()
 		o.Expect(output2).NotTo(o.ContainSubstring(`compression algo gzip`))
 	})
+
+	// author: shudili@redhat.com
+	g.It("Author:shudili-Low-49131-check haproxy's version", func() {
+		var exp_version = "2.2.20"
+		g.By("rsh to a default router pod and get the HAProxy's version")
+		haproxyVer :=  getHAProxyVersion(oc)
+		g.By("show haproxy version("+haproxyVer+"), and check if it is updated successfully")
+		o.Expect(haproxyVer).To(o.ContainSubstring(exp_version))
+	})
 })

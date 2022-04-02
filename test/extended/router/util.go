@@ -238,6 +238,20 @@ func readHaproxyConfig(oc *exutil.CLI, routerPodName, searchString1, grepOption,
 	return output
 }
 
+//this function is used to get haproxy's version
+func getHAProxyVersion(oc *exutil.CLI) string {
+	var proxyVersion = "notFound"
+	routerpod := getRouterPod(oc, "default")
+	haproxy_output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "haproxy -v | grep version").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	haproxyRe := regexp.MustCompile("([0-9\\.]+)-([0-9a-z]+)")
+	haproxyInfo := haproxyRe.FindStringSubmatch(haproxy_output)
+	if len(haproxyInfo) > 0 {
+		proxyVersion = haproxyInfo[0]
+	}
+	return proxyVersion
+}
+
 func getImagePullSpecFromPayload(oc *exutil.CLI, image string) string {
 	var pullspec string
 	baseDir := exutil.FixturePath("testdata", "router")
