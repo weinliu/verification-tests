@@ -10,7 +10,7 @@ describe('Allow dynamic plugins to proxy to services on the cluster (OCP-45629, 
         cy.exec(`echo '${JSON.stringify(DemoPluginNamespace)}' | oc create -f - --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
         cy.exec(`echo '${JSON.stringify(DemoPluginService)}' | oc create -f - -n ${JSON.stringify(DemoPluginNamespace.metadata.name)} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
         var json = `${JSON.stringify(DemoPluginDeployment)}`;
-        var obj = JSON.parse(json, (k, v) => k == 'image' && /PLUGIN_IMAGE/.test(v) ? 'quay.io/openshifttest/console-demo-plugin:410' : v);
+        var obj = JSON.parse(json, (k, v) => k == 'image' && /PLUGIN_IMAGE/.test(v) ? 'quay.io/openshifttest/console-demo-plugin:411' : v);
         cy.exec(`echo '${JSON.stringify(obj)}' | oc create -f - -n ${JSON.stringify(DemoPluginNamespace.metadata.name)} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
         cy.exec(`echo '${JSON.stringify(DemoPluginConsolePlugin)}' | oc create -f - --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
         // enable plugin

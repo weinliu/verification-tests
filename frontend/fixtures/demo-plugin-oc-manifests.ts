@@ -130,8 +130,8 @@ export const DemoPluginConsolePlugin = {
      "proxy": [
         {
            "type": "Service",
-           "alias": "demoplugin",
-           "authorize": true
+           "alias": "thanos-querier",
+           "authorize": true,
            "service": {
               "name": "thanos-querier",
               "namespace": "openshift-monitoring",
