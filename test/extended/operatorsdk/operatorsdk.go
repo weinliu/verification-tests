@@ -1052,35 +1052,84 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 	// author: chuo@redhat.com
 	g.It("ConnectedOnly-VMonly-Author:chuo-Medium-34366-change ansible operator flags from maxWorkers using env MAXCONCURRENTRECONCILES ", func() {
-		operatorsdkCLI.showInfo = true
-		exec.Command("bash", "-c", "mkdir -p /tmp/ocp-34366/memcached-operator && cd /tmp/ocp-34366/memcached-operator && operator-sdk init --plugins=ansible --domain example.com").Output()
-		defer exec.Command("bash", "-c", "rm -rf /tmp/ocp-34366").Output()
-		defer exec.Command("bash", "-c", "cd /tmp/ocp-34366/memcached-operator && make undeploy").Output()
-		exec.Command("bash", "-c", "cd /tmp/ocp-34366/memcached-operator && operator-sdk create api --group cache --version v1alpha1 --kind Memcached --generate-role").Output()
-		exec.Command("bash", "-c", "cp -rf test/extended/util/operatorsdk/ocp-34366-data/roles/memcached/tasks/main.yml /tmp/ocp-34366/memcached-operator/roles/memcached/tasks/main.yml").Output()
-		exec.Command("bash", "-c", "sed -i 's/v4.10/v4.9/g' /tmp/ocp-34366/memcached-operator/config/default/manager_auth_proxy_patch.yaml").Output()
-		exec.Command("bash", "-c", "cp -rf test/extended/util/operatorsdk/ocp-34366-data/config/manager/manager.yaml /tmp/ocp-34366/memcached-operator/config/manager/manager.yaml").Output()
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture != "amd64" {
+			g.Skip("do not support " + architecture)
+		}
+		imageTag := "quay.io/olmqe/memcached-operator-max-worker:v" + ocpversion + getRandomString()
+		nsSystem := "system-ocp34366" + getRandomString()
+		nsOperator := "memcached-operator-system-ocp34366" + getRandomString()
+
+		tmpBasePath := "/tmp/ocp-34366-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "memcached-operator")
+		err := os.MkdirAll(tmpPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
+
+		quayCLI := container.NewQuayCLI()
+		defer quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
+
+		defer func() {
+			g.By("step: undeploy")
+			_, err = makeCLI.Run("undeploy").Args().Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("step: init Ansible Based Operator")
+		output, err := operatorsdkCLI.Run("init").Args("--plugins=ansible", "--domain", "example.com").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Next"))
+
+		g.By("step: Create API.")
+		output, err = operatorsdkCLI.Run("create").Args("api", "--group", "cache", "--version", "v1alpha1", "--kind", "Memcached34366", "--generate-role").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Writing kustomize manifests"))
+
+		dataPath := "test/extended/util/operatorsdk/ocp-34366-data/"
+		err = copy(filepath.Join(dataPath, "roles", "memcached", "tasks", "main.yml"), filepath.Join(tmpPath, "roles", "memcached34366", "tasks", "main.yml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = copy(filepath.Join(dataPath, "config", "manager", "manager.yaml"), filepath.Join(tmpPath, "config", "manager", "manager.yaml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// to replace namespace memcached-operator-system with memcached-operator-system-ocp34366
-		exec.Command("bash", "-c", "sed -i 's/name: system/name: system-ocp34366/g' `grep -rl \"name: system\" /tmp/ocp-34366/memcached-operator`").Output()
-		exec.Command("bash", "-c", "sed -i 's/namespace: system/namespace: system-ocp34366/g'  `grep -rl \"namespace: system\" /tmp/ocp-34366/memcached-operator`").Output()
-		exec.Command("bash", "-c", "sed -i 's/namespace: memcached-operator-system/namespace: memcached-operator-system-ocp34366/g'  `grep -rl \"namespace: memcached-operator-system\" /tmp/ocp-34366/memcached-operator`").Output()
+		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/name: system/name: %s/g' `grep -rl \"name: system\" %s`", nsSystem, tmpPath)).Output()
+		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/namespace: system/namespace: %s/g'  `grep -rl \"namespace: system\" %s`", nsSystem, tmpPath)).Output()
+		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/namespace: memcached-operator-system/namespace: %s/g'  `grep -rl \"namespace: memcached-operator-system\" %s`", nsOperator, tmpPath)).Output()
 
-		exec.Command("bash", "-c", "cd /tmp/ocp-34366/memcached-operator && make install").Output()
-		exec.Command("bash", "-c", "cd /tmp/ocp-34366/memcached-operator && make deploy IMG=quay.io/olmqe/memcached-operator-max-worker:v4.9").Output()
-		_, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", "system:serviceaccount:memcached-operator-system-ocp34366:default").Output()
+		g.By("step: build and push img.")
+		output, err = makeCLI.Run("docker-build").Args("docker-push", "IMG="+imageTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+
+		g.By("step: Install the CRD")
+		output, err = makeCLI.Run("install").Args().Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("memcached34366s.cache.example.com created"))
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("crd", "memcached34366s.cache.example.com").Output()
+		e2e.Logf(output)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).NotTo(o.ContainSubstring("NotFound"))
+
+		g.By("step: Deploy the operator")
+		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("deployment.apps/memcached-operator-controller-manager"))
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", "system:serviceaccount:memcached-operator-system-ocp34366:default").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		waitErr := wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
-			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "memcached-operator-system-ocp34366").Output()
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "Running") {
 				return true, nil
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("memcached-operator-controller-manager of project memcached-operator-system-ocp34366 has no Starting workers"))
+		exutil.AssertWaitPollNoErr(waitErr, "memcached-operator-controller-manager has no Starting workers")
 
-		podname, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "memcached-operator-system-ocp34366", "-o=jsonpath={.items[0].metadata.name}").Output()
-		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(podname, "-c", "manager", "-n", "memcached-operator-system-ocp34366").Output()
+		output, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/memcached-operator-controller-manager", "-c", "manager", "-n", nsOperator).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("\"worker count\":6"))
 
