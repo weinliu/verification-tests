@@ -1925,7 +1925,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: ropatil@redhat.com
-	// [CSI Driver] [Dynamic PV] [FileShare] provisioning with VolumeBindingModes WaitForFirstConsumer, Immediate and volumes should store data and allow exec of files
+	// OCP-43971 - [CSI Driver] [Dynamic PV] [FileShare] provisioning with VolumeBindingModes WaitForFirstConsumer, Immediate and volumes should store data and allow exec of files
 	g.It("Author:ropatil-Critical-43971-CSI Driver [Dynamic PV] [FileShare] provisioning with VolumeBindingModes WaitForFirstConsumer, Immediate and volumes should store data and allow exec of files", func() {
 
 		// Define the test scenario support provisioners
@@ -2020,6 +2020,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 	})
 
+	// author: ropatil@redhat.com
 	// OCP-48666 - [CSI Driver] [Statefulset] [Filesystem] volumes should store data and allow exec of files on the volume
 	g.It("Author:ropatil-High-48666-[CSI Driver] [Statefulset] [Filesystem default] volumes should store data and allow exec of files on the volume", func() {
 		// Define the test scenario support provisioners
@@ -2057,9 +2058,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("# Wait for Statefulset to Ready")
 			sts.waitReady(oc)
 
-			g.By("# Check for StatefulSet in Running state")
-			checkPodStatusByLabel(oc, sts.namespace, "app="+sts.applabel, "Running")
-
 			g.By("# Check the no of pvc matched to StatefulSet replicas number")
 			o.Expect(sts.matchPvcNumWithReplicasNo(oc)).Should(o.BeTrue())
 
@@ -2072,6 +2070,54 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
 	})
+
+	// author: ropatil@redhat.com
+	// OCP-49478 - [CSI Driver] [Statefulset] [block volume] volumes should store data
+	g.It("Author:ropatil-High-49478-[CSI Driver] [Statefulset] [block volume] volumes should store data", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "diskplugin.csi.alibabacloud.com", "vpc.block.csi.ibm.io"}
+
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
+			stsTemplate         = filepath.Join(storageTeamBaseDir, "sts-template.yaml")
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		// Set up a specified project share for all the phases
+		g.By("0. Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			// Set the resource definition for the scenario
+			sts := newSts(setStsTemplate(stsTemplate), setStsReplicasNumber("2"), setStsVolumeType("volumeDevices"), setStsVolumeTypePath("devicePath"), setStsMountpath("/dev/dblock"), setStsVolumeMode("Block"))
+
+			g.By("# Create StatefulSet with the preset csi storageclass")
+			sts.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			e2e.Logf("%s", sts.scname)
+			sts.create(oc)
+			defer sts.deleteAsAdmin(oc)
+
+			g.By("# Wait for Statefulset to Ready")
+			sts.waitReady(oc)
+
+			g.By("# Check the no of pvc matched to StatefulSet replicas number")
+			o.Expect(sts.matchPvcNumWithReplicasNo(oc)).Should(o.BeTrue())
+
+			g.By("# Check the pod volume can write date")
+			sts.writeDataIntoRawBlockVolume(oc)
+
+			g.By("# Check the pod volume have original data")
+			sts.checkDataIntoRawBlockVolume(oc)
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
 	//author: chaoyang@redhat.com
 	//OCP-49372 - [CSI Driver] [Snapshot] [Delete deletionPolicy] delete snapshotcontent after the snapshot deletion
 	g.It("Author:chaoyang-Medium-49372-[CSI Driver] [Snapshot] [Delete deletionPolicy] delete snapshotcontent after the snapshot deletion", func() {

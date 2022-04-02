@@ -48,6 +48,7 @@ objects:
         resources:
           requests:
             storage: ${CAPACITY}
+        volumeMode: ${VOLUMEMODE} 
 parameters:
 - name: STSNAME
 - name: STSNAMESPACE
@@ -59,3 +60,4 @@ parameters:
 - name: TYPEPATH
 - name: SCNAME
 - name: CAPACITY
+- name: VOLUMEMODE

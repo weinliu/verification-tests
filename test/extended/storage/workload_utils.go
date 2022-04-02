@@ -776,6 +776,7 @@ type statefulset struct {
 	typepath   string
 	capacity   string
 	scname     string
+	volumemode string
 }
 
 // function option mode to change the default value of Statefulset parameters,eg. name, replicasno, mpath
@@ -858,6 +859,13 @@ func setStsSCName(scname string) statefulsetOption {
 	}
 }
 
+// Replace the default value of Statefulset volumeMode parameter
+func setStsVolumeMode(volumemode string) statefulsetOption {
+	return func(this *statefulset) {
+		this.volumemode = volumemode
+	}
+}
+
 //  Create a new customized Statefulset object
 func newSts(opts ...statefulsetOption) statefulset {
 	var defaultVolSize string
@@ -884,6 +892,7 @@ func newSts(opts ...statefulsetOption) statefulset {
 		typepath:   "mountPath",
 		capacity:   defaultVolSize,
 		scname:     "gp2-csi",
+		volumemode: "Filesystem",
 	}
 
 	for _, o := range opts {
@@ -898,7 +907,7 @@ func (sts *statefulset) create(oc *exutil.CLI) {
 	if sts.namespace == "" {
 		sts.namespace = oc.Namespace()
 	}
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", sts.template, "-p", "STSNAME="+sts.name, "STSNAMESPACE="+sts.namespace, "VOLUMENAME="+sts.pvcname, "REPLICASNUM="+sts.replicasno, "APPLABEL="+sts.applabel, "MPATH="+sts.mpath, "VOLUMETYPE="+sts.volumetype, "TYPEPATH="+sts.typepath, "CAPACITY="+sts.capacity, "SCNAME="+sts.scname)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", sts.template, "-p", "STSNAME="+sts.name, "STSNAMESPACE="+sts.namespace, "VOLUMENAME="+sts.pvcname, "REPLICASNUM="+sts.replicasno, "APPLABEL="+sts.applabel, "MPATH="+sts.mpath, "VOLUMETYPE="+sts.volumetype, "TYPEPATH="+sts.typepath, "CAPACITY="+sts.capacity, "SCNAME="+sts.scname, "VOLUMEMODE="+sts.volumemode)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -942,6 +951,16 @@ func (sts *statefulset) waitReady(oc *exutil.CLI) {
 
 	if err != nil {
 		sts.describeSTS(oc)
+		podsList, err := getPodsListByLabel(oc, sts.namespace, "app="+sts.applabel)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, podName := range podsList {
+			podstatus, err := oc.WithoutNamespace().Run("get").Args("pod", podName, "-n", sts.namespace, "-o=jsonpath={.status.phase}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if matched, _ := regexp.MatchString("Running", podstatus); !matched {
+				e2e.Logf("$ oc describe pod %s:\n%s", podName, describePod(oc, sts.namespace, podName))
+				describePersistentVolumeClaim(oc, sts.namespace, getPvcNameFromPod(oc, podName))
+			}
+		}
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Deployment %s not ready", sts.name))
 }
@@ -958,7 +977,8 @@ func (sts *statefulset) checkReady(oc *exutil.CLI) (bool, error) {
 
 //  Check the pod mounted volume could read and write
 func (sts *statefulset) checkMountedVolumeCouldRW(oc *exutil.CLI) {
-	podList, _ := getPodsListByLabel(oc, sts.namespace, "app="+sts.applabel)
+	podList, err := getPodsListByLabel(oc, sts.namespace, "app="+sts.applabel)
+	o.Expect(err).NotTo(o.HaveOccurred())
 	for _, podName := range podList {
 		content := "storage test " + getRandomString()
 		randomFileName := "/testfile_" + getRandomString()
@@ -970,10 +990,36 @@ func (sts *statefulset) checkMountedVolumeCouldRW(oc *exutil.CLI) {
 
 //  Check the pod mounted volume have exec right
 func (sts *statefulset) checkMountedVolumeHaveExecRight(oc *exutil.CLI) {
-	podList, _ := getPodsListByLabel(oc, sts.namespace, "app="+sts.applabel)
+	podList, err := getPodsListByLabel(oc, sts.namespace, "app="+sts.applabel)
+	o.Expect(err).NotTo(o.HaveOccurred())
 	for _, podName := range podList {
 		_, err := execCommandInSpecificPod(oc, sts.namespace, podName, "cp hello "+sts.mpath)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(execCommandInSpecificPod(oc, sts.namespace, podName, sts.mpath+"/hello")).To(o.ContainSubstring("Hello OpenShift Storage"))
+	}
+}
+
+//  Check the pod mounted volume could write data into raw block volume
+func (sts *statefulset) writeDataIntoRawBlockVolume(oc *exutil.CLI) {
+	e2e.Logf("Write the data in Raw Block volume")
+	podList, err := getPodsListByLabel(oc, sts.namespace, "app="+sts.applabel)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	for _, podName := range podList {
+		_, err := execCommandInSpecificPod(oc, sts.namespace, podName, "/bin/dd  if=/dev/null of="+sts.mpath+" bs=512 count=1")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = execCommandInSpecificPod(oc, sts.namespace, podName, "echo 'storage test' > "+sts.mpath)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+
+//  Check data into raw block volume could be read
+func (sts *statefulset) checkDataIntoRawBlockVolume(oc *exutil.CLI) {
+	e2e.Logf("Check the data in Raw Block volume")
+	podList, err := getPodsListByLabel(oc, sts.namespace, "app="+sts.applabel)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	for _, podName := range podList {
+		_, err := execCommandInSpecificPod(oc, sts.namespace, podName, "/bin/dd  if="+sts.mpath+" of=/tmp/testfile bs=512 count=1")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(execCommandInSpecificPod(oc, sts.namespace, podName, "cat /tmp/testfile")).To(o.ContainSubstring("storage test"))
 	}
 }
