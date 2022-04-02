@@ -1448,6 +1448,10 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture != "amd64" {
+			g.Skip("Do not support " + architecture)
+		}
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
 		dataPath := filepath.Join(buildPruningBaseDir, "ocp-44295-data")
 		quayCLI := container.NewQuayCLI()
