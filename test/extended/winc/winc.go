@@ -529,13 +529,16 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	// author: sgao@redhat.com
 	g.It("Author:sgao-Medium-33768-NodeWithoutOVNKubeNodePodRunning alert ignore Windows nodes", func() {
 		g.By("Check NodeWithoutOVNKubeNodePodRunning alert ignore Windows nodes")
-		portForwardCMD := "nohup oc -n openshift-monitoring port-forward svc/prometheus-operated 9090  >/dev/null 2>&1 &"
-		killPortForwardCMD := "killall oc"
-		exec.Command("bash", "-c", portForwardCMD).Output()
-		defer exec.Command("bash", "-c", killPortForwardCMD).Output()
-		getAlertCMD := "sleep 5; curl -s http://localhost:9090/api/v1/rules | jq '[.data.groups[].rules[] | select(.name==\"NodeWithoutOVNKubeNodePodRunning\")]'"
-		msg, _ := exec.Command("bash", "-c", getAlertCMD).Output()
-		if !strings.Contains(string(msg), "kube_node_labels{label_kubernetes_io_os=\\\"windows\\\"}") {
+		// Retrieve the Prometheus' pod id
+		prometheusPod, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l=app.kubernetes.io/name=prometheus", "-o", "jsonpath='{.items[0].metadata.name}'").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// Run locally, in the Prometheus container the API query to /api/v1/rules
+		// saving us from having to perform port-forwarding, which does not work
+		// with intermediate bastion hosts.
+		getAlertCMD, err := oc.WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", strings.Trim(prometheusPod, `'`), "--", "curl", "localhost:9090/api/v1/rules").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// Search for required string in the rules output
+		if !strings.Contains(string(getAlertCMD), "kube_node_labels{label_kubernetes_io_os=\\\"windows\\\"}") {
 			e2e.Failf("Failed to check NodeWithoutOVNKubeNodePodRunning alert ignore Windows nodes")
 		}
 	})
