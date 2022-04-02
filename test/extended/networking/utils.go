@@ -747,3 +747,8 @@ func getOVNMetrics(oc *exutil.CLI, url string) string {
 	return metrics_log
 }
 
+func checkIPsec(oc *exutil.CLI) string {
+	output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("network.operator", "cluster", "-o=jsonpath={.spec.defaultNetwork.ovnKubernetesConfig.ipsecConfig}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return output
+}

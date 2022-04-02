@@ -167,6 +167,32 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		    o.Expect(metric_value1).To(o.ContainSubstring("2"))
 		}
 	})
-})
 
+	g.It("Author:weliang-Medium-45842-Metrics for IPSec enabled/disabled", func() {
+		var (
+			namespace = "openshift-ovn-kubernetes"
+			cmName    = "ovn-kubernetes-master"
+		)
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+
+		ipsecState := checkIPsec(oc)
+		e2e.Logf("The ipsec state is : %v", ipsecState)
+		leaderNodeIP := getLeaderInfo(oc, namespace, cmName, networkType)
+		prometheus_url := "https://" + leaderNodeIP + ":9102/metrics"
+		output := getOVNMetrics(oc, prometheus_url)
+		metric_output, _ := exec.Command("bash", "-c", "cat "+output+" | grep ovnkube_master_ipsec_enabled | awk 'NR==3{print $2}'").Output()
+		metric_value := strings.TrimSpace(string(metric_output))
+		e2e.Logf("The output of the ovnkube_master_ipsec_enabled metrics is : %v", metric_value)
+		if metric_value == "1" && ipsecState == "{}"{
+			e2e.Logf("The IPsec is enabled in the cluster")
+		} else if metric_value == "0" && ipsecState == ""{
+			e2e.Logf("The IPsec is disabled in the cluster")
+		} else {
+			e2e.Failf("Testing fail to get the correct metrics of ovnkube_master_ipsec_enabled")
+		}
+	})
+})
 
