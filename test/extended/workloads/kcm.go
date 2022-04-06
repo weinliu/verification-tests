@@ -230,7 +230,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 				e2e.Logf("Fail to get events, error: %s. Trying again", err)
 				return false, nil
 			}
-			if matched, _ := regexp.MatchString("Warning   OwnerRefInvalidNamespace   clusterrole/foo43099", output); matched {
+			if matched, _ := regexp.MatchString("Warning.*OwnerRefInvalidNamespace.*clusterrole/foo43099", output); matched {
 				e2e.Logf("Found the event:\n%s", output)
 				return true, nil
 			}
