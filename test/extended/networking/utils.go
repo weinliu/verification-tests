@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net"
@@ -752,4 +753,76 @@ func checkIPsec(oc *exutil.CLI) string {
 	output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("network.operator", "cluster", "-o=jsonpath={.spec.defaultNetwork.ovnKubernetesConfig.ipsecConfig}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return output
+}
+
+func getAssignedEIPInEIPObject(oc *exutil.CLI, egressIPObject string) []map[string]string {
+	var egressIPs string
+	egressip_err := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+		egressIPStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressip", egressIPObject, "-ojsonpath={.status.items}").Output()
+		if err != nil {
+			e2e.Logf("Wait to get EgressIP object applied,try next round. %v", err)
+			return false, nil
+		}
+		if egressIPStatus == "" {
+			e2e.Logf("Wait to get EgressIP object applied,try next round. %v", err)
+			return false, nil
+		}
+		egressIPs = egressIPStatus
+		e2e.Logf("egressIPStatus: %v", egressIPs)
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(egressip_err, fmt.Sprintf("Failed to apply egressIPs:%s", egressip_err))
+
+	var egressIPJsonMap []map[string]string
+	json.Unmarshal([]byte(egressIPs), &egressIPJsonMap)
+	return egressIPJsonMap
+}
+
+func rebootNode(oc *exutil.CLI, nodeName string) {
+	e2e.Logf("\nRebooting node %s....", nodeName)
+	_, err1 := exutil.DebugNodeWithChroot(oc, nodeName, "shutdown", "-r", "+1")
+	o.Expect(err1).NotTo(o.HaveOccurred())
+}
+
+func checkNodeStatus(oc *exutil.CLI, nodeName string, expectedStatus string) {
+	var expectedStatus1 string
+	if expectedStatus == "Ready" {
+		expectedStatus1 = "True"
+	} else if expectedStatus == "NotReady" {
+		expectedStatus1 = "Unknown"
+	} else {
+		err1 := fmt.Errorf(" TBD supported node status.")
+		o.Expect(err1).NotTo(o.HaveOccurred())
+	}
+	err := wait.Poll(10*time.Second, 6*time.Minute, func() (bool, error) {
+		statusOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeName, "-ojsonpath={.status.conditions[3].status}").Output()
+		if err != nil {
+			e2e.Logf("\nGet node status with error : %v", err)
+			return false, nil
+		}
+		e2e.Logf("Node %s kubelet status is %s", nodeName, statusOutput)
+		if statusOutput != expectedStatus1 {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Node %s is not in expected status %s", nodeName, expectedStatus))
+}
+
+func updateEgressIPObject(oc *exutil.CLI, egressIPObjectName string, egressIP string) {
+	patchResourceAsAdmin(oc, "egressip/"+egressIPObjectName, "{\"spec\":{\"egressIPs\":[\""+egressIP+"\"]}}")
+	egressip_err := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("egressip", egressIPObjectName, "-o=jsonpath={.status.items[*]}").Output()
+		if err != nil {
+			e2e.Logf("Wait to get EgressIP object applied,try next round. %v", err)
+			return false, nil
+		}
+		if !strings.Contains(output, egressIP) {
+			e2e.Logf("Wait for new IP applied,try next round.")
+			e2e.Logf(output)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(egressip_err, fmt.Sprintf("Failed to apply new egressIPs:%s", egressip_err))
 }
