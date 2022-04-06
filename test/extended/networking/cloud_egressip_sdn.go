@@ -215,4 +215,56 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 	})
 
+	// author: jechen@redhat.com
+	g.It("Author:jechen-High-46554-Automatic EgressIP: no more than one egress IP per node for each namespace. [Disruptive]", func() {
+		g.By("1. Get list of nodes, get subnet from two worker nodes that have same subnet, add egressCIDRs to them")
+		var egressNode1, egressNode2 string
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("Not enough nodes available for the test, skip the case!!")
+		}
+		switch ci.CheckPlatform(oc) {
+		case "aws":
+			e2e.Logf("find the two nodes that have same subnet")
+			check, nodes := findTwoNodesWithSameSubnet(oc, nodeList)
+			if check {
+				egressNode1 = nodes[0]
+				egressNode2 = nodes[1]
+			} else {
+				g.Skip("Did not get two worker nodes with same subnet, skip the case!!")
+			}
+		case "gcp":
+			e2e.Logf("since GCP worker nodes all have same subnet, just pick first two nodes as egress nodes")
+			egressNode1 = nodeList.Items[0].Name
+			egressNode2 = nodeList.Items[1].Name
+		default:
+			g.Skip("Not support cloud provider for this case, skip the test.")
+		}
+
+		sub := getIfaddrFromNode(egressNode1, oc)
+
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[\""+sub+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[\""+sub+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[]}")
+
+		g.By("2. Find 3 unused IPs from one egress node")
+		freeIps := findUnUsedIPsOnNode(oc, egressNode1, sub, 3)
+		o.Expect(len(freeIps) == 3).Should(o.BeTrue())
+
+		g.By("3. Create one namespace, apply 3 egressIP to the namespace")
+		oc.SetupProject()
+		ns := oc.Namespace()
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIps[0]+"\",\""+freeIps[1]+"\",\""+freeIps[2]+"\"]}")
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+
+		g.By("4. Check egressIP for each node, each node should have 1 egressIP addresses assigned from the pool")
+		ip1, err := getEgressIPonSDNHost(oc, egressNode1, 1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ip2, err := getEgressIPonSDNHost(oc, egressNode2, 1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(ip1[0]).Should(o.BeElementOf(freeIps))
+		o.Expect(ip2[0]).Should(o.BeElementOf(freeIps))
+	})
 })

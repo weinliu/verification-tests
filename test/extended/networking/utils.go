@@ -593,22 +593,22 @@ func getNodeIPv4(oc *exutil.CLI, namespace string, nodeName string) string {
 
 func getLeaderInfo(oc *exutil.CLI, namespace string, cmName string, networkType string) string {
 	if networkType == "ovnkubernetes" {
-	    output1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-n", namespace, "-o=jsonpath={.metadata.annotations.control-plane\\.alpha\\.kubernetes\\.io/leader}").OutputToFile("oc_describe_nodes.txt")
-	    o.Expect(err1).NotTo(o.HaveOccurred())
-	    output2, err2 := exec.Command("bash", "-c", "cat "+output1+" |  jq -r .holderIdentity").Output()
-	    o.Expect(err2).NotTo(o.HaveOccurred())
-	    leaderNodeName := strings.Trim(strings.TrimSpace(string(output2)), "\"")
-	    e2e.Logf("The leader node name is %s", leaderNodeName)
-	    leaderNodeIP := getNodeIPv4(oc, namespace, leaderNodeName)
-	    e2e.Logf("The leader node's IP is: %v", leaderNodeIP)
+		output1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-n", namespace, "-o=jsonpath={.metadata.annotations.control-plane\\.alpha\\.kubernetes\\.io/leader}").OutputToFile("oc_describe_nodes.txt")
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		output2, err2 := exec.Command("bash", "-c", "cat "+output1+" |  jq -r .holderIdentity").Output()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		leaderNodeName := strings.Trim(strings.TrimSpace(string(output2)), "\"")
+		e2e.Logf("The leader node name is %s", leaderNodeName)
+		leaderNodeIP := getNodeIPv4(oc, namespace, leaderNodeName)
+		e2e.Logf("The leader node's IP is: %v", leaderNodeIP)
 		return leaderNodeIP
 	} else {
-	    output1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-n", namespace, "-o=jsonpath={.metadata.annotations.control-plane\\.alpha\\.kubernetes\\.io/leader}").OutputToFile("oc_describe_nodes.txt")
-	    o.Expect(err1).NotTo(o.HaveOccurred())
-	    output2, err2 := exec.Command("bash", "-c", "cat "+output1+" |  jq -r .holderIdentity").Output()
-	    o.Expect(err2).NotTo(o.HaveOccurred())
-	    leaderNodeName := strings.Trim(strings.TrimSpace(string(output2)), "\"")
-	    e2e.Logf("The leader node name is %s", leaderNodeName)
+		output1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-n", namespace, "-o=jsonpath={.metadata.annotations.control-plane\\.alpha\\.kubernetes\\.io/leader}").OutputToFile("oc_describe_nodes.txt")
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		output2, err2 := exec.Command("bash", "-c", "cat "+output1+" |  jq -r .holderIdentity").Output()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		leaderNodeName := strings.Trim(strings.TrimSpace(string(output2)), "\"")
+		e2e.Logf("The leader node name is %s", leaderNodeName)
 		oc_get_pods, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-sdn", "pod", "-l app=sdn", "-o=wide").OutputToFile("ocgetpods.txt")
 		o.Expect(err3).NotTo(o.HaveOccurred())
 		raw_grep_output, err3 := exec.Command("bash", "-c", "cat "+oc_get_pods+" | grep "+leaderNodeName+" | awk '{print $1}'").Output()
@@ -682,7 +682,8 @@ func getEgressIPonSDNHost(oc *exutil.CLI, node string, expectedNum int) ([]strin
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("EgressIP not found, or did not get expected number of egressIPs"))
+		e2e.Logf("Only got %d egressIP, or have err:%v", len(ip), err)
+		return ip, err
 	}
 	return ip, nil
 }
