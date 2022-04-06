@@ -352,6 +352,27 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
         defer oc.Run("delete").Args("pod/pod48681", "-n", oc.Namespace()).Execute()
 	})
 
+	// author: yinzhou@redhat.com
+	g.It("Author:yinzhou-Medium-49116-oc debug should remove startupProbe when create debug pod", func() {
+		g.By("create new namespace")
+		oc.SetupProject()
+
+		g.By("Create the deploy")
+		err := oc.Run("create").Args("deploy", "d49116", "--image", "quay.io/openshifttest/hello-openshift@sha256:b1aabe8c8272f750ce757b6c4263a2712796297511e0c6df79144ee188933623", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("patch the deploy with startupProbe")
+		patchS := `[{"op": "add", "path": "/spec/template/spec/containers/0/startupProbe", "value":{ "exec": {"command": [ "false" ]}}}]`
+		err = oc.Run("patch").Args("deploy", "d49116", "--type=json", "-p", patchS, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("run the debug with jsonpath")
+		out, err := oc.Run("debug").Args("deploy/d49116", "-o=jsonpath='{.spec.containers[0].startupProbe}'", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if out != "''" {
+			e2e.Failf("The output should be empty, but not: %v", out)
+		}
+	})
 })
 
 type ClientVersion struct {
