@@ -175,6 +175,13 @@ func getPvCapacityByPvcName(oc *exutil.CLI, pvcName string, namespace string) (s
 	return volumeSize, err
 }
 
+// Get specified storageClass related pv names
+func getPvNamesOfSpecifiedSc(oc *exutil.CLI, scName string) ([]string, error) {
+	pvNamesStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", "-o=jsonpath={.items[?(@.spec.storageClassName==\""+scName+"\")].metadata.name}").Output()
+	e2e.Logf("The storageClass \"%s\" PVs are %s", scName, pvNamesStr)
+	return strings.Split(pvNamesStr, " "), err
+}
+
 // Check persistent volume has the Attributes
 func checkVolumeCsiContainAttributes(oc *exutil.CLI, pvName string, content string) bool {
 	volumeAttributes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes}").Output()

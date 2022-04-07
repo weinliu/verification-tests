@@ -154,9 +154,10 @@ func getSchedulableWorkersWithSameAz(oc *exutil.CLI) (schedulableWorkersWithSame
 		zonePath                 = `metadata.labels.topology\.kubernetes\.io\/zone`
 	)
 	for _, worker := range workers {
+		readyStatus := gjson.Get(workersInfo, "items.#(metadata.name="+worker+").status.conditions.#(type=Ready).status").String()
 		scheduleFlag := gjson.Get(workersInfo, "items.#(metadata.name="+worker+").spec.unschedulable").String()
 		workerOS := gjson.Get(workersInfo, "items.#(metadata.name="+worker+").metadata.labels.kubernetes\\.io\\/os").String()
-		if scheduleFlag != "true" && workerOS == "linux" {
+		if readyStatus == "True" && scheduleFlag != "true" && workerOS == "linux" {
 			azName = gjson.Get(workersInfo, "items.#(metadata.name="+worker+")."+zonePath).String()
 			if azName == "" {
 				azName = "noneAzCluster"
@@ -226,4 +227,120 @@ func checkNodeZoned(oc *exutil.CLI) bool {
 		}
 	}
 	return true
+}
+
+type node struct {
+	name         string
+	instanceId   string
+	avaiableZone string
+	osType       string
+	osImage      string
+	osId         string
+	role         string
+	scheduleable bool
+	readyStatus  string // "True", "Unknown"(Node is poweroff or disconnect), "False"
+	architecture string
+}
+
+// Get cluster all node information
+func getAllNodesInfo(oc *exutil.CLI) []node {
+	var (
+		// nodes []node
+		nodes    = make([]node, 0, 10)
+		zonePath = `metadata.labels.topology\.kubernetes\.io\/zone`
+		nodeRole string
+	)
+	nodesInfoJson, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-o", "json").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	nodesList := strings.Split(strings.Trim(strings.Trim(gjson.Get(nodesInfoJson, "items.#.metadata.name").String(), "["), "]"), ",")
+	for _, nodeName := range nodesList {
+		nodeName = strings.Trim(nodeName, "\"")
+		if gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").metadata.labels.node-role\\.kubernetes\\.io\\/master").Exists() {
+			if gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").metadata.labels.node-role\\.kubernetes\\.io\\/worker").Exists() {
+				nodeRole = "masterAndworker"
+			} else {
+				nodeRole = "master"
+			}
+		} else {
+			nodeRole = "worker"
+		}
+		readyStatus := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").status.conditions.#(type=Ready).status").String()
+		scheduleFlag := !gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").spec.unschedulable").Exists()
+		nodeOsType := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").metadata.labels.kubernetes\\.io\\/os").String()
+		nodeOsId := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").metadata.labels.node\\.openshift\\.io\\/os_id").String()
+		nodeOsImage := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").status.nodeInfo.osImage").String()
+		nodeArch := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").status.nodeInfo.architecture").String()
+		nodeAvaiableZone := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+")."+zonePath).String()
+		tempSlice := strings.Split(gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+")."+"spec.providerID").String(), "/")
+		nodeInstanceId := tempSlice[len(tempSlice)-1]
+		nodes = append(nodes, node{
+			name:         nodeName,
+			instanceId:   nodeInstanceId,
+			avaiableZone: nodeAvaiableZone,
+			osType:       nodeOsType,
+			osId:         nodeOsId,
+			osImage:      nodeOsImage,
+			role:         nodeRole,
+			scheduleable: scheduleFlag,
+			architecture: nodeArch,
+			readyStatus:  readyStatus,
+		})
+	}
+	e2e.Logf("*** The \"%s\" Cluster nodes info is ***:\n \"%+v\"", cloudProvider, nodes)
+	return nodes
+}
+
+// Get all schedulable linux wokers
+func getSchedulableLinuxWorkers(allNodes []node) (linuxWorkers []node) {
+	linuxWorkers = make([]node, 0, 6)
+	for _, myNode := range allNodes {
+		if myNode.scheduleable && myNode.osType == "linux" && strings.Contains(myNode.role, "worker") && myNode.readyStatus == "True" {
+			linuxWorkers = append(linuxWorkers, myNode)
+		}
+	}
+	e2e.Logf("The schedulable linux workers are: \"%+v\"", linuxWorkers)
+	return linuxWorkers
+}
+
+// Get all schedulable rhel wokers
+func getSchedulableRhelWorkers(allNodes []node) []node {
+	schedulableRhelWorkers := make([]node, 0, 6)
+	for _, myNode := range allNodes {
+		if myNode.scheduleable && myNode.osId == "rhel" && strings.Contains(myNode.role, "worker") && myNode.readyStatus == "True" {
+			schedulableRhelWorkers = append(schedulableRhelWorkers, myNode)
+		}
+	}
+	e2e.Logf("The schedulable RHEL workers are: \"%+v\"", schedulableRhelWorkers)
+	return schedulableRhelWorkers
+}
+
+// Get one cluster schedulable linux woker, rhel linux worker first
+func getOneSchedulableWorker(allNodes []node) (expectedWorker node) {
+	schedulableRhelWorkers := getSchedulableRhelWorkers(allNodes)
+	if len(schedulableRhelWorkers) != 0 {
+		expectedWorker = schedulableRhelWorkers[0]
+	} else {
+		for _, myNode := range allNodes {
+			if myNode.scheduleable && myNode.osType == "linux" && strings.Contains(myNode.role, "worker") && myNode.readyStatus == "True" {
+				expectedWorker = myNode
+				break
+			}
+		}
+	}
+	e2e.Logf("Get the schedulableWorker is \"%+v\"", expectedWorker)
+	o.Expect(expectedWorker.name).NotTo(o.BeEmpty())
+	return expectedWorker
+}
+
+// Get one cluster schedulable master woker
+func getOneSchedulableMaster(allNodes []node) (expectedMater node) {
+	for _, myNode := range allNodes {
+		if myNode.scheduleable && myNode.osType == "linux" && strings.Contains(myNode.role, "master") && myNode.readyStatus == "True" {
+			expectedMater = myNode
+			break
+		}
+	}
+	e2e.Logf("Get the schedulableMaster is \"%+v\"", expectedMater)
+	o.Expect(expectedMater.name).NotTo(o.BeEmpty())
+	return expectedMater
 }

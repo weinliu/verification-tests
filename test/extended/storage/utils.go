@@ -76,6 +76,25 @@ func getRandomString() string {
 	return string(buffer)
 }
 
+// https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/device_naming.html
+// Define vaild devMap for aws instance ebs volume device "/dev/sd[f-p]"
+var devMaps = map[string]bool{"f": false, "g": false, "h": false, "i": false, "j": false,
+	"k": false, "l": false, "m": false, "n": false, "o": false, "p": false}
+
+// Get a valid device for EFS volume attach
+func getVaildDeviceForEbsVol() string {
+	var validStr string
+	for k, v := range devMaps {
+		if !v {
+			devMaps[k] = true
+			validStr = k
+			break
+		}
+	}
+	e2e.Logf("validDevice: \"/dev/sd%s\", devMaps: \"%+v\"", validStr, devMaps)
+	return "/dev/sd" + validStr
+}
+
 //  Get the cloud provider type of the test environment
 func getCloudProvider(oc *exutil.CLI) string {
 	var (
@@ -95,6 +114,17 @@ func getCloudProvider(oc *exutil.CLI) string {
 	return strings.ToLower(output)
 }
 
+//  Get the cluster version channel x.x (e.g. 4.11)
+func getClusterVersionChannel(oc *exutil.CLI) string {
+	// clusterbot env don't have ".spec.channel", So change to use desire version
+	clusterVersion, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clusterversion", "-o=jsonpath={.items[?(@.kind==\"ClusterVersion\")].status.desired.version}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	tempSlice := strings.Split(clusterVersion, ".")
+	clusterVersion = tempSlice[0] + "." + tempSlice[1]
+	e2e.Logf("The Cluster version is belong to channel: \"%s\"", clusterVersion)
+	return clusterVersion
+}
+
 //  Strings contain sub string check
 func contains(s []string, str string) bool {
 	for _, v := range s {
@@ -102,7 +132,6 @@ func contains(s []string, str string) bool {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -184,11 +213,13 @@ func jsonAddExtraParametersToFile(jsonInput string, extraParameters map[string]i
 		jsonPath = `items.0.`
 	} else {
 		jsonPath = interfaceToString(extraParameters["jsonPath"])
-		delete(extraParameters, "jsonPath")
 	}
 	for extraParametersKey, extraParametersValue := range extraParameters {
-		jsonInput, err = sjson.Set(jsonInput, jsonPath+extraParametersKey, extraParametersValue)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if extraParametersKey != "jsonPath" {
+			jsonInput, err = sjson.Set(jsonInput, jsonPath+extraParametersKey, extraParametersValue)
+			debugLogf("Process jsonPath: \"%s\" Value: \"%s\"", jsonPath+extraParametersKey, extraParametersValue)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 	}
 	if cloudProvider == "ibmcloud" && !gjson.Get(jsonInput, `items.0.parameters.profile`).Bool() {
 		jsonInput, err = sjson.Set(jsonInput, jsonPath+"parameters.profile", "10iops-tier")
@@ -196,6 +227,39 @@ func jsonAddExtraParametersToFile(jsonInput string, extraParameters map[string]i
 	}
 	path := filepath.Join(e2e.TestContext.OutputDir, "storageConfig"+"-"+getRandomString()+".json")
 	return path, ioutil.WriteFile(path, pretty.Pretty([]byte(jsonInput)), 0644)
+}
+
+// Json delete paths to jsonfile
+func jsonDeletePathsToFile(jsonInput string, deletePaths []string) (string, error) {
+	var err error
+	if len(deletePaths) != 0 {
+		for _, path := range deletePaths {
+			jsonInput, err = sjson.Delete(jsonInput, path)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+	}
+	path := filepath.Join(e2e.TestContext.OutputDir, "storageConfig"+"-"+getRandomString()+".json")
+	return path, ioutil.WriteFile(path, pretty.Pretty([]byte(jsonInput)), 0644)
+}
+
+//  Kubeadmin user use oc client apply yaml template delete parameters
+func applyResourceFromTemplateDeleteParametersAsAdmin(oc *exutil.CLI, deletePaths []string, parameters ...string) error {
+	var configFile string
+	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().Run("process").Args(parameters...).Output()
+		if err != nil {
+			e2e.Logf("the err:%v, and try next round", err)
+			return false, nil
+		}
+		configFile, _ = jsonDeletePathsToFile(output, deletePaths)
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("as admin fail to process %v", parameters))
+
+	e2e.Logf("the file of resource is %s", configFile)
+	jsonOutput, _ := ioutil.ReadFile(configFile)
+	debugLogf("The file content is: \n%s", jsonOutput)
+	return oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
 }
 
 //  Kubeadmin user use oc client apply yaml template with extra parameters

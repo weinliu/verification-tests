@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -246,4 +247,254 @@ func getAwsVolumeIopsByVolumeId(volumeId string) int64 {
 	volumeIops := gjson.Get(volumeInfo, `Volumes.0.Iops`).Int()
 	e2e.Logf("The volume %s Iops is %d on aws backend", volumeId, volumeIops)
 	return volumeIops
+}
+
+// Init the aws session
+func newAwsClient() *ec2.EC2 {
+	mySession := session.Must(session.NewSession())
+	svc := ec2.New(mySession, aws.NewConfig())
+	return svc
+}
+
+type ebsVolume struct {
+	AvailabilityZone string
+	Encrypted        bool
+	Size             int64  // The size of the volume, in GiBs
+	VolumeType       string // Valid Values: standard | io1 | io2 | gp2 | sc1 | st1 | gp3
+	Device           string
+	VolumeId         string
+	attachedNode     string
+	State            string // Valid Values: creating | available | in-use | deleting | deleted | error
+	DeviceById       string
+}
+
+// function option mode to change the default values of ebs volume attribute
+type volOption func(*ebsVolume)
+
+// Replace the default value of ebs volume AvailabilityZone
+func setVolAz(az string) volOption {
+	return func(vol *ebsVolume) {
+		vol.AvailabilityZone = az
+	}
+}
+
+// Replace the default value of ebs volume Encrypted
+func setVolEncrypted(encryptedBool bool) volOption {
+	return func(vol *ebsVolume) {
+		vol.Encrypted = encryptedBool
+	}
+}
+
+// Replace the default value of ebs volume Size
+func setVolSize(size int64) volOption {
+	return func(vol *ebsVolume) {
+		vol.Size = size
+	}
+}
+
+// Replace the default value of ebs volume VolumeType
+func setVolType(volType string) volOption {
+	return func(vol *ebsVolume) {
+		vol.VolumeType = volType
+	}
+}
+
+// Replace the default value of ebs volume Device
+func setVolDevice(device string) volOption {
+	return func(vol *ebsVolume) {
+		vol.Device = device
+	}
+}
+
+//  Create a new customized pod object
+func newEbsVolume(opts ...volOption) ebsVolume {
+	defaultVol := ebsVolume{
+		AvailabilityZone: "",
+		Encrypted:        false,
+		Size:             getRandomNum(5, 15),
+		VolumeType:       "gp3",
+		Device:           getVaildDeviceForEbsVol(),
+	}
+	for _, o := range opts {
+		o(&defaultVol)
+	}
+	return defaultVol
+}
+
+// Request create ebs volume on aws backend
+// https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateVolume.html
+// https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/device_naming.html
+func (vol *ebsVolume) create(ac *ec2.EC2) string {
+	volumeInput := &ec2.CreateVolumeInput{
+		AvailabilityZone: aws.String(vol.AvailabilityZone),
+		Encrypted:        aws.Bool(vol.Encrypted),
+		Size:             aws.Int64(vol.Size),
+		VolumeType:       aws.String(vol.VolumeType),
+	}
+	volInfo, err := ac.CreateVolume(volumeInput)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	volumeId := gjson.Get(interfaceToString(volInfo), `VolumeId`).String()
+	o.Expect(volumeId).NotTo(o.Equal(""))
+	vol.VolumeId = volumeId
+	return volumeId
+}
+
+// Create ebs volume on aws backend and waiting for state value to "avaiable"
+func (vol *ebsVolume) createAndReadyToUse(ac *ec2.EC2) {
+	vol.create(ac)
+	vol.waitStateAsExpected(ac, "available")
+	vol.State = "available"
+	e2e.Logf("The ebs volume : \"%s\" [regin:\"%s\",az:\"%s\",size:\"%dGi\"] is ReadyToUse",
+		vol.VolumeId, os.Getenv("AWS_REGION"), vol.AvailabilityZone, vol.Size)
+}
+
+// Get the ebs volume detail info
+func (vol *ebsVolume) getInfo(ac *ec2.EC2) (string, error) {
+	inputVol := &ec2.DescribeVolumesInput{
+		Filters: []*ec2.Filter{
+			{
+				Name: aws.String("volume-id"),
+				Values: []*string{
+					aws.String(vol.VolumeId),
+				},
+			},
+		},
+	}
+	volumeInfo, err := ac.DescribeVolumes(inputVol)
+	return interfaceToString(volumeInfo), err
+}
+
+// Request attach the ebs volume to specified instance
+func (vol *ebsVolume) attachToInstance(ac *ec2.EC2, instance node) *ec2.VolumeAttachment {
+	volumeInput := &ec2.AttachVolumeInput{
+		Device:     aws.String(vol.Device),
+		InstanceId: aws.String(instance.instanceId),
+		VolumeId:   aws.String(vol.VolumeId),
+	}
+	req, resp := ac.AttachVolumeRequest(volumeInput)
+	err := req.Send()
+	if strings.Contains(fmt.Sprint(err), "is already in use") {
+		e2e.Logf("Attached to \"%s\" failed of \"%+v\" try another Device", instance.instanceId, err)
+		devMaps[strings.Split(vol.Device, "")[len(vol.Device)-1]] = true
+		vol.Device = getVaildDeviceForEbsVol()
+		volumeInput.Device = aws.String(vol.Device)
+		req, resp = ac.AttachVolumeRequest(volumeInput)
+		err = req.Send()
+		debugLogf("Req:\"%+v\", Resp:\"%+v\"", req, resp)
+	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+	vol.attachedNode = instance.instanceId
+	return resp
+}
+
+// Waiting for the ebs volume state to expected value
+func (vol *ebsVolume) waitStateAsExpected(ac *ec2.EC2, expectedState string) {
+	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		volInfo, errinfo := vol.getInfo(ac)
+		if errinfo != nil {
+			e2e.Logf("Get ebs volume failed :%v, wait for next round get.", errinfo)
+			return false, errinfo
+		}
+		if gjson.Get(volInfo, `Volumes.0.State`).String() == expectedState {
+			e2e.Logf("The ebs volume : \"%s\" state is as expected \"%s\"", vol.VolumeId, expectedState)
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for ebs volume : \"%s\" state to  \"%s\" time out", vol.VolumeId, expectedState))
+}
+
+// Waiting for the ebs volume attach to node succeed
+func (vol *ebsVolume) waitAttachSucceed(ac *ec2.EC2) {
+	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		volInfo, errinfo := vol.getInfo(ac)
+		if errinfo != nil {
+			e2e.Logf("Get ebs volume failed :%v, wait for next round get.", errinfo)
+			return false, errinfo
+		}
+		if gjson.Get(volInfo, `Volumes.0.Attachments.0.State`).String() == "attached" {
+			e2e.Logf("The ebs volume : \"%s\" attached to instance \"%s\" succeed", vol.VolumeId, vol.attachedNode)
+			vol.State = "in-use"
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for the ebs volume \"%s\" attach to node %s timeout", vol.VolumeId, vol.attachedNode))
+}
+
+// Attach the ebs volume to specified instance and wait for attach succeed
+func (vol *ebsVolume) attachToInstanceSucceed(ac *ec2.EC2, oc *exutil.CLI, instance node) {
+	vol.attachToInstance(ac, instance)
+	vol.waitAttachSucceed(ac)
+	vol.attachedNode = instance.instanceId
+	// RHEL type deviceid generate basic rule
+	if instance.osId == "rhel" {
+		deviceInfo, err := execCommandInSpecificNode(oc, instance.name, "lsblk -J")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		sameSizeDevices := gjson.Get(deviceInfo, `blockdevices.#(size=`+strconv.FormatInt(vol.Size, 10)+`G)#.name`).Array()
+		sameTypeDevices := gjson.Get(deviceInfo, `blockdevices.#(type="disk")#.name`).Array()
+		devices := sliceIntersect(strings.Split(strings.Trim(strings.Trim(fmt.Sprint(sameSizeDevices), "["), "]"), " "),
+			strings.Split(strings.Trim(strings.Trim(fmt.Sprint(sameTypeDevices), "["), "]"), " "))
+		o.Expect(devices).NotTo(o.BeEmpty())
+		for _, device := range devices {
+			if strings.Split(device, "")[len(device)-1] == strings.Split(vol.Device, "")[len(vol.Device)-1] {
+				vol.DeviceById = "/dev/" + device
+				break
+			}
+		}
+	} else {
+		// RHCOS type deviceid generate basic rule
+		vol.DeviceById = "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_vol" + strings.TrimLeft(vol.VolumeId, "vol-")
+	}
+	e2e.Logf("Volume : \"%s\" attach to instance \"%s\" [Device:\"%s\", ById:\"%s\"]", vol.VolumeId, vol.attachedNode, vol.Device, vol.DeviceById)
+}
+
+// Request detach the ebs volume from instance
+func (vol *ebsVolume) detach(ac *ec2.EC2) error {
+	volumeInput := &ec2.DetachVolumeInput{
+		Device:     aws.String(vol.Device),
+		InstanceId: aws.String(vol.attachedNode),
+		Force:      aws.Bool(false),
+		VolumeId:   aws.String(vol.VolumeId),
+	}
+	if vol.attachedNode == "" {
+		e2e.Logf("The ebs volume \"%s\" is not attached to any node,no need to detach", vol.VolumeId)
+		return nil
+	}
+	req, resp := ac.DetachVolumeRequest(volumeInput)
+	err := req.Send()
+	debugLogf("Resp:\"%+v\", Err:\"%+v\"", resp, err)
+	return err
+}
+
+// Detach the ebs volume from instance and wait detach action succeed
+func (vol *ebsVolume) detachSucceed(ac *ec2.EC2) {
+	err := vol.detach(ac)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	vol.waitStateAsExpected(ac, "available")
+	vol.State = "available"
+}
+
+// Delete the ebs volume
+func (vol *ebsVolume) delete(ac *ec2.EC2) error {
+	deleteVolumeID := &ec2.DeleteVolumeInput{
+		VolumeId: aws.String(vol.VolumeId),
+	}
+	req, resp := ac.DeleteVolumeRequest(deleteVolumeID)
+	err := req.Send()
+	debugLogf("Resp:\"%+v\", Err:\"%+v\"", resp, err)
+	return err
+}
+
+// Delete the ebs volume and wait for delete succeed
+func (vol *ebsVolume) deleteSucceed(ac *ec2.EC2) {
+	err := vol.delete(ac)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	vol.waitStateAsExpected(ac, "")
+}
+
+// Detach and delete the ebs volume and wait for all actions succeed
+func (vol *ebsVolume) detachAndDeleteSucceed(ac *ec2.EC2) {
+	vol.detachSucceed(ac)
+	vol.deleteSucceed(ac)
 }

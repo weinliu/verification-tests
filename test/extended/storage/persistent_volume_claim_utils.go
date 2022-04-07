@@ -189,7 +189,6 @@ func (pvc *persistentVolumeClaim) deleteAsAdmin(oc *exutil.CLI) {
 //  Get the PersistentVolumeClaim status
 func (pvc *persistentVolumeClaim) getStatus(oc *exutil.CLI) (string, error) {
 	pvcStatus, err := oc.WithoutNamespace().Run("get").Args("pvc", "-n", pvc.namespace, pvc.name, "-o=jsonpath={.status.phase}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The PVC  %s status in namespace %s is %q", pvc.name, pvc.namespace, pvcStatus)
 	return pvcStatus, err
 }

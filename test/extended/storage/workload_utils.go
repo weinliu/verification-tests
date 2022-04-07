@@ -223,6 +223,8 @@ func (pod *pod) execCommandAsAdmin(oc *exutil.CLI, command string) (string, erro
 func (pod *pod) checkMountedVolumeCouldRW(oc *exutil.CLI) {
 	_, err := execCommandInSpecificPod(oc, pod.namespace, pod.name, "echo \"storage test\" >"+pod.mountPath+"/testfile")
 	o.Expect(err).NotTo(o.HaveOccurred())
+	_, err = execCommandInSpecificPod(oc, pod.namespace, pod.name, "sync -f "+pod.mountPath+"/testfile")
+	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(execCommandInSpecificPod(oc, pod.namespace, pod.name, "cat "+pod.mountPath+"/testfile")).To(o.ContainSubstring("storage test"))
 }
 
