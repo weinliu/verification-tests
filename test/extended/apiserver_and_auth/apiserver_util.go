@@ -204,10 +204,10 @@ func restore_cluster_ocp_41899(oc *exutil.CLI) {
 func check_cluster_load(oc *exutil.CLI, node_type, dirname string) (int, int) {
 	tmp_path, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "nodes", "-l", "node-role.kubernetes.io/"+node_type, "--no-headers").OutputToFile(dirname)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	cmd := fmt.Sprintf(`cat %v | awk '{print $3}'|awk -F '%%' '{ sum += $1 } END { print(sum / NR) }'|cut -d "." -f1`, tmp_path)
+	cmd := fmt.Sprintf(`cat %v | grep -v 'protocol-buffers' | awk '{print $3}'|awk -F '%%' '{ sum += $1 } END { print(sum / NR) }'|cut -d "." -f1`, tmp_path)
 	cpu_avg, err := exec.Command("bash", "-c", cmd).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	cmd = fmt.Sprintf(`cat %v | awk '{print $5}'|awk -F'%%' '{ sum += $1 } END { print(sum / NR) }'|cut -d "." -f1`, tmp_path)
+	cmd = fmt.Sprintf(`cat %v | grep -v 'protocol-buffers' | awk '{print $5}'|awk -F'%%' '{ sum += $1 } END { print(sum / NR) }'|cut -d "." -f1`, tmp_path)
 	mem_avg, err := exec.Command("bash", "-c", cmd).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	re, _ := regexp.Compile(`[^\w]`)
