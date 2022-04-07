@@ -194,5 +194,31 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			e2e.Failf("Testing fail to get the correct metrics of ovnkube_master_ipsec_enabled")
 		}
 	})
+
+	g.It("Author:weliang-Medium-45687-Metrics for egress router", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking/metrics")
+			egressrouterPod = filepath.Join(buildPruningBaseDir, "egressrouter.yaml")
+		)
+		g.By("create new namespace")
+		oc.SetupProject()
+		ns := oc.Namespace()
+	
+		g.By("create a test pod")
+		podErr1 := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", egressrouterPod, "-n", ns).Execute()
+	    o.Expect(podErr1).NotTo(o.HaveOccurred())
+		podErr2 := waitForPodWithLabelReady(oc, oc.Namespace(), "app=egress-router-cni")
+		exutil.AssertWaitPollNoErr(podErr2, "egressrouterPod is not running")
+	
+		podName := getPodName(oc, "openshift-multus", "app=multus-admission-controller")
+		output, err := oc.AsAdmin().Run("exec").Args("-n", "openshift-multus", podName[1], "--", "curl", "localhost:9091/metrics").OutputToFile("metrics.txt")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		metric_output, _ := exec.Command("bash", "-c", "cat "+output+" | grep egress-router | awk '{print $2}'").Output()
+		metric_value := strings.TrimSpace(string(metric_output))
+		e2e.Logf("The output of the egress-router metrics is : %v", metric_value)
+		o.Expect(metric_value).To(o.ContainSubstring("1"))
+	})
 })
+
+
 
