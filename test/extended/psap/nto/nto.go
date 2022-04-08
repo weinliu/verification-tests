@@ -39,6 +39,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		hugepage_mcp_file                = exutil.FixturePath("testdata", "psap", "nto", "hugepage-mcp.yaml")
 		hugepage_tuned_boottime_file     = exutil.FixturePath("testdata", "psap", "nto", "hugepage-tuned-boottime.yaml")
 		stalld_tuned_file                = exutil.FixturePath("testdata", "psap", "nto", "stalld-tuned.yaml")
+		openshift_node_postgresql_file   = exutil.FixturePath("testdata", "psap", "nto", "openshift-node-postgresql.yaml")
 
 		isNTO          bool
 		isPAOInstalled bool
@@ -1076,7 +1077,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Assert DuplicateError in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 60, "DuplicateError|already exists")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "3", 120, "DuplicateError|already exists|DuplicateOptionError")
 
 		g.By("Apply ips patch profile")
 		//Remove duplicated parameter and value
@@ -1087,12 +1088,11 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(renderCheck).To(o.ContainSubstring("ips-host"))
 
+		g.By("Assert ips-host in tuned pod log")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "1", 180, `active and recommended profile \(ips-host\) match`)
+
 		g.By("Check if new NTO profile was applied")
 		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "ips-host")
-
-		g.By("Assert ips-host in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "1", 60, "ips-host")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "1", 60, "active and recommended profile")
 
 		g.By("Check current profile for each node")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
@@ -1629,5 +1629,72 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		stalldStatus, err = exutil.DebugNodeWithChroot(oc, tunedNodeName, "systemctl", "status", "stalld")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stalldStatus).To(o.ContainSubstring("active (running)"))
+	})
+
+	g.It("Author:liqcui-Medium-49441-NTO Applying a profile with multiple inheritance where parents include a common ancestor. [Disruptive]", func() {
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		//trying to include two profiles that share the same parent profile "throughput-performance". An example of such profiles
+		// are the openshift-node --> openshift --> (virtual-guest) --> throughput-performance and postgresql profiles.
+		//Use the first worker node as labeled node
+		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "tuned.openshift.io/openshift-node-postgresql-").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "openshift-node-postgresql", "-n", ntoNamespace, "--ignore-not-found").Execute()
+
+		g.By("Label the node with tuned.openshift.io/openshift-node-postgresql=")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "tuned.openshift.io/openshift-node-postgresql=", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check postgresql profile /usr/lib/tuned/postgresql/tuned.conf include throughput-performance profile")
+		postGreSQLProfile, err := exutil.RemoteShPod(oc, ntoNamespace, tunedPodName, "cat", "/usr/lib/tuned/postgresql/tuned.conf")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(postGreSQLProfile).To(o.ContainSubstring("throughput-performance"))
+
+		g.By("Check postgresql profile /usr/lib/tuned/openshift-node/tuned.conf include openshift profile")
+		openshiftNodeProfile, err := exutil.RemoteShPod(oc, ntoNamespace, tunedPodName, "cat", "/usr/lib/tuned/openshift-node/tuned.conf")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(openshiftNodeProfile).To(o.ContainSubstring(`include=openshift`))
+
+		g.By("Check postgresql profile /usr/lib/tuned/openshift/tuned.conf include throughput-performance profile")
+		openshiftProfile, err := exutil.RemoteShPod(oc, ntoNamespace, tunedPodName, "cat", "/usr/lib/tuned/openshift/tuned.conf")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(openshiftProfile).To(o.ContainSubstring("throughput-performance"))
+
+		g.By("Create openshift-node-postgresql tuned profile")
+		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, openshift_node_postgresql_file)
+
+		g.By("Check if new profile in in rendered tuned")
+		renderCheck, err := getTunedRender(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).To(o.ContainSubstring("openshift-node-postgresql"))
+
+		g.By("Check openshift-node-postgresql tuned profile should be automatically created")
+		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNames).To(o.ContainSubstring("openshift-node-postgresql"))
+
+		g.By("Check if new NTO profile was applied")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-node-postgresql")
+
+		g.By("Check if profile openshift-node-postgresql applied on nodes")
+		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeProfileName).To(o.ContainSubstring("openshift-node-postgresql"))
+
+		g.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Assert active and recommended profile (openshift-node-postgresql) match in tuned pod log")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 300, `active and recommended profile \(openshift-node-postgresql\) match`)
 	})
 })
