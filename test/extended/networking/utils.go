@@ -24,6 +24,13 @@ type pingPodResource struct {
 	template  string
 }
 
+type pingPodResourceNode struct {
+	name      string
+	namespace string
+        nodename  string
+	template  string
+}
+
 type egressIPResource1 struct {
 	name          string
 	template      string
@@ -52,6 +59,18 @@ type egressFirewall2 struct {
 func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create pod %v", pod.name))
+}
+
+func (pod *pingPodResourceNode) createPingPodNode(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "NODENAME="+pod.nodename)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
@@ -140,6 +159,10 @@ func (egressFirewall *egressFirewall2) deleteEgressFW2Object(oc *exutil.CLI) {
 
 func (pingPod *pingPodResource) deletePingPod(oc *exutil.CLI) {
 	removeResource(oc, false, true, "pod", pingPod.name, "-n", pingPod.namespace)
+}
+
+func (pingPodNode *pingPodResourceNode) deletePingPodNode(oc *exutil.CLI) {
+	removeResource(oc, false, true, "pod", pingPodNode.name, "-n", pingPodNode.namespace)
 }
 
 func removeResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) {

@@ -1,0 +1,21 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: hello-pod-specific-node-template
+objects:
+- kind: Pod
+  apiVersion: v1
+  metadata:
+    name: "${NAME}"
+    namespace: "${NAMESPACE}"
+    labels:
+      name: hello-pod
+  spec:
+    containers:
+    - image: "quay.io/openshifttest/hello-sdn@sha256:2af5b5ec480f05fda7e9b278023ba04724a3dd53a296afcd8c13f220dec52197"
+      name: hello-pod
+    nodeName: "${NODENAME}"
+parameters:
+- name: NAME
+- name: NAMESPACE
+- name: NODENAME
