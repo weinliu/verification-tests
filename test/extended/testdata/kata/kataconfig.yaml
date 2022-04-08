@@ -3,16 +3,18 @@ kind: Template
 metadata:
   name: common-kc-template
 objects:
-- apiVersion: kataconfiguration.openshift.io/v1
-  kind: KataConfig
-  metadata:
-    name: "${NAME}"
-  #spec:
-  #  kataConfigPoolSelector:
-  #    matchLabels:
-  #       custom-kata1: test
-  #Note: you could add more config in this template for your common usage.
+  - apiVersion: kataconfiguration.openshift.io/v1
+    kind: KataConfig
+    metadata:
+      name: "${NAME}"
+      spec:
+        checkNodeEligibility: false
+        kataMonitorImage: "${MONITOR}"
+      #  kataConfigPoolSelector:
+      #    matchLabels:
+      #       custom-kata1: test
+      #Note: you could add more config in this template for your common usage.
 
 parameters:
-- name: NAME
-
+  - name: NAME
+  - name: MONITOR

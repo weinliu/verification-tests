@@ -21,26 +21,48 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		oc                   = exutil.NewCLI("kata", exutil.KubeConfigPath())
 		opNamespace          = "openshift-sandboxed-containers-operator"
 		commonKataConfigName = "example-kataconfig"
-		// Team - for specific kataconfig and pod, please define and create them in g.It.
-		testDataDir  = exutil.FixturePath("testdata", "kata")
-		iaasPlatform string
-		commonKc = filepath.Join(testDataDir, "kataconfig.yaml")
-		defaultDeployment = filepath.Join(testDataDir, "deployment-example.yaml")
-
+		testDataDir          = exutil.FixturePath("testdata", "kata")
+		iaasPlatform         string
+		commonKc             = filepath.Join(testDataDir, "kataconfig.yaml")
+		defaultDeployment    = filepath.Join(testDataDir, "deployment-example.yaml")
+		subTemplate          = filepath.Join(testDataDir, "subscription_template.yaml")
+		kcMonitorImageName   = ""
 	)
 
 	g.BeforeEach(func() {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+		subscription := subscriptionDescription{
+			subName:                "sandboxed-containers-operator",
+			namespace:              opNamespace,
+			catalogSourceName:      "redhat-operators",
+			catalogSourceNamespace: "openshift-marketplace",
+			channel:                "stable-1.2",
+			ipApproval:             "Automatic",
+			operatorPackage:        "sandboxed-containers-operator",
+			template:               subTemplate,
+		}
+
+		if subscription.channel == "stable-1.2" {
+			kcMonitorImageName = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:1.2.0"
+		}
+
+		var (
+			err error
+			msg string
+		)
+
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		iaasPlatform = strings.ToLower(output)
+		iaasPlatform = strings.ToLower(msg)
 		e2e.Logf("the current platform is %v", iaasPlatform)
+
 		ns := filepath.Join(testDataDir, "namespace.yaml")
 		og := filepath.Join(testDataDir, "operatorgroup.yaml")
-		sub := filepath.Join(testDataDir, "subscription.yaml")
 
-		createIfNoOperator(oc, opNamespace, ns, og, sub)
-		createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName)
+		//createIfNoOperator(oc, opNamespace, ns, og, sub)
+		msg, err = subscribeFromTemplate(oc, subscription, subTemplate, ns, og)
+		e2e.Logf("---------- subscription %v succeeded with channel %v %v", subscription.subName, subscription.channel, err)
 
+		createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName, kcMonitorImageName)
 	})
 
 	g.It("Author:abhbaner-High-39499-Operator installation", func() {
@@ -223,32 +245,31 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("Success")
 
 	})
-	
-	g.It("Author:abhbaner-High-43516-operator is available in CatalogSource"    , func() {
-        
-        	g.By("Checking catalog source for the operator")
-        	opMarketplace,err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifests", "-n", "openshift-marketplace").Output()
-        	o.Expect(err).NotTo(o.HaveOccurred())
-        	o.Expect(opMarketplace).NotTo(o.BeEmpty())
-        	o.Expect(opMarketplace).To(o.ContainSubstring("sandboxed-containers-operator"))
-        	o.Expect(opMarketplace).To(o.ContainSubstring("Red Hat Operators"))
-        	g.By("SUCCESS -  'sandboxed-containers-operator' is present in packagemanifests")
-        
-    })
 
+	g.It("Author:abhbaner-High-43516-operator is available in CatalogSource", func() {
+
+		g.By("Checking catalog source for the operator")
+		opMarketplace, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifests", "-n", "openshift-marketplace").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(opMarketplace).NotTo(o.BeEmpty())
+		o.Expect(opMarketplace).To(o.ContainSubstring("sandboxed-containers-operator"))
+		o.Expect(opMarketplace).To(o.ContainSubstring("Red Hat Operators"))
+		g.By("SUCCESS -  'sandboxed-containers-operator' is present in packagemanifests")
+
+	})
 
 	g.It("Longduration-NonPreRelease-Author:abhbaner-High-43523-Monitor Kataconfig deletion[Disruptive]", func() {
-        	g.By("Delete Common kataconfig and verify it")
-        	deleteKataConfig(oc, commonKataConfigName, opNamespace)
-        	e2e.Logf("common kataconfig %v was deleted", commonKataConfigName)
-        	g.By("SUCCESSS - kata runtime deleted successfully")
+		g.By("Delete Common kataconfig and verify it")
+		deleteKataConfig(oc, commonKataConfigName, opNamespace)
+		e2e.Logf("common kataconfig %v was deleted", commonKataConfigName)
+		g.By("SUCCESSS - kata runtime deleted successfully")
 		g.By("Creating kataconfig for the remaining test cases")
-    		createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName)
+		createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName, kcMonitorImageName)
 
-  })
- 
+	})
+
 	g.It("Longduration-NonPreRelease-Author:abhbaner-High-41813-Build Acceptance test[Disruptive]", func() {
-        //This test will install operator,kataconfig,pod with kata - delete pod, delete kataconfig
+		//This test will install operator,kataconfig,pod with kata - delete pod, delete kataconfig
 		commonPodName := "example"
 		commonPod := filepath.Join(testDataDir, "example.yaml")
 
@@ -261,13 +282,12 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
 		deleteKataPod(oc, podNs, newPodName)
 		g.By("Kata Pod deleted - now deleting kataconfig")
-    deleteKataConfig(oc, commonKataConfigName, opNamespace)
-    e2e.Logf("common kataconfig %v was deleted", commonKataConfigName)
-    g.By("SUCCESSS - build acceptance passed")
+		deleteKataConfig(oc, commonKataConfigName, opNamespace)
+		e2e.Logf("common kataconfig %v was deleted", commonKataConfigName)
+		g.By("SUCCESSS - build acceptance passed")
 		g.By("Creating kataconfig for the remaining test cases")
-    createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName)
-    })
-
+		createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName, kcMonitorImageName)
+	})
 
 	// author: tbuskey@redhat.com
 	g.It("Author:tbuskey-High-46235-Kata Metrics Verify that Namespace is labeled to enable monitoring", func() {
@@ -296,8 +316,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 		g.By("Success")
 	})
-  
-   
+
 	g.It("Author:abhbaner-High-43524-Existing deployments (with runc) should restart normally after kata runtime install", func() {
 		g.By("Creating a deployment")
 
@@ -309,24 +328,23 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		deployMsg,err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns,"-o=jsonpath={..name}").Output()
-		e2e.Logf(" get pods for ns %v, output - %v",ns,deployMsg)
+		deployMsg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns, "-o=jsonpath={..name}").Output()
+		e2e.Logf(" get pods for ns %v, output - %v", ns, deployMsg)
 		o.Expect(deployMsg).To(o.ContainSubstring(newDeployName))
-		
-		defaultPodName:= strings.Split(deployMsg, " example")[0]
+
+		defaultPodName := strings.Split(deployMsg, " example")[0]
 		//deleting pod from the deployment and checking its status
 		e2e.Logf("delete pod %s in namespace %s", defaultPodName, "%s ns", ns)
-		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", defaultPodName, "-n" , ns).Execute()
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", defaultPodName, "-n", ns).Execute()
 		errCheck := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
-			deployAfterDeleteMsg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment","-n" , ns).Output()
+			deployAfterDeleteMsg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", ns).Output()
 			if strings.Contains(deployAfterDeleteMsg, "3/3") {
 				return true, nil
-			}   
+			}
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Pod replica could not be restarted"))
 		g.By("SUCCESSS - kataconfig installed and post that pod with runc successfully restarted ")
 	})
-
 
 })

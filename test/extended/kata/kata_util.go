@@ -14,9 +14,83 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+type subscriptionDescription struct {
+	subName                string `json:"name"`
+	namespace              string `json:"namespace"`
+	channel                string `json:"channel"`
+	ipApproval             string `json:"installPlanApproval"`
+	operatorPackage        string `json:"spec.name"`
+	catalogSourceName      string `json:"source"`
+	catalogSourceNamespace string `json:"sourceNamespace"`
+	template               string
+}
+
 var (
 	snooze time.Duration = 720
 )
+
+func subscribeFromTemplate(oc *exutil.CLI, sub subscriptionDescription, subTemplate, nsFile, ogFile string) (msg string, err error) {
+	g.By(" (1) INSTALLING sandboxed-operator in '" + sub.namespace + "' namespace")
+	csvName := ""
+	subFile := ""
+	v := ""
+
+	g.By("(1.1) Applying namespace yaml")
+	msg, err = oc.AsAdmin().Run("apply").Args("-f", nsFile).Output()
+	e2e.Logf("STEP namespace %v %v", msg, err)
+
+	g.By("(1.2)  Applying operatorgroup yaml if needed")
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "-n", sub.namespace, "--no-headers").Output()
+	if strings.Contains(msg, "No resources found in") {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", ogFile, "-n", sub.namespace).Output()
+	}
+	e2e.Logf("STEP operator group %v %v", msg, err)
+
+	g.By("(1.3) Creating subscription yaml from template")
+	subFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", sub.template, "-p", "SUBNAME="+sub.subName, "SUBNAMESPACE="+sub.namespace, "CHANNEL="+sub.channel,
+		"APPROVAL="+sub.ipApproval, "OPERATORNAME="+sub.operatorPackage, "SOURCENAME="+sub.catalogSourceName, "SOURCENAMESPACE="+sub.catalogSourceNamespace).OutputToFile(getRandomString() + "subscriptionFile.json")
+	// o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Created the subscription yaml %s, %v", subFile, err)
+
+	g.By("(1.4) Applying subscription yaml")
+	// no need to check for an existing subscription
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subFile).Output()
+	e2e.Logf("Applied subscription %v: %v, %v", subFile, msg, err)
+
+	g.By("(1.5) Verify the operator finished subscribing")
+	errCheck := wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}").Output()
+		// o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Compare(msg, "AtLatestKnown") == 0 {
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "--no-headers").Output()
+			return true, nil
+		}
+		return false, nil
+	})
+	e2e.Logf("Subscription %v %v, %v", msg, err, errCheck)
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("subscription %v is not correct status in ns %v", sub.subName, sub.namespace))
+
+	g.By("(1.6) Get csvName")
+	csvName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installedCSV}").Output()
+	e2e.Logf("csvName %v %v", csvName, err)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(csvName).NotTo(o.BeEmpty())
+
+	g.By("(1.7) Verify the csv '" + csvName + "' has finished")
+	errCheck = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", sub.namespace, "-o=jsonpath={.status.phase}{.status.reason}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Compare(msg, "SucceededInstallSucceeded") == 0 {
+			v, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", sub.namespace, "--no-headers").Output()
+			msg = fmt.Sprintf("%v state %v", v, msg)
+			return true, nil
+		}
+		return false, nil
+	})
+	e2e.Logf("csv %v: %v %v", csvName, msg, err)
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status in ns %v: %v %v", csvName, sub.namespace, msg, err))
+	return msg, err
+}
 
 // author: abhbaner@redhat.com
 func createIfNoOperator(oc *exutil.CLI, opNamespace, ns, og, sub string) (status bool) {
@@ -25,8 +99,8 @@ func createIfNoOperator(oc *exutil.CLI, opNamespace, ns, og, sub string) (status
 }
 
 // author: abhbaner@redhat.com
-func createIfNoKataConfig(oc *exutil.CLI, opNamespace, kc, kcName string) (status bool) {
-	kataConfigInstall(oc, opNamespace, kc, kcName)
+func createIfNoKataConfig(oc *exutil.CLI, opNamespace, kc, kcName, kcMonitorImageName string) (status bool) {
+	kataConfigInstall(oc, opNamespace, kc, kcName, kcMonitorImageName)
 	return true
 
 }
@@ -82,9 +156,9 @@ func operatorInstall(oc *exutil.CLI, opNamespace, ns, og, sub string) (status bo
 }
 
 // author: abhbaner@redhat.com
-func kataConfigInstall(oc *exutil.CLI, opNamespace, kc, kcName string) (status bool) {
+func kataConfigInstall(oc *exutil.CLI, opNamespace, kc, kcName, kcMonitorImageName string) (status bool) {
 	g.By("Applying kataconfig")
-	configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", kc, "-p", "NAME="+kcName).OutputToFile(getRandomString() + "kataconfig-common.json")
+	configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", kc, "-p", "NAME="+kcName, "MONITOR="+kcMonitorImageName).OutputToFile(getRandomString() + "kataconfig-common.json")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("the file of resource is %s", configFile)
 
@@ -152,13 +226,13 @@ func getRandomString() string {
 }
 
 func deleteKataConfig(oc *exutil.CLI, kcName, opNamespace string) bool {
-    g.By("DELETING KATACONFIG - Hold on")
-    msg,err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("kataconfig", kcName).Output()
-    o.Expect(err).NotTo(o.HaveOccurred())
-    e2e.Logf("err %v, msg %v", err, msg)
-    kataStatus,err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig").Output()
-    o.Expect(err).NotTo(o.HaveOccurred())
-    o.Expect(kataStatus).To(o.ContainSubstring("No resources found"))
-    return true
+	g.By("DELETING KATACONFIG - Hold on")
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("kataconfig", kcName).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("err %v, msg %v", err, msg)
+	kataStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(kataStatus).To(o.ContainSubstring("No resources found"))
+	return true
 
 }
