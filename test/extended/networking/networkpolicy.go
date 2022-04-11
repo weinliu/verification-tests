@@ -112,7 +112,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		output, err = e2e.RunHostCmd(ns1, helloPodName[0], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIP1, "8080"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
-		output, err = e2e.RunHostCmd(ns1, helloPodName[0], "curl --connect-timeout 5  -s "+net.JoinHostPort(testPodIP2, "8080"))
+		_, err = e2e.RunHostCmd(ns1, helloPodName[0], "curl --connect-timeout 5  -s "+net.JoinHostPort(testPodIP2, "8080"))
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
 
@@ -128,7 +128,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		output, err = e2e.RunHostCmd(ns1, helloPodName[0], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIP1, "8080"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
-		output, err = e2e.RunHostCmd(ns1, helloPodName[0], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIP2, "8080"))
+		_, err = e2e.RunHostCmd(ns1, helloPodName[0], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIP2, "8080"))
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
 
@@ -203,12 +203,60 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		hellopodIP2_ns2 := getPodIPv4(oc, ns2, helloPodName_ns2[1])
 
 		g.By("4. Curl both ns2 pods from ns1.")
-		output, err = e2e.RunHostCmd(ns1, podns1.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(hellopodIP1_ns2, "8080"))
+		_, err = e2e.RunHostCmd(ns1, podns1.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(hellopodIP1_ns2, "8080"))
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
-		output, err = e2e.RunHostCmd(ns1, podns1.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(hellopodIP2_ns2, "8080"))
+		_, err = e2e.RunHostCmd(ns1, podns1.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(hellopodIP2_ns2, "8080"))
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
+	})
+
+	// author: zzhao@redhat.com
+	g.It("Author:zzhao-Critical-49696-mixed ingress and egress policies can work well", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			helloSdnFile        = filepath.Join(buildPruningBaseDir, "hellosdn.yaml")
+			egressTypeFile      = filepath.Join(buildPruningBaseDir, "networkpolicy/egress_49696.yaml")
+			ingressTypeFile     = filepath.Join(buildPruningBaseDir, "networkpolicy/ingress_49696.yaml")
+		)
+		g.By("create one namespace")
+		oc.SetupProject()
+		ns1 := oc.Namespace()
+
+		g.By("create test pods")
+		createResourceFromFile(oc, ns1, testPodFile)
+		createResourceFromFile(oc, ns1, helloSdnFile)
+		err := waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+		err = waitForPodWithLabelReady(oc, ns1, "name=hellosdn")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=hellosdn not ready")
+		hellosdnPodName_ns1 := getPodName(oc, ns1, "name=hellosdn")
+
+		g.By("create egress type networkpolicy in ns1")
+		createResourceFromFile(oc, ns1, egressTypeFile)
+
+		g.By("create ingress type networkpolicy in ns1")
+		createResourceFromFile(oc, ns1, ingressTypeFile)
+
+		g.By("create second namespace")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		g.By("create test pods in second namespace")
+		createResourceFromFile(oc, ns2, helloSdnFile)
+		err = waitForPodWithLabelReady(oc, ns2, "name=hellosdn")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=hellosdn not ready")
+
+		g.By("Get IP of the test pods in second namespace.")
+		hellosdnPodName_ns2 := getPodName(oc, ns2, "name=hellosdn")
+		hellosdnPodIP1_ns2 := getPodIPv4(oc, ns2, hellosdnPodName_ns2[0])
+
+		g.By("curl from ns1 hellosdn pod to ns2 pod")
+		_, err = e2e.RunHostCmd(ns1, hellosdnPodName_ns1[0], "curl --connect-timeout 5  -s "+net.JoinHostPort(hellosdnPodIP1_ns2, "8080"))
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
+
 	})
 
 })
