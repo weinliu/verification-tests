@@ -25,31 +25,6 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 
 	var opmCLI = NewOpmCLI()
 
-	// author: jiazha@redhat.com
-	g.It("Author:jiazha-Medium-27620-Validate operator bundle Image and Contents", func() {
-
-		bundleImages := []struct {
-			image  string
-			expect string
-		}{
-			{"quay.io/olmqe/etcd-bundle:0.9.4", "All validation tests have been completed successfully"},
-			{"quay.io/olmqe/etcd-bundle:wrong", "Bundle validation errors"},
-		}
-		opmCLI.showInfo = true
-		for _, b := range bundleImages {
-			g.By(fmt.Sprintf("Validating the %s", b.image))
-			output, err := opmCLI.Run("alpha").Args("bundle", "validate", "-b", "none", "-t", b.image).Output()
-
-			if strings.Contains(output, b.expect) {
-				e2e.Logf(fmt.Sprintf("That's expected! %s", b.image))
-			} else {
-				e2e.Failf(fmt.Sprintf("Failed to validating the %s, error: %v", b.image, err))
-			}
-
-		}
-
-	})
-
 	// author: scolange@redhat.com
 	g.It("Author:scolange-Medium-43769-Remove opm alpha add command", func() {
 
@@ -711,19 +686,6 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 
 	var opmCLI = NewOpmCLI()
 	var oc = exutil.NewCLI("vmonly-"+getRandomString(), exutil.KubeConfigPath())
-
-	// author: kuiwang@redhat.com
-	g.It("ConnectedOnly-VMonly-Author:kuiwang-Medium-44201-Add a warning to validation for v1beta1 deprecations in an operator bundle", func() {
-		containerCLI := container.NewPodmanCLI()
-
-		bundleImage := "quay.io/olmqe/teiid-operator:v0.4.0-2222"
-		defer containerCLI.RemoveImage(bundleImage)
-
-		g.By("opm validate it with warning")
-		output, err := opmCLI.Run("alpha").Args("bundle", "validate", "-t", bundleImage, "-b", "podman").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("v1beta1 CustomResourceDefinitions will be removed in the future"))
-	})
 
 	// OCP-43641 author: jitli@redhat.com
 	g.It("Author:jitli-ConnectedOnly-VMonly-Medium-43641-opm index add fails during image extraction", func() {
@@ -1773,51 +1735,6 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		os.Remove(path.Join(indexTmpPath1, "index.db"))
 
 		g.By("Finished")
-	})
-
-	// author: scolange@redhat.com
-	g.It("ConnectedOnly-Author:scolange-VMonly-Medium-30763-Bundles can include v1 CRDs", func() {
-		quayCLI := container.NewQuayCLI()
-		containerCLI := container.NewPodmanCLI()
-		containerTool := "podman"
-		opmBaseDir := exutil.FixturePath("testdata", "opm")
-		TestDataPath := filepath.Join(opmBaseDir, "v1Bundle")
-		TestManifest := filepath.Join(TestDataPath, "manifests")
-		bundleImageTag := "quay.io/olmqe/lib-bucket-provisioner:1.0"
-
-		defer containerCLI.RemoveImage(bundleImageTag)
-		defer quayCLI.DeleteTag(strings.Replace(bundleImageTag, "quay.io/", "", 1))
-		defer DeleteDir(TestDataPath, "fixture-testdata")
-
-		g.By("step: opm alpha bundle generate")
-		output, err := opmCLI.Run("alpha").Args("bundle", "generate", "-d", TestManifest, "-p", "lib-bucket-provisioner", "-c", "alpha", "-e", "alpha").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf(output)
-		if !strings.Contains(output, "Writing annotations.yaml") || !strings.Contains(output, "Writing bundle.Dockerfile") {
-			e2e.Failf("Failed to execute opm alpha bundle generate : %s", output)
-		}
-
-		g.By("step: build bundle image ")
-		opmCLI.ExecCommandPath = TestDataPath
-		output, err = opmCLI.Run("alpha").Args("bundle", "build", "-d", TestManifest, "-b", containerTool, "-t", bundleImageTag, "-p", "lib-bucket-provisioner", "-c", "alpha", "-e", "alpha", "--overwrite").Output()
-		if err != nil {
-			e2e.Logf(output)
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-		o.Expect(string(output)).To(o.ContainSubstring("Writing annotations.yaml"))
-		o.Expect(string(output)).To(o.ContainSubstring("Writing bundle.Dockerfile"))
-
-		if output, err = containerCLI.Run("push").Args(bundleImageTag).Output(); err != nil {
-			e2e.Logf(output)
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-
-		g.By("opm validate it with warning")
-		output, err = opmCLI.Run("alpha").Args("bundle", "validate", "-t", bundleImageTag, "-b", "podman").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("All validation tests have been completed successfully"))
-
-		g.By("step: SUCCESS 30763")
 	})
 
 	// author: scolange@redhat.com
