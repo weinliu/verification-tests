@@ -125,26 +125,6 @@ func getWorkersList(oc *exutil.CLI) []string {
 	return strings.Split(output, " ")
 }
 
-// Get schedulable worker node list
-func getSchedulableWorkersList(oc *exutil.CLI) []string {
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker,kubernetes.io/os=linux", "-o=jsonpath={.items[*].metadata.name}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return strings.Split(output, " ")
-}
-
-// Get schedulable worker node number
-func getSchedulablerWorkersNub(oc *exutil.CLI) int {
-	workersNub := len(getSchedulableWorkersList(oc))
-	unschedulableWorkersInfo, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker,kubernetes.io/os=linux", "-o=jsonpath={.items[*].spec.taints[?(@.effect==\"NoSchedule\")].key}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if len(unschedulableWorkersInfo) == 0 {
-		return workersNub
-	} else {
-		unschedulableWorkersNub := len(strings.Split(unschedulableWorkersInfo, " "))
-		return workersNub - unschedulableWorkersNub
-	}
-}
-
 // Get the cluster schedulable woker nodes names with the same avaiable zone
 func getSchedulableWorkersWithSameAz(oc *exutil.CLI) (schedulableWorkersWithSameAz []string, azName string) {
 	var (

@@ -191,6 +191,21 @@ func (pod *pod) createWithNodeSelector(oc *exutil.CLI, labelName string, labelVa
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// Create new pod with extra parameters for nodeAffinity, key, operator and values should be provided in matchExpressions
+func (pod *pod) createWithNodeAffinity(oc *exutil.CLI, key string, operator string, values []string) {
+	extraParameters := map[string]interface{}{
+		"jsonPath": `items.0.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms.0.matchExpressions.0.`,
+		"key":      key,
+		"operator": operator,
+		"values":   values,
+	}
+	if pod.namespace == "" {
+		pod.namespace = oc.Namespace()
+	}
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "PODNAME="+pod.name, "PODNAMESPACE="+pod.namespace, "PVCNAME="+pod.pvcname, "PODIMAGE="+pod.image, "VOLUMETYPE="+pod.volumeType, "PATHTYPE="+pod.pathType, "PODMOUNTPATH="+pod.mountPath)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 //  Delete the pod
 func (pod *pod) delete(oc *exutil.CLI) {
 	err := oc.WithoutNamespace().Run("delete").Args("pod", pod.name, "-n", pod.namespace).Execute()
