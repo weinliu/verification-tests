@@ -40,6 +40,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		hugepage_tuned_boottime_file     = exutil.FixturePath("testdata", "psap", "nto", "hugepage-tuned-boottime.yaml")
 		stalld_tuned_file                = exutil.FixturePath("testdata", "psap", "nto", "stalld-tuned.yaml")
 		openshift_node_postgresql_file   = exutil.FixturePath("testdata", "psap", "nto", "openshift-node-postgresql.yaml")
+		net_plugin_file                  = exutil.FixturePath("testdata", "psap", "nto", "net-plugin-tuned.yaml")
 
 		isNTO          bool
 		isPAOInstalled bool
@@ -1696,5 +1697,66 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("Assert active and recommended profile (openshift-node-postgresql) match in tuned pod log")
 		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 300, `active and recommended profile \(openshift-node-postgresql\) match`)
+	})
+
+	g.It("Author:liqcui-Medium-49705-Tuned net plugin handle net devices with n/a value for a channel. [Disruptive]", func() {
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		//Use the first worker node as labeled node
+		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("pod", tunedPodName, "-n", ntoNamespace, "node-role.kubernetes.io/netplugin-").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "net-plugin", "-n", ntoNamespace, "--ignore-not-found").Execute()
+
+		g.By("Label the node with node-role.kubernetes.io/netplugin=")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("pod", tunedPodName, "-n", ntoNamespace, "node-role.kubernetes.io/netplugin=", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create net-plugin tuned profile")
+		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, net_plugin_file)
+
+		g.By("Check if new profile in in rendered tuned")
+		renderCheck, err := getTunedRender(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).To(o.ContainSubstring("net-plugin"))
+
+		g.By("Check net-plugin tuned profile should be automatically created")
+		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNames).To(o.ContainSubstring("net-plugin"))
+
+		g.By("Assert active and recommended profile (net-plugin) match in tuned pod log")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 300, `active and recommended profile \(net-plugin\) match`)
+
+		g.By("Check if new NTO profile was applied")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "net-plugin")
+
+		g.By("Check if profile net-plugin applied on nodes")
+		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeProfileName).To(o.ContainSubstring("net-plugin"))
+
+		g.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Check channel for host network adapter, expected Combined: 1")
+		isMatch := assertIFChannel(oc, ntoNamespace, tunedNodeName)
+		o.Expect(isMatch).To(o.BeTrue())
+
+		g.By("Delete tuned net-plugin and check channel for host network adapater again")
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "net-plugin", "-n", ntoNamespace, "--ignore-not-found").Execute()
+
+		g.By("Check channel for host network adapter, not expected Combined: 1")
+		isMatch = assertIFChannel(oc, ntoNamespace, tunedNodeName)
+		o.Expect(isMatch).To(o.BeFalse())
 	})
 })

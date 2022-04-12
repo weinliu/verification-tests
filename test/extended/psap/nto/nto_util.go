@@ -583,3 +583,22 @@ func compareCertificateBetweenOpenSSLandTlsSecret(oc *exutil.CLI, ntoNamespace s
 	})
 	exutil.AssertWaitPollNoErr(err, "The certificate is different, please check")
 }
+
+func assertIFChannel(oc *exutil.CLI, namespace string, tunedNodeName string) bool {
+
+	ifName, err := exutil.DebugNodeWithOptionsAndChroot(oc, tunedNodeName, []string{"--quiet=true"}, "find", "/sys/class/net", "-type", "l", "-not", "-lname", "*virtual*", "-printf", "%f")
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	ethToolsOutput, err := exutil.DebugNodeWithOptionsAndChroot(oc, tunedNodeName, []string{"--quiet=true"}, "ethtool", "-l", ifName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("ethtool -l %v:, \n%v", ifName, ethToolsOutput)
+
+	regChannel, err := regexp.Compile("Combined:.*1")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	isMatch := regChannel.MatchString(ethToolsOutput)
+	if isMatch {
+		return true
+	} else {
+		return false
+	}
+}
