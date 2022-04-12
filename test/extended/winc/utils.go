@@ -116,12 +116,12 @@ func getSSHBastionHost(oc *exutil.CLI, iaasPlatform string) string {
 	if iaasPlatform == "vsphere" {
 		return "bastion.vmc.ci.openshift.org"
 	} else {
-	    msg, err := oc.WithoutNamespace().Run("get").Args("service", "--all-namespaces", "-l=run=ssh-bastion", "-o=go-template='{{ with (index (index .items 0).status.loadBalancer.ingress 0) }}{{ or .hostname .ip }}{{end}}'").Output()
-	    if err != nil || msg == "" {
+		msg, err := oc.WithoutNamespace().Run("get").Args("service", "--all-namespaces", "-l=run=ssh-bastion", "-o=go-template='{{ with (index (index .items 0).status.loadBalancer.ingress 0) }}{{ or .hostname .ip }}{{end}}'").Output()
+		if err != nil || msg == "" {
 			e2e.Failf("SSH bastion is not installed yet")
-	    }
-	    msg = removeOuterQuotes(msg)
-	    return (msg)
+		}
+		msg = removeOuterQuotes(msg)
+		return (msg)
 	}
 }
 
@@ -246,15 +246,21 @@ func scaleDeployment(oc *exutil.CLI, os string, replicas int, namespace string) 
 	return err
 }
 
-func scaleWindowsMachineSet(oc *exutil.CLI, windowsMachineSetName string, replicas int) error {
-	_, err := oc.WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), "machineset", windowsMachineSetName, "-n", "openshift-machine-api").Output()
-	return err
+func scaleWindowsMachineSet(oc *exutil.CLI, windowsMachineSetName string, deadTime int, replicas int) {
+	err := oc.WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), "machineset", windowsMachineSetName, "-n", "openshift-machine-api").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	waitForMachinesetReady(oc, windowsMachineSetName, deadTime, replicas)
 }
 
 // this function returns an array of workloads names by their OS type
 func getWorkloadsNames(oc *exutil.CLI, os string, namespace string) ([]string, error) {
 	workloadName := getWorkloadName(os)
-	workloads, err := oc.WithoutNamespace().Run("get").Args("pod", "--selector", "app="+workloadName, "--sort-by=.status.hostIP", "-o=jsonpath={.items[*].metadata.name}", "-n", namespace).Output()
+	if workloadName == "windows-machine-config-operator" {
+		workloadName = "name=" + workloadName
+	} else {
+		workloadName = "app=" + workloadName
+	}
+	workloads, err := oc.WithoutNamespace().Run("get").Args("pod", "--selector", workloadName, "--sort-by=.status.hostIP", "-o=jsonpath={.items[*].metadata.name}", "-n", namespace).Output()
 	pods := strings.Split(workloads, " ")
 	return pods, err
 }
@@ -330,8 +336,8 @@ func getMachineset(oc *exutil.CLI, iaasPlatform, winVersion string, machineSetNa
 		infrastructureID, err = oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
 		location, err := oc.WithoutNamespace().Run("get").Args("nodes", "-o=jsonpath=\"{.items[0].metadata.labels.topology\\.kubernetes\\.io\\/region}\"").Output()
 		if err != nil {
-		    e2e.Logf("Using default Azure region: centralus")
-		    location = "centralus"
+			e2e.Logf("Using default Azure region: centralus")
+			location = "centralus"
 		}
 		sku := "2019-Datacenter-with-Containers"
 		if winVersion == "2004" {
@@ -355,19 +361,23 @@ func createMachineset(oc *exutil.CLI, file string) error {
 }
 
 func waitForMachinesetReady(oc *exutil.CLI, machinesetName string, deadTime int, expectedReplicas int) {
-	pollErr := wait.Poll(15*time.Second, time.Duration(deadTime)*time.Minute, func() (bool, error) {
+	pollErr := wait.Poll(30*time.Second, time.Duration(deadTime)*time.Minute, func() (bool, error) {
 		msg, err := oc.WithoutNamespace().Run("get").Args("machineset", machinesetName, "-o=jsonpath={.status.readyReplicas}", "-n", "openshift-machine-api").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if msg != strconv.Itoa(expectedReplicas) {
-			e2e.Logf("Windows machine is not provisioned yet. Waiting 15 seconds more ...")
-			return false, nil
+		numberOfMachines := 0
+		if msg != "" {
+			numberOfMachines, err = strconv.Atoi(msg)
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}
-		e2e.Logf("Windows machine is provisioned")
-		return true, nil
+		if numberOfMachines == expectedReplicas {
+			e2e.Logf("numberOfMachines value is: %v", numberOfMachines)
+			return true, nil
+		}
+		e2e.Logf("Windows machine is not provisioned yet. Waiting 30 seconds more ...")
+		return false, nil
 	})
-	if pollErr != nil {
-		e2e.Failf("Windows machine is not provisioned after waiting up to %v minutes ...", deadTime)
-	}
+	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Windows machine is not provisioned after waiting up to %v minutes ...", deadTime))
+
 }
 
 func getNodeNameFromIP(oc *exutil.CLI, nodeIP string, iaasPlatform string) (string, error) {
@@ -447,7 +457,7 @@ func ip4or6(s string) string {
 			return "version 4"
 		case ':':
 			return "version 6"
-	    }
+		}
 	}
 	return "unknown"
 }
@@ -541,10 +551,28 @@ func waitUntilWMCOStatusChanged(oc *exutil.CLI, message string) {
 	exutil.AssertWaitPollNoErr(waitLogErr, fmt.Sprintf("%v still watch label", message))
 }
 
+func waitForEndpointsReady(oc *exutil.CLI, namespace string, waitTime int, numberOfEndpoints int) {
+	waitLogErr := wait.Poll(10*time.Second, time.Duration(waitTime)*time.Minute, func() (bool, error) {
+		msg, err := oc.WithoutNamespace().Run("get").Args("endpoints", "-n", namespace, "-ojsonpath={.items[*].subsets[*].addresses[*].ip}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if (msg == "" && numberOfEndpoints == 0) || len(strings.Split(msg, " ")) == numberOfEndpoints {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(waitLogErr, fmt.Sprintf("Required number of endpoints %d not reached", numberOfEndpoints))
+}
+
 func getRandomString(len int) string {
 	buff := make([]byte, len)
 	rand.Read(buff)
 	str := base64.StdEncoding.EncodeToString(buff)
 	// Base 64 can be longer than len
 	return str[:len]
+}
+
+func getEndpointsIPs(oc *exutil.CLI, namespace string) string {
+	endpoints, err := oc.WithoutNamespace().Run("get").Args("endpoints", "-n", namespace, "-o=jsonpath={.items[].subsets[].addresses[*].ip}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return endpoints
 }

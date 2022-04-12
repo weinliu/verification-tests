@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -420,8 +422,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		g.By("Scale up the MachineSet")
 		e2e.Logf("Scalling up the Windows node to 3")
 		windowsMachineSetName := getWindowsMachineSetName(oc)
-		scaleWindowsMachineSet(oc, windowsMachineSetName, 3)
-		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 2)
+		scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 3)
+		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2)
 		waitWindowsNodesReady(oc, 3, 60*time.Second, 1200*time.Second)
 		// Testing the Windows server is reachable via Linux pod
 		command = []string{"exec", "-n", namespace, linuxPodArray[0], "--", "curl", windowsClusterIP}
@@ -623,8 +625,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		oc.WithoutNamespace().Run("delete").Args("secret", "windows-user-data", "-n", "openshift-machine-api").Output()
 
 		windowsMachineSetName := getWindowsMachineSetName(oc)
-		scaleWindowsMachineSet(oc, windowsMachineSetName, 3)
-		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 2)
+		scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 3)
+		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2)
 
 		g.By("Check Windows machine should be in Provisioning phase and not reconciled")
 		pollErr := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
@@ -684,8 +686,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 
 		g.By("Scale up the MachineSet")
 		windowsMachineSetName := getWindowsMachineSetName(oc)
-		scaleWindowsMachineSet(oc, windowsMachineSetName, 3)
-		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 2)
+		scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 3)
+		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2)
 
 		g.By("Scale up WMCO")
 		scaleDeployment(oc, "wmco", 1, namespace)
@@ -838,4 +840,55 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		}
 	})
 
+	g.It("Longduration-Smokerun-Author:rrasouli-NonPreRelease-Critical-39858-Windows servicemonitor and endpoints check [Slow][Serial][Disruptive]", func() {
+
+		g.By("Get Endpoints and service monitor values")
+		namespace := "openshift-windows-machine-config-operator"
+		// need to fetch service monitor age
+		serviceMonitorAge1, err := oc.WithoutNamespace().Run("get").Args("endpoints", "-n", namespace, "-o=jsonpath={.items[].metadata.creationTimestamp}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// here we fetch a list of endpoints
+		endpointsIPsBefore := getEndpointsIPs(oc, namespace)
+		// restarting the WMCO deployment
+		g.By("Restart WMCO pod by deleting")
+		wmcoID, err := getWorkloadsNames(oc, "wmco", namespace)
+		wmcoStartTime, err := oc.WithoutNamespace().Run("get").Args("endpoints", "-n", namespace, "-o=jsonpath={.status.StartTime}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("WMCO start time before restart", wmcoStartTime)
+		oc.WithoutNamespace().Run("delete").Args("pod", wmcoID[0], "-n", namespace).Output()
+		// checking that the WMCO has no errors and restarted properly
+		poolErr := wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
+			return checkWorkloadCreated(oc, "windows-machine-config-operator", namespace, 1), nil
+		})
+		if poolErr != nil {
+			e2e.Failf("Error restarting WMCO up to 3 minutes ...")
+		}
+		g.By("Test endpoints IPs survives a WMCO restart")
+		waitForEndpointsReady(oc, namespace, 5, len(strings.Split(endpointsIPsBefore, " ")))
+
+		endpointsIPsAfter := getEndpointsIPs(oc, namespace)
+		endpointsIPsBeforeArray := strings.Split(endpointsIPsBefore, " ")
+		sort.Strings(endpointsIPsBeforeArray)
+		endpointsIPsAfterArray := strings.Split(endpointsIPsAfter, " ")
+		sort.Strings(endpointsIPsAfterArray)
+		if !reflect.DeepEqual(endpointsIPsBeforeArray, endpointsIPsAfterArray) {
+			e2e.Failf("Endpoints list mismatch after WMCO restart %v, %v", endpointsIPsBeforeArray, endpointsIPsAfterArray)
+		}
+		g.By("Test service-monitor restarted")
+		serviceMonitorAge2, err := oc.WithoutNamespace().Run("get").Args("endpoints", "-n", namespace, "-o=jsonpath={.items[].metadata.creationTimestamp}").Output()
+		timeOriginal, err := time.Parse(time.RFC3339, serviceMonitorAge1)
+		timeLast, err := time.Parse(time.RFC3339, serviceMonitorAge2)
+		if timeOriginal.Unix() >= timeLast.Unix() {
+			e2e.Failf("Service monitor %v did not restart, bigger than %v new service monitor age", serviceMonitorAge1, serviceMonitorAge2)
+		}
+		g.By("Scale down nodes")
+		defer scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc), 20, 2)
+		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc), 5, 0)
+		g.By("Test endpoints IP are deleted after scalling down")
+		waitForEndpointsReady(oc, namespace, 5, 0)
+		endpointsIPsLast := getEndpointsIPs(oc, namespace)
+		if endpointsIPsLast != "" {
+			e2e.Failf("Endpoints %v are still exists after scalling down Windows nodes", endpointsIPsLast)
+		}
+	})
 })
