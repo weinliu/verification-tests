@@ -209,4 +209,69 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("******" + cloudProvider + " csi driver: \"" + storageClass.provisioner + "\" for Filesystem default mode test phase finished" + "******")
 	})
+
+	// author: ropatil@redhat.com
+	// [Alibaba-CSI-Driver] [Dynamic PV] with resource group id and allow volumes to store data
+	g.It("Author:ropatil-Medium-49498-[Alibaba-CSI-Driver] [Dynamic PV] with resource group id and allow volumes to store data", func() {
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		g.By("Get the resource group id for the cluster")
+		rgid := getResourceGroupId(oc)
+
+		// Set the resource template and definition for the scenario
+		var (
+			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			deploymentTemplate     = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+			storageClass           = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("diskplugin.csi.alibabacloud.com"))
+			pvc                    = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			dep                    = newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+			storageClassParameters = map[string]string{
+				"resourceGroupId": rgid,
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+
+		g.By("Create csi storageclass")
+		storageClass.createWithExtraParameters(oc, extraParameters)
+		defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+		g.By("Create a pvc with the csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("Create deployment with the created pvc")
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+
+		g.By("Wait for the deployment ready")
+		dep.waitReady(oc)
+
+		g.By("Check the volume mounted on the pod located node")
+		volName := pvc.getVolumeName(oc)
+		nodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
+		checkVolumeMountOnNode(oc, volName, nodeName)
+
+		g.By("Check volume have the resourcegroup id attribute")
+		o.Expect(checkVolumeCsiContainAttributes(oc, volName, rgid)).To(o.BeTrue())
+
+		g.By("Check the deployment's pod mounted volume can be read and write")
+		dep.checkPodMountedVolumeCouldRW(oc)
+
+		g.By("Check the deployment's pod mounted volume have the exec right")
+		dep.checkPodMountedVolumeHaveExecRight(oc)
+
+		g.By("Delete the deployment and pvc")
+		dep.deleteAsAdmin(oc)
+		pvc.deleteAsAdmin(oc)
+
+		g.By("#Check the volume got deleted and not mounted on node")
+		waitForPersistentVolumeStatusAsExpected(oc, volName, "deleted")
+		checkVolumeNotMountOnNode(oc, volName, nodeName)
+	})
 })

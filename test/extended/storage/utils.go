@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ghodss/yaml"
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -497,4 +498,15 @@ func checkCSIDriverInstalled(oc *exutil.CLI, supportProvisioners []string) bool 
 	}
 	e2e.Logf("CSI driver got successfully installed for provisioner '%s'", provisioner)
 	return true
+}
+
+//Get the Resource Group id value
+func getResourceGroupId(oc *exutil.CLI) string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "cluster-config-v1", "-n", "kube-system", "-o=jsonpath={.data.install-config}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	jsonOutput, err := yaml.YAMLToJSON([]byte(output))
+	o.Expect(err).NotTo(o.HaveOccurred())
+	jsonOutputString := string(jsonOutput)
+	rgid := gjson.Get(jsonOutputString, `platform.`+cloudProvider+`.resourceGroupID`)
+	return rgid.String()
 }
