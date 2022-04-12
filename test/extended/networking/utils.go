@@ -27,7 +27,7 @@ type pingPodResource struct {
 type pingPodResourceNode struct {
 	name      string
 	namespace string
-        nodename  string
+	nodename  string
 	template  string
 }
 
@@ -53,6 +53,14 @@ type egressFirewall2 struct {
 	namespace string
 	ruletype  string
 	cidr      string
+	template  string
+}
+
+type ipBlock_ingress struct {
+	name      string
+	namespace string
+	cidr_ipv4 string
+	cidr_ipv6 string
 	template  string
 }
 
@@ -151,6 +159,18 @@ func (egressFirewall *egressFirewall2) createEgressFW2Object(oc *exutil.CLI) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create EgressFW2 %v", egressFirewall.name))
+}
+
+func (ipBlock_ingress_policy *ipBlock_ingress) createipBlockIngressObject(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipBlock_ingress_policy.template, "-p", "NAME="+ipBlock_ingress_policy.name, "NAMESPACE="+ipBlock_ingress_policy.namespace, "CIDR_IPv6="+ipBlock_ingress_policy.cidr_ipv6, "CIDR_IPv4="+ipBlock_ingress_policy.cidr_ipv4)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create network policy %v", ipBlock_ingress_policy.name))
 }
 
 func (egressFirewall *egressFirewall2) deleteEgressFW2Object(oc *exutil.CLI) {
