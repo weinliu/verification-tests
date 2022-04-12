@@ -731,8 +731,8 @@ spec:
 		e2e.Logf("Number of nodes are %d", len(node))
 		no_of_nodes :=  len(node)
 		if no_of_nodes > 1 &&  cpu_avg_val < 50 &&  mem_avg_val < 50 {
-			e2e.Logf("Cluster has load normal..CPU %d %% and Memory %d %%...So using value of N=20", cpu_avg_val, mem_avg_val)
-			namespace_count = 20
+			e2e.Logf("Cluster has load normal..CPU %d %% and Memory %d %%...So using value of N=10", cpu_avg_val, mem_avg_val)
+			namespace_count = 10
 		} else if no_of_nodes == 1 &&  cpu_avg_val < 60 &&  mem_avg_val < 60 {
 			e2e.Logf("Cluster is SNO...CPU %d %% and Memory %d %%....So using value of N=3", cpu_avg_val, mem_avg_val)
 			namespace_count = 3
