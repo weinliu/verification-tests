@@ -267,4 +267,79 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(ip1[0]).Should(o.BeElementOf(freeIps))
 		o.Expect(ip2[0]).Should(o.BeElementOf(freeIps))
 	})
+
+	// author: jechen@redhat.com
+	g.It("Author:jechen-High-46556-Automatic EgressIP: A pod that is on a node hosting egressIP, it will always use the egressIP of the node . [Disruptive]", func() {
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node.yaml")
+		//testPodFile := filepath.Join(buildPruningBaseDir, "list_for_pods.json")
+
+		g.By("1. Get list of nodes, get subnet from two worker nodes that have same subnet, add egressCIDRs to them")
+		var egressNode1, egressNode2 string
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("Not enough nodes available for the test, skip the case!!")
+		}
+		switch ci.CheckPlatform(oc) {
+		case "aws":
+			e2e.Logf("find the two nodes that have same subnet")
+			check, nodes := findTwoNodesWithSameSubnet(oc, nodeList)
+			if check {
+				egressNode1 = nodes[0]
+				egressNode2 = nodes[1]
+			} else {
+				g.Skip("Did not get two worker nodes with same subnet, skip the case!!")
+			}
+		case "gcp":
+			e2e.Logf("since GCP worker nodes all have same subnet, just pick first two nodes as egress nodes")
+			egressNode1 = nodeList.Items[0].Name
+			egressNode2 = nodeList.Items[1].Name
+		default:
+			g.Skip("Not support cloud provider for this case, skip the test.")
+		}
+
+		sub := getIfaddrFromNode(egressNode1, oc)
+
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[\""+sub+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[\""+sub+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[]}")
+
+		g.By("2. Find 2 unused IPs from one egress node")
+		freeIps := findUnUsedIPsOnNode(oc, egressNode1, sub, 2)
+		o.Expect(len(freeIps) == 2).Should(o.BeTrue())
+
+		g.By("3. Create a namespaces, apply the both egressIPs to the namespace, and create a test pod on the egress node")
+
+		oc.SetupProject()
+		ns := oc.Namespace()
+		podns := pingPodResourceNode{
+			name:      "hello-pod",
+			namespace: ns,
+			nodename:  egressNode1,
+			template:  pingPodNodeTemplate,
+		}
+		podns.createPingPodNode(oc)
+		waitPodReady(oc, podns.namespace, podns.name)
+
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIps[0]+"\", \""+freeIps[1]+"\"]}")
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+
+		// check the source IP that the test pod uses
+		g.By("4. get egressIP on the node where test pod resides")
+		ip, err := getEgressIPonSDNHost(oc, egressNode1, 1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(ip[0]).Should(o.BeElementOf(freeIps))
+
+		g.By("5.Check source IP from the test pod for 5 times, it should always use the egressIP of the egressNode that it resides on")
+		for i := 0; i < 5; i++ {
+			sourceIP, err := e2e.RunHostCmd(ns, podns.name, "curl -s "+ipEchoUrl+" --connect-timeout 5")
+			e2e.Logf("sourceIP is %v", sourceIP)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(sourceIP).Should(o.BeElementOf(ip))
+		}
+	})
+
 })
