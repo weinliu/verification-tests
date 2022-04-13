@@ -58,7 +58,6 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		ns := filepath.Join(testDataDir, "namespace.yaml")
 		og := filepath.Join(testDataDir, "operatorgroup.yaml")
 
-		//createIfNoOperator(oc, opNamespace, ns, og, sub)
 		msg, err = subscribeFromTemplate(oc, subscription, subTemplate, ns, og)
 		e2e.Logf("---------- subscription %v succeeded with channel %v %v", subscription.subName, subscription.channel, err)
 

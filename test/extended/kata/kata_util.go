@@ -29,6 +29,7 @@ var (
 	snooze time.Duration = 720
 )
 
+// author: tbuskey@redhat.com,abhbaner@redhat.com
 func subscribeFromTemplate(oc *exutil.CLI, sub subscriptionDescription, subTemplate, nsFile, ogFile string) (msg string, err error) {
 	g.By(" (1) INSTALLING sandboxed-operator in '" + sub.namespace + "' namespace")
 	csvName := ""
@@ -93,66 +94,10 @@ func subscribeFromTemplate(oc *exutil.CLI, sub subscriptionDescription, subTempl
 }
 
 // author: abhbaner@redhat.com
-func createIfNoOperator(oc *exutil.CLI, opNamespace, ns, og, sub string) (status bool) {
-	operatorInstall(oc, opNamespace, ns, og, sub)
-	return true
-}
-
-// author: abhbaner@redhat.com
 func createIfNoKataConfig(oc *exutil.CLI, opNamespace, kc, kcName, kcMonitorImageName string) (status bool) {
 	kataConfigInstall(oc, opNamespace, kc, kcName, kcMonitorImageName)
 	return true
 
-}
-
-// author: abhbaner@redhat.com
-func operatorInstall(oc *exutil.CLI, opNamespace, ns, og, sub string) (status bool) {
-	//Installing Operator
-	g.By(" (1) INSTALLING sandboxed-operator in 'openshift-sandboxed-containers-operator' namespace")
-
-	//Applying the config of necessary yaml files to create sandbox operator
-	g.By("(1.1) Applying namespace yaml")
-	msg, err := oc.AsAdmin().Run("apply").Args("-f", ns).Output()
-	e2e.Logf("err %v, msg %v", err, msg)
-
-	g.By("(1.2)  Applying operatorgroup yaml")
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "-n", opNamespace, "--no-headers").Output()
-	if strings.Contains(msg, "No resources found in") {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", og, "-n", opNamespace).Output()
-	}
-	e2e.Logf("err %v, msg %v", err, msg)
-
-	g.By("(1.3) Applying subscription yaml")
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", sub, "-n", opNamespace).Output()
-	e2e.Logf("err %v, msg %v", err, msg)
-
-	//confirming operator install
-	errCheck := wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
-		subState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "sandboxed-containers-operator", "-n", opNamespace, "-o=jsonpath={.status.state}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Compare(subState, "AtLatestKnown") == 0 {
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("sub sandboxed-containers-operator is not correct status in ns %v", opNamespace))
-
-	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "sandboxed-containers-operator", "-n", opNamespace, "-o=jsonpath={.status.installedCSV}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(csvName).NotTo(o.BeEmpty())
-	errCheck = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
-		csvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", opNamespace, "-o=jsonpath={.status.phase}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Compare(csvState, "Succeeded") == 0 {
-			return true, nil
-			e2e.Logf("CSV check complete!!!")
-		}
-		return false, nil
-
-	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status in ns %v", csvName, opNamespace))
-
-	return true
 }
 
 // author: abhbaner@redhat.com
