@@ -11,7 +11,7 @@ objects:
   spec:
     terminationGracePeriodSeconds: 90
     containers:
-    - image: "quay.io/openshifttest/nginx@sha256:3936fb3946790d711a68c58be93628e43cbca72439079e16d154b5db216b58da"
+    - image: "quay.io/openshifttest/hello-openshift@sha256:b1aabe8c8272f750ce757b6c4263a2712796297511e0c6df79144ee188933623"
       name: termination
       command: [bash, -c, "sleep 100000000"] 
       ports:
