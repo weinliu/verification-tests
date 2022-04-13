@@ -19,7 +19,8 @@ class ReportPortalClient:
                 "Multi-Cluster","Cluster_Operator","Azure","Network_Edge","ETCD","Installer","Portfolio_Integration",
                 "Service_Development_A","OLM","Operator_SDK","App_Migration","Windows_Containers","Security_and_Compliance",
                 "KNI","Openshift_Jenkins","RHV","ISV_Operators","PSAP","Multi-Cluster-Networking","OTA","Kata","Build_API",
-                "Image_Registry","Container_Engine_Tools","MCO","API_Server","Authentication","Hypershift","Network_Observability"
+                "Image_Registry","Container_Engine_Tools","MCO","API_Server","Authentication","Hypershift","Network_Observability",
+                "DR_Testing"
             ]
     def __init__(self, args):
         urllib3.disable_warnings(category=InsecureRequestWarning)

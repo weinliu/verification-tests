@@ -54,7 +54,8 @@ class SummaryClient:
                 "API_Server":"@apiserver-qe-team ",
                 "Authentication":"@auth-qe-team ",
                 "Hypershift":"",
-                "Network_Observability":"@no-qe-team "
+                "Network_Observability":"@no-qe-team ",
+                "DR_Testing":"@geliu"
             }
     def __init__(self, args):
         token = args.token
