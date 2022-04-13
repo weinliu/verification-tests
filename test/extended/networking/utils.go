@@ -13,6 +13,7 @@ import (
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	ci "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -300,10 +301,10 @@ func describePod(oc *exutil.CLI, namespace string, podName string) string {
 
 func execCommandInSpecificPod(oc *exutil.CLI, namespace string, podName string, command string) (string, error) {
 	e2e.Logf("The command is: %v", command)
-	command1 := []string{"-n", namespace, podName, "--", "/bin/sh", "-c", command}
+	command1 := []string{"-n", namespace, podName, "--", "bash", "-c", command}
 	msg, err := oc.WithoutNamespace().Run("exec").Args(command1...).Output()
 	if err != nil {
-		e2e.Logf("Execute command failed with  err:%v .", err)
+		e2e.Logf("Execute command failed with  err:%v  and output is %v.", err, msg)
 		return msg, err
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -868,4 +869,32 @@ func updateEgressIPObject(oc *exutil.CLI, egressIPObjectName string, egressIP st
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(egressip_err, fmt.Sprintf("Failed to apply new egressIPs:%s", egressip_err))
+}
+
+func getTwoNodesSameSubnet(oc *exutil.CLI, nodeList *v1.NodeList) (bool, []string) {
+	var egressNodes []string
+	if len(nodeList.Items) < 2 {
+		e2e.Logf("Not enough nodes available for the test, skip the case!!")
+		return false, nil
+	}
+	switch ci.CheckPlatform(oc) {
+	case "aws":
+		e2e.Logf("find the two nodes that have same subnet")
+		check, nodes := findTwoNodesWithSameSubnet(oc, nodeList)
+		if check {
+			egressNodes = nodes[:2]
+		} else {
+			e2e.Logf("No more than 2 worker nodes in same subnet, skip the test!!!")
+			return false, nil
+		}
+	case "gcp":
+		e2e.Logf("since GCP worker nodes all have same subnet, just pick first two nodes as egress nodes")
+		egressNodes = append(egressNodes, nodeList.Items[0].Name)
+		egressNodes = append(egressNodes, nodeList.Items[1].Name)
+	default:
+		e2e.Logf("Not supported platform yet!")
+		return false, nil
+	}
+
+	return true, egressNodes
 }
