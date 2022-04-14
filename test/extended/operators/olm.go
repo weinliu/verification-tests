@@ -6253,7 +6253,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-High-29809-can complete automatical updates based on replaces", func() {
-		SkipARM64(oc)
 		var (
 			itName              = g.CurrentGinkgoTestDescription().TestText
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -6271,20 +6270,20 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 29809 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/cockroachdb-index:29809",
+				address:     "quay.io/olmqe/nginxolm-operator-index:v1",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
-				subName:                "cockroachdb-operator-29809",
+				subName:                "nginx-operator-29809",
 				namespace:              "",
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "cockroachdb",
+				operatorPackage:        "nginx-operator",
 				catalogSourceName:      catsrc.name,
 				catalogSourceNamespace: "",
 				template:               subTemplate,
 				singleNamespace:        true,
-				startingCSV:            "cockroachdb.v5.0.3",
+				startingCSV:            "nginx-operator.v0.0.1",
 			}
 		)
 		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
@@ -6304,20 +6303,20 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		defer sub.delete(itName, dr)
 		sub.create(oc, itName, dr)
 
-		g.By("check the operator upgrade to cockroachdb.v5.0.4")
+		g.By("check the operator upgrade to nginx-operator.v0.0.1")
 		err := wait.Poll(15*time.Second, 480*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", sub.namespace, "csv", "cockroachdb.v5.0.4", "-o=jsonpath={.spec.replaces}").Output()
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", sub.namespace, "csv", "nginx-operator.v1.0.1", "-o=jsonpath={.spec.replaces}").Output()
 			e2e.Logf(output)
 			if err != nil {
 				e2e.Logf("The csv is not created, error:%v", err)
 				return false, nil
 			}
-			if strings.Contains(output, "cockroachdb.v5.0.3") {
+			if strings.Contains(output, "nginx-operator.v0.0.1") {
 				return true, nil
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "cockroachdb.v5.0.4 does not replace cockroachdb.v5.0.3")
+		exutil.AssertWaitPollNoErr(err, "nginx-operator.v1.0.1 does not replace nginx-operator.v0.0.1")
 	})
 
 	// author: xzha@redhat.com
