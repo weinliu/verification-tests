@@ -1162,82 +1162,103 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	g.It("VMonly-ConnectedOnly-Author:chuo-Critical-45431-Critical-45428-Medium-43973-Medium-43976-Medium-48630-scorecard basic test migration and migrate olm tests and proxy configurable and xunit adjustment and sa ", func() {
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
+		tmpBasePath := "/tmp/ocp-45431-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "memcached-operator")
+		err := os.MkdirAll(tmpPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
 
-		exec.Command("bash", "-c", "mkdir -p /tmp/ocp-43973/memcached-operator && cd /tmp/ocp-43973/memcached-operator && operator-sdk init --plugins=ansible --domain example.com").Output()
-		defer exec.Command("bash", "-c", "rm -rf /tmp/ocp-43973").Output()
-		exec.Command("bash", "-c", "cd /tmp/ocp-43973/memcached-operator && operator-sdk create api --group cache --version v1alpha1 --kind Memcached --generate-role").Output()
-		exec.Command("bash", "-c", "cd /tmp/ocp-43973/memcached-operator && mkdir -p /tmp/ocp-43973/memcached-operator/config/manifests/").Output()
-		exec.Command("bash", "-c", "cp -rf test/extended/util/operatorsdk/ocp-43973-data/manifests/bases/ /tmp/ocp-43973/memcached-operator/config/manifests/").Output()
+		g.By("step: init Ansible Based Operator")
+		_, err = operatorsdkCLI.Run("init").Args("--plugins=ansible", "--domain", "example.com").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step: Create API.")
+		_, err = operatorsdkCLI.Run("create").Args("api", "--group", "cache", "--version", "v1alpha1", "--kind", "Memcached", "--generate-role").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		manifestsPath := filepath.Join(tmpPath, "config", "manifests")
+		err = os.MkdirAll(manifestsPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exec.Command("bash", "-c", fmt.Sprintf("cp -rf test/extended/util/operatorsdk/ocp-43973-data/manifests/bases/ %s", manifestsPath)).Output()
 
 		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
-			msg, err := exec.Command("bash", "-c", "cd /tmp/ocp-43973/memcached-operator && make bundle").Output()
+			msg, err := makeCLI.Run("bundle").Args().Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(string(msg), "operator-sdk bundle validate ./bundle") {
 				return true, nil
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("operator-sdk bundle generate failed"))
+		exutil.AssertWaitPollNoErr(waitErr, "operator-sdk bundle generate failed")
 
-		output, err := operatorsdkCLI.Run("version").Args("").Output()
+		output, _ := operatorsdkCLI.Run("version").Args("").Output()
 		e2e.Logf("The OperatorSDK version is %s", output)
 		//ocp-43973
 		g.By("scorecard basic test migration")
-		output, err = operatorsdkCLI.Run("scorecard").Args("/tmp/ocp-43973/memcached-operator/bundle", "-c", "/tmp/ocp-43973/memcached-operator/bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=basic-check-spec-test", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=basic-check-spec-test", "-n", oc.Namespace()).Output()
 		e2e.Logf(" scorecard bundle %v", err)
 		o.Expect(output).To(o.ContainSubstring("State: fail"))
 		o.Expect(output).To(o.ContainSubstring("spec missing from [memcached-sample]"))
 
 		//ocp-43976
 		g.By("migrate OLM tests-bundle validation")
-		output, err = operatorsdkCLI.Run("scorecard").Args("/tmp/ocp-43973/memcached-operator/bundle", "-c", "/tmp/ocp-43973/memcached-operator/bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("State: pass"))
 
 		g.By("migrate OLM tests-crds have validation test")
-		output, err = operatorsdkCLI.Run("scorecard").Args("/tmp/ocp-43973/memcached-operator/bundle", "-c", "/tmp/ocp-43973/memcached-operator/bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-crds-have-validation-test", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-crds-have-validation-test", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("State: pass"))
 
 		g.By("migrate OLM tests-crds have resources test")
-		output, err = operatorsdkCLI.Run("scorecard").Args("/tmp/ocp-43973/memcached-operator/bundle", "-c", "/tmp/ocp-43973/memcached-operator/bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-crds-have-resources-test", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-crds-have-resources-test", "-n", oc.Namespace()).Output()
+		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("State: fail"))
 		o.Expect(output).To(o.ContainSubstring("Owned CRDs do not have resources specified"))
 
 		g.By("migrate OLM tests- spec descriptors test")
-		output, err = operatorsdkCLI.Run("scorecard").Args("/tmp/ocp-43973/memcached-operator/bundle", "-c", "/tmp/ocp-43973/memcached-operator/bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-spec-descriptors-test", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-spec-descriptors-test", "-n", oc.Namespace()).Output()
+		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("State: fail"))
 
 		g.By("migrate OLM tests- status descriptors test")
-		output, err = operatorsdkCLI.Run("scorecard").Args("/tmp/ocp-43973/memcached-operator/bundle", "-c", "/tmp/ocp-43973/memcached-operator/bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-status-descriptors-test", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-status-descriptors-test", "-n", oc.Namespace()).Output()
+		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("State: fail"))
 		o.Expect(output).To(o.ContainSubstring("memcacheds.cache.example.com does not have a status descriptor"))
 
 		//ocp-48630
 		g.By("scorecard proxy container port should be configurable")
-		exec.Command("bash", "-c", "sed -i '$a\\proxy-port: 9001' /tmp/ocp-43973/memcached-operator/bundle/tests/scorecard/config.yaml").Output()
-		output, err = operatorsdkCLI.Run("scorecard").Args("/tmp/ocp-43973/memcached-operator/bundle", "-c", "/tmp/ocp-43973/memcached-operator/bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test", "-n", oc.Namespace()).Output()
+		exec.Command("bash", "-c", fmt.Sprintf("sed -i '$a\\proxy-port: 9001' %s/bundle/tests/scorecard/config.yaml", tmpPath)).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("State: pass"))
 
 		//ocp-45428 xunit adjustments - add nested tags and attributes
 		g.By("migrate OLM tests-bundle validation to generate a pass xunit output")
-		output, err = operatorsdkCLI.Run("scorecard").Args("/tmp/ocp-43973/memcached-operator/bundle", "-c", "/tmp/ocp-43973/memcached-operator/bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test", "-o", "xunit", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test", "-o", "xunit", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("<testsuite name=\"olm-bundle-validation\" id=\"olm-bundle-validation\""))
+		o.Expect(output).To(o.ContainSubstring("<testsuite name=\"olm-bundle-validation-test\""))
+		o.Expect(output).To(o.ContainSubstring("<testcase name=\"olm-bundle-validation\""))
 
 		g.By("migrate OLM tests-status descriptors to generate a failed xunit output")
-		output, err = operatorsdkCLI.Run("scorecard").Args("/tmp/ocp-43973/memcached-operator/bundle", "-c", "/tmp/ocp-43973/memcached-operator/bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-status-descriptors-test", "-o", "xunit", "-n", oc.Namespace()).Output()
-		o.Expect(output).To(o.ContainSubstring("<testsuite name=\"olm-status-descriptors\" failures=\"Loaded ClusterServiceVersion"))
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-status-descriptors-test", "-o", "xunit", "-n", oc.Namespace()).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("<testcase name=\"olm-status-descriptors\""))
+		o.Expect(output).To(o.ContainSubstring("<system-out>Loaded ClusterServiceVersion:"))
+		o.Expect(output).To(o.ContainSubstring("failure"))
 
 		// ocp-45431 bring in latest o-f/api to SDK BEFORE 1.13
 		g.By("use an non-exist service account to run test")
-		output, err = operatorsdkCLI.Run("scorecard").Args("/tmp/ocp-43973/memcached-operator/bundle", "-c", "/tmp/ocp-43973/memcached-operator/bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test ", "-s", "testing", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test ", "-s", "testing", "-n", oc.Namespace()).Output()
+		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("serviceaccount \"testing\" not found"))
-		exec.Command("bash", "-c", "cp -rf test/extended/util/operatorsdk/ocp-43973-data/sa_testing.yaml /tmp/ocp-43973/memcached-operator/").Output()
-		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", "/tmp/ocp-43973/memcached-operator/sa_testing.yaml", "-n", oc.Namespace()).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", "test/extended/util/operatorsdk/ocp-43973-data/sa_testing.yaml", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		output, err = operatorsdkCLI.Run("scorecard").Args("/tmp/ocp-43973/memcached-operator/bundle", "-c", "/tmp/ocp-43973/memcached-operator/bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test ", "-s", "testing", "-n", oc.Namespace()).Output()
+		_, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test ", "-s", "testing", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 	})
