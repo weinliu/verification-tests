@@ -7,6 +7,9 @@ import (
 	"regexp"
 
 	"math/rand"
+	"os/exec"
+	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -648,3 +651,137 @@ func (pod *debugPodUsingDefinition) createDebugPodUsingDefinition(oc *exutil.CLI
     })
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod %s with %s is not created successfully", pod.name, pod.cliImageId))
 }
+
+
+func createDeployment(oc *exutil.CLI, namespace string, deployname string) {
+        err := oc.Run("create").Args("-n", namespace, "deployment", deployname, "--image=quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e", "--replicas=20").Execute()
+        o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func triggerSucceedDeployment(oc *exutil.CLI, namespace string, deployname string, num int, expectedPods int) {
+        for i := 0; i < num; i++ {
+                err := oc.Run("set").Args("-n", namespace, "env", "deployment", deployname, "paramtest=test"+strconv.Itoa(i)).Execute()
+                o.Expect(err).NotTo(o.HaveOccurred())
+                _, currentRsName := getCurrentRs(oc, namespace, "app="+deployname)
+                err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+                        availablePodNum, errGet := oc.Run("get").Args("-n", namespace, "rs", currentRsName, "-o=jsonpath='{.status.availableReplicas}'").Output()
+                        if errGet != nil {
+                                e2e.Logf("Err Occurred: %v", errGet)
+                                return false, errGet
+                        }
+                        availableNum, _ := strconv.Atoi(strings.ReplaceAll(availablePodNum,"'", ""))
+                        if availableNum != expectedPods {
+                                e2e.Logf("new triggered apps not deploy successfully, wait more times")
+                                return false, nil
+                        }
+                        return true, nil
+                })
+                exutil.AssertWaitPollNoErr(err, fmt.Sprintf("failed to deploy %v", deployname))
+
+        }
+}
+func triggerFailedDeployment(oc *exutil.CLI, namespace string, deployname string) {
+        patchYaml := `[{"op": "replace", "path": "/spec/template/spec/containers/0/image", "value": "quay.io/openshifttest/hello-openshift:nonexist"}]`
+        err := oc.Run("patch").Args("-n", namespace, "deployment", deployname, "--type=json", "-p", patchYaml).Execute()
+        o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func getShouldPruneRSFromPrune(oc *exutil.CLI, pruneRsNumCMD string, pruneRsCMD string, prunedNum int) []string {
+        e2e.Logf("Get pruned rs name by dry-run")
+        e2e.Logf("pruneRsNumCMD %v:", pruneRsNumCMD)
+        err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+                pruneRsNum, err := exec.Command("bash", "-c", pruneRsNumCMD).Output()
+                o.Expect(err).NotTo(o.HaveOccurred())
+                pruneNum, err := strconv.Atoi(strings.ReplaceAll(string(pruneRsNum),"\n", ""))
+                o.Expect(err).NotTo(o.HaveOccurred())
+                if pruneNum != prunedNum {
+                        e2e.Logf("pruneNum is not equal %v: ", prunedNum)
+                        return false, nil
+                }
+                return true, nil
+        })
+        exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Check pruned RS failed"))
+
+        e2e.Logf("pruneRsCMD %v:", pruneRsCMD)
+        pruneRsName, err := exec.Command("bash", "-c", pruneRsCMD).Output()
+        o.Expect(err).NotTo(o.HaveOccurred())
+        pruneRsList := strings.Fields(strings.ReplaceAll(string(pruneRsName),"\n", " "))
+        sort.Strings(pruneRsList)
+        e2e.Logf("pruneRsList %v:", pruneRsList)
+        return pruneRsList
+}
+
+func getCompeletedRsInfo(oc *exutil.CLI, namespace string, deployname string) (completedRsList []string, completedRsNum int){
+        out, err := oc.Run("get").Args("-n", namespace, "rs", "--sort-by={.metadata.creationTimestamp}", "-o=jsonpath='{.items[?(@.spec.replicas == 0)].metadata.name}'").Output()
+        o.Expect(err).NotTo(o.HaveOccurred())
+        e2e.Logf("string out %v:", out)
+        totalCompletedRsList := strings.Fields(strings.ReplaceAll(out, "'", ""))
+        totalCompletedRsListNum := len(totalCompletedRsList)
+        return totalCompletedRsList, totalCompletedRsListNum
+}
+
+func getShouldPruneRSFromCreateTime(totalCompletedRsList []string, totalCompletedRsListNum int,  keepNum int) []string {
+        rsList := totalCompletedRsList[0:(totalCompletedRsListNum - keepNum)]
+        sort.Strings(rsList)
+        e2e.Logf("rsList %v:", rsList)
+        return rsList
+
+}
+
+func comparePrunedRS(rsList []string, pruneRsList []string) bool{
+        e2e.Logf("Check pruned rs whether right")
+        if !reflect.DeepEqual(rsList, pruneRsList) {
+                return false
+        }
+        return true
+}
+
+
+func checkRunningRsList(oc *exutil.CLI, namespace string, deployname string) []string{
+        e2e.Logf("Get all the running RSs")
+        out, err := oc.Run("get").Args("-n", namespace, "rs", "-o=jsonpath='{.items[?(@.spec.replicas > 0)].metadata.name}'").Output()
+        o.Expect(err).NotTo(o.HaveOccurred())
+        runningRsList := strings.Fields(strings.ReplaceAll(out, "'", ""))
+        sort.Strings(runningRsList)
+        e2e.Logf("runningRsList %v:", runningRsList)
+        return runningRsList
+}
+
+func pruneCompletedRs(oc *exutil.CLI, parameters ...string) {
+        e2e.Logf("Delete all the completed RSs")
+        err := oc.AsAdmin().WithoutNamespace().Run("adm").Args(parameters...).Execute()
+        o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func getRemainingRs(oc *exutil.CLI, namespace string, deployname string) []string {
+        e2e.Logf("Get all the remaining RSs")
+        remainRs, err := oc.WithoutNamespace().Run("get").Args("rs", "-l", "app="+deployname, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+        o.Expect(err).NotTo(o.HaveOccurred())
+        remainRsList := strings.Fields(string(remainRs))
+        sort.Strings(remainRsList)
+        e2e.Logf("remainRsList %v:", remainRsList)
+        return remainRsList
+}
+
+
+func getCurrentRs(oc *exutil.CLI, projectName string, labels string) (string, string) {
+        var podTHash, rsName string
+        currentGeneration, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", projectName, "-l", labels, "-o=jsonpath={.items[*].status.observedGeneration}").Output()
+        o.Expect(err).NotTo(o.HaveOccurred())
+        output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("rs", "-n", projectName, "-l", labels, "-o=jsonpath={.items[*].metadata.name}").Output()
+        o.Expect(err).NotTo(o.HaveOccurred())
+        rsNameList := strings.Fields(output)
+        for _, rsname := range rsNameList {
+                version, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("rs", rsname, "-n", projectName, "-o=jsonpath={.metadata.annotations.deployment\\.kubernetes\\.io/revision}").Output()
+                o.Expect(err).NotTo(o.HaveOccurred())
+                if matched, _ := regexp.MatchString(currentGeneration, version); matched {
+                        podTHash, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("rs", rsname, "-n", projectName, "-o=jsonpath={.spec.selector.matchLabels.pod-template-hash}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+                        e2e.Logf("%s is the current rs", rsname)
+                        rsName = rsname
+			break
+                }
+        }
+        return podTHash, rsName
+}
+

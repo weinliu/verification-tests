@@ -2,6 +2,7 @@ package workloads
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os/exec"
 	"path/filepath"
@@ -352,6 +353,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
         defer oc.Run("delete").Args("pod/pod48681", "-n", oc.Namespace()).Execute()
 	})
 
+
 	// author: yinzhou@redhat.com
 	g.It("Author:yinzhou-Medium-49116-oc debug should remove startupProbe when create debug pod", func() {
 		g.By("create new namespace")
@@ -373,6 +375,107 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			e2e.Failf("The output should be empty, but not: %v", out)
 		}
 	})
+
+
+	// author: yinzhou@redhat.com
+        g.It("Author:yinzhou-NonPreRelease-High-45307-Critical-45327-check oc adm prune deployments to prune RS [Slow][Disruptive]", func() {
+                g.By("create new namespace")
+                oc.SetupProject()
+
+                g.By("Create deployments and trigger more times")
+                createDeployment(oc, oc.Namespace(), "mydep45307")
+                triggerSucceedDeployment(oc, oc.Namespace(), "mydep45307", 6, 20)
+                triggerFailedDeployment(oc, oc.Namespace(), "mydep45307")
+
+                g.By("get the completed rs infomation")
+                totalCompletedRsList, totalCompletedRsListNum := getCompeletedRsInfo(oc, oc.Namespace(), "mydep45307")
+
+                g.By("Dry run the prune deployments for RS")
+                keepCompletedRsNum := 3
+                pruneRsNumCMD := fmt.Sprintf("oc adm prune deployments --keep-complete=%v --keep-younger-than=10s --replica-sets=true  |grep %s |wc -l", keepCompletedRsNum, oc.Namespace())
+                pruneRsDryCMD := fmt.Sprintf("oc adm prune deployments --keep-complete=%v --keep-younger-than=10s --replica-sets=true  |grep %s|awk '{print $2}'", keepCompletedRsNum, oc.Namespace())
+                rsListFromPrune := getShouldPruneRSFromPrune(oc, pruneRsNumCMD, pruneRsDryCMD, (totalCompletedRsListNum - keepCompletedRsNum))
+                shouldPruneRsList := getShouldPruneRSFromCreateTime(totalCompletedRsList, totalCompletedRsListNum, keepCompletedRsNum)
+                if comparePrunedRS(shouldPruneRsList, rsListFromPrune) {
+                        e2e.Logf("Checked the pruned rs is expected")
+                } else {
+                        e2e.Failf("Pruned the wrong RS with dry run")
+                }
+
+                g.By("Make sure never prune RS with replicas num >0")
+                //before prune ,check the running rs list
+                runningRsList := checkRunningRsList(oc, oc.Namespace(), "mydep45307")
+
+                //checking the should prune rs list
+                completedRsNum := 0
+                pruneRsNumCMD = fmt.Sprintf("oc adm prune deployments --keep-complete=%v --keep-younger-than=10s --replica-sets=true  |grep %s |wc -l", completedRsNum, oc.Namespace())
+                pruneRsDryCMD = fmt.Sprintf("oc adm prune deployments --keep-complete=%v --keep-younger-than=10s --replica-sets=true  |grep %s|awk '{print $2}'", completedRsNum, oc.Namespace())
+
+                rsListFromPrune = getShouldPruneRSFromPrune(oc, pruneRsNumCMD, pruneRsDryCMD, (totalCompletedRsListNum - completedRsNum))
+                shouldPruneRsList = getShouldPruneRSFromCreateTime(totalCompletedRsList, totalCompletedRsListNum, completedRsNum)
+                if comparePrunedRS(shouldPruneRsList, rsListFromPrune) {
+                        e2e.Logf("dry run prune all completed rs is expected")
+                } else {
+                        e2e.Failf("Pruned the wrong RS with dry run")
+                }
+
+                //prune all the completed rs list
+                pruneCompletedRs(oc, "prune", "deployments", "--keep-complete=0", "--keep-younger-than=10s", "--replica-sets=true", "--confirm")
+
+                //after prune , check the remaining rs list
+                remainingRsList := getRemainingRs(oc, oc.Namespace(), "mydep45307")
+                if comparePrunedRS(runningRsList, remainingRsList) {
+                        e2e.Logf("pruned all completed rs is expected")
+                } else {
+                        e2e.Failf("Pruned the wrong")
+                }
+        })
+        // author: yinzhou@redhat.com
+        g.It("Author:yinzhou-NonPreRelease-High-45308-check oc adm prune deployments command with the orphans options works well [Slow][Disruptive]", func() {
+                g.By("create new namespace")
+                oc.SetupProject()
+
+                g.By("Create deployments and trigger more times")
+                createDeployment(oc, oc.Namespace(), "mydep45308")
+                triggerSucceedDeployment(oc, oc.Namespace(), "mydep45308", 6, 20)
+                triggerFailedDeployment(oc, oc.Namespace(), "mydep45308")
+
+                g.By("get the completed rs infomation")
+                totalCompletedRsList, totalCompletedRsListNum := getCompeletedRsInfo(oc, oc.Namespace(), "mydep45308")
+
+                g.By("delete the deploy with ")
+                err := oc.Run("delete").Args("-n", oc.Namespace(), "deploy", "mydep45308", "--cascade=orphan").Execute()
+                o.Expect(err).NotTo(o.HaveOccurred())
+                g.By("prune the rs with orphans=true")
+                //before prune ,check the running rs list
+                runningRsList := checkRunningRsList(oc, oc.Namespace(), "mydep45308")
+
+                //checking the should prune rs list
+                completedRsNum := 0
+                pruneRsNumCMD := fmt.Sprintf("oc adm prune deployments --keep-complete=%v --keep-younger-than=10s --replica-sets=true --orphans=true |grep %s |wc -l", completedRsNum, oc.Namespace())
+                pruneRsDryCMD := fmt.Sprintf("oc adm prune deployments --keep-complete=%v --keep-younger-than=10s --replica-sets=true --orphans=true |grep %s|awk '{print $2}'", completedRsNum, oc.Namespace())
+
+                rsListFromPrune := getShouldPruneRSFromPrune(oc, pruneRsNumCMD, pruneRsDryCMD, (totalCompletedRsListNum - completedRsNum))
+                shouldPruneRsList := getShouldPruneRSFromCreateTime(totalCompletedRsList, totalCompletedRsListNum, completedRsNum)
+                if comparePrunedRS(shouldPruneRsList, rsListFromPrune) {
+                        e2e.Logf("dry run prune all completed rs is expected")
+                } else {
+                        e2e.Failf("Pruned the wrong RS with dry run")
+                }
+
+                //prune all the completed rs list
+                pruneCompletedRs(oc, "prune", "deployments", "--keep-complete=0", "--keep-younger-than=10s", "--replica-sets=true", "--confirm", "--orphans=true")
+
+                //after prune , check the remaining rs list
+                remainingRsList := getRemainingRs(oc, oc.Namespace(), "mydep45308")
+                if comparePrunedRS(runningRsList, remainingRsList) {
+                        e2e.Logf("pruned all completed rs is expected")
+                } else {
+                        e2e.Failf("Pruned the wrong")
+                }
+        })
+
+
 })
 
 type ClientVersion struct {
