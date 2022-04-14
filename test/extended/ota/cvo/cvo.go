@@ -27,6 +27,32 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	oc := exutil.NewCLIWithoutNamespace(project_name)
 
 	//author: yanyang@redhat.com
+	g.It("Author:yanyang-Low-49670-change spec.capabilities to invalid value", func() {
+		orgBaseCap, err := getCVObyJP(oc, ".spec.capabilities.baselineCapabilitySet")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		orgAddCapstr, err := getCVObyJP(oc, ".spec.capabilities.additionalEnabledCapabilities[*]")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf(orgBaseCap, orgAddCapstr)
+
+		orgAddCap := strings.Split(orgAddCapstr, " ")
+
+		defer changeCap(oc, true, orgBaseCap)
+		defer changeCap(oc, false, orgAddCap)
+
+		g.By("Set invalid baselineCapabilitySet")
+		cmdOut, err := changeCap(oc, true, "Invalid")
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(cmdOut).To(o.ContainSubstring("spec.capabilities.baselineCapabilitySet: " +
+			"Unsupported value: \"Invalid\": supported values: \"None\", \"v4.11\", \"vCurrent\""))
+
+		g.By("Set invalid additionalEnabledCapabilities")
+		cmdOut, err = changeCap(oc, false, []string{"Invalid"})
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(cmdOut).To(o.ContainSubstring("spec.capabilities.additionalEnabledCapabilities: " +
+			"Unsupported value: \"Invalid\": supported values: \"openshift-samples\", \"baremetal\", \"marketplace\""))
+	})
+
+	//author: yanyang@redhat.com
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:yanyang-Medium-45879-check update info with oc adm upgrade --include-not-recommended [Serial][Slow]", func() {
 		orgUpstream, err := getCVObyJP(oc, ".spec.upstream")
 		o.Expect(err).NotTo(o.HaveOccurred())

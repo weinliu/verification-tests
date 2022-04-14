@@ -562,3 +562,19 @@ func checkUpdates(oc *exutil.CLI, conditional bool, interval time.Duration, time
 	}
 	return true
 }
+
+// change the spec.capabilities
+// if base==true, change the baselineCapabilitySet, otherwise, change the additionalEnabledCapabilities
+func changeCap(oc *exutil.CLI, base bool, cap interface{}) (string, error) {
+	var spec string
+	if base {
+		spec = "/spec/capabilities/baselineCapabilitySet"
+	} else {
+		spec = "/spec/capabilities/additionalEnabledCapabilities"
+	}
+	if cap == nil {
+		return ocJsonPatch(oc, "", "clusterversion/version", []JSONp{{"remove", spec, nil}})
+	} else {
+		return ocJsonPatch(oc, "", "clusterversion/version", []JSONp{{"add", spec, cap}})
+	}
+}
