@@ -7034,8 +7034,8 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// author: xzha@redhat.com, test case OCP-40534
 	g.It("ConnectedOnly-Author:xzha-Medium-40534-the deployment should not lost the resources section [Flaky]", func() {
-		SkipARM64(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		oc.SetupProject()
@@ -7046,26 +7046,37 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				namespace: namespaceName,
 				template:  ogSingleTemplate,
 			}
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-40534",
+				namespace:   namespaceName,
+				displayName: "Test Catsrc 40534 Operators",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/nginxolm-operator-index:v1",
+				template:    catsrcImageTemplate,
+			}
 			sub = subscriptionDescription{
-				subName:                "redis-40534-operator",
+				subName:                "nginx-40534-operator",
 				namespace:              namespaceName,
-				catalogSourceName:      "community-operators",
-				catalogSourceNamespace: "openshift-marketplace",
-				channel:                "stable",
+				catalogSourceName:      "catsrc-40534",
+				catalogSourceNamespace: namespaceName,
+				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "redis-operator",
+				operatorPackage:        "nginx-operator",
 				singleNamespace:        true,
 				template:               subTemplate,
 			}
 		)
 		itName := g.CurrentGinkgoTestDescription().TestText
-		g.By("STEP 1: create the OperatorGroup ")
+		g.By("STEP 1: create the OperatorGroup and catalog source")
 		og.createwithCheck(oc, itName, dr)
+		defer catsrc.delete(itName, dr)
+		catsrc.createWithCheck(oc, itName, dr)
 
 		g.By("STEP 2: create sub")
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "redis-operator", ok, []string{"deployment", "-n", sub.namespace}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "nginx-operator", ok, []string{"deployment", "-n", sub.namespace}).check(oc)
 
 		g.By("STEP 3: check OPERATOR_CONDITION_NAME")
 		cpuCSV := getResource(oc, asAdmin, withoutNamespace, "csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={..containers[?(@.name==\"manager\")].resources.requests.cpu}")
