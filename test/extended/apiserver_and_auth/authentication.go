@@ -1,7 +1,11 @@
 package apiserver_and_auth
 
 import (
+	"crypto/tls"
+	base64 "encoding/base64"
 	"io/ioutil"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -406,5 +410,204 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		}()
 		output, err = oc.Run("create").Args("-f", podYaml).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	// author: rugong@redhat.com
+	// It is destructive case, will change oauth cluster and the case execution duration is greater than 5 min, so adding [Disruptive] and [NonPreRelease]
+	g.It("NonPreRelease-Author:rugong-Medium-22434-RequestHeader IDP consumes header values from requests of auth proxy [Disruptive]", func() {
+		configMapPath, err := os.MkdirTemp("/tmp/", "tmp_22434")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(configMapPath)
+		caFileName := "/ca-bundle.crt"
+		configMapName := "my-request-header-idp-configmap"
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", "openshift-config", "cm/admin-kubeconfig-client-ca", "--confirm", "--to=" + configMapPath).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.Remove(configMapPath + caFileName)
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", configMapName, "--from-file=ca.crt=" + configMapPath + caFileName, "-n", "openshift-config").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			g.By("Removing configmap before exiting the scenario.")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", configMapName, "-n", "openshift-config").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		oauthClusterYamlPath := "/tmp/oauth_cluster_22434.yaml"
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("oauth", "cluster", "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// uid and resourceVersion must be removed, otherwise "Operation cannot be fulfilled" error will occur when running oc replace in later steps
+		re := regexp.MustCompile("(?m)[\r\n]+^  (uid|resourceVersion):.*$")
+		output = re.ReplaceAllString(output, "")
+		err = ioutil.WriteFile(oauthClusterYamlPath, []byte(output), 0644)
+		defer os.Remove(oauthClusterYamlPath)
+		baseDir := exutil.FixturePath("testdata", "apiserver_and_auth")
+		idpPath := filepath.Join(baseDir, "RequestHeader_IDP.yaml")
+		idpStr, err := ioutil.ReadFile(idpPath)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Replacing oauth cluster yaml [spec] part.")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("oauth", "cluster", "--type=merge", "-p", string(idpStr)).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			g.By("Restoring oauth cluster yaml before exiting the scenario.")
+			err = oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", oauthClusterYamlPath).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		expectedStatus := map[string]string{"Progressing": "True"}
+		err = waitCoBecomes(oc, "authentication", 240, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, `authentication status has not yet changed to {"Progressing": "True"} in 240 seconds`)
+		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err = waitCoBecomes(oc, "authentication", 240, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, `authentication status has not yet changed to {"Available": "True", "Progressing": "False", "Degraded": "False"} in 240 seconds`)
+		e2e.Logf("openshift-authentication pods are all running.")
+
+		g.By("Preparing file client.crt and client.key")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("config").Args("view", "--context", "admin", "--minify", "--raw").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		reg := regexp.MustCompile("(?m)[\r\n]+^    (client-certificate-data):.*$")
+		clientCertificateData := reg.FindString(output)
+		reg = regexp.MustCompile("(?m)[\r\n]+^    (client-key-data):.*$")
+		clientKeyData := reg.FindString(output)
+		reg = regexp.MustCompile("[^ ]+$")
+		crtEncode := reg.FindString(clientCertificateData)
+		o.Expect(crtEncode).NotTo(o.BeEmpty())
+		keyEncode := reg.FindString(clientKeyData)
+		o.Expect(keyEncode).NotTo(o.BeEmpty())
+		crtDecodeByte, err := base64.StdEncoding.DecodeString(crtEncode)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		keyDecodeByte, err := base64.StdEncoding.DecodeString(keyEncode)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		crtPath := "/tmp/client_22434.crt"
+		keyPath := "/tmp/client_22434.key"
+		err = ioutil.WriteFile(crtPath, crtDecodeByte, 0644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.Remove(crtPath)
+		err = ioutil.WriteFile(keyPath, keyDecodeByte, 0644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.Remove(keyPath)
+		e2e.Logf("File client.crt and client.key are prepared.")
+
+		// generate first request
+		cert, err := tls.LoadX509KeyPair(crtPath, keyPath)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		client := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+					Certificates:       []tls.Certificate{cert},
+				},
+			},
+			// if the client follows redirects automatically, it will encounter this error "http: no Location header in response"
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+		oauthRouteHost, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "oauth-openshift", "-n", "openshift-authentication", "-o", "jsonpath={.spec.host}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		requestURL := "https://" + oauthRouteHost + "/oauth/authorize?response_type=token&client_id=openshift-challenging-client"
+		request, err := http.NewRequest("GET", requestURL, nil)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ssoUser1 := "testUser1"
+		xRemoteUserDisplayName := "testDisplayName1"
+		request.Header.Add("SSO-User", ssoUser1)
+		request.Header.Add("X-Remote-User-Display-Name", xRemoteUserDisplayName)
+		g.By("First request is sending, waiting a response.")
+		response1, err := client.Do(request)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer response1.Body.Close()
+		// check user & identity & oauthaccesstoken
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("user", ssoUser1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("identity", "my-request-header-idp:" + ssoUser1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("oauthaccesstoken").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(ssoUser1))
+		e2e.Logf("First response is gotten, user & identity & oauthaccesstoken are expected.")
+		defer func() {
+			g.By("Removing user " + ssoUser1)
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("user", ssoUser1).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			g.By("Removing identity my-request-header-idp:" + ssoUser1)
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("identity", "my-request-header-idp:" + ssoUser1).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("Logging in with access_token.")
+		location := response1.Header.Get("Location")
+		u, err := url.Parse(location)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		subStrArr := strings.Split(u.Fragment, "&")
+		accessToken := ""
+		for i := 0; i < len(subStrArr); i++ {
+			if strings.Contains(subStrArr[i], "access_token") {
+				accessToken = strings.Replace(subStrArr[i], "access_token=", "", 1)
+				break
+			}
+		}
+		o.Expect(accessToken).NotTo(o.BeEmpty())
+		// The --token command modifies the file pointed to the env KUBECONFIG, so I need a temporary file for it to modify
+		oc.SetupProject()
+		err = oc.Run("login").Args("--token", accessToken).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Log in with access_token successfully.")
+
+		// generate second request
+		requestURL = "https://" + oauthRouteHost + "/oauth/authorize?response_type=token&client_id=openshift-challenging-client"
+		request, err = http.NewRequest("GET", requestURL, nil)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ssoUser2 := "testUser2"
+		xRemoteUserLogin := "testUserLogin"
+		request.Header.Add("SSO-User", ssoUser2)
+		request.Header.Add("X-Remote-User-Login", xRemoteUserLogin)
+		g.By("Second request is sending, waiting a response.")
+		response2, err := client.Do(request)
+		defer response2.Body.Close()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("user", xRemoteUserLogin).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("identity", "my-request-header-idp:" + ssoUser2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Second response is gotten, user & identity are expected.")
+		defer func() {
+			g.By("Removing user " + xRemoteUserLogin)
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("user", xRemoteUserLogin).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			g.By("Removing identity my-request-header-idp:" + ssoUser2)
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("identity", "my-request-header-idp:" + ssoUser2).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		client = &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+					Certificates:       []tls.Certificate{cert},
+				},
+			},
+		}
+		// generate third request
+		requestURL = "https://" + oauthRouteHost + "/oauth/token/request"
+		request, err = http.NewRequest("GET", requestURL, nil)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		xRemoteUser := "testUser3"
+		request.Header.Add("X-Remote-User", xRemoteUser)
+		g.By("Third request is sending, waiting a response.")
+		response3, err := client.Do(request)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer response3.Body.Close()
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("user", xRemoteUser).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("identity", "my-request-header-idp:" + xRemoteUser).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bodyByte, err := ioutil.ReadAll(response3.Body)
+		respBody := string(bodyByte)
+		o.Expect(respBody).To(o.ContainSubstring("Display Token"))
+		e2e.Logf("Third response is gotten, user & identity & display_token are expected.")
+		defer func() {
+			g.By("Removing user " + xRemoteUser)
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("user", xRemoteUser).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			g.By("Removing identity my-request-header-idp:" + xRemoteUser)
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("identity", "my-request-header-idp:" + xRemoteUser).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
 	})
 })
