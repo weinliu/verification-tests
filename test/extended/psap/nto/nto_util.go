@@ -539,7 +539,7 @@ func AssertNTOCertificateRotate(oc *exutil.CLI, ntoNamespace string, tunedNodeNa
 		openSSLOutputAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		openSSLExpireDateAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null  | openssl x509 -noout -dates")
+		openSSLExpireDateAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null  | /host/bin/openssl x509 -noout -dates")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("The openSSL Expired Date information of NTO openSSL after rotate as below: \n%v", openSSLExpireDateAfter)

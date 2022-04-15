@@ -1370,10 +1370,12 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//Use the first worker node as labeled node
 		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The tuned node name is: \n%v", tunedNodeName)
 
 		//Get NTO operator pod name
 		ntoOperatorPod, err := getNTOPodName(oc, ntoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The tuned operator pod name is: \n%v", ntoOperatorPod)
 
 		metricEndpoint := getServiceENDPoint(oc, ntoNamespace)
 
@@ -1382,9 +1384,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Get information about the creation and expiration date of the certificate")
-		openSSLExpireDateBefore, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null  | openssl x509 -noout -dates")
+		openSSLExpireDateBefore, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null | /host/bin/openssl x509 -noout -dates")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("The openSSL Expired Date information of NTO openSSL before rotate as below: \n%v", openSSLExpireDateBefore, openSSLExpireDateBefore)
+		e2e.Logf("The openSSL Expired Date information of NTO openSSL before rotate as below: \n%v", openSSLExpireDateBefore)
 
 		encodeBase64OpenSSLOutputBefore := exutil.StringToBASE64(openSSLOutputBefore)
 		encodeBase64OpenSSLExpireDateBefore := exutil.StringToBASE64(openSSLExpireDateBefore)
@@ -1396,7 +1398,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Assert NTO logs to match key words restarting metrics server to rotate certificates")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, ntoOperatorPod, "4", 300, "restarting metrics server to rotate certificates")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, ntoOperatorPod, "4", 240, "restarting metrics server to rotate certificates")
 
 		g.By("Assert if NTO rotate certificates ...")
 		AssertNTOCertificateRotate(oc, ntoNamespace, tunedNodeName, encodeBase64OpenSSLOutputBefore, encodeBase64OpenSSLExpireDateBefore)
@@ -1566,6 +1568,11 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-stalld-").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "openshift-stalld", "-n", ntoNamespace, "--ignore-not-found").Execute()
+		defer exutil.DebugNodeWithChroot(oc, tunedNodeName, "/usr/bin/throttlectl", "on")
+
+		g.By("Set off for /usr/bin/throttlectl before enable stalld")
+		_, err = exutil.DebugNodeWithChroot(oc, tunedNodeName, "/usr/bin/throttlectl", "off")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Label the node with node-role.kubernetes.io/worker-stalld=")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-stalld=", "--overwrite").Execute()
