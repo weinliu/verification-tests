@@ -2385,7 +2385,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: xiyuan@redhat.com
-		g.It("Author:xiyuan-High-33429-The Compliance Operator returns error if there is no toleration for a node taint [Exclusive] [Slow]", func() {
+		g.It("Author:xiyuan-High-33429-The Compliance Operator performs scan successfully on taint node without tolerations [Exclusive] [Slow]", func() {
 
 			var (
 				csuiteD = complianceSuiteDescription{
@@ -2424,7 +2424,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			csuiteD.create(oc, itName, dr)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
 				subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, contain, "ERROR", ok, []string{"compliancesuite", csuiteD.name, "-n",
+			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancesuite", csuiteD.name, "-n",
 				subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 
 			g.By("Check complianceScan result exit-code through configmap.. !!!\n")
