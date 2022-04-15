@@ -8,6 +8,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 var _ = g.Describe("[sig-networking] SDN", func() {
@@ -217,6 +218,103 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		metric_value := strings.TrimSpace(string(metric_output))
 		e2e.Logf("The output of the egress-router metrics is : %v", metric_value)
 		o.Expect(metric_value).To(o.ContainSubstring("1"))
+	})
+
+	g.It("Author:weliang-Medium-45685-Metrics for Metrics for egressIP. [Disruptive]", func() {
+		var (
+			ovnnamespace = "openshift-ovn-kubernetes"
+			ovncmName    = "ovn-kubernetes-master"
+			sdnnamespace = "openshift-sdn"
+			sdncmName    = "openshift-network-controller"
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			egressIPTemplate = filepath.Join(buildPruningBaseDir, "egressip-config1.yaml")
+		)
+
+		platform := checkPlatform(oc)
+		if !strings.Contains(platform, "vsphere") {
+			g.Skip("Skip for un-expected platform, egreeIP testing need to be executed on a vsphere cluster!")
+		}
+		networkType := checkNetworkType(oc)		
+		
+		if networkType == "ovnkubernetes" {
+			g.By("create new namespace")
+			oc.SetupProject()
+			ns := oc.Namespace()
+	
+			g.By("get the metrics of ovnkube_master_num_egress_ips before egress_ips configurations")
+			leaderNodeIP := getLeaderInfo(oc, ovnnamespace, ovncmName, networkType)
+			prometheus_url := "https://" + leaderNodeIP + ":9102/metrics"
+			output := getOVNMetrics(oc, prometheus_url)
+			metric_output, _ := exec.Command("bash", "-c", "cat "+output+" | grep ovnkube_master_num_egress_ips | awk 'NR==3{print $2}'").Output()
+			metric_value := strings.TrimSpace(string(metric_output))
+			e2e.Logf("The output of the ovnkube_master_num_egress_ips is : %v", metric_value)
+			o.Expect(metric_value).To(o.ContainSubstring("0"))
+	
+			g.By("Label EgressIP node")
+			var EgressNodeLabel = "k8s.ovn.org/egress-assignable"
+			nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+			if err != nil {
+				e2e.Logf("Unexpected error occurred: %v", err)
+			}
+			g.By("Apply EgressLabel Key on one node.")
+			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, EgressNodeLabel, "true")
+			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, EgressNodeLabel)
+	
+			g.By("Apply label to namespace")
+			_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "name=test").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "name-").Output()
+
+			g.By("Create an egressip object")
+			sub1, _ := getDefaultSubnet(oc)
+			ips := findUnUsedIPs(oc, sub1, 2)
+			egressip1 := egressIPResource1{
+				name:      "egressip-45685",
+				template:  egressIPTemplate,
+				egressIP1: ips[0],
+				egressIP2: ips[1],
+			}
+			egressip1.createEgressIPObject1(oc)
+			defer egressip1.deleteEgressIPObject1(oc)
+	
+			g.By("get the metrics of ovnkube_master_num_egress_ips after egress_ips configurations")
+            output1 := getOVNMetrics(oc, prometheus_url)
+            metric_output1, _ := exec.Command("bash", "-c", "cat "+output1+" | grep ovnkube_master_num_egress_ips | awk 'NR==3{print $2}'").Output()
+            metric_value1 := strings.TrimSpace(string(metric_output1))
+            e2e.Logf("The output of the ovnkube_master_num_egress_ips is : %v", metric_value1)
+            o.Expect(metric_value1).To(o.ContainSubstring("1"))
+		}
+
+		if networkType == "openshiftsdn" {
+			g.By("create new namespace")
+			oc.SetupProject()
+			ns := oc.Namespace()
+			ip := "192.168.249.145"
+
+			g.By("get the metrics of sdn_controller_num_egress_ips before egress_ips configurations")
+			leaderPodName := getLeaderInfo(oc, sdnnamespace, sdncmName, networkType)
+			output := getSDNMetrics(oc, leaderPodName)
+			metric_output, _ := exec.Command("bash", "-c", "cat "+output+" | grep sdn_controller_num_egress_ips | awk 'NR==3{print $2}'").Output()
+		    metric_value := strings.TrimSpace(string(metric_output))
+		    e2e.Logf("The output of the sdn_controller_num_egress_ips is : %v", metric_value)
+		    o.Expect(metric_value).To(o.ContainSubstring("0"))
+
+			patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+ip+"\"]}")
+			defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+
+			nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			egressNode := nodeList.Items[0].Name
+			patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[\""+ip+"\"]}")
+			defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[]}")
+
+			g.By("get the metrics of sdn_controller_num_egress_ips after egress_ips configurations")
+			output1 := getSDNMetrics(oc, leaderPodName)
+			metric_output1, _ := exec.Command("bash", "-c", "cat "+output1+" | grep sdn_controller_num_egress_ips | awk 'NR==3{print $2}'").Output()
+		    metric_value1 := strings.TrimSpace(string(metric_output1))
+		    e2e.Logf("The output of the sdn_controller_num_egress_ips is : %v", metric_value1)
+		    o.Expect(metric_value1).To(o.ContainSubstring("1"))	
+		}
 	})
 })
 
