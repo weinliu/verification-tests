@@ -12,7 +12,7 @@ FROM registry.ci.openshift.org/ocp/4.11:tools
 COPY --from=builder /tmp/build/extended-platform-tests /usr/bin/
 COPY --from=builder /tmp/build/handleresult.py /usr/bin/
 RUN sh -c 'echo -e "[google-cloud-sdk]\nname=Google Cloud SDK\nbaseurl=https://packages.cloud.google.com/yum/repos/cloud-sdk-el7-x86_64\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=1\ngpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg\n       https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg" > /etc/yum.repos.d/google-cloud-sdk.repo' && \
-    PACKAGES="google-cloud-sdk git gzip zip util-linux openssh-clients httpd-tools make gcc" && \
+    PACKAGES="google-cloud-sdk git gzip zip util-linux openssh-clients httpd-tools" && \
     yum update -y && \
     yum install --setopt=tsflags=nodocs -y $PACKAGES && yum clean all && rm -rf /var/cache/yum/* && \
     git config --system user.name test-private && \
