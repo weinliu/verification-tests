@@ -119,7 +119,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 		patch := "{\"spec\": {\"forwarder\": {\"fluentd\": {\"inFile\": {\"readLinesLimit\": 50}}}}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", cloNS, "cl/instance", "-p", patch, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		WaitForEFKPodsToBeReady(oc, cloNS)
+		WaitForECKPodsToBeReady(oc, cloNS)
 
 		// extract fluent.conf from cm/collector
 		baseDir := exutil.FixturePath("testdata", "logging")
@@ -164,13 +164,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")
 		cl := resource{"clusterlogging", "instance", cloNS}
 		defer cl.deleteClusterLogging(oc)
-		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "PVC_SIZE=5Gi")
-		WaitForEFKPodsToBeReady(oc, cloNS)
+		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "PVC_SIZE=20Gi")
+		WaitForECKPodsToBeReady(oc, cloNS)
 
 		g.By("make ES disk usage > 95%")
 		podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		o.Expect(err).NotTo(o.HaveOccurred())
-		create_file := "dd if=/dev/urandom of=/elasticsearch/persistent/file.txt bs=1048576 count=4700"
+		create_file := "dd if=/dev/urandom of=/elasticsearch/persistent/file.txt bs=1048576 count=20000"
 		_, _ = e2e.RunHostCmd(cloNS, podList.Items[0].Name, create_file)
 		check_disk_usage := "es_util --query=_cat/nodes?h=h,disk.used_percent"
 		stdout, err := e2e.RunHostCmdWithRetries(cloNS, podList.Items[0].Name, check_disk_usage, 3*time.Second, 30*time.Second)
@@ -229,8 +229,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")
 		cl := resource{"clusterlogging", "instance", cloNS}
 		defer cl.deleteClusterLogging(oc)
-		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "PVC_SIZE=5Gi", "-p", "ES_NODE_COUNT=5", "-p", "REDUNDANCY_POLICY=ZeroRedundancy")
-		WaitForEFKPodsToBeReady(oc, cloNS)
+		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "PVC_SIZE=20Gi", "-p", "ES_NODE_COUNT=5", "-p", "REDUNDANCY_POLICY=ZeroRedundancy")
+		WaitForECKPodsToBeReady(oc, cloNS)
 
 		g.By("scale down ES nodes when redundancy podlicy is ZeroRedundancy")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", cloNS, "cl/instance", "-p", "{\"spec\": {\"logStore\": {\"elasticsearch\": {\"nodeCount\": 4}}}}", "--type=merge").Execute()
@@ -329,7 +329,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		out, err := json.Marshal(appNamespaceSpec)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "APP_NAMESPACE_SPEC="+string(out))
-		WaitForEFKPodsToBeReady(oc, cloNS)
+		WaitForECKPodsToBeReady(oc, cloNS)
 		WaitForIMCronJobToAppear(oc, cloNS, "elasticsearch-im-prune-app")
 		masterPods, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		projects := []string{proj_1, proj_2, proj_3, proj_4}
@@ -392,7 +392,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		out, err := json.Marshal(appNamespaceSpec)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "APP_NAMESPACE_SPEC="+string(out), "-p", "PRUNE_INTERVAL=3m")
-		WaitForEFKPodsToBeReady(oc, cloNS)
+		WaitForECKPodsToBeReady(oc, cloNS)
 		WaitForIMCronJobToAppear(oc, cloNS, "elasticsearch-im-prune-app")
 		masterPods, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		waitForProjectLogsAppear(oc, cloNS, masterPods.Items[0].Name, proj_1, "app-00")
@@ -465,7 +465,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		defer cl.deleteClusterLogging(oc)
 		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "ES_NODE_COUNT=3", "-p", "REDUNDANCY_POLICY=SingleRedundancy")
 		g.By("waiting for the EFK pods to be ready...")
-		WaitForEFKPodsToBeReady(oc, cloNS)
+		WaitForECKPodsToBeReady(oc, cloNS)
 		esPODs, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=elasticsearch"})
 		signingES := resource{"secret", "signing-elasticsearch", cloNS}
 		esSVC := "https://elasticsearch." + cloNS + ".svc:9200"
@@ -502,7 +502,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		cl := resource{"clusterlogging", "instance", cloNS}
 		cl.applyFromTemplate(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc)
 		g.By("waiting for the EFK pods to be ready...")
-		WaitForEFKPodsToBeReady(oc, cloNS)
+		WaitForECKPodsToBeReady(oc, cloNS)
 
 		g.By("check metrics exposed by EO")
 		metrics, err := queryPrometheus(oc, "", "/api/v1/query?", "eo_es_cluster_management_state_info", "GET")
@@ -574,7 +574,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		cl := resource{"clusterlogging", "instance", preCLO.Namespace}
 		defer cl.deleteClusterLogging(oc)
 		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "ES_NODE_COUNT=3", "-p", "REDUNDANCY_POLICY=SingleRedundancy")
-		WaitForEFKPodsToBeReady(oc, preCLO.Namespace)
+		WaitForECKPodsToBeReady(oc, preCLO.Namespace)
 
 		//get current csv version
 		preCloCSV := preCLO.getInstalledCSV(oc)
@@ -615,7 +615,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 
 		if upgraded {
 			g.By("waiting for the EFK pods to be ready after upgrade")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 			checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", preCLO.Namespace, "-ojsonpath={.status.cluster.status}"})
 			//check PVC count, it should be equal to ES node count
 			pvc, _ := oc.AdminKubeClient().CoreV1().PersistentVolumeClaims(cloNS).List(metav1.ListOptions{LabelSelector: "logging-cluster=elasticsearch"})
@@ -659,7 +659,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		cl := resource{"clusterlogging", "instance", preCLO.Namespace}
 		defer cl.deleteClusterLogging(oc)
 		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "ES_NODE_COUNT=3", "-p", "REDUNDANCY_POLICY=SingleRedundancy")
-		WaitForEFKPodsToBeReady(oc, preCLO.Namespace)
+		WaitForECKPodsToBeReady(oc, preCLO.Namespace)
 
 		//change channel, and wait for the new operators to be ready
 		var source = CatalogSourceObjects{"stable-5.4", "qe-app-registry", "openshift-marketplace"}
@@ -687,7 +687,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		WaitForDeploymentPodsToBeReady(oc, preEO.Namespace, preEO.OperatorName)
 
 		g.By("waiting for the EFK pods to be ready after upgrade")
-		WaitForEFKPodsToBeReady(oc, cloNS)
+		WaitForECKPodsToBeReady(oc, cloNS)
 		checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", preCLO.Namespace, "-ojsonpath={.status.cluster.status}"})
 
 		//check PVC count, it should be equal to ES node count

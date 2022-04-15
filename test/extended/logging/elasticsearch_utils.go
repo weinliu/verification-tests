@@ -27,14 +27,14 @@ func getESIndices(oc *exutil.CLI, ns string, pod string) ([]ESIndex, error) {
 
 func getESIndicesByName(oc *exutil.CLI, ns string, pod string, indexName string) ([]ESIndex, error) {
 	cmd := "es_util --query=_cat/indices/" + indexName + "*?format=JSON"
-	stdout, err := e2e.RunHostCmdWithRetries(ns, pod, cmd, 3*time.Second, 9*time.Second)
+	stdout, err := e2e.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
 	indices := []ESIndex{}
 	json.Unmarshal([]byte(stdout), &indices)
 	return indices, err
 }
 
 func waitForIndexAppear(oc *exutil.CLI, ns string, pod string, indexName string) {
-	err := wait.Poll(3*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
 		indices, err := getESIndices(oc, ns, pod)
 		count := 0
 		for _, index := range indices {
@@ -51,12 +51,12 @@ func waitForIndexAppear(oc *exutil.CLI, ns string, pod string, indexName string)
 			return false, err
 		}
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("index %s is not counted", indexName))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Index %s is not appeared or the doc count is 0 in last 180 seconds.", indexName))
 }
 
 func getDocCountByQuery(oc *exutil.CLI, ns string, pod string, indexName string, queryString string) (int, error) {
 	cmd := "es_util --query=" + indexName + "*/_count?format=JSON -d '" + queryString + "'"
-	stdout, err := e2e.RunHostCmdWithRetries(ns, pod, cmd, 3*time.Second, 30*time.Second)
+	stdout, err := e2e.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
 	res := CountResult{}
 	json.Unmarshal([]byte(stdout), &res)
 	return res.Count, err
@@ -64,7 +64,7 @@ func getDocCountByQuery(oc *exutil.CLI, ns string, pod string, indexName string,
 
 func waitForProjectLogsAppear(oc *exutil.CLI, ns string, pod string, projectName string, indexName string) {
 	query := "{\"query\": {\"regexp\": {\"kubernetes.namespace_name\": \"" + projectName + "\"}}}"
-	err := wait.Poll(3*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
 		logCount, err := getDocCountByQuery(oc, ns, pod, indexName, query)
 		if err != nil {
 			return false, err
@@ -76,12 +76,12 @@ func waitForProjectLogsAppear(oc *exutil.CLI, ns string, pod string, projectName
 			}
 		}
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("log of index %s is not got", indexName))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The logs of project %s weren't collected to index %s in last 180 seconds.", projectName, indexName))
 }
 
 func searchDocByQuery(oc *exutil.CLI, ns string, pod string, indexName string, queryString string) SearchResult {
 	cmd := "es_util --query=" + indexName + "*/_search?format=JSON -d '" + queryString + "'"
-	stdout, err := e2e.RunHostCmdWithRetries(ns, pod, cmd, 3*time.Second, 30*time.Second)
+	stdout, err := e2e.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	res := SearchResult{}
 	//data := bytes.NewReader([]byte(stdout))
@@ -254,7 +254,7 @@ func (es externalES) getIndices(oc *exutil.CLI) ([]ESIndex, error) {
 }
 
 func (es externalES) waitForIndexAppear(oc *exutil.CLI, indexName string) {
-	err := wait.Poll(3*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
 		indices, err := es.getIndices(oc)
 		count := 0
 		for _, index := range indices {
@@ -271,12 +271,12 @@ func (es externalES) waitForIndexAppear(oc *exutil.CLI, indexName string) {
 			return false, err
 		}
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("index %s is not counted", indexName))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Index %s didn't appear or the doc count is 0 in last 3 minutes.", indexName))
 }
 
 func (es externalES) getDocCount(oc *exutil.CLI, indexName string, queryString string) (int, error) {
 	cmd := es.baseCurlString() + indexName + "*/_count?format=JSON -d '" + queryString + "'"
-	stdout, err := e2e.RunHostCmdWithRetries(es.namespace, es.getPodName(oc), cmd, 3*time.Second, 30*time.Second)
+	stdout, err := e2e.RunHostCmdWithRetries(es.namespace, es.getPodName(oc), cmd, 5*time.Second, 30*time.Second)
 	res := CountResult{}
 	json.Unmarshal([]byte(stdout), &res)
 	return res.Count, err
@@ -284,7 +284,7 @@ func (es externalES) getDocCount(oc *exutil.CLI, indexName string, queryString s
 
 func (es externalES) waitForProjectLogsAppear(oc *exutil.CLI, projectName string, indexName string) {
 	query := "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \"" + projectName + "\"}}}"
-	err := wait.Poll(3*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
 		logCount, err := es.getDocCount(oc, indexName, query)
 		if err != nil {
 			return false, err
@@ -296,7 +296,7 @@ func (es externalES) waitForProjectLogsAppear(oc *exutil.CLI, projectName string
 			}
 		}
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("log of index %s is not got", indexName))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The logs of project %s didn't collected to index %s in last 180 seconds.", projectName, indexName))
 }
 
 func (es externalES) searchDocByQuery(oc *exutil.CLI, indexName string, queryString string) SearchResult {

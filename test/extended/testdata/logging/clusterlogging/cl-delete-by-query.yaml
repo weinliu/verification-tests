@@ -38,7 +38,7 @@ objects:
         replicas: 1
     collection:
       logs:
-        type: "fluentd"
+        type: ${COLLECTOR}
         fluentd: {}
 parameters:
   - name: NAME
@@ -50,7 +50,7 @@ parameters:
   - name: STORAGE_CLASS
     value: "gp2"
   - name: PVC_SIZE
-    value: "10Gi"
+    value: "20Gi"
   - name: REDUNDANCY_POLICY
     value: "ZeroRedundancy"
   - name: APP_LOG_MAX_AGE
@@ -65,3 +65,5 @@ parameters:
     value: "[{\"minAge\": \"10m\", \"namespace\": \"project-1\"}, {\"minAge\": \"20m\", \"namespace\": \"project-2\"}]"
   - name: INFRA_NAMESPACE_SPEC
     value: "[{\"minAge\": \"3m\", \"namespace\": \"openshift-\"}]"
+  - name: COLLECTOR
+    value: fluentd

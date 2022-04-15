@@ -12,10 +12,12 @@ objects:
     managementState: "Managed"
     collection:
       logs:
-        type: "fluentd"
+        type: ${COLLECTOR}
         fluentd: {}
 parameters:
   - name: NAME
     value: "instance"
   - name: NAMESPACE
     value: "openshift-logging"
+  - name: COLLECTOR
+    value: fluentd

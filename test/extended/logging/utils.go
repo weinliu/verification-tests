@@ -175,32 +175,33 @@ func (so *SubscriptionObjects) SubscribeLoggingOperators(oc *exutil.CLI) {
 	if err != nil {
 		// check subscription, if there is no subscription objets, then create one
 		if apierrors.IsNotFound(err) {
-			sub, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", so.Namespace).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			msg := fmt.Sprintf("%v", sub)
-			if strings.Contains(msg, "No resources found") {
-				catsrcNamespaceName := so.getSourceNamespace(oc)
-				catsrcName := so.getCatalogSourceName(oc)
-				channelName := so.getChannelName(oc)
-				//check if the packagemanifest is exists in the source namespace or not
-				packages, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", catsrcNamespaceName, "packagemanifests", "-l", "catalog="+catsrcName, "-o", "name").Output()
-				o.Expect(packages).Should(o.ContainSubstring(so.PackageName))
-				//create subscription object
-				subscriptionFile, err := oc.AsAdmin().Run("process").Args("-n", so.Namespace, "-f", so.Subscription, "-p", "PACKAGE_NAME="+so.PackageName, "NAMESPACE="+so.Namespace, "CHANNEL="+channelName, "SOURCE="+catsrcName, "SOURCE_NAMESPACE="+catsrcNamespaceName).OutputToFile(getRandomString() + ".json")
-				o.Expect(err).NotTo(o.HaveOccurred())
-				err = wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
-					output, err := oc.AsAdmin().Run("apply").Args("-f", subscriptionFile, "-n", so.Namespace).Output()
-					if err != nil {
-						if strings.Contains(output, "AlreadyExists") {
-							return true, nil
+			sub, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", so.Namespace, so.PackageName).Output()
+			if err != nil {
+				msg := fmt.Sprint("v%", sub)
+				if strings.Contains(msg, "NotFound") {
+					catsrcNamespaceName := so.getSourceNamespace(oc)
+					catsrcName := so.getCatalogSourceName(oc)
+					channelName := so.getChannelName(oc)
+					//check if the packagemanifest is exists in the source namespace or not
+					packages, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", catsrcNamespaceName, "packagemanifests", "-l", "catalog="+catsrcName, "-o", "name").Output()
+					o.Expect(packages).Should(o.ContainSubstring(so.PackageName))
+					//create subscription object
+					subscriptionFile, err := oc.AsAdmin().Run("process").Args("-n", so.Namespace, "-f", so.Subscription, "-p", "PACKAGE_NAME="+so.PackageName, "NAMESPACE="+so.Namespace, "CHANNEL="+channelName, "SOURCE="+catsrcName, "SOURCE_NAMESPACE="+catsrcNamespaceName).OutputToFile(getRandomString() + ".json")
+					o.Expect(err).NotTo(o.HaveOccurred())
+					err = wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
+						output, err := oc.AsAdmin().Run("apply").Args("-f", subscriptionFile, "-n", so.Namespace).Output()
+						if err != nil {
+							if strings.Contains(output, "AlreadyExists") {
+								return true, nil
+							} else {
+								return false, err
+							}
 						} else {
-							return false, err
+							return true, nil
 						}
-					} else {
-						return true, nil
-					}
-				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("can't create subscription %s in %s project", so.PackageName, so.Namespace))
+					})
+					exutil.AssertWaitPollNoErr(err, fmt.Sprintf("can't create subscription %s in %s project", so.PackageName, so.Namespace))
+				}
 			}
 		}
 	}
@@ -210,7 +211,8 @@ func (so *SubscriptionObjects) SubscribeLoggingOperators(oc *exutil.CLI) {
 func (so *SubscriptionObjects) uninstallLoggingOperator(oc *exutil.CLI) {
 	resource{"subscription", so.PackageName, so.Namespace}.clear(oc)
 	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", so.Namespace, "csv", "--all").Execute()
-	resource{"operatorgroup", so.Namespace, so.Namespace}.clear(oc)
+	// do not remove namespace openshift-logging and openshift-operators-redhat, and preserve the operatorgroup as there may have several operators deployed in one namespace
+	// for example: loki-operator and elasticsearch-operator
 	if so.Namespace != "openshift-logging" && so.Namespace != "openshift-operators-redhat" && !strings.HasPrefix(so.Namespace, "e2e-test-") {
 		DeleteNamespace(oc, so.Namespace)
 	}
@@ -224,7 +226,7 @@ func (so *SubscriptionObjects) getInstalledCSV(oc *exutil.CLI) string {
 
 //WaitForDeploymentPodsToBeReady waits for the specific deployment to be ready
 func WaitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name string) {
-	err := wait.Poll(3*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
 		deployment, err := oc.AdminKubeClient().AppsV1().Deployments(namespace).Get(name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -247,7 +249,7 @@ func WaitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name strin
 
 //WaitForDaemonsetPodsToBeReady waits for all the pods controlled by the ds to be ready
 func WaitForDaemonsetPodsToBeReady(oc *exutil.CLI, ns string, name string) {
-	err := wait.Poll(3*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
 		daemonset, err := oc.AdminKubeClient().AppsV1().DaemonSets(ns).Get(name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -268,7 +270,7 @@ func WaitForDaemonsetPodsToBeReady(oc *exutil.CLI, ns string, name string) {
 }
 
 func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
-	err := wait.Poll(3*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
 		pods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(metav1.ListOptions{LabelSelector: label})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -323,8 +325,8 @@ func GetDeploymentsNameByLabel(oc *exutil.CLI, ns string, label string) []string
 	return nil
 }
 
-//WaitForEFKPodsToBeReady checks if the EFK pods could become ready or not
-func WaitForEFKPodsToBeReady(oc *exutil.CLI, ns string) {
+//WaitForECKPodsToBeReady checks if the EFK pods could become ready or not
+func WaitForECKPodsToBeReady(oc *exutil.CLI, ns string) {
 	//wait for ES
 	esDeployNames := GetDeploymentsNameByLabel(oc, ns, "cluster-name=elasticsearch")
 	for _, name := range esDeployNames {
@@ -441,7 +443,7 @@ func DeleteNamespace(oc *exutil.CLI, ns string) {
 		}
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
-	err = wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
+	err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		_, err := oc.AdminKubeClient().CoreV1().Namespaces().Get(ns, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -495,7 +497,7 @@ func waitForIMJobsToComplete(oc *exutil.CLI, ns string, timeout time.Duration) {
 	jobList, err := oc.AdminKubeClient().BatchV1().Jobs(ns).List(metav1.ListOptions{LabelSelector: "component=indexManagement"})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	for _, job := range jobList.Items {
-		err := wait.Poll(2*time.Second, 60*time.Second, func() (bool, error) {
+		err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			job, err := oc.AdminKubeClient().BatchV1().Jobs(ns).Get(job.Name, metav1.GetOptions{})
 			//succeeded, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "job", job.Name, "-o=jsonpath={.status.succeeded}").Output()
 			if err != nil {

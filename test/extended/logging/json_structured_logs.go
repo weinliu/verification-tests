@@ -67,7 +67,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 			g.By("waiting for the EFK pods to be ready...")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			// check data in ES
 			g.By("check indices in ES pod")
@@ -120,7 +120,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 			g.By("waiting for the EFK pods to be ready...")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			// check data in ES
 			g.By("check indices in ES pod")
@@ -176,7 +176,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "APP_LOG_MAX_AGE=10m")
 			g.By("waiting for the EFK pods to be ready...")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			// check indices name in ES
 			g.By("check indices in ES pod")
@@ -253,7 +253,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc)
 			g.By("waiting for the EFK pods to be ready...")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check logs in ES pod")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -294,7 +294,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 			g.By("waiting for the EFK pods to be ready...")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check indices in ES pod")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -354,7 +354,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 			g.By("waiting for the EFK pods to be ready...")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check indices in ES pod")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -387,7 +387,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 			g.By("waiting for the EFK pods to be ready...")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check indices in ES pod")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -420,7 +420,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 			g.By("waiting for the EFK pods to be ready...")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check indices in ES pod")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -434,7 +434,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("update CLF to test OCP-41732")
 			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DATA_PROJECTS="+string(projects), "-p", "STRUCTURED_TYPE_KEY=kubernetes.labels.test")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-centos-logtest")
 			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, app, "app-centos-logtest")
 			//check if the JSON logs are parsed
@@ -462,7 +462,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 			g.By("waiting for the EFK pods to be ready...")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check indices in ES pod")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -494,7 +494,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 			g.By("waiting for the EFK pods to be ready...")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check indices in ES pod")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -511,7 +511,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			projects, _ := json.Marshal([]string{app})
 			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", newclfTemplate, "-p", "DATA_PROJECTS="+string(projects), "-p", "STRUCTURED_TYPE_KEY=kubernetes.labels.none", "-p", "STRUCTURED_TYPE_NAME=test-41787")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-test-41787")
 			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, app, "app-test-41787")
 			//check if the JSON logs are parsed
@@ -545,7 +545,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 			g.By("waiting for the EFK pods to be ready...")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check indices in ES pod")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -583,7 +583,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("deploy fluentd pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "fluentd_only.yaml")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)

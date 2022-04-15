@@ -76,7 +76,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 			g.By("waiting for the EFK pods to be ready...")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			//check app index in ES
 			g.By("check indices in ES pod")
@@ -139,7 +139,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 			g.By("waiting for the EFK pods to be ready...")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			//check app index in ES
 			g.By("check indices in ES pod")
@@ -209,7 +209,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 			g.By("waiting for the EFK pods to be ready...")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("Check audit index in ES pod")
 			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
@@ -298,7 +298,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("deploy fluentd pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "fluentd_only.yaml")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
@@ -351,7 +351,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check logs in rsyslog server")
 			rsyslog.checkData(oc, true, "app-container.log")
@@ -388,7 +388,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("deploy fluentd pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "fluentd_only.yaml")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
@@ -431,7 +431,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 			g.By("waiting for the EFK pods to be ready...")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("Searching for Audit Logs in Loki")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=collector"})
@@ -482,7 +482,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "fluentd_only.yaml")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
@@ -526,7 +526,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 			g.By("waiting for the EFK pods to be ready...")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("Searching for Application Logs in Loki using tenantKey")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=collector"})
@@ -572,7 +572,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 			g.By("waiting for the EFK pods to be ready...")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("Searching for Application Logs in Loki using tenantKey")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=collector"})
@@ -625,7 +625,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 			g.By("waiting for the EFK pods to be ready...")
-			WaitForEFKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cloNS)
 
 			//Positive Scenario - Matching labelKeys
 			g.By("Searching for Application Logs in Loki using LabelKey - Postive match")
@@ -697,7 +697,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("deploy fluentd pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "fluentd_only.yaml")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
@@ -735,7 +735,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("deploy fluentd pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "fluentd_only.yaml")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
@@ -773,7 +773,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("deploy fluentd pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "fluentd_only.yaml")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)

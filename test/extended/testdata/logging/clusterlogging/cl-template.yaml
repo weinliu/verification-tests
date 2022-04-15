@@ -32,7 +32,7 @@ objects:
         replicas: 1
     collection:
       logs:
-        type: "fluentd"
+        type: ${COLLECTOR}
         fluentd: {}
 parameters:
   - name: NAME
@@ -49,3 +49,5 @@ parameters:
     value: "3h"
   - name: AUDIT_LOG_MAX_AGE
     value: "3h"
+  - name: COLLECTOR
+    value: fluentd
