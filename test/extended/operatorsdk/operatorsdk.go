@@ -1037,7 +1037,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 				return false, nil
 			})
 			if waitErr != nil {
-				msg, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("memcached34427-sample-memcached", "-n", nsOperator).Output()
+				msg, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/memcached34427-sample-memcached", "-n", nsOperator).Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				e2e.Logf(msg)
 			}
@@ -1418,6 +1418,10 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 			return false, nil
 		})
+		if waitErr != nil {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", nsOperator).Output()
+			e2e.Logf(msg)
+		}
 		exutil.AssertWaitPollNoErr(waitErr, "No nginx-sample is in Running status")
 	})
 
@@ -1602,6 +1606,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if waitErr != nil {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/memcached-sample", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf(msg)
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", nsOperator).Output()
 			e2e.Logf(msg)
 		}
 		exutil.AssertWaitPollNoErr(waitErr, "the status of deployment/memcached-sample is wrong")
