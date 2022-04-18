@@ -75,7 +75,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-High-46701-The same egressIP will not be assigned to different netnamespace. [Disruptive]", func() {
+	g.It("ConnectedOnly-Author:jechen-High-46701-The same egressIP will not be assigned to different netnamespace. [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod.yaml")
@@ -158,7 +158,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-High-46709-Master balance egressIPs across nodes when there are multiple nodes handling egressIP. [Disruptive]", func() {
+	g.It("ConnectedOnly-Author:jechen-High-46709-Master balance egressIPs across nodes when there are multiple nodes handling egressIP. [Disruptive]", func() {
 		g.By("1. Get list of nodes, get subnet from two worker nodes that have same subnet, add egressCIDRs to them")
 		var egressNode1, egressNode2 string
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -216,7 +216,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-High-46554-Automatic EgressIP: no more than one egress IP per node for each namespace. [Disruptive]", func() {
+	g.It("ConnectedOnly-Author:jechen-High-46554-Automatic EgressIP: no more than one egress IP per node for each namespace. [Disruptive]", func() {
 		g.By("1. Get list of nodes, get subnet from two worker nodes that have same subnet, add egressCIDRs to them")
 		var egressNode1, egressNode2 string
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -269,7 +269,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-High-46556-Automatic EgressIP: A pod that is on a node hosting egressIP, it will always use the egressIP of the node . [Disruptive]", func() {
+	g.It("ConnectedOnly-Author:jechen-High-46556-Automatic EgressIP: A pod that is on a node hosting egressIP, it will always use the egressIP of the node . [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node.yaml")
