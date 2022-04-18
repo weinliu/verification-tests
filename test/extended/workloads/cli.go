@@ -475,6 +475,22 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
                 }
         })
 
+        // author: yinzhou@redhat.com
+        g.It("Author:yinzhou-Medium-49859-should failed when oc import-image setting with Garbage values for --reference-policy", func() {
+                g.By("create new namespace")
+                oc.SetupProject()
+
+                g.By("import image with garbage values set for reference-policy")
+                out, err := oc.Run("import-image").Args("registry.redhat.io/openshift3/jenkins-2-rhel7", "--reference-policy=sdfsdfds", "--confirm").Output()
+                o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("reference policy values are source or local"))
+
+                g.By("check should no imagestream created")
+                out, err = oc.Run("get").Args("is").Output()
+                o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("No resources found"))
+        })
+
 
 })
 
