@@ -10,7 +10,7 @@ objects:
   spec:
     mtu: 1800
     nicSelector:
-      deviceID: '1015'
+      deviceID: ${DEVICEID}
       pfNames: 
         - ${PFNAME}
       vendor: '15b3'
@@ -21,4 +21,5 @@ objects:
 parameters:
 - name: SRIOVNETPOLICY 
 - name: PFNAME
+- name: DEVICEID
 

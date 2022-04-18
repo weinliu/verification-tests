@@ -25,6 +25,7 @@ type sriovNetworkNodePolicy struct {
 	policyName   string
 	deviceType   string
 	pfName       string
+	deviceID     string
 	vondor       string
 	numVfs       int
 	resourceName string
@@ -246,7 +247,7 @@ func (pod *sriovPod) sendHTTPRequest(oc *exutil.CLI, user, cmd string) {
 }
 func (sriovPolicy *sriovNetworkNodePolicy) createPolicy(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sriovPolicy.template, "-p", "NAMESPACE="+sriovPolicy.namespace, "SRIOVNETPOLICY="+sriovPolicy.policyName, "DEVICETYPE="+sriovPolicy.deviceType, "PFNAME="+sriovPolicy.pfName, "VENDOR="+sriovPolicy.vondor, "NUMVFS="+strconv.Itoa(sriovPolicy.numVfs), "RESOURCENAME="+sriovPolicy.resourceName)
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sriovPolicy.template, "-p", "NAMESPACE="+sriovPolicy.namespace, "DEVICEID="+sriovPolicy.deviceID, "SRIOVNETPOLICY="+sriovPolicy.policyName, "DEVICETYPE="+sriovPolicy.deviceType, "PFNAME="+sriovPolicy.pfName, "VENDOR="+sriovPolicy.vondor, "NUMVFS="+strconv.Itoa(sriovPolicy.numVfs), "RESOURCENAME="+sriovPolicy.resourceName)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
@@ -308,4 +309,12 @@ func getSriovNode(oc *exutil.CLI, namespace string, label string) string {
 	e2e.Logf("The sriov node is  %v ", sriovNodeName)
 	o.Expect(sriovNodeName).NotTo(o.BeEmpty())
 	return sriovNodeName
+}
+
+//checkDeviceIDExist will check the worker node contain the network card according to deviceID
+func checkDeviceIDExist(oc *exutil.CLI, namespace string, deviceID string) bool {
+	allDeviceID, err := oc.AsAdmin().Run("get").Args("sriovnetworknodestates", "-n", namespace, "-ojsonpath={.items[*].status.interfaces[*].deviceID}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("tested deviceID is %v and all supported deviceID on node are %v ", deviceID, allDeviceID)
+	return strings.Contains(allDeviceID, deviceID)
 }

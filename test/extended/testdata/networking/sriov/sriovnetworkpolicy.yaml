@@ -10,6 +10,7 @@ objects:
     name: ${SRIOVNETPOLICY}
   spec:
     deviceType: ${DEVICETYPE}
+    deviceID: ${DEVICEID}
     nicSelector:
       pfNames: 
         - ${PFNAME}
@@ -26,3 +27,4 @@ parameters:
 - name: RESOURCENAME
 - name: NUMVFS
 - name: NAMESPACE
+- name: DEVICEID

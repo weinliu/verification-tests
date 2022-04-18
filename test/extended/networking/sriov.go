@@ -3,7 +3,6 @@ package networking
 import (
 	"path/filepath"
 	"regexp"
-	"strings"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
@@ -15,13 +14,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 	var (
 		oc = exutil.NewCLI("sriov-"+getRandomString(), exutil.KubeConfigPath())
 	)
-	g.BeforeEach(func() {
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(msg, "bm2-zzhao") {
-			g.Skip("These cases only can be run on Beijing local baremetal server , skip for other envrionment!!!")
-		}
-	})
+
 	g.It("NonPreRelease-Author:yingwang-Medium-Longduration-42253-Pod with sriov interface should be created successfully with empty pod.ObjectMeta.Namespace in body [Disruptive]", func() {
 		var (
 			networkBaseDir = exutil.FixturePath("testdata", "networking")
@@ -33,6 +26,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			podName1           = "sriov-42253-testpod1"
 			podName2           = "sriov-42253-testpod2"
 			pfName             = "ens2f0"
+			deviceID           = "1015"
 			ipv4Addr1          = "192.168.2.5/24"
 			ipv6Addr1          = "2002::5/64"
 			ipv4Addr2          = "192.168.2.6/24"
@@ -42,7 +36,6 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			serviceAccount     = "deployer"
 		)
 
-		oc.SetupProject()
 		sriovNetworkPolicyTmpFile := filepath.Join(sriovBaseDir, sriovNetPolicyName+"-template.yaml")
 		sriovNetworkPolicy := sriovNetResource{
 			name:      sriovNetPolicyName,
@@ -61,13 +54,19 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 		g.By("1) ####### Check openshift-sriov-network-operator is running well ##########")
 		chkSriovOperatorStatus(oc, sriovOpNs)
+
+		g.By("Check the deviceID if exist on the cluster worker")
+		if !checkDeviceIDExist(oc, sriovOpNs, deviceID) {
+			g.Skip("the cluster do not contain the sriov card. skip this testing!")
+		}
 		//make sure the pf and sriov network policy name are not occupied
 		rmSriovNetworkPolicy(oc, sriovNetworkPolicy.name, sriovNetworkPolicy.namespace)
 		rmSriovNetwork(oc, sriovNetwork.name, sriovNetwork.namespace)
 
+		oc.SetupProject()
 		g.By("2) ####### Create sriov network policy ############")
 
-		sriovNetworkPolicy.create(oc, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetworkPolicy.name)
+		sriovNetworkPolicy.create(oc, "PFNAME="+pfName, "DEVICEID="+deviceID, "SRIOVNETPOLICY="+sriovNetworkPolicy.name)
 		defer rmSriovNetworkPolicy(oc, sriovNetworkPolicy.name, sriovNetworkPolicy.namespace)
 		waitForSriovPolicyReady(oc, sriovNetworkPolicy.namespace)
 
@@ -129,14 +128,15 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 	g.It("Author:zzhao-Medium-Longduration-25321-Check intel dpdk works well [Disruptive]", func() {
 		var (
 			buildPruningBaseDir            = exutil.FixturePath("testdata", "networking/sriov")
-			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovNetworkPolicy.yaml")
-			sriovNeworkTemplate            = filepath.Join(buildPruningBaseDir, "sriovNetwork.yaml")
+			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy.yaml")
+			sriovNeworkTemplate            = filepath.Join(buildPruningBaseDir, "sriovnetwork.yaml")
 			sriovTestPodTemplate           = filepath.Join(buildPruningBaseDir, "sriov-dpdk.yaml")
 			sriovOpNs                      = "openshift-sriov-network-operator"
 		)
 		sriovPolicy := sriovNetworkNodePolicy{
 			policyName:   "intel710",
 			deviceType:   "vfio-pci",
+			deviceID:     "158b",
 			pfName:       "ens1f0",
 			vondor:       "8086",
 			numVfs:       2,
@@ -147,6 +147,11 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 		g.By("check the sriov operator is running")
 		chkSriovOperatorStatus(oc, sriovOpNs)
+
+		g.By("Check the deviceID if exist on the cluster worker")
+		if !checkDeviceIDExist(oc, sriovOpNs, sriovPolicy.deviceID) {
+			g.Skip("the cluster do not contain the sriov card. skip this testing!")
+		}
 
 		g.By("setup one namespace")
 		oc.SetupProject()
@@ -191,13 +196,14 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 	g.It("Author:zzhao-Medium-Longduration-49213- VF with large number can be inited for intel card [Disruptive]", func() {
 		var (
 			buildPruningBaseDir            = exutil.FixturePath("testdata", "networking/sriov")
-			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovNetworkPolicy.yaml")
+			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy.yaml")
 			sriovOpNs                      = "openshift-sriov-network-operator"
 			sriovNodeLabel                 = "feature.node.kubernetes.io/sriov-capable=true"
 		)
 		sriovPolicy := sriovNetworkNodePolicy{
 			policyName:   "intel710",
 			deviceType:   "netdevice",
+			deviceID:     "158b",
 			pfName:       "ens1f0",
 			vondor:       "8086",
 			numVfs:       40,
@@ -208,6 +214,11 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 		g.By("check the sriov operator is running")
 		chkSriovOperatorStatus(oc, sriovOpNs)
+
+		g.By("Check the deviceID if exist on the cluster worker")
+		if !checkDeviceIDExist(oc, sriovOpNs, sriovPolicy.deviceID) {
+			g.Skip("the cluster do not contain the sriov card. skip this testing!")
+		}
 
 		g.By("Create sriovnetworkpolicy to init VF and check they are inited successfully")
 		sriovPolicy.createPolicy(oc)
