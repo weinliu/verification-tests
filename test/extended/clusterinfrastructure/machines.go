@@ -16,8 +16,14 @@ import (
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc = exutil.NewCLI("machine-api-operator", exutil.KubeConfigPath())
+		oc           = exutil.NewCLI("machine-api-operator", exutil.KubeConfigPath())
+		iaasPlatform string
 	)
+
+	g.BeforeEach(func() {
+		iaasPlatform = clusterinfra.CheckPlatform(oc)
+	})
+
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-Medium-45772-MachineSet selector is immutable", func() {
 		g.By("Create a new machineset")
@@ -314,5 +320,33 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			o.Expect(strings.Contains(volumeInfo, "\"Iops\":5000") && strings.Contains(volumeInfo, "\"VolumeType\":\"gp3\"")).To(o.BeTrue())
 		}
 		e2e.Logf("Only aws platform supported for the test")
+	})
+
+	// author: zhsun@redhat.com
+	g.It("Longduration-NonPreRelease-Author:zhsun-High-33040-Required configuration should be added to the ProviderSpec to enable spot instances - Azure [Disruptive]", func() {
+		if iaasPlatform != "azure" {
+			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
+		}
+		randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
+		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset/"+randomMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if region == "northcentralus" || region == "westus" || region == "usgovvirginia" {
+			g.Skip("Skip this test scenario because it is not supported on the " + region + " region, because this region doesn't have zones")
+		}
+
+		g.By("Create a spot instance on azure")
+		clusterinfra.SkipConditionally(oc)
+		ms := clusterinfra.MachineSetDescription{"machineset-33040", 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/machineset-33040", "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"spotVMOptions":{}}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterinfra.WaitForMachinesRunning(oc, 1, "machineset-33040")
+
+		g.By("Check machine and node were labelled as an `interruptible-instance`")
+		machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines", "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
+		o.Expect(machine).NotTo(o.BeEmpty())
+		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
+		o.Expect(node).NotTo(o.BeEmpty())
 	})
 })
