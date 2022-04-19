@@ -15,9 +15,23 @@ import (
 
 // Execute command in node
 func execCommandInSpecificNode(oc *exutil.CLI, nodeHostName string, command string) (string, error) {
+	// Adapt Pod Security changed on k8s v1.23+
+	// https://kubernetes.io/docs/tutorials/security/cluster-level-pss/
+	const debugCmdWarning = "Warning: would violate PodSecurity \"restricted:latest\": " +
+		"host namespaces (hostNetwork=true, hostPID=true), hostPath volumes (volume \"host\"), " +
+		"privileged (container \"container-00\" must not set securityContext.privileged=true), " +
+		"allowPrivilegeEscalation != false (container \"container-00\" must set securityContext.allowPrivilegeEscalation=false), " +
+		"unrestricted capabilities (container \"container-00\" must set securityContext.capabilities.drop=[\"ALL\"]), " +
+		"restricted volume types (volume \"host\" uses restricted volume type \"hostPath\"), " +
+		"runAsNonRoot != true (pod or container \"container-00\" must set securityContext.runAsNonRoot=true), " +
+		"runAsUser=0 (container \"container-00\" must not set runAsUser=0), seccompProfile (pod or container \"container-00\" " +
+		"must set securityContext.seccompProfile.type to \"RuntimeDefault\" or \"Localhost\")"
+
 	nodeHostName = "node/" + nodeHostName
 	command1 := []string{nodeHostName, "-q", "--", "chroot", "/host", "bin/sh", "-c", command}
 	msg, err := oc.AsAdmin().Run("debug").Args(command1...).Output()
+	// Remove the oc debug node output warning
+	msg = strings.TrimSpace(strings.TrimLeft(msg, debugCmdWarning))
 	if err != nil {
 		e2e.Logf("Execute \""+command+"\" on node \"%s\" *failed with* : \"%v\".", nodeHostName, err)
 		return msg, err
