@@ -2,9 +2,7 @@ package networking
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"strings"
@@ -27,56 +25,22 @@ func getAwsCredentialFromCluster(oc *exutil.CLI) {
 		g.Skip("it is not aws platform and can not get credential, and then skip it.")
 	}
 	credential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system", "-o", "json").Output()
-	// STS type test clusters
+	// Skip for sts and c2s clusters.
 	if err != nil {
-		newValue, _ := json.Marshal(err)
-		if strings.Contains(string(newValue), "not found") {
-			credential, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-cloud-credentials", "-n", "openshift-machine-api", "-o", "json").Output()
-		}
+		g.Skip("Did not get credential to update security rule, skip the testing.")
+
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
-	clusterRegion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	accessKeyIdBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).String(), gjson.Get(credential, `data.aws_secret_access_key`).String()
+	accessKeyId, err1 := base64.StdEncoding.DecodeString(accessKeyIdBase64)
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	secureKey, err2 := base64.StdEncoding.DecodeString(secureKeyBase64)
+	o.Expect(err2).NotTo(o.HaveOccurred())
+	clusterRegion, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
+	o.Expect(err3).NotTo(o.HaveOccurred())
+	os.Setenv("AWS_ACCESS_KEY_ID", string(accessKeyId))
+	os.Setenv("AWS_SECRET_ACCESS_KEY", string(secureKey))
 	os.Setenv("AWS_REGION", clusterRegion)
-	// C2S type test clusters, disconnected clusters and will be skipped.
-	if gjson.Get(credential, `data.credentials`).Exists() && gjson.Get(credential, `data.role`).Exists() {
-		g.Skip("Skip c2s cluster...")
-	}
-	// STS type test clusters
-	if gjson.Get(credential, `data.credentials`).Exists() && !gjson.Get(credential, `data.aws_access_key_id`).Exists() {
-		stsConfigPrefix := "/tmp/machine-stsconfig-" + getRandomString() + "-"
-		e2e.Logf("STS config prefix is: %s", stsConfigPrefix)
-		stsConfigBase64 := gjson.Get(credential, `data.credentials`).String()
-		stsConfig, err := base64.StdEncoding.DecodeString(stsConfigBase64)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		var tokenPath, roleArn string
-		dataList := strings.Split(string(stsConfig), ` `)
-		for _, subStr := range dataList {
-			if strings.Contains(subStr, `/token`) {
-				tokenPath = subStr
-			}
-			if strings.Contains(subStr, `arn:`) {
-				roleArn = strings.Split(string(subStr), "\n")[0]
-			}
-		}
-		cfgStr := strings.Replace(string(stsConfig), tokenPath, stsConfigPrefix+"token", -1)
-		tempToken, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-machine-api", "deployment/machine-api-controllers", "-c", "machine-controller", "--", "cat", tokenPath).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(ioutil.WriteFile(stsConfigPrefix+"config", []byte(cfgStr), 0644)).NotTo(o.HaveOccurred())
-		o.Expect(ioutil.WriteFile(stsConfigPrefix+"token", []byte(tempToken), 0644)).NotTo(o.HaveOccurred())
-		os.Setenv("AWS_ROLE_ARN", roleArn)
-		os.Setenv("AWS_WEB_IDENTITY_TOKEN_FILE", stsConfigPrefix+"token")
-		os.Setenv("AWS_CONFIG_FILE", stsConfigPrefix+"config")
-		os.Setenv("AWS_PROFILE", "awsAutotest"+getRandomString())
-	} else {
-		accessKeyIdBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).String(), gjson.Get(credential, `data.aws_secret_access_key`).String()
-		accessKeyId, err := base64.StdEncoding.DecodeString(accessKeyIdBase64)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		secureKey, err := base64.StdEncoding.DecodeString(secureKeyBase64)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		os.Setenv("AWS_ACCESS_KEY_ID", string(accessKeyId))
-		os.Setenv("AWS_SECRET_ACCESS_KEY", string(secureKey))
-	}
 
 }
 
