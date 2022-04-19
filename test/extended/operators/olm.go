@@ -109,30 +109,44 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("ConnectedOnly-Author:jiazha-High-46964-Disable Copied CSVs Toggle [Serial]", func() {
-		SkipARM64(oc)
-		g.By("1) Subscribe to etcdoperator v0.9.4 with AllNamespaces mode")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		dr := make(describerResrouce)
 		itName := g.CurrentGinkgoTestDescription().TestText
 		dr.addIr(itName)
 
+		g.By("1) Create a CatalogSource that contains the Learn,Sample operators")
+		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-image-template.yaml")
+		cs := catalogSourceDescription{
+			name:        "cs-46964",
+			namespace:   "openshift-marketplace",
+			displayName: "OLM QE Operators",
+			publisher:   "Jian",
+			sourceType:  "grpc",
+			address:     "quay.io/olmqe/learn-operator-index:v1",
+			template:    csImageTemplate,
+		}
+		defer cs.delete(itName, dr)
+		cs.createWithCheck(oc, itName, dr)
+
+		g.By("2) Subscribe to learn perator v0.0.3 with AllNamespaces mode")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
-			subName:                "sub-etcd-46964",
+			subName:                "sub-learn-46964",
 			namespace:              "openshift-operators",
-			catalogSourceName:      "community-operators",
+			catalogSourceName:      "cs-46964",
 			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "clusterwide-alpha",
+			channel:                "beta",
 			ipApproval:             "Automatic",
-			operatorPackage:        "etcd",
-			startingCSV:            "etcdoperator.v0.9.4-clusterwide",
+			operatorPackage:        "learn",
+			startingCSV:            "learn-operator.v0.0.3",
 			template:               subTemplate,
 		}
 		defer sub.delete(itName, dr)
 		sub.create(oc, itName, dr)
 		defer sub.deleteCSV(itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.4-clusterwide", "-n", "openshift-operators", "-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", "openshift-operators", "-o=jsonpath={.status.phase}"}).check(oc)
 
+		g.By("3) Create testing projects and Multi OperatorGroup")
 		ogMultiTemplate := filepath.Join(buildPruningBaseDir, "og-multins.yaml")
 		og := operatorGroupDescription{
 			name:         "og-46964",
@@ -149,65 +163,63 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			targetNamespace: "",
 		}
 
-		g.By("2) create testing projects and Multi OperatorGroup")
 		defer p1.delete(oc)
 		defer p2.delete(oc)
 		oc.SetupProject()
 		p1.targetNamespace = oc.Namespace()
 		p2.targetNamespace = oc.Namespace()
 		og.namespace = oc.Namespace()
-		g.By("Create new projects and label them")
+		g.By("3-1) create new projects and label them")
 		p1.create(oc, itName, dr)
 		p1.label(oc, "label-46964")
 		p2.create(oc, itName, dr)
 		p2.label(oc, "label-46964")
 		og.create(oc, itName, dr)
 
-		g.By("3) Subscribe to AMQ Stream with MultiNamespaces mode")
-		subAMQ := subscriptionDescription{
-			subName:                "sub-amq-46964",
+		g.By("4) Subscribe to Sample operator with MultiNamespaces mode")
+		subSample := subscriptionDescription{
+			subName:                "sub-sample-46964",
 			namespace:              oc.Namespace(),
-			catalogSourceName:      "redhat-operators",
+			catalogSourceName:      "cs-46964",
 			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "stable",
+			channel:                "alpha",
 			ipApproval:             "Automatic",
-			operatorPackage:        "amq-streams",
-			// startingCSV:            "amqstreams.v1.8.4",
-			template: subTemplate,
+			operatorPackage:        "sample-operator",
+			template:               subTemplate,
 		}
-		defer subAMQ.delete(itName, dr)
-		subAMQ.create(oc, itName, dr)
-		defer subAMQ.deleteCSV(itName, dr)
-		subAMQ.findInstalledCSV(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subAMQ.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
+		defer subSample.delete(itName, dr)
+		subSample.create(oc, itName, dr)
+		defer subSample.deleteCSV(itName, dr)
+		subSample.findInstalledCSV(oc, itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subSample.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("4) Enable this `disableCopiedCSVs` feature")
+		g.By("5) Enable this `disableCopiedCSVs` feature")
 		patchResource(oc, asAdmin, withoutNamespace, "olmconfig", "cluster", "-p", "{\"spec\":{\"features\":{\"disableCopiedCSVs\": true}}}", "--type=merge")
 
-		g.By("5) Check if the AllNamespaces Copied CSV are removed")
+		g.By("6) Check if the AllNamespaces Copied CSV are removed")
 
 		err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			copiedCSV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), "--no-headers").Output()
 			if err != nil {
 				e2e.Failf("Error: %v, fail to get CSVs in project: %s", err, oc.Namespace())
 			}
-			if strings.Contains(copiedCSV, "etcdoperator.v0.9.4-clusterwide") || !strings.Contains(copiedCSV, subAMQ.installedCSV) {
+			if strings.Contains(copiedCSV, "learn-operator.v0.0.3") || !strings.Contains(copiedCSV, subSample.installedCSV) {
 				return false, nil
 			}
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "AllNamespace Copied CSV should be remove")
 
-		g.By("6) Disable this `disableCopiedCSVs` feature")
+		g.By("7) Disable this `disableCopiedCSVs` feature")
 		patchResource(oc, asAdmin, withoutNamespace, "olmconfig", "cluster", "-p", "{\"spec\":{\"features\":{\"disableCopiedCSVs\": false}}}", "--type=merge")
 
-		g.By("7) Check if the AllNamespaces Copied CSV are back")
+		g.By("8) Check if the AllNamespaces Copied CSV are back")
 		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			copiedCSV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), "--no-headers").Output()
 			if err != nil {
 				e2e.Failf("Error: %v, fail to get CSVs in project: %s", err, oc.Namespace())
 			}
-			if !strings.Contains(copiedCSV, "etcdoperator.v0.9.4-clusterwide") || !strings.Contains(copiedCSV, subAMQ.installedCSV) {
+			if !strings.Contains(copiedCSV, "learn-operator.v0.0.3") || !strings.Contains(copiedCSV, subSample.installedCSV) {
 				return false, nil
 			}
 			return true, nil
