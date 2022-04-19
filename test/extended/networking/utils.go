@@ -839,7 +839,7 @@ func checkNodeStatus(oc *exutil.CLI, nodeName string, expectedStatus string) {
 		o.Expect(err1).NotTo(o.HaveOccurred())
 	}
 	err := wait.Poll(10*time.Second, 6*time.Minute, func() (bool, error) {
-		statusOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeName, "-ojsonpath={.status.conditions[3].status}").Output()
+		statusOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeName, "-ojsonpath={.status.conditions[-1].status}").Output()
 		if err != nil {
 			e2e.Logf("\nGet node status with error : %v", err)
 			return false, nil
