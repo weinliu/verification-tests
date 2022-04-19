@@ -8163,105 +8163,74 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// author: tbuskey@redhat.com, test case OCP-43114
-	g.It("Author:xzha-High-43114-Subscription status should show the message for InstallPlan failure conditions", func() {
-		SkipARM64(oc)
-		var (
-			itName              = g.CurrentGinkgoTestDescription().TestText
-			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
-			ogTemplate          = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-			subFile             = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-			err                 error
-			errorText           = "more than one operator group(s) are managing this namespace count=2"
-			exists              bool
-			msg                 string
-			ip                  string
-			snooze              time.Duration = 360
-			testCase                          = "43114"
-			waitErr             error
-		)
-
+	g.It("ConnectedOnly-Author:xzha-High-43114-Subscription status should show the message for InstallPlan failure conditions", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		ogSAtemplate := filepath.Join(buildPruningBaseDir, "operatorgroup-serviceaccount.yaml")
+		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 		oc.SetupProject()
-
-		var (
-			og = operatorGroupDescription{
-				name:      testCase + "-1",
-				namespace: oc.Namespace(),
-				template:  ogTemplate,
-			}
-			sub = subscriptionDescription{
-				subName:                "etcd-" + testCase,
-				namespace:              oc.Namespace(),
-				catalogSourceName:      "community-operators",
-				catalogSourceNamespace: "openshift-marketplace",
-				ipApproval:             "Automatic",
-				channel:                "singlenamespace-alpha",
-				operatorPackage:        "etcd",
-				startingCSV:            "etcdoperator.v0.9.4",
-				singleNamespace:        true,
-				template:               subFile,
-			}
-		)
-
-		g.By("check if this operator exists")
-		e2e.Logf("Check if %v exists in the %v catalog", sub.operatorPackage, sub.catalogSourceName)
-		exists, err = clusterPackageExists(oc, sub)
-		if !exists {
-			e2e.Failf("FAIL:PackageMissing %v does not exist in catalog %v", sub.operatorPackage, sub.catalogSourceName)
+		namespace := oc.Namespace()
+		og := operatorGroupDescription{
+			name:               "test-og-43114",
+			namespace:          namespace,
+			serviceAccountName: "scoped-43114",
+			template:           ogSAtemplate,
 		}
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(exists).To(o.BeTrue())
+		catsrc := catalogSourceDescription{
+			name:        "catsrc-43114",
+			namespace:   namespace,
+			displayName: "Test Catsrc 43114 Operators",
+			publisher:   "Red Hat",
+			sourceType:  "grpc",
+			address:     "quay.io/olmqe/nginxolm-operator-index:v1",
+			template:    catsrcImageTemplate,
+		}
 
-		g.By("Create 1st og")
-		og.name = testCase + "-1"
-		og.create(oc, itName, dr)
-		defer og.delete(itName, dr)
+		sub := subscriptionDescription{
+			subName:                "nginx-operator-43114",
+			namespace:              namespace,
+			channel:                "alpha",
+			ipApproval:             "Automatic",
+			operatorPackage:        "nginx-operator",
+			catalogSourceName:      catsrc.name,
+			catalogSourceNamespace: namespace,
+			template:               subTemplate,
+			singleNamespace:        true,
+		}
 
-		g.By("Create 2nd og")
-		og.name = testCase + "-2"
-		og.create(oc, itName, dr)
-		defer og.delete(itName, dr)
+		dr := make(describerResrouce)
+		itName := g.CurrentGinkgoTestDescription().TestText
+		dr.addIr(itName)
 
-		g.By("Check og")
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "-n", oc.Namespace()).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("og  %v\n", msg)
-		// expect both og to be in msg
+		g.By("1) Create the OperatorGroup")
+		og.createwithCheck(oc, itName, dr)
 
-		g.By("Subscribe")
+		g.By("2) create catalog source")
+		defer catsrc.delete(itName, dr)
+		catsrc.createWithCheck(oc, itName, dr)
+
+		g.By("3) Create a Subscription")
 		sub.createWithoutCheck(oc, itName, dr)
-		defer sub.delete(itName, dr)
 
-		g.By("Wait for sub to create install plan")
-		waitErr = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace(), sub.subName, "-o=jsonpath={.status.installplan}").Output()
-			if strings.Contains(msg, "install-") {
-				return true, nil
-			}
-			return false, nil
-		})
-		e2e.Logf("sub %v %v\n", err, msg)
-
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("The installplan name was not found in the subscription: %s", msg))
-
-		g.By("Wait for error in the install plan status")
-		ip, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace(), sub.subName, "-o=jsonpath={.status.installplan.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		waitErr = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", "-n", oc.Namespace(), ip, "-o=jsonpath={.status.conditions..message}").Output()
+		g.By("4) check install plan message")
+		ip := sub.getIP(oc)
+		msg := ""
+		errorText := "no operator group found"
+		waitErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", ip, "-n", oc.Namespace(), "-o=jsonpath={..status.conditions}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(msg, errorText) {
+			if strings.Contains(strings.ToLower(msg), errorText) {
 				e2e.Logf("InstallPlan has the expected error")
 				return true, nil
 			}
+			e2e.Logf(msg)
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("The installplan %s did not include expected message.  The message was instead %s", ip, msg))
 
-		g.By("Check sub for message")
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace(), sub.subName, "-o=jsonpath={.status.conditions..message}").Output()
-		// e2e.Logf("sub %v, %v\n", err, msg)
-		o.Expect(strings.Contains(msg, errorText)).To(o.BeTrue())
+		g.By("5) Check sub message")
+		msg, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions}").Output()
+		o.Expect(strings.Contains(strings.ToLower(msg), errorText)).To(o.BeTrue())
 		e2e.Logf("subscription also has the expected error")
 
 		g.By("Finished")
