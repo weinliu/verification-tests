@@ -41,6 +41,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		stalld_tuned_file                = exutil.FixturePath("testdata", "psap", "nto", "stalld-tuned.yaml")
 		openshift_node_postgresql_file   = exutil.FixturePath("testdata", "psap", "nto", "openshift-node-postgresql.yaml")
 		net_plugin_file                  = exutil.FixturePath("testdata", "psap", "nto", "net-plugin-tuned.yaml")
+		cloud_provider_file              = exutil.FixturePath("testdata", "psap", "nto", "cloud-provider-profile.yaml")
 
 		isNTO          bool
 		isPAOInstalled bool
@@ -1765,5 +1766,69 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check channel for host network adapter, not expected Combined: 1")
 		isMatch = assertIFChannel(oc, ntoNamespace, tunedNodeName)
 		o.Expect(isMatch).To(o.BeFalse())
+	})
+
+	g.It("Author:liqcui-Medium-49617-NTO support cloud-provider specific profiles for NTO/TuneD. [Disruptive]", func() {
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		//Use the first worker node as labeled node
+		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+
+		g.By("Get cloud provider name ...")
+		providerName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("profile", tunedNodeName, "-n", ntoNamespace, "-ojsonpath={.spec.config.providerName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "provider-"+providerName, "-n", ntoNamespace, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "provider-abc", "-n", ntoNamespace, "--ignore-not-found").Execute()
+
+		providerID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.spec.providerID}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(providerID).To(o.ContainSubstring(providerName))
+
+		g.By("Check /var/lib/tuned/provider on target nodes")
+		openshiftProfile, err := exutil.RemoteShPod(oc, ntoNamespace, tunedPodName, "cat", "/var/lib/tuned/provider")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(openshiftProfile).To(o.ContainSubstring(providerName))
+
+		g.By("Check the value of vm.admin_reserve_kbytes on target nodes, the expected value should be 8192")
+		sysctlOutput, err := exutil.RemoteShPod(oc, ntoNamespace, tunedPodName, "sysctl", "vm.admin_reserve_kbytes")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sysctlOutput).To(o.ContainSubstring("vm.admin_reserve_kbytes = 8192"))
+
+		g.By("Apply cloud-provider profile ...")
+		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", cloud_provider_file, "-p", "PROVIDER_NAME="+providerName)
+
+		g.By("Check if new profile in in rendered tuned")
+		renderCheck, err := getTunedRender(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).To(o.ContainSubstring("provider-" + providerName))
+
+		g.By("Check provider + providerName profile should be automatically created")
+		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNames).To(o.ContainSubstring("provider-" + providerName))
+
+		g.By("Check the value of vm.admin_reserve_kbytes on target nodes, the expected value is 16386")
+		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "vm.admin_reserve_kbytes", "16386")
+
+		g.By("Remove cloud-provider profile, the value of vm.admin_reserve_kbytes rollback to 8192")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "provider-"+providerName, "-n", ntoNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the value of vm.admin_reserve_kbytes on target nodes, the expected value should be 8192")
+		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "vm.admin_reserve_kbytes", "8192")
+
+		g.By("Apply cloud-provider-abc profile,the abc doesn't belong to any cloud provider ...")
+		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", cloud_provider_file, "-p", "PROVIDER_NAME=abc")
+
+		g.By("Check the value of vm.admin_reserve_kbytes on target nodes, the expected value should be no change, still is 8192")
+		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "vm.admin_reserve_kbytes", "8192")
 	})
 })

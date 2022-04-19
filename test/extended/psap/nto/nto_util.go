@@ -602,3 +602,25 @@ func assertIFChannel(oc *exutil.CLI, namespace string, tunedNodeName string) boo
 		return false
 	}
 }
+
+func compareSpecifiedValueByNameOnLabelNodewithRetry(oc *exutil.CLI, ntoNamespace, nodeName, sysctlparm, specifiedvalue string) {
+
+	err := wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
+
+		sysctlOutput, err := exutil.DebugNodeWithChroot(oc, nodeName, "sysctl", sysctlparm)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		regexpstr, _ := regexp.Compile(sysctlparm + " = " + specifiedvalue)
+		matchStr := regexpstr.FindString(sysctlOutput)
+		e2e.Logf("The value is %v on %v", matchStr, nodeName)
+
+		isMatch := regexpstr.MatchString(sysctlOutput)
+		if isMatch {
+			return true, nil
+		} else {
+			return false, nil
+		}
+
+	})
+	exutil.AssertWaitPollNoErr(err, "The certificate is different, please check")
+}
