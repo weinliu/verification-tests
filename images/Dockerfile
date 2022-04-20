@@ -29,6 +29,7 @@ RUN curl -s -k https://dl.google.com/go/go1.17.6.linux-amd64.tar.gz -o go1.17.6.
     curl -s -L https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_x86_64.tar.gz -o govc_Linux_x86_64.tar.gz && tar -C /usr/bin/ -xvf govc_Linux_x86_64.tar.gz govc && rm -f govc_Linux_x86_64.tar.gz && \
     curl -s -k https://mirror2.openshift.com/pub/openshift-v4/clients/ocp-dev-preview/latest-4.11/opm-linux.tar.gz -o opm-linux.tar.gz && \
     tar -C /usr/bin -xzvf opm-linux.tar.gz && rm -fr opm-linux.tar.gz /usr/bin/oc && \
+    curl -s -k https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/ocp-dev-preview/latest/oc-mirror.tar.gz -o oc-mirror.tar.gz && tar -C /usr/bin/ -xzvf oc-mirror.tar.gz && chmod +x /usr/bin/oc-mirror && rm -f oc-mirror.tar.gz && \
     curl -s -k https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/operator-sdk/ -o sdk.html && \
     curl -s -k https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/operator-sdk/pre-release/operator-sdk-linux-x86_64.tar.gz -o opt-sdk.tar.gz && \
     tar -C /usr/bin -xzvf opt-sdk.tar.gz && rm -fr opt-sdk.tar.gz
