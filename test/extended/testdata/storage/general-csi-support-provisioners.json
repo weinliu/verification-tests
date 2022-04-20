@@ -70,6 +70,10 @@
             "preset_scname": "alicloud-disk",
             "preset_vscname": "alicloud-disk"
           }
+        ],
+        "volumetypes": [
+          "cloud_essd",
+          "cloud_efficiency"
         ]
       },
       {

@@ -348,6 +348,19 @@ func getSupportProvisionersByCloudProvider(oc *exutil.CLI) []string {
 	return supportProvisioners
 }
 
+// Get common csi volumetypes by cloudplatform
+func getSupportVolumesByCloudProvider() []string {
+	csiCommonSupportVolumeMatrix, err := ioutil.ReadFile(filepath.Join(exutil.FixturePath("testdata", "storage"), "general-csi-support-provisioners.json"))
+	o.Expect(err).NotTo(o.HaveOccurred())
+	supportVolumes := []string{}
+	supportVolumesResult := gjson.GetBytes(csiCommonSupportVolumeMatrix, "support_Matrix.platforms.#(name="+cloudProvider+").volumetypes|@flatten").Array()
+	e2e.Logf("%s support volumes are : %v", cloudProvider, supportVolumesResult)
+	for i := 0; i < len(supportVolumesResult); i++ {
+		supportVolumes = append(supportVolumes, gjson.GetBytes(csiCommonSupportVolumeMatrix, "support_Matrix.platforms.#(name="+cloudProvider+").volumetypes|@flatten."+strconv.Itoa(i)).String())
+	}
+	return supportVolumes
+}
+
 // Get pre-defined storageclass by cloudplatform and provisioner
 func getPresetStorageClassNameByProvisioner(cloudProvider string, provisioner string) string {
 	csiCommonSupportMatrix, err := ioutil.ReadFile(filepath.Join(exutil.FixturePath("testdata", "storage"), "general-csi-support-provisioners.json"))
