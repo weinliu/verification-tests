@@ -258,13 +258,19 @@ func getAllNodesInfo(oc *exutil.CLI) []node {
 		} else {
 			nodeRole = "worker"
 		}
+		nodeAvaiableZone := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+")."+zonePath).String()
+		// Enchancemant: It seems sometimes aws worker node miss kubernetes az label, maybe caused by other parallel cases
+		if nodeAvaiableZone == "" && cloudProvider == "aws" {
+			e2e.Logf("The node \"%s\" kubernetes az label not exist, retry get from csi az label", nodeName)
+			zonePath = `metadata.labels.topology\.ebs\.csi\.aws\.com\/zone`
+			nodeAvaiableZone = gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+")."+zonePath).String()
+		}
 		readyStatus := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").status.conditions.#(type=Ready).status").String()
 		scheduleFlag := !gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").spec.unschedulable").Exists()
 		nodeOsType := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").metadata.labels.kubernetes\\.io\\/os").String()
 		nodeOsId := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").metadata.labels.node\\.openshift\\.io\\/os_id").String()
 		nodeOsImage := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").status.nodeInfo.osImage").String()
 		nodeArch := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").status.nodeInfo.architecture").String()
-		nodeAvaiableZone := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+")."+zonePath).String()
 		tempSlice := strings.Split(gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+")."+"spec.providerID").String(), "/")
 		nodeInstanceId := tempSlice[len(tempSlice)-1]
 		nodes = append(nodes, node{

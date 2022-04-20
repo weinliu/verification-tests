@@ -1,7 +1,7 @@
 apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
-  name: lso-deploy-template
+  name: localvolume-template
 objects:
 # LocalVolume
 - kind: LocalVolume

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -79,8 +80,6 @@ func (lso *localStorageOperator) install(oc *exutil.CLI) {
 	if lso.namespace == "" {
 		lso.namespace = oc.Namespace()
 	}
-	// err := oc.AsAdmin().WithoutNamespace().Run("new-project").Args(lso.namespace).Execute()
-	// o.Expect(err).NotTo(o.HaveOccurred())
 	err := applyResourceFromTemplateAsAdmin(oc, "--ignore-unknown-parameters=true", "-f", lso.deployTemplate, "-p", "NAMESPACE="+lso.namespace, "CHANNEL="+lso.channel,
 		"SOURCE="+lso.source)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -158,9 +157,12 @@ func (lso *localStorageOperator) checkInstallSucceed(oc *exutil.CLI) (bool, erro
 // Waiting for openshift local storage operator install succeed
 func (lso *localStorageOperator) waitInstallSucceed(oc *exutil.CLI) {
 	lso.getCurrentCSV(oc)
-	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
 		return lso.checkInstallSucceed(oc)
 	})
+	if err != nil {
+		e2e.Logf("LSO *%s* install failed caused by:\n%s", lso.currentCSV, getOcDescribeInfo(oc, lso.namespace, "csv", lso.currentCSV))
+	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for local storage operator:\"%s\" install succeed in ns/%s timeout", lso.currentCSV, lso.namespace))
 }
 
@@ -286,4 +288,157 @@ func (lv *localVolume) deleteAsAdmin(oc *exutil.CLI) {
 	for _, worker := range workers {
 		execCommandInSpecificNode(oc, worker, command)
 	}
+}
+
+// Define LocalVolumeSet CR
+type localVolumeSet struct {
+	name           string
+	namespace      string
+	fsType         string
+	maxDeviceCount int64
+	scname         string
+	volumeMode     string
+	template       string
+}
+
+// function option mode to change the default values of localVolumeSet attributes
+type localVolumeSetOption func(*localVolumeSet)
+
+// Replace the default value of localVolumeSet name
+func setLvsName(name string) localVolumeSetOption {
+	return func(lvs *localVolumeSet) {
+		lvs.name = name
+	}
+}
+
+// Replace the default value of localVolumeSet namespace
+func setLvsNamespace(namespace string) localVolumeSetOption {
+	return func(lvs *localVolumeSet) {
+		lvs.namespace = namespace
+	}
+}
+
+// Replace the default value of localVolumeSet storageclass name
+func setLvsScname(scname string) localVolumeSetOption {
+	return func(lvs *localVolumeSet) {
+		lvs.scname = scname
+	}
+}
+
+// Replace the default value of localVolumeSet fsType
+func setLvsFstype(fsType string) localVolumeSetOption {
+	return func(lvs *localVolumeSet) {
+		lvs.fsType = fsType
+	}
+}
+
+// Replace the default value of localVolumeSet maxDeviceCount
+func setLvsMaxDeviceCount(maxDeviceCount int64) localVolumeSetOption {
+	return func(lvs *localVolumeSet) {
+		lvs.maxDeviceCount = maxDeviceCount
+	}
+}
+
+// Replace the default value of localVolumeSet volumeMode
+func setLvsVolumeMode(volumeMode string) localVolumeSetOption {
+	return func(lvs *localVolumeSet) {
+		lvs.volumeMode = volumeMode
+	}
+}
+
+// Replace the default value of localVolumeSet template
+func setLvsTemplate(template string) localVolumeSetOption {
+	return func(lvs *localVolumeSet) {
+		lvs.template = template
+	}
+}
+
+//  Create a new customized localVolumeSet object
+func newLocalVolumeSet(opts ...localVolumeSetOption) localVolumeSet {
+	defaultLocalVolumeSet := localVolumeSet{
+		name:           "lvs-" + getRandomString(),
+		namespace:      "",
+		fsType:         "ext4",
+		maxDeviceCount: 10,
+		scname:         "lvs-sc-" + getRandomString(),
+		volumeMode:     "Filesystem",
+		template:       "/lso/localvolumeset-template.yaml",
+	}
+	for _, o := range opts {
+		o(&defaultLocalVolumeSet)
+	}
+	return defaultLocalVolumeSet
+}
+
+// Create localVolumeSet CR
+func (lvs *localVolumeSet) create(oc *exutil.CLI) {
+	var deletePaths = make([]string, 0, 5)
+	if lvs.volumeMode == "Block" {
+		deletePaths = []string{`items.0.spec.storageClassDevices.0.fsType`}
+	}
+	err := applyResourceFromTemplateDeleteParametersAsAdmin(oc, deletePaths, "--ignore-unknown-parameters=true", "-f", lvs.template, "-p", "NAME="+lvs.name, "NAMESPACE="+lvs.namespace,
+		"FSTYPE="+lvs.fsType, "MAXDEVICECOUNT="+strconv.FormatInt(lvs.maxDeviceCount, 10), "SCNAME="+lvs.scname, "VOLUMEMODE="+lvs.volumeMode)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Create localVolumeSet CR with extra parameters
+func (lvs *localVolumeSet) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", lvs.template, "-p", "NAME="+lvs.name, "NAMESPACE="+lvs.namespace,
+		"FSTYPE="+lvs.fsType, "MAXDEVICECOUNT="+strconv.FormatInt(lvs.maxDeviceCount, 10), "SCNAME="+lvs.scname, "VOLUMEMODE="+lvs.volumeMode)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Delete localVolumeSet CR
+func (lvs *localVolumeSet) deleteAsAdmin(oc *exutil.CLI) {
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("localvolumeSet/"+lvs.name, "-n", lvs.namespace).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("sc/" + lvs.scname).Execute()
+	lvPvs, _ := getPvNamesOfSpecifiedSc(oc, lvs.scname)
+	for _, pv := range lvPvs {
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv/" + pv).Execute()
+	}
+	command := "rm -rf /mnt/local-storage/" + lvs.scname
+	workers := getWorkersList(oc)
+	for _, worker := range workers {
+		execCommandInSpecificNode(oc, worker, command)
+	}
+}
+
+// Get the localVolumeSet CR totalProvisionedDeviceCount
+func (lvs *localVolumeSet) getTotalProvisionedDeviceCount(oc *exutil.CLI) (int64, error) {
+	var (
+		output                 string
+		provisionedDeviceCount int64
+		err                    error
+	)
+	output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", lvs.namespace, "localvolumeSet/"+lvs.name, "-o=jsonpath={.status.totalProvisionedDeviceCount}").Output()
+	if err == nil {
+		provisionedDeviceCount, err = strconv.ParseInt(output, 10, 64)
+		if err != nil {
+			e2e.Logf("The localVolumeSet CR totalProvisionedDeviceCount is: \"%d\"", provisionedDeviceCount)
+		}
+	}
+	return provisionedDeviceCount, err
+}
+
+// Waiting for the localVolumeSet CR have already provisioned Device
+func (lvs *localVolumeSet) waitDeviceProvisioned(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+		provisionedDeviceCount, errinfo := lvs.getTotalProvisionedDeviceCount(oc)
+		if errinfo != nil {
+			e2e.Logf("Get LVS provisionedDeviceCount failed :%v, wait for next round get.", errinfo)
+			return false, errinfo
+		}
+		if provisionedDeviceCount > 0 {
+			e2e.Logf("The localVolumeSet \"%s\" have already provisioned Device [provisionedDeviceCount: %d]", lvs.name, provisionedDeviceCount)
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", lvs.namespace, "localvolumeSet/"+lvs.name).Output()
+		e2e.Logf("***$ oc describe localVolumeSet/%s\n***%s", lvs.name, output)
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", lvs.namespace, "-l", "app=diskmaker-manager", "-c", "diskmaker-manager", "--since=2m").Output()
+		e2e.Logf("***$ oc logs -l app=diskmaker-manager -c diskmaker-manager --since=2m\n***%s", output)
+	}
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for the localVolumeSet \"%s\" have already provisioned Device timeout", lvs.name))
 }

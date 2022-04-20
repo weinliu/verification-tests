@@ -373,14 +373,22 @@ func (vol *ebsVolume) attachToInstance(ac *ec2.EC2, instance node) *ec2.VolumeAt
 	}
 	req, resp := ac.AttachVolumeRequest(volumeInput)
 	err := req.Send()
+	// Enchancemant: When the node already attached several volumes retry new device
+	// to avoid device name conflict cause the attach action failed
 	if strings.Contains(fmt.Sprint(err), "is already in use") {
-		e2e.Logf("Attached to \"%s\" failed of \"%+v\" try another Device", instance.instanceId, err)
-		devMaps[strings.Split(vol.Device, "")[len(vol.Device)-1]] = true
-		vol.Device = getVaildDeviceForEbsVol()
-		volumeInput.Device = aws.String(vol.Device)
-		req, resp = ac.AttachVolumeRequest(volumeInput)
-		err = req.Send()
-		debugLogf("Req:\"%+v\", Resp:\"%+v\"", req, resp)
+		for i := 1; i <= 8; i++ {
+			devMaps[strings.Split(vol.Device, "")[len(vol.Device)-1]] = true
+			vol.Device = getVaildDeviceForEbsVol()
+			volumeInput.Device = aws.String(vol.Device)
+			req, resp = ac.AttachVolumeRequest(volumeInput)
+			e2e.Logf("Attached to \"%s\" failed of \"%+v\" try next*%d* Device \"%s\"",
+				instance.instanceId, err, i, vol.Device)
+			err = req.Send()
+			debugLogf("Req:\"%+v\", Resp:\"%+v\"", req, resp)
+			if err == nil {
+				break
+			}
+		}
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	vol.attachedNode = instance.instanceId
@@ -396,7 +404,9 @@ func (vol *ebsVolume) waitStateAsExpected(ac *ec2.EC2, expectedState string) {
 			return false, errinfo
 		}
 		if gjson.Get(volInfo, `Volumes.0.State`).String() == expectedState {
-			e2e.Logf("The ebs volume : \"%s\" state is as expected \"%s\"", vol.VolumeId, expectedState)
+			e2e.Logf("The ebs volume : \"%s\" [regin:\"%s\",az:\"%s\",size:\"%dGi\"] is as expected \"%s\"",
+				vol.VolumeId, os.Getenv("AWS_REGION"), vol.AvailabilityZone, vol.Size, expectedState)
+			vol.State = expectedState
 			return true, nil
 		}
 		return false, nil

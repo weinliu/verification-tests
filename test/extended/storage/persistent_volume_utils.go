@@ -231,8 +231,16 @@ func waitForPersistentVolumeStatusAsExpected(oc *exutil.CLI, pvName string, expe
 		err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
 			status, err = getPersistentVolumeStatus(oc, pvName)
 			if err != nil {
-				e2e.Logf("Get persist volume '%v' status failed of: %v.", pvName, err)
-				return false, err
+				// Adapt for LSO test
+				// When pvc deleted the related pv status become [Released -> Deleted -> Avaiable]
+				// The default storageclass reclaimpolicy is delete but after deleted the LSO will generate a same name pv
+				if strings.Contains(interfaceToString(err), "not found") {
+					e2e.Logf("Get persist volume '%s' status failed of *not fonud*, try another round", pvName)
+					return false, nil
+				} else {
+					e2e.Logf("Get persist volume '%v' status failed of: %v.", pvName, err)
+					return false, err
+				}
 			} else {
 				if status == expectedStatus {
 					e2e.Logf("The persist volume '%s' becomes to expected status: '%s' ", pvName, expectedStatus)
