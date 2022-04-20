@@ -20,15 +20,8 @@
           spec:
             containers:
             - name: memcached
-              command:
-              - memcached
-              - -m=64
-              - -o
-              - modern
-              - -v
-              image: "docker.io/memcached:1.4.36-alpine"
-              ports:
-                - containerPort: 11211
+              image: "quay.io/olmqe/memcached-docker:multi-arch"
+              
 
 - k8s:
     definition:
