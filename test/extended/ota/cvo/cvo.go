@@ -27,6 +27,62 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	oc := exutil.NewCLIWithoutNamespace(project_name)
 
 	//author: yanyang@redhat.com
+	g.It("Author:yanyang-Medium-49508-disable capabilities by modifying the cv.spec.capabilities.baselineCapabilitySet [Serial]", func() {
+		orgBaseCap, err := getCVObyJP(oc, ".spec.capabilities.baselineCapabilitySet")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if orgBaseCap != "vCurrent" {
+			g.Skip("The test requires baselineCapabilitySet=vCurrent, rather than " + orgBaseCap)
+		}
+
+		defer changeCap(oc, true, orgBaseCap)
+
+		g.By("Check cap status and condition prior to change")
+		enabledCap, err := getCVObyJP(oc, ".status.capabilities.enabledCapabilities[*]")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		capSet := strings.Split(enabledCap, " ")
+		for _, op := range capSet {
+			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", op).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		status, err := getCVObyJP(oc, ".status.conditions[?(.type=='ImplicitlyEnabledCapabilities')].status")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(status).To(o.Equal("False"))
+
+		g.By("Disable capabilities by modifying the baselineCapabilitySet")
+		_, err = changeCap(oc, true, "None")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check cap status and condition after change")
+		enabledCapPost, err := getCVObyJP(oc, ".status.capabilities.enabledCapabilities[*]")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(enabledCapPost).To(o.Equal(enabledCap))
+
+		for _, op := range capSet {
+			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", op).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		for _, k := range []string{"status", "reason", "message"} {
+			jsonpath := ".status.conditions[?(.type=='ImplicitlyEnabledCapabilities')]." + k
+			out, err := getCVObyJP(oc, jsonpath)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if k == "status" {
+				o.Expect(out).To(o.Equal("True"))
+			} else if k == "reason" {
+				o.Expect(out).To(o.Equal("CapabilitiesImplicitlyEnabled"))
+			} else {
+				msg := append(capSet, "The following capabilities could not be disabled")
+				for _, m := range msg {
+					o.Expect(out).To(o.ContainSubstring(m))
+				}
+			}
+		}
+	})
+
+	//author: yanyang@redhat.com
 	g.It("Author:yanyang-Low-49670-change spec.capabilities to invalid value", func() {
 		orgBaseCap, err := getCVObyJP(oc, ".spec.capabilities.baselineCapabilitySet")
 		o.Expect(err).NotTo(o.HaveOccurred())
