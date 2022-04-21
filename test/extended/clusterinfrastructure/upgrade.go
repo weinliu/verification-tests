@@ -4,7 +4,7 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	ci "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 )
 
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
@@ -15,7 +15,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	)
 
 	g.BeforeEach(func() {
-		iaasPlatform = ci.CheckPlatform(oc)
+		iaasPlatform = clusterinfra.CheckPlatform(oc)
 	})
 
 	// author: zhsun@redhat.com
@@ -50,5 +50,53 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		kcm, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/config", "-n", "openshift-kube-controller-manager", "-o=jsonpath={.data.config\\.yaml}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(kcm).To(o.ContainSubstring("\"cloud-provider\":[\"external\"]"))
+	})
+
+	// author: zhsun@redhat.com
+	g.It("Longduration-NonPreRelease-PreChkUpgrade-Author:zhsun-Medium-41804-[Upgrade]Spot/preemptible instances should not block upgrade - Azure [Disruptive]", func() {
+		if iaasPlatform != "azure" {
+			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
+		}
+		randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
+		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset/"+randomMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if region == "northcentralus" || region == "westus" || region == "usgovvirginia" {
+			g.Skip("Skip this test scenario because it is not supported on the " + region + " region, because this region doesn't have zones")
+		}
+
+		g.By("Create a spot instance on azure")
+		clusterinfra.SkipConditionally(oc)
+		ms := clusterinfra.MachineSetDescription{"machineset-41804", 0}
+		ms.CreateMachineSet(oc)
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/machineset-41804", "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"spotVMOptions":{}}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterinfra.WaitForMachinesRunning(oc, 1, "machineset-41804")
+
+		g.By("Check machine and node were labelled `interruptible-instance`")
+		machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines", "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
+		o.Expect(machine).NotTo(o.BeEmpty())
+		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "machine.openshift.io/interruptible-instance=").Output()
+		o.Expect(node).NotTo(o.BeEmpty())
+	})
+
+	// author: zhsun@redhat.com
+	g.It("Longduration-NonPreRelease-PstChkUpgrade-Author:zhsun-Medium-41804-[Upgrade]Spot/preemptible instances should not block upgrade - Azure [Disruptive]", func() {
+		if iaasPlatform != "azure" {
+			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
+		}
+		randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
+		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset/"+randomMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if region == "northcentralus" || region == "westus" || region == "usgovvirginia" {
+			g.Skip("Skip this test scenario because it is not supported on the " + region + " region, because this region doesn't have zones")
+		}
+		ms := clusterinfra.MachineSetDescription{"machineset-41804", 0}
+		defer ms.DeleteMachineSet(oc)
+
+		g.By("Check machine and node were still be labelled `interruptible-instance`")
+		machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines", "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
+		o.Expect(machine).NotTo(o.BeEmpty())
+		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "machine.openshift.io/interruptible-instance=").Output()
+		o.Expect(node).NotTo(o.BeEmpty())
 	})
 })
