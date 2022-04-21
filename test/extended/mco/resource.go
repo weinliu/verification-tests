@@ -103,7 +103,7 @@ func (r *ocGetter) GetSafe(jsonPath string, defaultValue string, extraParams ...
 func (r *ocGetter) GetOrFail(jsonPath string, extraParams ...string) string {
 	ret, err := r.Get(jsonPath, extraParams...)
 	if err != nil {
-		e2e.Failf("%v", err)
+		e2e.Failf("Could not get value %s. Error: %v", jsonPath, err)
 	}
 
 	return ret
@@ -226,9 +226,19 @@ func NewNamespacedResourceList(oc *exutil.CLI, kind string, namespace string) *R
 	return &ResourceList{ocGetter{oc.AsAdmin(), kind, namespace, ""}, []string{}}
 }
 
+// CleanParams removes the extraparams added by methods like "ByLabel" or "SorBy..."
+func (l *ResourceList) CleanParams() {
+	l.extraParams = []string{}
+}
+
 // SortByTimestamp will configure the list to be sorted by creation timestamp
 func (l *ResourceList) SortByTimestamp() {
 	l.extraParams = append(l.extraParams, "--sort-by=metadata.creationTimestamp")
+}
+
+// SortByZone will configure the list to be sorted by HA topology zone
+func (l *ResourceList) SortByZone() {
+	l.extraParams = append(l.extraParams, `--sort-by=.metadata.labels.topology\.kubernetes\.io/zone`)
 }
 
 // ByLabel will use the given label to filter the list
@@ -240,7 +250,7 @@ func (l *ResourceList) ByLabel(label string) {
 func (l ResourceList) GetAll() ([]Resource, error) {
 	allItemsNames, err := l.Get("{.items[*].metadata.name}", l.extraParams...)
 	if err != nil {
-		e2e.Failf("%v", err)
+		return nil, err
 	}
 	allNames := strings.Split(strings.Trim(allItemsNames, " "), " ")
 

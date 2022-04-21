@@ -1371,6 +1371,119 @@ nulla pariatur.`
 		o.Expect(rf.GetTextContent()).To(o.Equal(fileContent))
 		o.Expect(rf.GetNpermissions()).To(o.Equal(fileMode))
 	})
+
+	g.It("Author:sregidor-Longduration-NonPreRelease-High-49568-Check nodes updating order maxUnavailable=1 [Serial]", func() {
+		g.By("Scale machinesets and 1 more replica to make sure we have at least 2 nodes per machineset")
+		platform := ci.CheckPlatform(oc)
+		e2e.Logf("Platform is %s", platform)
+		if platform != "none" && platform != "" {
+			err := AddToAllMachineSets(oc, 1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer func() { o.Expect(AddToAllMachineSets(oc, -1)).NotTo(o.HaveOccurred()) }()
+		} else {
+			e2e.Logf("Platform is %s, skipping the MachineSets replica configuration", platform)
+		}
+
+		g.By("Get the nodes in the worker pool sorted by update order")
+		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		workerNodes, errGet := mcp.GetSortedNodes()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+
+		g.By("Create a MC to deploy a config file")
+		filePath := "/etc/TC-49568-mco-test-file-order"
+		fileContent := "MCO test file order\n"
+		fileMode := "0400" // decimal 256
+		fileConfig := getUrlEncodedFileConfig(filePath, fileContent, fileMode)
+
+		mcName := "mco-test-file-order"
+		mc := MachineConfig{name: mcName, pool: "worker"}
+		defer mc.delete(oc)
+
+		template := NewMCOTemplate(oc, "generic-machine-config-template.yml")
+		err := template.Create("-p", "NAME="+mcName, "-p", "POOL=worker", "-p", fmt.Sprintf("FILES=[%s]", fileConfig))
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Poll the nodes sorted by the order they are updated")
+		maxUnavailable := 1
+		updatedNodes := mcp.GetSortedUpdatedNodes(maxUnavailable)
+		for _, n := range updatedNodes {
+			e2e.Logf("updated node: %s created: %s zone: %s", n.GetName(), n.GetOrFail(`{.metadata.creationTimestamp}`), n.GetOrFail(`{.metadata.labels.topology\.kubernetes\.io/zone}`))
+		}
+
+		g.By("Wait for the configuration to be applied in all nodes")
+		mcp.waitForComplete()
+
+		g.By("Check that nodes were updated in the right order")
+		rightOrder := checkUpdatedLists(workerNodes, updatedNodes, maxUnavailable)
+		o.Expect(rightOrder).To(o.BeTrue(), "Expected update order %s, but found order %s", workerNodes, updatedNodes)
+
+		g.By("Verfiy file content and permissions")
+		rf := NewRemoteFile(workerNodes[0], filePath)
+		rferr := rf.Fetch()
+		o.Expect(rferr).NotTo(o.HaveOccurred())
+
+		o.Expect(rf.GetTextContent()).To(o.Equal(fileContent))
+		o.Expect(rf.GetNpermissions()).To(o.Equal(fileMode))
+	})
+
+	g.It("Author:sregidor-Longduration-NonPreRelease-High-49672-Check nodes updating order maxUnavailable>1 [Serial]", func() {
+		g.By("Scale machinesets and 1 more replica to make sure we have at least 2 nodes per machineset")
+		platform := ci.CheckPlatform(oc)
+		e2e.Logf("Platform is %s", platform)
+		if platform != "none" && platform != "" {
+			err := AddToAllMachineSets(oc, 1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer func() { o.Expect(AddToAllMachineSets(oc, -1)).NotTo(o.HaveOccurred()) }()
+		} else {
+			e2e.Logf("Platform is %s, skipping the MachineSets replica configuration", platform)
+		}
+
+		g.By("Get the nodes in the worker pool sorted by update order")
+		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		workerNodes, errGet := mcp.GetSortedNodes()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+
+		g.By("Set maxUnavailable value")
+		maxUnavailable := 2
+		mcp.SetMaxUnavailable(maxUnavailable)
+		defer mcp.RemoveMaxUnavailable()
+
+		g.By("Create a MC to deploy a config file")
+		filePath := "/etc/TC-49672-mco-test-file-order"
+		fileContent := "MCO test file order 2\n"
+		fileMode := "0400" // decimal 256
+		fileConfig := getUrlEncodedFileConfig(filePath, fileContent, fileMode)
+
+		mcName := "mco-test-file-order2"
+		mc := MachineConfig{name: mcName, pool: "worker"}
+		defer mc.delete(oc)
+
+		template := NewMCOTemplate(oc, "generic-machine-config-template.yml")
+		err := template.Create("-p", "NAME="+mcName, "-p", "POOL=worker", "-p", fmt.Sprintf("FILES=[%s]", fileConfig))
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Poll the nodes sorted by the order they are updated")
+		updatedNodes := mcp.GetSortedUpdatedNodes(maxUnavailable)
+		for _, n := range updatedNodes {
+			e2e.Logf("updated node: %s created: %s zone: %s", n.GetName(), n.GetOrFail(`{.metadata.creationTimestamp}`), n.GetOrFail(`{.metadata.labels.topology\.kubernetes\.io/zone}`))
+		}
+
+		g.By("Wait for the configuration to be applied in all nodes")
+		mcp.waitForComplete()
+
+		g.By("Check that nodes were updated in the right order")
+		rightOrder := checkUpdatedLists(workerNodes, updatedNodes, maxUnavailable)
+		o.Expect(rightOrder).To(o.BeTrue(), "Expected update order %s, but found order %s", workerNodes, updatedNodes)
+
+		g.By("Verfiy file content and permissions")
+		rf := NewRemoteFile(workerNodes[0], filePath)
+		rferr := rf.Fetch()
+		o.Expect(rferr).NotTo(o.HaveOccurred())
+
+		o.Expect(rf.GetTextContent()).To(o.Equal(fileContent))
+		o.Expect(rf.GetNpermissions()).To(o.Equal(fileMode))
+	})
+
 })
 
 func createMcAndVerifyMCValue(oc *exutil.CLI, stepText string, mcName string, workerNode node, textToVerify TextToVerify, cmd ...string) {
@@ -1562,4 +1675,49 @@ func verifyDriftConfig(mcp *MachineConfigPool, rf *RemoteFile, newMode string, f
 	g.By("Verify that node annotations have been cleaned")
 	reason = workerNode.GetAnnotationOrFail("machineconfiguration.openshift.io/reason")
 	o.Expect(reason).To(o.Equal(``))
+}
+
+// checkUpdatedLists Compares that 2 lists are ordered in steps.
+//   when we update nodes with maxUnavailable>1, since we are polling, we cannot make sure
+//   that the sorted lists have the same order one by one. We can only make sure that the steps
+//   defined by maxUnavailable have the right order.
+//   If step=1, it is the same as comparing that both lists are equal.
+func checkUpdatedLists(l []node, r []node, step int) bool {
+	if len(l) != len(r) {
+		e2e.Logf("Compared lists have different size")
+		return false
+	}
+
+	indexStart := 0
+	for i := 0; i < len(l); i = i + step {
+		indexEnd := i + step
+		if (i + step) > (len(l)) {
+			indexEnd = len(l)
+		}
+
+		// Create 2 sublists with the size of the step
+		stepL := l[indexStart:indexEnd]
+		stepR := r[indexStart:indexEnd]
+		indexStart = indexStart + step
+
+		// All elements in one sublist should exist in the other one
+		// but they dont have to be in the same order.
+		for _, nl := range stepL {
+			found := false
+			for _, nr := range stepR {
+				if nl.GetName() == nr.GetName() {
+					found = true
+					break
+				}
+
+			}
+			if !found {
+				e2e.Logf("Nodes were not updated in the right order. Comparing steps %s and %s\n", stepL, stepR)
+				return false
+			}
+		}
+
+	}
+	return true
+
 }

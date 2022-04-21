@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -215,6 +216,20 @@ func (mcp *MachineConfigPool) pause(enable bool) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// SetMaxUnavailable sets the value for maxUnavailable
+func (mcp *MachineConfigPool) SetMaxUnavailable(maxUnavailable int) {
+	e2e.Logf("patch mcp %v, change spec.maxUnavailable to %d", mcp.name, maxUnavailable)
+	err := mcp.Patch("merge", fmt.Sprintf(`{"spec":{"maxUnavailable": %d}}`, maxUnavailable))
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// RemoveMaxUnavailable removes spec.maxUnavailable attribute from the pool config
+func (mcp *MachineConfigPool) RemoveMaxUnavailable() {
+	e2e.Logf("patch mcp %v, removing spec.maxUnavailable")
+	err := mcp.Patch("json", fmt.Sprintf(`[{ "op": "remove", "path": "/spec/maxUnavailable" }]`))
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 func (mcp *MachineConfigPool) getConfigNameOfSpec() (string, error) {
 	output, err := mcp.Get(`{.spec.configuration.name}`)
 	e2e.Logf("spec.configuration.name of mcp/%v is %v", mcp.name, output)
@@ -286,6 +301,88 @@ func (mcp *MachineConfigPool) estimateWaitTimeInMinutes() int {
 
 	return totalNodes * 10
 
+}
+
+func (mcp *MachineConfigPool) GetNodes() ([]node, error) {
+	labels := JSON(mcp.GetOrFail(`{.spec.nodeSelector.matchLabels}`))
+	o.Expect(labels.Exists()).Should(o.BeTrue(), fmt.Sprintf("The pool %s has no machLabels value defined", mcp.GetName()))
+	nodeList := NewNodeList(mcp.oc)
+	for k, v := range labels.ToMap() {
+		requiredLabel := fmt.Sprintf("%s=%s", k, v.(string))
+		nodeList.ByLabel(requiredLabel)
+	}
+	return nodeList.GetAll()
+}
+
+func (mcp *MachineConfigPool) GetSortedNodes() ([]node, error) {
+
+	poolNodes, err := mcp.GetNodes()
+	if err != nil {
+		return nil, err
+	}
+
+	return sortNodeList(poolNodes), nil
+
+}
+
+// GetSortedUpdatedNodes returns the list of the UpdatedNodes sorted by the time when they started to be updated.
+//	If maxUnavailable>0, then the function will fail if more that maxUpdatingNodes are being updated at the same time
+func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []node {
+	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
+	e2e.Logf("Waiting %s in pool %s for all nodes to start updating.", timeToWait, mcp.name)
+
+	poolNodes, errget := mcp.GetNodes()
+	o.Expect(errget).NotTo(o.HaveOccurred(), fmt.Sprintf("Cannot get nodes in pool %s", mcp.GetName()))
+
+	pendingNodes := poolNodes
+	updatedNodes := []node{}
+	err := wait.Poll(20*time.Second, timeToWait, func() (bool, error) {
+		// If there are degraded machines, stop polling, directly fail
+		degradedstdout, degradederr := mcp.getDegradedMachineCount()
+		if degradederr != nil {
+			e2e.Logf("the err:%v, and try next round", degradederr)
+			return false, nil
+		}
+
+		if degradedstdout != 0 {
+			exutil.AssertWaitPollNoErr(fmt.Errorf("Degraded machines"), fmt.Sprintf("mcp %s has degraded %d machines", mcp.name, degradedstdout))
+		}
+
+		// Check that there aren't more thatn maxUpdatingNodes updating at the same time
+		if maxUnavailable > 0 {
+			totalUpdating := 0
+			for _, node := range poolNodes {
+				if node.IsUpdating() {
+					totalUpdating++
+				}
+			}
+			if totalUpdating > maxUnavailable {
+				exutil.AssertWaitPollNoErr(fmt.Errorf("maxUnavailable Not Honored"), fmt.Sprintf("Pool %s, error: %d nodes were updating at the same time. Only %s nodes should be updating at the same time.", mcp.GetName(), totalUpdating, maxUnavailable))
+			}
+		}
+
+		remainingNodes := []node{}
+		for _, node := range pendingNodes {
+			if node.IsUpdating() {
+				e2e.Logf("Node %s is UPDATING", node.GetName())
+				updatedNodes = append(updatedNodes, node)
+			} else {
+				remainingNodes = append(remainingNodes, node)
+			}
+		}
+
+		if len(remainingNodes) == 0 {
+			e2e.Logf("All nodes have started to be updated on mcp %s", mcp.name)
+			return true, nil
+
+		}
+		e2e.Logf(" %d remaining nodes", len(remainingNodes))
+		pendingNodes = remainingNodes
+		return false, nil
+	})
+
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Could not get the list of updated nodes on mcp %s", mcp.name))
+	return updatedNodes
 }
 
 func (mcp *MachineConfigPool) waitForComplete() {
@@ -579,4 +676,89 @@ func getSingleUnitConfig(unitName string, unitEnabled bool, unitContents string)
 	// Escape not valid characters in json from the file content
 	escapedContent := jsonEncode(unitContents)
 	return fmt.Sprintf(`{"name": "%s", "enabled": %t, "contents": %s}`, unitName, unitEnabled, escapedContent)
+}
+
+// AddToAllMachineSets adds a delta to all MachineSets replicas and wait for the MachineSets to be ready
+func AddToAllMachineSets(oc *exutil.CLI, delta int) error {
+	allMs, err := NewMachineSetList(oc, "openshift-machine-api").GetAll()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	var addErr error = nil
+	modifiedMSs := []MachineSet{}
+	for _, ms := range allMs {
+		addErr = ms.AddToScale(delta)
+		if addErr == nil {
+			modifiedMSs = append(modifiedMSs, ms)
+		} else {
+			break
+		}
+	}
+
+	if addErr != nil {
+		e2e.Logf("Error reconfiguring MachineSets. Restoring original replicas.")
+		for _, ms := range modifiedMSs {
+			_ = ms.AddToScale(-1 * delta)
+		}
+
+		return addErr
+	}
+
+	var waitErr error = nil
+	for _, ms := range allMs {
+		waitErr = wait.PollImmediate(30*time.Second, 8*time.Minute, func() (bool, error) { return ms.PollIsReady()(), nil })
+		if waitErr != nil {
+			e2e.Logf("MachineSet %s is not ready. Restoring original replicas.", ms.GetName())
+			for _, ms := range modifiedMSs {
+				_ = ms.AddToScale(-1 * delta)
+			}
+			break
+		}
+	}
+
+	return waitErr
+}
+
+func sortNodeList(nodes []node) []node {
+	sort.Slice(nodes, func(l, r int) bool {
+		lMetadata := JSON(nodes[l].GetOrFail("{.metadata}"))
+		rMetadata := JSON(nodes[r].GetOrFail("{.metadata}"))
+
+		lLabels := &JSONData{nil}
+		if lMetadata.Get("labels").Exists() {
+			lLabels = lMetadata.Get("labels")
+		}
+		rLabels := &JSONData{nil}
+		if rMetadata.Get("labels").Exists() {
+			rLabels = rMetadata.Get("labels")
+		}
+
+		lZone := lLabels.Get("topology.kubernetes.io/zone")
+		rZone := rLabels.Get("topology.kubernetes.io/zone")
+		// if both nodes have zone label, sort by zone, push nodes without label to end of list
+		if lZone.Exists() && rZone.Exists() {
+			if lZone.ToString() != rZone.ToString() {
+				return lZone.ToString() < rZone.ToString()
+			}
+		} else if rZone.Exists() {
+			return false
+		} else if lZone.Exists() {
+			return true
+		}
+
+		// if nodes are in the same zone or they have no labels sortby creationTime oldest to newest
+		dateLayout := "2006-01-02T15:04:05Z"
+		lDate, err := time.Parse(dateLayout, lMetadata.Get("creationTimestamp").ToString())
+		if err != nil {
+			e2e.Failf("Cannot parse creationTimestamp %s in node $s", lMetadata.Get("creationTimestamp").ToString(), nodes[l].GetName())
+
+		}
+		rDate, err := time.Parse(dateLayout, rMetadata.Get("creationTimestamp").ToString())
+		if err != nil {
+			e2e.Failf("Cannot parse creationTimestamp %s in node $s", rMetadata.Get("creationTimestamp").ToString(), nodes[r].GetName())
+
+		}
+		return lDate.Before(rDate)
+
+	})
+	return nodes
 }

@@ -24,6 +24,11 @@ func NewNodeList(oc *exutil.CLI) *nodeList {
 	return &nodeList{*NewResourceList(oc, "node")}
 }
 
+// String implements the Stringer interface
+func (n node) String() string {
+	return n.GetName()
+}
+
 // DebugNode creates a debugging session of the node with chroot
 func (n *node) DebugNodeWithChroot(cmd ...string) (string, error) {
 	return exutil.DebugNodeWithChroot(n.oc, n.name, cmd...)
@@ -92,6 +97,37 @@ func (n *node) PollIsCordoned() func() bool {
 	}
 }
 
+// GetCurrentMachineConfig returns the ID of the current machine config used in the node
+func (n *node) GetCurrentMachineConfig() string {
+	return n.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/currentConfig}`)
+}
+
+// GetDesiredMachineConfig returns the ID of the machine config that we want the node to use
+func (n *node) GetDesiredMachineConfig() string {
+	return n.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/desiredConfig}`)
+}
+
+// GetMachineConfigState returns the State of machineconfiguration process
+func (n *node) GetMachineConfigState() string {
+	return n.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/state}`)
+}
+
+// IsUpdated returns if the node is pending for machineconfig configuration or it is up to date
+func (n *node) IsUpdated() bool {
+	return (n.GetCurrentMachineConfig() == n.GetDesiredMachineConfig()) && (n.GetMachineConfigState() == "Done")
+}
+
+// IsTainted returns if the node hast taints or not
+func (n *node) IsTainted() bool {
+	taint, err := n.Get("{.spec.taints}")
+	return err == nil && taint != ""
+}
+
+// IsUpdating returns if the node is currently updating the machine configuration
+func (n *node) IsUpdating() bool {
+	return n.GetMachineConfigState() == "Working"
+}
+
 //GetAll returns a []node list with all existing nodes
 func (nl *nodeList) GetAll() ([]node, error) {
 	allNodeResources, err := nl.ResourceList.GetAll()
@@ -149,4 +185,18 @@ func (nl nodeList) GetAllCoreOsWokerNodesOrFail() []node {
 	workers, err := nl.GetAll()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return workers
+}
+
+func (nl *nodeList) GetTaintedNodes() []node {
+	allNodes, err := nl.GetAll()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	taintedNodes := []node{}
+	for _, node := range allNodes {
+		if node.IsTainted() {
+			taintedNodes = append(taintedNodes, node)
+		}
+	}
+
+	return taintedNodes
 }
