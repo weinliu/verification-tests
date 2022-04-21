@@ -673,6 +673,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(renderCheck).To(o.ContainSubstring("user-max-net-namespaces"))
 
 		//Verify nto operator logs
+		g.By("Check NTO operator pod logs to confirm if user-max-net-namespaces applied")
 		assertNTOOperatorLogs(oc, ntoNamespace, ntoOperatorPod, "user-max-net-namespaces")
 
 		//Verify if debug is false by CR setting
@@ -732,7 +733,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the default values of /proc/irq/default_smp_affinity on worker nodes")
-		defaultSMPAffinity, err := exutil.DebugNodeWithOptionsAndChroot(oc, tunedNodeName, []string{"--quiet=true"}, "cat", "/proc/irq/default_smp_affinity")
+
+		//Replace exutil.DebugNodeWithOptionsAndChroot with oc.AsAdmin().WithoutNamespace due to throw go warning even if set --quiet=true
+		//This test case must got the value of default_smp_affinity without warning information
+		defaultSMPAffinity, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot", "/host", "cat", "/proc/irq/default_smp_affinity").Output()
 		e2e.Logf("the default value of /proc/irq/default_smp_affinity without cpu affinity is: %v", defaultSMPAffinity)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defaultSMPAffinityMask := getDefaultSMPAffinityBitMaskbyCPUCores(oc, tunedNodeName)
@@ -756,7 +760,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes1.assertTunedProfileApplied(oc)
 
 		g.By("Check values of /proc/irq/default_smp_affinity on worker nodes after enabling isolated_cores=1")
-		isolatedcoresSMPAffinity, err := exutil.DebugNodeWithOptionsAndChroot(oc, tunedNodeName, []string{"--quiet=true"}, "cat", "/proc/irq/default_smp_affinity")
+		isolatedcoresSMPAffinity, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot", "/host", "cat", "/proc/irq/default_smp_affinity").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("the value of default_smp_affinity after setting isolated_cores=1 is: %v", isolatedcoresSMPAffinity)
 
@@ -784,7 +788,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes2.assertTunedProfileApplied(oc)
 
 		g.By("Check values of /proc/irq/default_smp_affinity on worker nodes")
-		IRQSMPAffinity, err := exutil.DebugNodeWithOptionsAndChroot(oc, tunedNodeName, []string{"--quiet=true"}, "cat", "/proc/irq/default_smp_affinity")
+		IRQSMPAffinity, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot", "/host", "cat", "/proc/irq/default_smp_affinity").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Isolate the second cpu cores, the default_smp_affinity should be changed
@@ -1381,11 +1385,11 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		metricEndpoint := getServiceENDPoint(oc, ntoNamespace)
 
 		g.By("Get information about the certificate the metrics server in NTO")
-		openSSLOutputBefore, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null")
+		openSSLOutputBefore, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Get information about the creation and expiration date of the certificate")
-		openSSLExpireDateBefore, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null | /host/bin/openssl x509 -noout -dates")
+		openSSLExpireDateBefore, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null | /host/bin/openssl x509 -noout -dates").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("The openSSL Expired Date information of NTO openSSL before rotate as below: \n%v", openSSLExpireDateBefore)
 

@@ -328,7 +328,7 @@ func (ntoRes ntoResource) assertTunedProfileApplied(oc *exutil.CLI) {
 }
 
 func assertNTOOperatorLogs(oc *exutil.CLI, namespace string, ntoOperatorPod string, profileName string) {
-	ntoOperatorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", namespace, ntoOperatorPod, "--tail=1").Output()
+	ntoOperatorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", namespace, ntoOperatorPod, "--tail=3").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(ntoOperatorLogs).To(o.ContainSubstring(profileName))
 }
@@ -564,7 +564,7 @@ func compareCertificateBetweenOpenSSLandTlsSecret(oc *exutil.CLI, ntoNamespace s
 	err := wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
 
 		//Extract certificate from openssl that nto operator service endpoint
-		openSSLOutputAfter, err := exutil.DebugNodeWithOptions(oc, tunedNodeName, []string{"--quiet=true"}, "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p'")
+		openSSLOutputAfter, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "/bin/bash", "-c", "/host/bin/openssl s_client -connect "+metricEndpoint+" 2>/dev/null </dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Extract tls.crt from secret node-tuning-operator-tls
@@ -586,10 +586,11 @@ func compareCertificateBetweenOpenSSLandTlsSecret(oc *exutil.CLI, ntoNamespace s
 
 func assertIFChannel(oc *exutil.CLI, namespace string, tunedNodeName string) bool {
 
-	ifName, err := exutil.DebugNodeWithOptionsAndChroot(oc, tunedNodeName, []string{"--quiet=true"}, "find", "/sys/class/net", "-type", "l", "-not", "-lname", "*virtual*", "-printf", "%f")
+	ifName, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "--quiet=true", "node/"+tunedNodeName, "--", "find", "/sys/class/net", "-type", "l", "-not", "-lname", "*virtual*", "-printf", "%f").Output()
+	//ifName, err := oc.AsAdmin().Run("debug").Args("--quiet=true", "node/"+tunedNodeName, "--", "find", "/sys/class/net", "-type", "l", "-not", "-lname", "*virtual*", "-printf", "%f").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	ethToolsOutput, err := exutil.DebugNodeWithOptionsAndChroot(oc, tunedNodeName, []string{"--quiet=true"}, "ethtool", "-l", ifName)
+	ethToolsOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "--quiet=true", "node/"+tunedNodeName, "--", "ethtool", "-l", ifName).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("ethtool -l %v:, \n%v", ifName, ethToolsOutput)
 
