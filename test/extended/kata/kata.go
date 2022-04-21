@@ -171,11 +171,16 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 		checkKataPodStatus(oc, podNs, newPodName)
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
-
-		podlogs, err := oc.AsAdmin().Run("logs").WithoutNamespace().Args("pod/"+newPodName, "-n", podNs).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(podlogs).NotTo(o.BeEmpty())
-		o.Expect(podlogs).To(o.ContainSubstring("httpd"))
+		errCheck:= wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
+			podlogs, err := oc.AsAdmin().Run("logs").WithoutNamespace().Args("pod/"+newPodName, "-n", podNs).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(podlogs).NotTo(o.BeEmpty())
+			if strings.Contains(podlogs, "httpd") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Pod logs are not getting generated"))
 		g.By("SUCCESS - Logs for pods with kata validated")
 		g.By("TEARDOWN - deleting the kata pod")
 	})

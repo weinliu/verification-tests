@@ -26,7 +26,7 @@ type subscriptionDescription struct {
 }
 
 var (
-	snooze time.Duration = 720
+	snooze time.Duration = 1200
 )
 
 // author: tbuskey@redhat.com,abhbaner@redhat.com
