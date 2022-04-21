@@ -190,6 +190,15 @@ func checkVolumeCsiContainAttributes(oc *exutil.CLI, pvName string, content stri
 	return strings.Contains(volumeAttributes, content)
 }
 
+// Get persistent volume annotation value
+func getPvAnnotationValues(oc *exutil.CLI, namespace string, pvcName string) string {
+	pvName := getPersistentVolumeNameByPersistentVolumeClaim(oc, namespace, pvcName)
+	annotationsValue, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.metadata.annotations}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The annotationsValues are %s", annotationsValue)
+	return annotationsValue
+}
+
 // Wait for PV capacity expand successfully
 func waitPVVolSizeToGetResized(oc *exutil.CLI, namespace string, pvcName string, expandedCapactiy string) {
 	pvName := getPersistentVolumeNameByPersistentVolumeClaim(oc, namespace, pvcName)

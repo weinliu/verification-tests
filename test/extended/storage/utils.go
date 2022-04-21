@@ -331,6 +331,17 @@ func generalCsiSupportCheck(cloudProvider string) {
 	}
 }
 
+// Common Intree cloud provider support check
+func generalIntreeSupportCheck(cloudProvider string) {
+	generalIntreeSupportMatrix, err := ioutil.ReadFile(filepath.Join(exutil.FixturePath("testdata", "storage"), "general-intree-support-provisioners.json"))
+	o.Expect(err).NotTo(o.HaveOccurred())
+	supportPlatformsBool := gjson.GetBytes(generalIntreeSupportMatrix, "support_Matrix.platforms.#(name="+cloudProvider+")|@flatten").Exists()
+	e2e.Logf("%s * %v * %v", cloudProvider, gjson.GetBytes(generalIntreeSupportMatrix, "support_Matrix.platforms.#(name="+cloudProvider+").provisioners.#.name|@flatten"), supportPlatformsBool)
+	if !supportPlatformsBool {
+		g.Skip("Skip for non-supported cloud provider: " + cloudProvider + "!!!")
+	}
+}
+
 // Get common csi provisioners by cloudplatform
 func getSupportProvisionersByCloudProvider(oc *exutil.CLI) []string {
 	csiCommonSupportMatrix, err := ioutil.ReadFile(filepath.Join(exutil.FixturePath("testdata", "storage"), "general-csi-support-provisioners.json"))
@@ -361,11 +372,30 @@ func getSupportVolumesByCloudProvider() []string {
 	return supportVolumes
 }
 
+// Get common Intree provisioners by cloudplatform
+func getIntreeSupportProvisionersByCloudProvider(oc *exutil.CLI) []string {
+	csiCommonSupportMatrix, err := ioutil.ReadFile(filepath.Join(exutil.FixturePath("testdata", "storage"), "general-intree-support-provisioners.json"))
+	o.Expect(err).NotTo(o.HaveOccurred())
+	supportProvisioners := []string{}
+	supportProvisionersResult := gjson.GetBytes(csiCommonSupportMatrix, "support_Matrix.platforms.#(name="+cloudProvider+").provisioners.#.name|@flatten").Array()
+	e2e.Logf("%s support provisioners are : %v", cloudProvider, supportProvisionersResult)
+	for i := 0; i < len(supportProvisionersResult); i++ {
+		supportProvisioners = append(supportProvisioners, gjson.GetBytes(csiCommonSupportMatrix, "support_Matrix.platforms.#(name="+cloudProvider+").provisioners.#.name|@flatten."+strconv.Itoa(i)).String())
+	}
+	return supportProvisioners
+}
 // Get pre-defined storageclass by cloudplatform and provisioner
 func getPresetStorageClassNameByProvisioner(cloudProvider string, provisioner string) string {
 	csiCommonSupportMatrix, err := ioutil.ReadFile(filepath.Join(exutil.FixturePath("testdata", "storage"), "general-csi-support-provisioners.json"))
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return gjson.GetBytes(csiCommonSupportMatrix, "support_Matrix.platforms.#(name="+cloudProvider+").provisioners.#(name="+provisioner+").preset_scname").String()
+}
+
+// Get pre-defined storageclass by cloudplatform and provisioner
+func getIntreePresetStorageClassNameByProvisioner(cloudProvider string, provisioner string) string {
+	intreeCommonSupportMatrix, err := ioutil.ReadFile(filepath.Join(exutil.FixturePath("testdata", "storage"), "general-intree-support-provisioners.json"))
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return gjson.GetBytes(intreeCommonSupportMatrix, "support_Matrix.platforms.#(name="+cloudProvider+").provisioners.#(name="+provisioner+").preset_scname").String()
 }
 
 // Get pre-defined volumesnapshotclass by cloudplatform and provisioner

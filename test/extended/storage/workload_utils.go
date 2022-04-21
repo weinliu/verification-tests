@@ -404,8 +404,8 @@ func getPodsListByLabel(oc *exutil.CLI, namespace string, selectorLabel string) 
 }
 
 // Get the pvcName from the pod
-func getPvcNameFromPod(oc *exutil.CLI, podName string) string {
-	pvcName, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", oc.Namespace(), "-o=jsonpath={.spec.volumes[*].persistentVolumeClaim.claimName}").Output()
+func getPvcNameFromPod(oc *exutil.CLI, podName string, namespace string) string {
+	pvcName, err := oc.WithoutNamespace().Run("get").Args("pod", podName, "-n", namespace, "-o=jsonpath={.spec.volumes[*].persistentVolumeClaim.claimName}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return pvcName
 }
@@ -423,7 +423,7 @@ func checkPodStatusByLabel(oc *exutil.CLI, namespace string, selectorLabel strin
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if matched, _ := regexp.MatchString(expectedstatus, podstatus); !matched {
 				podDescribe = describePod(oc, namespace, podName)
-				pvcList = append(pvcList, getPvcNameFromPod(oc, podName))
+				pvcList = append(pvcList, getPvcNameFromPod(oc, podName, namespace))
 				podflag = 1
 			}
 		}
@@ -780,6 +780,68 @@ func (dep *deployment) checkDataBlockType(oc *exutil.CLI) {
 	o.Expect(execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat /tmp/testfile | grep 'test data' ")).To(o.ContainSubstring("matches"))
 }
 
+//Function to delete the project
+func deleteProjectAsAdmin(oc *exutil.CLI, namespace string) {
+	_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = wait.Poll(15*time.Second, 120*time.Second, func() (bool, error) {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("project", namespace).Output()
+		if strings.Contains(output, "not found") {
+			e2e.Logf("Project %s got deleted successfully", namespace)
+			return true, nil
+		} else {
+			return false, nil
+		}
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The Resources did not get deleted within the time period"))
+}
+
+//Function to return the command combinations based on resourceName, namespace
+func getCommandCombinations(oc *exutil.CLI, resourceType string, resourceName string, namespace string) []string {
+	var command []string
+	if resourceName != "" && namespace != "" {
+		command = []string{resourceType, resourceName, "-n", namespace}
+	}
+	if resourceName != "" && namespace == "" {
+		command = []string{resourceType, resourceName}
+	}
+	if resourceName == "" && namespace != "" {
+		command = []string{resourceType, "--all", "-n", namespace}
+	}
+	if resourceName == "" && namespace == "" {
+		command = []string{resourceType, "--all"}
+	}
+	return command
+}
+
+// Function to check the resources exists or no
+func checkResourcesNotExist(oc *exutil.CLI, resourceType string, resourceName string, namespace string) {
+	command := getCommandCombinations(oc, resourceType, resourceName, namespace)
+	err := wait.Poll(15*time.Second, 120*time.Second, func() (bool, error) {
+		output, _ := oc.WithoutNamespace().Run("get").Args(command...).Output()
+		if strings.Contains(output, "not found") && namespace != "" {
+			e2e.Logf("No %s resource exists in the namespace %s", resourceType, namespace)
+			return true, nil
+		}
+		if strings.Contains(output, "not found") && namespace == "" {
+			e2e.Logf("No %s resource exists", resourceType)
+			return true, nil
+		} else {
+			return false, nil
+		}
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The Resources %s still exists in the namespace %s", resourceType, namespace))
+}
+
+// Function to delete the resources ex: dep, pvc, pod, sts, ds
+func deleteSpecifiedResource(oc *exutil.CLI, resourceType string, resourceName string, namespace string) {
+	command := getCommandCombinations(oc, resourceType, resourceName, namespace)
+	command = append(command, "--ignore-not-found")
+	_, err := oc.WithoutNamespace().Run("delete").Args(command...).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	checkResourcesNotExist(oc, resourceType, resourceName, namespace)
+}
+
 // Statefulset workload related functions
 type statefulset struct {
 	name       string
@@ -975,7 +1037,7 @@ func (sts *statefulset) waitReady(oc *exutil.CLI) {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if matched, _ := regexp.MatchString("Running", podstatus); !matched {
 				e2e.Logf("$ oc describe pod %s:\n%s", podName, describePod(oc, sts.namespace, podName))
-				describePersistentVolumeClaim(oc, sts.namespace, getPvcNameFromPod(oc, podName))
+				describePersistentVolumeClaim(oc, sts.namespace, getPvcNameFromPod(oc, podName, sts.namespace))
 			}
 		}
 	}
