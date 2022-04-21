@@ -82,6 +82,7 @@ type CLI struct {
 	verbose            bool
 	showInfo           bool
 	withoutNamespace   bool
+	withoutKubeconf    bool
 	kubeFramework      *e2e.Framework
 
 	resourcesToDelete []resourceRef
@@ -193,6 +194,12 @@ func (c *CLI) NotShowInfo() *CLI {
 // WithoutNamespace instructs the command should be invoked without adding --namespace parameter
 func (c CLI) WithoutNamespace() *CLI {
 	c.withoutNamespace = true
+	return &c
+}
+
+// WithoutKubeconf instructs the command should be invoked without adding --kubeconfig parameter
+func (c CLI) WithoutKubeconf() *CLI {
+	c.withoutKubeconf = true
 	return &c
 }
 
@@ -482,9 +489,10 @@ func (c *CLI) Run(commands ...string) *CLI {
 		adminConfigPath: c.adminConfigPath,
 		configPath:      c.configPath,
 		username:        c.username,
-		globalArgs: append([]string{
-			fmt.Sprintf("--kubeconfig=%s", c.configPath),
-		}, commands...),
+		globalArgs:      commands,
+	}
+	if !c.withoutKubeconf {
+		nc.globalArgs = append([]string{fmt.Sprintf("--kubeconfig=%s", c.configPath)}, nc.globalArgs...)
 	}
 	if !c.withoutNamespace {
 		nc.globalArgs = append([]string{fmt.Sprintf("--namespace=%s", c.Namespace())}, nc.globalArgs...)
@@ -642,8 +650,8 @@ func (c *CLI) OutputToFile(filename string) (string, error) {
 // The stdout output will be written to fileName+'.stdout'
 // The stderr output will be written to fileName+'.stderr'
 func (c *CLI) OutputsToFiles(fileName string) (string, string, error) {
-	stdoutFilename := fileName+".stdout"
-	stderrFilename := fileName+".stderr"
+	stdoutFilename := fileName + ".stdout"
+	stderrFilename := fileName + ".stderr"
 
 	stdout, stderr, err := c.Outputs()
 	if err != nil {
@@ -652,13 +660,13 @@ func (c *CLI) OutputsToFiles(fileName string) (string, string, error) {
 	stdoutPath := filepath.Join(e2e.TestContext.OutputDir, c.Namespace()+"-"+stdoutFilename)
 	stderrPath := filepath.Join(e2e.TestContext.OutputDir, c.Namespace()+"-"+stderrFilename)
 
-        if err := ioutil.WriteFile(stdoutPath, []byte(stdout), 0644); err != nil {
+	if err := ioutil.WriteFile(stdoutPath, []byte(stdout), 0644); err != nil {
 		return "", "", err
-        }
+	}
 
-        if err := ioutil.WriteFile(stderrPath, []byte(stderr), 0644); err != nil {
+	if err := ioutil.WriteFile(stderrPath, []byte(stderr), 0644); err != nil {
 		return stdoutPath, "", err
-        }
+	}
 
 	return stdoutPath, stderrPath, nil
 }
