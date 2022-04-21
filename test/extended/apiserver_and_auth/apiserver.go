@@ -8,6 +8,8 @@ import (
 	"time"
 	"os/exec"
 	"os"
+	"bufio"
+	"path/filepath"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -1119,4 +1121,171 @@ spec:
 			e2e.Logf("Test case: Passed.....There is no error abnormaliy found..")
 		}
 	})
+
+	// author: kewang@redhat.com
+	g.It("Longduration-NonPreRelease-Author:kewang-Medium-12308-Customizing template for project creation [Serial][Slow]", func() {
+		var (
+			caseID                  = "ocp-12308"
+			dirname                 = "/tmp/-ocp-12308"
+			templateYaml            = "template.yaml"
+			templateYamlFile        = filepath.Join(dirname, templateYaml)
+			patchYamlFile           = filepath.Join(dirname, "patch.yaml")
+			project1                = caseID + "-test1"
+			project2                = caseID + "-test2"
+			patchJson               = `[{"op": "replace", "path": "/spec/projectRequestTemplate", "value":{"name":"project-request"}}]`
+			restore_patchJson       = `[{"op": "replace", "path": "/spec", "value" :{}}]`
+			init_regexpr            = []string{`limits.cpu[\s]+0[\s]+6`, `limits.memory[\s]+0[\s]+16Gi`, `pods[\s]+0[\s]+10`, `requests.cpu[\s]+0[\s]+4`, `requests.memory[\s]+0[\s]+8Gi`}
+			regexpr                 = []string{`limits.cpu[\s]+[1-9]+[\s]+6`, `limits.memory[\s]+[A-Za-z0-9]+[\s]+16Gi`, `pods[\s]+[1-9]+[\s]+10`, `requests.cpu[\s]+[A-Za-z0-9]+[\s]+4`, `requests.memory[\s]+[A-Za-z0-9]+[\s]+8Gi`}
+		)
+
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+
+		g.By("1) Create a bootstrap project template and output it to a file template.yaml")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("create-bootstrap-project-template", "-o", "yaml").OutputToFile(filepath.Join(caseID, templateYaml))
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("2) To customize template.yaml and add ResourceQuota and LimitRange objects.")
+		patchYaml := `- apiVersion: v1
+  kind: "LimitRange"
+  metadata:
+    name: ${PROJECT_NAME}-limits
+  spec:
+    limits:
+      - type: "Container"
+        default:
+          cpu: "1"
+          memory: "1Gi"
+        defaultRequest:
+          cpu: "500m"
+          memory: "500Mi"
+- apiVersion: v1
+  kind: ResourceQuota
+  metadata:
+    name: ${PROJECT_NAME}-quota
+  spec:
+    hard:
+      pods: "10"
+      requests.cpu: "4"
+      requests.memory: 8Gi
+      limits.cpu: "6"
+      limits.memory: 16Gi
+      requests.storage: "20G"
+`
+		f, _ := os.Create(patchYamlFile)
+		defer f.Close()
+		w := bufio.NewWriter(f)
+		_, err = fmt.Fprintf(w, "%s", patchYaml)
+		w.Flush()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Insert the patch Ymal before the keyword 'parameters:' in template yaml file
+		sed_cmd := fmt.Sprintf(`sed -i '/^parameters:/e cat %s' %s`, patchYamlFile, templateYamlFile)
+		e2e.Logf("Check sed cmd %s description:", sed_cmd)
+		_, err = exec.Command("bash", "-c", sed_cmd ).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("3) Create a project request template from the customized template.yaml file in the openshift-config namespace.")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", templateYamlFile, "-n", "openshift-config").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("templates", "project-request", "-n", "openshift-config").Execute()
+
+		g.By("4) Create new project before applying the customized template of projects.")
+		err = oc.AsAdmin().WithoutNamespace().Run("new-project").Args(project1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", project1).Execute()
+
+		g.By("5) Associate the template with projectRequestTemplate in the project resource of the config.openshift.io/v1.")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("project.config.openshift.io/cluster", "--type=json", "-p", patchJson).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("patch").Args("project.config.openshift.io/cluster", "--type=json", "-p", restore_patchJson).Execute()
+			expectedStatus := map[string]string{"Progressing": "True"}
+			err = waitCoBecomes(oc, "openshift-apiserver", 240, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, `openshift-apiserver status has not yet changed to {"Progressing": "True"} in 240 seconds`)
+			expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			err = waitCoBecomes(oc, "openshift-apiserver", 360, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, `openshift-apiserver operator status has not yet changed to {"Available": "True", "Progressing": "False", "Degraded": "False"} in 360 seconds`)
+			e2e.Logf("openshift-apiserver pods are all running.")
+		}()
+
+		g.By("5.1) Wait until the openshift-apiserver clusteroperator complete degradation and in the normal status ...")
+		// It needs a bit more time to wait for all openshift-apiservers getting back to normal.
+		expectedStatus := map[string]string{"Progressing": "True"}
+		err = waitCoBecomes(oc, "openshift-apiserver", 240, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, `openshift-apiserver status has not yet changed to {"Progressing": "True"} in 240 seconds`)
+		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err = waitCoBecomes(oc, "openshift-apiserver", 360, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, `openshift-apiserver operator status has not yet changed to {"Available": "True", "Progressing": "False", "Degraded": "False"} in 360 seconds`)
+		e2e.Logf("openshift-apiserver operator is normal and pods are all running.")
+
+		g.By("6) The resource quotas will be used for a new project after the customized template of projects is applied.")
+		err = oc.AsAdmin().WithoutNamespace().Run("new-project").Args(project2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", project2).Execute()
+
+		output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("project", project2).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Check quotas setting of project %s description:", project2)
+		o.Expect(string(output)).To(o.ContainSubstring(project2 + "-quota"))
+		for _, regx := range init_regexpr {
+			o.Expect(string(output)).Should(o.MatchRegexp(regx))
+		}
+
+		g.By("7) To add applications to created project, check if Quota usage of the project is changed.")
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("openshift/hello-openshift").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Waiting for all pods of hello-openshift application to be ready ...")
+		err = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			output, err := oc.WithoutNamespace().Run("get").Args("pods","--no-headers").Output()
+			if err != nil {
+				e2e.Logf("Failed to get pods' status of project %s, error: %s. Trying again", project2, err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString(`(ContainerCreating|Init|Pending)`, output); matched {
+				e2e.Logf("Some of pods still not get ready:\n%s", output)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Some of pods still not get ready!")
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("project", project2).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Check quotas changes of project %s after new app is created:", project2)
+		for _, regx := range regexpr {
+			o.Expect(string(output)).Should(o.MatchRegexp(regx))
+		}
+
+		g.By("8) Check the previously created project, no qutoas setting is applied.")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("project", project1).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Check quotas changes of project %s after new app is created:", project1)
+		o.Expect(string(output)).NotTo(o.ContainSubstring(project1 + "-quota"))
+		o.Expect(string(output)).NotTo(o.ContainSubstring(project1 + "-limits"))
+
+		g.By("9) After deleted all resource objects for created application, the quota usage of the project is released.")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("all", "--selector", "app=hello-openshift").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// Wait for deletion of application to complete
+		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			output, _ := oc.WithoutNamespace().Run("get").Args("all").Output()
+			if matched, _ := regexp.MatchString("No resources found.*", output); matched {
+				e2e.Logf("All resource objects for created application have been completely deleted\n%s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "All resource objects for created application haven't been completely deleted!")
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("project", project2).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Check quotas setting of project %s description:", project2)
+		for _, regx := range init_regexpr {
+			o.Expect(string(output)).Should(o.MatchRegexp(regx))
+		}
+		g.By(fmt.Sprintf("Last) %s SUCCESS", caseID))
+	})
+
 })
