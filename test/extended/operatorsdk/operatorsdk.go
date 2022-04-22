@@ -1431,6 +1431,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		g.By("step: Create the resource")
 		filePath := filepath.Join(tmpPath, "config", "samples", "demo_v1_nginx34426.yaml")
+		replaceContent(filePath, "repository: nginx", "repository: quay.io/olmqe/nginx-docker")
+		replaceContent(filePath, "tag: \"\"", "tag: multi-arch")
+
 		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", filePath, "-n", nsOperator).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
