@@ -3919,7 +3919,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			displayName: "22618 Operators",
 			publisher:   "OLM QE",
 			sourceType:  "grpc",
-			address:     "quay.io/olmqe/etcd-index:v1-4.8",
+			address:     "quay.io/olmqe/nginxolm-operator-index:v1",
 			template:    csImageTemplate,
 		}
 		dr := make(describerResrouce)
