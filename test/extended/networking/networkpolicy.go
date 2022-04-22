@@ -476,4 +476,99 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 
+	// author: anusaxen@redhat.com
+	g.It("Author:anusaxen-High-46246-Network Policies should work with OVNKubernetes when traffic hairpins back to the same source through a service", func() {
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
+			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node.yaml")
+			allowfromsameNS        = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-from-same-namespace.yaml")
+			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "template-service-generic.yaml")
+		)
+
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+		g.By("Create a namespace")
+		oc.SetupProject()
+		ns := oc.Namespace()
+
+		g.By("create 1st hello pod in ns1")
+
+		pod1 := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns,
+			nodename:  nodeList.Items[0].Name,
+			template:  pingPodNodeTemplate,
+		}
+		pod1.createPingPodNode(oc)
+		waitPodReady(oc, ns, pod1.name)
+
+		g.By("create 2nd hello pod in same namespace but on different node")
+
+		pod2 := pingPodResourceNode{
+			name:      "hello-pod2",
+			namespace: ns,
+			nodename:  nodeList.Items[1].Name,
+			template:  pingPodNodeTemplate,
+		}
+		pod2.createPingPodNode(oc)
+		waitPodReady(oc, ns, pod2.name)
+
+		g.By("Create a test service backing up both the above pods")
+		svc := genericServiceResource{
+			servicename:             "test-service",
+			namespace:               ns,
+			protocol:                "TCP",
+			selector:                "hello-pod",
+			service_type:            "ClusterIP",
+			ip_family_policy:        "",
+			internal_traffic_policy: "Cluster",
+			template:                genericServiceTemplate,
+		}
+		svc.ip_family_policy = "SingleStack"
+		svc.createServiceFromParams(oc)
+
+		g.By("create allow-from-same-namespace ingress networkpolicy in ns")
+		createResourceFromFile(oc, ns, allowfromsameNS)
+
+		g.By("curl from hello-pod1 to hello-pod2")
+		CurlPod2PodPass(oc, ns, "hello-pod1", "hello-pod2")
+
+		g.By("curl from hello-pod2 to hello-pod1")
+		CurlPod2PodPass(oc, ns, "hello-pod2", "hello-pod1")
+
+		for i := 0; i < 5; i++ {
+
+			g.By("curl from hello-pod1 to service:port")
+			CurlPod2SvcPass(oc, ns, "hello-pod1", "test-service")
+
+			g.By("curl from hello-pod2 to service:port")
+			CurlPod2SvcPass(oc, ns, "hello-pod2", "test-service")
+		}
+
+		g.By("Make sure pods are curl'able from respective nodes")
+		CurlNode2PodPass(oc, pod1.nodename, ns, "hello-pod1")
+		CurlNode2PodPass(oc, pod2.nodename, ns, "hello-pod2")
+
+		ipStackType := checkIpStackType(oc)
+
+		if ipStackType == "dualstack" {
+			g.By("Delete testservice from ns")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "test-service", "-n", ns).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			g.By("Checking pod to svc:port behavior now on with PreferDualStack Service")
+			svc.ip_family_policy = "PreferDualStack"
+			svc.createServiceFromParams(oc)
+			for i := 0; i < 5; i++ {
+				g.By("curl from hello-pod1 to service:port")
+				CurlPod2SvcPass(oc, ns, "hello-pod1", "test-service")
+
+				g.By("curl from hello-pod2 to service:port")
+				CurlPod2SvcPass(oc, ns, "hello-pod2", "test-service")
+			}
+		}
+
+	})
 })

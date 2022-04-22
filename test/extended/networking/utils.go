@@ -65,6 +65,17 @@ type ipBlock_ingress struct {
 	template  string
 }
 
+type genericServiceResource struct {
+	servicename             string
+	namespace               string
+	protocol                string
+	selector                string
+	service_type            string
+	ip_family_policy        string
+	internal_traffic_policy string
+	template                string
+}
+
 func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace)
@@ -172,6 +183,18 @@ func (ipBlock_ingress_policy *ipBlock_ingress) createipBlockIngressObject(oc *ex
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create network policy %v", ipBlock_ingress_policy.name))
+}
+
+func (service *genericServiceResource) createServiceFromParams(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", service.template, "-p", "SERVICENAME="+service.servicename, "NAMESPACE="+service.namespace, "PROTOCOL="+service.protocol, "SELECTOR="+service.selector, "SERVICE_TYPE="+service.service_type, "IP_FAMILY_POLICY="+service.ip_family_policy, "INTERNAL_TRAFFIC_POLICY="+service.internal_traffic_policy)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create network policy %v", service.servicename))
 }
 
 func (egressFirewall *egressFirewall2) deleteEgressFW2Object(oc *exutil.CLI) {
@@ -897,4 +920,146 @@ func getTwoNodesSameSubnet(oc *exutil.CLI, nodeList *v1.NodeList) (bool, []strin
 	}
 
 	return true, egressNodes
+}
+
+//getSvcIP returns IPv4 and IPv6 in vars in order on dual stack respectively and main Svc IP in case of single stack (v4 or v6) in 1st var, and nil in 2nd var
+func getSvcIP(oc *exutil.CLI, namespace string, svcName string) (string, string) {
+	ipStack := checkIpStackType(oc)
+	ipFamilyType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.ipFamilyPolicy}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if (ipStack == "ipv6single") || (ipStack == "ipv4single") {
+		svcIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.clusterIPs[0]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The service %s IP in namespace %s is %q", svcName, namespace, svcIP)
+		return svcIP, ""
+	} else if (ipStack == "dualstack" && ipFamilyType == "PreferDualStack") || (ipStack == "dualstack" && ipFamilyType == "RequireDualStack") {
+		ipFamilyPrecedence, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.ipFamilies[0]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		//if IPv4 is listed first in ipFamilies then clustrIPs allocation will take order as Ipv4 first and then Ipv6 else reverse
+		svcIPv4, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.clusterIPs[0]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The service %s IP in namespace %s is %q", svcName, namespace, svcIPv4)
+		svcIPv6, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.clusterIPs[1]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The service %s IP in namespace %s is %q", svcName, namespace, svcIPv6)
+		if ipFamilyPrecedence == "IPv4" {
+			e2e.Logf("The ipFamilyPrecedence is Ipv4, Ipv6")
+			return svcIPv4, svcIPv6
+		} else {
+			e2e.Logf("The ipFamilyPrecedence is Ipv6, Ipv4")
+			svcIPv6, svcIPv4 = svcIPv4, svcIPv6
+			return svcIPv4, svcIPv6
+		}
+	} else {
+		//Its a Dual Stack Cluster with SingleStack ipFamilyPolicy
+		svcIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.clusterIPs[0]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The service %s IPv4 in namespace %s is %q", svcName, namespace, svcIP)
+		return svcIP, ""
+	}
+}
+
+//getPodIP returns IPv4 and IPv6 in vars in order on dual stack respectively and main IP in case of single stack (v4 or v6) in 1st var, and nil in 2nd var
+func getPodIP(oc *exutil.CLI, namespace string, podName string) (string, string) {
+	ipStack := checkIpStackType(oc)
+	if (ipStack == "ipv6single") || (ipStack == "ipv4single") {
+		podIP, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.podIPs[0].ip}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The pod  %s IP in namespace %s is %q", podName, namespace, podIP)
+		return podIP, ""
+	} else if ipStack == "dualstack" {
+		podIPv6, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.podIPs[1].ip}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The pod  %s IPv6 in namespace %s is %q", podName, namespace, podIPv6)
+		podIPv4, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.podIPs[0].ip}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The pod  %s IPv4 in namespace %s is %q", podName, namespace, podIPv4)
+		return podIPv4, podIPv6
+	}
+	return "", ""
+}
+
+func CurlPod2PodPass(oc *exutil.CLI, namespace string, podNameSrc string, podNameDst string) {
+	podIP1, podIP2 := getPodIP(oc, namespace, podNameDst)
+	if podIP2 != "" {
+		_, err := e2e.RunHostCmd(namespace, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP1, "8080"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = e2e.RunHostCmd(namespace, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP2, "8080"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		_, err := e2e.RunHostCmd(namespace, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP1, "8080"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+
+func CurlPod2PodFail(oc *exutil.CLI, namespace string, podName string) {
+	podIP1, podIP2 := getPodIP(oc, namespace, podName)
+	if podIP2 != "" {
+		_, err := e2e.RunHostCmd(namespace, podName, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP1, "8080"))
+		o.Expect(err).To(o.HaveOccurred())
+		_, err = e2e.RunHostCmd(namespace, podName, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP2, "8080"))
+		o.Expect(err).To(o.HaveOccurred())
+	} else {
+		_, err := e2e.RunHostCmd(namespace, podName, "curl --connect-timeout 5 -s "+net.JoinHostPort(podIP1, "8080"))
+		o.Expect(err).To(o.HaveOccurred())
+	}
+}
+
+func CurlNode2PodPass(oc *exutil.CLI, nodeName string, namespace string, podName string) {
+	//getPodIP returns IPv4 and IPv6 in order on dual stack in PodIP1 and PodIP2 respectively and main IP in case of single stack (v4 or v6) in PodIP1, and nil in PodIP2
+	podIP1, podIP2 := getPodIP(oc, namespace, podName)
+	if podIP2 != "" {
+		podv4_url := net.JoinHostPort(podIP1, "8080")
+		podv6_url := net.JoinHostPort(podIP2, "8080")
+		_, err := exutil.DebugNode(oc, nodeName, "curl", podv4_url, "-s", "--connect-timeout", "5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = exutil.DebugNode(oc, nodeName, "curl", podv6_url, "-s", "--connect-timeout", "5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		pod_url := net.JoinHostPort(podIP1, "8080")
+		_, err := exutil.DebugNode(oc, nodeName, "curl", pod_url, "-s", "--connect-timeout", "5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+
+func CurlNode2SvcPass(oc *exutil.CLI, nodeName string, namespace string, svcName string) {
+	svcIP1, svcIP2 := getSvcIP(oc, namespace, svcName)
+	if svcIP2 != "" {
+		svcv4_url := net.JoinHostPort(svcIP1, "27017")
+		svcv6_url := net.JoinHostPort(svcIP2, "27017")
+		_, err := exutil.DebugNode(oc, nodeName, "curl", svcv4_url, "-s", "--connect-timeout", "5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = exutil.DebugNode(oc, nodeName, "curl", svcv6_url, "-s", "--connect-timeout", "5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		svc_url := net.JoinHostPort(svcIP1, "27017")
+		_, err := exutil.DebugNode(oc, nodeName, "curl", svc_url, "-s", "--connect-timeout", "5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+
+func CurlPod2SvcPass(oc *exutil.CLI, namespace string, podNameSrc string, svcName string) {
+	svcIP1, svcIP2 := getSvcIP(oc, namespace, svcName)
+	if svcIP2 != "" {
+		_, err := e2e.RunHostCmd(namespace, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = e2e.RunHostCmd(namespace, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP2, "27017"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		_, err := e2e.RunHostCmd(namespace, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+
+func CurlPod2SvcFail(oc *exutil.CLI, namespace string, podNameSrc string, svcName string) {
+	svcIP1, svcIP2 := getSvcIP(oc, namespace, svcName)
+	if svcIP2 != "" {
+		_, err := e2e.RunHostCmd(namespace, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
+		o.Expect(err).To(o.HaveOccurred())
+		_, err = e2e.RunHostCmd(namespace, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP2, "27017"))
+		o.Expect(err).To(o.HaveOccurred())
+	} else {
+		_, err := e2e.RunHostCmd(namespace, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
+		o.Expect(err).To(o.HaveOccurred())
+	}
 }

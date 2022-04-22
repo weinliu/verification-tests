@@ -1,0 +1,32 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: test-service-template
+objects:
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: "${SERVICENAME}"
+    namespace: "${NAMESPACE}"
+    labels:
+      name: test-service
+  spec:
+    internalTrafficPolicy: "${INTERNAL_TRAFFIC_POLICY}"
+    ipFamilyPolicy: "${IP_FAMILY_POLICY}" 
+    ports:
+    - name: http
+      port: 27017
+      protocol: "${PROTOCOL}"
+      targetPort: 8080
+    selector:
+      name: "${SELECTOR}"
+    type: "${SERVICE_TYPE}"
+parameters:
+- name: SERVICENAME
+- name: NAMESPACE
+- name: INTERNAL_TRAFFIC_POLICY
+- name: IP_FAMILY_POLICY
+- name: PROTOCOL
+- name: SELECTOR
+- name: SERVICE_TYPE
+- name: PORT
