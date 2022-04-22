@@ -580,3 +580,92 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 })
+
+var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
+	//Cases in this function, do not need curl ip-echo
+	defer g.GinkgoRecover()
+
+	var (
+		egressNodeLabel = "k8s.ovn.org/egress-assignable"
+		oc              = exutil.NewCLI("networking-"+getRandomString(), exutil.KubeConfigPath())
+	)
+
+	g.BeforeEach(func() {
+		platform := ci.CheckPlatform(oc)
+		networkType := checkNetworkType(oc)
+		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp")
+		if !acceptedPlatform || !strings.Contains(networkType, "ovn") {
+			g.Skip("Test cases should be run on AWS or GCP cluster with ovn network plugin, skip for other platforms or other network plugin!!")
+		}
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-NonPreRelease-Medium-47020-Low-47024-EgressIP node liveness probe. [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2.yaml")
+
+		g.By("1 Get list of nodes \n")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		egressNode := nodeList.Items[0].Name
+
+		g.By("2 Create first egressip object \n")
+		sub1 := getIfaddrFromNode(egressNode, oc)
+		freeIps := findUnUsedIPsOnNode(oc, egressNode, sub1, 1)
+		o.Expect(len(freeIps) == 1).Should(o.BeTrue())
+		egressip1 := egressIPResource1{
+			name:          "egressip-47020",
+			template:      egressIP2Template,
+			egressIP1:     freeIps[0],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "pink",
+		}
+		egressip1.createEgressIPObject2(oc)
+		defer egressip1.deleteEgressIPObject1(oc)
+
+		g.By("3. Check warning event. \n")
+		warn_err := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			warningEvent, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", "default").Output()
+			if err != nil {
+				e2e.Logf("Wait for waring event generated.%v", err)
+				return false, nil
+			}
+			if !strings.Contains(warningEvent, "NoMatchingNodeFound") {
+				e2e.Logf("Wait for waring event generated. ")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(warn_err, fmt.Sprintf("Warning event doesn't conclude: NoMatchingNodeFound."))
+
+		g.By("4 Apply EgressLabel Key to one node. \n")
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
+
+		g.By("5. Check EgressIP assigned in the object.\n")
+		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps1) == 1).Should(o.BeTrue())
+
+		g.By("6. Add iptables on ovn-k8s-mp0 port to block probe detect.\n")
+		_, err1 := exutil.DebugNodeWithChroot(oc, egressNode, "iptables", "-I", "INPUT", "1", "-i", "ovn-k8s-mp0", "-p", "tcp", "--destination-port", "9", "-j", "DROP")
+		defer exutil.DebugNodeWithChroot(oc, egressNode, "iptables", "-D", "INPUT", "-i", "ovn-k8s-mp0", "-p", "tcp", "--destination-port", "9", "-j", "DROP")
+		o.Expect(err1).NotTo(o.HaveOccurred())
+
+		g.By("7. Wait for the egressip object updated, should no egress node assigned.\n")
+		egressIPMaps1 = getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps1) == 0).Should(o.BeTrue())
+
+		g.By("8. Remove iptables ovn-k8s-mp0 port to unblock probe detect.\n")
+		_, err1 = exutil.DebugNodeWithChroot(oc, egressNode, "iptables", "-D", "INPUT", "-i", "ovn-k8s-mp0", "-p", "tcp", "--destination-port", "9", "-j", "DROP")
+		o.Expect(err1).NotTo(o.HaveOccurred())
+
+		g.By("9. Check EgressIP assigned in the object.\n")
+		egressIPMaps1 = getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps1) == 1).Should(o.BeTrue())
+
+	})
+
+})
