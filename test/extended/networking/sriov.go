@@ -11,6 +11,8 @@ import (
 )
 
 var _ = g.Describe("[sig-networking] SDN sriov", func() {
+	defer g.GinkgoRecover()
+
 	var (
 		oc = exutil.NewCLI("sriov-"+getRandomString(), exutil.KubeConfigPath())
 	)
