@@ -301,3 +301,11 @@ func createNewPersistVolumeWithRetainVolume(oc *exutil.CLI, originPvExportJson s
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The new persist volume:\"%s\" created", newPvName)
 }
+
+// Check if persistent volume has the nodeAffinity
+func checkPvNodeAffinityContains(oc *exutil.CLI, pvName string, content string) bool {
+	nodeAffinity, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.nodeAffinity}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("PV \"%s\" nodeAffinity: %s", pvName, nodeAffinity)
+	return strings.Contains(nodeAffinity, content)
+}

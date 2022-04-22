@@ -9,6 +9,7 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -2185,6 +2186,201 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		}
 
+	})
+
+	//author: wduan@redhat.com
+	// Known issue(BZ2073617) for ibm CSI Driver
+	g.It("Author:wduan-Critical-37570-[CSI Driver][Dynamic PV][FileSystem] topology should provision a volume and schedule a pod with AllowedTopologies", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com"}
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			deploymentTemplate   = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+		)
+
+		// Set up a specified project share for all the phases
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+			g.By("Get the zone value with CSI topology key")
+			topology_path := map[string]string{
+				"aws":          `topology\.ebs\.csi\.aws\.com\/zone`,
+				"azure":        `topology\.disk\.csi\.azure\.com\/zone`,
+				"alibabacloud": `topology\.diskplugin\.csi\.alibabacloud\.com\/zone`,
+				//Known issue(BZ2073617) for ibm CSI Driver
+				//"ibmcloud":      `failure-domain\.beta\.kubernetes\.io\/zone`,
+				"gcp": `topology\.gke\.io\/zone`,
+			}
+
+			topology_key := map[string]string{
+				"aws":          "topology.ebs.csi.aws.com/zone",
+				"azure":        "topology.disk.csi.azure.com/zone",
+				"alibabacloud": "topology.diskplugin.csi.alibabacloud.com/zone",
+				//Known issue(BZ2073617) for ibm CSI Driver
+				//"ibmcloud":      "failure-domain.beta.kubernetes.io/zone",
+				"gcp": "topology.gke.io/zone",
+			}
+
+			allNodes := getAllNodesInfo(oc)
+			node := getOneSchedulableWorker(allNodes)
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node.name, "-o=jsonpath={.metadata.labels}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			zone := gjson.Get(output, topology_path[cloudProvider]).String()
+			if len(zone) == 0 {
+				g.Skip("Skip for no expected topology available zone value.")
+			} else {
+				e2e.Logf("The AvailableZone of node \"%s\" is \"%s\"", node.name, zone)
+			}
+
+			// Set the resource definition for the scenario
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
+			zones := []string{zone}
+			labelExpressions := []map[string]interface{}{
+				{"key": topology_key[cloudProvider], "values": zones},
+			}
+			matchLabelExpressions := []map[string]interface{}{
+				{"matchLabelExpressions": labelExpressions},
+			}
+			extraParameters := map[string]interface{}{
+				"allowedTopologies": matchLabelExpressions,
+			}
+
+			g.By("Create csi storageclass with allowedTopologies")
+			storageClass.provisioner = provisioner
+			storageClass.createWithExtraParameters(oc, extraParameters)
+			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+			g.By("Create a pvc with the csi storageclass")
+			pvc.create(oc)
+			defer pvc.delete(oc)
+
+			g.By("Create deployment with the created pvc and wait ready")
+			dep.create(oc)
+			defer dep.delete(oc)
+			dep.waitReady(oc)
+
+			g.By("Check the deployment's pod mounted volume can be read and write")
+			dep.checkPodMountedVolumeCouldRW(oc)
+
+			g.By("Check the deployment's pod mounted volume have the exec right")
+			dep.checkPodMountedVolumeHaveExecRight(oc)
+
+			g.By("Check nodeAffinity in pv info")
+			pvName := pvc.getVolumeName(oc)
+			o.Expect(checkPvNodeAffinityContains(oc, pvName, topology_key[cloudProvider])).To(o.BeTrue())
+			o.Expect(checkPvNodeAffinityContains(oc, pvName, zone)).To(o.BeTrue())
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
+	//author: wduan@redhat.com
+	// Known issue(BZ2073617) for ibm CSI Driver
+	g.It("Author:wduan-Critical-50202-[CSI Driver][Dynamic PV][Block] topology should provision a volume and schedule a pod with AllowedTopologies", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com"}
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			deploymentTemplate   = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+		)
+
+		// Set up a specified project share for all the phases
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+			g.By("Get the zone value with CSI topology key")
+			topology_path := map[string]string{
+				"aws":          `topology\.ebs\.csi\.aws\.com\/zone`,
+				"azure":        `topology\.disk\.csi\.azure\.com\/zone`,
+				"alibabacloud": `topology\.diskplugin\.csi\.alibabacloud\.com\/zone`,
+				//Known issue(BZ2073617) for ibm CSI Driver
+				//"ibmcloud":      `failure-domain\.beta\.kubernetes\.io\/zone`,
+				"gcp": `topology\.gke\.io\/zone`,
+			}
+
+			topology_key := map[string]string{
+				"aws":          "topology.ebs.csi.aws.com/zone",
+				"azure":        "topology.disk.csi.azure.com/zone",
+				"alibabacloud": "topology.diskplugin.csi.alibabacloud.com/zone",
+				//Known issue(BZ2073617) for ibm CSI Driver
+				//"ibmcloud":      "failure-domain.beta.kubernetes.io/zone",
+				"gcp": "topology.gke.io/zone",
+			}
+
+			allNodes := getAllNodesInfo(oc)
+			node := getOneSchedulableWorker(allNodes)
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node.name, "-o=jsonpath={.metadata.labels}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			zone := gjson.Get(output, topology_path[cloudProvider]).String()
+			if len(zone) == 0 {
+				g.Skip("Skip for no expected topology available zone value.")
+			} else {
+				e2e.Logf("The AvailableZone of node \"%s\" is \"%s\"", node.name, zone)
+			}
+
+			// Set the resource definition for the scenario
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimVolumemode("Block"))
+			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name), setDeploymentVolumeType("volumeDevices"), setDeploymentVolumeTypePath("devicePath"), setDeploymentMountpath("/dev/dblock"))
+
+			zones := []string{zone}
+			labelExpressions := []map[string]interface{}{
+				{"key": topology_key[cloudProvider], "values": zones},
+			}
+			matchLabelExpressions := []map[string]interface{}{
+				{"matchLabelExpressions": labelExpressions},
+			}
+			extraParameters := map[string]interface{}{
+				"allowedTopologies": matchLabelExpressions,
+			}
+
+			g.By("Create csi storageclass with allowedTopologies")
+			storageClass.provisioner = provisioner
+			storageClass.createWithExtraParameters(oc, extraParameters)
+			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+			g.By("Create a pvc with the csi storageclass")
+			pvc.create(oc)
+			defer pvc.delete(oc)
+
+			g.By("Create deployment with the created pvc and wait ready")
+			dep.create(oc)
+			defer dep.delete(oc)
+			dep.waitReady(oc)
+
+			g.By("Write data to block volume")
+			dep.writeDataBlockType(oc)
+
+			g.By("Check nodeAffinity in pv info")
+			pvName := pvc.getVolumeName(oc)
+			o.Expect(checkPvNodeAffinityContains(oc, pvName, topology_key[cloudProvider])).To(o.BeTrue())
+			o.Expect(checkPvNodeAffinityContains(oc, pvName, zone)).To(o.BeTrue())
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
 	})
 })
 
