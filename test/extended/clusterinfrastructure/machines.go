@@ -397,4 +397,32 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		e2e.Logf("out:%s", out)
 		o.Expect(strings.Contains(out, "not supported")).To(o.BeTrue())
 	})
+
+	// author: huliu@redhat.com
+	g.It("Longduration-NonPreRelease-Author:huliu-Medium-49827-Ensure pd-balanced disk is supported on GCP via machine api [Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
+		if iaasPlatform != "gcp" {
+			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
+		}
+		g.By("Create a new machineset")
+		machinesetName := "machineset-49827"
+		ms := clusterinfra.MachineSetDescription{machinesetName, 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		g.By("Update machineset with invalid disk type")
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `[{"op":"replace","path":"/spec/template/spec/providerSpec/value/disks/0/type","value":"invalid"}]`, "--type=json").Output()
+		o.Expect(strings.Contains(out, "Unsupported value")).To(o.BeTrue())
+
+		g.By("Update machineset with pd-balanced disk type")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `[{"op":"replace","path":"/spec/replicas","value": 1},{"op":"replace","path":"/spec/template/spec/providerSpec/value/disks/0/type","value":"pd-balanced"}]`, "--type=json").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		g.By("Check machine with pd-balanced disk type")
+		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.disks[0].type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("out:%s", out)
+		o.Expect(out).Should(o.Equal("pd-balanced"))
+	})
 })
