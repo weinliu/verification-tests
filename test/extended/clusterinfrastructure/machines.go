@@ -349,4 +349,52 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
 		o.Expect(node).NotTo(o.BeEmpty())
 	})
+
+	// author: huliu@redhat.com
+	g.It("Longduration-NonPreRelease-Author:huliu-Medium-48594-AWS EFA network interfaces should be supported via machine api [Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
+		if iaasPlatform != "aws" {
+			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
+		}
+		g.By("Create a new machineset")
+		machinesetName := "machineset-48594"
+		ms := clusterinfra.MachineSetDescription{machinesetName, 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		g.By("Update machineset with networkInterfaceType: EFA")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"networkInterfaceType":"EFA","instanceType":"m5dn.24xlarge"}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		g.By("Check machine with networkInterfaceType: EFA")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.networkInterfaceType}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("out:%s", out)
+		o.Expect(out).Should(o.Equal("EFA"))
+	})
+
+	// author: huliu@redhat.com
+	g.It("Longduration-NonPreRelease-Author:huliu-Medium-48595-Negative validation for AWS NetworkInterfaceType [Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
+		if iaasPlatform != "aws" {
+			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
+		}
+		g.By("Create a new machineset")
+		machinesetName := "machineset-48595"
+		ms := clusterinfra.MachineSetDescription{machinesetName, 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		g.By("Update machineset with networkInterfaceType: invalid")
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"networkInterfaceType":"invalid","instanceType":"m5dn.24xlarge"}}}}}}`, "--type=merge").Output()
+		o.Expect(strings.Contains(out, "Invalid value")).To(o.BeTrue())
+
+		g.By("Update machineset with not supported instance types")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"networkInterfaceType":"EFA","instanceType":"m6i.xlarge"}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterinfra.WaitForMachineFailed(oc, machinesetName)
+		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].status.errorMessage}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("out:%s", out)
+		o.Expect(strings.Contains(out, "not supported")).To(o.BeTrue())
+	})
 })
