@@ -19,6 +19,7 @@ import (
 )
 
 var _ = g.Describe("[sig-mco] MCO", func() {
+	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("mco", exutil.KubeConfigPath())
 
