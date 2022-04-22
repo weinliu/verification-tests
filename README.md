@@ -150,11 +150,11 @@ cfme        dockerhub                            gce_v4.json   openshift-qe-gce_
 ```
 
 ## Jenkins
-You can use the [ginkgo-test job](https://mastern-jenkins-csb-openshift-qe.apps.ocp4.prod.psi.redhat.com/job/ocp-common/job/ginkgo-test/) to run your test case with your repo. As follows:
+You can use the [ginkgo-test job](https://mastern-jenkins-csb-openshift-qe.apps.ocp-c1.prod.psi.redhat.com/job/ocp-common/job/ginkgo-test/) to run your test case with your repo. As follows:
 
 Here are the parameters:  
 > - SCENARIO: input your case ID  
-> - FLEXY_BUILD: the [Launch Environment Flexy](https://mastern-jenkins-csb-openshift-qe.apps.ocp4.prod.psi.redhat.com/job/Launch%20Environment%20Flexy/) build ID to build the cluster you use  
+> - FLEXY_BUILD: the [Flexy-install](https://mastern-jenkins-csb-openshift-qe.apps.ocp-c1.prod.psi.redhat.com/job/ocp-common/job/Flexy-install/) build ID to build the cluster you use
 > - TIERN_REPO_OWNER: your GitHub account  
 > - TIERN_REPO_BRANCH: your branch for the debug case code  
 > - JENKINS_SLAVE: gocxx, xx is your cluster release version, for example, goc47 for 4.7 cluster  
