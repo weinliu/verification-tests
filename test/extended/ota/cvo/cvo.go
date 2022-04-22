@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1275,5 +1276,79 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "the deployment was not reconciled back in 5min.")
+	})
+
+	//author: yanyang@redhat.com
+	g.It("Author:yanyang-Medium-49507-disable capability by removing cap from cv.spec.capabilities.additionalEnabledCapabilities [Serial]", func() {
+		orgBaseCap, err := getCVObyJP(oc, ".spec.capabilities.baselineCapabilitySet")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		orgAddCapstr, err := getCVObyJP(oc, ".spec.capabilities.additionalEnabledCapabilities[*]")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf(orgBaseCap, orgAddCapstr)
+
+		orgAddCap := strings.Split(orgAddCapstr, " ")
+
+		if orgBaseCap != "None" || len(orgAddCap) < 1 {
+			g.Skip("The test requires baselineCapabilitySet=None and at least 1 additional enabled caps")
+		}
+
+		defer changeCap(oc, false, orgAddCap)
+
+		g.By("Check cap status and condition prior to change")
+		enabledCap, err := getCVObyJP(oc, ".status.capabilities.enabledCapabilities[*]")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		for _, op := range orgAddCap {
+			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", op).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		status, err := getCVObyJP(oc, ".status.conditions[?(.type=='ImplicitlyEnabledCapabilities')].status")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(status).To(o.Equal("False"))
+
+		capSet := make([]string, len(orgAddCap))
+		copy(capSet, orgAddCap)
+		loop := 1
+		if len(orgAddCap) > 1 {
+			loop = 2
+		}
+		r := rand.New(rand.NewSource(time.Now().Unix()))
+		for i := 0; i < loop; i++ {
+			g.By("Disable capabilities by modifying the additionalEnabledCapabilities")
+			randIndex := r.Intn(len(capSet))
+			delCap := capSet[randIndex]
+			e2e.Logf("Disabling cap " + delCap)
+			capSet = append(capSet[:randIndex], capSet[randIndex+1:]...)
+			cmdOut, err := changeCap(oc, false, capSet)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(cmdOut).NotTo(o.ContainSubstring("no change"))
+
+			g.By("Check cap status and condition after change")
+			enabledCapPost, err := getCVObyJP(oc, ".status.capabilities.enabledCapabilities[*]")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(enabledCapPost).To(o.Equal(enabledCap))
+
+			for _, op := range orgAddCap {
+				_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", op).Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+
+			for _, k := range []string{"status", "reason", "message"} {
+				jsonpath := ".status.conditions[?(.type=='ImplicitlyEnabledCapabilities')]." + k
+				out, err := getCVObyJP(oc, jsonpath)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if k == "status" {
+					o.Expect(out).To(o.Equal("True"))
+				} else if k == "reason" {
+					o.Expect(out).To(o.Equal("CapabilitiesImplicitlyEnabled"))
+				} else {
+					msg := []string{"The following capabilities could not be disabled", delCap}
+					for _, m := range msg {
+						o.Expect(out).To(o.ContainSubstring(m))
+					}
+				}
+			}
+		}
 	})
 })
