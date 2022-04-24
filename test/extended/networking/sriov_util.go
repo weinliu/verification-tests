@@ -318,3 +318,13 @@ func checkDeviceIDExist(oc *exutil.CLI, namespace string, deviceID string) bool 
 	e2e.Logf("tested deviceID is %v and all supported deviceID on node are %v ", deviceID, allDeviceID)
 	return strings.Contains(allDeviceID, deviceID)
 }
+
+// Wait for sriov network policy ready
+func (rs *sriovNetResource) chkSriovPolicy(oc *exutil.CLI) bool {
+	sriovPolicyList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("SriovNetworkNodePolicy", "-n", rs.namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if !strings.Contains(sriovPolicyList, rs.name) {
+		return false
+	}
+	return true
+}

@@ -19,5 +19,3 @@ parameters:
 - name: SRIOVNETNAME 
 - name: TARGETNS
 - name: SRIOVNETPOLICY
-
-
