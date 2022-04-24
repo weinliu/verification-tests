@@ -2,10 +2,12 @@ package storage
 
 import (
 	"fmt"
+	"io/ioutil"
 	"strings"
 	"time"
 
 	o "github.com/onsi/gomega"
+	"github.com/tidwall/sjson"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -25,6 +27,17 @@ type volumeSnapshotClass struct {
 	driver         string
 	template       string
 	deletionPolicy string
+}
+
+type volumeSnapshotContent struct {
+	vscontentname  string
+	deletionPolicy string
+	driver         string
+	snHandle       string
+	vsclassname    string
+	vsname         string
+	vsnamespace    string
+	template       string
 }
 
 // function option mode to change the default values of VolumeSnapshot parameters, e.g. name, namespace, volumesnapshotclassname, source.pvcname etc.
@@ -108,14 +121,14 @@ func (vs *volumeSnapshot) waitReadyToUse(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
 		status, err1 := vs.getVsStatus(oc)
 		if err1 != nil {
-			e2e.Logf("The err:%v, wait for volumesnahotshot %v to become ready_to_use.", err1, vs.name)
+			e2e.Logf("The err:%v, wait for volumesnapshot %v to become ready_to_use.", err1, vs.name)
 			return status, err1
 		}
 		if !status {
-			e2e.Logf("Waiting the volumesnahotshot %v in namespace %v to be ready_to_use.", vs.name, vs.namespace)
+			e2e.Logf("Waiting the volumesnapshot %v in namespace %v to be ready_to_use.", vs.name, vs.namespace)
 			return status, nil
 		}
-		e2e.Logf("The volumesnahotshot %v in namespace %v is ready_to_use.", vs.name, vs.namespace)
+		e2e.Logf("The volumesnapshot %v in namespace %v is ready_to_use.", vs.name, vs.namespace)
 		return status, nil
 	})
 
@@ -192,4 +205,115 @@ func getVSContentDeletionPolicy(oc *exutil.CLI, vscontentName string) string {
 	vscontentDeletionPolicy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("volumesnapshotcontent", vscontentName, "-o=jsonpath={.spec.deletionPolicy}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return vscontentDeletionPolicy
+}
+
+func createVolumeSnapshotWithSnapshotHandle(oc *exutil.CLI, originVolumeSnapshotExportJson string, newVolumeSnapshotName string, volumeSnapshotContentName string, volumesnapshotNamespace string) {
+	var (
+		err            error
+		outputJsonFile string
+	)
+	jsonPathList := []string{`spec.source.persistentVolumeClaimName`, `status`, `metadata`}
+
+	for _, jsonPath := range jsonPathList {
+		originVolumeSnapshotExportJson, err = sjson.Delete(originVolumeSnapshotExportJson, jsonPath)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+
+	volumesnapshotName := map[string]interface{}{
+		"jsonPath":  `metadata.`,
+		"name":      newVolumeSnapshotName,
+		"namespace": volumesnapshotNamespace,
+	}
+
+	volumeSnapshotContent := map[string]interface{}{
+		"jsonPath":                  `spec.source.`,
+		"volumeSnapshotContentName": volumeSnapshotContentName,
+	}
+
+	for _, extraParameter := range []map[string]interface{}{volumesnapshotName, volumeSnapshotContent} {
+		outputJsonFile, err = jsonAddExtraParametersToFile(originVolumeSnapshotExportJson, extraParameter)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		tempJsonByte, _ := ioutil.ReadFile(outputJsonFile)
+		originVolumeSnapshotExportJson = string(tempJsonByte)
+	}
+
+	e2e.Logf("The new volumesnapshot jsonfile of resource is %s", outputJsonFile)
+	jsonOutput, _ := ioutil.ReadFile(outputJsonFile)
+	debugLogf("The file content is: \n%s", jsonOutput)
+	_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", outputJsonFile).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The new volumeSnapshot:\"%s\" created", newVolumeSnapshotName)
+
+}
+
+type volumeSnapshotContentOption func(*volumeSnapshotContent)
+
+func setVolumeSnapshotContentName(vscontentName string) volumeSnapshotContentOption {
+	return func(this *volumeSnapshotContent) {
+		this.vscontentname = vscontentName
+	}
+}
+func setDeletionPolicy(deletionPolicy string) volumeSnapshotContentOption {
+	return func(this *volumeSnapshotContent) {
+		this.deletionPolicy = deletionPolicy
+	}
+}
+
+func setSnapshotHndle(snapshotHandle string) volumeSnapshotContentOption {
+	return func(this *volumeSnapshotContent) {
+		this.snHandle = snapshotHandle
+	}
+}
+
+func setVolumeSnapshotClass(volumeSnapshotClass string) volumeSnapshotContentOption {
+	return func(this *volumeSnapshotContent) {
+		this.vsclassname = volumeSnapshotClass
+	}
+}
+
+func setVSNameInVSContent(volumeSnapshotName string) volumeSnapshotContentOption {
+	return func(this *volumeSnapshotContent) {
+		this.vsname = volumeSnapshotName
+	}
+}
+
+func setVolumeSnapshotNS(volumeSnapshotNS string) volumeSnapshotContentOption {
+	return func(this *volumeSnapshotContent) {
+		this.vsnamespace = volumeSnapshotNS
+	}
+}
+
+func setVolumeSnapshotContentTemplate(volumeSnapshotContentTemplate string) volumeSnapshotContentOption {
+	return func(this *volumeSnapshotContent) {
+		this.template = volumeSnapshotContentTemplate
+	}
+}
+
+//  Create a new customized VolumeSnapshotContent object
+func newVolumeSnapshotContent(opts ...volumeSnapshotContentOption) volumeSnapshotContent {
+	defaultVolumeSnapshotContent := volumeSnapshotContent{
+		vscontentname:  "my-volumesnapshotcontent-" + getRandomString(),
+		deletionPolicy: "Delete",
+		driver:         "ebs.csi.aws.com",
+		snHandle:       "snap-0e4bf1485cde980a5",
+		vsclassname:    "csi-aws-vsc",
+		vsname:         "my-volumesnapshot" + getRandomString(),
+		vsnamespace:    "",
+		template:       "volumesnapshotcontent-template.yaml",
+	}
+
+	for _, o := range opts {
+		o(&defaultVolumeSnapshotContent)
+	}
+
+	return defaultVolumeSnapshotContent
+}
+
+// Create new VolumeSnapshotContent with customized parameters
+func (vsc *volumeSnapshotContent) create(oc *exutil.CLI) {
+	if vsc.vsnamespace == "" {
+		vsc.vsnamespace = oc.Namespace()
+	}
+	err := applyResourceFromTemplateAsAdmin(oc, "--ignore-unknown-parameters=true", "-f", vsc.template, "-p", "VSCONTENTNAME="+vsc.vscontentname, "VSNAMESPACE="+vsc.vsnamespace, "DELETIONPOLICY="+vsc.deletionPolicy, "DRIVER="+vsc.driver, "SNHANDLE="+vsc.snHandle, "VSCLASSNAME="+vsc.vsclassname, "VSNAME="+vsc.vsname)
+	o.Expect(err).NotTo(o.HaveOccurred())
 }

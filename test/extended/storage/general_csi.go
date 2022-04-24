@@ -2382,6 +2382,112 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
 	})
+	//author: chaoyang@redhat.com
+	//OCP-27723 - [CSI Driver] [Snapshot] [Retain deletionPolicy] [Pre-provison] could re-used snapshotcontent after the snapshot/snapshotcontent deletion
+	g.It("Author:chaoyang-Medium-27723-[CSI Driver] [Snapshot] [Retain deletionPolicy] [Pre-provison] could re-used snapshotcontent after the snapshot/snapshotcontent deletion", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com"}
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+		var (
+			storageTeamBaseDir            = exutil.FixturePath("testdata", "storage")
+			pvcTemplate                   = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate                   = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			storageClassTemplate          = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			volumesnapshotTemplate        = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
+			volumeSnapshotClassTemplate   = filepath.Join(storageTeamBaseDir, "volumesnapshotclass-template.yaml")
+			volumeSnapshotContentTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshotcontent-template.yaml")
+
+			storageClassParameters = map[string]string{
+				"csi.storage.k8s.io/fstype": "ext4",
+			}
+			sc_extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
+			pvc_ori := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+			pod_ori := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_ori.name))
+
+			g.By("Create a csi storageclass with parameter 'csi.storage.k8s.io/fstype': 'ext4'")
+			storageClass.provisioner = provisioner
+			storageClass.createWithExtraParameters(oc, sc_extraParameters)
+			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+			g.By("Create a pvc with the csi storageclass")
+			pvc_ori.scname = storageClass.name
+			pvc_ori.create(oc)
+			defer pvc_ori.deleteAsAdmin(oc)
+
+			g.By("Create pod with the created pvc and wait for the pod ready")
+			pod_ori.create(oc)
+			defer pod_ori.deleteAsAdmin(oc)
+			pod_ori.waitReady(oc)
+
+			g.By("Write file to volume")
+			pod_ori.checkMountedVolumeCouldRW(oc)
+
+			g.By("Create volumesnapshot with the Retain deletionpolicy volumesnapshotclass and wait it ready to use")
+			volumesnapshotClass := newVolumeSnapshotClass(setVolumeSnapshotClassTemplate(volumeSnapshotClassTemplate), setVolumeSnapshotClassDriver(provisioner), setVolumeSnapshotDeletionpolicy("Retain"))
+			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvc_ori.name), setVolumeSnapshotVscname(volumesnapshotClass.name))
+			volumesnapshotClass.create(oc)
+			defer volumesnapshotClass.deleteAsAdmin(oc)
+			volumesnapshot.create(oc)
+			defer volumesnapshot.delete(oc) //in case of delete volumesnapshot in the steps is failed
+			volumesnapshot.waitReadyToUse(oc)
+			originVolumeSnapshot, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("volumesnapshot", volumesnapshot.name, "-n", volumesnapshot.namespace, "-o", "json").Output()
+			debugLogf(originVolumeSnapshot)
+			o.Expect(err).ShouldNot(o.HaveOccurred())
+
+			g.By("Get snapshotHandle from volumesnapshot and delete old volumesnapshot and volumesnapshotcontent")
+			vscontent := getVSContentByVSname(oc, volumesnapshot.namespace, volumesnapshot.name)
+			vscontent_sphandle, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("volumesnapshotcontent", vscontent, "-o=jsonpath={.status.snapshotHandle}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			volumesnapshot.delete(oc)
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("volumesnapshotcontent", vscontent).Execute()
+
+			g.By("Create new volumesnapshotcontent with snapshotHandle and create new volumesnapshot")
+			newVolumeSnapshotName := "my-vs" + getRandomString()
+			newVolumeSnapshotContentName := "my-vscontent" + getRandomString()
+
+			newVolumeSnapshotContent := newVolumeSnapshotContent(setVolumeSnapshotContentTemplate(volumeSnapshotContentTemplate), setVolumeSnapshotContentName(newVolumeSnapshotContentName), setVolumeSnapshotClass(volumesnapshot.name), setSnapshotHndle(vscontent_sphandle), setVSNameInVSContent(newVolumeSnapshotName))
+			newVolumeSnapshotContent.create(oc)
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("volumesnapshotcontent", newVolumeSnapshotContentName).Execute()
+			createVolumeSnapshotWithSnapshotHandle(oc, originVolumeSnapshot, newVolumeSnapshotName, newVolumeSnapshotContentName, volumesnapshot.namespace)
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("volumesnapshot", newVolumeSnapshotName, "-n", volumesnapshot.namespace).Execute()
+
+			// Set the resource definition for the restore
+			pvc_restore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(newVolumeSnapshotName))
+			pod_restore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_restore.name))
+
+			g.By("Create a restored pvc with the preset csi storageclass")
+			pvc_restore.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvc_restore.capacity = pvc_ori.capacity
+			pvc_restore.createWithSnapshotDataSource(oc)
+			defer pvc_restore.deleteAsAdmin(oc)
+
+			g.By("Create pod with the restored pvc and wait for the pod ready")
+			pod_restore.create(oc)
+			defer pod_restore.deleteAsAdmin(oc)
+			pod_restore.waitReady(oc)
+			g.By("Check the file exist in restored volume")
+			output, err := pod_restore.execCommand(oc, "cat "+pod_restore.mountPath+"/testfile")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("storage test"))
+			pod_restore.checkMountedVolumeCouldRW(oc)
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+
+		}
+
+	})
+
 })
 
 // Performing test steps for Online Volume Resizing
