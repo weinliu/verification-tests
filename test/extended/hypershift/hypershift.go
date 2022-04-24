@@ -352,12 +352,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Author:heli-Critical-42867-Create iam and infrastructure repeatedly with the same infra-id on aws", func() {
-		g.By("hypershift OCP-42867-Create iam and infrastructure repeatedly with the same infra-id on aws")
-		g.Skip("aws iaas infra create & delete testcase, skip test run")
-	})
-
-	// author: heli@redhat.com
 	g.It("Author:heli-Critical-43554-Check FIPS support in the Hosted Cluster", func() {
 		g.By("hypershift OCP-43554-Check FIPS support in the Hosted Cluster")
 
@@ -468,12 +462,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			o.Expect(err).ShouldNot(o.HaveOccurred())
 			checkSubstring(string(roleInfo), []string{"role_arn", "web_identity_token_file"})
 		}
-	})
-
-	// author: heli@redhat.com
-	g.It("Author:heli-Critical-44806-Test Kube API server advertise address/port", func() {
-		g.By("hypershift OCP-44806-Test Kube API server advertise address/port")
-		g.Skip("creating & destorying cluster test, skip test run")
 	})
 
 	// author: heli@redhat.com
@@ -642,12 +630,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Author:heli-Critical-44981-Test built-in control plane pod tolerations", func() {
-		g.By("hypershift OCP-44981-Test built-in control plane pod tolerations")
-		g.Skip("add taint on nodes, skip in testrun")
-	})
-
-	// author: heli@redhat.com
 	g.It("Author:heli-Critical-44988-Colocate control plane components by default", func() {
 		g.By("hypershift OCP-44988-Colocate control plane components by default")
 
@@ -749,11 +731,5 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "statefulset", etcdSts, "-ojsonpath={" + antiAffinityJsonPath + "}"})
 		res := doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "statefulset", etcdSts, "-ojsonpath={" + topologyKeyJsonPath + "}"})
 		o.Expect(res).To(o.ContainSubstring(desiredTopogyKey))
-	})
-
-	// author: heli@redhat.com
-	g.It("Author:heli-Critical-47053-Test InfrastructureTopology configuration", func() {
-		g.By("hypershift OCP-47053-Test InfrastructureTopology configuration")
-		g.Skip("need destory cluster & create different mode of guest cluster, skip in testrun")
 	})
 })
