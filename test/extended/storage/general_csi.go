@@ -1184,7 +1184,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	//[CSI Driver] [Dynamic PV] [Security] CSI volume security testing when privileged is false
 	g.It("Author:chaoyang-Critical-44908-[CSI Driver] [Dynamic PV] CSI volume security testing when privileged is false ", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com","vpc.block.csi.ibm.io","diskplugin.csi.alibabacloud.com"}
 
 		// Set the resource template for the scenario
 		var (
