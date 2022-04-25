@@ -289,4 +289,31 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 
 	})
 
+	// author: yinzhou@redhat.com
+	g.It("Author:yinzhou-High-50255-make sure disabled JobTrackingWithFinalizers", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		cronjobF := filepath.Join(buildPruningBaseDir, "cronjob50255.yaml")
+		g.By("create new namespace")
+		oc.SetupProject()
+
+		g.By("create cronjob")
+		err := oc.Run("create").Args("-f", cronjobF).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("check when pod running should not have finalizer")
+		err = wait.Poll(5*time.Second, 600*time.Second, func() (bool, error) {
+			output, err := oc.Run("get").Args("pod", "-o=jsonpath='{.items[?(@.status.phase == \"Running\")].metadata.name}'").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if matched, _ := regexp.MatchString("cronjob50255", output); !matched {
+				e2e.Logf("Failed to find running pods")
+				return false, nil
+			}
+			result, err := oc.Run("get").Args("pod", "-o=jsonpath='{.items[?(@.status.phase == \"Running\")].metadata.finalizers}'").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("the finalizer output is %v", result)
+			o.Expect(result).NotTo(o.ContainSubstring("job-tracking"))
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Failed to get running pods for cronjob")
+	})
+
 })
