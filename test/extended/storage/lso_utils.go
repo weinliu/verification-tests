@@ -2,6 +2,9 @@ package storage
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -103,6 +106,10 @@ func (lso *localStorageOperator) getCurrentCSV(oc *exutil.CLI) string {
 		}
 		return false, nil
 	})
+	if err != nil {
+		describeSubscription, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", lso.namespace, "Subscription/local-storage-operator").Output()
+		e2e.Logf("The openshift local storage operator Subscription detail info is:\n \"%s\"", describeSubscription)
+	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Get local storage operator currentCSV in ns/%s timeout", lso.namespace))
 	lso.currentCSV = currentCSV
 	return currentCSV
@@ -168,13 +175,40 @@ func (lso *localStorageOperator) waitInstallSucceed(oc *exutil.CLI) {
 
 // Uninstall specified openshift local storage operator
 func (lso *localStorageOperator) uninstall(oc *exutil.CLI) error {
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("localvolume", "--all", "-n", lso.namespace).Execute()
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("localvolumeset", "--all", "-n", lso.namespace).Execute()
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("localvolumediscovery", "--all", "-n", lso.namespace).Execute()
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("deployment/"+"local-storage-operator", "-n", lso.namespace).Execute()
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("ds/"+"diskmaker-manager", "-n", lso.namespace).Execute()
-	debugLogf("LSO uninstall Succeed")
+	var (
+		err           error
+		errs          []error
+		resourceTypes = []string{"localvolume", "localvolumeset", "localvolumediscovery", "deployment", "ds", "pod", "pvc"}
+	)
+	for _, resouceType := range resourceTypes {
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", lso.namespace, resouceType, "--all", "--ignore-not-found").Execute()
+		if err != nil {
+			e2e.Logf("Clean \"%s\" resources failed of %v", resouceType, err)
+			errs = append(errs, err)
+		}
+	}
+	o.Expect(errs).Should(o.HaveLen(0))
+	e2e.Logf("LSO uninstall Succeed")
 	return nil
+}
+
+// Get the diskmaker-manager log content
+func (lso *localStorageOperator) getDiskManagerLoginfo(oc *exutil.CLI, extraParameters ...string) (string, error) {
+	cmdArgs := []string{"-n", lso.namespace, "-l", "app=diskmaker-manager", "-c", "diskmaker-manager"}
+	cmdArgs = append(cmdArgs, extraParameters...)
+	return oc.AsAdmin().WithoutNamespace().Run("logs").Args(cmdArgs...).Output()
+}
+
+// Check diskmaker-manager log contains specified content
+func (lso *localStorageOperator) checkDiskManagerLogContains(oc *exutil.CLI, expectedContent string, checkFlag bool) {
+	logContent, err := lso.getDiskManagerLoginfo(oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if os.Getenv("STORAGE_LOG_LEVEL") == "DEBUG" {
+		path := filepath.Join(e2e.TestContext.OutputDir, "lso-diskmaker-manager-log-"+getRandomString()+".log")
+		ioutil.WriteFile(path, []byte(logContent), 0644)
+		debugLogf("The diskmaker-manager log is %s", path)
+	}
+	o.Expect(strings.Contains(logContent, expectedContent)).Should(o.Equal(checkFlag))
 }
 
 // Define LocalVolume CR
@@ -439,6 +473,7 @@ func (lvs *localVolumeSet) waitDeviceProvisioned(oc *exutil.CLI) {
 		e2e.Logf("***$ oc describe localVolumeSet/%s\n***%s", lvs.name, output)
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", lvs.namespace, "-l", "app=diskmaker-manager", "-c", "diskmaker-manager", "--since=2m").Output()
 		e2e.Logf("***$ oc logs -l app=diskmaker-manager -c diskmaker-manager --since=2m\n***%s", output)
+		e2e.Logf("**************************************************************************")
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for the localVolumeSet \"%s\" have already provisioned Device timeout", lvs.name))
 }

@@ -212,6 +212,12 @@ func (pod *pod) delete(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+//  Force delete the pod
+func (pod *pod) forceDelete(oc *exutil.CLI) {
+	err := oc.WithoutNamespace().Run("delete").Args("pod", pod.name, "-n", pod.namespace, "--force", "--grace-period=0").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 //  Delete the pod use kubeadmin
 func (pod *pod) deleteAsAdmin(oc *exutil.CLI) {
 	oc.WithoutNamespace().AsAdmin().Run("delete").Args("pod", pod.name, "-n", pod.namespace).Execute()
@@ -234,13 +240,31 @@ func (pod *pod) execCommandAsAdmin(oc *exutil.CLI, command string) (string, erro
 	return msg, nil
 }
 
+//  Check the pod mounted filesystem type volume could write data
+func (pod *pod) checkMountedVolumeCouldWriteData(oc *exutil.CLI, checkFlag bool) {
+	_, err := execCommandInSpecificPod(oc, pod.namespace, pod.name, "echo \"storage test\" >"+pod.mountPath+"/testfile")
+	o.Expect(err == nil).Should(o.Equal(checkFlag))
+	if err == nil && checkFlag {
+		_, err = execCommandInSpecificPod(oc, pod.namespace, pod.name, "sync -f "+pod.mountPath+"/testfile")
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+
 //  Check the pod mounted volume could read and write
 func (pod *pod) checkMountedVolumeCouldRW(oc *exutil.CLI) {
-	_, err := execCommandInSpecificPod(oc, pod.namespace, pod.name, "echo \"storage test\" >"+pod.mountPath+"/testfile")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	_, err = execCommandInSpecificPod(oc, pod.namespace, pod.name, "sync -f "+pod.mountPath+"/testfile")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(execCommandInSpecificPod(oc, pod.namespace, pod.name, "cat "+pod.mountPath+"/testfile")).To(o.ContainSubstring("storage test"))
+	pod.checkMountedVolumeCouldWriteData(oc, true)
+	pod.checkMountedVolumeDataExist(oc, true)
+}
+
+//  Check the pod mounted volume origin wrote data 'testfile' exist or not
+func (pod *pod) checkMountedVolumeDataExist(oc *exutil.CLI, checkFlag bool) {
+	if checkFlag {
+		o.Expect(execCommandInSpecificPod(oc, pod.namespace, pod.name, "cat "+pod.mountPath+"/testfile")).To(o.ContainSubstring("storage test"))
+	} else {
+		output, err := execCommandInSpecificPod(oc, pod.namespace, pod.name, "cat "+pod.mountPath+"/testfile")
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("No such file or directory"))
+	}
 }
 
 //  Check the pod mounted volume have exec right
@@ -351,7 +375,7 @@ func execCommandInSpecificPod(oc *exutil.CLI, namespace string, podName string, 
 		output, errInfo = oc.WithoutNamespace().Run("exec").Args(command1...).Output()
 		if errInfo != nil {
 			e2e.Logf(podName+"# "+command+" *failed with* :\"%v\".", errInfo)
-			return false, errInfo
+			return false, nil
 		}
 		e2e.Logf(podName+"# "+command+" *Output is* :\"%s\".", output)
 		return true, nil

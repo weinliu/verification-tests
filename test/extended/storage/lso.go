@@ -184,10 +184,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer pod_new.deleteAsAdmin(oc)
 		pod_new.waitReady(oc)
 		// Check the data is cleaned up in the volume
-		command := []string{"-n", pod_new.namespace, pod_new.name, "--", "/bin/sh", "-c", "cat " + pod.mountPath + "/testfile"}
-		output, err := oc.WithoutNamespace().Run("exec").Args(command...).Output()
-		o.Expect(err).Should(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("No such file or directory"))
+		pod_new.checkMountedVolumeDataExist(oc, false)
 	})
 
 	// author: pewang@redhat.com
@@ -252,10 +249,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer pod_new.deleteAsAdmin(oc)
 		pod_new.waitReady(oc)
 		// Check the data is cleaned up in the volume
-		command := []string{"-n", pod_new.namespace, pod_new.name, "--", "/bin/sh", "-c", "cat " + pod.mountPath + "/testfile"}
-		output, err := oc.WithoutNamespace().Run("exec").Args(command...).Output()
-		o.Expect(err).Should(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("No such file or directory"))
+		pod_new.checkMountedVolumeDataExist(oc, false)
 	})
 
 	// author: pewang@redhat.com
@@ -367,10 +361,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer pod_new.deleteAsAdmin(oc)
 			pod_new.waitReady(oc)
 			// Check the data is cleaned up in the volume
-			command := []string{"-n", pod_new.namespace, pod_new.name, "--", "/bin/sh", "-c", "cat " + pod.mountPath + "/testfile"}
-			output, err := oc.WithoutNamespace().Run("exec").Args(command...).Output()
-			o.Expect(err).Should(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("No such file or directory"))
+			pod_new.checkMountedVolumeDataExist(oc, false)
 
 			g.By("# Delete the new pod,pvc")
 			pod_new.deleteAsAdmin(oc)
@@ -553,9 +544,75 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer pod_new.deleteAsAdmin(oc)
 		pod_new.waitReady(oc)
 		// Check the data is cleaned up in the volume
-		command := []string{"-n", pod_new.namespace, pod_new.name, "--", "/bin/sh", "-c", "cat " + pod.mountPath + "/testfile"}
-		output, err := oc.WithoutNamespace().Run("exec").Args(command...).Output()
-		o.Expect(err).Should(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("No such file or directory"))
+		pod_new.checkMountedVolumeDataExist(oc, false)
+	})
+
+	// author: pewang@redhat.com
+	// Customer Scenario for Telco:
+	// https://bugzilla.redhat.com/show_bug.cgi?id=2023614
+	// https://bugzilla.redhat.com/show_bug.cgi?id=2014083#c18
+	// https://access.redhat.com/support/cases/#/case/03078926
+	g.It("Author:pewang-Critical-50071-[LSO] LocalVolume CR provisioned volume should be umount when its consumed pod is force deleted", func() {
+		// Set the resource definition for the scenario
+		var (
+			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
+			podTemplate = filepath.Join(lsoBaseDir, "pod-template.yaml")
+			lvTemplate  = filepath.Join(lsoBaseDir, "/lso/localvolume-template.yaml")
+			mylv        = newLocalVolume(setLvNamespace(myLso.namespace), setLvTemplate(lvTemplate), setLvFstype("ext4"))
+			pvc         = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylv.scname))
+			pod         = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+		)
+
+		g.By("# Create a new project for the scenario")
+		oc.SetupProject() //create new project
+
+		g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
+		myWorker := getOneSchedulableWorker(allNodes)
+		myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone))
+		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
+		myVolume.createAndReadyToUse(ac)
+		// Attach the volume to a schedulable linux worker node
+		defer myVolume.detachSucceed(ac)
+		myVolume.attachToInstanceSucceed(ac, oc, myWorker)
+
+		g.By("# Create a localvolume cr use diskPath by id with the attached volume")
+		mylv.deviceId = myVolume.DeviceById
+		mylv.create(oc)
+		defer mylv.deleteAsAdmin(oc)
+
+		g.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
+		pvc.capacity = interfaceToString(getRandomNum(1, myVolume.Size)) + "Gi"
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+		pod.create(oc)
+		defer pod.deleteAsAdmin(oc)
+		pod.waitReady(oc)
+
+		g.By("# Check the pod volume can be read and write")
+		pod.checkMountedVolumeCouldRW(oc)
+
+		g.By("# Force delete pod and check the volume umount form the node")
+		pvName := pvc.getVolumeName(oc)
+		nodeName := getNodeNameByPod(oc, pod.namespace, pod.name)
+		pod.forceDelete(oc)
+		checkVolumeNotMountOnNode(oc, pvName, nodeName)
+
+		g.By("# Create new pod and check the data in origin volume is still exist")
+		pod_new := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+		pod_new.create(oc)
+		defer pod_new.deleteAsAdmin(oc)
+		pod_new.waitReady(oc)
+		// Check the origin wrote data is still in the volume
+		pod_new.checkMountedVolumeDataExist(oc, true)
+
+		g.By("# Force delete the project and check the volume umount from the node and become Available")
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", pod_new.namespace, "--force", "--grace-period=0").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// Waiting for the volume umount successfully
+		checkVolumeNotMountOnNode(oc, pvName, nodeName)
+		waitForPersistentVolumeStatusAsExpected(oc, pvName, "Available")
+
+		g.By("Check the diskManager log has no deleter configmap err reported")
+		myLso.checkDiskManagerLogContains(oc, "deleter could not get provisioner configmap", false)
 	})
 })

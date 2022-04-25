@@ -27,11 +27,16 @@ func execCommandInSpecificNode(oc *exutil.CLI, nodeHostName string, command stri
 		"runAsUser=0 (container \"container-00\" must not set runAsUser=0), seccompProfile (pod or container \"container-00\" " +
 		"must set securityContext.seccompProfile.type to \"RuntimeDefault\" or \"Localhost\")"
 
-	nodeHostName = "node/" + nodeHostName
-	command1 := []string{nodeHostName, "-q", "--", "chroot", "/host", "bin/sh", "-c", command}
-	msg, err := oc.AsAdmin().Run("debug").Args(command1...).Output()
+	debugPodNamespace := oc.Namespace()
+	// Check whether current namespace is Active
+	nsState, err := oc.AsAdmin().Run("get").Args("ns/"+oc.Namespace(), "-o=jsonpath={.status.phase}", "--ignore-not-found").Output()
+	if nsState != "Active" || err != nil {
+		debugPodNamespace = "default"
+	}
+	argsCmd := []string{"-n", debugPodNamespace, "node/" + nodeHostName, "-q", "--", "chroot", "/host", "bin/sh", "-c", command}
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args(argsCmd...).Output()
 	// Remove the oc debug node output warning
-	msg = strings.TrimSpace(strings.TrimLeft(msg, debugCmdWarning))
+	msg = strings.TrimSpace(strings.TrimPrefix(msg, debugCmdWarning))
 	if err != nil {
 		e2e.Logf("Execute \""+command+"\" on node \"%s\" *failed with* : \"%v\".", nodeHostName, err)
 		return msg, err
@@ -59,7 +64,7 @@ func checkVolumeMountOnNode(oc *exutil.CLI, volumeName string, nodeName string) 
 // Check the Volume not mounted on the Node
 func checkVolumeNotMountOnNode(oc *exutil.CLI, volumeName string, nodeName string) {
 	command := "mount | grep -c \"" + volumeName + "\" || true"
-	err := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 		count, err := execCommandInSpecificNode(oc, nodeName, command)
 		if err != nil {
 			e2e.Logf("Err Occurred: %v", err)
