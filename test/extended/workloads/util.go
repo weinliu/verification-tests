@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	o "github.com/onsi/gomega"
+	"io/ioutil"
 	"regexp"
 
 	"math/rand"
+	"os"
 	"os/exec"
 	"reflect"
 	"sort"
@@ -783,5 +785,38 @@ func getCurrentRs(oc *exutil.CLI, projectName string, labels string) (string, st
                 }
         }
         return podTHash, rsName
+}
+
+func copyFile(source string, dest string) {
+        bytesRead, err := ioutil.ReadFile(source)
+        o.Expect(err).NotTo(o.HaveOccurred())
+        err = ioutil.WriteFile(dest, bytesRead, 0644)
+        o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func locatePodmanCred(oc *exutil.CLI, dst string) error {
+        err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dst, "--confirm").Execute()
+        o.Expect(err).NotTo(o.HaveOccurred())
+
+        key := "XDG_RUNTIME_DIR"
+        currentRuntime, ex := os.LookupEnv(key)
+        if !ex {
+                err = os.MkdirAll("/tmp/configocmirror/containers", 0700)
+                o.Expect(err).NotTo(o.HaveOccurred())
+                os.Setenv(key, "/tmp/configocmirror")
+                copyFile(dst+"/"+".dockerconfigjson", "/tmp/configocmirror/containers/auth.json")
+                return nil
+        }
+        _, err = os.Stat(currentRuntime + "containers/auth.json")
+        if os.IsNotExist(err) {
+                err1 := os.MkdirAll(currentRuntime+"containers", 0700)
+                o.Expect(err1).NotTo(o.HaveOccurred())
+                copyFile(dst+"/"+".dockerconfigjson", "/tmp/configocmirror/containers/auth.json")
+                return nil
+        }
+        if err != nil {
+                return err
+        }
+        return nil
 }
 

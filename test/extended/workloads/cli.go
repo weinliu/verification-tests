@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -491,7 +492,25 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(out).To(o.ContainSubstring("No resources found"))
         })
 
+	// author: yinzhou@redhat.com
+	g.It("Author:yinzhou-Medium-44061-Check the default registry credential path for oc", func() {
+		g.By("check the help info for the registry config locations")
+		clusterImage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.desired.image}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		out, err := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", clusterImage).Output()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("unauthorized: authentication required"))
 
+		g.By("Set podman registry config")
+		dirname := "/tmp/case44061"
+		err = os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", clusterImage).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 })
 
 type ClientVersion struct {
