@@ -354,7 +354,11 @@ func getSupportProvisionersByCloudProvider(oc *exutil.CLI) []string {
 	}
 	if cloudProvider == "aws" && !checkCSIDriverInstalled(oc, []string{"efs.csi.aws.com"}) {
 		supportProvisioners = deleteElement(supportProvisioners, "efs.csi.aws.com")
-		e2e.Logf("***%s \"efs csi driver\" not installed update support provisioners to : %v***", cloudProvider, supportProvisioners)
+		e2e.Logf("***%s \"AWS-EFS CSI Driver\" not installed, updating support provisioners to: %v***", cloudProvider, supportProvisioners)
+	}
+	if cloudProvider == "azure" && checkFips(oc) {
+		supportProvisioners = deleteElement(supportProvisioners, "file.csi.azure.com")
+		e2e.Logf("***%s \"Azure-file CSI Driver\" don't support FIPS enabled env, updating support provisioners to: %v***", cloudProvider, supportProvisioners)
 	}
 	return supportProvisioners
 }
@@ -384,6 +388,7 @@ func getIntreeSupportProvisionersByCloudProvider(oc *exutil.CLI) []string {
 	}
 	return supportProvisioners
 }
+
 // Get pre-defined storageclass by cloudplatform and provisioner
 func getPresetStorageClassNameByProvisioner(cloudProvider string, provisioner string) string {
 	csiCommonSupportMatrix, err := ioutil.ReadFile(filepath.Join(exutil.FixturePath("testdata", "storage"), "general-csi-support-provisioners.json"))
@@ -552,4 +557,20 @@ func getResourceGroupId(oc *exutil.CLI) string {
 	jsonOutputString := string(jsonOutput)
 	rgid := gjson.Get(jsonOutputString, `platform.`+cloudProvider+`.resourceGroupID`)
 	return rgid.String()
+}
+
+// Check if FIPS is enabled
+// Azure-file doesn't work on FIPS enabled cluster
+func checkFips(oc *exutil.CLI) bool {
+	master_node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[0].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	fips_info, err := execCommandInSpecificNode(oc, master_node, "fips-mode-setup --check")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(fips_info, "FIPS mode is disabled.") {
+		e2e.Logf("FIPS is not enabled.")
+		return false
+	} else {
+		e2e.Logf("FIPS is enabled.")
+		return true
+	}
 }
