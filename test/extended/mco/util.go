@@ -226,7 +226,7 @@ func (mcp *MachineConfigPool) SetMaxUnavailable(maxUnavailable int) {
 // RemoveMaxUnavailable removes spec.maxUnavailable attribute from the pool config
 func (mcp *MachineConfigPool) RemoveMaxUnavailable() {
 	e2e.Logf("patch mcp %v, removing spec.maxUnavailable")
-	err := mcp.Patch("json", fmt.Sprintf(`[{ "op": "remove", "path": "/spec/maxUnavailable" }]`))
+	err := mcp.Patch("json", `[{ "op": "remove", "path": "/spec/maxUnavailable" }]`)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -357,7 +357,7 @@ func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []node {
 				}
 			}
 			if totalUpdating > maxUnavailable {
-				exutil.AssertWaitPollNoErr(fmt.Errorf("maxUnavailable Not Honored"), fmt.Sprintf("Pool %s, error: %d nodes were updating at the same time. Only %s nodes should be updating at the same time.", mcp.GetName(), totalUpdating, maxUnavailable))
+				exutil.AssertWaitPollNoErr(fmt.Errorf("maxUnavailable Not Honored"), fmt.Sprintf("Pool %s, error: %d nodes were updating at the same time. Only %d nodes should be updating at the same time.", mcp.GetName(), totalUpdating, maxUnavailable))
 			}
 		}
 
@@ -749,12 +749,12 @@ func sortNodeList(nodes []node) []node {
 		dateLayout := "2006-01-02T15:04:05Z"
 		lDate, err := time.Parse(dateLayout, lMetadata.Get("creationTimestamp").ToString())
 		if err != nil {
-			e2e.Failf("Cannot parse creationTimestamp %s in node $s", lMetadata.Get("creationTimestamp").ToString(), nodes[l].GetName())
+			e2e.Failf("Cannot parse creationTimestamp %s in node %s", lMetadata.Get("creationTimestamp").ToString(), nodes[l].GetName())
 
 		}
 		rDate, err := time.Parse(dateLayout, rMetadata.Get("creationTimestamp").ToString())
 		if err != nil {
-			e2e.Failf("Cannot parse creationTimestamp %s in node $s", rMetadata.Get("creationTimestamp").ToString(), nodes[r].GetName())
+			e2e.Failf("Cannot parse creationTimestamp %s in node %s", rMetadata.Get("creationTimestamp").ToString(), nodes[r].GetName())
 
 		}
 		return lDate.Before(rDate)
