@@ -537,7 +537,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-46358 - [CSI Driver] [CSI Clone] Clone a pvc with filesystem VolumeMode
 	g.It("Author:wduan-Critical-46358-[CSI Driver] [CSI Clone] Clone a pvc with filesystem VolumeMode", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org"}
+		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org","pd.csi.storage.gke.io"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
@@ -685,7 +685,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-46813 - [CSI Driver] [CSI Clone] Clone a pvc with Raw Block VolumeMode
 	g.It("Author:wduan-Critical-46813-[CSI Driver][CSI Clone] Clone a pvc with Raw Block VolumeMode", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org"}
+		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org","pd.csi.storage.gke.io"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
@@ -747,7 +747,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-47225 - [CSI Driver] [CSI Clone] [Raw Block] provisioning volume with pvc data source larger than original volume
 	g.It("Author:wduan-High-47225-[CSI Driver] [CSI Clone] [Raw Block] provisioning volume with pvc data source larger than original volume", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org"}
+		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org","pd.csi.storage.gke.io"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
