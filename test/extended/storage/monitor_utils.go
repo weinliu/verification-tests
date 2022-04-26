@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	prometheusQueryUrl  = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
-	prometheusNamespace = "openshift-monitoring"
-	prometheusK8s       = "prometheus-k8s"
+	prometheusQueryUrl  string = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
+	prometheusNamespace string = "openshift-monitoring"
+	prometheusK8s       string = "prometheus-k8s"
 )
 
 //  Define a monitor object

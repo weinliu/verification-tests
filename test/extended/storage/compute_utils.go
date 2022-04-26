@@ -17,7 +17,7 @@ import (
 func execCommandInSpecificNode(oc *exutil.CLI, nodeHostName string, command string) (string, error) {
 	// Adapt Pod Security changed on k8s v1.23+
 	// https://kubernetes.io/docs/tutorials/security/cluster-level-pss/
-	const debugCmdWarning = "Warning: would violate PodSecurity \"restricted:latest\": " +
+	const debugCmdWarning string = "Warning: would violate PodSecurity \"restricted:latest\": " +
 		"host namespaces (hostNetwork=true, hostPID=true), hostPath volumes (volume \"host\"), " +
 		"privileged (container \"container-00\" must not set securityContext.privileged=true), " +
 		"allowPrivilegeEscalation != false (container \"container-00\" must set securityContext.allowPrivilegeEscalation=false), " +

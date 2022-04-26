@@ -193,3 +193,47 @@ func getFsIdDetails(oc *exutil.CLI, scName string) string {
 	e2e.Logf("The filesystem Id is %s", fsId)
 	return fsId
 }
+
+// Define CSI Driver Privisioners const
+const (
+	ebsCsiDriverPrivisioner string = "ebs.csi.aws.com"
+	efsCsiDriverPrivisioner string = "efs.csi.aws.com"
+)
+
+// Generate storageClass parameters by volume type
+func gererateCsiScExtraParametersByVolType(oc *exutil.CLI, csiProvisioner string, volumeType string) map[string]interface{} {
+	var (
+		storageClassParameters = make(map[string]string)
+		extraParameters        = make(map[string]interface{})
+	)
+	switch csiProvisioner {
+	case ebsCsiDriverPrivisioner:
+		// aws-ebs-csi
+		// https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-volume-types.html
+		// io1, io2, gp2, gp3, sc1, st1,standard
+		// Default is gp3 if not set the volumeType in storageClass parameters
+		storageClassParameters = map[string]string{
+			"type": volumeType}
+		// I/O operations per second per GiB. Required when io1 or io2 volume type is specified.
+		if volumeType == "io1" || volumeType == "io2" {
+			storageClassParameters["iopsPerGB"] = "50"
+		}
+	// aws-efs-csi
+	// https://github.com/kubernetes-sigs/aws-efs-csi-driver
+	case efsCsiDriverPrivisioner:
+		fsid := getFsIdDetails(oc, getPresetStorageClassNameByProvisioner(cloudProvider, "efs.csi.aws.com"))
+		storageClassParameters = map[string]string{
+			"provisioningMode": volumeType,
+			"fileSystemId":     fsid,
+			"directoryPerms":   "700",
+		}
+	default:
+		storageClassParameters = map[string]string{
+			"type": volumeType}
+	}
+	extraParameters = map[string]interface{}{
+		"parameters":           storageClassParameters,
+		"allowVolumeExpansion": true,
+	}
+	return extraParameters
+}

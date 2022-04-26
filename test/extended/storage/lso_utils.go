@@ -18,9 +18,9 @@ import (
 )
 
 const (
-	qeCatalogSource     = "qe-app-registry"
-	redhatCatalogSource = "redhat-operators"
-	sourceNameSpace     = "openshift-marketplace"
+	qeCatalogSource     string = "qe-app-registry"
+	redhatCatalogSource string = "redhat-operators"
+	sourceNameSpace     string = "openshift-marketplace"
 )
 
 // Define the localStorageOperator struct

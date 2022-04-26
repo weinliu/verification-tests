@@ -378,3 +378,44 @@ func (pvc *persistentVolumeClaim) waitPvcStatusToTimer(oc *exutil.CLI, expectedS
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The persist volume claim '%s' changed to status '%s' instead of expected status: '%s' ", pvc.name, status, expectedStatus))
 }
+
+// Get valid random capacity by volume type
+func getValidRandomCapacityByCsiVolType(csiProvisioner string, volumeType string) string {
+	var validRandomCapacityInt64 int64
+	switch csiProvisioner {
+	// aws-ebs-csi
+	// https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-volume-types.html
+	// io1, io2, gp2, gp3, sc1, st1,standard
+	// Default is gp3 if not set the volumeType in storageClass parameters
+	case ebsCsiDriverPrivisioner:
+		// General Purpose SSD: 1 GiB - 16 TiB
+		ebsGeneralPurposeSSD := []string{"gp2", "gp3"}
+		// Provisioned IOPS SSD 4 GiB - 16 TiB
+		ebsProvisionedIopsSSD := []string{"io1", "io2"}
+		// HDD: {"sc1", "st1" 125 GiB - 16 TiB}, {"standard" 1 GiB - 1 TiB}
+		ebsHDD := []string{"sc1", "st1", "standard"}
+
+		if strSliceContains(ebsGeneralPurposeSSD, volumeType) || volumeType == "standard" {
+			validRandomCapacityInt64 = getRandomNum(1, 10)
+			break
+		}
+		if strSliceContains(ebsProvisionedIopsSSD, volumeType) {
+			validRandomCapacityInt64 = getRandomNum(4, 20)
+			break
+		}
+		if strSliceContains(ebsHDD, volumeType) && volumeType != "standard" {
+			validRandomCapacityInt64 = getRandomNum(125, 200)
+			break
+		}
+		validRandomCapacityInt64 = getRandomNum(1, 10)
+	// aws-efs-csi
+	// https://github.com/kubernetes-sigs/aws-efs-csi-driver
+	// Accually for efs-csi volumes the capacity is meaningless
+	// efs provides volumes almost unlimited capacity only billed by usage
+	case efsCsiDriverPrivisioner:
+		validRandomCapacityInt64 = getRandomNum(1, 10)
+	default:
+		validRandomCapacityInt64 = getRandomNum(1, 10)
+	}
+	return strconv.FormatInt(validRandomCapacityInt64, 10) + "Gi"
+}
