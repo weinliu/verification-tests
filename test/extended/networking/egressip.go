@@ -32,9 +32,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Skip for not ovn cluster !!!")
 		}
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod.yaml")
-		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1.yaml")
-		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall1.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
+		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall1-template.yaml")
 
 		g.By("create new namespace")
 		oc.SetupProject()
@@ -106,7 +106,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		testPodFile := filepath.Join(buildPruningBaseDir, "testpod.yaml")
-		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1.yaml")
+		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 
 		g.By("1. Pick a node as egressIP node")
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)

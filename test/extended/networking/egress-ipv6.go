@@ -35,8 +35,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Current env is ipv4 single stack cluster, skip this test!!!")
 		}
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod.yaml")
-		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 
 		g.By("create new namespace")
 		oc.SetupProject()
@@ -94,7 +94,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Current env is not dualstack cluster, skip this case!!!")
 		}
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1.yaml")
+		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 
 		g.By("create new namespace")
 		oc.SetupProject()
@@ -162,8 +162,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Current env is ipv4 single cluster, skip the test!!!")
 		}
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod.yaml")
-		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall2.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall2-template.yaml")
 
 		g.By("create new namespace")
 		oc.SetupProject()

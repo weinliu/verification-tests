@@ -251,7 +251,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 
 		g.By("5) ########### Create hostnetwork Pods to capture packets ##########")
 
-		hostnwPodTmp := filepath.Join(sriovBaseDir, "net_admin_cap_pod-tempalte.yaml")
+		hostnwPodTmp := filepath.Join(sriovBaseDir, "net-admin-cap-pod-template.yaml")
 		hostnwPod0 := sriovNetResource{
 			name:      hostnwPod0_Name,
 			namespace: oc.Namespace(),
@@ -433,7 +433,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 
 		g.By("7) ########### Create hostnetwork Pods to capture packets ##########")
 
-		hostnwPodTmp := filepath.Join(sriovBaseDir, "net_admin_cap_pod-tempalte.yaml")
+		hostnwPodTmp := filepath.Join(sriovBaseDir, "net-admin-cap-pod-template.yaml")
 		hostnwPod0 := sriovNetResource{
 			name:      hostnwPod0_Name,
 			namespace: oc.Namespace(),
@@ -567,7 +567,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 
 		g.By("5) ########### Create hostnetwork Pods to capture packets ##########")
 
-		hostnwPodTmp := filepath.Join(sriovBaseDir, "net_admin_cap_pod-tempalte.yaml")
+		hostnwPodTmp := filepath.Join(sriovBaseDir, "net-admin-cap-pod-template.yaml")
 		hostnwPod0 := sriovNetResource{
 			name:      hostnwPod0_Name,
 			namespace: oc.Namespace(),

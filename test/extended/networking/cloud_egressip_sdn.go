@@ -81,7 +81,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("ConnectedOnly-Author:jechen-High-46701-The same egressIP will not be assigned to different netnamespace. [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 
 		g.By("1. Pick a node as egressIP node, add egressCIDRs to it")
 		// get CIDR on the node
@@ -247,7 +247,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("ConnectedOnly-Author:jechen-High-46556-Automatic EgressIP: A pod that is on a node hosting egressIP, it will always use the egressIP of the node . [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node.yaml")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 
 		g.By("1. Get list of nodes, get subnet from two worker nodes that have same subnet, add egressCIDRs to them")
 		var egressNode1, egressNode2 string
@@ -306,7 +306,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-46705-The egressIP should still work fine after the node or network service restarted. [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 
 		g.By("1. Pick a node as egressIP node")
 		// get CIDR on the node
@@ -379,7 +379,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("ConnectedOnly-Author:jechen-High-46555-[Automatic EgressIP]-Random egressIP is used on a pod that is not on a node hosting an egressIP . [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node.yaml")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 
 		g.By("1. Identify two worker nodes with same subnet as egressIP nodes, pick a third node as non-egressIP node")
 		var egressNode1, egressNode2, nonEgressNode string

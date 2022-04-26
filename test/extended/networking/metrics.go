@@ -227,7 +227,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			sdnnamespace = "openshift-sdn"
 			sdncmName    = "openshift-network-controller"
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
-			egressIPTemplate = filepath.Join(buildPruningBaseDir, "egressip-config1.yaml")
+			egressIPTemplate = filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 		)
 
 		platform := checkPlatform(oc)

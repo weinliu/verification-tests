@@ -140,7 +140,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			egressTypeFile      = filepath.Join(buildPruningBaseDir, "networkpolicy/default-allow-egress.yaml")
 			ingressTypeFile     = filepath.Join(buildPruningBaseDir, "networkpolicy/default-deny-ingress.yaml")
-			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node.yaml")
+			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 		)
 		g.By("Create first namespace")
 		oc.SetupProject()
@@ -215,8 +215,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("Author:anusaxen-Medium-49686-[dual stack] A network policy with ingress rule with ipBlock	", func() {
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
-			ipBlockIngressTemplate = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock_ingress_dual_CIDRs.yaml")
-			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node.yaml")
+			ipBlockIngressTemplate = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-ingress-dual-CIDRs-template.yaml")
+			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 		)
 
 		ipStackType := checkIpStackType(oc)
@@ -480,9 +480,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("Author:anusaxen-High-46246-Network Policies should work with OVNKubernetes when traffic hairpins back to the same source through a service", func() {
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
-			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node.yaml")
+			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 			allowfromsameNS        = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-from-same-namespace.yaml")
-			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "template-service-generic.yaml")
+			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
 		)
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)

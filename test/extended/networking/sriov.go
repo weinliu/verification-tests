@@ -142,9 +142,9 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 	g.It("Author:zzhao-Medium-Longduration-25321-Check intel dpdk works well [Disruptive]", func() {
 		var (
 			buildPruningBaseDir            = exutil.FixturePath("testdata", "networking/sriov")
-			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy.yaml")
-			sriovNeworkTemplate            = filepath.Join(buildPruningBaseDir, "sriovnetwork.yaml")
-			sriovTestPodTemplate           = filepath.Join(buildPruningBaseDir, "sriov-dpdk.yaml")
+			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy-template.yaml")
+			sriovNeworkTemplate            = filepath.Join(buildPruningBaseDir, "sriovnetwork-template.yaml")
+			sriovTestPodTemplate           = filepath.Join(buildPruningBaseDir, "sriov-dpdk-template.yaml")
 			sriovOpNs                      = "openshift-sriov-network-operator"
 		)
 		sriovPolicy := sriovNetworkNodePolicy{
@@ -210,7 +210,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 	g.It("Author:zzhao-Medium-Longduration-49213- VF with large number can be inited for intel card [Disruptive]", func() {
 		var (
 			buildPruningBaseDir            = exutil.FixturePath("testdata", "networking/sriov")
-			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy.yaml")
+			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy-template.yaml")
 			sriovOpNs                      = "openshift-sriov-network-operator"
 			sriovNodeLabel                 = "feature.node.kubernetes.io/sriov-capable=true"
 		)

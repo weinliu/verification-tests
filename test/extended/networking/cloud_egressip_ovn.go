@@ -82,8 +82,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("ConnectedOnly-Author:huirwang-High-47163-High-47026-Deleting EgressIP object and recreating it works. [Serial]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod.yaml")
-		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 
 		g.By("create new namespace")
 		oc.SetupProject()
@@ -163,8 +163,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("ConnectedOnly-Author:huirwang-Medium-47272-Pods will not be affected by the egressIP set on other netnamespace. [Serial]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod.yaml")
-		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
 		g.By("1.1 Label EgressIP node")
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -269,8 +269,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("ConnectedOnly-Author:huirwang-Medium-47164-Be able to update egressip object. [Serial]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod.yaml")
-		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
 		g.By("1.1 Label EgressIP node")
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -335,7 +335,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("ConnectedOnly-Author:huirwang-Medium-47030-An EgressIP object can not have multiple egress IP assignments on the same node. [Serial]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1.yaml")
+		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 
 		g.By("1. Label EgressIP node")
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -366,8 +366,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	// author: huirwang@redhat.com
 	g.It("ConnectedOnly-Author:huirwang-Medium-47028-After remove EgressIP node tag, EgressIP will failover to other availabel egress nodes. [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod.yaml")
-		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 
 		g.By("1. Get list of nodes, get subnet from two worker nodes that have same subnet \n")
 		var egressNode1, egressNode2 string
@@ -449,7 +449,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		testPodFile := filepath.Join(buildPruningBaseDir, "testpod.yaml")
-		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2.yaml")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
 		g.By("1.1 Label EgressIP node\n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -521,8 +521,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("ConnectedOnly-Author:huirwang-Critical-47032-Traffic is load balanced between egress nodes. [Serial]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod.yaml")
-		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 
 		g.By("create new namespace\n")
 		oc.SetupProject()
@@ -603,7 +603,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 	// author: huirwang@redhat.com
 	g.It("Author:huirwang-NonPreRelease-Medium-47020-Low-47024-EgressIP node liveness probe. [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2.yaml")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
 		g.By("1 Get list of nodes \n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
