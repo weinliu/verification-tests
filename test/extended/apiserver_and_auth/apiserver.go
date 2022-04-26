@@ -1,15 +1,15 @@
 package apiserver_and_auth
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
-	"os/exec"
-	"os"
-	"bufio"
-	"path/filepath"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -17,6 +17,7 @@ import (
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -377,30 +378,30 @@ spec:
 	g.It("NonPreRelease-Longduration-Author:rgangwar-Low-25926-Wire cipher config from apiservers/cluster into apiserver and authentication operators [Disruptive] [Slow]", func() {
 		// Check authentication operator cliconfig, openshiftapiservers.operator.openshift.io and kubeapiservers.operator.openshift.io
 		var (
-			cipher_to_recover           = `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":}]`
-			cipherOps                   = []string{"openshift-authentication", "openshiftapiservers.operator", "kubeapiservers.operator"}
-			cipher_to_match             = `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"] VersionTLS12`
+			cipher_to_recover = `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":}]`
+			cipherOps         = []string{"openshift-authentication", "openshiftapiservers.operator", "kubeapiservers.operator"}
+			cipher_to_match   = `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"] VersionTLS12`
 		)
 
 		cipherItems := []struct {
-			cipher_type string
+			cipher_type     string
 			cipher_to_check string
-			patch string
+			patch           string
 		}{
 			{
-				cipher_type      : "custom",
-				cipher_to_check  : `["TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"] VersionTLS11`,
-				patch            : `[{"op": "add", "path": "/spec/tlsSecurityProfile", "value":{"custom":{"ciphers":["ECDHE-ECDSA-CHACHA20-POLY1305","ECDHE-RSA-CHACHA20-POLY1305","ECDHE-RSA-AES128-GCM-SHA256","ECDHE-ECDSA-AES128-GCM-SHA256"],"minTLSVersion":"VersionTLS11"},"type":"Custom"}}]`,
+				cipher_type:     "custom",
+				cipher_to_check: `["TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"] VersionTLS11`,
+				patch:           `[{"op": "add", "path": "/spec/tlsSecurityProfile", "value":{"custom":{"ciphers":["ECDHE-ECDSA-CHACHA20-POLY1305","ECDHE-RSA-CHACHA20-POLY1305","ECDHE-RSA-AES128-GCM-SHA256","ECDHE-ECDSA-AES128-GCM-SHA256"],"minTLSVersion":"VersionTLS11"},"type":"Custom"}}]`,
 			},
 			{
-				cipher_type      : "Intermediate",
-				cipher_to_check  : cipher_to_match, // cipherSuites of "Intermediate" seems to equal to the default values when .spec.tlsSecurityProfile not set.
-				patch            : `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":{"intermediate":{},"type":"Intermediate"}}]`,
+				cipher_type:     "Intermediate",
+				cipher_to_check: cipher_to_match, // cipherSuites of "Intermediate" seems to equal to the default values when .spec.tlsSecurityProfile not set.
+				patch:           `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":{"intermediate":{},"type":"Intermediate"}}]`,
 			},
 			{
-				cipher_type      : "Old",
-				cipher_to_check  : `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA","TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA","TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA","TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA","TLS_RSA_WITH_AES_128_GCM_SHA256","TLS_RSA_WITH_AES_256_GCM_SHA384","TLS_RSA_WITH_AES_128_CBC_SHA256","TLS_RSA_WITH_AES_128_CBC_SHA","TLS_RSA_WITH_AES_256_CBC_SHA","TLS_RSA_WITH_3DES_EDE_CBC_SHA"] VersionTLS10`,
-				patch            : `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":{"old":{},"type":"Old"}}]`,
+				cipher_type:     "Old",
+				cipher_to_check: `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA","TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA","TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA","TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA","TLS_RSA_WITH_AES_128_GCM_SHA256","TLS_RSA_WITH_AES_256_GCM_SHA384","TLS_RSA_WITH_AES_128_CBC_SHA256","TLS_RSA_WITH_AES_128_CBC_SHA","TLS_RSA_WITH_AES_256_CBC_SHA","TLS_RSA_WITH_3DES_EDE_CBC_SHA"] VersionTLS10`,
+				patch:           `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":{"old":{},"type":"Old"}}]`,
 			},
 		}
 
@@ -413,7 +414,7 @@ spec:
 		//Recovering apiserver/cluster's ciphers:
 		defer func() {
 			g.By("Restoring apiserver/cluster's ciphers")
-			output,err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", cipher_to_recover).Output()
+			output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", cipher_to_recover).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(output, "patched (no change)") {
 				e2e.Logf("Apiserver/cluster's ciphers are not changed from the default values")
@@ -488,7 +489,7 @@ spec:
 			user             = "system:admin"
 			user_cert        = dirname + "system-admin"
 			group            = "system:masters"
-			user_subj        = dirname + "/O="+group+"/CN="+user
+			user_subj        = dirname + "/O=" + group + "/CN=" + user
 			new_kubeconfig   = dirname + "kubeconfig." + user
 			patch            = `[{"op": "add", "path": "/spec/clientCA", "value":{"name":"client-ca-custom"}}]`
 			patch_to_recover = `[{"op": "replace", "path": "/spec/clientCA", "value":}]`
@@ -538,7 +539,7 @@ spec:
 		configmap_bkp, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "admin-kubeconfig-client-ca", "-n", "openshift-config", "-o", "yaml").OutputToFile("OCP-41899-ca/OCP-41899-bkp.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		sed_cmd := fmt.Sprintf(`sed -i '/creationTimestamp:\|resourceVersion:\|uid:/d' %s`, configmap_bkp)
-		_, err = exec.Command("bash", "-c", sed_cmd ).Output()
+		_, err = exec.Command("bash", "-c", sed_cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Generation of a new self-signed CA, in case a corporate or another CA is already existing can be used.
@@ -550,7 +551,7 @@ spec:
 
 		e2e.Logf("Create the CA certificate")
 		openssl_cmd = fmt.Sprintf(`openssl req -x509 -new -nodes -key %s-ca.key -sha256 -days %d -out %s-ca.crt -subj %s`, name, validity, name, ca_subj)
-		_ ,err = exec.Command("bash", "-c", openssl_cmd).Output()
+		_, err = exec.Command("bash", "-c", openssl_cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Generation of a new system:admin certificate. The client certificate must have the user into the x.509 subject CN field and the group into the O field.
@@ -650,15 +651,15 @@ spec:
 	// author: rgangwar@redhat.com
 	g.It("Author:rgangwar-Medium-43889-Examine non critical kube-apiserver errors", func() {
 		var (
-			keywords          =    "(error|fail|tcp dial timeout|connect: connection refused|Unable to connect to the server: dial tcp|remote error: tls: bad certificate)"
-			exceptions        =    "panic|fatal|SHOULD NOT HAPPEN"
-			format            =    "[0-9TZ.:]{2,30}"
-			words             =    `(\w+?[^0-9a-zA-Z]+?){,5}`
-			afterwords        =    `(\w+?[^0-9a-zA-Z]+?){,12}`
-			co                =    "openshift-kube-apiserver-operator"
-			dirname           =    "/tmp/-OCP-43889/"
-			regex_to_grep_1   =    "("+words+keywords+words+")"+"+"
-			regex_to_grep_2   =    "("+words+keywords+afterwords+")"+"+"
+			keywords        = "(error|fail|tcp dial timeout|connect: connection refused|Unable to connect to the server: dial tcp|remote error: tls: bad certificate)"
+			exceptions      = "panic|fatal|SHOULD NOT HAPPEN"
+			format          = "[0-9TZ.:]{2,30}"
+			words           = `(\w+?[^0-9a-zA-Z]+?){,5}`
+			afterwords      = `(\w+?[^0-9a-zA-Z]+?){,12}`
+			co              = "openshift-kube-apiserver-operator"
+			dirname         = "/tmp/-OCP-43889/"
+			regex_to_grep_1 = "(" + words + keywords + words + ")" + "+"
+			regex_to_grep_2 = "(" + words + keywords + afterwords + ")" + "+"
 		)
 
 		defer os.RemoveAll(dirname)
@@ -676,22 +677,22 @@ spec:
 
 		g.By("Check the log files of KAS")
 		master_node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
-                o.Expect(err).NotTo(o.HaveOccurred())
-                master_name := strings.Fields(master_node)
-                cmd = fmt.Sprintf(`grep -rohiE '%s' |grep -iEv '%s' /var/log/pods/openshift-kube-apiserver_kube-apiserver*/*/* | sed -E 's/%s/../g'`, regex_to_grep_2, exceptions, format)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		master_name := strings.Fields(master_node)
+		cmd = fmt.Sprintf(`grep -rohiE '%s' |grep -iEv '%s' /var/log/pods/openshift-kube-apiserver_kube-apiserver*/*/* | sed -E 's/%s/../g'`, regex_to_grep_2, exceptions, format)
 		for i := 0; i < len(master_name); i++ {
-			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", "node/"+master_name[i], "--", "chroot", "/host", "bash", "-c", cmd).OutputToFile("OCP-43889/kas_pod.log."+master_name[i])
+			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", "node/"+master_name[i], "--", "chroot", "/host", "bash", "-c", cmd).OutputToFile("OCP-43889/kas_pod.log." + master_name[i])
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		cmd = fmt.Sprintf(`cat %v| sort | uniq -c | sort -rh | awk '$1 >5000 {print}'`, dirname+"kas_pod.log.*")
 		kas_podlogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-                e2e.Logf("%s", kas_podlogs)
+		e2e.Logf("%s", kas_podlogs)
 
 		g.By("Check the audit log files of KAS")
 		cmd = fmt.Sprintf(`grep -rohiE '%s' /var/log/kube-apiserver/audit*.log |grep -iEv '%s' | sed -E 's/%s/../g'`, regex_to_grep_2, exceptions, format)
 		for i := 0; i < len(master_name); i++ {
-			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", "node/"+master_name[i], "--", "chroot", "/host", "bash", "-c", cmd).OutputToFile("OCP-43889/kas_audit.log."+master_name[i])
+			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", "node/"+master_name[i], "--", "chroot", "/host", "bash", "-c", cmd).OutputToFile("OCP-43889/kas_audit.log." + master_name[i])
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		cmd = fmt.Sprintf(`cat %v| sort | uniq -c | sort -rh | awk '$1 >5000 {print}'`, dirname+"kas_audit.log.*")
@@ -710,9 +711,9 @@ spec:
 	// author: rgangwar@redhat.com
 	g.It("PreChkUpgrade-NonPreRelease-Author:rgangwar-Critical-40667-Prepare Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
 		var (
-			dirname     =   "/tmp/-OCP-40667/"
-			exceptions  =   "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
-			keywords    =   "body: net/http: request canceled (Client.Timeout|panic"
+			dirname    = "/tmp/-OCP-40667/"
+			exceptions = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
+			keywords   = "body: net/http: request canceled (Client.Timeout|panic"
 			// Creating below variable for clusterbuster commands "N" argument parameter.
 			namespace_count = 0
 		)
@@ -731,11 +732,11 @@ spec:
 		node, err := exutil.GetAllNodes(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Number of nodes are %d", len(node))
-		no_of_nodes :=  len(node)
-		if no_of_nodes > 1 &&  cpu_avg_val < 50 &&  mem_avg_val < 50 {
+		no_of_nodes := len(node)
+		if no_of_nodes > 1 && cpu_avg_val < 50 && mem_avg_val < 50 {
 			e2e.Logf("Cluster has load normal..CPU %d %% and Memory %d %%...So using value of N=10", cpu_avg_val, mem_avg_val)
 			namespace_count = 10
-		} else if no_of_nodes == 1 &&  cpu_avg_val < 60 &&  mem_avg_val < 60 {
+		} else if no_of_nodes == 1 && cpu_avg_val < 60 && mem_avg_val < 60 {
 			e2e.Logf("Cluster is SNO...CPU %d %% and Memory %d %%....So using value of N=3", cpu_avg_val, mem_avg_val)
 			namespace_count = 3
 		} else {
@@ -764,7 +765,7 @@ spec:
 			o.Expect(err).NotTo(o.HaveOccurred())
 			cmd = fmt.Sprintf(`cat %v | grep -i 'clusterbuster' | grep -ivE 'Running|Completed|namespace' || true`, dirname+"pod.log")
 			pod_logs, err = exec.Command("bash", "-c", cmd).Output()
-			 o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(err).NotTo(o.HaveOccurred())
 			if len(pod_logs) > 0 {
 				e2e.Logf("clusterbuster pods are not still running and completed")
 				return false, nil
@@ -814,7 +815,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		master_name := strings.Fields(master_node)
 		for i := 0; i < len(master_name); i++ {
-			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+master_name[i]).OutputToFile("OCP-40667/kas.log."+master_name[i])
+			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+master_name[i]).OutputToFile("OCP-40667/kas.log." + master_name[i])
 			o.Expect(errlog).NotTo(o.HaveOccurred())
 		}
 		cmd = fmt.Sprintf(`cat %v | grep -iE 'apf_controller.go|apf_filter.go' | grep 'no route' || true`, dirname+"kas.log.*")
@@ -859,8 +860,8 @@ spec:
 	// author: rgangwar@redhat.com
 	g.It("PstChkUpgrade-NonPreRelease-Author:rgangwar-Critical-40667-Post Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
 		var (
-			dirname     =   "/tmp/-OCP-40667/"
-			exceptions  =   "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
+			dirname    = "/tmp/-OCP-40667/"
+			exceptions = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
 		)
 		defer os.RemoveAll(dirname)
 		defer func() {
@@ -926,7 +927,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		master_name := strings.Fields(master_node)
 		for i := 0; i < len(master_name); i++ {
-			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+master_name[i]).OutputToFile("OCP-40667/kas.log."+master_name[i])
+			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+master_name[i]).OutputToFile("OCP-40667/kas.log." + master_name[i])
 			o.Expect(errlog).NotTo(o.HaveOccurred())
 		}
 		cmd = fmt.Sprintf(`cat %v | grep -iE 'apf_controller.go|apf_filter.go' | grep 'no route' || true`, dirname+"kas.log.*")
@@ -971,9 +972,9 @@ spec:
 	// author: rgangwar@redhat.com
 	g.It("NonPreRelease-Author:rgangwar-Critical-40861-[Apiserver] [bug 1912564] cluster works fine wihtout panic under stress with API Priority and Fairness feature [Slow]", func() {
 		var (
-			dirname     =   "/tmp/-OCP-40861/"
-			exceptions  =   "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
-			keywords    =   "body: net/http: request canceled (Client.Timeout|panic"
+			dirname    = "/tmp/-OCP-40861/"
+			exceptions = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
+			keywords   = "body: net/http: request canceled (Client.Timeout|panic"
 			// Creating below variable for clusterbuster commands "N" argument parameter.
 			namespace_count = 0
 		)
@@ -997,11 +998,11 @@ spec:
 		node, err := exutil.GetAllNodes(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Number of nodes are %d", len(node))
-		no_of_nodes :=  len(node)
-		if no_of_nodes > 1 &&  cpu_avg_val < 50 &&  mem_avg_val < 50 {
+		no_of_nodes := len(node)
+		if no_of_nodes > 1 && cpu_avg_val < 50 && mem_avg_val < 50 {
 			e2e.Logf("Cluster has load normal..CPU %d %% and Memory %d %%...So using value of N=10", cpu_avg_val, mem_avg_val)
 			namespace_count = 10
-		} else if no_of_nodes == 1 &&  cpu_avg_val < 60 &&  mem_avg_val < 60 {
+		} else if no_of_nodes == 1 && cpu_avg_val < 60 && mem_avg_val < 60 {
 			e2e.Logf("Cluster is SNO...CPU %d %% and Memory %d %%....So using value of N=3", cpu_avg_val, mem_avg_val)
 			namespace_count = 3
 		} else {
@@ -1080,7 +1081,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		master_name := strings.Fields(master_node)
 		for i := 0; i < len(master_name); i++ {
-			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+master_name[i]).OutputToFile("OCP-40861/kas.log."+master_name[i])
+			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+master_name[i]).OutputToFile("OCP-40861/kas.log." + master_name[i])
 			o.Expect(errlog).NotTo(o.HaveOccurred())
 		}
 		cmd = fmt.Sprintf(`cat %v | grep -iE 'apf_controller.go|apf_filter.go' | grep 'no route' || true`, dirname+"kas.log.*")
@@ -1125,17 +1126,17 @@ spec:
 	// author: kewang@redhat.com
 	g.It("Longduration-NonPreRelease-Author:kewang-Medium-12308-Customizing template for project creation [Serial][Slow]", func() {
 		var (
-			caseID                  = "ocp-12308"
-			dirname                 = "/tmp/-ocp-12308"
-			templateYaml            = "template.yaml"
-			templateYamlFile        = filepath.Join(dirname, templateYaml)
-			patchYamlFile           = filepath.Join(dirname, "patch.yaml")
-			project1                = caseID + "-test1"
-			project2                = caseID + "-test2"
-			patchJson               = `[{"op": "replace", "path": "/spec/projectRequestTemplate", "value":{"name":"project-request"}}]`
-			restore_patchJson       = `[{"op": "replace", "path": "/spec", "value" :{}}]`
-			init_regexpr            = []string{`limits.cpu[\s]+0[\s]+6`, `limits.memory[\s]+0[\s]+16Gi`, `pods[\s]+0[\s]+10`, `requests.cpu[\s]+0[\s]+4`, `requests.memory[\s]+0[\s]+8Gi`}
-			regexpr                 = []string{`limits.cpu[\s]+[1-9]+[\s]+6`, `limits.memory[\s]+[A-Za-z0-9]+[\s]+16Gi`, `pods[\s]+[1-9]+[\s]+10`, `requests.cpu[\s]+[A-Za-z0-9]+[\s]+4`, `requests.memory[\s]+[A-Za-z0-9]+[\s]+8Gi`}
+			caseID            = "ocp-12308"
+			dirname           = "/tmp/-ocp-12308"
+			templateYaml      = "template.yaml"
+			templateYamlFile  = filepath.Join(dirname, templateYaml)
+			patchYamlFile     = filepath.Join(dirname, "patch.yaml")
+			project1          = caseID + "-test1"
+			project2          = caseID + "-test2"
+			patchJson         = `[{"op": "replace", "path": "/spec/projectRequestTemplate", "value":{"name":"project-request"}}]`
+			restore_patchJson = `[{"op": "replace", "path": "/spec", "value" :{}}]`
+			init_regexpr      = []string{`limits.cpu[\s]+0[\s]+6`, `limits.memory[\s]+0[\s]+16Gi`, `pods[\s]+0[\s]+10`, `requests.cpu[\s]+0[\s]+4`, `requests.memory[\s]+0[\s]+8Gi`}
+			regexpr           = []string{`limits.cpu[\s]+[1-9]+[\s]+6`, `limits.memory[\s]+[A-Za-z0-9]+[\s]+16Gi`, `pods[\s]+[1-9]+[\s]+10`, `requests.cpu[\s]+[A-Za-z0-9]+[\s]+4`, `requests.memory[\s]+[A-Za-z0-9]+[\s]+8Gi`}
 		)
 
 		err := os.MkdirAll(dirname, 0755)
@@ -1183,7 +1184,7 @@ spec:
 		// Insert the patch Ymal before the keyword 'parameters:' in template yaml file
 		sed_cmd := fmt.Sprintf(`sed -i '/^parameters:/e cat %s' %s`, patchYamlFile, templateYamlFile)
 		e2e.Logf("Check sed cmd %s description:", sed_cmd)
-		_, err = exec.Command("bash", "-c", sed_cmd ).Output()
+		_, err = exec.Command("bash", "-c", sed_cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("3) Create a project request template from the customized template.yaml file in the openshift-config namespace.")
@@ -1238,7 +1239,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Waiting for all pods of hello-openshift application to be ready ...")
 		err = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
-			output, err := oc.WithoutNamespace().Run("get").Args("pods","--no-headers").Output()
+			output, err := oc.WithoutNamespace().Run("get").Args("pods", "--no-headers").Output()
 			if err != nil {
 				e2e.Logf("Failed to get pods' status of project %s, error: %s. Trying again", project2, err)
 				return false, nil
@@ -1288,4 +1289,55 @@ spec:
 		g.By(fmt.Sprintf("Last) %s SUCCESS", caseID))
 	})
 
+	// author: zxiao@redhat.com
+	g.It("Author:zxiao-High-24698-Check the http accessible /readyz for kube-apiserver [Serial]", func() {
+		g.By("1) Check if port 6080 is available")
+		err := wait.Poll(10*time.Second, 40*time.Second, func() (bool, error) {
+			checkOutput, _ := exec.Command("bash", "-c", "lsof -i:6080").Output()
+			// no need to check error since some system output stderr for valid result
+			if len(checkOutput) == 0 {
+				return true, nil
+			}
+			e2e.Logf("Port 6080 is occupied, trying again")
+			return false, nil
+		})
+
+		exutil.AssertWaitPollNoErr(err, "Port 6080 is available")
+
+		g.By("2) Check if openshift-kube-apiserver pods are ready")
+		output, err := oc.WithoutNamespace().Run("get").Args("pods", "-n", "openshift-kube-apiserver", "-l", "apiserver", "--no-headers").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if matched, _ := regexp.MatchString("kube-apiserver.*Running", output); !matched {
+			e2e.Logf("Some of openshift-kube-apiserver are abnormal:\n%s", output)
+		}
+		e2e.Logf("All pods of openshift-kube-apiserver are ready")
+
+		g.By("3) Get kube-apiserver pods")
+		err = oc.AsAdmin().Run("project").Args("openshift-kube-apiserver").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().Run("project").Args("defult").Execute() // switch to default project
+
+		podList, err := oc.AdminKubeClient().CoreV1().Pods("openshift-kube-apiserver").List(metav1.ListOptions{LabelSelector: "apiserver"})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podList.Size()).NotTo(o.Equal(0))
+		e2e.Logf("Fetched all pods from openshift-kube-apiserver")
+
+		g.By("4) Perform port-forward on the first pod available")
+		pod := podList.Items[0]
+		_, _, _, err = oc.AsAdmin().Run("port-forward").Args(pod.Name, "6080").Background()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer exec.Command("kill", "-9", "$(lsof -t -i:6080)").Output()
+		e2e.Logf("Port forward running in background, sleep for 30 seconds")
+
+		// sleep 30 seconds to make sure that port forwarding is correctly configured
+		time.Sleep(30 * time.Second)
+
+		g.By("5) check if port forward succeed")
+		checkOutput, err := exec.Command("bash", "-c", "curl http://127.0.0.1:6080/readyz --noproxy \"127.0.0.1\"").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(checkOutput)).To(o.Equal("ok"))
+		e2e.Logf("Port forwarding works fine")
+	})
 })
