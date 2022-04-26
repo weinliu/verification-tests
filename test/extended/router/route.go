@@ -1,6 +1,7 @@
 package router
 
 import (
+	"fmt"
 	"path/filepath"
 
 	g "github.com/onsi/ginkgo"
@@ -81,5 +82,52 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		log, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress", podName, "-c", "router").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(log).NotTo(o.ContainSubstring(`timer overflow`))
+	})
+
+	// author: mjoseph@redhat.com
+	g.It("Author:mjoseph-High-49802-HTTPS redirect happens even if there is a more specific http-only", func() {
+		var (
+			output              string
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			testEdge            = filepath.Join(buildPruningBaseDir, "49802-route.yaml")
+		)
+
+		g.By("create project and a 'Hello' pod")
+		baseDomain := getBaseDomain(oc)
+		oc.SetupProject()
+		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
+		err := waitForPodWithLabelReady(oc, oc.Namespace(), "app=hello-pod")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=hello-pod, Ready status not met")
+
+		g.By("create a clusterip service")
+		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("service", "clusterip", "hello-pod", "--tcp=80:8080", "--tcp=443:8443", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err = oc.Run("get").Args("service").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("hello-pod"))
+		podName := getPodName(oc, oc.Namespace(), "app=hello-pod")
+
+		g.By("create http and https routes")
+		createResourceFromFile(oc, oc.Namespace(), testEdge)
+
+		g.By("check the reachability of the secure route")
+		curlCmd := fmt.Sprintf("curl -I -k https://hello-pod-%s.apps.%s", oc.Namespace(), baseDomain)
+		statsOut, err := exutil.RemoteShPod(oc, oc.Namespace(), podName[0], "sh", "-c", curlCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(statsOut).Should(o.ContainSubstring("HTTP/1.1 200 OK"))
+
+		g.By("check the reachability of the secure route with redirection")
+		curlCmd1 := fmt.Sprintf("curl -I http://hello-pod-%s.apps.%s", oc.Namespace(), baseDomain)
+		statsOut1, err := exutil.RemoteShPod(oc, oc.Namespace(), podName[0], "sh", "-c", curlCmd1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(statsOut1).Should(o.ContainSubstring("HTTP/1.1 302 Found"))
+		o.Expect(statsOut1).Should(o.ContainSubstring("location: https://hello-pod-%s.apps.%s", oc.Namespace(), baseDomain))
+
+		g.By("check the reachability of the insecure routes")
+		curlCmd2 := fmt.Sprintf(`curl -I http://hello-pod-http-%s.apps.%s/test/`, oc.Namespace(), baseDomain)
+		statsOut2, err := exutil.RemoteShPod(oc, oc.Namespace(), podName[0], "sh", "-c", curlCmd2)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(statsOut2).Should(o.ContainSubstring("HTTP/1.1 200 OK"))
 	})
 })
