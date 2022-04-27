@@ -205,7 +205,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("ConnectedOnly-Author:jechen-High-46554-Automatic EgressIP: no more than one egress IP per node for each namespace. [Disruptive]", func() {
+	g.It("ConnectedOnly-Author:jechen-High-46554-[Automatic EgressIP] no more than one egress IP per node for each namespace. [Disruptive]", func() {
 		g.By("1. Get list of nodes, get subnet from two worker nodes that have same subnet, add egressCIDRs to them")
 		var egressNode1, egressNode2 string
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -244,7 +244,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("ConnectedOnly-Author:jechen-High-46556-Automatic EgressIP: A pod that is on a node hosting egressIP, it will always use the egressIP of the node . [Disruptive]", func() {
+	g.It("ConnectedOnly-Author:jechen-High-46556-[Automatic EgressIP] A pod that is on a node hosting egressIP, it will always use the egressIP of the node . [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -376,7 +376,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("ConnectedOnly-Author:jechen-High-46555-[Automatic EgressIP]-Random egressIP is used on a pod that is not on a node hosting an egressIP . [Disruptive]", func() {
+	g.It("ConnectedOnly-Author:jechen-High-46555-[Automatic EgressIP] Random egressIP is used on a pod that is not on a node hosting an egressIP . [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -431,23 +431,135 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		podns.createPingPodNode(oc)
 		waitPodReady(oc, podns.namespace, podns.name)
 
-		g.By("5.Check source IP from the test pod for 5 times, it should use either egressIP address as its sourceIP")
-		var sourceIp string
-		for i := 0; i < 5; i++ {
-			sourceIP_err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-				sourceIp, err = e2e.RunHostCmd(ns, podns.name, "curl -s "+ipEchoUrl+" --connect-timeout 5")
-				if !contains(freeIps, sourceIp) || err != nil {
-					e2e.Logf("\n got sourceIP as %v, that is not same as egressIP configured %v, or got the error: %v\n", sourceIp, err)
-					return false, nil
-				}
-				return true, nil
-			})
-			exutil.AssertWaitPollNoErr(sourceIP_err, fmt.Sprintf("Failed to get sourceIP:%s", sourceIP_err))
-			e2e.Logf("\nGetting sourceIP: %v\n", sourceIp)
-			o.Expect(sourceIp).Should(o.Or(
-				o.ContainSubstring(freeIps[0]),
-				o.ContainSubstring(freeIps[1])))
+		g.By("5.Check source IP from the test pod for 10 times, it should use either egressIP address as its sourceIP")
+		sourceIp, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoUrl+" --connect-timeout 5 ; sleep 2;echo ;done")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf(sourceIp)
+		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps[0]))
+		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps[1]))
+	})
+
+	// author: jechen@redhat.com
+	g.It("ConnectedOnly-Author:jechen-High-46557-[Manual EgressIP] Random egressIP is used on a pod that is not on a node hosting an egressIP . [Disruptive]", func() {
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node.yaml")
+
+		g.By("1. Identify two worker nodes with same subnet as egressIP nodes, pick a third node as non-egressIP node")
+		var egressNode1, egressNode2, nonEgressNode string
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
+		if !ok || egressNodes == nil || len(egressNodes) < 2 || len(nodeList.Items) < 3 {
+			g.Skip("Need at least 3 worker nodes, the prerequirement was not fullfilled, skip the case!!")
 		}
+		egressNode1 = egressNodes[0]
+		egressNode2 = egressNodes[1]
+		for i := 0; i < len(nodeList.Items); i++ {
+			if nodeList.Items[i].Name != egressNode1 && nodeList.Items[i].Name != egressNode2 {
+				nonEgressNode = nodeList.Items[i].Name
+				break
+			}
+		}
+		if nonEgressNode == "" {
+			g.Skip("Did not get a node that is not egressIP node, skip the case!!")
+		}
+
+		e2e.Logf("\nEgressNode1: %v\n", egressNode1)
+		e2e.Logf("\nEgressNode2: %v\n", egressNode2)
+		e2e.Logf("\nnonEgressNode: %v\n", nonEgressNode)
+
+		g.By("2. Find 2 unused IPs from one egress node")
+		sub := getIfaddrFromNode(egressNode1, oc)
+		freeIps := findUnUsedIPsOnNode(oc, egressNode1, sub, 2)
+		o.Expect(len(freeIps) == 2).Should(o.BeTrue())
+
+		g.By("3. Patch egressIP address to egressIP nodes")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressIPs\":[\""+freeIps[0]+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressIPs\":[\""+freeIps[1]+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressIPs\":[]}")
+
+		g.By("4. Create a namespaces, apply the both egressIPs to the namespace, but create a test pod on the third non-egressIP node")
+		oc.SetupProject()
+		ns := oc.Namespace()
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIps[0]+"\", \""+freeIps[1]+"\"]}")
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+
+		podns := pingPodResourceNode{
+			name:      "hello-pod",
+			namespace: ns,
+			nodename:  nonEgressNode,
+			template:  pingPodNodeTemplate,
+		}
+		podns.createPingPodNode(oc)
+		waitPodReady(oc, podns.namespace, podns.name)
+
+		g.By("5.Check source IP from the test pod for 10 times, it should use either egressIP address as its sourceIP")
+		sourceIp, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoUrl+" --connect-timeout 5 ; sleep 2;echo ;done")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf(sourceIp)
+		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps[0]))
+		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps[1]))
+	})
+
+	// author: jechen@redhat.com
+	g.It("ConnectedOnly-Author:jechen-High-46558-[Manual EgressIP] A pod that is on a node hosting egressIP, it will always use the egressIP of the node . [Disruptive]", func() {
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node.yaml")
+
+		g.By("1. Get list of nodes, get subnet from two worker nodes that have same subnet, add egressCIDRs to them")
+		var egressNode1, egressNode2 string
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
+		if !ok || egressNodes == nil || len(egressNodes) < 2 {
+			g.Skip("The prerequirement was not fullfilled, skip the case!!")
+		}
+		egressNode1 = egressNodes[0]
+		egressNode2 = egressNodes[1]
+
+		sub := getIfaddrFromNode(egressNode1, oc)
+
+		g.By("2. Find 2 unused IPs from one egress node")
+		freeIps := findUnUsedIPsOnNode(oc, egressNode1, sub, 2)
+		o.Expect(len(freeIps) == 2).Should(o.BeTrue())
+
+		g.By("3. Patch egressIP address to egressIP nodes")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressIPs\":[\""+freeIps[0]+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressIPs\":[\""+freeIps[1]+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressIPs\":[]}")
+
+		g.By("3. Create a namespaces, apply the both egressIPs to the namespace, and create a test pod on the egress node")
+
+		oc.SetupProject()
+		ns := oc.Namespace()
+		podns := pingPodResourceNode{
+			name:      "hello-pod",
+			namespace: ns,
+			nodename:  egressNode1,
+			template:  pingPodNodeTemplate,
+		}
+		podns.createPingPodNode(oc)
+		waitPodReady(oc, podns.namespace, podns.name)
+
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIps[0]+"\", \""+freeIps[1]+"\"]}")
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+
+		// check the source IP that the test pod uses
+		g.By("4. get egressIP on the node where test pod resides")
+		ip, err := getEgressIPonSDNHost(oc, egressNode1, 1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(ip[0]).Should(o.BeElementOf(freeIps))
+
+		g.By("5.Check source IP from the test pod for 10 times, it should always use the egressIP of the egressNode that it resides on")
+		sourceIp, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoUrl+" --connect-timeout 5 ; sleep 2;echo ;done")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf(sourceIp)
+		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps[0]))
+		o.Expect(sourceIp).ShouldNot(o.ContainSubstring(freeIps[1]))
 	})
 
 })
