@@ -1116,8 +1116,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("PAO is not in OperatorHub - skipping test ...")
 		}
 
+		skipPAODeploy := skipDeployPAO(oc)
 		isPAOInstalled = exutil.IsPAOInstalled(oc)
-		if isPAOInstalled {
+		if skipPAODeploy || isPAOInstalled {
 			e2e.Logf("PAO has been installed and continue to execute test case")
 		} else {
 			exutil.InstallPAO(oc, paoNamespace)
@@ -1240,8 +1241,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("PAO is not in OperatorHub - skipping test ...")
 		}
 
+		skipPAODeploy := skipDeployPAO(oc)
 		isPAOInstalled = exutil.IsPAOInstalled(oc)
-		if isPAOInstalled {
+		if skipPAODeploy || isPAOInstalled {
 			e2e.Logf("PAO has been installed and continue to execute test case")
 		} else {
 			exutil.InstallPAO(oc, paoNamespace)

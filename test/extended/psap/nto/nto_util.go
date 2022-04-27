@@ -625,3 +625,20 @@ func compareSpecifiedValueByNameOnLabelNodewithRetry(oc *exutil.CLI, ntoNamespac
 	})
 	exutil.AssertWaitPollNoErr(err, "The certificate is different, please check")
 }
+
+func skipDeployPAO(oc *exutil.CLI) bool {
+
+	skipPAO := true
+	clusterVersion, _, err := exutil.GetClusterVersion(oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Cluster Version: %v", clusterVersion)
+	paoDeployOCPVersionList := []string{"4.6", "4.7", "4.8", "4.9", "4.10"}
+
+	for _, v := range paoDeployOCPVersionList {
+		if strings.Contains(clusterVersion, v) {
+			skipPAO = false
+			break
+		}
+	}
+	return skipPAO
+}
