@@ -510,6 +510,7 @@ type operatorGroupDescription struct {
 	multinslabel       string
 	template           string
 	serviceAccountName string
+	upgradeStrategy    string
 }
 
 //the method is to check if og exist. if not existing, create it with template and save it to dr.
@@ -533,10 +534,12 @@ func (og *operatorGroupDescription) create(oc *exutil.CLI, itName string, dr des
 	var err error
 	if strings.Compare(og.multinslabel, "") != 0 && strings.Compare(og.serviceAccountName, "") != 0 {
 		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", og.template, "-p", "NAME="+og.name, "NAMESPACE="+og.namespace, "MULTINSLABEL="+og.multinslabel, "SERVICE_ACCOUNT_NAME="+og.serviceAccountName)
-	} else if strings.Compare(og.multinslabel, "") == 0 && strings.Compare(og.serviceAccountName, "") == 0 {
+	} else if strings.Compare(og.multinslabel, "") == 0 && strings.Compare(og.serviceAccountName, "") == 0 && strings.Compare(og.upgradeStrategy, "") == 0 {
 		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", og.template, "-p", "NAME="+og.name, "NAMESPACE="+og.namespace)
 	} else if strings.Compare(og.multinslabel, "") != 0 {
 		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", og.template, "-p", "NAME="+og.name, "NAMESPACE="+og.namespace, "MULTINSLABEL="+og.multinslabel)
+	} else if strings.Compare(og.upgradeStrategy, "") != 0 {
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", og.template, "-p", "NAME="+og.name, "NAMESPACE="+og.namespace, "UPGRADESTRATEGY="+og.upgradeStrategy)
 	} else {
 		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", og.template, "-p", "NAME="+og.name, "NAMESPACE="+og.namespace, "SERVICE_ACCOUNT_NAME="+og.serviceAccountName)
 	}

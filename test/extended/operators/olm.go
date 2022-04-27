@@ -5882,6 +5882,284 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"operator", subMta.operatorPackage + "." + subMta.namespace}).check(oc)
 	})
 
+	// It will cover test case: OCP-50135, author: kuiwang@redhat.com
+	g.It("ConnectedOnly-Author:kuiwang-Medium-50135-automatic upgrade for failed operator installation og created correctly", func() {
+		var (
+			itName                    = g.CurrentGinkgoTestDescription().TestText
+			buildPruningBaseDir       = exutil.FixturePath("testdata", "olm")
+			ogSingleTemplate          = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+			ogAllTemplate             = filepath.Join(buildPruningBaseDir, "og-allns.yaml")
+			ogUpgradeStrategyTemplate = filepath.Join(buildPruningBaseDir, "operatorgroup-upgradestrategy.yaml")
+
+			og = operatorGroupDescription{
+				name:      "og-singlenamespace",
+				namespace: "",
+				template:  ogSingleTemplate,
+			}
+			ogAll = operatorGroupDescription{
+				name:      "og-all",
+				namespace: "",
+				template:  ogAllTemplate,
+			}
+			ogDefault = operatorGroupDescription{
+				name:            "og-default",
+				namespace:       "",
+				upgradeStrategy: "Default",
+				template:        ogUpgradeStrategyTemplate,
+			}
+			ogFailForward = operatorGroupDescription{
+				name:            "og-failforwad",
+				namespace:       "",
+				upgradeStrategy: "TechPreviewUnsafeFailForward",
+				template:        ogUpgradeStrategyTemplate,
+			}
+			ogFoo = operatorGroupDescription{
+				name:            "og-foo",
+				namespace:       "",
+				upgradeStrategy: "foo",
+				template:        ogUpgradeStrategyTemplate,
+			}
+		)
+
+		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		ns := oc.Namespace()
+		og.namespace = ns
+		ogAll.namespace = ns
+		ogDefault.namespace = ns
+		ogFailForward.namespace = ns
+		ogFoo.namespace = ns
+
+		g.By("Create og")
+		og.create(oc, itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Default", ok, []string{"og", og.name, "-n", og.namespace, "-o=jsonpath={.spec.upgradeStrategy}"}).check(oc)
+		og.delete(itName, dr)
+
+		g.By("Create og all")
+		ogAll.create(oc, itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Default", ok, []string{"og", ogAll.name, "-n", ogAll.namespace, "-o=jsonpath={.spec.upgradeStrategy}"}).check(oc)
+		ogAll.delete(itName, dr)
+
+		g.By("Create og Default")
+		ogDefault.create(oc, itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Default", ok, []string{"og", ogDefault.name, "-n", ogDefault.namespace, "-o=jsonpath={.spec.upgradeStrategy}"}).check(oc)
+		ogDefault.delete(itName, dr)
+
+		g.By("Create og failforward")
+		ogFailForward.create(oc, itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "TechPreviewUnsafeFailForward", ok, []string{"og", ogFailForward.name, "-n", ogFailForward.namespace, "-o=jsonpath={.spec.upgradeStrategy}"}).check(oc)
+		ogFailForward.delete(itName, dr)
+
+		g.By("Create og all")
+		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ogFoo.template, "-p", "NAME="+ogFoo.name, "NAMESPACE="+ogFoo.namespace, "UPGRADESTRATEGY="+ogFoo.upgradeStrategy)
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(err.Error()).To(o.ContainSubstring("exit status 1"))
+	})
+
+	// It will cover test case: OCP-50136, author: kuiwang@redhat.com
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:kuiwang-Medium-50136-automatic upgrade for failed operator installation csv fails", func() {
+		var (
+			itName              = g.CurrentGinkgoTestDescription().TestText
+			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
+			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			og                  = operatorGroupDescription{
+				name:      "og-singlenamespace",
+				namespace: "",
+				template:  ogSingleTemplate,
+			}
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-2378-operator",
+				namespace:   "",
+				displayName: "Test Catsrc 2378 Operators",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				template:    catsrcImageTemplate,
+			}
+			subOadp = subscriptionDescription{
+				subName:                "oadp-operator",
+				namespace:              "",
+				channel:                "alpha",
+				ipApproval:             "Automatic",
+				operatorPackage:        "oadp-operator",
+				catalogSourceName:      catsrc.name,
+				catalogSourceNamespace: "",
+				startingCSV:            "oadp-operator.v0.5.3",
+				currentCSV:             "",
+				installedCSV:           "",
+				template:               subTemplate,
+				singleNamespace:        true,
+			}
+		)
+
+		oc.SetupProject()
+		og.namespace = oc.Namespace()
+		catsrc.namespace = oc.Namespace()
+		subOadp.namespace = oc.Namespace()
+		subOadp.catalogSourceNamespace = catsrc.namespace
+
+		g.By("create catalog source")
+		catsrc.createWithCheck(oc, itName, dr)
+
+		g.By("Create og")
+		og.create(oc, itName, dr)
+
+		g.By("install OADP")
+		subOadp.create(oc, itName, dr)
+
+		g.By("Check the oadp-operator.v0.5.3 is installed successfully")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subOadp.installedCSV, "-n", subOadp.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("patch to index image with wrong bundle csv fails")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "--type=merge", "-p", "{\"spec\":{\"image\":\"quay.io/olmqe/olm-index:OLM-2378-Oadp-csvfail\"}}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, compare, "oadp-operator.v0.5.4", ok, []string{"sub", subOadp.subName, "-n", subOadp.namespace, "-o=jsonpath={.status.currentCSV}"}).check(oc)
+
+		g.By("check the csv fails")
+		// it fails after 10m which we can not control it. so, have to check it in 11m
+		err = wait.Poll(30*time.Second, 11*time.Minute, func() (bool, error) {
+			status := getResource(oc, asAdmin, withoutNamespace, "csv", "oadp-operator.v0.5.4", "-n", subOadp.namespace, "-o=jsonpath={.status.phase}")
+			if strings.Compare(status, "Failed") == 0 {
+				e2e.Logf("csv oadp-operator.v0.5.4 fails expected")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "csv oadp-operator.v0.5.4 is not failing as expected")
+
+		g.By("change upgrade strategy to TechPreviewUnsafeFailForward")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("og", og.name, "-n", og.namespace, "--type=merge", "-p", "{\"spec\":{\"upgradeStrategy\":\"TechPreviewUnsafeFailForward\"}}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check if oadp-operator.v0.5.6 is created	")
+		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			csv := getResource(oc, asAdmin, withoutNamespace, "sub", subOadp.subName, "-n", subOadp.namespace, "-o=jsonpath={.status.currentCSV}")
+			if strings.Compare(csv, "oadp-operator.v0.5.6") == 0 {
+				e2e.Logf("csv %v is created", csv)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "csv oadp-operator.v0.5.6 is not created")
+
+		g.By("check if upgrade is done")
+		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			status := getResource(oc, asAdmin, withoutNamespace, "csv", "oadp-operator.v0.5.6", "-n", subOadp.namespace, "-o=jsonpath={.status.phase}")
+			if strings.Compare(status, "Succeeded") == 0 {
+				e2e.Logf("csv oadp-operator.v0.5.6 is successful")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "csv oadp-operator.v0.5.6 is not successful")
+
+	})
+
+	// It will cover test case: OCP-50138, author: kuiwang@redhat.com
+	g.It("ConnectedOnly-Author:kuiwang-Medium-50138-automatic upgrade for failed operator installation ip fails", func() {
+		var (
+			itName              = g.CurrentGinkgoTestDescription().TestText
+			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
+			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			og                  = operatorGroupDescription{
+				name:      "og-singlenamespace",
+				namespace: "",
+				template:  ogSingleTemplate,
+			}
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-2378-operator",
+				namespace:   "",
+				displayName: "Test Catsrc 2378 Operators",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				template:    catsrcImageTemplate,
+			}
+			subOadp = subscriptionDescription{
+				subName:                "oadp-operator",
+				namespace:              "",
+				channel:                "alpha",
+				ipApproval:             "Automatic",
+				operatorPackage:        "oadp-operator",
+				catalogSourceName:      catsrc.name,
+				catalogSourceNamespace: "",
+				startingCSV:            "oadp-operator.v0.5.3",
+				currentCSV:             "",
+				installedCSV:           "",
+				template:               subTemplate,
+				singleNamespace:        true,
+			}
+		)
+
+		oc.SetupProject()
+		og.namespace = oc.Namespace()
+		catsrc.namespace = oc.Namespace()
+		subOadp.namespace = oc.Namespace()
+		subOadp.catalogSourceNamespace = catsrc.namespace
+
+		g.By("create catalog source")
+		catsrc.createWithCheck(oc, itName, dr)
+
+		g.By("Create og")
+		og.create(oc, itName, dr)
+
+		g.By("install OADP")
+		subOadp.create(oc, itName, dr)
+
+		g.By("Check the oadp-operator.v0.5.3 is installed successfully")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subOadp.installedCSV, "-n", subOadp.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("patch to index image with wrong bundle ip fails")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "--type=merge", "-p", "{\"spec\":{\"image\":\"quay.io/olmqe/olm-index:OLM-2378-Oadp-ipfailTwo\"}}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, compare, "oadp-operator.v0.5.5", ok, []string{"sub", subOadp.subName, "-n", subOadp.namespace, "-o=jsonpath={.status.currentCSV}"}).check(oc)
+
+		g.By("check the ip fails")
+		ips := getResource(oc, asAdmin, withoutNamespace, "sub", subOadp.subName, "-n", subOadp.namespace, "-o=jsonpath={.status.installplan.name}")
+		o.Expect(ips).NotTo(o.BeEmpty())
+		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			status := getResource(oc, asAdmin, withoutNamespace, "installplan", ips, "-n", subOadp.namespace, "-o=jsonpath={.status.phase}")
+			if strings.Compare(status, "Failed") == 0 {
+				e2e.Logf("ip %v fails expected", ips)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ip %v not failing as expected", ips))
+
+		g.By("change upgrade strategy to TechPreviewUnsafeFailForward")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("og", og.name, "-n", og.namespace, "--type=merge", "-p", "{\"spec\":{\"upgradeStrategy\":\"TechPreviewUnsafeFailForward\"}}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("patch to index image again with fixed bundle")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "--type=merge", "-p", "{\"spec\":{\"image\":\"quay.io/olmqe/olm-index:OLM-2378-Oadp-ipfailskip\"}}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			csv := getResource(oc, asAdmin, withoutNamespace, "sub", subOadp.subName, "-n", subOadp.namespace, "-o=jsonpath={.status.currentCSV}")
+			if strings.Compare(csv, "oadp-operator.v0.5.6") == 0 {
+				e2e.Logf("csv %v is created", csv)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "csv oadp-operator.v0.5.6 is not created")
+
+		g.By("check if upgrade is done")
+		err = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			status := getResource(oc, asAdmin, withoutNamespace, "csv", "oadp-operator.v0.5.6", "-n", subOadp.namespace, "-o=jsonpath={.status.phase}")
+			if strings.Compare(status, "Succeeded") == 0 {
+				e2e.Logf("csv oadp-operator.v0.5.6 is successful")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "csv oadp-operator.v0.5.6 is not successful")
+
+	})
+
 	// It will cover test case: OCP-24917, author: tbuskey@redhat.com
 	g.It("Author:bandrade-Medium-24917-Operators in SingleNamespace should not be granted namespace list [Disruptive]", func() {
 		g.By("1) Install the OperatorGroup in a random project")
