@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -761,4 +762,57 @@ func sortNodeList(nodes []node) []node {
 
 	})
 	return nodes
+}
+
+func getMachineConfigControllerPod(oc *exutil.CLI) (string, error) {
+
+	pods, podsErr := exutil.GetAllPods(oc.AsAdmin(), "openshift-machine-config-operator")
+	if podsErr != nil {
+		return "", podsErr
+	}
+
+	var ctrlerPod string
+	if len(pods) > 0 {
+		for _, pod := range pods {
+			if strings.HasPrefix(pod, "machine-config-controller") {
+				ctrlerPod = pod
+				e2e.Logf("machine config controller pod name is %s", ctrlerPod)
+				break
+			}
+		}
+	} else {
+		podsErr = errors.New("mco pod list is empty") // if get pod command returns empty list w/o error
+	}
+
+	return ctrlerPod, podsErr
+
+}
+
+func getAlertsByName(oc *exutil.CLI, alertName string) ([]JSONData, error) {
+
+	mon, monErr := exutil.NewMonitor(oc.AsAdmin())
+	if monErr != nil {
+		return nil, monErr
+	}
+
+	allAerts, allAlertErr := mon.GetAlerts()
+
+	if allAlertErr != nil {
+		return nil, allAlertErr
+	}
+
+	e2e.Logf("get all alerts: %s\n", allAerts)
+
+	jsonObj := JSON(allAerts)
+	filteredAlerts, filteredAlertErr := jsonObj.GetJSONPath(fmt.Sprintf(`{.data.alerts[?(@.labels.alertname=="%s")]}`, alertName))
+
+	if filteredAlertErr != nil {
+		return nil, filteredAlertErr
+	}
+
+	for _, alert := range filteredAlerts {
+		e2e.Logf("filtered alert %s\n", alert.String())
+	}
+
+	return filteredAlerts, nil
 }
