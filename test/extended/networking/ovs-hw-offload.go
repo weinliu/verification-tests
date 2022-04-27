@@ -44,7 +44,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		)
 
 		oc.SetupProject()
-		sriovNetPolicyTmpFile := filepath.Join(sriovBaseDir, sriovNetPolicyName+"-template.yaml")
+		sriovNetPolicyTmpFile := filepath.Join(sriovBaseDir, "sriovoffloadpolicy-template.yaml")
 		sriovNetPolicy := sriovNetResource{
 			name:      sriovNetPolicyName,
 			namespace: sriovOpNs,
@@ -52,7 +52,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 			tempfile:  sriovNetPolicyTmpFile,
 		}
 
-		sriovNetworkAttachTmpFile := filepath.Join(sriovBaseDir, sriovNetDeviceName+"-template.yaml")
+		sriovNetworkAttachTmpFile := filepath.Join(sriovBaseDir, "sriovoffloadnetattchdef-template.yaml")
 		sriovNetwork := sriovNetResource{
 			name:      sriovNetDeviceName,
 			namespace: oc.Namespace(),
@@ -174,7 +174,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		)
 
 		oc.SetupProject()
-		sriovNetPolicyTmpFile := filepath.Join(sriovBaseDir, sriovNetPolicyName+"-template.yaml")
+		sriovNetPolicyTmpFile := filepath.Join(sriovBaseDir, "sriovoffloadpolicy-template.yaml")
 		sriovNetPolicy := sriovNetResource{
 			name:      sriovNetPolicyName,
 			namespace: sriovOpNs,
@@ -182,7 +182,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 			tempfile:  sriovNetPolicyTmpFile,
 		}
 
-		sriovNetworkAttachTmpFile := filepath.Join(sriovBaseDir, sriovNetDeviceName+"-template.yaml")
+		sriovNetworkAttachTmpFile := filepath.Join(sriovBaseDir, "sriovoffloadnetattchdef-template.yaml")
 		sriovNetwork := sriovNetResource{
 			name:      sriovNetDeviceName,
 			namespace: oc.Namespace(),
@@ -295,7 +295,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		)
 
 		oc.SetupProject()
-		sriovNetPolicyTmpFile := filepath.Join(sriovBaseDir, sriovNetPolicyName+"-template.yaml")
+		sriovNetPolicyTmpFile := filepath.Join(sriovBaseDir, "sriovoffloadpolicy-template.yaml")
 		sriovNetPolicy := sriovNetResource{
 			name:      sriovNetPolicyName,
 			namespace: sriovOpNs,
@@ -303,7 +303,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 			tempfile:  sriovNetPolicyTmpFile,
 		}
 
-		sriovNetworkAttachTmpFile := filepath.Join(sriovBaseDir, sriovNetDeviceName+"-template.yaml")
+		sriovNetworkAttachTmpFile := filepath.Join(sriovBaseDir, "sriovoffloadnetattchdef-template.yaml")
 		sriovNetwork := sriovNetResource{
 			name:      sriovNetDeviceName,
 			namespace: oc.Namespace(),
@@ -481,7 +481,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		)
 
 		oc.SetupProject()
-		sriovNetPolicyTmpFile := filepath.Join(sriovBaseDir, sriovNetPolicyName+"-template.yaml")
+		sriovNetPolicyTmpFile := filepath.Join(sriovBaseDir, "sriovoffloadpolicy-template.yaml")
 		sriovNetPolicy := sriovNetResource{
 			name:      sriovNetPolicyName,
 			namespace: sriovOpNs,
@@ -489,7 +489,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 			tempfile:  sriovNetPolicyTmpFile,
 		}
 
-		sriovNetworkAttachTmpFile := filepath.Join(sriovBaseDir, sriovNetDeviceName+"-template.yaml")
+		sriovNetworkAttachTmpFile := filepath.Join(sriovBaseDir, "sriovoffloadnetattchdef-template.yaml")
 		sriovNetwork := sriovNetResource{
 			name:      sriovNetDeviceName,
 			namespace: oc.Namespace(),
@@ -609,7 +609,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		)
 
 		oc.SetupProject()
-		sriovNetPolicyTmpFile := filepath.Join(sriovBaseDir, sriovNetPolicyName+"-template.yaml")
+		sriovNetPolicyTmpFile := filepath.Join(sriovBaseDir, "sriovoffloadpolicy-template.yaml")
 		sriovNetPolicy := sriovNetResource{
 			name:      sriovNetPolicyName,
 			namespace: sriovOpNs,
@@ -617,7 +617,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 			tempfile:  sriovNetPolicyTmpFile,
 		}
 
-		sriovNetworkAttachTmpFile := filepath.Join(sriovBaseDir, sriovNetDeviceName+"-template.yaml")
+		sriovNetworkAttachTmpFile := filepath.Join(sriovBaseDir, "sriovoffloadnetattchdef-template.yaml")
 		sriovNetwork := sriovNetResource{
 			name:      sriovNetDeviceName,
 			namespace: oc.Namespace(),

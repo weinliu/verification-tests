@@ -50,7 +50,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			serviceAccount     = "deployer"
 		)
 
-		sriovNetworkPolicyTmpFile := filepath.Join(sriovBaseDir, sriovNetPolicyName+"-template.yaml")
+		sriovNetworkPolicyTmpFile := filepath.Join(sriovBaseDir, "netpolicy42253-template.yaml")
 		sriovNetworkPolicy := sriovNetResource{
 			name:      sriovNetPolicyName,
 			namespace: sriovOpNs,
@@ -58,7 +58,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			kind:      "SriovNetworkNodePolicy",
 		}
 
-		sriovNetworkAttachTmpFile := filepath.Join(sriovBaseDir, sriovNetDeviceName+"-template.yaml")
+		sriovNetworkAttachTmpFile := filepath.Join(sriovBaseDir, "netdevice42253-template.yaml")
 		sriovNetwork := sriovNetResource{
 			name:      sriovNetDeviceName,
 			namespace: sriovOpNs,
