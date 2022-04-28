@@ -790,7 +790,7 @@ func getMachineConfigControllerPod(oc *exutil.CLI) (string, error) {
 
 func getAlertsByName(oc *exutil.CLI, alertName string) ([]JSONData, error) {
 
-	mon, monErr := exutil.NewMonitor(oc.AsAdmin())
+	mon, monErr := exutil.NewPrometheusMonitor(oc.AsAdmin())
 	if monErr != nil {
 		return nil, monErr
 	}
