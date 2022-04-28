@@ -3004,12 +3004,15 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		var tail = "--tail=10"
 
 		oc.SetupProject()
-		g.By("1) Install the OperatorGroup in a random project")
+
 		dr := make(describerResrouce)
 		itName := g.CurrentGinkgoTestDescription().TestText
 		dr.addIr(itName)
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+
+		g.By("1) Install the OperatorGroup in a random project")
+
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		og := operatorGroupDescription{
 			name:      "og-42069",
@@ -3018,23 +3021,23 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) Install the etcdoperator v0.9.4 with Automatic approval")
+		g.By("2) Install the learn-operator with Automatic approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+
 		sub := subscriptionDescription{
 			subName:                "sub-42069",
 			namespace:              oc.Namespace(),
-			catalogSourceName:      "community-operators",
+			catalogSourceName:      "qe-app-registry",
 			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "singlenamespace-alpha",
 			ipApproval:             "Automatic",
-			operatorPackage:        "etcd",
-			startingCSV:            "etcdoperator.v0.9.4",
+			channel:                "beta",
+			operatorPackage:        "learn",
 			singleNamespace:        true,
 			template:               subTemplate,
 		}
 
 		sub.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.4", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 		defer sub.delete(itName, dr)
 		defer sub.deleteCSV(itName, dr)
 
