@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -951,4 +952,11 @@ func restoreRouteExposeRegistry(oc *exutil.CLI) {
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(output).To(o.ContainSubstring("patched"))
+}
+
+func getImageRegistryPodNumber(oc *exutil.CLI) int {
+	podNum, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.spec.replicas}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	intPodNum, _ := strconv.Atoi(podNum)
+	return intPodNum
 }
