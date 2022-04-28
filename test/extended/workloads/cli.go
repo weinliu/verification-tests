@@ -511,6 +511,21 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", clusterImage).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
+	// author: yinzhou@redhat.com
+        g.It("Author:yinzhou-Medium-50399-oc apply could update EgressNetworkPolicy resource", func() {
+                buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+                egressnetworkP := filepath.Join(buildPruningBaseDir, "egressnetworkpolicy.yaml")
+                updateegressnetworkP := filepath.Join(buildPruningBaseDir, "update_egressnetworkpolicy.yaml")
+
+                g.By("create new namespace")
+                oc.SetupProject()
+                out, err := oc.AsAdmin().Run("apply").Args("-f", egressnetworkP).Output()
+                o.Expect(err).NotTo(o.HaveOccurred())
+                o.Expect(out).To(o.ContainSubstring("default-egress-egressnetworkpolicy created"))
+                out, err = oc.AsAdmin().Run("apply").Args("-f", updateegressnetworkP).Output()
+                o.Expect(err).NotTo(o.HaveOccurred())
+                o.Expect(out).To(o.ContainSubstring("default-egress-egressnetworkpolicy configured"))
+        })
 })
 
 type ClientVersion struct {
