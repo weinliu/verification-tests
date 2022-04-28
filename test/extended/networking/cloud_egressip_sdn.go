@@ -562,4 +562,37 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(sourceIp).ShouldNot(o.ContainSubstring(freeIps[1]))
 	})
 
+	g.It("ConnectedOnly-Author:jechen-Medium-46963-Should remove the egressIP from the array if it was not being used. [Disruptive]", func() {
+		g.By("1. Pick a node as egressIP node, add egressCIDRs to it")
+		// get CIDR on the node
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		egressNode := nodeList.Items[0].Name
+		sub := getIfaddrFromNode(egressNode, oc)
+
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressCIDRs\":[\""+sub+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressCIDRs\":[]}")
+
+		g.By("2. Find 5 unused IPs from the egress node")
+		freeIps := findUnUsedIPsOnNode(oc, egressNode, sub, 5)
+		o.Expect(len(freeIps) == 5).Should(o.BeTrue())
+
+		g.By("3. Create a namespace, patch one egressIP from the freeIPs to the netnamespace, repeat 5 times, replaces the egressIP each time")
+		oc.SetupProject()
+		ns := oc.Namespace()
+
+		for i := 0; i < 5; i++ {
+			patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIps[i]+"\"]}")
+			defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+		}
+
+		g.By("4. check egressIP for the node, it should have only the last egressIP from the freeIPs as its egressIP address")
+		ip, err := getEgressIPonSDNHost(oc, egressNode, 1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(ip[0]).Should(o.BeElementOf(freeIps[4]))
+		for i := 0; i < 4; i++ {
+			o.Expect(ip[0]).ShouldNot(o.BeElementOf(freeIps[i]))
+		}
+	})
+
 })
