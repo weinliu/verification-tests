@@ -212,16 +212,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: anusaxen@redhat.com
-	g.It("Author:anusaxen-Medium-49686-[dual stack] A network policy with ingress rule with ipBlock	", func() {
+	g.It("Author:anusaxen-Medium-49686-network policy with ingress rule with ipBlock", func() {
 		var (
-			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
-			ipBlockIngressTemplate = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-ingress-dual-CIDRs-template.yaml")
-			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+			buildPruningBaseDir          = exutil.FixturePath("testdata", "networking")
+			ipBlockIngressTemplateDual   = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-ingress-dual-CIDRs-template.yaml")
+			ipBlockIngressTemplateSingle = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-ingress-single-CIDR-template.yaml")
+			pingPodNodeTemplate          = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 		)
 
 		ipStackType := checkIpStackType(oc)
-		if ipStackType != "dualstack" {
-			g.Skip("This case requires dualstack cluster")
+		if ipStackType == "ipv4single" {
+			g.Skip("This case requires dualstack or Single Stack Ipv6 cluster")
 		}
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -234,7 +235,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		ns1 := oc.Namespace()
 
 		g.By("create 1st hello pod in ns1")
-
 		pod1ns1 := pingPodResourceNode{
 			name:      "hello-pod1",
 			namespace: ns1,
@@ -245,7 +245,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		waitPodReady(oc, pod1ns1.namespace, pod1ns1.name)
 
 		g.By("create 2nd hello pod in ns1")
-
 		pod2ns1 := pingPodResourceNode{
 			name:      "hello-pod2",
 			namespace: ns1,
@@ -254,10 +253,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 		pod2ns1.createPingPodNode(oc)
 		waitPodReady(oc, pod2ns1.namespace, pod2ns1.name)
-		//defer pod2.deletePingPodNode(oc)
 
 		g.By("create 3rd hello pod in ns1")
-
 		pod3ns1 := pingPodResourceNode{
 			name:      "hello-pod3",
 			namespace: ns1,
@@ -267,55 +264,48 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod3ns1.createPingPodNode(oc)
 		waitPodReady(oc, pod3ns1.namespace, pod3ns1.name)
 
-		helloPod1ns1_IPv4 := getPodIPv4(oc, ns1, pod1ns1.name)
-		helloPod3ns1_IPv4 := getPodIPv4(oc, ns1, pod3ns1.name)
-
-		helloPod1ns1_IPv6 := getPodIPv6(oc, ns1, pod1ns1.name, "dualstack")
-		helloPod3ns1_IPv6 := getPodIPv6(oc, ns1, pod3ns1.name, "dualstack")
-
+		helloPod1ns1_IPv6, helloPod1ns1_IPv4 := getPodIP(oc, ns1, pod1ns1.name)
 		helloPod1ns1_IPv4_with_cidr := helloPod1ns1_IPv4 + "/32"
 		helloPod1ns1_IPv6_with_cidr := helloPod1ns1_IPv6 + "/128"
 
-		g.By("create ipBlock Ingress Dual CIDRs Policy in ns1")
-		np_ipBlockNS1 := ipBlock_ingress{
-			name:      "ipblock-dual-cidrs-ingress",
-			template:  ipBlockIngressTemplate,
-			cidr_ipv4: helloPod1ns1_IPv4_with_cidr,
-			cidr_ipv6: helloPod1ns1_IPv6_with_cidr,
-			namespace: ns1,
+		if ipStackType == "dualstack" {
+			g.By("create ipBlock Ingress Dual CIDRs Policy in ns1")
+			np_ipBlockNS1 := ipBlock_ingress_dual{
+				name:      "ipblock-dual-cidrs-ingress",
+				template:  ipBlockIngressTemplateDual,
+				cidr_ipv4: helloPod1ns1_IPv4_with_cidr,
+				cidr_ipv6: helloPod1ns1_IPv6_with_cidr,
+				namespace: ns1,
+			}
+			np_ipBlockNS1.createipBlockIngressObjectDual(oc)
+
+			output, err := oc.Run("get").Args("networkpolicy").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("ipblock-dual-cidrs-ingress"))
+		} else {
+			np_ipBlockNS1 := ipBlock_ingress_single{
+				name:      "ipblock-single-cidr-ingress",
+				template:  ipBlockIngressTemplateSingle,
+				cidr:      helloPod1ns1_IPv6_with_cidr,
+				namespace: ns1,
+			}
+			np_ipBlockNS1.createipBlockIngressObjectSingle(oc)
+
+			output, err := oc.Run("get").Args("networkpolicy").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("ipblock-single-cidr-ingress"))
 		}
-		np_ipBlockNS1.createipBlockIngressObject(oc)
+		g.By("Checking connectivity from pod1 to pod3")
+		CurlPod2PodPass(oc, ns1, "hello-pod1", ns1, "hello-pod3")
 
-		output, err := oc.Run("get").Args("networkpolicy").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("ipblock-dual-cidrs-ingress"))
-
-		g.By("Checking connectivity from pod1 to pod3 on IPv4 interface")
-		output, err = e2e.RunHostCmd(ns1, pod1ns1.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(helloPod3ns1_IPv4, "8080"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
-
-		g.By("Checking connectivity from pod1 to pod3 on IPv6 interface")
-		output, err = e2e.RunHostCmd(ns1, pod1ns1.name, "curl --connect-timeout 5  -s -6 "+net.JoinHostPort(helloPod3ns1_IPv6, "8080"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
-
-		g.By("Checking connectivity from pod2 to pod3 on IPv4 interface")
-		_, err = e2e.RunHostCmd(ns1, pod2ns1.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(helloPod3ns1_IPv4, "8080"))
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
-
-		g.By("Checking connectivity from pod2 to pod3 on IPv6 interface")
-		_, err = e2e.RunHostCmd(ns1, pod2ns1.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(helloPod3ns1_IPv6, "8080"))
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
+		g.By("Checking connectivity from pod2 to pod3")
+		CurlPod2PodFail(oc, ns1, "hello-pod2", ns1, "hello-pod3")
 
 		g.By("Create 2nd namespace")
 		oc.SetupProject()
 		ns2 := oc.Namespace()
 
 		g.By("create 1st hello pod in ns2")
-
 		pod1ns2 := pingPodResourceNode{
 			name:      "hello-pod1",
 			namespace: ns2,
@@ -326,7 +316,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		waitPodReady(oc, pod1ns2.namespace, pod1ns2.name)
 
 		g.By("create 2nd hello pod in ns2")
-
 		pod2ns2 := pingPodResourceNode{
 			name:      "hello-pod2",
 			namespace: ns2,
@@ -336,95 +325,70 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod2ns2.createPingPodNode(oc)
 		waitPodReady(oc, pod2ns2.namespace, pod2ns2.name)
 
-		g.By("Checking connectivity from pod1ns2 to pod3ns1 on IPv4 interface")
-		_, err = e2e.RunHostCmd(ns2, pod1ns2.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(helloPod3ns1_IPv4, "8080"))
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
+		g.By("Checking connectivity from pod1ns2 to pod3ns1")
+		CurlPod2PodFail(oc, ns2, "hello-pod1", ns1, "hello-pod3")
 
-		g.By("Checking connectivity from pod1ns2 to pod3ns1 on IPv6 interface")
-		_, err = e2e.RunHostCmd(ns2, pod1ns2.name, "curl --connect-timeout 5  -s -6 "+net.JoinHostPort(helloPod3ns1_IPv6, "8080"))
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
+		g.By("Checking connectivity from pod2ns2 to pod1ns1")
+		CurlPod2PodFail(oc, ns2, "hello-pod2", ns1, "hello-pod1")
 
-		g.By("Checking connectivity from pod2ns2 to pod1ns1 on IPv4 interface")
-		_, err = e2e.RunHostCmd(ns2, pod2ns2.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(helloPod1ns1_IPv4, "8080"))
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
-
-		g.By("Checking connectivity from pod2ns2 to pod1ns1 on IPv6 interface")
-		_, err = e2e.RunHostCmd(ns2, pod2ns2.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(helloPod1ns1_IPv6, "8080"))
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
-
-		g.By("Delete networkpolicy from ns1")
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("networkpolicy", "ipblock-dual-cidrs-ingress", "-n", ns1).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		helloPod2ns2_IPv4 := getPodIPv4(oc, ns2, pod2ns2.name)
-		helloPod2ns2_IPv6 := getPodIPv6(oc, ns2, pod2ns2.name, "dualstack")
-
+		if ipStackType == "dualstack" {
+			g.By("Delete networkpolicy from ns1")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("networkpolicy", "ipblock-dual-cidrs-ingress", "-n", ns1).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			g.By("Delete networkpolicy from ns1")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("networkpolicy", "ipblock-single-cidr-ingress", "-n", ns1).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		helloPod2ns2_IPv6, helloPod2ns2_IPv4 := getPodIP(oc, ns2, pod2ns2.name)
 		helloPod2ns2_IPv4_with_cidr := helloPod2ns2_IPv4 + "/32"
 		helloPod2ns2_IPv6_with_cidr := helloPod2ns2_IPv6 + "/128"
 
-		g.By("create ipBlock Ingress Dual CIDRs Policy in ns1 again but with ipblock for pod2 ns2")
-		np_ipBlockNS1_new := ipBlock_ingress{
-			name:      "ipblock-dual-cidrs-ingress",
-			template:  ipBlockIngressTemplate,
-			cidr_ipv4: helloPod2ns2_IPv4_with_cidr,
-			cidr_ipv6: helloPod2ns2_IPv6_with_cidr,
-			namespace: ns1,
+		if ipStackType == "dualstack" {
+			g.By("create ipBlock Ingress Dual CIDRs Policy in ns1 again but with ipblock for pod2 ns2")
+			np_ipBlockNS1_new := ipBlock_ingress_dual{
+				name:      "ipblock-dual-cidrs-ingress",
+				template:  ipBlockIngressTemplateDual,
+				cidr_ipv4: helloPod2ns2_IPv4_with_cidr,
+				cidr_ipv6: helloPod2ns2_IPv6_with_cidr,
+				namespace: ns1,
+			}
+			np_ipBlockNS1_new.createipBlockIngressObjectDual(oc)
+		} else {
+			np_ipBlockNS1_new := ipBlock_ingress_single{
+				name:      "ipblock-single-cidr-ingress",
+				template:  ipBlockIngressTemplateSingle,
+				cidr:      helloPod2ns2_IPv6_with_cidr,
+				namespace: ns1,
+			}
+			np_ipBlockNS1_new.createipBlockIngressObjectSingle(oc)
 		}
-		np_ipBlockNS1_new.createipBlockIngressObject(oc)
+		g.By("Checking connectivity from pod2 ns2 to pod3 ns1")
+		CurlPod2PodPass(oc, ns2, "hello-pod2", ns1, "hello-pod3")
 
-		g.By("Checking connectivity from pod2 ns2 to pod3 ns1 on IPv4 interface")
-		output, err = e2e.RunHostCmd(ns2, pod2ns2.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(helloPod3ns1_IPv4, "8080"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+		g.By("Checking connectivity from pod1 ns2 to pod3 ns1")
+		CurlPod2PodFail(oc, ns2, "hello-pod1", ns1, "hello-pod3")
 
-		g.By("Checking connectivity from pod2 ns2 to pod3 ns1 on IPv6 interface")
-		output, err = e2e.RunHostCmd(ns2, pod2ns2.name, "curl --connect-timeout 5  -s -6 "+net.JoinHostPort(helloPod3ns1_IPv6, "8080"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
-
-		g.By("Checking connectivity from pod1 ns2 to pod3 ns1 on IPv4 interface")
-		_, err = e2e.RunHostCmd(ns2, pod1ns2.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(helloPod3ns1_IPv4, "8080"))
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
-
-		g.By("Checking connectivity from pod1 ns2 to pod3 ns1 on IPv6 interface")
-		_, err = e2e.RunHostCmd(ns2, pod1ns2.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(helloPod3ns1_IPv6, "8080"))
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
-
-		g.By("Delete networkpolicy from ns1 again So no networkpolicy in any namespace")
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("networkpolicy", "ipblock-dual-cidrs-ingress", "-n", ns1).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if ipStackType == "dualstack" {
+			g.By("Delete networkpolicy from ns1 again so no networkpolicy in namespace")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("networkpolicy", "ipblock-dual-cidrs-ingress", "-n", ns1).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			g.By("Delete networkpolicy from ns1 again so no networkpolicy in namespace")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("networkpolicy", "ipblock-single-cidr-ingress", "-n", ns1).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		g.By("Check connectivity works fine across all failed ones above to make sure all policy flows are cleared properly")
 
-		g.By("Checking connectivity from pod2ns1 to pod3ns1 on IPv4 interface")
-		_, err = e2e.RunHostCmd(ns1, pod2ns1.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(helloPod3ns1_IPv4, "8080"))
-		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Checking connectivity from pod2ns1 to pod3ns1")
+		CurlPod2PodPass(oc, ns1, "hello-pod2", ns1, "hello-pod3")
 
-		g.By("Checking connectivity from pod2ns1 to pod3ns1 on IPv6 interface")
-		_, err = e2e.RunHostCmd(ns1, pod2ns1.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(helloPod3ns1_IPv6, "8080"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("Checking connectivity from pod1ns2 to pod3ns1 on IPv4 interface")
-		_, err = e2e.RunHostCmd(ns2, pod1ns2.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(helloPod3ns1_IPv4, "8080"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("Checking connectivity from pod1ns2 to pod3ns1 on IPv6 interface")
-		_, err = e2e.RunHostCmd(ns2, pod1ns2.name, "curl --connect-timeout 5  -s -6 "+net.JoinHostPort(helloPod3ns1_IPv6, "8080"))
-		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Checking connectivity from pod1ns2 to pod3ns1")
+		CurlPod2PodPass(oc, ns2, "hello-pod1", ns1, "hello-pod3")
 
 		g.By("Checking connectivity from pod2ns2 to pod1ns1 on IPv4 interface")
-		_, err = e2e.RunHostCmd(ns2, pod2ns2.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(helloPod1ns1_IPv4, "8080"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("Checking connectivity from pod2ns2 to pod1ns1 on IPv6 interface")
-		_, err = e2e.RunHostCmd(ns2, pod2ns2.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(helloPod1ns1_IPv6, "8080"))
-		o.Expect(err).NotTo(o.HaveOccurred())
+		CurlPod2PodPass(oc, ns2, "hello-pod2", ns1, "hello-pod1")
 
 	})
 
@@ -534,10 +498,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		createResourceFromFile(oc, ns, allowfromsameNS)
 
 		g.By("curl from hello-pod1 to hello-pod2")
-		CurlPod2PodPass(oc, ns, "hello-pod1", "hello-pod2")
+		CurlPod2PodPass(oc, ns, "hello-pod1", ns, "hello-pod2")
 
 		g.By("curl from hello-pod2 to hello-pod1")
-		CurlPod2PodPass(oc, ns, "hello-pod2", "hello-pod1")
+		CurlPod2PodPass(oc, ns, "hello-pod2", ns, "hello-pod1")
 
 		for i := 0; i < 5; i++ {
 
