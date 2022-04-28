@@ -117,7 +117,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// [CSI Driver] [Dynamic PV] [Filesystem default] volumes should store data and allow exec of files
 	g.It("Author:pewang-Critical-24485-[CSI Driver] [Dynamic PV] [Filesystem default] volumes should store data and allow exec of files", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
@@ -161,7 +161,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-44911 -[CSI Driver] [Dynamic PV] [Filesystem] could not write into read-only volume
 	g.It("Author:pewang-High-44911-[CSI Driver] [Dynamic PV] [Filesystem] could not write into read-only volume", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "diskplugin.csi.alibabacloud.com"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
@@ -537,7 +537,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-46358 - [CSI Driver] [CSI Clone] Clone a pvc with filesystem VolumeMode
 	g.It("Author:wduan-Critical-46358-[CSI Driver] [CSI Clone] Clone a pvc with filesystem VolumeMode", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org","pd.csi.storage.gke.io"}
+		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
@@ -685,7 +685,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-46813 - [CSI Driver] [CSI Clone] Clone a pvc with Raw Block VolumeMode
 	g.It("Author:wduan-Critical-46813-[CSI Driver][CSI Clone] Clone a pvc with Raw Block VolumeMode", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org","pd.csi.storage.gke.io"}
+		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
@@ -747,7 +747,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-47225 - [CSI Driver] [CSI Clone] [Raw Block] provisioning volume with pvc data source larger than original volume
 	g.It("Author:wduan-High-47225-[CSI Driver] [CSI Clone] [Raw Block] provisioning volume with pvc data source larger than original volume", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org","pd.csi.storage.gke.io"}
+		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
@@ -818,7 +818,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-44909 [CSI Driver] Volume should mount again after `oc adm drain`
 	g.It("Author:pewang-High-44909-[CSI Driver] Volume should mount again after `oc adm drain` [Disruptive]", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir                   = exutil.FixturePath("testdata", "storage")
@@ -837,48 +837,50 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
 		for _, provisioner := range supportProvisioners {
-			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
-			// Set the resource definition for the scenario
-			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)))
-			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+			func() {
+				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+				// Set the resource definition for the scenario
+				pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)))
+				dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 
-			g.By("# Create a pvc with preset csi storageclass")
-			e2e.Logf("The preset storage class name is: %s", pvc.scname)
-			pvc.create(oc)
-			defer pvc.deleteAsAdmin(oc)
+				g.By("# Create a pvc with preset csi storageclass")
+				e2e.Logf("The preset storage class name is: %s", pvc.scname)
+				pvc.create(oc)
+				defer pvc.deleteAsAdmin(oc)
 
-			g.By("# Create a deployment with the created pvc, node selector and wait for the pod ready")
-			if azName == "noneAzCluster" {
-				dep.create(oc)
-			} else {
-				dep.createWithNodeSelector(oc, `topology\.kubernetes\.io\/zone`, azName)
-			}
-			defer dep.deleteAsAdmin(oc)
+				g.By("# Create a deployment with the created pvc, node selector and wait for the pod ready")
+				if azName == "noneAzCluster" {
+					dep.create(oc)
+				} else {
+					dep.createWithNodeSelector(oc, `topology\.kubernetes\.io\/zone`, azName)
+				}
+				defer dep.deleteAsAdmin(oc)
 
-			g.By("# Wait for the deployment ready")
-			dep.waitReady(oc)
+				g.By("# Wait for the deployment ready")
+				dep.waitReady(oc)
 
-			g.By("# Check the deployment's pod mounted volume can be read and write")
-			dep.checkPodMountedVolumeCouldRW(oc)
+				g.By("# Check the deployment's pod mounted volume can be read and write")
+				dep.checkPodMountedVolumeCouldRW(oc)
 
-			g.By("# Run drain cmd to drain the node which the deployment's pod located")
-			originNodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
-			drainSpecificNode(oc, originNodeName)
-			defer uncordonSpecificNode(oc, originNodeName)
+				g.By("# Run drain cmd to drain the node which the deployment's pod located")
+				originNodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
+				drainSpecificNode(oc, originNodeName)
+				defer uncordonSpecificNode(oc, originNodeName)
 
-			g.By("# Wait for the deployment become ready again")
-			dep.waitReady(oc)
+				g.By("# Wait for the deployment become ready again")
+				dep.waitReady(oc)
 
-			g.By("# Check the deployment's pod schedule to another ready node")
-			newNodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
-			o.Expect(originNodeName).NotTo(o.Equal(newNodeName))
+				g.By("# Check the deployment's pod schedule to another ready node")
+				newNodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
+				o.Expect(originNodeName).NotTo(o.Equal(newNodeName))
 
-			g.By("# Check testdata still in the volume")
-			output, err := execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat "+dep.mpath+"/testfile*")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("storage test"))
+				g.By("# Check testdata still in the volume")
+				output, err := execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat "+dep.mpath+"/testfile*")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(output).To(o.ContainSubstring("storage test"))
 
-			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+			}()
 		}
 	})
 
@@ -886,7 +888,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// https://kubernetes.io/docs/concepts/storage/persistent-volumes/#delete
 	g.It("Author:pewang-High-44906-[CSI Driver] [Dynamic PV] [Delete reclaimPolicy] volumes should be deleted after the pvc deletion", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
@@ -947,7 +949,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// https://kubernetes.io/docs/concepts/storage/persistent-volumes/#retain
 	g.It("Author:pewang-High-44907-[CSI Driver] [Dynamic PV] [Retain reclaimPolicy] [Static PV] volumes could be re-used after the pvc/pv deletion", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
@@ -1184,8 +1186,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	//[CSI Driver] [Dynamic PV] [Security] CSI volume security testing when privileged is false
 	g.It("Author:chaoyang-Critical-44908-[CSI Driver] [Dynamic PV] CSI volume security testing when privileged is false ", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com","vpc.block.csi.ibm.io","diskplugin.csi.alibabacloud.com"}
-
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
@@ -1262,7 +1263,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-48911 - [CSI Driver] [fsgroup] should be updated with new defined value when volume attach to another pod
 	g.It("Author:wduan-Critical-48911-[CSI Driver] [fsgroup] should be updated with new defined value when volume attach to another pod", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -2028,7 +2029,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-48666 - [CSI Driver] [Statefulset] [Filesystem] volumes should store data and allow exec of files on the volume
 	g.It("Author:ropatil-High-48666-[CSI Driver] [Statefulset] [Filesystem default] volumes should store data and allow exec of files on the volume", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "diskplugin.csi.alibabacloud.com", "vpc.block.csi.ibm.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "diskplugin.csi.alibabacloud.com", "vpc.block.csi.ibm.io"}
 
 		// Set the resource template for the scenario
 		var (
