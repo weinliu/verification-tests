@@ -1573,6 +1573,78 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
+	g.It("NonPreRelease-Author:jitli-Critical-46083-Topology Constraints works well in SNO environment [Disruptive]", func() {
+
+		g.By("Check platforms")
+		platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		platforms := map[string]bool{
+			"AWS":          true,
+			"Azure":        true,
+			"GCP":          true,
+			"OpenStack":    true,
+			"AlibabaCloud": true,
+			"IBMCloud":     true,
+		}
+		if !platforms[platformtype] {
+			g.Skip("Skip for non-supported platform")
+		}
+
+		g.By("Check whether the environment is SNO")
+		//Only 1 master, 1 worker node and with the same hostname.
+		masterNodes, _ := exutil.GetClusterNodesBy(oc, "master")
+		workerNodes, _ := exutil.GetClusterNodesBy(oc, "worker")
+		if len(masterNodes) == 1 && len(workerNodes) == 1 && masterNodes[0] == workerNodes[0] {
+			e2e.Logf("This is a SNO cluster")
+		} else {
+			g.Skip("Not SNO cluster - skipping test ...")
+		}
+
+		g.By("Check the image-registry default topology in SNO cluster")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.template.spec.topologySpreadConstraints}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`{"labelSelector":{"matchLabels":{"docker-registry":"default"}},"maxSkew":1,"topologyKey":"topology.kubernetes.io/zone","whenUnsatisfiable":"DoNotSchedule"}`))
+		o.Expect(output).To(o.ContainSubstring(`{"labelSelector":{"matchLabels":{"docker-registry":"default"}},"maxSkew":1,"topologyKey":"kubernetes.io/hostname","whenUnsatisfiable":"DoNotSchedule"}`))
+		o.Expect(output).To(o.ContainSubstring(`{"labelSelector":{"matchLabels":{"docker-registry":"default"}},"maxSkew":1,"topologyKey":"node-role.kubernetes.io/worker","whenUnsatisfiable":"DoNotSchedule"}`))
+
+		g.By("Check registry pod")
+		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", 1)
+
+		g.By("Scale registry pod to 2")
+		defer oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"replicas":1}}`, "--type=merge").Execute()
+		output, err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"replicas":2}}`, "--type=merge").Output()
+		if err != nil {
+			e2e.Logf(output)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("patched"))
+
+		g.By("Check registry new pods")
+		err = wait.Poll(20*time.Second, 1*time.Minute, func() (bool, error) {
+			podsStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-o", "wide", "-n", "openshift-image-registry", "-l", "docker-registry=default", "--sort-by={.status.phase}", "-o=jsonpath={.items[*].status.phase}").Output()
+			if podsStatus != "Pending Pending Running" {
+				e2e.Logf("the pod status is %v, continue to next round", podsStatus)
+				return false, nil
+			} else {
+				return true, nil
+			}
+		})
+		exutil.AssertWaitPollNoErr(err, "Pods list are not one Running two Pending")
+
+		g.By("Scale registry pod to 3")
+		output, err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"replicas":3}}`, "--type=merge").Output()
+		if err != nil {
+			e2e.Logf(output)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("patched"))
+
+		g.By("Check if all pods are running well")
+		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", 3)
+
+	})
+
+	// author: jitli@redhat.com
 	g.It("Author:jitli-High-NonPreRelease-50219-Setting nodeSelector and tolerations on nodes with taints registry works well [Disruptive]", func() {
 
 		g.By("Check the image-registry default topology")
