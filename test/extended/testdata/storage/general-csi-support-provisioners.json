@@ -45,7 +45,8 @@
         "provisioners": [
           {
             "name": "csi.vsphere.vmware.com",
-            "preset_scname": "thin-csi"
+            "preset_scname": "thin-csi",
+            "preset_vscname": "csi-vsphere-vsc"
           }
         ]
       },
