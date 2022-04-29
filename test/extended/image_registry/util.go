@@ -464,10 +464,10 @@ func (stafulsrc *staSource) create(oc *exutil.CLI) {
 }
 
 func checkPodsRunningWithLabel(oc *exutil.CLI, namespace string, label string, number int) {
-	err := wait.Poll(20*time.Second, 1*time.Minute, func() (bool, error) {
+	err := wait.Poll(20*time.Second, 3*time.Minute, func() (bool, error) {
 		podList, _ := oc.AdminKubeClient().CoreV1().Pods(namespace).List(metav1.ListOptions{LabelSelector: label})
 		if len(podList.Items) != number {
-			e2e.Logf("the pod number is not %s, Continue to next round", number)
+			e2e.Logf("the pod number is not %d, Continue to next round", number)
 			return false, nil
 		} else {
 			for _, pod := range podList.Items {
@@ -952,6 +952,13 @@ func restoreRouteExposeRegistry(oc *exutil.CLI) {
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(output).To(o.ContainSubstring("patched"))
+}
+
+func getPodNodeListByLabel(oc *exutil.CLI, namespace string, labelKey string) []string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-o", "wide", "-n", namespace, "-l", labelKey, "-o=jsonpath={.items[*].spec.nodeName}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	nodeNameList := strings.Fields(output)
+	return nodeNameList
 }
 
 func getImageRegistryPodNumber(oc *exutil.CLI) int {

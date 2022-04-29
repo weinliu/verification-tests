@@ -1505,6 +1505,74 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
+	// Cover test case: OCP-46069 and 49886
+	g.It("NonPreRelease-Author:jitli-Critical-46069-Could override the default topology constraints and Topology Constraints works well in non zone cluster [Disruptive]", func() {
+
+		g.By("Get image registry pod replicas num")
+		podNum := getImageRegistryPodNumber(oc)
+
+		g.By("Check cluster whose nodes have no zone label set")
+		if !checkRegistryUsingFSVolume(oc) {
+
+			g.By("Platform with zone, Check the image-registry default topology")
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.template.spec.topologySpreadConstraints}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring(`{"labelSelector":{"matchLabels":{"docker-registry":"default"}},"maxSkew":1,"topologyKey":"topology.kubernetes.io/zone","whenUnsatisfiable":"DoNotSchedule"}`))
+			o.Expect(output).To(o.ContainSubstring(`{"labelSelector":{"matchLabels":{"docker-registry":"default"}},"maxSkew":1,"topologyKey":"kubernetes.io/hostname","whenUnsatisfiable":"DoNotSchedule"}`))
+			o.Expect(output).To(o.ContainSubstring(`{"labelSelector":{"matchLabels":{"docker-registry":"default"}},"maxSkew":1,"topologyKey":"node-role.kubernetes.io/worker","whenUnsatisfiable":"DoNotSchedule"}`))
+
+			g.By("Check whether these two registry pods are running in different workers")
+			NodeList := getPodNodeListByLabel(oc, "openshift-image-registry", "docker-registry=default")
+			o.Expect(NodeList[0]).NotTo(o.Equal(NodeList[1]))
+
+			g.By("Configure topology")
+			defer oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"topologySpreadConstraints":null}}`, "--type=merge").Execute()
+			output, err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"topologySpreadConstraints":[{"labelSelector":{"matchLabels":{"docker-registry":"bar"}},"maxSkew":2,"topologyKey":"zone","whenUnsatisfiable":"ScheduleAnyway"}]}}`, "--type=merge").Output()
+			if err != nil {
+				e2e.Logf(output)
+			}
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("patched"))
+
+			g.By("Check if the topology has been override in image registry deploy")
+			err = wait.Poll(3*time.Second, 9*time.Second, func() (bool, error) {
+				output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.template.spec.topologySpreadConstraints}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if strings.Contains(output, `{"labelSelector":{"matchLabels":{"docker-registry":"bar"}},"maxSkew":2,"topologyKey":"zone","whenUnsatisfiable":"ScheduleAnyway"}`) {
+					return true, nil
+				} else {
+					e2e.Logf("Continue to next round")
+					return false, nil
+				}
+			})
+			exutil.AssertWaitPollNoErr(err, "The topology has not been overridden")
+
+			g.By("Check if image registry pods go to running")
+			checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
+
+			g.By("check registry working well")
+			oc.SetupProject()
+			checkRegistryFunctionFine(oc, "test-46069", oc.Namespace())
+
+		} else {
+
+			g.By("Platform without zone, Check the image-registry default topology in non zone label cluster")
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.template.spec.topologySpreadConstraints}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring(`{"labelSelector":{"matchLabels":{"docker-registry":"default"}},"maxSkew":1,"topologyKey":"kubernetes.io/hostname","whenUnsatisfiable":"DoNotSchedule"}`))
+			o.Expect(output).To(o.ContainSubstring(`{"labelSelector":{"matchLabels":{"docker-registry":"default"}},"maxSkew":1,"topologyKey":"node-role.kubernetes.io/worker","whenUnsatisfiable":"DoNotSchedule"}`))
+
+			g.By("Check registry pod")
+			checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
+
+			g.By("check registry working well")
+			oc.SetupProject()
+			checkRegistryFunctionFine(oc, "test-49886", oc.Namespace())
+		}
+
+	})
+
+	// author: jitli@redhat.com
 	g.It("Author:jitli-High-NonPreRelease-50219-Setting nodeSelector and tolerations on nodes with taints registry works well [Disruptive]", func() {
 
 		g.By("Check the image-registry default topology")
