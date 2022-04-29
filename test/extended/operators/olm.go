@@ -3094,14 +3094,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// Author: tbuskey@redhat.com, scolange@redhat.com
-	g.It("Author:tbuskey-ConnectedOnly-Medium-23673-Installplan can be created while Install and uninstall operators via Marketplace for 5 times [Slow]", func() {
+	g.It("Author:tbuskey-Medium-23673-Installplan can be created while Install and uninstall operators via Marketplace for 5 times [Slow]", func() {
 		SkipARM64(oc)
 		var (
 			itName              = g.CurrentGinkgoTestDescription().TestText
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogTemplate          = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 			subFile             = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-			finalCSV            = ""
 			err                 error
 			exists              bool
 			i                   int
@@ -3119,15 +3118,15 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				namespace: oc.Namespace(),
 				template:  ogTemplate,
 			}
+
 			sub = subscriptionDescription{
-				subName:                "prometheus-23673",
+				subName:                "sub-23673",
 				namespace:              oc.Namespace(),
-				catalogSourceName:      "community-operators",
+				catalogSourceName:      "qe-app-registry",
 				catalogSourceNamespace: "openshift-marketplace",
 				ipApproval:             "Automatic",
 				channel:                "beta",
-				operatorPackage:        "prometheus",
-				startingCSV:            finalCSV,
+				operatorPackage:        "learn",
 				singleNamespace:        true,
 				template:               subFile,
 			}
@@ -3154,12 +3153,12 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		newCheck("expect", asAdmin, withoutNamespace, compare, "AtLatestKnown", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}"}).check(oc)
 
 		// grab the installedCSV and use as startingCSV
-		finalCSV, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace(), sub.subName, "-o", "jsonpath={.status.installedCSV}").Output()
+		finalCSV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace(), sub.subName, "-o", "jsonpath={.status.installedCSV}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(finalCSV).NotTo(o.BeEmpty())
 		sub.startingCSV = finalCSV
 
-		g.By("4 Unsubscribe to operator prometheus")
+		g.By("4 Unsubscribe to operator learn")
 		sub.delete(itName, dr)
 		sub.deleteCSV(itName, dr)
 		msgSub, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace()).Output()
@@ -3168,7 +3167,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			e2e.Failf("Cycle #1 subscribe/unsubscribe failed %v:\n%v \n%v \n", err, msgSub, msgCsv)
 		}
 
-		g.By("5, subscribe/unsubscribe to operator prometheus 4 more times")
+		g.By("5, subscribe/unsubscribe to operator learn 4 more times")
 		for i = 2; i < 6; i++ {
 			e2e.Logf("Cycle #%v starts", i)
 
