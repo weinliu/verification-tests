@@ -610,4 +610,64 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 	})
+
+	// author: rugong@redhat.com
+	g.It("Author:rugong-Low-37697-Allow Users To Manage Their Own Tokens", func() {
+		oc.SetupProject()
+		user1Name := oc.Username()
+		userOauthAccessTokenYamlPath, err := os.MkdirTemp("/tmp/", "tmp_37697")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(userOauthAccessTokenYamlPath)
+		userOauthAccessTokenYamlName := "userOauthAccessToken.yaml"
+		userOauthAccessTokenName1, err := oc.Run("get").Args("useroauthaccesstokens", "-ojsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		userOauthAccessTokenYaml, err := oc.Run("get").Args("useroauthaccesstokens", userOauthAccessTokenName1, "-o", "yaml").Output()
+		err = ioutil.WriteFile(userOauthAccessTokenYamlPath + "/" + userOauthAccessTokenYamlName, []byte(userOauthAccessTokenYaml), 0644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("create").Args("-f", userOauthAccessTokenYamlPath + "/" + userOauthAccessTokenYamlName).Execute()
+		o.Expect(err).To(o.HaveOccurred())
+		e2e.Logf("User cannot create useroauthaccesstokens by yaml file of his own, this is expected.")
+
+		// switch to another user, try to get and delete previous user's useroauthaccesstokens
+		oc.SetupProject()
+		err = oc.Run("get").Args("useroauthaccesstokens", userOauthAccessTokenName1).Execute()
+		o.Expect(err).To(o.HaveOccurred())
+		e2e.Logf("User cannot list other user's useroauthaccesstokens, this is expected.")
+		err = oc.Run("delete").Args("useroauthaccesstoken", userOauthAccessTokenName1).Execute()
+		o.Expect(err).To(o.HaveOccurred())
+		e2e.Logf("User cannot delete other user's useroauthaccesstoken, this is expected.")
+
+		baseDir := exutil.FixturePath("testdata", "apiserver_and_auth")
+		clusterRoleTestSudoer := filepath.Join(baseDir, "clusterrole-test-sudoer.yaml")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", clusterRoleTestSudoer).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterroles", "test-sudoer-37697").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("clusterrolebinding", "test-sudoer-37697", "--clusterrole=test-sudoer-37697", "--user=" + oc.Username()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding", "test-sudoer-37697").Execute()
+		e2e.Logf("Clusterroles and clusterrolebinding were created successfully.")
+
+		err = oc.Run("get").Args("useroauthaccesstokens", "--as=" + user1Name, "--as-group=system:authenticated:oauth").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("delete").Args("useroauthaccesstoken", userOauthAccessTokenName1, "--as=" + user1Name, "--as-group=system:authenticated:oauth").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("A user of 'impersonate' permission can get and delete other user's useroauthaccesstoken, this is expected.")
+
+		shaToken, err := oc.Run("whoami").Args("-t").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		userOauthAccessTokenName2, err := oc.Run("get").Args("useroauthaccesstokens", "-ojsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("delete").Args("useroauthaccesstokens", userOauthAccessTokenName2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// Need wait a moment to ensure the token really becomes invalidated
+		err = wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			err = oc.Run("login").Args("--token=" + shaToken).Execute()
+			if err != nil {
+				e2e.Logf("The token is now invalidated after its useroauthaccesstoken is deleted for a while.")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Timed out in invalidating a token after its useroauthaccesstoken is deleted for a while")
+	})
 })
