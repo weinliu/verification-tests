@@ -3348,19 +3348,12 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	g.It("ConnectedOnly-Author:scolange-Medium-41283-Marketplace extract container request CPU or memory", func() {
 
 		var buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
-		var Sub = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		var og1 = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+		var subFile = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+		var ogFile = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		var operatorWait = 150 * time.Second
 
 		oc.SetupProject()
 		namespace := oc.Namespace()
-
-		/*
-			createOg, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", og, "-p", "NAME=test-operators-og", "NAMESPACE=test41283").OutputToFile("config-41283.json")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createOg).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		*/
 
 		dr := make(describerResrouce)
 		itName := g.CurrentGinkgoTestDescription().TestText
@@ -3369,30 +3362,22 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		og := operatorGroupDescription{
 			name:      "test-operators-og",
 			namespace: namespace,
-			template:  og1,
+			template:  ogFile,
 		}
 		og.createwithCheck(oc, itName, dr)
 
 		g.By("Verify inside the jobs the value of spec.containers[].resources.requests field are setted")
 
-		/*
-			createImgSub, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", Sub, "-p", "SUBNAME=couchbase", "SUBNAMESPACE=test41283",
-				"CHANNEL=stable", "APPROVAL=Automatic", "OPERATORNAME=couchbase-enterprise-certified", "SOURCENAME=certified-operators", "SOURCENAMESPACE=openshift-marketplace").OutputToFile("config-41283.json")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", createImgSub).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		*/
-
 		sub := subscriptionDescription{
-			subName:                "couchbase",
+			subName:                "sub-41283",
 			namespace:              namespace,
-			catalogSourceName:      "certified-operators",
+			catalogSourceName:      "qe-app-registry",
 			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "stable",
 			ipApproval:             "Automatic",
-			operatorPackage:        "couchbase-enterprise-certified",
+			channel:                "beta",
+			operatorPackage:        "learn",
 			singleNamespace:        true,
-			template:               Sub,
+			template:               subFile,
 		}
 		defer sub.delete(itName, dr)
 		defer sub.deleteCSV(itName, dr)
