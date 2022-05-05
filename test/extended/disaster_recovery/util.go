@@ -7,7 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"math/rand"
 	"os"
-	"fmt"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -100,9 +100,9 @@ func getNodeInternalIpListByLabel(oc *exutil.CLI, labelKey string) []string {
 
 // Run the etcdrestroe shell script command on master or node
 func runPSCommand(bastionHost string, nodeInternalIp string, command string, privateKeyForClusterNode string, privateKeyForBastion string, userForBastion string) (result string, err error) {
-	privateCMD := fmt.Sprintf("sudo -i ssh  -o StrictHostKeyChecking=no  -o UserKnownHostsFile=/dev/null -i %s core@%s  %s", privateKeyForClusterNode, nodeInternalIp, command)
-	sshClient := exutil.SshClient{User: userForBastion, Host: bastionHost, Port: 22, PrivateKey: privateKeyForBastion}
-	return sshClient.RunOutput(privateCMD)
+	var msg []byte
+	msg, err = exec.Command("bash", "-c", "chmod 600 "+privateKeyForBastion+"; ssh -i "+privateKeyForBastion+" -t -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "+userForBastion+"@"+bastionHost+" sudo -i ssh  -o StrictHostKeyChecking=no  -o UserKnownHostsFile=/dev/null -i "+privateKeyForClusterNode+" core@"+nodeInternalIp+" "+command).CombinedOutput()
+	return string(msg), err
 }
 
 func waitForOperatorRestart(oc *exutil.CLI, operatorName string) {
