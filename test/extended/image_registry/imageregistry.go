@@ -1573,6 +1573,77 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
+	g.It("NonPreRelease-Author:jitli-Medium-46082-Increase replicas to match one zone have one pod [Disruptive]", func() {
+
+		g.By("Check platforms")
+		if checkRegistryUsingFSVolume(oc) {
+			g.Skip("Skip for fs volume")
+		}
+
+		g.By("Check the nodes with Each zone have one worker")
+		workerNodes, _ := exutil.GetClusterNodesBy(oc, "worker")
+		if len(workerNodes) != 3 {
+			g.Skip("Skip for not three workers")
+		}
+		zone, err := oc.AsAdmin().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker", `-o=jsonpath={.items[*].metadata.labels.topology\.kubernetes\.io\/zone}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		zoneList := strings.Fields(zone)
+		if strings.EqualFold(zoneList[0], zoneList[1]) || strings.EqualFold(zoneList[0], zoneList[2]) || strings.EqualFold(zoneList[1], zoneList[2]) {
+
+			e2e.Logf("Zone: %v . Doesn't conform Each zone have one worker", zone)
+			g.By("Only check pods on different worker")
+			samenum, diffnum := comparePodHostIp(oc)
+			e2e.Logf("%v %v", samenum, diffnum)
+			o.Expect(samenum == 0).To(o.BeTrue())
+			o.Expect(diffnum == 1).To(o.BeTrue())
+
+		} else {
+
+			e2e.Logf("Zone: %v . Each zone have one worker", zone)
+			g.By("Scale registry pod to 3 then to 4")
+			/*
+				replicas=2 has the pod affinity configure
+				When change replicas=2 to other number, the registry pods will be recreated.
+				When changed replicas to 3, the Pods will be scheduled to each worker.
+				Due to the RollingUpdate policy, it will also count the old pods that are running.
+				So there is a certain probability that two pods are running in the same worker
+				To deal with the problem, we change replicas to 3 then 4 to monitor the new pod followoing topologyspread.
+
+				When the kubernetes issues fixed, we can update the checkpoint ,
+				https://bugzilla.redhat.com/show_bug.cgi?id=2024888#c11
+			*/
+			defer oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"replicas":2}}`, "--type=merge").Execute()
+			output, err := oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"replicas":3}}`, "--type=merge").Output()
+			if err != nil {
+				e2e.Logf(output)
+			}
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("patched"))
+			checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", 3)
+
+			output, err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"replicas":4}}`, "--type=merge").Output()
+			if err != nil {
+				e2e.Logf(output)
+			}
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("patched"))
+			checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", 4)
+
+			g.By("Check if image registry pods run in each zone")
+			samenum, diffnum := comparePodHostIp(oc)
+			e2e.Logf("%v %v", samenum, diffnum)
+			o.Expect(samenum == 1).To(o.BeTrue())
+			o.Expect(diffnum == 5).To(o.BeTrue())
+
+		}
+
+		g.By("check registry working well")
+		oc.SetupProject()
+		checkRegistryFunctionFine(oc, "test-46082", oc.Namespace())
+
+	})
+
+	// author: jitli@redhat.com
 	g.It("NonPreRelease-Author:jitli-Critical-46083-Topology Constraints works well in SNO environment [Disruptive]", func() {
 
 		g.By("Check platforms")
