@@ -1340,4 +1340,132 @@ spec:
 		o.Expect(string(checkOutput)).To(o.Equal("ok"))
 		e2e.Logf("Port forwarding works fine")
 	})
+
+	// author: dpunia@redhat.com
+	g.It("Author:dpunia-High-41664-Check deprecated APIs to be removed in next release and next EUS release", func() {
+		var (
+			ignore_case  = "system:kube-controller-manager|system:serviceaccount|system:admin"
+			eus_releases = map[float64][]float64{4.8: []float64{1.21, 1.22, 1.23}, 4.10: []float64{1.24, 1.25}}
+		)
+
+		//Anonymous function to check elements available in slice, it return true if elements exists otherwise return false.
+		elems_checkers := func(elems []float64, value float64) bool {
+			for _, element := range elems {
+				if value == element {
+					return true
+				}
+			}
+			return false
+		}
+
+		g.By("1) Get current cluster version")
+		clusterVersion, _, err := exutil.GetClusterVersion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cluster_version, err := strconv.ParseFloat(clusterVersion, 64)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("%v", cluster_version)
+
+		g.By("2) Get current k8s release & next release")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/kube-apiserver", "-o", `jsonpath='{.status.versions[?(@.name=="kube-apiserver")].version}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd := fmt.Sprintf(`echo '%v' | awk -F"." '{print $1"."$2}'`, out)
+		k8s_ver, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		curr_relese, _ := strconv.ParseFloat(strings.Trim(string(k8s_ver), "\n"), 64)
+		e2e.Logf("Current Release : %v", curr_relese)
+		nxt_releases := curr_relese + 0.01
+		e2e.Logf("APIRemovedInNextReleaseInUse : %v", nxt_releases)
+
+		g.By("3) Get the removedInRelease of api groups list")
+		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("apirequestcount", "-o", `jsonpath='{range .items[?(@.status.removedInRelease != "")]}{.metadata.name}{"\t"}{.status.removedInRelease}{"\n"}{end}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		listOutput := strings.Trim(string(out), "'")
+		if len(listOutput) == 0 {
+			e2e.Logf("There is no api for next APIRemovedInNextReleaseInUse & APIRemovedInNextEUSReleaseInUse\n")
+		} else {
+			e2e.Logf("List of api Removed in next EUS & Non-EUS releases\n %v", listOutput)
+			apis_rm_rel_list := bufio.NewScanner(strings.NewReader(listOutput))
+			for apis_rm_rel_list.Scan() {
+				remove_release_api := strings.Fields(apis_rm_rel_list.Text())[0]
+				remove_release, _ := strconv.ParseFloat(strings.Fields(apis_rm_rel_list.Text())[1], 64)
+				// Checking the alert & logs for next APIRemovedInNextReleaseInUse & APIRemovedInNextEUSReleaseInUse
+				if remove_release == nxt_releases {
+					g.By("4) Checking Alert For APIRemovedInNextReleaseInUse")
+					e2e.Logf("Api %v and release %v", remove_release_api, remove_release)
+					// Checking alerts, Wait for max 5 min to generate all the alert.
+					err = wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+						// Generating Alert for removed apis
+						_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(remove_release_api).Output()
+						o.Expect(err).NotTo(o.HaveOccurred())
+						alertOutput, err := oc.Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-s", "-k", "http://localhost:9090/api/v1/alerts").Output()
+						o.Expect(err).NotTo(o.HaveOccurred())
+						cmd := fmt.Sprintf(`echo '%v' | egrep 'APIRemovedInNextReleaseInUse' | grep -oh '%s'`, alertOutput, remove_release_api)
+						_, outerr := exec.Command("bash", "-c", cmd).Output()
+						o.Expect(err).NotTo(o.HaveOccurred())
+						if outerr == nil {
+							e2e.Logf("Got the Alert for APIRemovedInNextReleaseInUse, %v and release %v", remove_release_api, remove_release)
+							e2e.Logf("Step 4, Tests passed")
+							return true, nil
+						}
+						e2e.Logf("Not Get the alert for APIRemovedInNextReleaseInUse, Api %v : release %v. Trying again", remove_release_api, remove_release)
+						return false, nil
+					})
+					exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test Fail:  Not Get Alert for APIRemovedInNextReleaseInUse, %v : release %v", remove_release_api, remove_release))
+
+					g.By("5) Checking Client compenents accessing the APIRemovedInNextReleaseInUse")
+					out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("apirequestcount", remove_release_api, "-o", `jsonpath='{range .status.currentHour..byUser[*]}{..byVerb[*].verb}{","}{.username}{","}{.userAgent}{"\n"}{end}'`).Output()
+					stdOutput := strings.TrimRight(strings.Trim(out, "'"), "\n")
+					o.Expect(err).NotTo(o.HaveOccurred())
+					cmd := fmt.Sprintf(`echo "%s" | egrep -v '%s' || true`, stdOutput, ignore_case)
+					clientAccessLog, err := exec.Command("bash", "-c", cmd).Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					if len(clientAccessLog) > 0 {
+						e2e.Logf("%v", string(clientAccessLog))
+						e2e.Failf("Test Failed: Client components access Apis logs found, file a bug.")
+					} else {
+						e2e.Logf("Test Passed: No client components access Apis logs found\n")
+					}
+				}
+				// Checking the alert & logs for next APIRemovedInNextEUSReleaseInUse
+				if elems_checkers(eus_releases[cluster_version], remove_release) {
+					g.By("6) Checking the alert for APIRemovedInNextEUSReleaseInUse")
+					e2e.Logf("Api %v and release %v", remove_release_api, remove_release)
+					// Checking alerts, Wait for max 5 min to generate all the alert.
+					err = wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+						// Generating Alert for removed apis
+						_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(remove_release_api).Output()
+						o.Expect(err).NotTo(o.HaveOccurred())
+						alertOutput, err := oc.Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-s", "-k", "http://localhost:9090/api/v1/alerts").Output()
+						o.Expect(err).NotTo(o.HaveOccurred())
+						cmd := fmt.Sprintf(`echo '%v' | egrep 'APIRemovedInNextEUSReleaseInUse' | grep -oh '%s'`, alertOutput, remove_release_api)
+						_, outerr := exec.Command("bash", "-c", cmd).Output()
+						o.Expect(err).NotTo(o.HaveOccurred())
+						if outerr == nil {
+							e2e.Logf("Got the Alert for APIRemovedInNextEUSReleaseInUse, %v and release %v", remove_release_api, remove_release)
+							e2e.Logf("Step 6, Tests passed")
+							return true, nil
+						}
+						e2e.Logf("Not Get the alert for APIRemovedInNextEUSReleaseInUse, %v : release %v. Trying again", remove_release_api, remove_release)
+						return false, nil
+					})
+					exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test Fail:  Not Get Alert for APIRemovedInNextEUSReleaseInUse, Api %v : release %v", remove_release_api, remove_release))
+
+					// Checking logs for APIRemovedInNextEUSReleaseInUse apis client components logs.
+					g.By("7) Checking client components access logs for APIRemovedInNextEUSReleaseInUse")
+					out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("apirequestcount", remove_release_api, "-o", `jsonpath='{range .status.currentHour..byUser[*]}{..byVerb[*].verb}{","}{.username}{","}{.userAgent}{"\n"}{end}'`).Output()
+					stdOutput := strings.TrimRight(strings.Trim(out, "'"), "\n")
+					o.Expect(err).NotTo(o.HaveOccurred())
+					cmd := fmt.Sprintf(`echo "%s" | egrep -v '%s' || true`, stdOutput, ignore_case)
+					client_comp_access, err := exec.Command("bash", "-c", cmd).Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					if len(client_comp_access) > 0 {
+						e2e.Logf(string(client_comp_access))
+						e2e.Failf("Test Failed: Client components access Apis logs found, file a bug.")
+					} else {
+						e2e.Logf("Test Passed: No client components access Apis logs found")
+					}
+				}
+			}
+		}
+	})
 })
