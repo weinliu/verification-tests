@@ -4,6 +4,8 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 
+	"bufio"
+	"io"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"math/rand"
 	"os"
@@ -175,5 +177,81 @@ func checkEtcdPodStatus(oc *exutil.CLI) bool {
 			return false
 		}
 	}
+	return true
+}
+
+//make sure all the machine are running
+func waitMachineStatusRunning(oc *exutil.CLI, newMasterMachineName string) {
+	err := wait.Poll(60*time.Second, 300*time.Second, func() (bool, error) {
+		machineStatus, err := oc.AsAdmin().Run("get").Args("-n", "openshift-machine-api", "machine", newMasterMachineName, "-o=jsonpath='{.status.phase}'").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if match, _ := regexp.MatchString("Running", machineStatus); match {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "The machine is not Running as expected")
+}
+
+//update new machine file
+func updateMachineYmlFile(machineYmlFile string, oldMachineName string, newMasterMachineName string) bool {
+	fileName := machineYmlFile
+	in, err := os.OpenFile(fileName, os.O_RDONLY, 0666)
+	if err != nil {
+		e2e.Logf("open machineYaml file fail:", err)
+		return false
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(strings.Replace(fileName, "machine.yaml", "machineUpd.yaml", -1), os.O_RDWR|os.O_CREATE, 0766)
+	if err != nil {
+		e2e.Logf("Open write file fail:", err)
+		return false
+	}
+	defer out.Close()
+
+	br := bufio.NewReader(in)
+	index := 1
+	matchTag := false
+	newLine := ""
+
+	for {
+		line, _, err := br.ReadLine()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			e2e.Logf("read err:", err)
+			return false
+		}
+		if strings.Contains(string(line), "providerID: ") {
+			matchTag = true
+		} else if strings.Contains(string(line), "status:") {
+			break
+		} else if strings.Contains(string(line), "generation: ") {
+			matchTag = true
+		} else if strings.Contains(string(line), "machine.openshift.io/instance-state: ") {
+			matchTag = true
+		} else if strings.Contains(string(line), "resourceVersion: ") {
+			matchTag = true
+		} else if strings.Contains(string(line), "uid: ") {
+			matchTag = true
+		} else if strings.Contains(string(line), oldMachineName) {
+			newLine = strings.Replace(string(line), oldMachineName, newMasterMachineName, -1)
+		} else {
+			newLine = string(line)
+		}
+		if !matchTag {
+			_, err = out.WriteString(newLine + "\n")
+			if err != nil {
+				e2e.Logf("Write to file fail:", err)
+				return false
+			}
+		} else {
+			matchTag = false
+		}
+		index++
+	}
+	e2e.Logf("Update Machine FINISH!")
 	return true
 }

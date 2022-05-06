@@ -3,6 +3,7 @@ package disaster_recovery
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -167,6 +168,48 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForOperatorRestart(oc, "kube-scheduler")
 
+	})
+	// author: geliu@redhat.com
+	g.It("Author:geliu-NonPreRelease-Critical-50205-lost master can be replaced by new one with machine config recreation in ocp 4.x [Disruptive][Slow]", func() {
+		g.By("Test for case lost master can be replaced by new one with machine config recreation in ocp 4.x")
+
+		g.By("Get all the master node name & count")
+		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
+		masterNodeCount := len(masterNodeList)
+
+		g.By("make sure all the etcd pods are running")
+		defer o.Expect(checkEtcdPodStatus(oc)).To(o.BeTrue())
+		podAllRunning := checkEtcdPodStatus(oc)
+		if podAllRunning != true {
+			g.Skip("The ectd pods are not running")
+		}
+
+		g.By("Export the machine config file for 1st master node")
+		output, err := oc.AsAdmin().Run("get").Args("machines", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		masterMachineNameList := strings.Fields(output)
+		machineYmlFile := ""
+		machineYmlFile, err = oc.AsAdmin().Run("get").Args("machines", "-n", "openshift-machine-api", masterMachineNameList[0], "-o", "yaml").OutputToFile("machine.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newMachineConfigFile := strings.Replace(machineYmlFile, "machine.yaml", "machineUpd.yaml", -1)
+		defer exec.Command("bash", "-c", "rm -f "+machineYmlFile).Output()
+		defer exec.Command("bash", "-c", "rm -f "+newMachineConfigFile).Output()
+
+		g.By("update machineYmlFile to newMachineYmlFile:")
+		newMasterMachineNameSuffix := masterMachineNameList[0] + "00"
+		o.Expect(updateMachineYmlFile(machineYmlFile, masterMachineNameList[0], newMasterMachineNameSuffix)).To(o.BeTrue())
+
+		g.By("Create new machine")
+		result_file, _ := exec.Command("bash", "-c", "cat "+newMachineConfigFile).Output()
+		e2e.Logf("####newMasterMachineNameSuffix is %s\n", string(result_file))
+		_, err = oc.AsAdmin().Run("create").Args("-n", "openshift-machine-api", "-f", newMachineConfigFile).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitMachineStatusRunning(oc, newMasterMachineNameSuffix)
+
+		g.By("Delete machine of the unhealthy master node")
+		_, err = oc.AsAdmin().Run("delete").Args("-n", "openshift-machine-api", "machine", masterMachineNameList[0]).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(getNodeListByLabel(oc, "node-role.kubernetes.io/master="))).To(o.Equal(masterNodeCount))
 	})
 
 })
