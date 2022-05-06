@@ -820,3 +820,15 @@ func locatePodmanCred(oc *exutil.CLI, dst string) error {
         return nil
 }
 
+func checkPodStatus(oc *exutil.CLI, podLabel string, namespace string, expected string) {
+        err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+                output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", podLabel, "-o=jsonpath={.items[*].status.phase}").Output()
+                o.Expect(err).NotTo(o.HaveOccurred())
+                e2e.Logf("the result of pod:%v", output)
+                if strings.Contains(output, expected) && (!(strings.Contains(strings.ToLower(output), "error"))) && (!(strings.Contains(strings.ToLower(output), "crashLoopbackOff"))) {
+                        return true, nil
+                }
+                return false, nil
+        })
+        exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the state of pod with %s is not expected %s", podLabel, expected))
+}

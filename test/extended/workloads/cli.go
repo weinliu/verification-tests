@@ -313,8 +313,8 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		afterSetcm, err := oc.Run("get").Args("cm", "cm-47555", "-o=jsonpath={.data.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if match, _ := regexp.MatchString(beforeSetcm, afterSetcm); !match {
-                        e2e.Failf("Should not persistent update configmap with server dry-run")
-                }
+			e2e.Failf("Should not persistent update configmap with server dry-run")
+		}
 		g.By("Create new secret")
 		err = oc.Run("create").Args("secret", "generic", "secret-47555", "--from-literal=name=abc").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -327,33 +327,32 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		afterSetse, err := oc.Run("get").Args("secret", "secret-47555", "-o=jsonpath={.data.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if match, _ := regexp.MatchString(beforeSetse, afterSetse); !match {
-                        e2e.Failf("Should not persistent update secret with server dry-run")
-                }
+			e2e.Failf("Should not persistent update secret with server dry-run")
+		}
 
 	})
 
-    // author: knarra@redhat.com
-    g.It("Author:knarra-Medium-48681-Could start debug pod using pod definition yaml", func() {
-        buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+	// author: knarra@redhat.com
+	g.It("Author:knarra-Medium-48681-Could start debug pod using pod definition yaml", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		debugPodUsingDefinitionT := filepath.Join(buildPruningBaseDir, "debugpod_48681.yaml")
 
-        g.By("create new namespace")
-        oc.SetupProject()
-        g.By("Get the cli image from openshift")
+		g.By("create new namespace")
+		oc.SetupProject()
+		g.By("Get the cli image from openshift")
 		cliImage := getCliImage(oc)
 
-        pod48681 := debugPodUsingDefinition{
-            name:        "pod48681",
-            namespace:   oc.Namespace(),
-            cliImageId:  cliImage,
-            template:    debugPodUsingDefinitionT,
-        }
+		pod48681 := debugPodUsingDefinition{
+			name:       "pod48681",
+			namespace:  oc.Namespace(),
+			cliImageId: cliImage,
+			template:   debugPodUsingDefinitionT,
+		}
 
-        g.By("Create test pod")
-        pod48681.createDebugPodUsingDefinition(oc)
-        defer oc.Run("delete").Args("pod/pod48681", "-n", oc.Namespace()).Execute()
+		g.By("Create test pod")
+		pod48681.createDebugPodUsingDefinition(oc)
+		defer oc.Run("delete").Args("pod/pod48681", "-n", oc.Namespace()).Execute()
 	})
-
 
 	// author: yinzhou@redhat.com
 	g.It("Author:yinzhou-Medium-49116-oc debug should remove startupProbe when create debug pod", func() {
@@ -377,120 +376,119 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		}
 	})
 
+	// author: yinzhou@redhat.com
+	g.It("Author:yinzhou-NonPreRelease-High-45307-Critical-45327-check oc adm prune deployments to prune RS [Slow][Disruptive]", func() {
+		g.By("create new namespace")
+		oc.SetupProject()
+
+		g.By("Create deployments and trigger more times")
+		createDeployment(oc, oc.Namespace(), "mydep45307")
+		triggerSucceedDeployment(oc, oc.Namespace(), "mydep45307", 6, 20)
+		triggerFailedDeployment(oc, oc.Namespace(), "mydep45307")
+
+		g.By("get the completed rs infomation")
+		totalCompletedRsList, totalCompletedRsListNum := getCompeletedRsInfo(oc, oc.Namespace(), "mydep45307")
+
+		g.By("Dry run the prune deployments for RS")
+		keepCompletedRsNum := 3
+		pruneRsNumCMD := fmt.Sprintf("oc adm prune deployments --keep-complete=%v --keep-younger-than=10s --replica-sets=true  |grep %s |wc -l", keepCompletedRsNum, oc.Namespace())
+		pruneRsDryCMD := fmt.Sprintf("oc adm prune deployments --keep-complete=%v --keep-younger-than=10s --replica-sets=true  |grep %s|awk '{print $2}'", keepCompletedRsNum, oc.Namespace())
+		rsListFromPrune := getShouldPruneRSFromPrune(oc, pruneRsNumCMD, pruneRsDryCMD, (totalCompletedRsListNum - keepCompletedRsNum))
+		shouldPruneRsList := getShouldPruneRSFromCreateTime(totalCompletedRsList, totalCompletedRsListNum, keepCompletedRsNum)
+		if comparePrunedRS(shouldPruneRsList, rsListFromPrune) {
+			e2e.Logf("Checked the pruned rs is expected")
+		} else {
+			e2e.Failf("Pruned the wrong RS with dry run")
+		}
+
+		g.By("Make sure never prune RS with replicas num >0")
+		//before prune ,check the running rs list
+		runningRsList := checkRunningRsList(oc, oc.Namespace(), "mydep45307")
+
+		//checking the should prune rs list
+		completedRsNum := 0
+		pruneRsNumCMD = fmt.Sprintf("oc adm prune deployments --keep-complete=%v --keep-younger-than=10s --replica-sets=true  |grep %s |wc -l", completedRsNum, oc.Namespace())
+		pruneRsDryCMD = fmt.Sprintf("oc adm prune deployments --keep-complete=%v --keep-younger-than=10s --replica-sets=true  |grep %s|awk '{print $2}'", completedRsNum, oc.Namespace())
+
+		rsListFromPrune = getShouldPruneRSFromPrune(oc, pruneRsNumCMD, pruneRsDryCMD, (totalCompletedRsListNum - completedRsNum))
+		shouldPruneRsList = getShouldPruneRSFromCreateTime(totalCompletedRsList, totalCompletedRsListNum, completedRsNum)
+		if comparePrunedRS(shouldPruneRsList, rsListFromPrune) {
+			e2e.Logf("dry run prune all completed rs is expected")
+		} else {
+			e2e.Failf("Pruned the wrong RS with dry run")
+		}
+
+		//prune all the completed rs list
+		pruneCompletedRs(oc, "prune", "deployments", "--keep-complete=0", "--keep-younger-than=10s", "--replica-sets=true", "--confirm")
+
+		//after prune , check the remaining rs list
+		remainingRsList := getRemainingRs(oc, oc.Namespace(), "mydep45307")
+		if comparePrunedRS(runningRsList, remainingRsList) {
+			e2e.Logf("pruned all completed rs is expected")
+		} else {
+			e2e.Failf("Pruned the wrong")
+		}
+	})
+	// author: yinzhou@redhat.com
+	g.It("Author:yinzhou-NonPreRelease-High-45308-check oc adm prune deployments command with the orphans options works well [Slow][Disruptive]", func() {
+		g.By("create new namespace")
+		oc.SetupProject()
+
+		g.By("Create deployments and trigger more times")
+		createDeployment(oc, oc.Namespace(), "mydep45308")
+		triggerSucceedDeployment(oc, oc.Namespace(), "mydep45308", 6, 20)
+		triggerFailedDeployment(oc, oc.Namespace(), "mydep45308")
+
+		g.By("get the completed rs infomation")
+		totalCompletedRsList, totalCompletedRsListNum := getCompeletedRsInfo(oc, oc.Namespace(), "mydep45308")
+
+		g.By("delete the deploy with ")
+		err := oc.Run("delete").Args("-n", oc.Namespace(), "deploy", "mydep45308", "--cascade=orphan").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("prune the rs with orphans=true")
+		//before prune ,check the running rs list
+		runningRsList := checkRunningRsList(oc, oc.Namespace(), "mydep45308")
+
+		//checking the should prune rs list
+		completedRsNum := 0
+		pruneRsNumCMD := fmt.Sprintf("oc adm prune deployments --keep-complete=%v --keep-younger-than=10s --replica-sets=true --orphans=true |grep %s |wc -l", completedRsNum, oc.Namespace())
+		pruneRsDryCMD := fmt.Sprintf("oc adm prune deployments --keep-complete=%v --keep-younger-than=10s --replica-sets=true --orphans=true |grep %s|awk '{print $2}'", completedRsNum, oc.Namespace())
+
+		rsListFromPrune := getShouldPruneRSFromPrune(oc, pruneRsNumCMD, pruneRsDryCMD, (totalCompletedRsListNum - completedRsNum))
+		shouldPruneRsList := getShouldPruneRSFromCreateTime(totalCompletedRsList, totalCompletedRsListNum, completedRsNum)
+		if comparePrunedRS(shouldPruneRsList, rsListFromPrune) {
+			e2e.Logf("dry run prune all completed rs is expected")
+		} else {
+			e2e.Failf("Pruned the wrong RS with dry run")
+		}
+
+		//prune all the completed rs list
+		pruneCompletedRs(oc, "prune", "deployments", "--keep-complete=0", "--keep-younger-than=10s", "--replica-sets=true", "--confirm", "--orphans=true")
+
+		//after prune , check the remaining rs list
+		remainingRsList := getRemainingRs(oc, oc.Namespace(), "mydep45308")
+		if comparePrunedRS(runningRsList, remainingRsList) {
+			e2e.Logf("pruned all completed rs is expected")
+		} else {
+			e2e.Failf("Pruned the wrong")
+		}
+	})
 
 	// author: yinzhou@redhat.com
-        g.It("Author:yinzhou-NonPreRelease-High-45307-Critical-45327-check oc adm prune deployments to prune RS [Slow][Disruptive]", func() {
-                g.By("create new namespace")
-                oc.SetupProject()
+	g.It("Author:yinzhou-Medium-49859-should failed when oc import-image setting with Garbage values for --reference-policy", func() {
+		g.By("create new namespace")
+		oc.SetupProject()
 
-                g.By("Create deployments and trigger more times")
-                createDeployment(oc, oc.Namespace(), "mydep45307")
-                triggerSucceedDeployment(oc, oc.Namespace(), "mydep45307", 6, 20)
-                triggerFailedDeployment(oc, oc.Namespace(), "mydep45307")
-
-                g.By("get the completed rs infomation")
-                totalCompletedRsList, totalCompletedRsListNum := getCompeletedRsInfo(oc, oc.Namespace(), "mydep45307")
-
-                g.By("Dry run the prune deployments for RS")
-                keepCompletedRsNum := 3
-                pruneRsNumCMD := fmt.Sprintf("oc adm prune deployments --keep-complete=%v --keep-younger-than=10s --replica-sets=true  |grep %s |wc -l", keepCompletedRsNum, oc.Namespace())
-                pruneRsDryCMD := fmt.Sprintf("oc adm prune deployments --keep-complete=%v --keep-younger-than=10s --replica-sets=true  |grep %s|awk '{print $2}'", keepCompletedRsNum, oc.Namespace())
-                rsListFromPrune := getShouldPruneRSFromPrune(oc, pruneRsNumCMD, pruneRsDryCMD, (totalCompletedRsListNum - keepCompletedRsNum))
-                shouldPruneRsList := getShouldPruneRSFromCreateTime(totalCompletedRsList, totalCompletedRsListNum, keepCompletedRsNum)
-                if comparePrunedRS(shouldPruneRsList, rsListFromPrune) {
-                        e2e.Logf("Checked the pruned rs is expected")
-                } else {
-                        e2e.Failf("Pruned the wrong RS with dry run")
-                }
-
-                g.By("Make sure never prune RS with replicas num >0")
-                //before prune ,check the running rs list
-                runningRsList := checkRunningRsList(oc, oc.Namespace(), "mydep45307")
-
-                //checking the should prune rs list
-                completedRsNum := 0
-                pruneRsNumCMD = fmt.Sprintf("oc adm prune deployments --keep-complete=%v --keep-younger-than=10s --replica-sets=true  |grep %s |wc -l", completedRsNum, oc.Namespace())
-                pruneRsDryCMD = fmt.Sprintf("oc adm prune deployments --keep-complete=%v --keep-younger-than=10s --replica-sets=true  |grep %s|awk '{print $2}'", completedRsNum, oc.Namespace())
-
-                rsListFromPrune = getShouldPruneRSFromPrune(oc, pruneRsNumCMD, pruneRsDryCMD, (totalCompletedRsListNum - completedRsNum))
-                shouldPruneRsList = getShouldPruneRSFromCreateTime(totalCompletedRsList, totalCompletedRsListNum, completedRsNum)
-                if comparePrunedRS(shouldPruneRsList, rsListFromPrune) {
-                        e2e.Logf("dry run prune all completed rs is expected")
-                } else {
-                        e2e.Failf("Pruned the wrong RS with dry run")
-                }
-
-                //prune all the completed rs list
-                pruneCompletedRs(oc, "prune", "deployments", "--keep-complete=0", "--keep-younger-than=10s", "--replica-sets=true", "--confirm")
-
-                //after prune , check the remaining rs list
-                remainingRsList := getRemainingRs(oc, oc.Namespace(), "mydep45307")
-                if comparePrunedRS(runningRsList, remainingRsList) {
-                        e2e.Logf("pruned all completed rs is expected")
-                } else {
-                        e2e.Failf("Pruned the wrong")
-                }
-        })
-        // author: yinzhou@redhat.com
-        g.It("Author:yinzhou-NonPreRelease-High-45308-check oc adm prune deployments command with the orphans options works well [Slow][Disruptive]", func() {
-                g.By("create new namespace")
-                oc.SetupProject()
-
-                g.By("Create deployments and trigger more times")
-                createDeployment(oc, oc.Namespace(), "mydep45308")
-                triggerSucceedDeployment(oc, oc.Namespace(), "mydep45308", 6, 20)
-                triggerFailedDeployment(oc, oc.Namespace(), "mydep45308")
-
-                g.By("get the completed rs infomation")
-                totalCompletedRsList, totalCompletedRsListNum := getCompeletedRsInfo(oc, oc.Namespace(), "mydep45308")
-
-                g.By("delete the deploy with ")
-                err := oc.Run("delete").Args("-n", oc.Namespace(), "deploy", "mydep45308", "--cascade=orphan").Execute()
-                o.Expect(err).NotTo(o.HaveOccurred())
-                g.By("prune the rs with orphans=true")
-                //before prune ,check the running rs list
-                runningRsList := checkRunningRsList(oc, oc.Namespace(), "mydep45308")
-
-                //checking the should prune rs list
-                completedRsNum := 0
-                pruneRsNumCMD := fmt.Sprintf("oc adm prune deployments --keep-complete=%v --keep-younger-than=10s --replica-sets=true --orphans=true |grep %s |wc -l", completedRsNum, oc.Namespace())
-                pruneRsDryCMD := fmt.Sprintf("oc adm prune deployments --keep-complete=%v --keep-younger-than=10s --replica-sets=true --orphans=true |grep %s|awk '{print $2}'", completedRsNum, oc.Namespace())
-
-                rsListFromPrune := getShouldPruneRSFromPrune(oc, pruneRsNumCMD, pruneRsDryCMD, (totalCompletedRsListNum - completedRsNum))
-                shouldPruneRsList := getShouldPruneRSFromCreateTime(totalCompletedRsList, totalCompletedRsListNum, completedRsNum)
-                if comparePrunedRS(shouldPruneRsList, rsListFromPrune) {
-                        e2e.Logf("dry run prune all completed rs is expected")
-                } else {
-                        e2e.Failf("Pruned the wrong RS with dry run")
-                }
-
-                //prune all the completed rs list
-                pruneCompletedRs(oc, "prune", "deployments", "--keep-complete=0", "--keep-younger-than=10s", "--replica-sets=true", "--confirm", "--orphans=true")
-
-                //after prune , check the remaining rs list
-                remainingRsList := getRemainingRs(oc, oc.Namespace(), "mydep45308")
-                if comparePrunedRS(runningRsList, remainingRsList) {
-                        e2e.Logf("pruned all completed rs is expected")
-                } else {
-                        e2e.Failf("Pruned the wrong")
-                }
-        })
-
-        // author: yinzhou@redhat.com
-        g.It("Author:yinzhou-Medium-49859-should failed when oc import-image setting with Garbage values for --reference-policy", func() {
-                g.By("create new namespace")
-                oc.SetupProject()
-
-                g.By("import image with garbage values set for reference-policy")
-                out, err := oc.Run("import-image").Args("registry.redhat.io/openshift3/jenkins-2-rhel7", "--reference-policy=sdfsdfds", "--confirm").Output()
-                o.Expect(err).Should(o.HaveOccurred())
+		g.By("import image with garbage values set for reference-policy")
+		out, err := oc.Run("import-image").Args("registry.redhat.io/openshift3/jenkins-2-rhel7", "--reference-policy=sdfsdfds", "--confirm").Output()
+		o.Expect(err).Should(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("reference policy values are source or local"))
 
-                g.By("check should no imagestream created")
-                out, err = oc.Run("get").Args("is").Output()
-                o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("check should no imagestream created")
+		out, err = oc.Run("get").Args("is").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("No resources found"))
-        })
+	})
 
 	// author: yinzhou@redhat.com
 	g.It("Author:yinzhou-Medium-44061-Check the default registry credential path for oc", func() {
@@ -512,20 +510,63 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 	// author: yinzhou@redhat.com
-        g.It("Author:yinzhou-Medium-50399-oc apply could update EgressNetworkPolicy resource", func() {
-                buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
-                egressnetworkP := filepath.Join(buildPruningBaseDir, "egressnetworkpolicy.yaml")
-                updateegressnetworkP := filepath.Join(buildPruningBaseDir, "update_egressnetworkpolicy.yaml")
+	g.It("Author:yinzhou-Medium-50399-oc apply could update EgressNetworkPolicy resource", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		egressnetworkP := filepath.Join(buildPruningBaseDir, "egressnetworkpolicy.yaml")
+		updateegressnetworkP := filepath.Join(buildPruningBaseDir, "update_egressnetworkpolicy.yaml")
 
-                g.By("create new namespace")
-                oc.SetupProject()
-                out, err := oc.AsAdmin().Run("apply").Args("-f", egressnetworkP).Output()
-                o.Expect(err).NotTo(o.HaveOccurred())
-                o.Expect(out).To(o.ContainSubstring("default-egress-egressnetworkpolicy created"))
-                out, err = oc.AsAdmin().Run("apply").Args("-f", updateegressnetworkP).Output()
-                o.Expect(err).NotTo(o.HaveOccurred())
-                o.Expect(out).To(o.ContainSubstring("default-egress-egressnetworkpolicy configured"))
-        })
+		g.By("create new namespace")
+		oc.SetupProject()
+		out, err := oc.AsAdmin().Run("apply").Args("-f", egressnetworkP).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("default-egress-egressnetworkpolicy created"))
+		out, err = oc.AsAdmin().Run("apply").Args("-f", updateegressnetworkP).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("default-egress-egressnetworkpolicy configured"))
+	})
+	// author: yinzhou@redhat.com
+	g.It("Author:yinzhou-High-42982-Describe quota output should always show units", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		deploymentconfigF := filepath.Join(buildPruningBaseDir, "deploymentconfig_with_quota.yaml")
+		clusterresourceF := filepath.Join(buildPruningBaseDir, "clusterresource_for_user.yaml")
+		g.By("create new namespace")
+		oc.SetupProject()
+		err := oc.AsAdmin().Run("create").Args("quota", "compute-resources-42982", "--hard=requests.cpu=4,requests.memory=8Gi,pods=4,limits.cpu=4,limits.memory=8Gi").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("create").Args("-f", deploymentconfigF).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		//wait for pod running
+		checkPodStatus(oc, "deploymentconfig=hello-openshift", oc.Namespace(), "Running")
+		checkPodStatus(oc, "openshift.io/deployer-pod-for.name=hello-openshift-1", oc.Namespace(), "Succeeded")
+		output, err := oc.Run("describe").Args("quota", "compute-resources-42982").Output()
+		if matched, _ := regexp.MatchString("requests.memory.*Ki.*8Gi", output); matched {
+			e2e.Logf("describe the quota with units:\n%s", output)
+		}
+
+		//check for clusterresourcequota
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterresourcequota", "for-user42982").Execute()
+		userName, err := oc.Run("whoami").Args("").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", clusterresourceF).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("current user name is %v", userName)
+		patchPath := fmt.Sprintf("-p=[{\"op\": \"replace\", \"path\": \"/spec/selector/annotations\", \"value\":{ \"openshift.io/requester\": \"%s\" }}]", userName)
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterresourcequota", "for-user42982", "--type=json", patchPath).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().Run("new-project").Args("p42982-1").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", "p42982-1").Execute()
+		err = oc.WithoutNamespace().Run("create").Args("-f", deploymentconfigF, "-n", "p42982-1").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		//wait for pod running
+		checkPodStatus(oc, "deploymentconfig=hello-openshift", "p42982-1", "Running")
+		checkPodStatus(oc, "openshift.io/deployer-pod-for.name=hello-openshift-1", "p42982-1", "Succeeded")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("clusterresourcequota", "for-user42982").Output()
+		if matched, _ := regexp.MatchString("requests.memory.*Ki.*8Gi", output); matched {
+			e2e.Logf("describe the quota with units:\n%s", output)
+		}
+
+	})
 })
 
 type ClientVersion struct {
