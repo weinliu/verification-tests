@@ -1082,3 +1082,14 @@ func CurlPod2SvcFail(oc *exutil.CLI, namespace string, podNameSrc string, svcNam
 		o.Expect(err).To(o.HaveOccurred())
 	}
 }
+
+func checkProxy(oc *exutil.CLI) bool {
+	httpProxy, err := doAction(oc, "get", true, true, "proxy", "cluster", "-o=jsonpath={.status.httpProxy}")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	httpsProxy, err := doAction(oc, "get", true, true, "proxy", "cluster", "-o=jsonpath={.status.httpsProxy}")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if httpProxy != "" || httpsProxy != "" {
+		return true
+	}
+	return false
+}

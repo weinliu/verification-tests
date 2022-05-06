@@ -579,6 +579,106 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 
+	// author: huirwang@redhat.com
+	g.It("ConnectedOnly-Author:huirwang-High-47019-High-47023-EgressIP works well with networkpolicy and egressFirewall. [Serial]", func() {
+		//EgressFirewall case cannot run in proxy cluster, skip if proxy cluster.
+		if checkProxy(oc) {
+			g.Skip("This is proxy cluster, skip the test.")
+		}
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		networkPolicyFile := filepath.Join(buildPruningBaseDir, "networkpolicy/default-deny-ingress.yaml")
+		testPodFile := filepath.Join(buildPruningBaseDir, "testpod.yaml")
+		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
+		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall2-template.yaml")
+
+		g.By("1. Label EgressIP node\n")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		egressNode := nodeList.Items[0].Name
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("2. Apply EgressLabel Key for this test on one node.\n")
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
+
+		g.By("3. create new namespace\n")
+		oc.SetupProject()
+		ns1 := oc.Namespace()
+
+		g.By("4. Apply label to namespace\n")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
+
+		g.By("5. Create an egressip object\n")
+		sub1 := getIfaddrFromNode(egressNode, oc)
+		freeIps := findUnUsedIPsOnNode(oc, egressNode, sub1, 2)
+		o.Expect(len(freeIps) == 2).Should(o.BeTrue())
+		egressip1 := egressIPResource1{
+			name:      "egressip-47019",
+			template:  egressIPTemplate,
+			egressIP1: freeIps[0],
+			egressIP2: freeIps[1],
+		}
+		egressip1.createEgressIPObject1(oc)
+		defer egressip1.deleteEgressIPObject1(oc)
+
+		g.By("6. Create test pods \n")
+		createResourceFromFile(oc, ns1, testPodFile)
+		err = waitForPodWithLabelReady(oc, oc.Namespace(), "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+
+		g.By("7. Create default deny ingress type networkpolicy in test namespace\n")
+		createResourceFromFile(oc, ns1, networkPolicyFile)
+		output, err := oc.Run("get").Args("networkpolicy").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("default-deny-ingress"))
+
+		g.By("8. Create an EgressFirewall object with rule deny.")
+		ipEchoIP := strings.Split(ipEchoUrl, ":")[0]
+		e2e.Logf(ipEchoIP)
+		egressFW2 := egressFirewall2{
+			name:      "default",
+			namespace: ns1,
+			ruletype:  "Deny",
+			cidr:      ipEchoIP + "/32",
+			template:  egressFWTemplate,
+		}
+		egressFW2.createEgressFW2Object(oc)
+		defer egressFW2.deleteEgressFW2Object(oc)
+
+		g.By("9. Get test pods IP and test pod name in test namespace\n")
+		testPodName := getPodName(oc, oc.Namespace(), "name=test-pods")
+
+		g.By("10. Check network policy works. \n")
+		CurlPod2PodFail(oc, ns1, testPodName[0], ns1, testPodName[1])
+
+		g.By("11. Check EgressFirewall policy works. \n")
+		_, err = e2e.RunHostCmd(ns1, testPodName[0], "curl -s "+ipEchoUrl+" --connect-timeout 5")
+		o.Expect(err).To(o.HaveOccurred())
+
+		g.By("12.Update EgressFirewall to allow")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressfirewall.k8s.ovn.org/default", "-n", ns1, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Allow\",\"to\":{\"cidrSelector\":\""+ipEchoIP+"/32\"}}]}}", "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("13. Check EgressFirewall Allow rule works and EgressIP works.\n")
+		egressip_err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+			sourceIp, err := e2e.RunHostCmd(ns1, testPodName[0], "curl -s "+ipEchoUrl+" --connect-timeout 5")
+			if err != nil {
+				e2e.Logf("Wait for EgressFirewall taking effect. %v", err)
+				return false, nil
+			}
+			if !contains(freeIps, sourceIp) {
+				eip, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressip", "-o=jsonpath={.}").Output()
+				e2e.Logf(eip)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(egressip_err, fmt.Sprintf("The source Ip is not same as the egressIP expected!"))
+
+	})
+
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
