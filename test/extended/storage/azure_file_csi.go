@@ -177,6 +177,111 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("Check the deployment's pod mounted volume have the exec right")
 		dep.checkPodMountedVolumeHaveExecRight(oc)
 	})
+
+	// author: rdeore@redhat.com
+	// Author:rdeore-[Azure-File-CSI-Driver] [SKU-NAMES] support different skuName in storageclass
+	var azureSkuNamesCaseIdMap = map[string]string{
+		"50392": "Standard_LRS",    // High-50392-[Azure-File-CSI-Driver] [Standard_LRS] support different skuName in storageclass
+		"50590": "Standard_GRS",    // High-50590-[Azure-File-CSI-Driver] [Standard_GRS] support different skuName in storageclass
+		"50591": "Standard_RAGRS",  // High-50591-[Azure-File-CSI-Driver] [Standard_RAGRS] support different skuName in storageclass
+		"50592": "Standard_RAGZRS", // High-50592-[Azure-File-CSI-Driver] [Standard_RAGZRS] support different skuName in storageclass
+		"50593": "Premium_LRS",     // High-50593-[Azure-File-CSI-Driver] [Premium_LRS] support different skuName in storageclass
+		"50594": "Standard_ZRS",    // High-50594-[Azure-File-CSI-Driver] [Standard_ZRS] support different skuName in storageclass
+		"50595": "Premium_ZRS",     // High-50595-[Azure-File-CSI-Driver] [Premium_ZRS] support different skuName in storageclass
+	}
+	caseIds := []string{"50392", "50590", "50591", "50592", "50593", "50594", "50595"}
+	for i := 0; i < len(caseIds); i++ {
+		skuName := azureSkuNamesCaseIdMap[caseIds[i]]
+
+		g.It("Author:rdeore-High-"+caseIds[i]+"-[Azure-File-CSI-Driver] [SKU-NAMES] support different skuName in storageclass with "+skuName, func() {
+			region := getClusterRegion(oc)
+			support_regions := []string{"westus2", "westeurope", "northeurope", "francecentral"}
+			if strings.Contains(skuName, "ZRS") && !contains(support_regions, region) {
+				g.Skip("Current region doesn't support zone-redundant storage")
+			}
+
+			// Set the resource template for the scenario
+			var (
+				podTemplate = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+				provisioner = "file.csi.azure.com"
+			)
+
+			// Set up a specified project share for all the phases
+			g.By("#. Create new project for the scenario")
+			oc.SetupProject()
+
+			// Set the resource definition for the scenario
+			storageClassParameters := map[string]string{
+				"skuname": skuName,
+			}
+			extraParameters := map[string]interface{}{
+				"parameters": storageClassParameters,
+			}
+
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+			g.By("#. Create csi storageclass with skuname: " + skuName)
+			storageClass.createWithExtraParameters(oc, extraParameters)
+			defer storageClass.deleteAsAdmin(oc)
+
+			g.By("#. Create a pvc with the csi storageclass")
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+
+			g.By("#. Create pod with the created pvc and wait for the pod ready")
+			pod.create(oc)
+			defer pod.deleteAsAdmin(oc)
+			pod.waitReady(oc)
+
+			g.By("#. Check the pod volume can be read and write")
+			pod.checkMountedVolumeCouldRW(oc)
+
+			g.By("#. Check the pod volume have the exec right")
+			pod.checkMountedVolumeHaveExecRight(oc)
+
+			g.By("#. Check the pv.spec.csi.volumeAttributes.skuname")
+			pvName := pvc.getVolumeName(oc)
+			skuname_pv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.skuname}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("The skuname in PV is: %v.", skuname_pv)
+			o.Expect(skuname_pv).To(o.Equal(skuName))
+		})
+	}
+
+	// author: rdeore@redhat.com
+	// OCP-50634 -[Azure-File-CSI-Driver] fail to provision Block volumeMode
+	g.It("Author:rdeore-High-50634-[Azure-File-CSI-Driver] fail to provision Block volumeMode", func() {
+		// Set the resource template for the scenario
+		var (
+			provisioner = "file.csi.azure.com"
+		)
+
+		// Set up a specified project share for all the phases
+		g.By("#. Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
+
+		g.By("#. Create a storageclass")
+		sc.create(oc)
+		defer sc.deleteAsAdmin(oc)
+
+		g.By("#. Create a pvc with the csi storageclass")
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc.name), setPersistentVolumeClaimVolumemode("Block"))
+		e2e.Logf("%s", pvc.scname)
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("#. Check pvc: " + pvc.name + " is in pending status")
+		pvc.waitPvcStatusToTimer(oc, "Pending")
+
+		g.By("#. Check pvc provisioning failure information is clear")
+		info, err := pvc.getDescription(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(info).To(o.ContainSubstring("driver does not support block volume"))
+	})
 })
 
 // Get resourceGroup/account/share name by creating a new azure-file volume

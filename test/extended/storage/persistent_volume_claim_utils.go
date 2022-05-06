@@ -210,6 +210,13 @@ func (pvc *persistentVolumeClaim) getVolumeId(oc *exutil.CLI) string {
 	return volumeId
 }
 
+//  Get the description of PersistentVolumeClaim
+func (pvc *persistentVolumeClaim) getDescription(oc *exutil.CLI) (string, error) {
+	output, err := oc.WithoutNamespace().Run("describe").Args("pvc", "-n", pvc.namespace, pvc.name).Output()
+	e2e.Logf("****** The PVC  %s in namespace %s detail info: ******\n %s", pvc.name, pvc.namespace, output)
+	return output, err
+}
+
 //  Get specified PersistentVolumeClaim status
 func getPersistentVolumeClaimStatus(oc *exutil.CLI, namespace string, pvcName string) (string, error) {
 	pvcStatus, err := oc.WithoutNamespace().Run("get").Args("pvc", "-n", namespace, pvcName, "-o=jsonpath={.status.phase}").Output()
