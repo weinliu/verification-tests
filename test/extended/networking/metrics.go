@@ -4,11 +4,14 @@ import (
 	"os/exec"
 	"strings"
 	"path/filepath"
+	"time"
+	"fmt"
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 var _ = g.Describe("[sig-networking] SDN", func() {
@@ -316,7 +319,97 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		    o.Expect(metric_value1).To(o.ContainSubstring("1"))	
 		}
 	})
-})
 
+	g.It("Author:weliang-Medium-45689-Metrics for idling enable/disabled.", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			testPodFile = filepath.Join(buildPruningBaseDir, "metrics/metrics-pod.json")
+			testSvcFile =  filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			testPodName = "hello-pod"
+		)
+
+		g.By("create new namespace")
+		oc.SetupProject()
+		ns := oc.Namespace()
+
+		g.By("create a service")
+		createResourceFromFile(oc, ns, testSvcFile)
+		ServiceOutput, serviceErr := oc.WithoutNamespace().Run("get").Args("service", "-n", ns).Output()
+		o.Expect(serviceErr).NotTo(o.HaveOccurred())
+		o.Expect(ServiceOutput).To(o.ContainSubstring("test-service"))
+
+		g.By("create a test pod")
+		createResourceFromFile(oc, ns, testPodFile)
+		podErr := waitForPodWithLabelReady(oc, ns, "name=hello-pod")
+		exutil.AssertWaitPollNoErr(podErr, "hello-pod is not running")
+
+		g.By("get test service ip address")
+		testServiceIP,_ := getSvcIP(oc, ns, "test-service") //This case is check metrics not svc testing, do not need use test-service dual-stack address
+
+		g.By("test-pod can curl service ip address:port")
+		ipStackType := checkIpStackType(oc)
+		//Need curl serverice several times, otherwise casue curl: (7) Failed to connect to 172.30.248.18 port 27017 
+		//after 0 ms: Connection refused\ncommand terminated with exit code 7\n\nerror:\nexit status 7"
+		if ipStackType == "ipv6single" {
+		    for i := 0; i < 6; i++ {
+		        e2e.RunHostCmd(ns, testPodName, "curl [" +testServiceIP+ "]:27017 --connect-timeout 5")
+		    }
+		    _, svcerr := e2e.RunHostCmd(ns, testPodName, "curl [" +testServiceIP+ "]:27017 --connect-timeout 5")
+		    o.Expect(svcerr).NotTo(o.HaveOccurred())
+	    } 
+		if ipStackType == "ipv4single" || ipStackType == "dualstack" { 
+			for i := 0; i < 6; i++ {
+		        e2e.RunHostCmd(ns, testPodName, "curl " +testServiceIP+ ":27017 --connect-timeout 5")
+		    }
+		    _, svcerr := e2e.RunHostCmd(ns, testPodName, "curl " +testServiceIP+ ":27017 --connect-timeout 5")
+		    o.Expect(svcerr).NotTo(o.HaveOccurred())
+		}
+
+		g.By("idle test-service")
+		_, idleerr := oc.Run("idle").Args("-n", ns, "test-service").Output()
+		o.Expect(idleerr).NotTo(o.HaveOccurred())
+
+		g.By("test pod can curl service address:port again to unidle the svc")
+		//Need curl serverice several times, otherwise casue curl: (7) Failed to connect to 172.30.248.18 port 27017 
+		//after 0 ms: Connection refused\ncommand terminated with exit code 7\n\nerror:\nexit status 7"
+		if ipStackType == "ipv6single" {
+		    for i := 0; i < 6; i++ {
+		        e2e.RunHostCmd(ns, testPodName, "curl [" +testServiceIP+ "]:27017 --connect-timeout 5")
+		    }
+		    _, svcerr := e2e.RunHostCmd(ns, testPodName, "curl [" +testServiceIP+ "]:27017 --connect-timeout 5")
+		    o.Expect(svcerr).NotTo(o.HaveOccurred())
+	    } else { 
+			for i := 0; i < 6; i++ {
+		        e2e.RunHostCmd(ns, testPodName, "curl " +testServiceIP+ ":27017 --connect-timeout 5")
+		    }
+		    _, svcerr := e2e.RunHostCmd(ns, testPodName, "curl " +testServiceIP+ ":27017 --connect-timeout 5")
+		    o.Expect(svcerr).NotTo(o.HaveOccurred())
+		}
+
+		g.By("get controller-managert service ip address")
+		ManagertServiceIP,_ := getSvcIP(oc, "openshift-controller-manager", "controller-manager") //Right now, the cluster svc only get single IP
+		var prometheus_url string
+		if ipStackType == "ipv6single" {
+			prometheus_url = "https://[" + ManagertServiceIP + "]/metrics"	
+		} else {
+			prometheus_url = "https://" + ManagertServiceIP + "/metrics"
+		}
+		//Because Bug 2064786: Not always can get the metrics of openshift_unidle_events_total 
+		//Need curl several times to get the metrics of openshift_unidle_events_total
+		metrics_err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		    output := getOVNMetrics(oc, prometheus_url)
+		    metric_output, _ := exec.Command("bash", "-c", "cat "+output+" | grep openshift_unidle_events_total | awk 'NR==3{print $2}'").Output()
+		    metric_value := strings.TrimSpace(string(metric_output))
+			e2e.Logf("The output of openshift_unidle_events metrics is : %v", metric_value)
+			if strings.Contains(metric_value,"1") {
+		        return true, nil
+		    } else {
+		        e2e.Logf("Can't get correct metrics of openshift_unidle_events and try again")
+		        return false, nil
+			}
+		})
+		exutil.AssertWaitPollNoErr(metrics_err, fmt.Sprintf("Fail to get metric and the error is:%s", metrics_err))
+	})
+})
 
 
