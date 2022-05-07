@@ -34,22 +34,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	// author: wewang@redhat.com
 	g.It("Author:wewang-Medium-35906-Only API objects will be removed in image pruner pod when image registry is set to Removed [Disruptive]", func() {
 		g.By("Check platforms")
-		platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		platforms := map[string]bool{
-			"AWS":          true,
-			"Azure":        true,
-			"GCP":          true,
-			"OpenStack":    true,
-			"AlibabaCloud": true,
-			"IBMCloud":     true,
-		}
-		if !platforms[platformtype] {
-			g.Skip("Skip for non-supported platform")
+		//When registry configured using pvc, the following removed registry operation will remove pvc too.
+		//This is not suitable for the defer recoverage. Only run this case on cloud storage.
+		if checkRegistryUsingFSVolume(oc) {
+			g.Skip("Skip for fs volume")
 		}
 
 		g.By("Set image registry cluster Removed")
-		err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Removed"}}`, "--type=merge").Execute()
+		err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Removed"}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
 			g.By("Set image registry cluster Managed")

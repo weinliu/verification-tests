@@ -329,35 +329,55 @@ func recoverRegistryDefaultReplicas(oc *exutil.CLI) {
 	}
 }
 
-func restoreRegistryStorageConfig(oc *exutil.CLI) string {
-	var storageinfo string
+func restoreRegistryStorageConfig(oc *exutil.CLI) (string, string) {
+	var storagetype, storageinfo string
 	g.By("Get image registry storage info")
 	platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	switch platformtype {
 	case "AWS":
+		storagetype = "s3"
 		storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.s3.bucket}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	case "Azure":
+		storagetype = "azure"
 		storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.azure.container}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	case "GCP":
+		storagetype = "gcs"
 		storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.gcs.bucket}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	case "OpenStack":
+		storagetype = "swift"
 		storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.swift.container}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		//On disconnect & openstack, the registry configure to use persistent volume
+		if storageinfo == "" {
+			storagetype = "pvc"
+			storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.pvc.claim}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+	case "AlibabaCloud":
+		storagetype = "oss"
+		storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.oss.bucket}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	case "IBMCloud":
+		storagetype = "ibmocs"
+		storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.ibmocs.bucket}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 	case "None", "VSphere":
+		storagetype = "pvc"
 		storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.pvc.claim}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if storageinfo == "" {
+			storagetype = "emptyDir"
 			storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.emptyDir}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 	default:
 		e2e.Logf("Image Registry is using unknown storage type")
 	}
-	return storageinfo
+	return storagetype, storageinfo
 }
 
 func loginRegistryDefaultRoute(oc *exutil.CLI, defroute string, ns string) {
@@ -966,4 +986,14 @@ func getImageRegistryPodNumber(oc *exutil.CLI) int {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	intPodNum, _ := strconv.Atoi(podNum)
 	return intPodNum
+}
+
+func saveImageRegistryAuth(oc *exutil.CLI, regRoute, ns string) (string, error) {
+	tempDataFile := filepath.Join("/tmp/", fmt.Sprintf("ir-auth-%s", getRandomString()))
+	err := oc.AsAdmin().WithoutNamespace().Run("registry").Args("login", "--registry="+regRoute, "-z", "builder", "--to="+tempDataFile, "--insecure", "-n", ns).Execute()
+	if err != nil {
+		e2e.Logf("Fail to login image registry: %v", err)
+		return tempDataFile, err
+	}
+	return tempDataFile, nil
 }

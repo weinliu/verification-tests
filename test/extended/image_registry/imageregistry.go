@@ -160,26 +160,18 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("Author:wewang-Critial-22893-PodAntiAffinity should work for image registry pod", func() {
+	g.It("Author:wewang-Critial-22893-PodAntiAffinity should work for image registry pod[Serial]", func() {
 		g.Skip("According devel comments: https://bugzilla.redhat.com/show_bug.cgi?id=2014940, still not work,when find a solution, will enable it")
 		g.By("Check platforms")
-		platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		platforms := map[string]bool{
-			"AWS":          true,
-			"Azure":        true,
-			"GCP":          true,
-			"OpenStack":    true,
-			"AlibabaCloud": true,
-			"IBMCloud":     true,
-		}
-		if !platforms[platformtype] {
-			g.Skip("Skip for non-supported platform")
+		//We set registry use pv on openstack&disconnect cluster, the case will fail on this scenario.
+		//Skip all the fs volume test, only run on object storage backend.
+		if checkRegistryUsingFSVolume(oc) {
+			g.Skip("Skip for fs volume")
 		}
 
 		var numi, numj int
 		g.By("Add podAntiAffinity in image registry config")
-		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"affinity":{"podAntiAffinity":{"preferredDuringSchedulingIgnoredDuringExecution":[{"podAffinityTerm":{"topologyKey":"kubernetes.io/hostname"},"weight":100}]}}}}`, "--type=merge").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"affinity":{"podAntiAffinity":{"preferredDuringSchedulingIgnoredDuringExecution":[{"podAffinityTerm":{"topologyKey":"kubernetes.io/hostname"},"weight":100}]}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"affinity":null}}`, "--type=merge").Execute()
 
@@ -376,32 +368,24 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("Author:wewang-High-41414-There are 2 replicas for image registry on HighAvailable workers S3/Azure/GCS/Swift storage [Flaky]", func() {
+	g.It("Author:wewang-High-41414-There are 2 replicas for image registry on HighAvailable workers S3/Azure/GCS/Swift storage", func() {
 		g.By("Check image registry pod")
-		platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		switch platformtype {
-		case "AWS", "Azure", "GCP", "OpenStack", "AlibabaCloud", "IBMCloud":
-			podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(metav1.ListOptions{LabelSelector: "docker-registry=default"})
-			o.Expect(len(podList.Items)).To(o.Equal(2))
-			oc.SetupProject()
-			err := oc.Run("new-build").Args("-D", "FROM quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "--to=test-41414").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			err = exutil.WaitForABuild(oc.BuildClient().BuildV1().Builds(oc.Namespace()), "test-41414-1", nil, nil, nil)
-			if err != nil {
-				exutil.DumpBuildLogs("test-41414", oc)
-			}
-			exutil.AssertWaitPollNoErr(err, "build is not complete")
-		default:
-			g.Skip("Skip for other clusters!")
+		//We set registry use pv on openstack&disconnect cluster, the case will fail on this scenario.
+		//Skip all the fs volume test, only run on object storage backend.
+		if checkRegistryUsingFSVolume(oc) {
+			g.Skip("Skip for fs volume")
 		}
+
+		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", 2)
+		oc.SetupProject()
+		checkRegistryFunctionFine(oc, "test-41414", oc.Namespace())
 	})
 
 	//author: xiuwang@redhat.com
 	g.It("Author:xiuwang-Critial-34680-Image registry storage cannot be removed if set to Unamanaged when image registry is set to Removed [Disruptive]", func() {
 		g.By("Get registry storage info")
 		var storageinfo1, storageinfo2, storageinfo3 string
-		storageinfo1 = restoreRegistryStorageConfig(oc)
+		_, storageinfo1 = restoreRegistryStorageConfig(oc)
 		g.By("Set image registry storage to Unmanaged, image registry operator to Removed")
 		err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Removed","storage":{"managementState":"Unmanaged"}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -424,7 +408,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Image registry is not removed")
-		storageinfo2 = restoreRegistryStorageConfig(oc)
+		_, storageinfo2 = restoreRegistryStorageConfig(oc)
 		if strings.Compare(storageinfo1, storageinfo2) != 0 {
 			e2e.Failf("Image stroage has changed")
 		}
@@ -444,7 +428,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Image registry is not recovered")
-		storageinfo3 = restoreRegistryStorageConfig(oc)
+		_, storageinfo3 = restoreRegistryStorageConfig(oc)
 		if strings.Compare(storageinfo1, storageinfo3) != 0 {
 			e2e.Failf("Image stroage has changed")
 		}
@@ -453,18 +437,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	// author: wewang@redhat.com
 	g.It("Author:wewang-Critical-21593-Check registry status by changing managementState for image-registry [Disruptive]", func() {
 		g.By("Check platforms")
-		platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		platforms := map[string]bool{
-			"AWS":          true,
-			"Azure":        true,
-			"GCP":          true,
-			"OpenStack":    true,
-			"AlibabaCloud": true,
-			"IBMCloud":     true,
-		}
-		if !platforms[platformtype] {
-			g.Skip("Skip for non-supported platform")
+		//We set registry use pv on openstack&disconnect cluster, the case will fail on this scenario.
+		//Skip all the fs volume test, only run on object storage backend.
+		if checkRegistryUsingFSVolume(oc) {
+			g.Skip("Skip for fs volume")
 		}
 
 		g.By("Change managementSet from Managed -> Removed")
@@ -473,7 +449,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Managed"}}`, "--type=merge").Execute()
 			recoverRegistryDefaultPods(oc)
 		}()
-		err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Removed"}}`, "--type=merge").Execute()
+		err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Removed"}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Check image-registry pods are removed")
 		checkRegistrypodsRemoved(oc)
@@ -1233,18 +1209,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	// author: wewang@redhat.com
 	g.It("NonPreRelease-ConnectedOnly-Author:wewang-Medium-43731-Image registry pods should have anti-affinity rules [Disruptive]", func() {
 		g.By("Check platforms")
-		platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		platforms := map[string]bool{
-			"AWS":          true,
-			"Azure":        true,
-			"GCP":          true,
-			"OpenStack":    true,
-			"AlibabaCloud": true,
-			"IBMCloud":     true,
-		}
-		if !platforms[platformtype] {
-			g.Skip("Skip for non-supported platform")
+		//We set registry use pv on openstack&disconnect cluster, the case will fail on this scenario.
+		//Skip all the fs volume test, only run on object storage backend.
+		//pods anti-affinity sets when registry's replicas is 2
+		if checkRegistryUsingFSVolume(oc) {
+			g.Skip("Skip for fs volume")
 		}
 
 		g.By("Check pods anti-affinity match requiredDuringSchedulingIgnoredDuringExecution rule when replicas is 2")
@@ -1254,7 +1223,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Set image registry replica to 3")
 		defer recoverRegistryDefaultReplicas(oc)
-		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"replicas":3}}`, "--type=merge").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"replicas":3}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Confirm 3 pods scaled up")
 		err = wait.Poll(30*time.Second, 2*time.Minute, func() (bool, error) {
@@ -1482,6 +1451,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring(host + "/openshift/tools:latest"))
 
 	})
+
 	// author: yyou@redhat.com
 	g.It("VMonly-NonPreRelease-Author:yyou-Critical-44037-Could configure swift authentication using application credentials [Disruptive]", func() {
 		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
@@ -1758,6 +1728,60 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("check registry working well")
 		checkRegistryFunctionFine(oc, "test2-50219", oc.Namespace())
+	})
+
+	// author: xiuwang@redhat.com
+	g.It("Author:xiuwang-Critical-NonPreRelease-49455-disableRedirect should work when image registry configured object storage [Serial]", func() {
+		g.By("Get registry storage info")
+		storagetype, _ := restoreRegistryStorageConfig(oc)
+		if storagetype == "pvc" || storagetype == "emptyDir" {
+			g.Skip("Skip disableRedirect test for fs volume")
+		}
+
+		g.By("Set object storage client accordingly")
+		var storageclient string
+		switch storagetype {
+		case "azure":
+			storageclient = "blob.core.windows.net"
+		case "gcs":
+			storageclient = "storage.googleapis.com"
+		case "ibmocs":
+			storageclient = "storage.appdomain.cloud"
+		case "oss":
+			storageclient = "aliyuncs.com"
+		case "swift":
+			storageclient = "redhat.com"
+		case "s3":
+			storageclient = "amazonaws.com"
+		default:
+			e2e.Failf("Image Registry is using unknown storage type")
+		}
+
+		g.By("Create route to expose the registry")
+		defer restoreRouteExposeRegistry(oc)
+		createRouteExposeRegistry(oc)
+		regRoute := getRegistryDefaultRoute(oc)
+
+		g.By("push image to registry")
+		oc.SetupProject()
+		checkRegistryFunctionFine(oc, "test-49455", oc.Namespace())
+		authFile, err := saveImageRegistryAuth(oc, regRoute, oc.Namespace())
+		defer os.RemoveAll(authFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check disableRedirect function")
+		//disableRedirect: Controls whether to route all data through the registry, rather than redirecting to the back end. Defaults to false.
+		myimage := regRoute + "/" + oc.Namespace() + "/test-49455:latest"
+		cmd := "oc image info " + myimage + " -ojson -a " + authFile + " --insecure|jq -r '.layers[0].digest'"
+		imageblob, err := exec.Command("bash", "-c", cmd).Output()
+		e2e.Logf(" imageblob is %s", imageblob)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		token, err := oc.WithoutNamespace().AsAdmin().Run("sa").Args("get-token", "builder", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd = "curl -Lks -u " + oc.Username() + ":" + token + " -I HEAD https://" + regRoute + "/v2/" + oc.Namespace() + "/test-49455/blobs/" + string(imageblob)
+		curlOutput, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(curlOutput)).To(o.ContainSubstring(storageclient))
 	})
 
 })
