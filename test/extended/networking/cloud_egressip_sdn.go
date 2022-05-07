@@ -562,6 +562,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(sourceIp).ShouldNot(o.ContainSubstring(freeIps[1]))
 	})
 
+	// author: jechen@redhat.com
 	g.It("ConnectedOnly-Author:jechen-Medium-46963-Should remove the egressIP from the array if it was not being used. [Disruptive]", func() {
 		g.By("1. Pick a node as egressIP node, add egressCIDRs to it")
 		// get CIDR on the node
@@ -593,6 +594,107 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		for i := 0; i < 4; i++ {
 			o.Expect(ip[0]).ShouldNot(o.BeElementOf(freeIps[i]))
 		}
+	})
+
+	// author: jechen@redhat.com
+	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-47054-The egressIP can be HA if netnamespace has single egressIP . [Disruptive][Slow]", func() {
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+
+		g.By("1. Get list of nodes, get subnet from two worker nodes that have same subnet, add egressCIDRs to them")
+		var egressNode1, egressNode2, nonEgressNode string
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
+		if !ok || egressNodes == nil || len(egressNodes) < 2 {
+			g.Skip("The prerequirement was not fullfilled, skip the case!!")
+		}
+		egressNode1 = egressNodes[0]
+		egressNode2 = egressNodes[1]
+
+		// find a node that is not egress node
+		for i := 0; i < len(nodeList.Items); i++ {
+			if nodeList.Items[i].Name != egressNode1 && nodeList.Items[i].Name != egressNode2 {
+				nonEgressNode = nodeList.Items[i].Name
+				break
+			}
+		}
+		if nonEgressNode == "" {
+			g.Skip("Did not get a node that is not egressIP node, skip the case!!")
+		}
+		e2e.Logf("\n non-egress node: %v\n", nonEgressNode)
+
+		g.By("2. Get subnet from egressIP node, add egressCIDRs to both egressIP nodes")
+		sub := getIfaddrFromNode(egressNode1, oc)
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[\""+sub+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[\""+sub+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[]}")
+
+		g.By("3. Find 1 unused IPs from one egress node")
+		freeIps := findUnUsedIPsOnNode(oc, egressNode1, sub, 1)
+		o.Expect(len(freeIps) == 1).Should(o.BeTrue())
+
+		g.By("4. Create a namespaces, apply the egressIP to the namespace, and create a test pod on a non-egress node")
+		oc.SetupProject()
+		ns := oc.Namespace()
+
+		podns := pingPodResourceNode{
+			name:      "hello-pod",
+			namespace: ns,
+			nodename:  nonEgressNode,
+			template:  pingPodNodeTemplate,
+		}
+		podns.createPingPodNode(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", podns.name, "-n", podns.namespace).Execute()
+		waitPodReady(oc, podns.namespace, podns.name)
+
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIps[0]+"\"]}")
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+
+		g.By("5. Find the host that is assigned the egressIP address")
+		foundHost := SDNHostwEgressIP(oc, egressNodes, freeIps[0])
+		e2e.Logf("\n\n\n foundHost that has the egressIP: %v\n\n\n", foundHost)
+		if foundHost == "" {
+			g.Fail("Did not find host that has the egressIP address assigned, the test case is failing!")
+		}
+
+		g.By("6. reboot the host that has egressIP address")
+		defer checkNodeStatus(oc, foundHost, "Ready")
+		rebootNode(oc, foundHost)
+
+		g.By("7. Get the egressNode that does not have egressIP address assigned previously")
+		// remove the host with egressIP address from the egress node list, get the egressNode that does not have egressIP address assigned
+		var hostLeft []string
+		for i, v := range egressNodes {
+			if v == foundHost {
+				hostLeft = append(egressNodes[:i], egressNodes[i+1:]...)
+				break
+			}
+		}
+		e2e.Logf("\n Get the egressNode that did not have egressIP address previously: %v\n\n\n", hostLeft)
+
+		g.By("8. check if egressIP address is moved to the other egressIP node after original host is rebooted")
+		ip, err := getEgressIPonSDNHost(oc, hostLeft[0], 1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(ip[0]).Should(o.BeElementOf(freeIps))
+
+		g.By("9.From the namespace, check source IP is egressIP address")
+		sourceIp, err := e2e.RunHostCmd(podns.namespace, podns.name, "curl -s "+ipEchoUrl+" --connect-timeout 5")
+		if !contains(freeIps, sourceIp) || err != nil {
+			err = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+				sourceIp, err := e2e.RunHostCmd(podns.namespace, podns.name, "curl -s "+ipEchoUrl+" --connect-timeout 5")
+				if !contains(freeIps, sourceIp) || err != nil {
+					e2e.Logf("\n got sourceIP as %v while egressIP is %v, or got the error: %v\n, try again", sourceIp, ip, err)
+					return false, nil
+				}
+				return true, nil
+			})
+		}
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to get sourceIP:%s", err))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIp).Should(o.BeElementOf(freeIps[0]))
 	})
 
 })

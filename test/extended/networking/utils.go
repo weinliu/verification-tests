@@ -1093,3 +1093,44 @@ func checkProxy(oc *exutil.CLI) bool {
 	}
 	return false
 }
+
+// find out which egress node has the egressIP
+func SDNHostwEgressIP(oc *exutil.CLI, node []string, egressip string) string {
+	var ip []string
+	var foundHost string
+	for i := 0; i < len(node); i++ {
+		iplist, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostsubnet", node[i], "-o=jsonpath={.egressIPs}").Output()
+		if iplist != "" {
+			ip = strings.Split(iplist[2:len(iplist)-2], "\",\"")
+		}
+		if iplist == "" || err != nil {
+			err = wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
+				iplist, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("hostsubnet", node[i], "-o=jsonpath={.egressIPs}").Output()
+				if iplist != "" {
+					e2e.Logf("Found egressIP list for node %v is: %v", node, iplist)
+					ip = strings.Split(iplist[2:len(iplist)-2], "\",\"")
+					return true, nil
+				}
+				if err != nil {
+					e2e.Logf("only got %d egressIP, or have err:%v, and try next round", len(ip), err)
+					return false, nil
+				}
+				return false, nil
+			})
+		}
+		if isValueInList(egressip, ip) {
+			foundHost = node[i]
+			break
+		}
+	}
+	return foundHost
+}
+
+func isValueInList(value string, list []string) bool {
+	for _, v := range list {
+		if v == value {
+			return true
+		}
+	}
+	return false
+}
