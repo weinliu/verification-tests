@@ -19,7 +19,7 @@ RUN sh -c 'echo -e "[google-cloud-sdk]\nname=Google Cloud SDK\nbaseurl=https://p
     git config --system user.email test-private@test.com && \
     chmod g+w /etc/passwd && \
     rm -rf /root/.config/gcloud
-RUN pip3 install dotmap minio pyyaml requests
+RUN pip3 install --upgrade setuptools pip && pip3 install dotmap minio pyyaml==5.4.1 requests python-openstackclient
 RUN curl -s -k https://dl.google.com/go/go1.17.6.linux-amd64.tar.gz -o go1.17.6.linux-amd64.tar.gz && \
     tar -C /usr/local -xzf go1.17.6.linux-amd64.tar.gz && rm -fr go1.17.6.linux-amd64.tar.gz && \
     mkdir -p /tmp/goproject && mkdir -p /tmp/gocache && chmod -R g=u /tmp/goproject && \
