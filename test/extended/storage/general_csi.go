@@ -830,9 +830,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip: Non-supported provisioner!!!")
 		}
+
+		var nonZonedProvisioners = []string{"file.csi.azure.com"}
 		if len(schedulableWorkersWithSameAz) == 0 {
-			g.Skip("Skip: The test cluster has less than two schedulable workers in each avaiable zone!!!")
+			e2e.Logf("The test cluster has less than two schedulable workers in each avaiable zone, check whether there is non-zoned provisioner")
+			if len(sliceIntersect(nonZonedProvisioners, supportProvisioners)) != 0 {
+				supportProvisioners = sliceIntersect(nonZonedProvisioners, supportProvisioners)
+				e2e.Logf("***Supportprosisioners contains nonZonedProvisioners: \"%v\", test continue***", supportProvisioners)
+			} else {
+				g.Skip("Skip: The test cluster has less than two schedulable workers in each avaiable zone and no nonZonedProvisioners!!")
+			}
 		}
+
 		// Set up a specified project share for all the phases
 		g.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
@@ -849,7 +858,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				defer pvc.deleteAsAdmin(oc)
 
 				g.By("# Create a deployment with the created pvc, node selector and wait for the pod ready")
-				if azName == "noneAzCluster" {
+				if azName == "noneAzCluster" || provisioner == "file.csi.azure.com" { // file.csi.azure is not dependent of same az
 					dep.create(oc)
 				} else {
 					dep.createWithNodeSelector(oc, `topology\.kubernetes\.io\/zone`, azName)
@@ -1055,7 +1064,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// [CSI Driver] [Dynamic PV] [Filesystem] volumes resize on-line
 	g.It("Author:ropatil-Critical-45984-[CSI Driver] [Dynamic PV] [Filesystem default] volumes resize on-line", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
