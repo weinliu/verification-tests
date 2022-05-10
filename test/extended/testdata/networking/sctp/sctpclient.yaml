@@ -7,4 +7,4 @@ metadata:
 spec:
   containers:
     - name: sctpclient
-      image: quay.io/openshifttest/centos-network@sha256:48da37205f9b43424e0983d4c5e7e07f77b7ba1504bbe35e2f264c75dcb4cd15
+      image: quay.io/openshifttest/hello-sdn@sha256:2af5b5ec480f05fda7e9b278023ba04724a3dd53a296afcd8c13f220dec52197

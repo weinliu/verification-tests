@@ -61,24 +61,24 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			sctpServerPodIP := getPodIPv4(oc, oc.Namespace(), sctpServerPodName)
 
 			g.By("sctpserver pod start to wait for sctp traffic")
-			_, _, _, err := oc.Run("exec").Args("-n", oc.Namespace(), sctpServerPodName, "--", "/usr/bin/nc", "-l", "30102", "--sctp").Background()
+			_, _, _, err := oc.Run("exec").Args("-n", oc.Namespace(), sctpServerPodName, "--", "/usr/bin/ncat", "-l", "30102", "--sctp").Background()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			time.Sleep(5 * time.Second)
 
 			g.By("check sctp process enabled in the sctp server pod")
 			msg, err := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(strings.Contains(msg, "/usr/bin/nc -l 30102 --sctp")).To(o.BeTrue())
+			o.Expect(strings.Contains(msg, "/usr/bin/ncat -l 30102 --sctp")).To(o.BeTrue())
 
 			g.By("sctpclient pod start to send sctp traffic")
-			_, err1 := e2e.RunHostCmd(oc.Namespace(), sctpClientPodname, "nc -v "+sctpServerPodIP+" 30102 --sctp <<< 'Test traffic using sctp port from sctpclient to sctpserver'")
+			_, err1 := e2e.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
 			o.Expect(err1).NotTo(o.HaveOccurred())
 
 			g.By("server sctp process will end after get sctp traffic from sctp client")
 			time.Sleep(5 * time.Second)
 			msg1, err1 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err1).NotTo(o.HaveOccurred())
-			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/nc -l 30102 --sctp"))
+			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
 		}
 
 		g.By("test ipv6 in ipv6 cluster or dualstack cluster")
@@ -87,22 +87,22 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			sctpServerPodIP := getPodIPv6(oc, oc.Namespace(), sctpServerPodName, ipStackType)
 
 			g.By("sctpserver pod start to wait for sctp traffic")
-			oc.Run("exec").Args("-n", oc.Namespace(), sctpServerPodName, "--", "/usr/bin/nc", "-l", "30102", "--sctp").Background()
+			oc.Run("exec").Args("-n", oc.Namespace(), sctpServerPodName, "--", "/usr/bin/ncat", "-l", "30102", "--sctp").Background()
 			time.Sleep(5 * time.Second)
 
 			g.By("check sctp process enabled in the sctp server pod")
 			msg, err := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(strings.Contains(msg, "/usr/bin/nc -l 30102 --sctp")).To(o.BeTrue())
+			o.Expect(strings.Contains(msg, "/usr/bin/ncat -l 30102 --sctp")).To(o.BeTrue())
 
 			g.By("sctpclient pod start to send sctp traffic")
-			e2e.RunHostCmd(oc.Namespace(), sctpClientPodname, "nc -v "+sctpServerPodIP+" 30102 --sctp <<< 'Test traffic using sctp port from sctpclient to sctpserver'")
+			e2e.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
 
 			g.By("server sctp process will end after get sctp traffic from sctp client")
 			time.Sleep(5 * time.Second)
 			msg1, err1 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err1).NotTo(o.HaveOccurred())
-			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/nc -l 30102 --sctp"))
+			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
 		}
 	})
 
@@ -159,24 +159,24 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			sctpServiceIPv4 := getSvcIPv4(oc, oc.Namespace(), "sctpservice-v4")
 
 			g.By("sctpserver pod start to wait for sctp traffic")
-			_, _, _, err1 := oc.Run("exec").Args("-n", oc.Namespace(), sctpServerPodName, "--", "/usr/bin/nc", "-l", "30102", "--sctp").Background()
+			_, _, _, err1 := oc.Run("exec").Args("-n", oc.Namespace(), sctpServerPodName, "--", "/usr/bin/ncat", "-l", "30102", "--sctp").Background()
 			o.Expect(err1).NotTo(o.HaveOccurred())
 			time.Sleep(5 * time.Second)
 
 			g.By("check sctp process enabled in the sctp server pod")
 			msg, err2 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err2).NotTo(o.HaveOccurred())
-			o.Expect(strings.Contains(msg, "/usr/bin/nc -l 30102 --sctp")).To(o.BeTrue())
+			o.Expect(strings.Contains(msg, "/usr/bin/ncat -l 30102 --sctp")).To(o.BeTrue())
 
 			g.By("sctpclient pod start to send sctp traffic")
-			_, err3 := e2e.RunHostCmd(oc.Namespace(), sctpClientPodname, "nc -v "+sctpServiceIPv4+" 30102 --sctp <<< 'Test traffic using sctp port from sctpclient to sctpserver'")
+			_, err3 := e2e.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServiceIPv4+" 30102 --sctp; }")
 			o.Expect(err3).NotTo(o.HaveOccurred())
 
 			g.By("server sctp process will end after get sctp traffic from sctp client")
 			time.Sleep(5 * time.Second)
 			msg1, err4 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err4).NotTo(o.HaveOccurred())
-			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/nc -l 30102 --sctp"))
+			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
 		}
 
 		g.By("test ipv6 singlestack cluster")
@@ -191,24 +191,24 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			sctpServiceIPv6 := getSvcIPv6(oc, oc.Namespace(), "sctpservice-v6")
 
 			g.By("sctpserver pod start to wait for sctp traffic")
-			_, _, _, err1 := oc.Run("exec").Args("-n", oc.Namespace(), sctpServerPodName, "--", "/usr/bin/nc", "-l", "30102", "--sctp").Background()
+			_, _, _, err1 := oc.Run("exec").Args("-n", oc.Namespace(), sctpServerPodName, "--", "/usr/bin/ncat", "-l", "30102", "--sctp").Background()
 			o.Expect(err1).NotTo(o.HaveOccurred())
 			time.Sleep(5 * time.Second)
 
 			g.By("check sctp process enabled in the sctp server pod")
 			msg, err2 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err2).NotTo(o.HaveOccurred())
-			o.Expect(strings.Contains(msg, "/usr/bin/nc -l 30102 --sctp")).To(o.BeTrue())
+			o.Expect(strings.Contains(msg, "/usr/bin/ncat -l 30102 --sctp")).To(o.BeTrue())
 
 			g.By("sctpclient pod start to send sctp traffic")
-			_, err3 := e2e.RunHostCmd(oc.Namespace(), sctpClientPodname, "nc -v "+sctpServiceIPv6+" 30102 --sctp <<< 'Test traffic using sctp port from sctpclient to sctpserver'")
+			_, err3 := e2e.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServiceIPv6+" 30102 --sctp; }")
 			o.Expect(err3).NotTo(o.HaveOccurred())
 
 			g.By("server sctp process will end after get sctp traffic from sctp client")
 			time.Sleep(5 * time.Second)
 			msg1, err4 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err4).NotTo(o.HaveOccurred())
-			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/nc -l 30102 --sctp"))
+			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
 		}
 
 		g.By("test ip dualstack cluster")
@@ -224,43 +224,43 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 			g.By("test ipv4 in dualstack cluster")
 			g.By("sctpserver pod start to wait for sctp traffic")
-			_, _, _, err1 := oc.Run("exec").Args("-n", oc.Namespace(), sctpServerPodName, "--", "/usr/bin/nc", "-l", "30102", "--sctp").Background()
+			_, _, _, err1 := oc.Run("exec").Args("-n", oc.Namespace(), sctpServerPodName, "--", "/usr/bin/ncat", "-l", "30102", "--sctp").Background()
 			o.Expect(err1).NotTo(o.HaveOccurred())
 			time.Sleep(5 * time.Second)
 
 			g.By("check sctp process enabled in the sctp server pod")
 			msg, err2 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err2).NotTo(o.HaveOccurred())
-			o.Expect(strings.Contains(msg, "/usr/bin/nc -l 30102 --sctp")).To(o.BeTrue())
+			o.Expect(strings.Contains(msg, "/usr/bin/ncat -l 30102 --sctp")).To(o.BeTrue())
 
 			g.By("sctpclient pod start to send sctp traffic")
-			_, err3 := e2e.RunHostCmd(oc.Namespace(), sctpClientPodname, "nc -v "+sctpServiceIPv4+" 30102 --sctp <<< 'Test traffic using sctp port from sctpclient to sctpserver'")
+			_, err3 := e2e.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServiceIPv4+" 30102 --sctp; }")
 			o.Expect(err3).NotTo(o.HaveOccurred())
 
 			g.By("server sctp process will end after get sctp traffic from sctp client")
 			time.Sleep(5 * time.Second)
 			msg1, err4 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err4).NotTo(o.HaveOccurred())
-			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/nc -l 30102 --sctp"))
+			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
 
 			g.By("test ipv6 in dualstack cluster")
 			g.By("sctpserver pod start to wait for sctp traffic")
-			oc.Run("exec").Args("-n", oc.Namespace(), sctpServerPodName, "--", "/usr/bin/nc", "-l", "30102", "--sctp").Background()
+			oc.Run("exec").Args("-n", oc.Namespace(), sctpServerPodName, "--", "/usr/bin/ncat", "-l", "30102", "--sctp").Background()
 			time.Sleep(5 * time.Second)
 
 			g.By("check sctp process enabled in the sctp server pod")
 			msg, err5 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err5).NotTo(o.HaveOccurred())
-			o.Expect(strings.Contains(msg, "/usr/bin/nc -l 30102 --sctp")).To(o.BeTrue())
+			o.Expect(strings.Contains(msg, "/usr/bin/ncat -l 30102 --sctp")).To(o.BeTrue())
 
 			g.By("sctpclient pod start to send sctp traffic")
-			e2e.RunHostCmd(oc.Namespace(), sctpClientPodname, "nc -v "+sctpServiceIPv6+" 30102 --sctp <<< 'Test traffic using sctp port from sctpclient to sctpserver'")
+			e2e.RunHostCmd(oc.Namespace(), sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServiceIPv6+" 30102 --sctp; }")
 
 			g.By("server sctp process will end after get sctp traffic from sctp client")
 			time.Sleep(5 * time.Second)
 			msg1, err6 := e2e.RunHostCmd(oc.Namespace(), sctpServerPodName, "ps aux | grep sctp")
 			o.Expect(err6).NotTo(o.HaveOccurred())
-			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/nc -l 30102 --sctp"))
+			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
 		}
 	})
 })
