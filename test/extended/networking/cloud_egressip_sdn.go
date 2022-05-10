@@ -443,7 +443,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("ConnectedOnly-Author:jechen-High-46557-[Manual EgressIP] Random egressIP is used on a pod that is not on a node hosting an egressIP . [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node.yaml")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 
 		g.By("1. Identify two worker nodes with same subnet as egressIP nodes, pick a third node as non-egressIP node")
 		var egressNode1, egressNode2, nonEgressNode string
@@ -507,7 +507,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("ConnectedOnly-Author:jechen-High-46558-[Manual EgressIP] A pod that is on a node hosting egressIP, it will always use the egressIP of the node . [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node.yaml")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 
 		g.By("1. Get list of nodes, get subnet from two worker nodes that have same subnet, add egressCIDRs to them")
 		var egressNode1, egressNode2 string
