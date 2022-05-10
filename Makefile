@@ -15,6 +15,9 @@ nightly-test:
 name-check:
 	python ./hack/rule.py 
 
+check-code:
+	./hack/check-code.sh master
+
 pr-test:
 	python ./hack/pr.py
 

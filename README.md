@@ -7,6 +7,7 @@ These tests are based on [ginkgo](https://github.com/onsi/ginkgo) and the [kuber
 * Git installed. See [Installing Git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git).
 * Golang installed. See [Installing Golang](https://golang.org/doc/install), the newer the better.
 	* Ensure you install Golang from a binary release [found here](https://golang.org/dl/), not with a package manager such as `dnf`.
+* golint installed. See [Installing golint](https://github.com/golang/lint#installation)
 * Have the environment variable `KUBECONFIG` set pointing to your cluster.
 
 ### Include test cases of the Public Repo
@@ -37,11 +38,16 @@ $ ls -hl ./bin/extended-platform-tests
 ```
 
 ## Contribution 
-Below are the general steps for submitting a PR. First, you should **Fork** this repo to your own Github account.
+Below are the general steps for submitting a PR to master branch. First, you should **Fork** this repo to your own Github account.
 ```console
 $ git remote add <Your Name> git@github.com:<Your Github Account>/openshift-tests-private.git
 $ git pull origin master
 $ git checkout -b <Branch Name>
+$ git add xxx
+$ git diff master --name-only |grep ".go$"| grep -v "bindata.go$" | xargs -n1 golint
+  Please fix all golint error
+$ git diff master --name-only |grep ".go$"| grep -v "bindata.go$" | xargs gofmt -s -l
+  Please fix all gofmt error, running 'gofmt -s [file_path]' or autocorrect with 'gofmt -s -w [file_path]'
 $ git add xxx
 $ make build
 $ ./bin/extended-platform-tests run all --dry-run |grep <Test Case ID>|./bin/extended-platform-tests run -f -
