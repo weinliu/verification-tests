@@ -25,7 +25,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("registries.conf gets updated")
 		workNode, _ := exutil.GetFirstWorkerNode(oc)
-		err = wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
+		err = wait.Poll(30*time.Second, 8*time.Minute, func() (bool, error) {
 			registriesstatus, _ := exutil.DebugNodeWithChroot(oc, workNode, "bash", "-c", "cat /etc/containers/registries.conf |grep -E '\"untrusted.com\"|\"insecure.com\"'")
 			if strings.Contains(registriesstatus, "location = \"untrusted.com\"") && strings.Contains(registriesstatus, "location = \"insecure.com\"") {
 				e2e.Logf("registries.conf updated")
