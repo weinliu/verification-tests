@@ -667,12 +667,12 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 	// author: bandrade@redhat.com
 	g.It("Author:bandrade-VMonly-Low-30318-Bundle build understands packages", func() {
 		opmBaseDir := exutil.FixturePath("testdata", "opm")
-		testDataPath := filepath.Join(opmBaseDir, "aqua")
+		testDataPath := filepath.Join(opmBaseDir, "learn_operator")
 		opmCLI.ExecCommandPath = testDataPath
 		defer DeleteDir(testDataPath, "fixture-testdata")
 
 		g.By("step: opm alpha bundle generate")
-		output, err := opmCLI.Run("alpha").Args("bundle", "generate", "-d", "1.0.1").Output()
+		output, err := opmCLI.Run("alpha").Args("bundle", "generate", "-d", "package/0.0.1", "-p", "25955-operator", "-c", "alpha", "-e", "alpha").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(output)
 		if !strings.Contains(output, "Writing annotations.yaml") || !strings.Contains(output, "Writing bundle.Dockerfile") {
