@@ -3528,7 +3528,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: scolange@redhat.com
-	g.It("ConnectedOnly-Author:scolange-Medium-25674-restart the marketplace-operator when the cluster is in bad state [Disruptive]", func() {
+	g.It("Author:scolange-Medium-25674-restart the marketplace-operator when the cluster is in bad state [Disruptive]", func() {
 
 		var buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 		var Sub = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -3548,13 +3548,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		og.createwithCheck(oc, itName, dr)
 
 		sub := subscriptionDescription{
-			subName:                "jagerk",
-			namespace:              namespace,
-			catalogSourceName:      "kaka",
+			subName:                "sub-25674",
+			namespace:              oc.Namespace(),
+			catalogSourceName:      "qe-app-registry",
 			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "alpha",
 			ipApproval:             "Automatic",
-			operatorPackage:        "",
+			channel:                "beta",
+			operatorPackage:        "learn",
 			singleNamespace:        true,
 			template:               Sub,
 		}
