@@ -651,10 +651,16 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		exec.Command("bash", "-c", "sleep 5").Output()
 		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(cmdOut).To(o.ContainSubstring(fmt.Sprintf("Upstream: %s", graphURL)))
-		o.Expect(cmdOut).To(o.ContainSubstring("Channel: channel-a (available channels: channel-a, channel-b)"))
-		o.Expect(cmdOut).To(o.ContainSubstring("Recommended updates:"))
-		o.Expect(cmdOut).To(o.ContainSubstring(targetVersion + " " + targetPayload))
+		exp_str := []string{
+			fmt.Sprintf("Upstream: %s", graphURL),
+			"Channel: channel-a (available channels: channel-a, channel-b)",
+			"Recommended updates:",
+			targetVersion,
+			targetPayload}
+
+		for _, v := range exp_str {
+			o.Expect(cmdOut).To(o.ContainSubstring(v))
+		}
 
 		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").
 			Args("upgrade", "--include-not-recommended").Output()
@@ -667,10 +673,20 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(cmdOut).NotTo(o.ContainSubstring("Upstream:"))
-		o.Expect(cmdOut).NotTo(o.ContainSubstring("Channel:"))
-		o.Expect(cmdOut).To(o.ContainSubstring("Reason: NoChannel"))
-		o.Expect(cmdOut).To(o.ContainSubstring("Message: The update channel has not been configured."))
+
+		exp_str = []string{
+			"Upstream:",
+			"Channel:",
+			"Reason: NoChannel",
+			"Message: The update channel has not been configured"}
+
+		for _, v := range exp_str[:2] {
+			o.Expect(cmdOut).NotTo(o.ContainSubstring(v))
+		}
+
+		for _, v := range exp_str[2:] {
+			o.Expect(cmdOut).To(o.ContainSubstring(v))
+		}
 	})
 
 	//author: jiajliu@redhat.com
