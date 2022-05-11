@@ -7,9 +7,9 @@ objects:
     kind: KataConfig
     metadata:
       name: "${NAME}"
-      spec:
-        checkNodeEligibility: false
-        kataMonitorImage: "${MONITOR}"
+    spec:
+      checkNodeEligibility: false
+      kataMonitorImage: "${MONITOR}"
       #  kataConfigPoolSelector:
       #    matchLabels:
       #       custom-kata1: test

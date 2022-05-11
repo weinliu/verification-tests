@@ -23,28 +23,31 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		commonKataConfigName = "example-kataconfig"
 		testDataDir          = exutil.FixturePath("testdata", "kata")
 		iaasPlatform         string
-		commonKc             = filepath.Join(testDataDir, "kataconfig.yaml")
+		kcTemplate           = filepath.Join(testDataDir, "kataconfig.yaml")
 		defaultDeployment    = filepath.Join(testDataDir, "deployment-example.yaml")
 		subTemplate          = filepath.Join(testDataDir, "subscription_template.yaml")
 		kcMonitorImageName   = ""
 	)
 
+	subscription := subscriptionDescription{
+		subName:                "sandboxed-containers-operator",
+		namespace:              opNamespace,
+		catalogSourceName:      "redhat-operators",
+		catalogSourceNamespace: "openshift-marketplace",
+		channel:                "stable-1.2",
+		ipApproval:             "Automatic",
+		operatorPackage:        "sandboxed-containers-operator",
+		template:               subTemplate,
+	}
+
+	if subscription.channel == "stable-1.2" {
+		kcMonitorImageName = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:1.2.0"
+	}
+
 	g.BeforeEach(func() {
-		subscription := subscriptionDescription{
-			subName:                "sandboxed-containers-operator",
-			namespace:              opNamespace,
-			catalogSourceName:      "redhat-operators",
-			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "stable-1.2",
-			ipApproval:             "Automatic",
-			operatorPackage:        "sandboxed-containers-operator",
-			template:               subTemplate,
-		}
-
-		if subscription.channel == "stable-1.2" {
-			kcMonitorImageName = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:1.2.0"
-		}
-
+		// Creating/deleting kataconfig reboots all worker node and extended-platform-tests may timeout after 20m.
+		// add --timeout 50m
+		// tag with [Slow][Serial][Disruptive] when deleting/recreating kataconfig
 		var (
 			err error
 			msg string
@@ -61,7 +64,8 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		msg, err = subscribeFromTemplate(oc, subscription, subTemplate, ns, og)
 		e2e.Logf("---------- subscription %v succeeded with channel %v %v", subscription.subName, subscription.channel, err)
 
-		createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName, kcMonitorImageName)
+		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, subscription.namespace)
+		e2e.Logf("---------- kataconfig %v create succeeded %v %v", commonKataConfigName, msg, err)
 	})
 
 	g.It("Author:abhbaner-High-39499-Operator installation", func() {
@@ -104,7 +108,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			kcTemplate      = filepath.Join(testDataDir, "kataconfig.yaml")
 		)
 		g.By("Create 2nd kataconfig file")
-		configFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", kcTemplate, "-p", "NAME="+kataConfigName2).OutputToFile(getRandomString() + "kataconfig-common.json")
+		configFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", kcTemplate, "-p", "NAME="+kataConfigName2, "-n", subscription.namespace).OutputToFile(getRandomString() + "kataconfig-common.json")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("the file of resource is %s", configFile)
 
@@ -171,7 +175,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 		checkKataPodStatus(oc, podNs, newPodName)
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
-		errCheck:= wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
+		errCheck := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
 			podlogs, err := oc.AsAdmin().Run("logs").WithoutNamespace().Args("pod/"+newPodName, "-n", podNs).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(podlogs).NotTo(o.BeEmpty())
@@ -262,17 +266,19 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 	})
 
-	g.It("Longduration-NonPreRelease-Author:abhbaner-High-43523-Monitor Kataconfig deletion[Disruptive]", func() {
-		g.By("Delete Common kataconfig and verify it")
-		deleteKataConfig(oc, commonKataConfigName, opNamespace)
-		e2e.Logf("common kataconfig %v was deleted", commonKataConfigName)
-		g.By("SUCCESSS - kata runtime deleted successfully")
-		g.By("Creating kataconfig for the remaining test cases")
-		createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName, kcMonitorImageName)
+	g.It("Longduration-NonPreRelease-Author:abhbaner-High-43523-Monitor Kataconfig deletion[Disruptive][Serial][Slow]", func() {
+		g.By("Delete kataconfig and verify it")
+		msg, err := deleteKataConfig(oc, commonKataConfigName)
+		e2e.Logf("kataconfig %v was deleted\n--------- %v %v", commonKataConfigName, msg, err)
 
+		g.By("Recreating kataconfig in 43523 for the remaining test cases")
+		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, subscription.namespace)
+		e2e.Logf("recreated kataconfig %v: %v %v", commonKataConfigName, msg, err)
+
+		g.By("SUCCESS")
 	})
 
-	g.It("Longduration-NonPreRelease-Author:abhbaner-High-41813-Build Acceptance test[Disruptive]", func() {
+	g.It("Longduration-NonPreRelease-Author:abhbaner-High-41813-Build Acceptance test[Disruptive][Serial][Slow]", func() {
 		//This test will install operator,kataconfig,pod with kata - delete pod, delete kataconfig
 		commonPodName := "example"
 		commonPod := filepath.Join(testDataDir, "example.yaml")
@@ -286,11 +292,14 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
 		deleteKataPod(oc, podNs, newPodName)
 		g.By("Kata Pod deleted - now deleting kataconfig")
-		deleteKataConfig(oc, commonKataConfigName, opNamespace)
-		e2e.Logf("common kataconfig %v was deleted", commonKataConfigName)
+
+		msg, err := deleteKataConfig(oc, commonKataConfigName)
+		e2e.Logf("common kataconfig %v was deleted %v %v", commonKataConfigName, msg, err)
 		g.By("SUCCESSS - build acceptance passed")
-		g.By("Creating kataconfig for the remaining test cases")
-		createIfNoKataConfig(oc, opNamespace, commonKc, commonKataConfigName, kcMonitorImageName)
+
+		g.By("Recreating kataconfig for the remaining test cases")
+		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, subscription.namespace)
+		e2e.Logf("recreated kataconfig %v: %v %v", commonKataConfigName, msg, err)
 	})
 
 	// author: tbuskey@redhat.com

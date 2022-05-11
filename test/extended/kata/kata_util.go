@@ -49,7 +49,7 @@ func subscribeFromTemplate(oc *exutil.CLI, sub subscriptionDescription, subTempl
 
 	g.By("(1.3) Creating subscription yaml from template")
 	subFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", sub.template, "-p", "SUBNAME="+sub.subName, "SUBNAMESPACE="+sub.namespace, "CHANNEL="+sub.channel,
-		"APPROVAL="+sub.ipApproval, "OPERATORNAME="+sub.operatorPackage, "SOURCENAME="+sub.catalogSourceName, "SOURCENAMESPACE="+sub.catalogSourceNamespace).OutputToFile(getRandomString() + "subscriptionFile.json")
+		"APPROVAL="+sub.ipApproval, "OPERATORNAME="+sub.operatorPackage, "SOURCENAME="+sub.catalogSourceName, "SOURCENAMESPACE="+sub.catalogSourceNamespace, "-n", sub.namespace).OutputToFile(getRandomString() + "subscriptionFile.json")
 	// o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("Created the subscription yaml %s, %v", subFile, err)
 
@@ -93,33 +93,58 @@ func subscribeFromTemplate(oc *exutil.CLI, sub subscriptionDescription, subTempl
 	return msg, err
 }
 
-// author: abhbaner@redhat.com
-func createIfNoKataConfig(oc *exutil.CLI, opNamespace, kc, kcName, kcMonitorImageName string) (status bool) {
-	kataConfigInstall(oc, opNamespace, kc, kcName, kcMonitorImageName)
-	return true
+// author: tbuskey@redhat.com, abhbaner@redhat.com
+func createKataConfig(oc *exutil.CLI, kcTemplate, kcName, kcMonitorImageName, subNamespace string) (msg string, err error) {
+	// If this is used, label the caller with [Disruptive][Serial][Slow]
+	// If kataconfig already exists, this must not error
+	var configFile string
 
-}
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", "--no-headers", "-n", subNamespace).Output()
+	if strings.Contains(msg, kcName) {
+		g.By("(2) kataconfig is previously installed")
+		return msg, err // no need to go through the rest
+	}
 
-// author: abhbaner@redhat.com
-func kataConfigInstall(oc *exutil.CLI, opNamespace, kc, kcName, kcMonitorImageName string) (status bool) {
-	g.By("Applying kataconfig")
-	configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", kc, "-p", "NAME="+kcName, "MONITOR="+kcMonitorImageName).OutputToFile(getRandomString() + "kataconfig-common.json")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("the file of resource is %s", configFile)
+	g.By("(2) Create kataconfig file")
+	configFile, err = oc.AsAdmin().WithoutNamespace().Run("process").Args("--ignore-unknown-parameters=true", "-f", kcTemplate, "-p", "NAME="+kcName, "MONITOR="+kcMonitorImageName, "-n", subNamespace).OutputToFile(getRandomString() + "kataconfig-common.json")
+	e2e.Logf("the kataconfig file is %s, %v", configFile, err)
 
-	oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
-
-	g.By("Check if kataconfig is applied")
+	g.By("(2.1) Apply kataconfig file")
 	errCheck := wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-o=jsonpath={.status.installationStatus.IsInProgress}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Output()
+		e2e.Logf("%v %v", msg, err)
+		if err == nil {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("applying kataconfig %v failed: %v %v", configFile, msg, err))
+	// -o=jsonpath={.status.installationStatus.IsInProgress} "" at this point
+
+	g.By("(2.2) Check kataconfig creation has started")
+	errCheck = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", "--no-headers").Output()
+		if strings.Contains(msg, kcName) {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("kataconfig %v did not get created: %v %v", kcName, msg, err))
+	// -o=jsonpath={.status.installationStatus.IsInProgress} "True" at this point
+
+	g.By("(2.3) Wait for kataconfig to finish install")
+	errCheck = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-o=jsonpath={.status.installationStatus.IsInProgress}").Output()
 		if strings.Contains(msg, "false") {
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("kataconfig %v is not correct status in ns %v", kcName, opNamespace))
-	return true
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("kataconfig %v did not finish install", kcName))
+
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "--no-headers").Output()
+	msg = "SUCCESS kataconfig is created " + msg
+	return msg, err
 }
 
 // author: abhbaner@redhat.com
@@ -170,14 +195,21 @@ func getRandomString() string {
 	return string(buffer)
 }
 
-func deleteKataConfig(oc *exutil.CLI, kcName, opNamespace string) bool {
-	g.By("DELETING KATACONFIG - Hold on")
-	msg, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("kataconfig", kcName).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("err %v, msg %v", err, msg)
-	kataStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(kataStatus).To(o.ContainSubstring("No resources found"))
-	return true
+func deleteKataConfig(oc *exutil.CLI, kcName string) (msg string, err error) {
+	g.By("(3) Deleting kataconfig")
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("kataconfig", kcName).Output()
+	e2e.Logf("%v %v", msg, err)
 
+	g.By("(3.1) Wait for kataconfig to be deleted")
+	errCheck := wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig").Output()
+		if strings.Contains(msg, "No resources found") {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("kataconfig %v did not get deleted: %v %v", kcName, msg, err))
+
+	g.By("(3.2) kataconfig is gone")
+	return msg, err
 }
