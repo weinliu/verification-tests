@@ -679,6 +679,92 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 
+	// author: huirwang@redhat.com
+	g.It("ConnectedOnly-Author:huirwang-Medium-47018-Medium-47017-Multiple projects use same EgressIP. [Serial]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		testPodFile := filepath.Join(buildPruningBaseDir, "testpod.yaml")
+		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
+
+		g.By("1. Label EgressIP node\n")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		egressNode := nodeList.Items[0].Name
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("2. Apply EgressLabel Key for this test on one node.\n")
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
+
+		g.By("3. create first namespace\n")
+		oc.SetupProject()
+		ns1 := oc.Namespace()
+
+		g.By("4. Create test pods in first namespace. \n")
+		createResourceFromFile(oc, ns1, testPodFile)
+		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+		testPodNs1Name := getPodName(oc, ns1, "name=test-pods")
+
+		g.By("5. Apply label to ns1 namespace\n")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
+
+		g.By("6. Create an egressip object\n")
+		sub1 := getIfaddrFromNode(egressNode, oc)
+		freeIps := findUnUsedIPsOnNode(oc, egressNode, sub1, 2)
+		o.Expect(len(freeIps) == 2).Should(o.BeTrue())
+		egressip1 := egressIPResource1{
+			name:      "egressip-47018",
+			template:  egressIPTemplate,
+			egressIP1: freeIps[0],
+			egressIP2: freeIps[1],
+		}
+		egressip1.createEgressIPObject1(oc)
+		defer egressip1.deleteEgressIPObject1(oc)
+
+		g.By("7. create new namespace\n")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		g.By("8. Apply label to namespace\n")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "name=test").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "name-").Execute()
+
+		g.By("9. Create test pods in second namespace  \n")
+		createResourceFromFile(oc, ns2, testPodFile)
+		err = waitForPodWithLabelReady(oc, ns2, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+		testPodNs2Name := getPodName(oc, ns2, "name=test-pods")
+
+		g.By("10. Check source IP from both namespace, should be egressip.  \n")
+		sourceIp, err := e2e.RunHostCmd(ns1, testPodNs1Name[0], "curl -s "+ipEchoUrl+" --connect-timeout 5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIp).Should(o.BeElementOf(freeIps))
+		sourceIp, err = e2e.RunHostCmd(ns1, testPodNs1Name[1], "curl -s "+ipEchoUrl+" --connect-timeout 5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIp).Should(o.BeElementOf(freeIps))
+		sourceIp, err = e2e.RunHostCmd(ns2, testPodNs2Name[0], "curl -s "+ipEchoUrl+" --connect-timeout 5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIp).Should(o.BeElementOf(freeIps))
+		sourceIp, err = e2e.RunHostCmd(ns2, testPodNs2Name[1], "curl -s "+ipEchoUrl+" --connect-timeout 5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIp).Should(o.BeElementOf(freeIps))
+
+		g.By("11. Remove matched labels from namespace ns1  \n")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("12.  Check source IP from namespace ns1, should not be egressip. \n")
+		sourceIp, err = e2e.RunHostCmd(ns1, testPodNs1Name[0], "curl -s "+ipEchoUrl+" --connect-timeout 5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIp).ShouldNot(o.BeElementOf(freeIps))
+		sourceIp, err = e2e.RunHostCmd(ns1, testPodNs1Name[1], "curl -s "+ipEchoUrl+" --connect-timeout 5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIp).ShouldNot(o.BeElementOf(freeIps))
+
+	})
+
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
