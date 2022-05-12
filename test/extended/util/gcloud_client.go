@@ -3,9 +3,10 @@ package util
 import (
 	"errors"
 	"fmt"
-	o "github.com/onsi/gomega"
 	"os/exec"
 	"strings"
+
+	o "github.com/onsi/gomega"
 )
 
 type Gcloud struct {
@@ -54,4 +55,23 @@ func (gcloud *Gcloud) GetFirewallAllowPorts(ruleName string) (string, error) {
 // UpdateFirewallAllowPorts updates the firewall allow ports
 func (gcloud *Gcloud) UpdateFirewallAllowPorts(ruleName string, ports string) error {
 	return exec.Command("bash", "-c", fmt.Sprintf(`gcloud compute firewall-rules update %s --allow %s`, ruleName, ports)).Run()
+}
+
+// get zone information for an instance
+func (gcloud *Gcloud) GetZone(infraId string, workerName string) (string, error) {
+	output, err := exec.Command("bash", "-c", fmt.Sprintf(`gcloud compute instances list --filter="%s" --format="value(ZONE)"`, workerName)).Output()
+	if string(output) == "" {
+		return "", errors.New("Zone info for the instance is not found")
+	}
+	return string(output), err
+}
+
+// Bring GCP node/instance back up
+func (gcloud *Gcloud) StartInstance(nodeName string, zoneName string) error {
+	return exec.Command("bash", "-c", fmt.Sprintf(`gcloud compute instances start %s --zone=%s`, nodeName, zoneName)).Run()
+}
+
+// Shutdown GCP node/instance
+func (gcloud *Gcloud) StopInstance(nodeName string, zoneName string) error {
+	return exec.Command("bash", "-c", fmt.Sprintf(`gcloud compute instances stop %s --zone=%s`, nodeName, zoneName)).Run()
 }

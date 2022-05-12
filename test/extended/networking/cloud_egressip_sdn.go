@@ -656,9 +656,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("5. Find the host that is assigned the egressIP address")
 		foundHost := SDNHostwEgressIP(oc, egressNodes, freeIps[0])
 		e2e.Logf("\n\n\n foundHost that has the egressIP: %v\n\n\n", foundHost)
-		if foundHost == "" {
-			g.Fail("Did not find host that has the egressIP address assigned, the test case is failing!")
-		}
+		o.Expect(foundHost).NotTo(o.BeEmpty())
 
 		g.By("6. reboot the host that has egressIP address")
 		defer checkNodeStatus(oc, foundHost, "Ready")
@@ -695,6 +693,118 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to get sourceIP:%s", err))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(sourceIp).Should(o.BeElementOf(freeIps[0]))
+	})
+
+	// author: jechen@redhat.com
+	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-46559-[Automatic EgressIP] If some egress node is unavailable, pods continue use other available egressIPs after a short delay. [Disruptive][Slow]", func() {
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+
+		g.By("1. Get list of nodes, get subnet as egressCIDR and an unused ip address from each node that have same subnet, add egressCIDR to each egress node")
+		var egressNodes []string
+		nodeNum := 4
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < nodeNum {
+			g.Skip("Not enough worker nodes for this test, skip the case!!")
+		}
+
+		// choose first 3 nodes as egress nodes
+		for i := 0; i < (nodeNum - 1); i++ {
+			egressNodes = append(egressNodes, nodeList.Items[i].Name)
+		}
+		sub1 := getIfaddrFromNode(nodeList.Items[0].Name, oc)
+		sub2 := getIfaddrFromNode(nodeList.Items[1].Name, oc)
+		sub3 := getIfaddrFromNode(nodeList.Items[2].Name, oc)
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNodes[0], "{\"egressCIDRs\":[\""+sub1+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNodes[0], "{\"egressCIDRs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNodes[1], "{\"egressCIDRs\":[\""+sub2+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNodes[1], "{\"egressCIDRs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNodes[2], "{\"egressCIDRs\":[\""+sub3+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNodes[2], "{\"egressCIDRs\":[]}")
+
+		// Find 1 unused IPs from each egress node
+		freeIps1 := findUnUsedIPsOnNode(oc, nodeList.Items[0].Name, sub1, 1)
+		o.Expect(len(freeIps1) == 1).Should(o.BeTrue())
+		freeIps2 := findUnUsedIPsOnNode(oc, nodeList.Items[1].Name, sub2, 1)
+		o.Expect(len(freeIps2) == 1).Should(o.BeTrue())
+		freeIps3 := findUnUsedIPsOnNode(oc, nodeList.Items[2].Name, sub3, 1)
+		o.Expect(len(freeIps3) == 1).Should(o.BeTrue())
+
+		g.By("2. Create a namespaces, patch all egressIPs to the namespace, and create a test pod on a non-egress node")
+		oc.SetupProject()
+		ns := oc.Namespace()
+		podns := pingPodResourceNode{
+			name:      "hello-pod",
+			namespace: ns,
+			nodename:  nodeList.Items[nodeNum-1].Name,
+			template:  pingPodNodeTemplate,
+		}
+		podns.createPingPodNode(oc)
+		waitPodReady(oc, podns.namespace, podns.name)
+
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIps1[0]+"\", \""+freeIps2[0]+"\", \""+freeIps3[0]+"\"]}")
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+
+		g.By("3.Check source IP from the test pod for 10 times, it should use any egressIP address as its sourceIP")
+		sourceIp, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoUrl+" --connect-timeout 5 ; sleep 2;echo ;done")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n Get sourceIP as: %v\n", sourceIp)
+		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps1[0]))
+		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps2[0]))
+		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps3[0]))
+
+		g.By("4. Find the host that is assigned the first egressIP address")
+		foundHost := SDNHostwEgressIP(oc, egressNodes, freeIps1[0])
+		e2e.Logf("\n\n\n foundHost that has the egressIP: %v\n\n\n", foundHost)
+		o.Expect(foundHost).NotTo(o.BeEmpty())
+
+		g.By("5. Get the zone info for the host, shutdown the host that has the first egressIP address")
+		var instance []string
+		var zone string
+		switch ci.CheckPlatform(oc) {
+		case "aws":
+			e2e.Logf("\n AWS is detected \n")
+			g.Skip("Skip the rest temporarily.")
+		case "gcp":
+			// for gcp, remove the postfix "c.openshift-qe.internal" to get its instance name
+			instance = strings.Split(foundHost, ".")
+			e2e.Logf("\n\n\n the worker node to be shutdown is: %v\n\n\n", instance[0])
+			infraId, err := exutil.GetInfraId(oc)
+			zone, err = getZoneOfInstanceFromGcp(oc, infraId, instance[0])
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = stopInstanceOnGcp(oc, instance[0], zone)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "NotReady")
+		default:
+			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
+			g.Skip("Not support cloud provider for auto egressip cases for now.")
+		}
+
+		g.By("6.From the namespace, check source IP is egressIP address")
+		sourceIp, err = execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoUrl+" --connect-timeout 5 ; sleep 2;echo ;done")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n Get sourceIP as: %v\n", sourceIp)
+		o.Expect(sourceIp).ShouldNot(o.ContainSubstring(freeIps1[0]))
+		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps2[0]))
+		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps3[0]))
+
+		g.By("7. Bring the host back up")
+		switch ci.CheckPlatform(oc) {
+		case "aws":
+			e2e.Logf("\n AWS is detected \n")
+			g.Skip("Skip the rest temporarliy.")
+		case "gcp":
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			err = startInstanceOnGcp(oc, instance[0], zone)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "NotReady")
+		default:
+			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
+			g.Skip("Not support cloud provider for auto egressip cases for now.")
+		}
+
 	})
 
 })

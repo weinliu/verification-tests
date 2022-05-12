@@ -249,3 +249,19 @@ func uninstallIpEchoServiceOnGCP(oc *exutil.CLI) {
 		o.Expect(getgcloudClient(oc).UpdateFirewallAllowPorts(ruleName, updatedPorts)).NotTo(o.HaveOccurred())
 	}
 }
+
+func getZoneOfInstanceFromGcp(oc *exutil.CLI, infraId string, workerName string) (string, error) {
+	zone, err := getgcloudClient(oc).GetZone(infraId, workerName)
+	e2e.Logf("zone for instance %v is: %s", workerName, zone)
+	return zone, err
+}
+
+func startInstanceOnGcp(oc *exutil.CLI, nodeName string, zone string) error {
+	err := getgcloudClient(oc).StartInstance(nodeName, zone)
+	return err
+}
+
+func stopInstanceOnGcp(oc *exutil.CLI, nodeName string, zone string) error {
+	err := getgcloudClient(oc).StopInstance(nodeName, zone)
+	return err
+}
