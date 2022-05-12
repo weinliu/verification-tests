@@ -7,11 +7,25 @@ if [ "$arg" == "" ]; then
     echo "    if you checkout branch from release-4.10, ./check-code.sh release-4.10"
     exit 2
 fi
-
-head=$(git rev-parse --short HEAD | xargs echo -n)
 set +e
+commit1=""
+commit2=""
+commit_log=$(git log -n 1 --pretty=format:"%an")
+if [[ $commit_log == "ci-robot" ]]; then
+  commit1=$(git log -n 1 --pretty=format:"%p" | awk '{print $1}')
+  commit2=$(git log -n 1 --pretty=format:"%h")
+else
+  commit1=$arg
+  commit2=$(git rev-parse --short HEAD | xargs echo -n)
+fi
+if [[ "x${commit1}x" == "xx" ]] || [[ "x${commit2}x" == "xx" ]];then
+    echo "get commit id failed"
+    exit 1
+fi
+
+echo "run 'git diff-tree --no-commit-id --name-only -r $commit1..$commit2'"
 modified_files_check=""
-modified_files=$(git diff-tree --no-commit-id --name-only -r $arg..$head | \
+modified_files=$(git diff-tree --no-commit-id --name-only -r $commit1..$commit2 | \
 	grep "^test" | grep ".go$" | grep -v "bindata.go$" | grep -v "Godeps" | \
 	grep -v "third_party")
 if [ -n "${modified_files}" ]; then
@@ -22,9 +36,13 @@ if [ -n "${modified_files}" ]; then
         fi 
     done
     echo -e "Checking modified files: ${modified_files_check}\n"
+else
+    git diff-tree --no-commit-id --name-only -r $commit1..$commit2
+    echo -e "no go file is modified"
+    exit 0
 fi
-set -e
 
+set -e
 echo -e "\n###############  golint  ####################"
 bad_golint_files=""
 if [ -n "${modified_files_check}" ]; then
