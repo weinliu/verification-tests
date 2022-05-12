@@ -1837,4 +1837,20 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check the value of vm.admin_reserve_kbytes on target nodes, the expected value should be no change, still is 8192")
 		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "vm.admin_reserve_kbytes", "8192")
 	})
+
+	g.It("Author:liqcui-Medium-45593-NTO Operator set io_timeout for AWS Nitro instances in correct way.[Disruptive]", func() {
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		// currently test is only supported on AWS
+		if iaasPlatform == "aws" {
+			g.By("Expected /sys/module/nvme_core/parameters/io_timeout value on each node is: 4294967295")
+			assertIOTimeOutandMaxRetries(oc, ntoNamespace)
+		} else {
+			g.Skip("Test Case 45593 doesn't support on other cloud platform, only support aws - skipping test ...")
+		}
+
+	})
 })

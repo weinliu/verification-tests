@@ -642,3 +642,16 @@ func skipDeployPAO(oc *exutil.CLI) bool {
 	}
 	return skipPAO
 }
+
+func assertIOTimeOutandMaxRetries(oc *exutil.CLI, ntoNamespace string) {
+	nodeList, err := exutil.GetAllNodesbyOSType(oc, "linux")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	nodeListSize := len(nodeList)
+
+	for i := 0; i < nodeListSize; i++ {
+		timeoutOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+nodeList[i], "--", "chroot", "/host", "cat", "/sys/module/nvme_core/parameters/io_timeout").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The value of io_timeout is : %v on node %v", timeoutOutput, nodeList[i])
+		o.Expect(timeoutOutput).To(o.ContainSubstring("4294967295"))
+	}
+}
