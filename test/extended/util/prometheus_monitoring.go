@@ -2,21 +2,23 @@ package util
 
 import (
 	"fmt"
+	"strings"
 
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 const (
-	prometheusUrl             = "https://prometheus-k8s.openshift-monitoring.svc:9091"
-	thanosUrl                 = "https://thanos-querier.openshift-monitoring.svc:9091"
-	monitorInstantQuery       = "/api/v1/query"
-	monitorRangeQuery         = "/api/v1/query_range"
-	monitorAlerts             = "/api/v1/alerts"
-	monitorRules              = "/api/v1/rules"
-	monitorNamespace          = "openshift-monitoring"
-	prometheusK8s             = "prometheus-k8s"
+	prometheusURL       = "https://prometheus-k8s.openshift-monitoring.svc:9091"
+	thanosURL           = "https://thanos-querier.openshift-monitoring.svc:9091"
+	monitorInstantQuery = "/api/v1/query"
+	monitorRangeQuery   = "/api/v1/query_range"
+	monitorAlerts       = "/api/v1/alerts"
+	monitorRules        = "/api/v1/rules"
+	monitorNamespace    = "openshift-monitoring"
+	prometheusK8s       = "prometheus-k8s"
 )
 
+// MonitorInstantQueryParams API doc
 // query parameters:
 //  query=<string>: Prometheus expression query string.
 //  time=<rfc3339 | unix_timestamp>: Evaluation timestamp. Optional.
@@ -27,6 +29,7 @@ type MonitorInstantQueryParams struct {
 	Timeout string
 }
 
+// MonitorRangeQueryParams API doc
 // query range parameters
 //  query=<string>: Prometheus expression query string.
 //  start=<rfc3339 | unix_timestamp>: Start timestamp, inclusive.
@@ -41,6 +44,7 @@ type MonitorRangeQueryParams struct {
 	Timeout string
 }
 
+// Monitorer interface represents all funcs of monitoring
 type Monitorer interface {
 	SimpleQuery(query string) (string, error)
 	InstantQuery(queryParams MonitorInstantQueryParams) (string, error)
@@ -51,45 +55,45 @@ type Monitorer interface {
 	GetRecordRules() (string, error)
 }
 
-//  Define a monitor object. It will query thanos
+// Monitor define a monitor object. It will query thanos
 type Monitor struct {
 	url      string
 	Token    string
 	ocClient *CLI
 }
 
-//  Define a monitor object. It will query prometheus directly instead of thanos
+// PrometheusMonitor define a monitor object. It will query prometheus directly instead of thanos
 type PrometheusMonitor struct {
 	Monitor
 }
 
-// Create a monitor using thanos URL
+// NewMonitor create a monitor using thanos URL
 func NewMonitor(oc *CLI) (*Monitor, error) {
 	var mo Monitor
 	var err error
-	mo.url = thanosUrl
+	mo.url = thanosURL
 	mo.ocClient = oc
-	mo.Token, err = getSAToken(oc)
+	mo.Token, err = GetSAToken(oc)
 	return &mo, err
 }
 
-// Create a monitor using prometheus url
+// NewPrometheusMonitor create a monitor using prometheus url
 func NewPrometheusMonitor(oc *CLI) (*PrometheusMonitor, error) {
 	var mo Monitor
 	var err error
-	mo.url = prometheusUrl
+	mo.url = prometheusURL
 	mo.ocClient = oc
-	mo.Token, err = getSAToken(oc)
+	mo.Token, err = GetSAToken(oc)
 	return &PrometheusMonitor{Monitor: mo}, err
 }
 
-// Query executes a query in prometheus. .../query?query=$query_to_execute
+// SimpleQuery query executes a query in prometheus. .../query?query=$query_to_execute
 func (mo *Monitor) SimpleQuery(query string) (string, error) {
 	queryParams := MonitorInstantQueryParams{Query: query}
 	return mo.InstantQuery(queryParams)
 }
 
-// Query executes a query in prometheus with time and timeout.
+// InstantQuery query executes a query in prometheus with time and timeout.
 //   Example:  curl 'http://host:port/api/v1/query?query=up&time=2015-07-01T20:10:51.781Z'
 func (mo *Monitor) InstantQuery(queryParams MonitorInstantQueryParams) (string, error) {
 	queryString := ""
@@ -107,7 +111,7 @@ func (mo *Monitor) InstantQuery(queryParams MonitorInstantQueryParams) (string, 
 	return RemoteShPod(mo.ocClient, monitorNamespace, "statefulsets/"+prometheusK8s, "sh", "-c", getCmd)
 }
 
-// QueryRange executes a query range in prometheus with start, end, step and timeout
+// RangeQuery executes a query range in prometheus with start, end, step and timeout
 //   Example: curl 'http://host:port/api/v1/query_range?query=metricname&start=2015-07-01T20:10:30.781Z&end=2015-07-01T20:11:00.781Z&step=15s'
 func (mo *Monitor) RangeQuery(queryParams MonitorRangeQueryParams) (string, error) {
 	queryString := ""
@@ -132,11 +136,11 @@ func (mo *Monitor) RangeQuery(queryParams MonitorRangeQueryParams) (string, erro
 }
 
 func (mo *Monitor) queryRules(query string) (string, error) {
-	query_string := ""
+	queryString := ""
 	if query != "" {
-		query_string = "?" + query
+		queryString = "?" + query
 	}
-	getCmd := "curl -k -s -H \"" + fmt.Sprintf("Authorization: Bearer %v", mo.Token) + "\" " + mo.url + monitorRules + query_string
+	getCmd := "curl -k -s -H \"" + fmt.Sprintf("Authorization: Bearer %v", mo.Token) + "\" " + mo.url + monitorRules + queryString
 	return RemoteShPod(mo.ocClient, monitorNamespace, "statefulsets/"+prometheusK8s, "sh", "-c", getCmd)
 }
 
@@ -162,7 +166,17 @@ func (pmo *PrometheusMonitor) GetAlerts() (string, error) {
 }
 
 // GetSAToken get a token assigned to prometheus-k8s from openshift-monitoring namespace
-func getSAToken(oc *CLI) (string, error) {
+func GetSAToken(oc *CLI) (string, error) {
 	e2e.Logf("Getting a token assgined to prometheus-k8s from %s namespace...", monitorNamespace)
-	return oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", prometheusK8s, "-n", monitorNamespace).Output()
+	token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", prometheusK8s, "-n", monitorNamespace).Output()
+	if err != nil {
+		if strings.Contains(token, "unknown command") { // oc client is old version, create token is not supported
+			e2e.Logf("oc create token is not supported by current client, use oc sa get-token instead")
+			token, err = oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", prometheusK8s, "-n", monitorNamespace).Output()
+		} else {
+			return "", err
+		}
+	}
+
+	return token, err
 }
