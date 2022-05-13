@@ -161,6 +161,10 @@ if [ "${pipelinetype}" != "None" ] && [ "${pipelinetype}" != "failtogetvalue" ] 
       echo "it is veci pipeline"
       profiletype="ve"
       ;;
+    katapipeline)
+      echo "it is kata pipeline"
+      profiletype="kata"
+      ;;
     *)
       echo "it is prerelease pipeline"
       profiletype="ci"
@@ -209,6 +213,8 @@ if [ "X${LAUNCHID}X" != "XX" ]; then
     else
       existing=`ls ${WORKSPACE}"/cip/"${VERSION}"/"|grep "${PROFILENAME}"".test"|grep "test_run.yaml"|wc -l|xargs`
     fi
+  elif [[ "X${profiletype}X" == "XkataX" ]]; then
+    existing=`ls ${WORKSPACE}"/cip/"${VERSION}"/"${profiletype}"/"|grep "${PROFILENAME}"".test"|grep "test_run.yaml"|wc -l|xargs`
   elif [[ "X${profiletype}X" == "XstageX" ]] || [[ "X${profiletype}X" == "XveX" ]]; then
     existing=`ls ${WORKSPACE}"/cip/"${profiletype}"/"${VERSION}"/"|grep "${PROFILENAME}"".test"|grep "test_run.yaml"|wc -l|xargs`
   else
@@ -246,6 +252,8 @@ if [ "X${LAUNCHID}X" != "XX" ]; then
       else
         ppath="../cip/"${VERSION}"/"
       fi
+    elif [[ "X${profiletype}X" == "XkataX" ]]; then
+      ppath="../cip/"${VERSION}"/"${profiletype}"/"
     elif [[ "X${profiletype}X" == "XstageX" ]] || [[ "X${profiletype}X" == "XveX" ]]; then
       ppath="../cip/"${profiletype}"/"${VERSION}"/"
     else
