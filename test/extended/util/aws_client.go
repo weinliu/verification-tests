@@ -12,23 +12,25 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-type Aws_client struct {
+// AwsClient struct
+type AwsClient struct {
 	svc *ec2.EC2
 }
 
-func InitAwsSession() *Aws_client {
+// InitAwsSession init session
+func InitAwsSession() *AwsClient {
 	mySession := session.Must(session.NewSession())
-	a_client := &Aws_client{
+	aClient := &AwsClient{
 		svc: ec2.New(mySession, aws.NewConfig()),
 	}
 
-	return a_client
+	return aClient
 }
 
-// Get int svc instance ID
-func (a *Aws_client) GetAwsInstanceID(instanceName string) (string, error) {
+// GetAwsInstanceID Get int svc instance ID
+func (a *AwsClient) GetAwsInstanceID(instanceName string) (string, error) {
 	filters := []*ec2.Filter{
-		&ec2.Filter{
+		{
 			Name: aws.String("tag:Name"),
 			Values: []*string{
 				aws.String(instanceName),
@@ -51,12 +53,13 @@ func (a *Aws_client) GetAwsInstanceID(instanceName string) (string, error) {
 	return *instanceID, err
 }
 
-func (a *Aws_client) GetAwsIntIPs(instanceId string) (map[string]string, error) {
+// GetAwsIntIPs get aws int ip
+func (a *AwsClient) GetAwsIntIPs(instanceID string) (map[string]string, error) {
 	filters := []*ec2.Filter{
-		&ec2.Filter{
+		{
 			Name: aws.String("instance-id"),
 			Values: []*string{
-				aws.String(instanceId),
+				aws.String(instanceID),
 			},
 		},
 	}
@@ -67,7 +70,7 @@ func (a *Aws_client) GetAwsIntIPs(instanceId string) (map[string]string, error) 
 	}
 
 	if len(instanceInfo.Reservations) < 1 {
-		return nil, fmt.Errorf("No instance found in current cluster with ID %s", instanceId)
+		return nil, fmt.Errorf("No instance found in current cluster with ID %s", instanceID)
 	}
 
 	privateIP := instanceInfo.Reservations[0].Instances[0].PrivateIpAddress
@@ -75,8 +78,8 @@ func (a *Aws_client) GetAwsIntIPs(instanceId string) (map[string]string, error) 
 	ips := make(map[string]string, 3)
 
 	if publicIP == nil && privateIP == nil {
-		e2e.Logf("There is no ips for this instance %s", instanceId)
-		return nil, fmt.Errorf("There is no ips for this instance %s", instanceId)
+		e2e.Logf("There is no ips for this instance %s", instanceID)
+		return nil, fmt.Errorf("There is no ips for this instance %s", instanceID)
 	}
 
 	if publicIP != nil {
@@ -92,9 +95,10 @@ func (a *Aws_client) GetAwsIntIPs(instanceId string) (map[string]string, error) 
 	return ips, nil
 }
 
-func (a *Aws_client) UpdateAwsIntSecurityRule(instanceID string, dstPort int64) error {
+// UpdateAwsIntSecurityRule update int security rule
+func (a *AwsClient) UpdateAwsIntSecurityRule(instanceID string, dstPort int64) error {
 	filters := []*ec2.Filter{
-		&ec2.Filter{
+		{
 			Name: aws.String("instance-id"),
 			Values: []*string{
 				aws.String(instanceID),

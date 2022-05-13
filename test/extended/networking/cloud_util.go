@@ -31,21 +31,21 @@ func getAwsCredentialFromCluster(oc *exutil.CLI) {
 
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
-	accessKeyIdBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).String(), gjson.Get(credential, `data.aws_secret_access_key`).String()
-	accessKeyId, err1 := base64.StdEncoding.DecodeString(accessKeyIdBase64)
+	accessKeyIDBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).String(), gjson.Get(credential, `data.aws_secret_access_key`).String()
+	accessKeyID, err1 := base64.StdEncoding.DecodeString(accessKeyIDBase64)
 	o.Expect(err1).NotTo(o.HaveOccurred())
 	secureKey, err2 := base64.StdEncoding.DecodeString(secureKeyBase64)
 	o.Expect(err2).NotTo(o.HaveOccurred())
 	clusterRegion, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 	o.Expect(err3).NotTo(o.HaveOccurred())
-	os.Setenv("AWS_ACCESS_KEY_ID", string(accessKeyId))
+	os.Setenv("AWS_ACCESS_KEY_ID", string(accessKeyID))
 	os.Setenv("AWS_SECRET_ACCESS_KEY", string(secureKey))
 	os.Setenv("AWS_REGION", clusterRegion)
 
 }
 
 // Get AWS int svc instance ID
-func getAwsIntSvcInstanceID(a *exutil.Aws_client, oc *exutil.CLI) (string, error) {
+func getAwsIntSvcInstanceID(a *exutil.AwsClient, oc *exutil.CLI) (string, error) {
 	clusterPrefixName := exutil.GetClusterPrefixName(oc)
 	instanceName := clusterPrefixName + "-int-svc"
 	instanceID, err := a.GetAwsInstanceID(instanceName)
@@ -57,7 +57,7 @@ func getAwsIntSvcInstanceID(a *exutil.Aws_client, oc *exutil.CLI) (string, error
 }
 
 // Get int svc instance private ip and public ip
-func getAwsIntSvcIPs(a *exutil.Aws_client, oc *exutil.CLI) map[string]string {
+func getAwsIntSvcIPs(a *exutil.AwsClient, oc *exutil.CLI) map[string]string {
 	instanceID, err := getAwsIntSvcInstanceID(a, oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	ips, err := a.GetAwsIntIPs(instanceID)
@@ -66,7 +66,7 @@ func getAwsIntSvcIPs(a *exutil.Aws_client, oc *exutil.CLI) map[string]string {
 }
 
 //Update int svc instance ingress rule to allow destination port
-func updateAwsIntSvcSecurityRule(a *exutil.Aws_client, oc *exutil.CLI, dstPort int64) {
+func updateAwsIntSvcSecurityRule(a *exutil.AwsClient, oc *exutil.CLI, dstPort int64) {
 	instanceID, err := getAwsIntSvcInstanceID(a, oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	err = a.UpdateAwsIntSecurityRule(instanceID, dstPort)
@@ -74,7 +74,7 @@ func updateAwsIntSvcSecurityRule(a *exutil.Aws_client, oc *exutil.CLI, dstPort i
 
 }
 
-func installIpEchoServiceOnAWS(a *exutil.Aws_client, oc *exutil.CLI) (string, error) {
+func installIPEchoServiceOnAWS(a *exutil.AwsClient, oc *exutil.CLI) (string, error) {
 	user := os.Getenv("SSH_CLOUD_PRIV_AWS_USER")
 	if user == "" {
 		user = "ec2-user"
@@ -106,8 +106,8 @@ func installIpEchoServiceOnAWS(a *exutil.Aws_client, oc *exutil.CLI) (string, er
 
 	updateAwsIntSvcSecurityRule(a, oc, 9095)
 
-	ipEchoUrl := net.JoinHostPort(privateIP, "9095")
-	return ipEchoUrl, nil
+	ipEchoURL := net.JoinHostPort(privateIP, "9095")
+	return ipEchoURL, nil
 }
 
 func getIfaddrFromNode(nodeName string, oc *exutil.CLI) string {
@@ -177,43 +177,43 @@ func getgcloudClient(oc *exutil.CLI) *exutil.Gcloud {
 	if ci.CheckPlatform(oc) != "gcp" {
 		g.Skip("it is not gcp platform!")
 	}
-	projectId, err := exutil.GetGcpProjectId(oc)
+	projectID, err := exutil.GetGcpProjectId(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if projectId != "openshift-qe" {
+	if projectID != "openshift-qe" {
 		g.Skip("openshift-qe project is needed to execute this test case!")
 	}
-	gcloud := exutil.Gcloud{ProjectId: projectId}
+	gcloud := exutil.Gcloud{ProjectID: projectID}
 	return gcloud.Login()
 }
 
-func getIntSvcExternalIpFromGcp(oc *exutil.CLI, infraId string) (string, error) {
-	externalIp, err := getgcloudClient(oc).GetIntSvcExternalIp(infraId)
-	e2e.Logf("Additional VM external ip: %s", externalIp)
-	return externalIp, err
+func getIntSvcExternalIPFromGcp(oc *exutil.CLI, infraID string) (string, error) {
+	externalIP, err := getgcloudClient(oc).GetIntSvcExternalIP(infraID)
+	e2e.Logf("Additional VM external ip: %s", externalIP)
+	return externalIP, err
 }
 
-func installIpEchoServiceOnGCP(oc *exutil.CLI, infraId string, host string) (string, error) {
-	e2e.Logf("Infra id: %s, install ipecho service on host %s", infraId, host)
+func installIPEchoServiceOnGCP(oc *exutil.CLI, infraID string, host string) (string, error) {
+	e2e.Logf("Infra id: %s, install ipecho service on host %s", infraID, host)
 
 	// Run ip-echo service on the additional VM
 	serviceName := "ip-echo"
-	internalIp, err := getgcloudClient(oc).GetIntSvcInternalIp(infraId)
+	internalIP, err := getgcloudClient(oc).GetIntSvcInternalIP(infraID)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	port := "9095"
-	runIpEcho := fmt.Sprintf("sudo netstat -ntlp | grep %s || sudo podman run --name %s -d -p %s:80 quay.io/openshifttest/ip-echo:multiarch", port, serviceName, port)
+	runIPEcho := fmt.Sprintf("sudo netstat -ntlp | grep %s || sudo podman run --name %s -d -p %s:80 quay.io/openshifttest/ip-echo:multiarch", port, serviceName, port)
 	user := os.Getenv("SSH_CLOUD_PRIV_GCP_USER")
 	if user == "" {
 		user = "cloud-user"
 	}
-	//o.Expect(sshRunCmd(host, user, runIpEcho)).NotTo(o.HaveOccurred())
-	err = sshRunCmd(host, user, runIpEcho)
+	//o.Expect(sshRunCmd(host, user, runIPEcho)).NotTo(o.HaveOccurred())
+	err = sshRunCmd(host, user, runIPEcho)
 	if err != nil {
-		e2e.Logf("Failed to run %v: %v", runIpEcho, err)
+		e2e.Logf("Failed to run %v: %v", runIPEcho, err)
 		return "", err
 	}
 
 	// Update firewall rules to expose ip-echo service
-	ruleName := fmt.Sprintf("%s-int-svc-ingress-allow", infraId)
+	ruleName := fmt.Sprintf("%s-int-svc-ingress-allow", infraID)
 	ports, err := getgcloudClient(oc).GetFirewallAllowPorts(ruleName)
 	if err != nil {
 		e2e.Logf("Failed to update firewall rules for port %v: %v", ports, err)
@@ -221,18 +221,18 @@ func installIpEchoServiceOnGCP(oc *exutil.CLI, infraId string, host string) (str
 	}
 	//o.Expect(err).NotTo(o.HaveOccurred())
 	if !strings.Contains(ports, "tcp:"+port) {
-		addIpEchoPort := fmt.Sprintf("%s,tcp:%s", ports, port)
-		o.Expect(getgcloudClient(oc).UpdateFirewallAllowPorts(ruleName, addIpEchoPort)).NotTo(o.HaveOccurred())
-		e2e.Logf("Allow Ports: %s", addIpEchoPort)
+		addIPEchoPort := fmt.Sprintf("%s,tcp:%s", ports, port)
+		o.Expect(getgcloudClient(oc).UpdateFirewallAllowPorts(ruleName, addIPEchoPort)).NotTo(o.HaveOccurred())
+		e2e.Logf("Allow Ports: %s", addIPEchoPort)
 	}
-	ipEchoUrl := net.JoinHostPort(internalIp, port)
-	return ipEchoUrl, nil
+	ipEchoURL := net.JoinHostPort(internalIP, port)
+	return ipEchoURL, nil
 }
 
-func uninstallIpEchoServiceOnGCP(oc *exutil.CLI) {
-	infraId, err := exutil.GetInfraId(oc)
+func uninstallIPEchoServiceOnGCP(oc *exutil.CLI) {
+	infraID, err := exutil.GetInfraId(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	host, err := getIntSvcExternalIpFromGcp(oc, infraId)
+	host, err := getIntSvcExternalIPFromGcp(oc, infraID)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	//Remove ip-echo service
 	user := os.Getenv("SSH_CLOUD_PRIV_GCP_USER")
@@ -241,7 +241,7 @@ func uninstallIpEchoServiceOnGCP(oc *exutil.CLI) {
 	}
 	o.Expect(sshRunCmd(host, user, "sudo podman rm ip-echo -f")).NotTo(o.HaveOccurred())
 	//Update firewall rules
-	ruleName := fmt.Sprintf("%s-int-svc-ingress-allow", infraId)
+	ruleName := fmt.Sprintf("%s-int-svc-ingress-allow", infraID)
 	ports, err := getgcloudClient(oc).GetFirewallAllowPorts(ruleName)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if strings.Contains(ports, "tcp:9095") {
@@ -250,8 +250,8 @@ func uninstallIpEchoServiceOnGCP(oc *exutil.CLI) {
 	}
 }
 
-func getZoneOfInstanceFromGcp(oc *exutil.CLI, infraId string, workerName string) (string, error) {
-	zone, err := getgcloudClient(oc).GetZone(infraId, workerName)
+func getZoneOfInstanceFromGcp(oc *exutil.CLI, infraID string, workerName string) (string, error) {
+	zone, err := getgcloudClient(oc).GetZone(infraID, workerName)
 	e2e.Logf("zone for instance %v is: %s", workerName, zone)
 	return zone, err
 }

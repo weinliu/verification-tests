@@ -19,8 +19,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		ipEchoUrl string
-		a         *exutil.Aws_client
+		ipEchoURL string
+		a         *exutil.AwsClient
 
 		oc = exutil.NewCLI("networking-"+getRandomString(), exutil.KubeConfigPath())
 	)
@@ -37,7 +37,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		switch platform {
 		case "aws":
 			e2e.Logf("\n AWS is detected, running the case on AWS\n")
-			if ipEchoUrl == "" {
+			if ipEchoURL == "" {
 				getAwsCredentialFromCluster(oc)
 				a = exutil.InitAwsSession()
 				_, err := getAwsIntSvcInstanceID(a, oc)
@@ -46,7 +46,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 					g.Skip("There is no int svc instance in this cluster, skip the cases!!")
 				}
 
-				ipEchoUrl, err = installIpEchoServiceOnAWS(a, oc)
+				ipEchoURL, err = installIPEchoServiceOnAWS(a, oc)
 				if err != nil {
 					e2e.Logf("No ip-echo service installed on the bastion host, %v", err)
 					g.Skip("No ip-echo service installed on the bastion host, skip the cases!!")
@@ -54,17 +54,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			}
 		case "gcp":
 			e2e.Logf("\n GCP is detected, running the case on GCP\n")
-			if ipEchoUrl == "" {
+			if ipEchoURL == "" {
 				// If an int-svc instance with external IP found, IpEcho service will be installed on the int-svc instance
 				// otherwise, just give error message and skip the test
-				infraId, err := exutil.GetInfraId(oc)
+				infraID, err := exutil.GetInfraId(oc)
 				o.Expect(err).NotTo(o.HaveOccurred())
-				host, err := getIntSvcExternalIpFromGcp(oc, infraId)
+				host, err := getIntSvcExternalIPFromGcp(oc, infraID)
 				if err != nil {
 					e2e.Logf("There is no int svc instance in this cluster, %v", err)
 					g.Skip("There is no int svc instance in this cluster, skip the cases!!")
 				}
-				ipEchoUrl, err = installIpEchoServiceOnGCP(oc, infraId, host)
+				ipEchoURL, err = installIPEchoServiceOnGCP(oc, infraID, host)
 				if err != nil {
 					e2e.Logf("No ip-echo service installed on the bastion host, %v", err)
 					g.Skip("No ip-echo service installed on the bastion host, skip the cases!!")
@@ -123,10 +123,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(freeIps[0]).Should(o.BeElementOf(ip))
 
 		g.By("4.From first namespace, check source IP is EgressIP")
-		e2e.Logf("\n ipEchoUrl is %v\n", ipEchoUrl)
-		sourceIp, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoUrl+" --connect-timeout 5")
+		e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
+		sourceIP, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(sourceIp).Should(o.BeElementOf(freeIps[0]))
+		o.Expect(sourceIP).Should(o.BeElementOf(freeIps[0]))
 
 		g.By("5. Create second namespace, create a test pod in it")
 		oc.SetupProject()
@@ -152,11 +152,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(freeIps[0]).Should(o.BeElementOf(ip))
 
 		g.By("8.Check source IP again from first project, curl command should not succeed, error is expected")
-		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoUrl+" --connect-timeout 5")
+		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 		o.Expect(err).To(o.HaveOccurred())
 
 		g.By("9.Check source IP again from second project, curl command should not succeed, error is expected")
-		_, err = e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s "+ipEchoUrl+" --connect-timeout 5")
+		_, err = e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 		o.Expect(err).To(o.HaveOccurred())
 	})
 
@@ -295,7 +295,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("5.Check source IP from the test pod for 5 times, it should always use the egressIP of the egressNode that it resides on")
 		for i := 0; i < 5; i++ {
-			sourceIP, err := e2e.RunHostCmd(ns, podns.name, "curl -s "+ipEchoUrl+" --connect-timeout 5")
+			sourceIP, err := e2e.RunHostCmd(ns, podns.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 			e2e.Logf("sourceIP is %v", sourceIP)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(sourceIP).Should(o.BeElementOf(ip))
@@ -346,16 +346,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(freeIps[0]).Should(o.BeElementOf(ip))
 
 		g.By("5.From the namespace, check source IP is EgressIP")
-		e2e.Logf("\n ipEchoUrl is %v\n", ipEchoUrl)
-		sourceIP_err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-			sourceIp, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoUrl+" --connect-timeout 5")
-			if !contains(freeIps, sourceIp) || err != nil {
-				e2e.Logf("\n got sourceIP as %v while egressIP is %v, or got the error: %v\n", sourceIp, ip, err)
+		e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
+		sourceIPErr := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+			sourceIP, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+			if !contains(freeIps, sourceIP) || err != nil {
+				e2e.Logf("\n got sourceIP as %v while egressIP is %v, or got the error: %v\n", sourceIP, ip, err)
 				return false, nil
 			}
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(sourceIP_err, fmt.Sprintf("Failed to get sourceIP:%s", sourceIP_err))
+		exutil.AssertWaitPollNoErr(sourceIPErr, fmt.Sprintf("Failed to get sourceIP:%s", sourceIPErr))
 
 		g.By("6.Reboot egress node.\n")
 		defer checkNodeStatus(oc, egressNode, "Ready")
@@ -364,15 +364,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		checkNodeStatus(oc, egressNode, "Ready")
 
 		g.By("7.check source IP is EgressIP again")
-		sourceIP_err = wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-			sourceIp, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoUrl+" --connect-timeout 5")
-			if !contains(freeIps, sourceIp) || err != nil {
-				e2e.Logf("\n got sourceIP as %v while egressIP is %v, or got the error: %v\n", sourceIp, ip, err)
+		sourceIPErr = wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+			sourceIP, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+			if !contains(freeIps, sourceIP) || err != nil {
+				e2e.Logf("\n got sourceIP as %v while egressIP is %v, or got the error: %v\n", sourceIP, ip, err)
 				return false, nil
 			}
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(sourceIP_err, fmt.Sprintf("Failed to get sourceIP:%s", sourceIP_err))
+		exutil.AssertWaitPollNoErr(sourceIPErr, fmt.Sprintf("Failed to get sourceIP:%s", sourceIPErr))
 	})
 
 	// author: jechen@redhat.com
@@ -432,11 +432,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		waitPodReady(oc, podns.namespace, podns.name)
 
 		g.By("5.Check source IP from the test pod for 10 times, it should use either egressIP address as its sourceIP")
-		sourceIp, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoUrl+" --connect-timeout 5 ; sleep 2;echo ;done")
+		sourceIP, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf(sourceIp)
-		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps[0]))
-		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps[1]))
+		e2e.Logf(sourceIP)
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps[1]))
 	})
 
 	// author: jechen@redhat.com
@@ -496,11 +496,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		waitPodReady(oc, podns.namespace, podns.name)
 
 		g.By("5.Check source IP from the test pod for 10 times, it should use either egressIP address as its sourceIP")
-		sourceIp, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoUrl+" --connect-timeout 5 ; sleep 2;echo ;done")
+		sourceIP, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf(sourceIp)
-		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps[0]))
-		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps[1]))
+		e2e.Logf(sourceIP)
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps[1]))
 	})
 
 	// author: jechen@redhat.com
@@ -555,11 +555,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(ip[0]).Should(o.BeElementOf(freeIps))
 
 		g.By("5.Check source IP from the test pod for 10 times, it should always use the egressIP of the egressNode that it resides on")
-		sourceIp, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoUrl+" --connect-timeout 5 ; sleep 2;echo ;done")
+		sourceIP, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf(sourceIp)
-		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps[0]))
-		o.Expect(sourceIp).ShouldNot(o.ContainSubstring(freeIps[1]))
+		e2e.Logf(sourceIP)
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps[0]))
+		o.Expect(sourceIP).ShouldNot(o.ContainSubstring(freeIps[1]))
 	})
 
 	// author: jechen@redhat.com
@@ -679,12 +679,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(ip[0]).Should(o.BeElementOf(freeIps))
 
 		g.By("9.From the namespace, check source IP is egressIP address")
-		sourceIp, err := e2e.RunHostCmd(podns.namespace, podns.name, "curl -s "+ipEchoUrl+" --connect-timeout 5")
-		if !contains(freeIps, sourceIp) || err != nil {
+		sourceIP, err := e2e.RunHostCmd(podns.namespace, podns.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		if !contains(freeIps, sourceIP) || err != nil {
 			err = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
-				sourceIp, err := e2e.RunHostCmd(podns.namespace, podns.name, "curl -s "+ipEchoUrl+" --connect-timeout 5")
-				if !contains(freeIps, sourceIp) || err != nil {
-					e2e.Logf("\n got sourceIP as %v while egressIP is %v, or got the error: %v\n, try again", sourceIp, ip, err)
+				sourceIP, err := e2e.RunHostCmd(podns.namespace, podns.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+				if !contains(freeIps, sourceIP) || err != nil {
+					e2e.Logf("\n got sourceIP as %v while egressIP is %v, or got the error: %v\n, try again", sourceIP, ip, err)
 					return false, nil
 				}
 				return true, nil
@@ -692,7 +692,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to get sourceIP:%s", err))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(sourceIp).Should(o.BeElementOf(freeIps[0]))
+		o.Expect(sourceIP).Should(o.BeElementOf(freeIps[0]))
 	})
 
 	// author: jechen@redhat.com
@@ -748,12 +748,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
 
 		g.By("3.Check source IP from the test pod for 10 times, it should use any egressIP address as its sourceIP")
-		sourceIp, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoUrl+" --connect-timeout 5 ; sleep 2;echo ;done")
+		sourceIP, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("\n Get sourceIP as: %v\n", sourceIp)
-		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps1[0]))
-		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps2[0]))
-		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps3[0]))
+		e2e.Logf("\n Get sourceIP as: %v\n", sourceIP)
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps1[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps2[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps3[0]))
 
 		g.By("4. Find the host that is assigned the first egressIP address")
 		foundHost := SDNHostwEgressIP(oc, egressNodes, freeIps1[0])
@@ -771,8 +771,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			// for gcp, remove the postfix "c.openshift-qe.internal" to get its instance name
 			instance = strings.Split(foundHost, ".")
 			e2e.Logf("\n\n\n the worker node to be shutdown is: %v\n\n\n", instance[0])
-			infraId, err := exutil.GetInfraId(oc)
-			zone, err = getZoneOfInstanceFromGcp(oc, infraId, instance[0])
+			infraID, err := exutil.GetInfraId(oc)
+			zone, err = getZoneOfInstanceFromGcp(oc, infraID, instance[0])
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = stopInstanceOnGcp(oc, instance[0], zone)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -783,12 +783,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		g.By("6.From the namespace, check source IP is egressIP address")
-		sourceIp, err = execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoUrl+" --connect-timeout 5 ; sleep 2;echo ;done")
+		sourceIP, err = execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("\n Get sourceIP as: %v\n", sourceIp)
-		o.Expect(sourceIp).ShouldNot(o.ContainSubstring(freeIps1[0]))
-		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps2[0]))
-		o.Expect(sourceIp).Should(o.ContainSubstring(freeIps3[0]))
+		e2e.Logf("\n Get sourceIP as: %v\n", sourceIP)
+		o.Expect(sourceIP).ShouldNot(o.ContainSubstring(freeIps1[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps2[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps3[0]))
 
 		g.By("7. Bring the host back up")
 		switch ci.CheckPlatform(oc) {
