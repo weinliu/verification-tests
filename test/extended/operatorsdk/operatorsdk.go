@@ -1014,10 +1014,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 					if strings.Contains(line, "Running") {
 						e2e.Logf("the status of pod memcached-operator-34427-controller-manager is Running")
 						return true, nil
-					} else {
-						e2e.Logf("the status of pod memcached-operator-34427-controller-manager is not Running")
-						return false, nil
 					}
+					e2e.Logf("the status of pod memcached-operator-34427-controller-manager is not Running")
+					return false, nil
 				}
 			}
 			return false, nil
@@ -1296,6 +1295,72 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 	})
+
+	// author: chuo@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:chuo-High-43660-scorecard support storing test output", func() {
+		operatorsdkCLI.showInfo = true
+		oc.SetupProject()
+		tmpBasePath := "/tmp/ocp-43660-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-43660")
+		err := os.MkdirAll(tmpPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
+
+		g.By("step: init Ansible Based Operator")
+		_, err = operatorsdkCLI.Run("init").Args("--plugins=ansible", "--domain", "example.com").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step: Create API.")
+		_, err = operatorsdkCLI.Run("create").Args("api", "--group", "cache", "--version", "v1alpha1", "--kind", "Memcached43660", "--generate-role").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step: make bundle.")
+		manifestsPath := filepath.Join(tmpPath, "config", "manifests")
+		err = os.MkdirAll(manifestsPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exec.Command("bash", "-c", fmt.Sprintf("cp -rf test/extended/util/operatorsdk/ocp-43660-data/manifests/bases/ %s", manifestsPath)).Output()
+
+		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
+			msg, err := makeCLI.Run("bundle").Args().Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(string(msg), "operator-sdk bundle validate ./bundle") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "operator-sdk bundle generate failed")
+
+		g.By("run scorecard ")
+		output, err := operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "4m", "--selector=test=olm-bundle-validation-test", "--test-output", "/testdata", "-n", oc.Namespace()).Output()
+		e2e.Logf(" scorecard bundle %v", err)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("State: pass"))
+		o.Expect(output).To(o.ContainSubstring("Name: olm-bundle-validation"))
+
+		g.By("step: modify test config.")
+		configFilePath := filepath.Join(tmpPath, "bundle", "tests", "scorecard", "config.yaml")
+		replaceContent(configFilePath, "mountPath: {}", "mountPath:\n          path: /test-output")
+
+		g.By("scorecard basic test migration")
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=basic-check-spec-test", "-n", oc.Namespace()).Output()
+		e2e.Logf(" scorecard bundle %v", err)
+		o.Expect(output).To(o.ContainSubstring("State: fail"))
+		o.Expect(output).To(o.ContainSubstring("spec missing from [memcached43660-sample]"))
+		pathOutput := filepath.Join(tmpPath, "test-output", "basic", "basic-check-spec-test")
+		_, err = os.Stat(pathOutput)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test", "-n", oc.Namespace()).Output()
+		e2e.Logf(" scorecard bundle %v", err)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("State: pass"))
+		pathOutput = filepath.Join(tmpPath, "test-output", "olm", "olm-bundle-validation-test")
+		_, err = os.Stat(pathOutput)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
 	// author: chuo@redhat.com
 	g.It("ConnectedOnly-Author:chuo-High-31219-scorecard bundle is mandatory ", func() {
 		operatorsdkCLI.showInfo = true
@@ -1416,10 +1481,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 					if strings.Contains(line, "Running") {
 						e2e.Logf("the status of pod nginx-operator-34426-controller-manager is Running")
 						return true, nil
-					} else {
-						e2e.Logf("the status of pod nginx-operator-34426-controller-manager is not Running")
-						return false, nil
 					}
+					e2e.Logf("the status of pod nginx-operator-34426-controller-manager is not Running")
+					return false, nil
 				}
 			}
 			return false, nil
@@ -1451,10 +1515,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 					if strings.Contains(line, "Running") {
 						e2e.Logf("the status of pod nginx34426-sample is Running")
 						return true, nil
-					} else {
-						e2e.Logf("the status of pod nginx34426-sample is not Running")
-						return false, nil
 					}
+					e2e.Logf("the status of pod nginx34426-sample is not Running")
+					return false, nil
 				}
 			}
 			return false, nil
@@ -1608,10 +1671,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 					if strings.Contains(line, "Running") {
 						e2e.Logf("the status of pod memcached-operator-controller-manager is Running")
 						return true, nil
-					} else {
-						e2e.Logf("the status of pod memcached-operator-controller-manager is not Running")
-						return false, nil
 					}
+					e2e.Logf("the status of pod memcached-operator-controller-manager is not Running")
+					return false, nil
 				}
 			}
 			return false, nil
@@ -1762,10 +1824,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 					if strings.Contains(line, "Running") {
 						e2e.Logf("the status of pod memcached-operator-40341-controller-manager is Running")
 						return true, nil
-					} else {
-						e2e.Logf("the status of pod memcached-operator-40341-controller-manager is not Running")
-						return false, nil
 					}
+					e2e.Logf("the status of pod memcached-operator-40341-controller-manager is not Running")
+					return false, nil
 				}
 			}
 			return false, nil
