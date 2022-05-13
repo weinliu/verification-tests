@@ -66,7 +66,7 @@ type subscriptionDescription struct {
 	ipCsv                  string
 }
 
-// tbuskey@redhat.com for OCP-21080
+// PrometheusQueryResult the prometheus query result
 type PrometheusQueryResult struct {
 	Data struct {
 		Result []struct {
@@ -1309,6 +1309,7 @@ func githubClient() (context.Context, *http.Client) {
 	return ctx, tc
 }
 
+// GetDirPath return a string of dir path
 func GetDirPath(filePathStr string, filePre string) string {
 	if !strings.Contains(filePathStr, "/") || filePathStr == "/" {
 		return ""
@@ -1316,27 +1317,27 @@ func GetDirPath(filePathStr string, filePre string) string {
 	dir, file := filepath.Split(filePathStr)
 	if strings.HasPrefix(file, filePre) {
 		return filePathStr
-	} else {
-		return GetDirPath(filepath.Dir(dir), filePre)
 	}
+	return GetDirPath(filepath.Dir(dir), filePre)
 }
 
+// DeleteDir delete the dir
 func DeleteDir(filePathStr string, filePre string) bool {
 	filePathToDelete := GetDirPath(filePathStr, filePre)
 	if filePathToDelete == "" || !strings.Contains(filePathToDelete, filePre) {
 		e2e.Logf("there is no such dir %s", filePre)
 		return false
-	} else {
-		e2e.Logf("remove dir %s", filePathToDelete)
-		os.RemoveAll(filePathToDelete)
-		if _, err := os.Stat(filePathToDelete); err == nil {
-			e2e.Logf("delele dir %s failed", filePathToDelete)
-			return false
-		}
-		return true
 	}
+	e2e.Logf("remove dir %s", filePathToDelete)
+	os.RemoveAll(filePathToDelete)
+	if _, err := os.Stat(filePathToDelete); err == nil {
+		e2e.Logf("delele dir %s failed", filePathToDelete)
+		return false
+	}
+	return true
 }
 
+// CheckUpgradeStatus check upgrade status
 func CheckUpgradeStatus(oc *exutil.CLI, expectedStatus string) {
 	e2e.Logf("Check the Upgradeable status of the OLM, expected: %s", expectedStatus)
 	err := wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
@@ -1353,6 +1354,7 @@ func CheckUpgradeStatus(oc *exutil.CLI, expectedStatus string) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Upgradeable status of the OLM %s is not expected", expectedStatus))
 }
 
+// SkipARM64 skip the test if cluster is arm64
 func SkipARM64(oc *exutil.CLI) {
 	e2e.Logf("get architecture")
 	version := exutil.GetClusterArchitecture(oc)

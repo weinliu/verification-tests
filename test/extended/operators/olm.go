@@ -3390,10 +3390,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			if checknameCsv == "" {
 				e2e.Logf("jobs KO Limit not setted ")
 				return false, nil
-			} else {
-				e2e.Logf("jobs OK Limit setted ")
-				return true, nil
 			}
+			e2e.Logf("jobs OK Limit setted ")
+			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "jobs KO Limit not setted")
 
@@ -4057,9 +4056,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 				g.By("3) Configuring the audit log policy to AllRequestBodies")
 				defer func() {
-					pathJson := fmt.Sprintf("{\"spec\":{\"audit\":{\"profile\":\"%s\"}}}", originProfile)
-					e2e.Logf("recover to be %v", pathJson)
-					patchResource(oc, asAdmin, withoutNamespace, "apiserver", "cluster", "-p", pathJson, "--type=merge")
+					pathJSON := fmt.Sprintf("{\"spec\":{\"audit\":{\"profile\":\"%s\"}}}", originProfile)
+					e2e.Logf("recover to be %v", pathJSON)
+					patchResource(oc, asAdmin, withoutNamespace, "apiserver", "cluster", "-p", pathJSON, "--type=merge")
 					output = getResource(oc, asAdmin, withoutNamespace, "apiserver", "cluster", "-o=jsonpath={.spec.audit.profile}")
 					o.Expect(output).To(o.Equal("Default"))
 				}()
@@ -4085,14 +4084,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 						e2e.Logf("revision number is : %v", revisionNumber2)
 						if revisionNumber2 > revisionNumber1 {
 							return true, nil
-						} else {
-							e2e.Logf("revision number is not changed, go next round")
-							return false, nil
 						}
-					} else {
-						e2e.Logf("Fail to get revision number, go next round")
+						e2e.Logf("revision number is not changed, go next round")
 						return false, nil
+
 					}
+					e2e.Logf("Fail to get revision number, go next round")
+					return false, nil
 				})
 				exutil.AssertWaitPollNoErr(err, "api not rollout")
 				//According to the case steps, wait for 5 minutes, then check the audit log doesn't contain olm-operator-serviceaccount.
@@ -4612,7 +4610,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				name := strings.Fields(ip)[0]
 				CSVs := getResource(oc, asAdmin, withoutNamespace, "installplan", name, "-n", sub.namespace, "-o=jsonpath={.spec.clusterServiceVersionNames}")
 				if strings.Contains(CSVs, sub.installedCSV) {
-					count += 1
+					count++
 				}
 			}
 			if count != 1 {
@@ -6399,10 +6397,9 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			if checkCatSource == "READY" {
 				e2e.Logf("Installed catalogsource")
 				return true, nil
-			} else {
-				e2e.Logf("FAIL - Installed catalogsource ")
-				return false, nil
 			}
+			e2e.Logf("FAIL - Installed catalogsource ")
+			return false, nil
 		})
 		if err != nil {
 			catsrcStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", catsrcName, "-n", catsrc.namespace, "-o", "jsonpath={.status}").Output()
@@ -8724,10 +8721,9 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			if strings.Contains(msg, errorText) {
 				e2e.Logf("subscription has the expected error")
 				return true, nil
-			} else {
-				e2e.Logf("subscription doesn't have the expected error:" + msg)
-				return false, nil
 			}
+			e2e.Logf("subscription doesn't have the expected error:" + msg)
+			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "subscription doesn't have the expected error")
 		g.By("Finished")
@@ -9296,10 +9292,9 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 			if csvStatus == "Succeeded" {
 				e2e.Logf("CSV status is Succeeded")
 				return true, nil
-			} else {
-				e2e.Logf("CSV status is %s, not Succeeded, go next round", csvStatus)
-				return false, nil
 			}
+			e2e.Logf("CSV status is %s, not Succeeded, go next round", csvStatus)
+			return false, nil
 		})
 		if err != nil {
 			getResource(oc, asAdmin, withoutNamespace, "csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status}")
@@ -9933,7 +9928,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 				interval:    "2m0s",
 				template:    catsrcImageTemplate,
 			}
-			sub_manual = subscriptionDescription{
+			subManual = subscriptionDescription{
 				subName:                "ditto-27672-operator",
 				namespace:              namespaceName,
 				catalogSourceName:      catsrcName,
@@ -9981,10 +9976,10 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		g.By("STEP 2: Create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 		g.By("STEP 3: install operator ")
-		sub_manual.create(oc, itName, dr)
+		subManual.create(oc, itName, dr)
 		e2e.Logf("approve the install plan")
-		sub_manual.approve(oc, itName, dr)
-		sub_manual.expectCSV(oc, itName, dr, "ditto-operator.v0.1.0")
+		subManual.approve(oc, itName, dr)
+		subManual.expectCSV(oc, itName, dr, "ditto-operator.v0.1.0")
 
 		g.By("STEP 4: update CatalogSource index image")
 		output, err = opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag2, "-f", indexTag, "-t", indexTag, "-c", containerTool).Output()
@@ -10011,21 +10006,20 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 		g.By("STEP 5: approve the install plan")
 		err = wait.Poll(3*time.Second, 300*time.Second, func() (bool, error) {
-			ipCsv := getResource(oc, asAdmin, withoutNamespace, "sub", sub_manual.subName, "-n", sub_manual.namespace, "-o=jsonpath={.status.installplan.name}{\" \"}{.status.currentCSV}")
+			ipCsv := getResource(oc, asAdmin, withoutNamespace, "sub", subManual.subName, "-n", subManual.namespace, "-o=jsonpath={.status.installplan.name}{\" \"}{.status.currentCSV}")
 			if strings.Contains(ipCsv, "ditto-operator.v0.1.1") {
 				return true, nil
-			} else {
-				return false, nil
 			}
+			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ditto-operator.v0.1.1 of sub %s fails", sub_manual.subName))
-		sub_manual.approveSpecificIP(oc, itName, dr, "ditto-operator.v0.1.1", "Complete")
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ditto-operator.v0.1.1 of sub %s fails", subManual.subName))
+		subManual.approveSpecificIP(oc, itName, dr, "ditto-operator.v0.1.1", "Complete")
 		g.By("STEP 6: check the csv")
-		sub_manual.expectCSV(oc, itName, dr, "ditto-operator.v0.1.1")
+		subManual.expectCSV(oc, itName, dr, "ditto-operator.v0.1.1")
 		e2e.Logf("delete the catsrc sub csv")
 		catsrc.delete(itName, dr)
-		sub_manual.delete(itName, dr)
-		sub_manual.getCSV().delete(itName, dr)
+		subManual.delete(itName, dr)
+		subManual.getCSV().delete(itName, dr)
 	})
 
 	// OCP-45359 author: jitli@redhat.com
@@ -10145,10 +10139,9 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			if checknameCsv == "Succeeded" {
 				e2e.Logf("CSV Installed")
 				return true, nil
-			} else {
-				e2e.Logf("CSV not installed")
-				return false, nil
 			}
+			e2e.Logf("CSV not installed")
+			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("status.phase of csv %s is not Succeeded", sub.installedCSV))
 
