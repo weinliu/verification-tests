@@ -1530,6 +1530,114 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: xzha@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:xzha-Critical-38101-implement IndexImageCatalogCreator", func() {
+		operatorsdkCLI.showInfo = true
+
+		g.By("step: create new project")
+		oc.SetupProject()
+		ns := oc.Namespace()
+
+		g.By("step: run bundle 1")
+		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/kubeturbo-bundle:v8.4.0", "-n", ns, "--timeout", "5m").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
+
+		g.By("step: check catsrc annotations")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "kubeturbo-catalog", "-n", oc.Namespace(), "-o=jsonpath={.metadata.annotations}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("index-image"))
+		o.Expect(output).To(o.ContainSubstring("injected-bundles"))
+		o.Expect(output).To(o.ContainSubstring("registry-pod-name"))
+		o.Expect(output).To(o.ContainSubstring("quay.io/olmqe/kubeturbo-bundle:v8.4.0"))
+		o.Expect(output).NotTo(o.ContainSubstring("quay.io/olmqe/kubeturbo-bundle:v8.5.0"))
+
+		g.By("step: check catsrc address")
+		podname1, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "kubeturbo-catalog", "-n", oc.Namespace(), "-o=jsonpath={.metadata.annotations.operators\\.operatorframework\\.io/registry-pod-name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podname1).NotTo(o.BeEmpty())
+
+		ip, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podname1, "-n", oc.Namespace(), "-o=jsonpath={.status.podIP}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(ip).NotTo(o.BeEmpty())
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "kubeturbo-catalog", "-n", oc.Namespace(), "-o=jsonpath={.spec.address}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.Equal(ip + ":50051"))
+
+		g.By("step: check catsrc sourceType")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "kubeturbo-catalog", "-n", oc.Namespace(), "-o=jsonpath={.spec.sourceType}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("grpc"))
+
+		g.By("step: check packagemanifest")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "kubeturbo", "-n", oc.Namespace(), "-o=jsonpath={.status.channels[*].currentCSV}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("kubeturbo-operator.v8.4.0"))
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "kubeturbo", "-n", oc.Namespace(), "-o=jsonpath={.status.channels[*].name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("8.4.0"))
+		o.Expect(output).To(o.ContainSubstring("stable"))
+
+		g.By("step: upgrade bundle")
+		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/kubeturbo-bundle:v8.5.0", "-n", ns, "--timeout", "5m").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
+		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "kubeturbo-operator.v8.5.0", "-n", ns).Output()
+			if strings.Contains(msg, "Succeeded") {
+				e2e.Logf("upgrade to 8.5.0 success")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("upgradeoperator upgrade failed in %s ", ns))
+
+		g.By("step: check catsrc annotations")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "kubeturbo-catalog", "-n", oc.Namespace(), "-o=jsonpath={.metadata.annotations}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("index-image"))
+		o.Expect(output).To(o.ContainSubstring("injected-bundles"))
+		o.Expect(output).To(o.ContainSubstring("registry-pod-name"))
+		o.Expect(output).To(o.ContainSubstring("quay.io/olmqe/kubeturbo-bundle:v8.4.0"))
+		o.Expect(output).To(o.ContainSubstring("quay.io/olmqe/kubeturbo-bundle:v8.5.0"))
+
+		g.By("step: check catsrc address")
+		podname2, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "kubeturbo-catalog", "-n", oc.Namespace(), "-o=jsonpath={.metadata.annotations.operators\\.operatorframework\\.io/registry-pod-name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podname2).NotTo(o.BeEmpty())
+		o.Expect(podname2).NotTo(o.Equal(podname1))
+
+		ip, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podname2, "-n", oc.Namespace(), "-o=jsonpath={.status.podIP}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(ip).NotTo(o.BeEmpty())
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "kubeturbo-catalog", "-n", oc.Namespace(), "-o=jsonpath={.spec.address}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.Equal(ip + ":50051"))
+
+		g.By("step: check catsrc sourceType")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "kubeturbo-catalog", "-n", oc.Namespace(), "-o=jsonpath={.spec.sourceType}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.Equal("grpc"))
+
+		g.By("step: check packagemanifest")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "kubeturbo", "-n", oc.Namespace(), "-o=jsonpath={.status.channels[*].currentCSV}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("kubeturbo-operator.v8.5.0"))
+		o.Expect(output).To(o.ContainSubstring("kubeturbo-operator.v8.4.0"))
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "kubeturbo", "-n", oc.Namespace(), "-o=jsonpath={.status.channels[*].name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("8.5.0"))
+		o.Expect(output).To(o.ContainSubstring("8.4.0"))
+		o.Expect(output).To(o.ContainSubstring("stable"))
+
+		g.By("SUCCESS")
+
+	})
+
+	// author: xzha@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:xzha-High-42028-Update python kubernetes and python openshift to kubernetes 12.0.0", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
