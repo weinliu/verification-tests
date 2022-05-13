@@ -1126,3 +1126,202 @@ func (sts *statefulset) checkDataIntoRawBlockVolume(oc *exutil.CLI) {
 		o.Expect(execCommandInSpecificPod(oc, sts.namespace, podName, "cat /tmp/testfile")).To(o.ContainSubstring("storage test"))
 	}
 }
+
+// Daemonset workload related functions
+type daemonset struct {
+	name       string
+	namespace  string
+	applabel   string
+	mpath      string
+	pvcname    string
+	template   string
+	volumetype string
+	typepath   string
+}
+
+// function option mode to change the default value of daemonset parameters,eg. name, mpath
+type daemonSetOption func(*daemonset)
+
+// Replace the default value of Daemonset name parameter
+func setDsName(name string) daemonSetOption {
+	return func(this *daemonset) {
+		this.name = name
+	}
+}
+
+// Replace the default value of Daemonset template parameter
+func setDsTemplate(template string) daemonSetOption {
+	return func(this *daemonset) {
+		this.template = template
+	}
+}
+
+// Replace the default value of Daemonset namespace parameter
+func setDsNamespace(namespace string) daemonSetOption {
+	return func(this *daemonset) {
+		this.namespace = namespace
+	}
+}
+
+// Replace the default value of Daemonset app label
+func setDsApplabel(applabel string) daemonSetOption {
+	return func(this *daemonset) {
+		this.applabel = applabel
+	}
+}
+
+// Replace the default value of Daemonset mountpath parameter
+func setDsMountpath(mpath string) daemonSetOption {
+	return func(this *daemonset) {
+		this.mpath = mpath
+	}
+}
+
+// Replace the default value of Daemonset pvcname parameter
+func setDsPVCName(pvcname string) daemonSetOption {
+	return func(this *daemonset) {
+		this.pvcname = pvcname
+	}
+}
+
+// Replace the default value of Daemonset volume type parameter
+func setDsVolumeType(volumetype string) daemonSetOption {
+	return func(this *daemonset) {
+		this.volumetype = volumetype
+	}
+}
+
+// Replace the default value of Daemonset volume type path parameter
+func setDsVolumeTypePath(typepath string) daemonSetOption {
+	return func(this *daemonset) {
+		this.typepath = typepath
+	}
+}
+
+//  Create a new customized Daemonset object
+func newDaemonSet(opts ...daemonSetOption) daemonset {
+	defaultDaemonSet := daemonset{
+		name:       "my-ds-" + getRandomString(),
+		template:   "ds-template.yaml",
+		namespace:  "",
+		applabel:   "myapp-" + getRandomString(),
+		mpath:      "/mnt/ds",
+		pvcname:    "",
+		volumetype: "volumeMounts",
+		typepath:   "mountPath",
+	}
+
+	for _, o := range opts {
+		o(&defaultDaemonSet)
+	}
+
+	return defaultDaemonSet
+}
+
+// Create new Daemonset with customized parameters
+func (ds *daemonset) create(oc *exutil.CLI) {
+	if ds.namespace == "" {
+		ds.namespace = oc.Namespace()
+	}
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ds.template, "-p", "DSNAME="+ds.name, "DSNAMESPACE="+ds.namespace, "PVCNAME="+ds.pvcname, "DSLABEL="+ds.applabel, "MPATH="+ds.mpath, "VOLUMETYPE="+ds.volumetype, "TYPEPATH="+ds.typepath)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Create new Daemonset with extra parameters
+func (ds *daemonset) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
+	if ds.namespace == "" {
+		ds.namespace = oc.Namespace()
+	}
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", ds.template, "-p", "DNAME="+ds.name, "DNAMESPACE="+ds.namespace, "PVCNAME="+ds.pvcname, "DLABEL="+ds.applabel, "MPATH="+ds.mpath, "VOLUMETYPE="+ds.volumetype, "TYPEPATH="+ds.typepath)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Delete Daemonset from the namespace
+func (ds *daemonset) delete(oc *exutil.CLI) {
+	err := oc.WithoutNamespace().Run("delete").Args("daemonset", ds.name, "-n", ds.namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Delete Daemonset from the namespace
+func (ds *daemonset) deleteAsAdmin(oc *exutil.CLI) {
+	oc.WithoutNamespace().AsAdmin().Run("delete").Args("daemonset", ds.name, "-n", ds.namespace).Execute()
+}
+
+//  Describe Daemonset
+func (ds *daemonset) describeDaemonSet(oc *exutil.CLI) {
+	output, err := oc.WithoutNamespace().Run("describe").Args("daemonset", "-n", ds.namespace, ds.name).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("****** The Daemonset  %s in namespace %s with detail info: ******\n %s", ds.name, ds.namespace, output)
+}
+
+// Get daemonset pod list
+func (ds *daemonset) getPodsList(oc *exutil.CLI) []string {
+	selectorLable := ds.applabel
+	if !strings.Contains(ds.applabel, "=") {
+		selectorLable = "app=" + ds.applabel
+	}
+	output, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", ds.namespace, "-l", selectorLable, "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Split(output, " ")
+}
+
+// Check the Daemonset ready
+func (ds *daemonset) checkReady(oc *exutil.CLI) (bool, error) {
+
+	dsReady, err := oc.WithoutNamespace().Run("get").Args("daemonset", ds.name, "-n", ds.namespace, "-o", "jsonpath={.status.numberAvailable}").Output()
+	dsNoScheduled, err := oc.WithoutNamespace().Run("get").Args("daemonset", ds.name, "-n", ds.namespace, "-o", "jsonpath={.status.desiredNumberScheduled}").Output()
+
+	e2e.Logf("Available no of daemonsets: %s and Desired no of scheduled daemonsets: %s ", dsReady, dsNoScheduled)
+	if dsReady == dsNoScheduled {
+		return true, err
+	}
+	return false, err
+}
+
+// Check the daemonset mounted volume could write
+func (ds *daemonset) checkPodMountedVolumeCouldWrite(oc *exutil.CLI) {
+	for indexValue, podinstance := range ds.getPodsList(oc) {
+		content := "storage test " + getRandomString()
+		FileName := "/testfile_" + strconv.Itoa(indexValue+1)
+		_, err := execCommandInSpecificPod(oc, ds.namespace, podinstance, "echo "+content+">"+ds.mpath+FileName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+
+// Check the daemonset mounted volume has the original data
+func (ds *daemonset) checkPodMountedVolumeCouldRead(oc *exutil.CLI) {
+	podList := ds.getPodsList(oc)
+	for _, podInstance := range podList {
+		for indexValue := 1; indexValue <= len(podList); indexValue++ {
+			o.Expect(execCommandInSpecificPod(oc, ds.namespace, podInstance, "cat "+ds.mpath+"/testfile_"+strconv.Itoa(indexValue))).To(o.ContainSubstring("storage test"))
+		}
+	}
+}
+
+// Waiting the Daemonset to become ready
+func (ds *daemonset) waitReady(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		dsReady, err := ds.checkReady(oc)
+		if err != nil {
+			return dsReady, err
+		}
+		if !dsReady {
+			return dsReady, nil
+		}
+		e2e.Logf(ds.name + " reached to expected availableNumbers")
+		return dsReady, nil
+	})
+
+	if err != nil {
+		ds.describeDaemonSet(oc)
+		podsList, _ := getPodsListByLabel(oc, ds.namespace, "app="+ds.applabel)
+		for _, podName := range podsList {
+			podstatus, _ := oc.WithoutNamespace().Run("get").Args("pod", podName, "-n", ds.namespace, "-o=jsonpath={.status.phase}").Output()
+			if matched, _ := regexp.MatchString("Running", podstatus); !matched {
+				e2e.Logf("$ oc describe pod %s:\n%s", podName, describePod(oc, ds.namespace, podName))
+				describePersistentVolumeClaim(oc, ds.namespace, getPvcNameFromPod(oc, podName, ds.namespace))
+			}
+		}
+	}
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Daemonset %s not ready", ds.name))
+}

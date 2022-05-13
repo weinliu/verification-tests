@@ -2502,6 +2502,74 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
 	})
+
+	// author: ropatil@redhat.com
+	// OCP-50398 - [CSI Driver] [Daemonset] [Filesystem default] could provide RWX access mode volume
+	g.It("Author:ropatil-High-50398-[CSI Driver] [Daemonset] [Filesystem default] could provide RWX access mode volume", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"efs.csi.aws.com"}
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
+
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
+			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			dsTemplate         = filepath.Join(storageTeamBaseDir, "ds-template.yaml")
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		// Set up a specified project share for all the phases
+		g.By("0. Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			// Get the present scName and check it is installed or no
+			scName := getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			// This condition added only for EFS platform as per earlier merged codes
+			if provisioner == "efs.csi.aws.com" {
+				checkStorageclassExists(oc, scName)
+			}
+
+			// Set the resource definition for the scenario
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimAccessmode("ReadWriteMany"))
+			ds := newDaemonSet(setDsTemplate(dsTemplate))
+
+			g.By("Create a pvc with the csi storageclass")
+			pvc.scname = scName
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+
+			g.By("Create daemonset pod with the created pvc and wait for the pod ready")
+			ds.pvcname = pvc.name
+			ds.create(oc)
+			defer ds.deleteAsAdmin(oc)
+			ds.waitReady(oc)
+
+			g.By("Check the volume mounted on the pod located node")
+			volName := pvc.getVolumeName(oc)
+			for _, podInstance := range ds.getPodsList(oc) {
+				nodeName := getNodeNameByPod(oc, ds.namespace, podInstance)
+				checkVolumeMountOnNode(oc, volName, nodeName)
+			}
+
+			g.By("# Check the pods can write data inside volume")
+			ds.checkPodMountedVolumeCouldWrite(oc)
+
+			g.By("# Check the original data from pods")
+			ds.checkPodMountedVolumeCouldRead(oc)
+
+			g.By("# Delete the  Resources: daemonset, pvc from namespace and check pv does not exist")
+			deleteSpecifiedResource(oc, "daemonset", ds.name, ds.namespace)
+			deleteSpecifiedResource(oc, "pvc", pvc.name, pvc.namespace)
+			checkResourcesNotExist(oc.AsAdmin(), "pv", volName, "")
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
 })
 
 // Performing test steps for Online Volume Resizing
