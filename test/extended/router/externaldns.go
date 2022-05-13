@@ -27,8 +27,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	)
 
 	g.BeforeEach(func() {
-		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
 		if strings.Contains(output, "NotFound") {
 			g.Skip("Skip since catalogsource/qe-app-registry is not installed")
 		}
