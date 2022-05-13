@@ -1,4 +1,4 @@
-package apiserver_and_auth
+package apiserverauth
 
 import (
 	"crypto/tls"
@@ -172,7 +172,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 		//Check service endpoint is showing correct error
 
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserver_and_auth")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth")
 
 		g.By("Check service endpoint is showing correct error")
 		networkPolicyAllow := filepath.Join(buildPruningBaseDir, "allow-same-namespace.yaml")
@@ -341,7 +341,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 		oc.SetupProject()
-		BaseDir := exutil.FixturePath("testdata", "apiserver_and_auth")
+		BaseDir := exutil.FixturePath("testdata", "apiserverauth")
 		podYaml := filepath.Join(BaseDir, "pod_with_sysctls.yaml")
 		err = oc.Run("create").Args("-f", podYaml).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -394,7 +394,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		defer os.Remove(path)
 
 		oc.SetupProject()
-		BaseDir := exutil.FixturePath("testdata", "apiserver_and_auth")
+		BaseDir := exutil.FixturePath("testdata", "apiserverauth")
 		podYaml := filepath.Join(BaseDir, "pod-with-msgmax.yaml")
 		output, err = oc.Run("create").Args("-f", podYaml).Output()
 		o.Expect(err).To(o.HaveOccurred())
@@ -420,10 +420,10 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		defer os.RemoveAll(configMapPath)
 		caFileName := "/ca-bundle.crt"
 		configMapName := "my-request-header-idp-configmap"
-		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", "openshift-config", "cm/admin-kubeconfig-client-ca", "--confirm", "--to=" + configMapPath).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", "openshift-config", "cm/admin-kubeconfig-client-ca", "--confirm", "--to="+configMapPath).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.Remove(configMapPath + caFileName)
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", configMapName, "--from-file=ca.crt=" + configMapPath + caFileName, "-n", "openshift-config").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", configMapName, "--from-file=ca.crt="+configMapPath+caFileName, "-n", "openshift-config").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
 			g.By("Removing configmap before exiting the scenario.")
@@ -438,7 +438,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		output = re.ReplaceAllString(output, "")
 		err = ioutil.WriteFile(oauthClusterYamlPath, []byte(output), 0644)
 		defer os.Remove(oauthClusterYamlPath)
-		baseDir := exutil.FixturePath("testdata", "apiserver_and_auth")
+		baseDir := exutil.FixturePath("testdata", "apiserverauth")
 		idpPath := filepath.Join(baseDir, "RequestHeader_IDP.yaml")
 		idpStr, err := ioutil.ReadFile(idpPath)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -515,7 +515,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		// check user & identity & oauthaccesstoken
 		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("user", ssoUser1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("identity", "my-request-header-idp:" + ssoUser1).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("identity", "my-request-header-idp:"+ssoUser1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("oauthaccesstoken").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -526,7 +526,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("user", ssoUser1).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			g.By("Removing identity my-request-header-idp:" + ssoUser1)
-			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("identity", "my-request-header-idp:" + ssoUser1).Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("identity", "my-request-header-idp:"+ssoUser1).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 
@@ -563,7 +563,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("user", xRemoteUserLogin).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("identity", "my-request-header-idp:" + ssoUser2).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("identity", "my-request-header-idp:"+ssoUser2).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Second response is gotten, user & identity are expected.")
 		defer func() {
@@ -571,7 +571,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("user", xRemoteUserLogin).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			g.By("Removing identity my-request-header-idp:" + ssoUser2)
-			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("identity", "my-request-header-idp:" + ssoUser2).Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("identity", "my-request-header-idp:"+ssoUser2).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 
@@ -595,7 +595,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		defer response3.Body.Close()
 		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("user", xRemoteUser).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("identity", "my-request-header-idp:" + xRemoteUser).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("identity", "my-request-header-idp:"+xRemoteUser).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		bodyByte, err := ioutil.ReadAll(response3.Body)
 		respBody := string(bodyByte)
@@ -606,7 +606,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("user", xRemoteUser).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			g.By("Removing identity my-request-header-idp:" + xRemoteUser)
-			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("identity", "my-request-header-idp:" + xRemoteUser).Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("identity", "my-request-header-idp:"+xRemoteUser).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 	})
@@ -622,9 +622,9 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		userOauthAccessTokenName1, err := oc.Run("get").Args("useroauthaccesstokens", "-ojsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		userOauthAccessTokenYaml, err := oc.Run("get").Args("useroauthaccesstokens", userOauthAccessTokenName1, "-o", "yaml").Output()
-		err = ioutil.WriteFile(userOauthAccessTokenYamlPath + "/" + userOauthAccessTokenYamlName, []byte(userOauthAccessTokenYaml), 0644)
+		err = ioutil.WriteFile(userOauthAccessTokenYamlPath+"/"+userOauthAccessTokenYamlName, []byte(userOauthAccessTokenYaml), 0644)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.Run("create").Args("-f", userOauthAccessTokenYamlPath + "/" + userOauthAccessTokenYamlName).Execute()
+		err = oc.Run("create").Args("-f", userOauthAccessTokenYamlPath+"/"+userOauthAccessTokenYamlName).Execute()
 		o.Expect(err).To(o.HaveOccurred())
 		e2e.Logf("User cannot create useroauthaccesstokens by yaml file of his own, this is expected.")
 
@@ -637,19 +637,19 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(err).To(o.HaveOccurred())
 		e2e.Logf("User cannot delete other user's useroauthaccesstoken, this is expected.")
 
-		baseDir := exutil.FixturePath("testdata", "apiserver_and_auth")
+		baseDir := exutil.FixturePath("testdata", "apiserverauth")
 		clusterRoleTestSudoer := filepath.Join(baseDir, "clusterrole-test-sudoer.yaml")
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", clusterRoleTestSudoer).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterroles", "test-sudoer-37697").Execute()
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("clusterrolebinding", "test-sudoer-37697", "--clusterrole=test-sudoer-37697", "--user=" + oc.Username()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("clusterrolebinding", "test-sudoer-37697", "--clusterrole=test-sudoer-37697", "--user="+oc.Username()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding", "test-sudoer-37697").Execute()
 		e2e.Logf("Clusterroles and clusterrolebinding were created successfully.")
 
-		err = oc.Run("get").Args("useroauthaccesstokens", "--as=" + user1Name, "--as-group=system:authenticated:oauth").Execute()
+		err = oc.Run("get").Args("useroauthaccesstokens", "--as="+user1Name, "--as-group=system:authenticated:oauth").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.Run("delete").Args("useroauthaccesstoken", userOauthAccessTokenName1, "--as=" + user1Name, "--as-group=system:authenticated:oauth").Execute()
+		err = oc.Run("delete").Args("useroauthaccesstoken", userOauthAccessTokenName1, "--as="+user1Name, "--as-group=system:authenticated:oauth").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("A user of 'impersonate' permission can get and delete other user's useroauthaccesstoken, this is expected.")
 

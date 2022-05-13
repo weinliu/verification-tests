@@ -1,4 +1,4 @@
-package apiserver_and_auth
+package apiserverauth
 
 import (
 	"bufio"
@@ -378,49 +378,49 @@ spec:
 	g.It("NonPreRelease-Longduration-Author:rgangwar-Low-25926-Wire cipher config from apiservers/cluster into apiserver and authentication operators [Disruptive] [Slow]", func() {
 		// Check authentication operator cliconfig, openshiftapiservers.operator.openshift.io and kubeapiservers.operator.openshift.io
 		var (
-			cipher_to_recover = `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":}]`
-			cipherOps         = []string{"openshift-authentication", "openshiftapiservers.operator", "kubeapiservers.operator"}
-			cipher_to_match   = `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"] VersionTLS12`
+			cipherToRecover = `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":}]`
+			cipherOps       = []string{"openshift-authentication", "openshiftapiservers.operator", "kubeapiservers.operator"}
+			cipherToMatch   = `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"] VersionTLS12`
 		)
 
 		cipherItems := []struct {
-			cipher_type     string
-			cipher_to_check string
-			patch           string
+			cipherType    string
+			cipherToCheck string
+			patch         string
 		}{
 			{
-				cipher_type:     "custom",
-				cipher_to_check: `["TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"] VersionTLS11`,
-				patch:           `[{"op": "add", "path": "/spec/tlsSecurityProfile", "value":{"custom":{"ciphers":["ECDHE-ECDSA-CHACHA20-POLY1305","ECDHE-RSA-CHACHA20-POLY1305","ECDHE-RSA-AES128-GCM-SHA256","ECDHE-ECDSA-AES128-GCM-SHA256"],"minTLSVersion":"VersionTLS11"},"type":"Custom"}}]`,
+				cipherType:    "custom",
+				cipherToCheck: `["TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"] VersionTLS11`,
+				patch:         `[{"op": "add", "path": "/spec/tlsSecurityProfile", "value":{"custom":{"ciphers":["ECDHE-ECDSA-CHACHA20-POLY1305","ECDHE-RSA-CHACHA20-POLY1305","ECDHE-RSA-AES128-GCM-SHA256","ECDHE-ECDSA-AES128-GCM-SHA256"],"minTLSVersion":"VersionTLS11"},"type":"Custom"}}]`,
 			},
 			{
-				cipher_type:     "Intermediate",
-				cipher_to_check: cipher_to_match, // cipherSuites of "Intermediate" seems to equal to the default values when .spec.tlsSecurityProfile not set.
-				patch:           `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":{"intermediate":{},"type":"Intermediate"}}]`,
+				cipherType:    "Intermediate",
+				cipherToCheck: cipherToMatch, // cipherSuites of "Intermediate" seems to equal to the default values when .spec.tlsSecurityProfile not set.
+				patch:         `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":{"intermediate":{},"type":"Intermediate"}}]`,
 			},
 			{
-				cipher_type:     "Old",
-				cipher_to_check: `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA","TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA","TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA","TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA","TLS_RSA_WITH_AES_128_GCM_SHA256","TLS_RSA_WITH_AES_256_GCM_SHA384","TLS_RSA_WITH_AES_128_CBC_SHA256","TLS_RSA_WITH_AES_128_CBC_SHA","TLS_RSA_WITH_AES_256_CBC_SHA","TLS_RSA_WITH_3DES_EDE_CBC_SHA"] VersionTLS10`,
-				patch:           `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":{"old":{},"type":"Old"}}]`,
+				cipherType:    "Old",
+				cipherToCheck: `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA","TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA","TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA","TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA","TLS_RSA_WITH_AES_128_GCM_SHA256","TLS_RSA_WITH_AES_256_GCM_SHA384","TLS_RSA_WITH_AES_128_CBC_SHA256","TLS_RSA_WITH_AES_128_CBC_SHA","TLS_RSA_WITH_AES_256_CBC_SHA","TLS_RSA_WITH_3DES_EDE_CBC_SHA"] VersionTLS10`,
+				patch:         `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":{"old":{},"type":"Old"}}]`,
 			},
 		}
 
 		// Check ciphers for authentication operator cliconfig, openshiftapiservers.operator.openshift.io and kubeapiservers.operator.openshift.io:
 		for _, s := range cipherOps {
-			err := verify_ciphers(oc, cipher_to_match, s)
+			err := verifyCiphers(oc, cipherToMatch, s)
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Ciphers are not matched : %s", s))
 		}
 
 		//Recovering apiserver/cluster's ciphers:
 		defer func() {
 			g.By("Restoring apiserver/cluster's ciphers")
-			output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", cipher_to_recover).Output()
+			output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", cipherToRecover).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(output, "patched (no change)") {
 				e2e.Logf("Apiserver/cluster's ciphers are not changed from the default values")
 			} else {
 				for _, s := range cipherOps {
-					err := verify_ciphers(oc, cipher_to_match, s)
+					err := verifyCiphers(oc, cipherToMatch, s)
 					exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Ciphers are not restored : %s", s))
 				}
 				g.By("Checking KAS, OAS, Auththentication operators should be in Progressing and Available after rollout and recovery")
@@ -447,14 +447,14 @@ spec:
 
 		// Check custom, intermediate, old ciphers for authentication operator cliconfig, openshiftapiservers.operator.openshift.io and kubeapiservers.operator.openshift.io:
 		for _, cipherItem := range cipherItems {
-			g.By("Patching the apiserver cluster with ciphers : " + cipherItem.cipher_type)
+			g.By("Patching the apiserver cluster with ciphers : " + cipherItem.cipherType)
 			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", cipherItem.patch).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			// Calling verify_cipher function to check ciphers and minTLSVersion
 			for _, s := range cipherOps {
-				err := verify_ciphers(oc, cipherItem.cipher_to_check, s)
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Ciphers are not matched: %s : %s", s, cipherItem.cipher_type))
+				err := verifyCiphers(oc, cipherItem.cipherToCheck, s)
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Ciphers are not matched: %s : %s", s, cipherItem.cipherType))
 			}
 			g.By("Checking KAS, OAS, Auththentication operators should be in Progressing and Available after rollout")
 			// Calling waitCoBecomes function to wait for define waitTime so that KAS, OAS, Authentication operator becomes progressing and available.
@@ -482,18 +482,18 @@ spec:
 	// author: rgangwar@redhat.com
 	g.It("NonPreRelease-Author:rgangwar-High-41899-Replacing the admin kubeconfig generated at install time [Disruptive] [Slow]", func() {
 		var (
-			dirname          = "/tmp/-OCP-41899-ca/"
-			name             = dirname + "custom"
-			validity         = 3650
-			ca_subj          = dirname + "/OU=openshift/CN=admin-kubeconfig-signer-custom"
-			user             = "system:admin"
-			user_cert        = dirname + "system-admin"
-			group            = "system:masters"
-			user_subj        = dirname + "/O=" + group + "/CN=" + user
-			new_kubeconfig   = dirname + "kubeconfig." + user
-			patch            = `[{"op": "add", "path": "/spec/clientCA", "value":{"name":"client-ca-custom"}}]`
-			patch_to_recover = `[{"op": "replace", "path": "/spec/clientCA", "value":}]`
-			configmap_bkp    = dirname + "OCP-41899-bkp.yaml"
+			dirname        = "/tmp/-OCP-41899-ca/"
+			name           = dirname + "custom"
+			validity       = 3650
+			caSubj         = dirname + "/OU=openshift/CN=admin-kubeconfig-signer-custom"
+			user           = "system:admin"
+			userCert       = dirname + "system-admin"
+			group          = "system:masters"
+			userSubj       = dirname + "/O=" + group + "/CN=" + user
+			newKubeconfig  = dirname + "kubeconfig." + user
+			patch          = `[{"op": "add", "path": "/spec/clientCA", "value":{"name":"client-ca-custom"}}]`
+			patchToRecover = `[{"op": "replace", "path": "/spec/clientCA", "value":}]`
+			configmapBkp   = dirname + "OCP-41899-bkp.yaml"
 		)
 
 		defer os.RemoveAll(dirname)
@@ -501,7 +501,7 @@ spec:
 			g.By("Restoring cluster")
 			output, err := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("").Output()
 			if strings.Contains(string(output), "Unauthorized") {
-				err = oc.AsAdmin().WithoutNamespace().Run("replace").Args("--kubeconfig", new_kubeconfig, "-f", configmap_bkp).Execute()
+				err = oc.AsAdmin().WithoutNamespace().Run("replace").Args("--kubeconfig", newKubeconfig, "-f", configmapBkp).Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				err = wait.Poll(5*time.Second, 100*time.Second, func() (bool, error) {
 					output, _ := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("").Output()
@@ -516,18 +516,18 @@ spec:
 					return false, nil
 				})
 				exutil.AssertWaitPollNoErr(err, "Old kubeconfig is not restored")
-				restore_cluster_ocp_41899(oc)
+				restoreClusterOcp41899(oc)
 				e2e.Logf("Cluster recovered")
 			} else if err == nil {
-				output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch_to_recover).Output()
+				output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patchToRecover).Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				if strings.Contains(output, "patched (no change)") {
 					e2e.Logf("Apiserver/cluster is not changed from the default values")
-					restore_cluster_ocp_41899(oc)
+					restoreClusterOcp41899(oc)
 				} else {
-					output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch_to_recover).Output()
+					output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patchToRecover).Output()
 					o.Expect(err).NotTo(o.HaveOccurred())
-					restore_cluster_ocp_41899(oc)
+					restoreClusterOcp41899(oc)
 				}
 			}
 		}()
@@ -536,97 +536,97 @@ spec:
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Get the default CA backup")
-		configmap_bkp, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "admin-kubeconfig-client-ca", "-n", "openshift-config", "-o", "yaml").OutputToFile("OCP-41899-ca/OCP-41899-bkp.yaml")
+		configmapBkp, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "admin-kubeconfig-client-ca", "-n", "openshift-config", "-o", "yaml").OutputToFile("OCP-41899-ca/OCP-41899-bkp.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		sed_cmd := fmt.Sprintf(`sed -i '/creationTimestamp:\|resourceVersion:\|uid:/d' %s`, configmap_bkp)
-		_, err = exec.Command("bash", "-c", sed_cmd).Output()
+		sedCmd := fmt.Sprintf(`sed -i '/creationTimestamp:\|resourceVersion:\|uid:/d' %s`, configmapBkp)
+		_, err = exec.Command("bash", "-c", sedCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Generation of a new self-signed CA, in case a corporate or another CA is already existing can be used.
 		g.By("Generation of a new self-signed CA")
 		e2e.Logf("Generate the CA private key")
-		openssl_cmd := fmt.Sprintf(`openssl genrsa -out %s-ca.key 4096`, name)
-		_, err = exec.Command("bash", "-c", openssl_cmd).Output()
+		opensslCmd := fmt.Sprintf(`openssl genrsa -out %s-ca.key 4096`, name)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Create the CA certificate")
-		openssl_cmd = fmt.Sprintf(`openssl req -x509 -new -nodes -key %s-ca.key -sha256 -days %d -out %s-ca.crt -subj %s`, name, validity, name, ca_subj)
-		_, err = exec.Command("bash", "-c", openssl_cmd).Output()
+		opensslCmd = fmt.Sprintf(`openssl req -x509 -new -nodes -key %s-ca.key -sha256 -days %d -out %s-ca.crt -subj %s`, name, validity, name, caSubj)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Generation of a new system:admin certificate. The client certificate must have the user into the x.509 subject CN field and the group into the O field.
 		g.By("Generation of a new system:admin certificate")
 		e2e.Logf("Create the user CSR")
-		openssl_cmd = fmt.Sprintf(`openssl req -nodes -newkey rsa:2048 -keyout %s.key -subj %s -out %s.csr`, user_cert, user_subj, user_cert)
-		_, err = exec.Command("bash", "-c", openssl_cmd).Output()
+		opensslCmd = fmt.Sprintf(`openssl req -nodes -newkey rsa:2048 -keyout %s.key -subj %s -out %s.csr`, userCert, userSubj, userCert)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// sign the user CSR and generate the certificate, the certificate must have the `clientAuth` extension
 		e2e.Logf("Sign the user CSR and generate the certificate")
-		openssl_cmd = fmt.Sprintf(`openssl x509 -extfile <(printf "extendedKeyUsage = clientAuth") -req -in %s.csr -CA %s-ca.crt -CAkey %s-ca.key -CAcreateserial -out %s.crt -days %d -sha256`, user_cert, name, name, user_cert, validity)
-		_, err = exec.Command("bash", "-c", openssl_cmd).Output()
+		opensslCmd = fmt.Sprintf(`openssl x509 -extfile <(printf "extendedKeyUsage = clientAuth") -req -in %s.csr -CA %s-ca.crt -CAkey %s-ca.key -CAcreateserial -out %s.crt -days %d -sha256`, userCert, name, name, userCert, validity)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// In order to have a safe replacement, before removing the default CA the new certificate is added as an additional clientCA.
 		g.By("Create the client-ca ConfigMap")
-		ca_file := fmt.Sprintf(`--from-file=ca-bundle.crt=%s-ca.crt`, name)
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", "client-ca-custom", "-n", "openshift-config", ca_file).Execute()
+		caFile := fmt.Sprintf(`--from-file=ca-bundle.crt=%s-ca.crt`, name)
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", "client-ca-custom", "-n", "openshift-config", caFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Patching apiserver")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patch).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Checking openshift-controller-manager operator should be in Progressing in 100 seconds")
-		expected_status := map[string]string{"Progressing": "True"}
-		err = waitCoBecomes(oc, "openshift-controller-manager", 100, expected_status) // Wait it to become Progressing=True
+		expectedStatus := map[string]string{"Progressing": "True"}
+		err = waitCoBecomes(oc, "openshift-controller-manager", 100, expectedStatus) // Wait it to become Progressing=True
 		exutil.AssertWaitPollNoErr(err, "openshift-controller-manager operator is not start progressing in 100 seconds")
 		e2e.Logf("Checking openshift-controller-manager operator should be Available in 300 seconds")
-		expected_status = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
-		err = waitCoBecomes(oc, "openshift-controller-manager", 300, expected_status) // Wait it to become Available=True and Progressing=False and Degraded=False
+		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err = waitCoBecomes(oc, "openshift-controller-manager", 300, expectedStatus) // Wait it to become Available=True and Progressing=False and Degraded=False
 		exutil.AssertWaitPollNoErr(err, "openshift-controller-manager operator is not becomes available in 300 seconds")
 
 		g.By("Create the new kubeconfig")
 		e2e.Logf("Add system:admin credentials, context to the kubeconfig")
-		err = oc.AsAdmin().WithoutNamespace().Run("config").Args("set-credentials", user, "--client-certificate="+user_cert+".crt", "--client-key="+user_cert+".key", "--embed-certs", "--kubeconfig="+new_kubeconfig).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("config").Args("set-credentials", user, "--client-certificate="+userCert+".crt", "--client-key="+userCert+".key", "--embed-certs", "--kubeconfig="+newKubeconfig).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Create context for the user")
-		cluster_name, _ := oc.AsAdmin().WithoutNamespace().Run("config").Args("view", "-o", `jsonpath={.clusters[0].name}`).Output()
-		err = oc.AsAdmin().WithoutNamespace().Run("config").Args("set-context", user, "--cluster="+cluster_name, "--namespace=default", "--user="+user, "--kubeconfig="+new_kubeconfig).Execute()
+		clusterName, _ := oc.AsAdmin().WithoutNamespace().Run("config").Args("view", "-o", `jsonpath={.clusters[0].name}`).Output()
+		err = oc.AsAdmin().WithoutNamespace().Run("config").Args("set-context", user, "--cluster="+clusterName, "--namespace=default", "--user="+user, "--kubeconfig="+newKubeconfig).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Extract certificate authority")
 		podnames, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-authentication", "-o", "name").Output()
 		podname := strings.Fields(podnames)
-		ingress_crt, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-authentication", podname[0], "cat", "/run/secrets/kubernetes.io/serviceaccount/ca.crt").OutputToFile("OCP-41899-ca/OCP-41899-ingress-ca.crt")
+		ingressCrt, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-authentication", podname[0], "cat", "/run/secrets/kubernetes.io/serviceaccount/ca.crt").OutputToFile("OCP-41899-ca/OCP-41899-ingress-ca.crt")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Set certificate authority data")
-		server_name, _ := oc.AsAdmin().WithoutNamespace().Run("config").Args("view", "-o", `jsonpath={.clusters[0].cluster.server}`).Output()
-		err = oc.AsAdmin().WithoutNamespace().Run("config").Args("set-cluster", cluster_name, "--server="+server_name, "--certificate-authority="+ingress_crt, "--kubeconfig="+new_kubeconfig, "--embed-certs").Execute()
+		serverName, _ := oc.AsAdmin().WithoutNamespace().Run("config").Args("view", "-o", `jsonpath={.clusters[0].cluster.server}`).Output()
+		err = oc.AsAdmin().WithoutNamespace().Run("config").Args("set-cluster", clusterName, "--server="+serverName, "--certificate-authority="+ingressCrt, "--kubeconfig="+newKubeconfig, "--embed-certs").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Set current context")
-		err = oc.AsAdmin().WithoutNamespace().Run("config").Args("use-context", user, "--kubeconfig="+new_kubeconfig).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("config").Args("use-context", user, "--kubeconfig="+newKubeconfig).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Test the new kubeconfig, be aware that the following command may requires some seconds for let the operator reconcile the newly added CA.
 		g.By("Testing the new kubeconfig")
-		err = oc.AsAdmin().WithoutNamespace().Run("login").Args("--kubeconfig", new_kubeconfig, "-u", user).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("login").Args("--kubeconfig", newKubeconfig, "-u", user).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("--kubeconfig", new_kubeconfig, "node").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("--kubeconfig", newKubeconfig, "node").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// If the previous commands are successful is possible to replace the default CA.
 		e2e.Logf("Replace the default CA")
-		configmap_yaml, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("--kubeconfig", new_kubeconfig, "configmap", "admin-kubeconfig-client-ca", "-n", "openshift-config", ca_file, "--dry-run=client", "-o", "yaml").OutputToFile("OCP-41899-ca/OCP-41899.yaml")
+		configmapYaml, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("--kubeconfig", newKubeconfig, "configmap", "admin-kubeconfig-client-ca", "-n", "openshift-config", caFile, "--dry-run=client", "-o", "yaml").OutputToFile("OCP-41899-ca/OCP-41899.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("replace").Args("--kubeconfig", new_kubeconfig, "-f", configmap_yaml).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("replace").Args("--kubeconfig", newKubeconfig, "-f", configmapYaml).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Is now possible to remove the additional CA which we set earlier.
 		e2e.Logf("Removing the additional CA")
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("--kubeconfig", new_kubeconfig, "apiserver/cluster", "--type=json", "-p", patch_to_recover).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("--kubeconfig", newKubeconfig, "apiserver/cluster", "--type=json", "-p", patchToRecover).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Now the old kubeconfig should be invalid, the following command is expected to fail (make sure to set the proper kubeconfig path).
@@ -651,15 +651,15 @@ spec:
 	// author: rgangwar@redhat.com
 	g.It("Author:rgangwar-Medium-43889-Examine non critical kube-apiserver errors", func() {
 		var (
-			keywords        = "(error|fail|tcp dial timeout|connect: connection refused|Unable to connect to the server: dial tcp|remote error: tls: bad certificate)"
-			exceptions      = "panic|fatal|SHOULD NOT HAPPEN"
-			format          = "[0-9TZ.:]{2,30}"
-			words           = `(\w+?[^0-9a-zA-Z]+?){,5}`
-			afterwords      = `(\w+?[^0-9a-zA-Z]+?){,12}`
-			co              = "openshift-kube-apiserver-operator"
-			dirname         = "/tmp/-OCP-43889/"
-			regex_to_grep_1 = "(" + words + keywords + words + ")" + "+"
-			regex_to_grep_2 = "(" + words + keywords + afterwords + ")" + "+"
+			keywords     = "(error|fail|tcp dial timeout|connect: connection refused|Unable to connect to the server: dial tcp|remote error: tls: bad certificate)"
+			exceptions   = "panic|fatal|SHOULD NOT HAPPEN"
+			format       = "[0-9TZ.:]{2,30}"
+			words        = `(\w+?[^0-9a-zA-Z]+?){,5}`
+			afterwords   = `(\w+?[^0-9a-zA-Z]+?){,12}`
+			co           = "openshift-kube-apiserver-operator"
+			dirname      = "/tmp/-OCP-43889/"
+			regexToGrep1 = "(" + words + keywords + words + ")" + "+"
+			regexToGrep2 = "(" + words + keywords + afterwords + ")" + "+"
 		)
 
 		defer os.RemoveAll(dirname)
@@ -670,38 +670,38 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		podlog, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", co, podname).OutputToFile("OCP-43889/kas-o-grep.log")
 		o.Expect(errlog).NotTo(o.HaveOccurred())
-		cmd := fmt.Sprintf(`cat %v |grep -ohiE '%s' |grep -iEv '%s' | sed -E 's/%s/../g' | sort | uniq -c | sort -rh | awk '$1 >5000 {print}'`, podlog, regex_to_grep_1, exceptions, format)
-		kas_o_log, err := exec.Command("bash", "-c", cmd).Output()
+		cmd := fmt.Sprintf(`cat %v |grep -ohiE '%s' |grep -iEv '%s' | sed -E 's/%s/../g' | sort | uniq -c | sort -rh | awk '$1 >5000 {print}'`, podlog, regexToGrep1, exceptions, format)
+		kasOLog, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("%s", kas_o_log)
+		e2e.Logf("%s", kasOLog)
 
 		g.By("Check the log files of KAS")
-		master_node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
+		masterNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		master_name := strings.Fields(master_node)
-		cmd = fmt.Sprintf(`grep -rohiE '%s' |grep -iEv '%s' /var/log/pods/openshift-kube-apiserver_kube-apiserver*/*/* | sed -E 's/%s/../g'`, regex_to_grep_2, exceptions, format)
-		for i := 0; i < len(master_name); i++ {
-			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", "node/"+master_name[i], "--", "chroot", "/host", "bash", "-c", cmd).OutputToFile("OCP-43889/kas_pod.log." + master_name[i])
+		masterName := strings.Fields(masterNode)
+		cmd = fmt.Sprintf(`grep -rohiE '%s' |grep -iEv '%s' /var/log/pods/openshift-kube-apiserver_kube-apiserver*/*/* | sed -E 's/%s/../g'`, regexToGrep2, exceptions, format)
+		for i := 0; i < len(masterName); i++ {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", "node/"+masterName[i], "--", "chroot", "/host", "bash", "-c", cmd).OutputToFile("OCP-43889/kas_pod.log." + masterName[i])
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		cmd = fmt.Sprintf(`cat %v| sort | uniq -c | sort -rh | awk '$1 >5000 {print}'`, dirname+"kas_pod.log.*")
-		kas_podlogs, err := exec.Command("bash", "-c", cmd).Output()
+		kasPodlogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("%s", kas_podlogs)
+		e2e.Logf("%s", kasPodlogs)
 
 		g.By("Check the audit log files of KAS")
-		cmd = fmt.Sprintf(`grep -rohiE '%s' /var/log/kube-apiserver/audit*.log |grep -iEv '%s' | sed -E 's/%s/../g'`, regex_to_grep_2, exceptions, format)
-		for i := 0; i < len(master_name); i++ {
-			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", "node/"+master_name[i], "--", "chroot", "/host", "bash", "-c", cmd).OutputToFile("OCP-43889/kas_audit.log." + master_name[i])
+		cmd = fmt.Sprintf(`grep -rohiE '%s' /var/log/kube-apiserver/audit*.log |grep -iEv '%s' | sed -E 's/%s/../g'`, regexToGrep2, exceptions, format)
+		for i := 0; i < len(masterName); i++ {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", "node/"+masterName[i], "--", "chroot", "/host", "bash", "-c", cmd).OutputToFile("OCP-43889/kas_audit.log." + masterName[i])
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		cmd = fmt.Sprintf(`cat %v| sort | uniq -c | sort -rh | awk '$1 >5000 {print}'`, dirname+"kas_audit.log.*")
-		kas_auditlogs, err := exec.Command("bash", "-c", cmd).Output()
+		kasAuditlogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("%s", kas_auditlogs)
+		e2e.Logf("%s", kasAuditlogs)
 
 		g.By("Checking pod and audit logs")
-		if len(kas_o_log) > 0 || len(kas_podlogs) > 0 || len(kas_auditlogs) > 0 {
+		if len(kasOLog) > 0 || len(kasPodlogs) > 0 || len(kasAuditlogs) > 0 {
 			e2e.Failf("Found some non-critical-errors....Check non critical errors, if errors are  potential bug then file a bug.")
 		} else {
 			e2e.Logf("Test pass: No errors found from KAS operator, KAS logs/audit logs")
@@ -715,7 +715,7 @@ spec:
 			exceptions = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
 			keywords   = "body: net/http: request canceled (Client.Timeout|panic"
 			// Creating below variable for clusterbuster commands "N" argument parameter.
-			namespace_count = 0
+			namespaceCount = 0
 		)
 		defer os.RemoveAll(dirname)
 		err := os.MkdirAll(dirname, 0755)
@@ -728,64 +728,63 @@ spec:
 		o.Expect(output).Should(o.Equal(`20`))
 
 		g.By("Checking cluster worker load before running clusterbuster")
-		cpu_avg_val, mem_avg_val := check_cluster_load(oc, "worker", "OCP-40667/nodes.log")
+		cpuAvgVal, memAvgVal := checkClusterLoad(oc, "worker", "OCP-40667/nodes.log")
 		node, err := exutil.GetAllNodes(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Number of nodes are %d", len(node))
-		no_of_nodes := len(node)
-		if no_of_nodes > 1 && cpu_avg_val < 50 && mem_avg_val < 50 {
-			e2e.Logf("Cluster has load normal..CPU %d %% and Memory %d %%...So using value of N=10", cpu_avg_val, mem_avg_val)
-			namespace_count = 10
-		} else if no_of_nodes == 1 && cpu_avg_val < 60 && mem_avg_val < 60 {
-			e2e.Logf("Cluster is SNO...CPU %d %% and Memory %d %%....So using value of N=3", cpu_avg_val, mem_avg_val)
-			namespace_count = 3
+		noOfNodes := len(node)
+		if noOfNodes > 1 && cpuAvgVal < 50 && memAvgVal < 50 {
+			e2e.Logf("Cluster has load normal..CPU %d %% and Memory %d %%...So using value of N=10", cpuAvgVal, memAvgVal)
+			namespaceCount = 10
+		} else if noOfNodes == 1 && cpuAvgVal < 60 && memAvgVal < 60 {
+			e2e.Logf("Cluster is SNO...CPU %d %% and Memory %d %%....So using value of N=3", cpuAvgVal, memAvgVal)
+			namespaceCount = 3
 		} else {
-			e2e.Logf("Cluster has slighty high load...CPU %d %% and Memory %d %%....So using value of N=6", cpu_avg_val, mem_avg_val)
-			namespace_count = 6
+			e2e.Logf("Cluster has slighty high load...CPU %d %% and Memory %d %%....So using value of N=6", cpuAvgVal, memAvgVal)
+			namespaceCount = 6
 		}
 
 		g.By("Stress the cluster")
-		cmd := fmt.Sprintf(`clusterbuster -P server -b 5 -p 10 -D .01 -M 1 -N %d -r 4 -d 2 -c 10 -m 1000 -v -s 20 -x > %v`, namespace_count, dirname+"clusterbuster.log")
+		cmd := fmt.Sprintf(`clusterbuster -P server -b 5 -p 10 -D .01 -M 1 -N %d -r 4 -d 2 -c 10 -m 1000 -v -s 20 -x > %v`, namespaceCount, dirname+"clusterbuster.log")
 		_, err = exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd = fmt.Sprintf(`cat %v | grep -iE '%s' || true`, dirname+"clusterbuster.log", keywords)
-		buster_logs, err := exec.Command("bash", "-c", cmd).Output()
+		busterLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(buster_logs) > 0 {
-			e2e.Logf("%s", buster_logs)
+		if len(busterLogs) > 0 {
+			e2e.Logf("%s", busterLogs)
 			e2e.Logf("Found some panic or timeout errors, if errors are  potential bug then file a bug.")
 		} else {
 			e2e.Logf("No errors found in clusterbuster logs")
 		}
 
 		g.By("Check the abnormal pods")
-		var pod_logs []byte
-		err_pod := wait.Poll(15*time.Second, 600*time.Second, func() (bool, error) {
+		var podLogs []byte
+		errPod := wait.Poll(15*time.Second, 600*time.Second, func() (bool, error) {
 			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile("OCP-40667/pod.log")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			cmd = fmt.Sprintf(`cat %v | grep -i 'clusterbuster' | grep -ivE 'Running|Completed|namespace' || true`, dirname+"pod.log")
-			pod_logs, err = exec.Command("bash", "-c", cmd).Output()
+			podLogs, err = exec.Command("bash", "-c", cmd).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if len(pod_logs) > 0 {
+			if len(podLogs) > 0 {
 				e2e.Logf("clusterbuster pods are not still running and completed")
 				return false, nil
-			} else {
-				e2e.Logf("No abnormality found in pods...")
-				return true, nil
 			}
+			e2e.Logf("No abnormality found in pods...")
+			return true, nil
 		})
-		if err_pod != nil {
-			e2e.Logf("%s", pod_logs)
+		if errPod != nil {
+			e2e.Logf("%s", podLogs)
 		}
-		exutil.AssertWaitPollNoErr(err_pod, "Abnormality found in clusterbuster pods.")
+		exutil.AssertWaitPollNoErr(errPod, "Abnormality found in clusterbuster pods.")
 
 		g.By("Check the abnormal nodes")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--no-headers").OutputToFile("OCP-40667/node.log")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd = fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, dirname+"node.log")
-		node_logs, err := exec.Command("bash", "-c", cmd).Output()
-		e2e.Logf("%s", node_logs)
-		if len(node_logs) > 0 {
+		nodeLogs, err := exec.Command("bash", "-c", cmd).Output()
+		e2e.Logf("%s", nodeLogs)
+		if len(nodeLogs) > 0 {
 			e2e.Logf("Some nodes are NotReady or SchedulingDisabled...Please check")
 			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -799,10 +798,10 @@ spec:
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--no-headers").OutputToFile("OCP-40667/co.log")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd = fmt.Sprintf(`cat %v | grep -v '.True.*False.*False' || true`, dirname+"co.log")
-		co_logs, err := exec.Command("bash", "-c", cmd).Output()
+		coLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(co_logs) > 0 {
-			e2e.Logf("%s", co_logs)
+		if len(coLogs) > 0 {
+			e2e.Logf("%s", coLogs)
 			e2e.Logf("Found abnormal cluster operators, if errors are  potential bug then file a bug.")
 		} else {
 			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Execute()
@@ -811,46 +810,46 @@ spec:
 		}
 
 		g.By("Checking KAS logs")
-		master_node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
+		masterNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		master_name := strings.Fields(master_node)
-		for i := 0; i < len(master_name); i++ {
-			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+master_name[i]).OutputToFile("OCP-40667/kas.log." + master_name[i])
+		masterName := strings.Fields(masterNode)
+		for i := 0; i < len(masterName); i++ {
+			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+masterName[i]).OutputToFile("OCP-40667/kas.log." + masterName[i])
 			o.Expect(errlog).NotTo(o.HaveOccurred())
 		}
 		cmd = fmt.Sprintf(`cat %v | grep -iE 'apf_controller.go|apf_filter.go' | grep 'no route' || true`, dirname+"kas.log.*")
-		no_routelogs, err := exec.Command("bash", "-c", cmd).Output()
+		noRouteLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd = fmt.Sprintf(`cat %v | grep -i 'panic' | grep -Ev "%s" || true`, dirname+"kas.log.*", exceptions)
-		panic_logs, err := exec.Command("bash", "-c", cmd).Output()
+		panicLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(no_routelogs) > 0 || len(panic_logs) > 0 {
-			e2e.Logf("%s", panic_logs)
-			e2e.Logf("%s", no_routelogs)
+		if len(noRouteLogs) > 0 || len(panicLogs) > 0 {
+			e2e.Logf("%s", panicLogs)
+			e2e.Logf("%s", noRouteLogs)
 			e2e.Logf("Found some panic or no route errors, if errors are  potential bug then file a bug.")
 		} else {
 			e2e.Logf("No errors found in KAS logs")
 		}
 
 		g.By("Check the all worker nodes workload are normal")
-		cpu_avg_val, mem_avg_val = check_cluster_load(oc, "worker", "OCP-40667/nodes_new.log")
-		if cpu_avg_val > 75 || mem_avg_val > 75 {
+		cpuAvgVal, memAvgVal = checkClusterLoad(oc, "worker", "OCP-40667/nodes_new.log")
+		if cpuAvgVal > 75 || memAvgVal > 75 {
 			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
 			o.Expect(errlog).NotTo(o.HaveOccurred())
-			e2e.Logf("Nodes CPU avg %d %% and Memory avg %d %% consumption is high, please investigate the consumption...", cpu_avg_val, mem_avg_val)
+			e2e.Logf("Nodes CPU avg %d %% and Memory avg %d %% consumption is high, please investigate the consumption...", cpuAvgVal, memAvgVal)
 		} else {
 			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
 			o.Expect(errlog).NotTo(o.HaveOccurred())
-			e2e.Logf("Node CPU %d %% and Memory %d %% consumption is normal....", cpu_avg_val, mem_avg_val)
+			e2e.Logf("Node CPU %d %% and Memory %d %% consumption is normal....", cpuAvgVal, memAvgVal)
 		}
 
 		g.By("Summary of resources used")
-		resource_details := check_resources(oc, "OCP-40667/resources.log")
-		for key, value := range resource_details {
+		resourceDetails := checkResources(oc, "OCP-40667/resources.log")
+		for key, value := range resourceDetails {
 			e2e.Logf("Number of %s is %v\n", key, value)
 		}
 
-		if cpu_avg_val > 75 || mem_avg_val > 75 || len(no_routelogs) > 0 || len(panic_logs) > 0 || len(co_logs) > 0 || len(node_logs) > 0 || len(buster_logs) > 0 {
+		if cpuAvgVal > 75 || memAvgVal > 75 || len(noRouteLogs) > 0 || len(panicLogs) > 0 || len(coLogs) > 0 || len(nodeLogs) > 0 || len(busterLogs) > 0 {
 			e2e.Failf("Prechk Test case: Failed.....Check above errors in case run logs.")
 		} else {
 			e2e.Logf("Prechk Test case: Passed.....There is no error abnormaliy found..")
@@ -882,9 +881,9 @@ spec:
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--no-headers").OutputToFile("OCP-40667/node.log")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd := fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, dirname+"node.log")
-		node_logs, err := exec.Command("bash", "-c", cmd).Output()
-		e2e.Logf("%s", node_logs)
-		if len(node_logs) > 0 {
+		nodeLogs, err := exec.Command("bash", "-c", cmd).Output()
+		e2e.Logf("%s", nodeLogs)
+		if len(nodeLogs) > 0 {
 			e2e.Logf("Some nodes are NotReady or SchedulingDisabled...Please check")
 			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -898,10 +897,10 @@ spec:
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--no-headers").OutputToFile("OCP-40667/co.log")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd = fmt.Sprintf(`cat %v | grep -v '.True.*False.*False' || true`, dirname+"co.log")
-		co_logs, err := exec.Command("bash", "-c", cmd).Output()
+		coLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(co_logs) > 0 {
-			e2e.Logf("%s", co_logs)
+		if len(coLogs) > 0 {
+			e2e.Logf("%s", coLogs)
 			e2e.Logf("Found abnormal cluster operators, if errors are  potential bug then file a bug.")
 		} else {
 			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Execute()
@@ -913,56 +912,56 @@ spec:
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile("OCP-40667/pod.log")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd = fmt.Sprintf(`cat %v | grep -i 'clusterbuster' |grep -ivE 'Running|Completed|namespace' || true`, dirname+"pod.log")
-		pod_logs, err := exec.Command("bash", "-c", cmd).Output()
+		podLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(pod_logs) > 0 {
-			e2e.Logf("%s", pod_logs)
+		if len(podLogs) > 0 {
+			e2e.Logf("%s", podLogs)
 			e2e.Logf("Found abnormal pods, if errors are  potential bug then file a bug.")
 		} else {
 			e2e.Logf("No abnormality found in pods...")
 		}
 
 		g.By("Checking KAS logs")
-		master_node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
+		masterNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		master_name := strings.Fields(master_node)
-		for i := 0; i < len(master_name); i++ {
-			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+master_name[i]).OutputToFile("OCP-40667/kas.log." + master_name[i])
+		masterName := strings.Fields(masterNode)
+		for i := 0; i < len(masterName); i++ {
+			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+masterName[i]).OutputToFile("OCP-40667/kas.log." + masterName[i])
 			o.Expect(errlog).NotTo(o.HaveOccurred())
 		}
 		cmd = fmt.Sprintf(`cat %v | grep -iE 'apf_controller.go|apf_filter.go' | grep 'no route' || true`, dirname+"kas.log.*")
-		no_routelogs, err := exec.Command("bash", "-c", cmd).Output()
+		noRouteLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd = fmt.Sprintf(`cat %v | grep -i 'panic' | grep -Ev "%s" || true`, dirname+"kas.log.*", exceptions)
-		panic_logs, err := exec.Command("bash", "-c", cmd).Output()
+		panicLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(no_routelogs) > 0 || len(panic_logs) > 0 {
-			e2e.Logf("%s", panic_logs)
-			e2e.Logf("%s", no_routelogs)
+		if len(noRouteLogs) > 0 || len(panicLogs) > 0 {
+			e2e.Logf("%s", panicLogs)
+			e2e.Logf("%s", noRouteLogs)
 			e2e.Logf("Found some panic or no route errors, if errors are  potential bug then file a bug.")
 		} else {
 			e2e.Logf("No errors found in KAS logs")
 		}
 
 		g.By("Check the all worker nodes workload are normal")
-		cpu_avg_val, mem_avg_val := check_cluster_load(oc, "worker", "OCP-40667/nodes_new.log")
-		if cpu_avg_val > 75 || mem_avg_val > 75 {
+		cpuAvgVal, memAvgVal := checkClusterLoad(oc, "worker", "OCP-40667/nodes_new.log")
+		if cpuAvgVal > 75 || memAvgVal > 75 {
 			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
 			o.Expect(errlog).NotTo(o.HaveOccurred())
-			e2e.Logf("Nodes CPU avg %d %% and Memory avg %d %% consumption is high, please investigate the consumption...", cpu_avg_val, mem_avg_val)
+			e2e.Logf("Nodes CPU avg %d %% and Memory avg %d %% consumption is high, please investigate the consumption...", cpuAvgVal, memAvgVal)
 		} else {
 			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
 			o.Expect(errlog).NotTo(o.HaveOccurred())
-			e2e.Logf("Node CPU %d %% and Memory %d %% consumption is normal....", cpu_avg_val, mem_avg_val)
+			e2e.Logf("Node CPU %d %% and Memory %d %% consumption is normal....", cpuAvgVal, memAvgVal)
 		}
 
 		g.By("Summary of resources used")
-		resource_details := check_resources(oc, "OCP-40667/resources.log")
-		for key, value := range resource_details {
+		resourceDetails := checkResources(oc, "OCP-40667/resources.log")
+		for key, value := range resourceDetails {
 			e2e.Logf("Number of %s is %v\n", key, value)
 		}
 
-		if cpu_avg_val > 75 || mem_avg_val > 75 || len(no_routelogs) > 0 || len(panic_logs) > 0 || len(co_logs) > 0 || len(node_logs) > 0 {
+		if cpuAvgVal > 75 || memAvgVal > 75 || len(noRouteLogs) > 0 || len(panicLogs) > 0 || len(coLogs) > 0 || len(nodeLogs) > 0 {
 			e2e.Failf("Postchk Test case: Failed.....Check above errors in case run logs.")
 		} else {
 			e2e.Logf("Postchk Test case: Passed.....There is no error abnormaliy found..")
@@ -976,7 +975,7 @@ spec:
 			exceptions = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
 			keywords   = "body: net/http: request canceled (Client.Timeout|panic"
 			// Creating below variable for clusterbuster commands "N" argument parameter.
-			namespace_count = 0
+			namespaceCount = 0
 		)
 		defer os.RemoveAll(dirname)
 		defer func() {
@@ -994,64 +993,63 @@ spec:
 		o.Expect(output).Should(o.Equal(`20`))
 
 		g.By("Checking cluster worker load before running clusterbuster")
-		cpu_avg_val, mem_avg_val := check_cluster_load(oc, "worker", "OCP-40861/nodes.log")
+		cpuAvgVal, memAvgVal := checkClusterLoad(oc, "worker", "OCP-40861/nodes.log")
 		node, err := exutil.GetAllNodes(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Number of nodes are %d", len(node))
-		no_of_nodes := len(node)
-		if no_of_nodes > 1 && cpu_avg_val < 50 && mem_avg_val < 50 {
-			e2e.Logf("Cluster has load normal..CPU %d %% and Memory %d %%...So using value of N=10", cpu_avg_val, mem_avg_val)
-			namespace_count = 10
-		} else if no_of_nodes == 1 && cpu_avg_val < 60 && mem_avg_val < 60 {
-			e2e.Logf("Cluster is SNO...CPU %d %% and Memory %d %%....So using value of N=3", cpu_avg_val, mem_avg_val)
-			namespace_count = 3
+		noOfNodes := len(node)
+		if noOfNodes > 1 && cpuAvgVal < 50 && memAvgVal < 50 {
+			e2e.Logf("Cluster has load normal..CPU %d %% and Memory %d %%...So using value of N=10", cpuAvgVal, memAvgVal)
+			namespaceCount = 10
+		} else if noOfNodes == 1 && cpuAvgVal < 60 && memAvgVal < 60 {
+			e2e.Logf("Cluster is SNO...CPU %d %% and Memory %d %%....So using value of N=3", cpuAvgVal, memAvgVal)
+			namespaceCount = 3
 		} else {
-			e2e.Logf("Cluster has slighty high load...CPU %d %% and Memory %d %%....So using value of N=6", cpu_avg_val, mem_avg_val)
-			namespace_count = 6
+			e2e.Logf("Cluster has slighty high load...CPU %d %% and Memory %d %%....So using value of N=6", cpuAvgVal, memAvgVal)
+			namespaceCount = 6
 		}
 
 		g.By("Stress the cluster")
-		cmd := fmt.Sprintf(`clusterbuster -P server -b 5 -p 10 -D .01 -M 1 -N %d -r 4 -d 2 -c 10 -m 1000 -v -s 20 -t 1200 -x > %v`, namespace_count, dirname+"clusterbuster.log")
+		cmd := fmt.Sprintf(`clusterbuster -P server -b 5 -p 10 -D .01 -M 1 -N %d -r 4 -d 2 -c 10 -m 1000 -v -s 20 -t 1200 -x > %v`, namespaceCount, dirname+"clusterbuster.log")
 		_, err = exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd = fmt.Sprintf(`cat %v | grep -iE '%s' || true`, dirname+"clusterbuster.log", keywords)
-		buster_logs, err := exec.Command("bash", "-c", cmd).Output()
+		busterLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(buster_logs) > 0 {
-			e2e.Logf("%s", buster_logs)
+		if len(busterLogs) > 0 {
+			e2e.Logf("%s", busterLogs)
 			e2e.Logf("Found some panic or timeout errors, if errors are  potential bug then file a bug.")
 		} else {
 			e2e.Logf("No errors found in clusterbuster logs")
 		}
 
 		g.By("Check the abnormal pods")
-		var pod_logs []byte
-		err_pod := wait.Poll(15*time.Second, 600*time.Second, func() (bool, error) {
+		var podLogs []byte
+		errPod := wait.Poll(15*time.Second, 600*time.Second, func() (bool, error) {
 			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile("OCP-40861/pod.log")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			cmd = fmt.Sprintf(`cat %v | grep -i 'clusterbuster' | grep -ivE 'Running|Completed|namespace' || true`, dirname+"pod.log")
-			pod_logs, err = exec.Command("bash", "-c", cmd).Output()
+			podLogs, err = exec.Command("bash", "-c", cmd).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if len(pod_logs) > 0 {
+			if len(podLogs) > 0 {
 				e2e.Logf("clusterbuster pods are not still running and completed")
 				return false, nil
-			} else {
-				e2e.Logf("No abnormality found in pods...")
-				return true, nil
 			}
+			e2e.Logf("No abnormality found in pods...")
+			return true, nil
 		})
-		if err_pod != nil {
-			e2e.Logf("%s", pod_logs)
+		if errPod != nil {
+			e2e.Logf("%s", podLogs)
 		}
-		exutil.AssertWaitPollNoErr(err_pod, "Abnormality found in clusterbuster pods.")
+		exutil.AssertWaitPollNoErr(errPod, "Abnormality found in clusterbuster pods.")
 
 		g.By("Check the abnormal nodes")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--no-headers").OutputToFile("OCP-40861/node.log")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd = fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, dirname+"node.log")
-		node_logs, err := exec.Command("bash", "-c", cmd).Output()
-		e2e.Logf("%s", node_logs)
-		if len(node_logs) > 0 {
+		nodeLogs, err := exec.Command("bash", "-c", cmd).Output()
+		e2e.Logf("%s", nodeLogs)
+		if len(nodeLogs) > 0 {
 			e2e.Logf("Some nodes are NotReady or SchedulingDisabled...Please check")
 			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1065,10 +1063,10 @@ spec:
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--no-headers").OutputToFile("OCP-40861/co.log")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd = fmt.Sprintf(`cat %v | grep -v '.True.*False.*False' || true`, dirname+"co.log")
-		co_logs, err := exec.Command("bash", "-c", cmd).Output()
+		coLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(co_logs) > 0 {
-			e2e.Logf("%s", co_logs)
+		if len(coLogs) > 0 {
+			e2e.Logf("%s", coLogs)
 			e2e.Logf("Found abnormal cluster operators, if errors are  potential bug then file a bug.")
 		} else {
 			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Execute()
@@ -1077,46 +1075,46 @@ spec:
 		}
 
 		g.By("Checking KAS logs")
-		master_node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
+		masterNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		master_name := strings.Fields(master_node)
-		for i := 0; i < len(master_name); i++ {
-			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+master_name[i]).OutputToFile("OCP-40861/kas.log." + master_name[i])
+		masterName := strings.Fields(masterNode)
+		for i := 0; i < len(masterName); i++ {
+			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+masterName[i]).OutputToFile("OCP-40861/kas.log." + masterName[i])
 			o.Expect(errlog).NotTo(o.HaveOccurred())
 		}
 		cmd = fmt.Sprintf(`cat %v | grep -iE 'apf_controller.go|apf_filter.go' | grep 'no route' || true`, dirname+"kas.log.*")
-		no_routelogs, err := exec.Command("bash", "-c", cmd).Output()
+		noRouteLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd = fmt.Sprintf(`cat %v | grep -i 'panic' | grep -Ev "%s" || true`, dirname+"kas.log.*", exceptions)
-		panic_logs, err := exec.Command("bash", "-c", cmd).Output()
+		panicLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(no_routelogs) > 0 || len(panic_logs) > 0 {
-			e2e.Logf("%s", panic_logs)
-			e2e.Logf("%s", no_routelogs)
+		if len(noRouteLogs) > 0 || len(panicLogs) > 0 {
+			e2e.Logf("%s", panicLogs)
+			e2e.Logf("%s", noRouteLogs)
 			e2e.Logf("Found some panic or no route errors, if errors are  potential bug then file a bug.")
 		} else {
 			e2e.Logf("No errors found in KAS logs")
 		}
 
 		g.By("Check the all worker nodes workload are normal")
-		cpu_avg_val, mem_avg_val = check_cluster_load(oc, "worker", "OCP-40861/nodes_new.log")
-		if cpu_avg_val > 75 || mem_avg_val > 75 {
+		cpuAvgVal, memAvgVal = checkClusterLoad(oc, "worker", "OCP-40861/nodes_new.log")
+		if cpuAvgVal > 75 || memAvgVal > 75 {
 			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
 			o.Expect(errlog).NotTo(o.HaveOccurred())
-			e2e.Logf("Nodes CPU avg %d %% and Memory avg %d %% consumption is high, please investigate the consumption...", cpu_avg_val, mem_avg_val)
+			e2e.Logf("Nodes CPU avg %d %% and Memory avg %d %% consumption is high, please investigate the consumption...", cpuAvgVal, memAvgVal)
 		} else {
 			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
 			o.Expect(errlog).NotTo(o.HaveOccurred())
-			e2e.Logf("Node CPU %d %% and Memory %d %% consumption is normal....", cpu_avg_val, mem_avg_val)
+			e2e.Logf("Node CPU %d %% and Memory %d %% consumption is normal....", cpuAvgVal, memAvgVal)
 		}
 
 		g.By("Summary of resources used")
-		resource_details := check_resources(oc, "OCP-40861/resources.log")
-		for key, value := range resource_details {
+		resourceDetails := checkResources(oc, "OCP-40861/resources.log")
+		for key, value := range resourceDetails {
 			e2e.Logf("Number of %s is %v\n", key, value)
 		}
 
-		if cpu_avg_val > 75 || mem_avg_val > 75 || len(no_routelogs) > 0 || len(panic_logs) > 0 || len(co_logs) > 0 || len(node_logs) > 0 || len(buster_logs) > 0 {
+		if cpuAvgVal > 75 || memAvgVal > 75 || len(noRouteLogs) > 0 || len(panicLogs) > 0 || len(coLogs) > 0 || len(nodeLogs) > 0 || len(busterLogs) > 0 {
 			e2e.Failf("Test case: Failed.....Check above errors in case run logs.")
 		} else {
 			e2e.Logf("Test case: Passed.....There is no error abnormaliy found..")
@@ -1126,17 +1124,17 @@ spec:
 	// author: kewang@redhat.com
 	g.It("Longduration-NonPreRelease-Author:kewang-Medium-12308-Customizing template for project creation [Serial][Slow]", func() {
 		var (
-			caseID            = "ocp-12308"
-			dirname           = "/tmp/-ocp-12308"
-			templateYaml      = "template.yaml"
-			templateYamlFile  = filepath.Join(dirname, templateYaml)
-			patchYamlFile     = filepath.Join(dirname, "patch.yaml")
-			project1          = caseID + "-test1"
-			project2          = caseID + "-test2"
-			patchJson         = `[{"op": "replace", "path": "/spec/projectRequestTemplate", "value":{"name":"project-request"}}]`
-			restore_patchJson = `[{"op": "replace", "path": "/spec", "value" :{}}]`
-			init_regexpr      = []string{`limits.cpu[\s]+0[\s]+6`, `limits.memory[\s]+0[\s]+16Gi`, `pods[\s]+0[\s]+10`, `requests.cpu[\s]+0[\s]+4`, `requests.memory[\s]+0[\s]+8Gi`}
-			regexpr           = []string{`limits.cpu[\s]+[1-9]+[\s]+6`, `limits.memory[\s]+[A-Za-z0-9]+[\s]+16Gi`, `pods[\s]+[1-9]+[\s]+10`, `requests.cpu[\s]+[A-Za-z0-9]+[\s]+4`, `requests.memory[\s]+[A-Za-z0-9]+[\s]+8Gi`}
+			caseID           = "ocp-12308"
+			dirname          = "/tmp/-ocp-12308"
+			templateYaml     = "template.yaml"
+			templateYamlFile = filepath.Join(dirname, templateYaml)
+			patchYamlFile    = filepath.Join(dirname, "patch.yaml")
+			project1         = caseID + "-test1"
+			project2         = caseID + "-test2"
+			patchJSON        = `[{"op": "replace", "path": "/spec/projectRequestTemplate", "value":{"name":"project-request"}}]`
+			restorePatchJSON = `[{"op": "replace", "path": "/spec", "value" :{}}]`
+			initRegExpr      = []string{`limits.cpu[\s]+0[\s]+6`, `limits.memory[\s]+0[\s]+16Gi`, `pods[\s]+0[\s]+10`, `requests.cpu[\s]+0[\s]+4`, `requests.memory[\s]+0[\s]+8Gi`}
+			regexpr          = []string{`limits.cpu[\s]+[1-9]+[\s]+6`, `limits.memory[\s]+[A-Za-z0-9]+[\s]+16Gi`, `pods[\s]+[1-9]+[\s]+10`, `requests.cpu[\s]+[A-Za-z0-9]+[\s]+4`, `requests.memory[\s]+[A-Za-z0-9]+[\s]+8Gi`}
 		)
 
 		err := os.MkdirAll(dirname, 0755)
@@ -1182,9 +1180,9 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Insert the patch Ymal before the keyword 'parameters:' in template yaml file
-		sed_cmd := fmt.Sprintf(`sed -i '/^parameters:/e cat %s' %s`, patchYamlFile, templateYamlFile)
-		e2e.Logf("Check sed cmd %s description:", sed_cmd)
-		_, err = exec.Command("bash", "-c", sed_cmd).Output()
+		sedCmd := fmt.Sprintf(`sed -i '/^parameters:/e cat %s' %s`, patchYamlFile, templateYamlFile)
+		e2e.Logf("Check sed cmd %s description:", sedCmd)
+		_, err = exec.Command("bash", "-c", sedCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("3) Create a project request template from the customized template.yaml file in the openshift-config namespace.")
@@ -1198,10 +1196,10 @@ spec:
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", project1).Execute()
 
 		g.By("5) Associate the template with projectRequestTemplate in the project resource of the config.openshift.io/v1.")
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("project.config.openshift.io/cluster", "--type=json", "-p", patchJson).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("project.config.openshift.io/cluster", "--type=json", "-p", patchJSON).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
-			oc.AsAdmin().WithoutNamespace().Run("patch").Args("project.config.openshift.io/cluster", "--type=json", "-p", restore_patchJson).Execute()
+			oc.AsAdmin().WithoutNamespace().Run("patch").Args("project.config.openshift.io/cluster", "--type=json", "-p", restorePatchJSON).Execute()
 			expectedStatus := map[string]string{"Progressing": "True"}
 			err = waitCoBecomes(oc, "openshift-apiserver", 240, expectedStatus)
 			exutil.AssertWaitPollNoErr(err, `openshift-apiserver status has not yet changed to {"Progressing": "True"} in 240 seconds`)
@@ -1230,7 +1228,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Check quotas setting of project %s description:", project2)
 		o.Expect(string(output)).To(o.ContainSubstring(project2 + "-quota"))
-		for _, regx := range init_regexpr {
+		for _, regx := range initRegExpr {
 			o.Expect(string(output)).Should(o.MatchRegexp(regx))
 		}
 
@@ -1283,7 +1281,7 @@ spec:
 		output, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("project", project2).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Check quotas setting of project %s description:", project2)
-		for _, regx := range init_regexpr {
+		for _, regx := range initRegExpr {
 			o.Expect(string(output)).Should(o.MatchRegexp(regx))
 		}
 		g.By(fmt.Sprintf("Last) %s SUCCESS", caseID))
@@ -1344,12 +1342,12 @@ spec:
 	// author: dpunia@redhat.com
 	g.It("Author:dpunia-High-41664-Check deprecated APIs to be removed in next release and next EUS release", func() {
 		var (
-			ignore_case  = "system:kube-controller-manager|system:serviceaccount|system:admin"
-			eus_releases = map[float64][]float64{4.8: []float64{1.21, 1.22, 1.23}, 4.10: []float64{1.24, 1.25}}
+			ignoreCase  = "system:kube-controller-manager|system:serviceaccount|system:admin"
+			eusReleases = map[float64][]float64{4.8: {1.21, 1.22, 1.23}, 4.10: {1.24, 1.25}}
 		)
 
 		//Anonymous function to check elements available in slice, it return true if elements exists otherwise return false.
-		elems_checkers := func(elems []float64, value float64) bool {
+		elemsCheckers := func(elems []float64, value float64) bool {
 			for _, element := range elems {
 				if value == element {
 					return true
@@ -1359,22 +1357,22 @@ spec:
 		}
 
 		g.By("1) Get current cluster version")
-		clusterVersion, _, err := exutil.GetClusterVersion(oc)
+		clusterVersions, _, err := exutil.GetClusterVersion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		cluster_version, err := strconv.ParseFloat(clusterVersion, 64)
+		clusterVersion, err := strconv.ParseFloat(clusterVersions, 64)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("%v", cluster_version)
+		e2e.Logf("%v", clusterVersion)
 
 		g.By("2) Get current k8s release & next release")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/kube-apiserver", "-o", `jsonpath='{.status.versions[?(@.name=="kube-apiserver")].version}'`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd := fmt.Sprintf(`echo '%v' | awk -F"." '{print $1"."$2}'`, out)
-		k8s_ver, err := exec.Command("bash", "-c", cmd).Output()
+		k8sVer, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		curr_relese, _ := strconv.ParseFloat(strings.Trim(string(k8s_ver), "\n"), 64)
-		e2e.Logf("Current Release : %v", curr_relese)
-		nxt_releases := curr_relese + 0.01
-		e2e.Logf("APIRemovedInNextReleaseInUse : %v", nxt_releases)
+		currRelese, _ := strconv.ParseFloat(strings.Trim(string(k8sVer), "\n"), 64)
+		e2e.Logf("Current Release : %v", currRelese)
+		nxtReleases := currRelese + 0.01
+		e2e.Logf("APIRemovedInNextReleaseInUse : %v", nxtReleases)
 
 		g.By("3) Get the removedInRelease of api groups list")
 		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("apirequestcount", "-o", `jsonpath='{range .items[?(@.status.removedInRelease != "")]}{.metadata.name}{"\t"}{.status.removedInRelease}{"\n"}{end}'`).Output()
@@ -1384,39 +1382,39 @@ spec:
 			e2e.Logf("There is no api for next APIRemovedInNextReleaseInUse & APIRemovedInNextEUSReleaseInUse\n")
 		} else {
 			e2e.Logf("List of api Removed in next EUS & Non-EUS releases\n %v", listOutput)
-			apis_rm_rel_list := bufio.NewScanner(strings.NewReader(listOutput))
-			for apis_rm_rel_list.Scan() {
-				remove_release_api := strings.Fields(apis_rm_rel_list.Text())[0]
-				remove_release, _ := strconv.ParseFloat(strings.Fields(apis_rm_rel_list.Text())[1], 64)
+			apisRmRelList := bufio.NewScanner(strings.NewReader(listOutput))
+			for apisRmRelList.Scan() {
+				removeReleaseAPI := strings.Fields(apisRmRelList.Text())[0]
+				removeRelease, _ := strconv.ParseFloat(strings.Fields(apisRmRelList.Text())[1], 64)
 				// Checking the alert & logs for next APIRemovedInNextReleaseInUse & APIRemovedInNextEUSReleaseInUse
-				if remove_release == nxt_releases {
+				if removeRelease == nxtReleases {
 					g.By("4) Checking Alert For APIRemovedInNextReleaseInUse")
-					e2e.Logf("Api %v and release %v", remove_release_api, remove_release)
+					e2e.Logf("Api %v and release %v", removeReleaseAPI, removeRelease)
 					// Checking alerts, Wait for max 5 min to generate all the alert.
 					err = wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
 						// Generating Alert for removed apis
-						_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(remove_release_api).Output()
+						_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(removeReleaseAPI).Output()
 						o.Expect(err).NotTo(o.HaveOccurred())
 						alertOutput, err := oc.Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-s", "-k", "http://localhost:9090/api/v1/alerts").Output()
 						o.Expect(err).NotTo(o.HaveOccurred())
-						cmd := fmt.Sprintf(`echo '%v' | egrep 'APIRemovedInNextReleaseInUse' | grep -oh '%s'`, alertOutput, remove_release_api)
+						cmd := fmt.Sprintf(`echo '%v' | egrep 'APIRemovedInNextReleaseInUse' | grep -oh '%s'`, alertOutput, removeReleaseAPI)
 						_, outerr := exec.Command("bash", "-c", cmd).Output()
 						o.Expect(err).NotTo(o.HaveOccurred())
 						if outerr == nil {
-							e2e.Logf("Got the Alert for APIRemovedInNextReleaseInUse, %v and release %v", remove_release_api, remove_release)
+							e2e.Logf("Got the Alert for APIRemovedInNextReleaseInUse, %v and release %v", removeReleaseAPI, removeRelease)
 							e2e.Logf("Step 4, Tests passed")
 							return true, nil
 						}
-						e2e.Logf("Not Get the alert for APIRemovedInNextReleaseInUse, Api %v : release %v. Trying again", remove_release_api, remove_release)
+						e2e.Logf("Not Get the alert for APIRemovedInNextReleaseInUse, Api %v : release %v. Trying again", removeReleaseAPI, removeRelease)
 						return false, nil
 					})
-					exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test Fail:  Not Get Alert for APIRemovedInNextReleaseInUse, %v : release %v", remove_release_api, remove_release))
+					exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test Fail:  Not Get Alert for APIRemovedInNextReleaseInUse, %v : release %v", removeReleaseAPI, removeRelease))
 
 					g.By("5) Checking Client compenents accessing the APIRemovedInNextReleaseInUse")
-					out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("apirequestcount", remove_release_api, "-o", `jsonpath='{range .status.currentHour..byUser[*]}{..byVerb[*].verb}{","}{.username}{","}{.userAgent}{"\n"}{end}'`).Output()
+					out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("apirequestcount", removeReleaseAPI, "-o", `jsonpath='{range .status.currentHour..byUser[*]}{..byVerb[*].verb}{","}{.username}{","}{.userAgent}{"\n"}{end}'`).Output()
 					stdOutput := strings.TrimRight(strings.Trim(out, "'"), "\n")
 					o.Expect(err).NotTo(o.HaveOccurred())
-					cmd := fmt.Sprintf(`echo "%s" | egrep -v '%s' || true`, stdOutput, ignore_case)
+					cmd := fmt.Sprintf(`echo "%s" | egrep -v '%s' || true`, stdOutput, ignoreCase)
 					clientAccessLog, err := exec.Command("bash", "-c", cmd).Output()
 					o.Expect(err).NotTo(o.HaveOccurred())
 					if len(clientAccessLog) > 0 {
@@ -1427,39 +1425,39 @@ spec:
 					}
 				}
 				// Checking the alert & logs for next APIRemovedInNextEUSReleaseInUse
-				if elems_checkers(eus_releases[cluster_version], remove_release) {
+				if elemsCheckers(eusReleases[clusterVersion], removeRelease) {
 					g.By("6) Checking the alert for APIRemovedInNextEUSReleaseInUse")
-					e2e.Logf("Api %v and release %v", remove_release_api, remove_release)
+					e2e.Logf("Api %v and release %v", removeReleaseAPI, removeRelease)
 					// Checking alerts, Wait for max 5 min to generate all the alert.
 					err = wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
 						// Generating Alert for removed apis
-						_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(remove_release_api).Output()
+						_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(removeReleaseAPI).Output()
 						o.Expect(err).NotTo(o.HaveOccurred())
 						alertOutput, err := oc.Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-s", "-k", "http://localhost:9090/api/v1/alerts").Output()
 						o.Expect(err).NotTo(o.HaveOccurred())
-						cmd := fmt.Sprintf(`echo '%v' | egrep 'APIRemovedInNextEUSReleaseInUse' | grep -oh '%s'`, alertOutput, remove_release_api)
+						cmd := fmt.Sprintf(`echo '%v' | egrep 'APIRemovedInNextEUSReleaseInUse' | grep -oh '%s'`, alertOutput, removeReleaseAPI)
 						_, outerr := exec.Command("bash", "-c", cmd).Output()
 						o.Expect(err).NotTo(o.HaveOccurred())
 						if outerr == nil {
-							e2e.Logf("Got the Alert for APIRemovedInNextEUSReleaseInUse, %v and release %v", remove_release_api, remove_release)
+							e2e.Logf("Got the Alert for APIRemovedInNextEUSReleaseInUse, %v and release %v", removeReleaseAPI, removeRelease)
 							e2e.Logf("Step 6, Tests passed")
 							return true, nil
 						}
-						e2e.Logf("Not Get the alert for APIRemovedInNextEUSReleaseInUse, %v : release %v. Trying again", remove_release_api, remove_release)
+						e2e.Logf("Not Get the alert for APIRemovedInNextEUSReleaseInUse, %v : release %v. Trying again", removeReleaseAPI, removeRelease)
 						return false, nil
 					})
-					exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test Fail:  Not Get Alert for APIRemovedInNextEUSReleaseInUse, Api %v : release %v", remove_release_api, remove_release))
+					exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test Fail:  Not Get Alert for APIRemovedInNextEUSReleaseInUse, Api %v : release %v", removeReleaseAPI, removeRelease))
 
 					// Checking logs for APIRemovedInNextEUSReleaseInUse apis client components logs.
 					g.By("7) Checking client components access logs for APIRemovedInNextEUSReleaseInUse")
-					out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("apirequestcount", remove_release_api, "-o", `jsonpath='{range .status.currentHour..byUser[*]}{..byVerb[*].verb}{","}{.username}{","}{.userAgent}{"\n"}{end}'`).Output()
+					out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("apirequestcount", removeReleaseAPI, "-o", `jsonpath='{range .status.currentHour..byUser[*]}{..byVerb[*].verb}{","}{.username}{","}{.userAgent}{"\n"}{end}'`).Output()
 					stdOutput := strings.TrimRight(strings.Trim(out, "'"), "\n")
 					o.Expect(err).NotTo(o.HaveOccurred())
-					cmd := fmt.Sprintf(`echo "%s" | egrep -v '%s' || true`, stdOutput, ignore_case)
-					client_comp_access, err := exec.Command("bash", "-c", cmd).Output()
+					cmd := fmt.Sprintf(`echo "%s" | egrep -v '%s' || true`, stdOutput, ignoreCase)
+					clientCompAccess, err := exec.Command("bash", "-c", cmd).Output()
 					o.Expect(err).NotTo(o.HaveOccurred())
-					if len(client_comp_access) > 0 {
-						e2e.Logf(string(client_comp_access))
+					if len(clientCompAccess) > 0 {
+						e2e.Logf(string(clientCompAccess))
 						e2e.Failf("Test Failed: Client components access Apis logs found, file a bug.")
 					} else {
 						e2e.Logf("Test Passed: No client components access Apis logs found")
