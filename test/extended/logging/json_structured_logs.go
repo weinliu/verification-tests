@@ -28,7 +28,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			SingleNamespaceOG = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
 			AllNamespaceOG    = exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml")
 			jsonLogFile       = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-			nonJsonLogFile    = exutil.FixturePath("testdata", "logging", "generatelog", "container_non_json_log_template.json")
+			nonJSONLogFile    = exutil.FixturePath("testdata", "logging", "generatelog", "container_non_json_log_template.json")
 		)
 		cloNS := "openshift-logging"
 		eoNS := "openshift-operators-redhat"
@@ -39,8 +39,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			//CLO is deployed to `openshift-logging` namespace by default
 			//and EO is deployed to `openshift-operators-redhat` namespace
 			g.By("deploy CLO and EO")
-			CLO.SubscribeLoggingOperators(oc)
-			EO.SubscribeLoggingOperators(oc)
+			CLO.SubscribeOperator(oc)
+			EO.SubscribeOperator(oc)
 			oc.SetupProject()
 		})
 
@@ -48,8 +48,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:qitang-High-41847-High-41848-structured index by kubernetes.labels.test/openshift.labels.team [Serial][Slow]", func() {
 			// create a project, then create a pod in the project to generate some json logs
 			g.By("create some json logs")
-			app_proj := oc.Namespace()
-			err := oc.WithoutNamespace().Run("new-app").Args("-n", app_proj, "-f", jsonLogFile).Execute()
+			appProj := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			//create clusterlogforwarder instance
@@ -57,7 +57,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "42475.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DATA_PROJECT="+app_proj, "-p", "STRUCTURED_TYPE_KEY=kubernetes.labels.test")
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DATA_PROJECT="+appProj, "-p", "STRUCTURED_TYPE_KEY=kubernetes.labels.test")
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			// create clusterlogging instance
@@ -76,14 +76,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-centos-logtest")
 
 			//check if the JSON logs are parsed
-			check_log := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app_proj + "\"}}}"
-			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-centos-logtest", check_log)
+			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + appProj + "\"}}}"
+			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-centos-logtest", checkLog)
 			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
 
 			//update clusterlogforwarder instance
 			e2e.Logf("start testing OCP-41848")
 			g.By("change clusterlogforwarder/instance")
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DATA_PROJECT="+app_proj, "-p", "STRUCTURED_TYPE_KEY=openshift.labels.team")
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DATA_PROJECT="+appProj, "-p", "STRUCTURED_TYPE_KEY=openshift.labels.team")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
 			// check data in ES
@@ -92,17 +92,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-qa-openshift-label")
 			//check if the JSON logs are parsed
-			check_log_2 := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app_proj + "\"}}}"
-			logs_2 := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-qa-openshift-label", check_log_2)
-			o.Expect(logs_2.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			checkLog2 := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + appProj + "\"}}}"
+			logs2 := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-qa-openshift-label", checkLog2)
+			o.Expect(logs2.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
 		})
 
 		// author: qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-42475-High-42386-structured index by kubernetes.container_name/kubernetes.namespace_name [Serial][Slow]", func() {
 			// create a project, then create a pod in the project to generate some json logs
 			g.By("create some json logs")
-			app_proj := oc.Namespace()
-			err := oc.WithoutNamespace().Run("new-app").Args("-n", app_proj, "-f", jsonLogFile).Execute()
+			appProj := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			//create clusterlogforwarder instance
@@ -110,7 +110,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "42475.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DATA_PROJECT="+app_proj, "-p", "STRUCTURED_TYPE_KEY=kubernetes.container_name")
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DATA_PROJECT="+appProj, "-p", "STRUCTURED_TYPE_KEY=kubernetes.container_name")
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			// create clusterlogging instance
@@ -128,37 +128,37 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-logging-centos-logtest")
 			//check if the JSON logs are parsed
-			check_log := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app_proj + "\"}}}"
-			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-logging-centos-logtest", check_log)
+			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + appProj + "\"}}}"
+			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-logging-centos-logtest", checkLog)
 			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
 
 			e2e.Logf("start testing OCP-42386")
 			g.By("updating clusterlogforwarder")
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DATA_PROJECT="+app_proj, "-p", "STRUCTURED_TYPE_KEY=kubernetes.namespace_name")
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DATA_PROJECT="+appProj, "-p", "STRUCTURED_TYPE_KEY=kubernetes.namespace_name")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
 			// check data in ES
 			g.By("check indices in ES pod")
 			podList, err = oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-"+app_proj)
+			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-"+appProj)
 			//check if the JSON logs are parsed
-			check_log_2 := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app_proj + "\"}}}"
-			logs_2 := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-"+app_proj, check_log_2)
-			o.Expect(logs_2.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			checkLog2 := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + appProj + "\"}}}"
+			logs2 := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-"+appProj, checkLog2)
+			o.Expect(logs2.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
 		})
 
 		// author: qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-42363-structured and default index[Serial]", func() {
 			//create 2 projects and generate json logs in each project
 			g.By("create some json logs")
-			app_proj_1 := oc.Namespace()
-			err := oc.WithoutNamespace().Run("new-app").Args("-n", app_proj_1, "-f", jsonLogFile).Execute()
+			appProj1 := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			oc.SetupProject()
-			app_proj_2 := oc.Namespace()
-			err = oc.WithoutNamespace().Run("new-app").Args("-n", app_proj_2, "-f", jsonLogFile).Execute()
+			appProj2 := oc.Namespace()
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj2, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			//create clusterlogforwarder instance
@@ -166,7 +166,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "42363.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DATA_PROJECT="+app_proj_1, "-p", "STRUCTURED_TYPE_KEY=kubernetes.namespace_name")
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DATA_PROJECT="+appProj1, "-p", "STRUCTURED_TYPE_KEY=kubernetes.namespace_name")
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			// create clusterlogging instance
@@ -182,29 +182,29 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("check indices in ES pod")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			for _, indexName := range []string{"app-" + app_proj_1, "app-00", "infra-00", "audit-00"} {
+			for _, indexName := range []string{"app-" + appProj1, "app-00", "infra-00", "audit-00"} {
 				waitForIndexAppear(oc, cloNS, podList.Items[0].Name, indexName)
 			}
 
 			// check log in ES
-			// logs in proj_1 should be stored in index "app-${app_proj_1}" and json logs should be parsed
-			// logs in proj_2,proj_1 should be stored in index "app-000xxx", no json structured logs
-			check_log_1 := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app_proj_1 + "\"}}}"
-			logs_1 := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-"+app_proj_1, check_log_1)
-			o.Expect(logs_1.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			// logs in proj1 should be stored in index "app-${appProj1}" and json logs should be parsed
+			// logs in proj2,proj1 should be stored in index "app-000xxx", no json structured logs
+			checkLog1 := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + appProj1 + "\"}}}"
+			logs1 := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-"+appProj1, checkLog1)
+			o.Expect(logs1.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
 
-			for _, proj := range []string{app_proj_1, app_proj_2} {
+			for _, proj := range []string{appProj1, appProj2} {
 				waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, proj, "app-00")
-				check_log_2 := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + proj + "\"}}}"
-				logs_2 := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-00", check_log_2)
-				o.Expect(logs_2.Hits.DataHits[0].Source.Structured.Message).Should(o.BeEmpty())
+				checkLog2 := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + proj + "\"}}}"
+				logs2 := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-00", checkLog2)
+				o.Expect(logs2.Hits.DataHits[0].Source.Structured.Message).Should(o.BeEmpty())
 			}
 
 			// check if the retention policy works with the new indices
 			// set managementState to Unmanaged in es/elasticsearch
 			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("es/elasticsearch", "-n", cloNS, "-p", "{\"spec\": {\"managementState\": \"Unmanaged\"}}", "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			indices1, _ := getESIndicesByName(oc, cloNS, podList.Items[0].Name, "app-"+app_proj_1)
+			indices1, _ := getESIndicesByName(oc, cloNS, podList.Items[0].Name, "app-"+appProj1)
 			indexNames1 := make([]string, 0, len(indices1))
 			for _, index := range indices1 {
 				indexNames1 = append(indexNames1, index.Index)
@@ -219,7 +219,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("job", "-n", cloNS, "--all").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIMJobsToComplete(oc, cloNS, 180*time.Second)
-			indices2, _ := getESIndicesByName(oc, cloNS, podList.Items[0].Name, "app-"+app_proj_1)
+			indices2, _ := getESIndicesByName(oc, cloNS, podList.Items[0].Name, "app-"+appProj1)
 			indexNames2 := make([]string, 0, len(indices2))
 			for _, index := range indices2 {
 				indexNames2 = append(indexNames2, index.Index)
@@ -232,8 +232,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:qitang-High-42419-Fall into app-00* index if message is not json[Serial]", func() {
 			// create a project, then create a pod in the project to generate some non-json logs
 			g.By("create some non-json logs")
-			app_proj := oc.Namespace()
-			err := oc.WithoutNamespace().Run("new-app").Args("-n", app_proj, "-f", nonJsonLogFile).Execute()
+			appProj := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", nonJSONLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			//create clusterlogforwarder instance
@@ -241,7 +241,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "42475.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DATA_PROJECT="+app_proj, "-p", "STRUCTURED_TYPE_KEY=kubernetes.namespace_name")
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DATA_PROJECT="+appProj, "-p", "STRUCTURED_TYPE_KEY=kubernetes.namespace_name")
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			// create clusterlogging instance
@@ -259,33 +259,33 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-00")
-			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, app_proj, "app-00")
-			check_log := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app_proj + "\"}}}"
-			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-00", check_log)
+			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, appProj, "app-00")
+			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + appProj + "\"}}}"
+			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-00", checkLog)
 			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.BeEmpty())
 		})
 
 		// author: qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-41742-Mix the structured index, non-structured and the default input type[Serial]", func() {
-			app_1 := oc.Namespace()
-			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app_1).Execute()
+			app1 := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app1).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			oc.SetupProject()
-			app_2 := oc.Namespace()
-			err = oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app_2).Execute()
+			app2 := oc.Namespace()
+			err = oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app2).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			oc.SetupProject()
-			app_3 := oc.Namespace()
-			err = oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app_3).Execute()
+			app3 := oc.Namespace()
+			err = oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app3).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("create clusterlogforwarder/instance")
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "41742.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DATA_PROJECT_1="+app_1, "-p", "DATA_PROJECT_2="+app_2)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DATA_PROJECT_1="+app1, "-p", "DATA_PROJECT_2="+app2)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			// create clusterlogging instance
@@ -305,14 +305,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "audit")
 
 			//check if the JSON logs are parsed
-			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, app_1, "app-centos-logtest")
-			check_log := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app_1 + "\"}}}"
-			logs_1 := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-centos-logtest", check_log)
-			o.Expect(logs_1.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, app1, "app-centos-logtest")
+			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app1 + "\"}}}"
+			logs1 := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-centos-logtest", checkLog)
+			o.Expect(logs1.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
 
-			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, app_1, "app-00")
-			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, app_2, "app-00")
-			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, app_3, "app-00")
+			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, app1, "app-00")
+			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, app2, "app-00")
+			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, app3, "app-00")
 		})
 	})
 
@@ -322,7 +322,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			SingleNamespaceOG = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
 			AllNamespaceOG    = exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml")
 			jsonLogFile       = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-			//nonJsonLogFile    = exutil.FixturePath("testdata", "logging", "generatelog", "container_non_json_log_template.json")
+			//nonJSONLogFile    = exutil.FixturePath("testdata", "logging", "generatelog", "container_non_json_log_template.json")
 		)
 		cloNS := "openshift-logging"
 		eoNS := "openshift-operators-redhat"
@@ -330,8 +330,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		EO := SubscriptionObjects{eo, eoNS, AllNamespaceOG, subTemplate, eoPackageName, CatalogSourceObjects{}}
 		g.BeforeEach(func() {
 			g.By("deploy CLO and EO")
-			CLO.SubscribeLoggingOperators(oc)
-			EO.SubscribeLoggingOperators(oc)
+			CLO.SubscribeOperator(oc)
+			EO.SubscribeOperator(oc)
 			oc.SetupProject()
 		})
 
@@ -362,8 +362,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-qa-openshift-label")
 
 			//check if the JSON logs are parsed
-			check_log := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app + "\"}}}"
-			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-qa-openshift-label", check_log)
+			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app + "\"}}}"
+			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-qa-openshift-label", checkLog)
 			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
 		})
 
@@ -395,8 +395,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-ocp-41729")
 
 			//check if the JSON logs are parsed
-			check_log := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app + "\"}}}"
-			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-ocp-41729", check_log)
+			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app + "\"}}}"
+			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-ocp-41729", checkLog)
 			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
 		})
 
@@ -427,8 +427,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-"+app)
 			//check if the JSON logs are parsed
-			check_log := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app + "\"}}}"
-			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-"+app, check_log)
+			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app + "\"}}}"
+			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-"+app, checkLog)
 			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
 
 			g.By("update CLF to test OCP-41732")
@@ -438,8 +438,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-centos-logtest")
 			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, app, "app-centos-logtest")
 			//check if the JSON logs are parsed
-			check_log2 := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app + "\"}}}"
-			logs2 := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-centos-logtest", check_log2)
+			checkLog2 := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app + "\"}}}"
+			logs2 := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-centos-logtest", checkLog2)
 			o.Expect(logs2.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
 		})
 
@@ -470,8 +470,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-000")
 
 			//check if the JSON logs are parsed
-			check_log := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app + "\"}}}"
-			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-000", check_log)
+			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app + "\"}}}"
+			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-000", checkLog)
 			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.BeEmpty())
 		})
 
@@ -502,8 +502,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-00")
 
 			//check if the JSON logs are parsed
-			check_log := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app + "\"}}}"
-			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-00", check_log)
+			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app + "\"}}}"
+			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-00", checkLog)
 			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
 
 			g.By("update clusterlogforwarder/instance to test OCP-41787")
@@ -515,27 +515,27 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-test-41787")
 			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, app, "app-test-41787")
 			//check if the JSON logs are parsed
-			check_log_2 := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app + "\"}}}"
-			logs_2 := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-test-41787", check_log_2)
-			o.Expect(logs_2.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			checkLog2 := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app + "\"}}}"
+			logs2 := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-test-41787", checkLog2)
+			o.Expect(logs2.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
 		})
 
 		// author: qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-41790-The unmatched pod logs fall into index structuredTypeName[Serial]", func() {
-			app_1 := oc.Namespace()
-			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app_1).Execute()
+			app1 := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app1).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			oc.SetupProject()
-			app_2 := oc.Namespace()
-			err = oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app_2, "-p", "LABELS={\"test-logging\": \"OCP-41790\"}").Execute()
+			app2 := oc.Namespace()
+			err = oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app2, "-p", "LABELS={\"test-logging\": \"OCP-41790\"}").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("create clusterlogforwarder/instance")
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "41729.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			projects, _ := json.Marshal([]string{app_1, app_2})
+			projects, _ := json.Marshal([]string{app1, app2})
 			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DATA_PROJECTS="+string(projects), "-p", "STRUCTURED_TYPE_KEY=kubernetes.labels.test", "-p", "STRUCTURED_TYPE_NAME=ocp-41790")
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -554,11 +554,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-ocp-41790")
 
 			//check if the JSON logs are parsed
-			check_log := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app_1 + "\"}}}"
-			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-centos-logtest", check_log)
+			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + app1 + "\"}}}"
+			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app-centos-logtest", checkLog)
 			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
 
-			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, app_2, "app-ocp-41790")
+			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, app2, "app-ocp-41790")
 		})
 
 		// author: qitang@redhat.com
@@ -568,8 +568,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			oc.SetupProject()
-			es_proj := oc.Namespace()
-			ees := externalES{es_proj, "6.8", "elasticsearch-server", true, false, false, "", "", "external-es", cloNS}
+			esProj := oc.Namespace()
+			ees := externalES{esProj, "6.8", "elasticsearch-server", true, true, false, "", "", "external-es", cloNS}
 			defer ees.remove(oc)
 			ees.deploy(oc)
 
@@ -582,7 +582,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DATA_PROJECTS="+string(projects), "-p", "STRUCTURED_TYPE_KEY=kubernetes.namespace_name", "-p", "URL="+eesURL, "-p", "SECRET_NAME="+ees.secretName)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("deploy fluentd pods")
+			g.By("deploy collector pods")
 			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)

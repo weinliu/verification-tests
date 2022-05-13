@@ -266,5 +266,5 @@ init_cert_files
 create_signing_conf
 
 # TODO: get es SAN DNS, IP values from es service names
-generate_certs 'elasticsearch' "$(generate_extensions true true $LOG_STORE{,-cluster}{,.${NAMESPACE}.svc}{,.cluster.local})"
-generate_certs 'logging-es' "$(generate_extensions false true $LOG_STORE{,.${NAMESPACE}.svc}{,.cluster.local})"
+generate_certs 'server' "$(generate_extensions false true $LOG_STORE{,-cluster}{,.${NAMESPACE}.svc}{,.cluster.local})"
+generate_certs 'client' "$(generate_extensions false false $LOG_STORE{,.${NAMESPACE}.svc}{,.cluster.local})"

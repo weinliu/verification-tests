@@ -39,8 +39,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		g.BeforeEach(func() {
 			g.By("deploy CLO and EO")
-			CLO.SubscribeLoggingOperators(oc)
-			EO.SubscribeLoggingOperators(oc)
+			CLO.SubscribeOperator(oc)
+			EO.SubscribeOperator(oc)
 		})
 
 		// author ikanse@redhat.com
@@ -110,19 +110,19 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create an instance of the logtest app")
 			oc.SetupProject()
-			app_proj := oc.Namespace()
-			cerr := oc.WithoutNamespace().Run("new-app").Args("-n", app_proj, "-f", jsonLogFile).Execute()
+			appProj := oc.Namespace()
+			cerr := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(cerr).NotTo(o.HaveOccurred())
 
 			g.By("Make sure the logtest app has generated logs")
-			appPodList, err := oc.AdminKubeClient().CoreV1().Pods(app_proj).List(metav1.ListOptions{LabelSelector: "run=centos-logtest"})
+			appPodList, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			pl := resource{"pods", appPodList.Items[0].Name, app_proj}
+			pl := resource{"pods", appPodList.Items[0].Name, appProj}
 			pl.assertResourceStatus(oc, "jsonpath={.status.phase}", "Running")
 			pl.checkLogsFromRs(oc, "foobar", "logging-centos-logtest")
 
 			g.By("Delete the logtest app namespace")
-			DeleteNamespace(oc, app_proj)
+			deleteNamespace(oc, appProj)
 
 			g.By("Wait for 3 minutes for logtest app logs to be discarded")
 			time.Sleep(180 * time.Second)
@@ -139,12 +139,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			postPodList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(oc, cloNS, postPodList.Items[0].Name, "infra-00")
-			LogCount, err := getDocCountByQuery(oc, cloNS, postPodList.Items[0].Name, "app", "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+app_proj+"\"}}}")
+			LogCount, err := getDocCountByQuery(oc, cloNS, postPodList.Items[0].Name, "app", "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+appProj+"\"}}}")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("Logcount for the logtest app in %s project is %d", app_proj, LogCount)
+			e2e.Logf("Logcount for the logtest app in %s project is %d", appProj, LogCount)
 
 			g.By("Check if the logtest application logs are discarded")
-			o.Expect(LogCount).To(o.Equal(0), "The log count for the %s namespace should be 0", app_proj)
+			o.Expect(LogCount).To(o.Equal(0), "The log count for the %s namespace should be 0", appProj)
 		})
 
 		// author ikanse@redhat.com
@@ -164,8 +164,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Check if the log4j2 properties: file is mounted inside the elasticsearch pod.")
 			prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			stat_file := "stat /usr/share/java/elasticsearch/config/log4j2.properties"
-			_, err = e2e.RunHostCmd(cloNS, prePodList.Items[0].Name, stat_file)
+			statFile := "stat /usr/share/java/elasticsearch/config/log4j2.properties"
+			_, err = e2e.RunHostCmd(cloNS, prePodList.Items[0].Name, statFile)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Check if log4j2 properties: file is loaded by elasticsearch pod")
@@ -209,23 +209,22 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create external Elasticsearch instance")
 			oc.SetupProject()
-			es_proj := oc.Namespace()
-			es := resource{"deployment", "elasticsearch-server", es_proj}
-			esTemplate := exutil.FixturePath("testdata", "logging", "external-log-stores", "40168.yaml")
-			err := es.applyFromTemplate(oc, "-n", es.namespace, "-f", esTemplate, "-p", "NAMESPACE="+es.namespace)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			WaitForDeploymentPodsToBeReady(oc, es_proj, es.name)
+			esProj := oc.Namespace()
+			ees := externalES{esProj, "6.8", "elasticsearch-server", false, false, false, "", "", "", cloNS}
+			defer ees.remove(oc)
+			ees.deploy(oc)
 
 			g.By("Create CLF")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "40168.yaml")
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ESNAMESPACE="+es_proj)
+			err := clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ESNAMESPACE="+esProj)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Deploy EFK pods")
 			instance = exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
 			cl = resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 
 			g.By("Check must-gather can collect cluster logging data")
@@ -386,8 +385,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch 
 	EO := SubscriptionObjects{"elasticsearch-operator", eoNS, AllNamespaceOG, subTemplate, "elasticsearch-operator", CatalogSourceObjects{}}
 	g.BeforeEach(func() {
 		g.By("deploy CLO and EO")
-		CLO.SubscribeLoggingOperators(oc)
-		EO.SubscribeLoggingOperators(oc)
+		CLO.SubscribeOperator(oc)
+		EO.SubscribeOperator(oc)
 	})
 
 	// author qitang@redhat.com
@@ -412,19 +411,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch 
 			metricData1, err := queryPrometheus(oc, "", "/api/v1/query?", "es_index_namespaces_total", "GET")
 			if err != nil {
 				return false, err
-			} else {
-				if len(metricData1.Data.Result) == 0 {
-					return false, nil
-				} else {
-					namespaceCount, _ := strconv.Atoi(metricData1.Data.Result[0].Value[1].(string))
-					e2e.Logf("\nthe namespace count is: %d", namespaceCount)
-					if namespaceCount > 0 {
-						return true, nil
-					} else {
-						return false, nil
-					}
-				}
 			}
+			if len(metricData1.Data.Result) == 0 {
+				return false, nil
+			}
+			namespaceCount, _ := strconv.Atoi(metricData1.Data.Result[0].Value[1].(string))
+			e2e.Logf("\nthe namespace count is: %d", namespaceCount)
+			if namespaceCount > 0 {
+				return true, nil
+			}
+			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The value of metric %s isn't more than 0", "es_index_namespaces_total"))
 
@@ -493,15 +489,15 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch 
 
 		g.By("deploy a pod and try to connect to ES")
 		oc.SetupProject()
-		app_proj := oc.Namespace()
-		err = oc.Run("new-app").Args("-n", app_proj, "-f", jsonLogFile).Execute()
+		appProj := oc.Namespace()
+		err = oc.Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		token, err := oc.Run("whoami").Args("-t").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		podList, err := oc.AdminKubeClient().CoreV1().Pods(app_proj).List(metav1.ListOptions{LabelSelector: "run=centos-logtest"})
+		podList, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd := "curl -tlsv1.2 --insecure -H \"Authorization: Bearer " + token + "\" https://elasticsearch.openshift-logging.svc:9200"
-		stdout, err := e2e.RunHostCmdWithRetries(app_proj, podList.Items[0].Name, cmd, 5*time.Second, 60*time.Second)
+		stdout, err := e2e.RunHostCmdWithRetries(appProj, podList.Items[0].Name, cmd, 5*time.Second, 60*time.Second)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stdout).Should(o.ContainSubstring("You Know, for Search"))
 	})
@@ -568,8 +564,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Fluentd should
 	EO := SubscriptionObjects{"elasticsearch-operator", eoNS, AllNamespaceOG, subTemplate, "elasticsearch-operator", CatalogSourceObjects{}}
 	g.BeforeEach(func() {
 		g.By("deploy CLO and EO")
-		CLO.SubscribeLoggingOperators(oc)
-		EO.SubscribeLoggingOperators(oc)
+		CLO.SubscribeOperator(oc)
+		EO.SubscribeOperator(oc)
 	})
 
 	// author qitang@redhat.com

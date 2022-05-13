@@ -52,6 +52,7 @@ type SubscriptionObjects struct {
 	CatalogSource CatalogSourceObjects `json:",omitempty"`
 }
 
+// CatalogSourceObjects defines the source used to subscribe an operator
 type CatalogSourceObjects struct {
 	Channel         string `json:",omitempty"`
 	SourceName      string `json:",omitempty"`
@@ -66,6 +67,20 @@ func getRandomString() string {
 		buffer[index] = chars[seed.Intn(len(chars))]
 	}
 	return string(buffer)
+}
+
+func processTemplate(oc *exutil.CLI, parameters ...string) (string, error) {
+	var configFile string
+	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + ".json")
+		if err != nil {
+			e2e.Logf("the err:%v, and try next round", err)
+			return false, nil
+		}
+		configFile = output
+		return true, nil
+	})
+	return configFile, err
 }
 
 func (so *SubscriptionObjects) getChannelName(oc *exutil.CLI) string {
@@ -121,27 +136,25 @@ func (so *SubscriptionObjects) getCatalogSourceName(oc *exutil.CLI) string {
 	return catsrcName
 }
 
-// SubscribeLoggingOperators is used to subcribe the CLO and EO
-func (so *SubscriptionObjects) SubscribeLoggingOperators(oc *exutil.CLI) {
+// SubscribeOperator is used to subcribe the CLO and EO
+func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 	// check if the namespace exists, if it doesn't exist, create the namespace
 	_, err := oc.AdminKubeClient().CoreV1().Namespaces().Get(so.Namespace, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			e2e.Logf("The project %s is not found, create it now...", so.Namespace)
 			namespaceTemplate := exutil.FixturePath("testdata", "logging", "subscription", "namespace.yaml")
-			namespaceFile, err := oc.AsAdmin().Run("process").Args("-f", namespaceTemplate, "-p", "NAMESPACE_NAME="+so.Namespace).OutputToFile(getRandomString() + ".json")
+			namespaceFile, err := processTemplate(oc, "-f", namespaceTemplate, "-p", "NAMESPACE_NAME="+so.Namespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
 				output, err := oc.AsAdmin().Run("apply").Args("-f", namespaceFile).Output()
 				if err != nil {
 					if strings.Contains(output, "AlreadyExists") {
 						return true, nil
-					} else {
-						return false, err
 					}
-				} else {
-					return true, nil
+					return false, err
 				}
+				return true, nil
 			})
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("can't create project %s", so.Namespace))
 		}
@@ -153,68 +166,59 @@ func (so *SubscriptionObjects) SubscribeLoggingOperators(oc *exutil.CLI) {
 	msg := fmt.Sprintf("%v", og)
 	if strings.Contains(msg, "No resources found") {
 		// create operator group
-		ogFile, err := oc.AsAdmin().WithoutNamespace().Run("process").Args("-n", so.Namespace, "-f", so.OperatorGroup, "-p", "OG_NAME="+so.Namespace, "NAMESPACE="+so.Namespace).OutputToFile(getRandomString() + ".json")
+		ogFile, err := processTemplate(oc, "-n", so.Namespace, "-f", so.OperatorGroup, "-p", "OG_NAME="+so.Namespace, "NAMESPACE="+so.Namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
 			output, err := oc.AsAdmin().Run("apply").Args("-f", ogFile, "-n", so.Namespace).Output()
 			if err != nil {
 				if strings.Contains(output, "AlreadyExists") {
 					return true, nil
-				} else {
-					return false, err
 				}
-			} else {
-				return true, nil
+				return false, err
 			}
+			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("can't create operatorgroup %s in %s project", so.Namespace, so.Namespace))
 	}
 
-	// subscribe operator if the deployment doesn't exist
-	_, err = oc.AdminKubeClient().AppsV1().Deployments(so.Namespace).Get(so.OperatorName, metav1.GetOptions{})
+	// check subscription, if there is no subscription objets, then create one
+	sub, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", so.Namespace, so.PackageName).Output()
 	if err != nil {
-		// check subscription, if there is no subscription objets, then create one
-		if apierrors.IsNotFound(err) {
-			sub, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", so.Namespace, so.PackageName).Output()
-			if err != nil {
-				msg := fmt.Sprint("v%", sub)
-				if strings.Contains(msg, "NotFound") {
-					catsrcNamespaceName := so.getSourceNamespace(oc)
-					catsrcName := so.getCatalogSourceName(oc)
-					channelName := so.getChannelName(oc)
-					//check if the packagemanifest is exists in the source namespace or not
-					packages, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", catsrcNamespaceName, "packagemanifests", "-l", "catalog="+catsrcName, "-o", "name").Output()
-					o.Expect(packages).Should(o.ContainSubstring(so.PackageName))
-					//create subscription object
-					subscriptionFile, err := oc.AsAdmin().Run("process").Args("-n", so.Namespace, "-f", so.Subscription, "-p", "PACKAGE_NAME="+so.PackageName, "NAMESPACE="+so.Namespace, "CHANNEL="+channelName, "SOURCE="+catsrcName, "SOURCE_NAMESPACE="+catsrcNamespaceName).OutputToFile(getRandomString() + ".json")
-					o.Expect(err).NotTo(o.HaveOccurred())
-					err = wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
-						output, err := oc.AsAdmin().Run("apply").Args("-f", subscriptionFile, "-n", so.Namespace).Output()
-						if err != nil {
-							if strings.Contains(output, "AlreadyExists") {
-								return true, nil
-							} else {
-								return false, err
-							}
-						} else {
-							return true, nil
-						}
-					})
-					exutil.AssertWaitPollNoErr(err, fmt.Sprintf("can't create subscription %s in %s project", so.PackageName, so.Namespace))
+		msg := fmt.Sprint("v%", sub)
+		if strings.Contains(msg, "NotFound") {
+			catsrcNamespaceName := so.getSourceNamespace(oc)
+			catsrcName := so.getCatalogSourceName(oc)
+			channelName := so.getChannelName(oc)
+			//check if the packagemanifest is exists in the source namespace or not
+			packages, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", catsrcNamespaceName, "packagemanifests", "-l", "catalog="+catsrcName, "-o", "name").Output()
+			o.Expect(packages).Should(o.ContainSubstring(so.PackageName))
+			//create subscription object
+			subscriptionFile, err := processTemplate(oc, "-n", so.Namespace, "-f", so.Subscription, "-p", "PACKAGE_NAME="+so.PackageName, "NAMESPACE="+so.Namespace, "CHANNEL="+channelName, "SOURCE="+catsrcName, "SOURCE_NAMESPACE="+catsrcNamespaceName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
+				output, err := oc.AsAdmin().Run("apply").Args("-f", subscriptionFile, "-n", so.Namespace).Output()
+				if err != nil {
+					if strings.Contains(output, "AlreadyExists") {
+						return true, nil
+					}
+					return false, err
 				}
-			}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("can't create subscription %s in %s project", so.PackageName, so.Namespace))
 		}
 	}
-	WaitForDeploymentPodsToBeReady(oc, so.Namespace, so.OperatorName)
+	//WaitForDeploymentPodsToBeReady(oc, so.Namespace, so.OperatorName)
+	waitForPodReadyWithLabel(oc, so.Namespace, "name="+so.OperatorName)
 }
 
-func (so *SubscriptionObjects) uninstallLoggingOperator(oc *exutil.CLI) {
+func (so *SubscriptionObjects) uninstallOperator(oc *exutil.CLI) {
 	resource{"subscription", so.PackageName, so.Namespace}.clear(oc)
 	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", so.Namespace, "csv", "--all").Execute()
 	// do not remove namespace openshift-logging and openshift-operators-redhat, and preserve the operatorgroup as there may have several operators deployed in one namespace
 	// for example: loki-operator and elasticsearch-operator
 	if so.Namespace != "openshift-logging" && so.Namespace != "openshift-operators-redhat" && !strings.HasPrefix(so.Namespace, "e2e-test-") {
-		DeleteNamespace(oc, so.Namespace)
+		deleteNamespace(oc, so.Namespace)
 	}
 }
 
@@ -238,11 +242,9 @@ func WaitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name strin
 		if deployment.Status.AvailableReplicas == *deployment.Spec.Replicas && deployment.Status.UpdatedReplicas == *deployment.Spec.Replicas {
 			e2e.Logf("Deployment %s available (%d/%d)\n", name, deployment.Status.AvailableReplicas, *deployment.Spec.Replicas)
 			return true, nil
-		} else {
-			e2e.Logf("Waiting for full availability of %s deployment (%d/%d)\n", name, deployment.Status.AvailableReplicas, *deployment.Spec.Replicas)
-			return false, nil
 		}
-
+		e2e.Logf("Waiting for full availability of %s deployment (%d/%d)\n", name, deployment.Status.AvailableReplicas, *deployment.Spec.Replicas)
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment %s is not availabile", name))
 }
@@ -260,10 +262,9 @@ func WaitForDaemonsetPodsToBeReady(oc *exutil.CLI, ns string, name string) {
 		}
 		if daemonset.Status.NumberReady == daemonset.Status.DesiredNumberScheduled && daemonset.Status.UpdatedNumberScheduled == daemonset.Status.DesiredNumberScheduled {
 			return true, nil
-		} else {
-			e2e.Logf("Waiting for full availability of %s daemonset (%d/%d)\n", name, daemonset.Status.NumberReady, daemonset.Status.DesiredNumberScheduled)
-			return false, nil
 		}
+		e2e.Logf("Waiting for full availability of %s daemonset (%d/%d)\n", name, daemonset.Status.NumberReady, daemonset.Status.DesiredNumberScheduled)
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Daemonset %s is not availabile", name))
 	e2e.Logf("Daemonset %s is available\n", name)
@@ -390,20 +391,10 @@ func (r resource) WaitForResourceToAppear(oc *exutil.CLI) {
 }
 
 func (r resource) applyFromTemplate(oc *exutil.CLI, parameters ...string) error {
-	var configFile string
-	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
-		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + ".json")
-		if err != nil {
-			e2e.Logf("the err:%v, and try next round", err)
-			return false, nil
-		}
-		configFile = output
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to process %v", parameters))
-
-	e2e.Logf("the file of resource is %s", configFile)
-	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", r.namespace).Execute()
+	parameters = append(parameters, "-n", r.namespace)
+	file, err := processTemplate(oc, parameters...)
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can not process %v", parameters))
+	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", r.namespace).Execute()
 	r.WaitForResourceToAppear(oc)
 	return err
 }
@@ -435,7 +426,7 @@ func (r resource) createClusterLogging(oc *exutil.CLI, parameters ...string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func DeleteNamespace(oc *exutil.CLI, ns string) {
+func deleteNamespace(oc *exutil.CLI, ns string) {
 	err := oc.AdminKubeClient().CoreV1().Namespaces().Delete(ns, &metav1.DeleteOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -448,16 +439,15 @@ func DeleteNamespace(oc *exutil.CLI, ns string) {
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				return true, nil
-			} else {
-				return false, err
 			}
-		} else {
-			return false, nil
+			return false, err
 		}
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Namespace %s is not deleted in 3 minutes", ns))
 }
 
+// WaitForIMCronJobToAppear checks if the cronjob exists or not
 func WaitForIMCronJobToAppear(oc *exutil.CLI, ns string, name string) {
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
 		_, err = oc.AdminKubeClient().BatchV1beta1().CronJobs(ns).Get(name, metav1.GetOptions{})
@@ -465,12 +455,10 @@ func WaitForIMCronJobToAppear(oc *exutil.CLI, ns string, name string) {
 			if apierrors.IsNotFound(err) {
 				e2e.Logf("Waiting for availability of cronjob\n")
 				return false, nil
-			} else {
-				return false, err
 			}
-		} else {
-			return true, nil
+			return false, err
 		}
+		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cronjob %s is not availabile", name))
 }
@@ -488,9 +476,8 @@ func waitForIMJobsToComplete(oc *exutil.CLI, ns string, timeout time.Duration) {
 		}
 		if len(jobList.Items) > 0 {
 			return true, nil
-		} else {
-			return false, nil
 		}
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("jobs with label %s are not exist", "component=indexManagement"))
 	// wait for jobs to complete
@@ -502,15 +489,13 @@ func waitForIMJobsToComplete(oc *exutil.CLI, ns string, timeout time.Duration) {
 			//succeeded, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "job", job.Name, "-o=jsonpath={.status.succeeded}").Output()
 			if err != nil {
 				return false, err
-			} else {
-				if job.Status.Succeeded == 1 {
-					e2e.Logf("job %s completed successfully", job.Name)
-					return true, nil
-				} else {
-					e2e.Logf("job %s is not completed yet", job.Name)
-					return false, nil
-				}
 			}
+			if job.Status.Succeeded == 1 {
+				e2e.Logf("job %s completed successfully", job.Name)
+				return true, nil
+			}
+			e2e.Logf("job %s is not completed yet", job.Name)
+			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("job %s is not completed yet", job.Name))
 	}
@@ -540,18 +525,16 @@ func (r resource) assertResourceStatus(oc *exutil.CLI, content string, exptdStat
 		clStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(r.kind, r.name, "-n", r.namespace, "-o", content).Output()
 		if err != nil {
 			return false, err
-		} else {
-			if strings.Compare(clStatus, exptdStatus) != 0 {
-				return false, nil
-			} else {
-				return true, nil
-			}
 		}
+		if strings.Compare(clStatus, exptdStatus) != 0 {
+			return false, nil
+		}
+		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s %s value for %s is not %s", r.kind, r.name, content, exptdStatus))
 }
 
-type PrometheusQueryResult struct {
+type prometheusQueryResult struct {
 	Data struct {
 		Result []struct {
 			Metric struct {
@@ -582,7 +565,7 @@ type PrometheusQueryResult struct {
 // path: the api path, for example: /api/v1/query?
 // query: the metric/alert you want to search, e.g.: es_index_namespaces_total
 // action: it can be "GET", "get", "Get", "POST", "post", "Post"
-func queryPrometheus(oc *exutil.CLI, token string, path string, query string, action string) (PrometheusQueryResult, error) {
+func queryPrometheus(oc *exutil.CLI, token string, path string, query string, action string) (prometheusQueryResult, error) {
 	var bearerToken string
 	if token == "" {
 		bearerToken, _ = oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
@@ -634,25 +617,23 @@ func queryPrometheus(oc *exutil.CLI, token string, path string, query string, ac
 	o.Expect(err).NotTo(o.HaveOccurred())
 	defer response.Body.Close()
 	responseData, err := ioutil.ReadAll(response.Body)
-	res := PrometheusQueryResult{}
+	res := prometheusQueryResult{}
 	json.Unmarshal(responseData, &res)
 	return res, err
 }
 
-//Wait for pods selected with labelselector to be removed
+//WaitUntilPodsAreGone waits for pods selected with labelselector to be removed
 func WaitUntilPodsAreGone(oc *exutil.CLI, namespace string, labelSelector string) {
 	err := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector="+labelSelector, "-n", namespace).Output()
 		if err != nil {
 			return false, err
-		} else {
-			errstring := fmt.Sprintf("%v", output)
-			if strings.Contains(errstring, "No resources found") {
-				return true, nil
-			} else {
-				return false, nil
-			}
 		}
+		errstring := fmt.Sprintf("%v", output)
+		if strings.Contains(errstring, "No resources found") {
+			return true, nil
+		}
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Error waiting for pods to be removed using label selector %s", labelSelector))
 }
@@ -668,10 +649,9 @@ func (r resource) checkLogsFromRs(oc *exutil.CLI, expected string, containerName
 		if matched, _ := regexp.Match(expected, []byte(output)); !matched {
 			e2e.Logf("Can't find the expected string\n")
 			return false, nil
-		} else {
-			e2e.Logf("Check the logs succeed!!\n")
-			return true, nil
 		}
+		e2e.Logf("Check the logs succeed!!\n")
+		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s is not expected for %s", expected, r.name))
 }
@@ -728,9 +708,9 @@ func chkMustGather(oc *exutil.CLI, ns string) {
 	}
 
 	for _, v := range checkPath {
-		path_stat, err := os.Stat(filepath.Join(TestDataPath, v))
+		pathStat, err := os.Stat(filepath.Join(TestDataPath, v))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(path_stat.Size() > 0).To(o.BeTrue(), "The path %s is empty", v)
+		o.Expect(pathStat.Size() > 0).To(o.BeTrue(), "The path %s is empty", v)
 	}
 }
 
@@ -763,23 +743,23 @@ func checkResource(oc *exutil.CLI, expect bool, compare bool, expectedContent st
 	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(args...).Output()
 		if err != nil {
+			if strings.Contains(output, "NotFound") {
+				return false, nil
+			}
 			return false, err
 		}
 		if compare {
 			res := strings.Compare(output, expectedContent)
 			if (res == 0 && expect) || (res != 0 && !expect) {
 				return true, nil
-			} else {
-				return false, nil
 			}
-		} else {
-			res := strings.Contains(output, expectedContent)
-			if (res && expect) || (!res && !expect) {
-				return true, nil
-			} else {
-				return false, nil
-			}
+			return false, nil
 		}
+		res := strings.Contains(output, expectedContent)
+		if (res && expect) || (!res && !expect) {
+			return true, nil
+		}
+		return false, nil
 	})
 	if expect {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The content doesn't match/contain %s", expectedContent))
@@ -826,7 +806,7 @@ func (r rsyslog) deploy(oc *exutil.CLI) {
 		// create pipelinesecret
 		r.createPipelineSecret(oc, keysPath)
 		// create secret for rsyslog server
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", r.serverName, "-n", r.namespace, "--from-file=server.key="+keysPath+"/logging-es.key", "--from-file=server.crt="+keysPath+"/logging-es.crt", "--from-file=ca_bundle.crt="+keysPath+"/ca.crt").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", r.serverName, "-n", r.namespace, "--from-file=server.key="+keysPath+"/server.key", "--from-file=server.crt="+keysPath+"/server.crt", "--from-file=ca_bundle.crt="+keysPath+"/ca.crt").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		filePath = append(filePath, "secure")
 	} else {
@@ -881,13 +861,11 @@ func (r rsyslog) checkData(oc *exutil.CLI, expect bool, filename string) {
 		stdout, err := e2e.RunHostCmdWithRetries(r.namespace, r.getPodName(oc), cmd, 3*time.Second, 15*time.Second)
 		if err != nil {
 			return false, err
-		} else {
-			if (strings.Contains(stdout, filename) && expect) || (!strings.Contains(stdout, filename) && !expect) {
-				return true, nil
-			} else {
-				return false, nil
-			}
 		}
+		if (strings.Contains(stdout, filename) && expect) || (!strings.Contains(stdout, filename) && !expect) {
+			return true, nil
+		}
+		return false, nil
 	})
 	if expect {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The %s doesn't exist", filename))
@@ -939,32 +917,32 @@ func searchAppLogsInLokiByLabelKeys(oc *exutil.CLI, cloNS string, lokiNS string,
 func deployExternalLokiServer(oc *exutil.CLI, lokiConfigMapName string, lokiServerName string) string {
 	//create project to deploy Loki Server
 	oc.SetupProject()
-	loki_proj := oc.Namespace()
+	lokiProj := oc.Namespace()
 
 	//creating sa for loki
-	err := oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", "loki-sa", "-n", loki_proj).Execute()
+	err := oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", "loki-sa", "-n", lokiProj).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	err = oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "privileged", fmt.Sprintf("system:serviceaccount:%s:loki-sa", loki_proj)).Execute()
+	err = oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "privileged", fmt.Sprintf("system:serviceaccount:%s:loki-sa", lokiProj)).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	//Create configmap for Loki
 	CMTemplate := exutil.FixturePath("testdata", "logging", "external-log-stores", "loki", "loki-configmap.yaml")
-	lokiCM := resource{"configmap", "loki-config", loki_proj}
-	err = lokiCM.applyFromTemplate(oc, "-n", loki_proj, "-f", CMTemplate, "-p", "LOKINAMESPACE="+loki_proj, "-p", "LOKICMNAME="+lokiConfigMapName)
+	lokiCM := resource{"configmap", "loki-config", lokiProj}
+	err = lokiCM.applyFromTemplate(oc, "-n", lokiProj, "-f", CMTemplate, "-p", "LOKINAMESPACE="+lokiProj, "-p", "LOKICMNAME="+lokiConfigMapName)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	//Create Deployment for Loki
 	deployTemplate := exutil.FixturePath("testdata", "logging", "external-log-stores", "loki", "loki-deployment.yaml")
-	lokiDeploy := resource{"Deployment", "loki-server", loki_proj}
-	err = lokiDeploy.applyFromTemplate(oc, "-n", loki_proj, "-f", deployTemplate, "-p", "LOKISERVERNAME="+lokiServerName, "-p", "LOKINAMESPACE="+loki_proj, "-p", "LOKICMNAME="+lokiConfigMapName)
+	lokiDeploy := resource{"Deployment", "loki-server", lokiProj}
+	err = lokiDeploy.applyFromTemplate(oc, "-n", lokiProj, "-f", deployTemplate, "-p", "LOKISERVERNAME="+lokiServerName, "-p", "LOKINAMESPACE="+lokiProj, "-p", "LOKICMNAME="+lokiConfigMapName)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	//Expose Loki as a Service
-	WaitForDeploymentPodsToBeReady(oc, loki_proj, "loki-server")
-	err = oc.AsAdmin().WithoutNamespace().Run("expose").Args("-n", loki_proj, "deployment", "loki-server").Execute()
+	WaitForDeploymentPodsToBeReady(oc, lokiProj, "loki-server")
+	err = oc.AsAdmin().WithoutNamespace().Run("expose").Args("-n", lokiProj, "deployment", "loki-server").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	return loki_proj
+	return lokiProj
 }
 
 type fluentdServer struct {
@@ -982,7 +960,7 @@ func (f fluentdServer) createPipelineSecret(oc *exutil.CLI, keysPath string) {
 	secret := resource{"secret", f.secretName, f.loggingNS}
 	cmd := []string{"secret", "generic", secret.name, "-n", secret.namespace, "--from-file=ca-bundle.crt=" + keysPath + "/ca.crt"}
 	if f.clientAuth {
-		cmd = append(cmd, "--from-file=tls.key="+keysPath+"/logging-es.key", "--from-file=tls.crt="+keysPath+"/logging-es.crt")
+		cmd = append(cmd, "--from-file=tls.key="+keysPath+"/client.key", "--from-file=tls.crt="+keysPath+"/client.crt")
 	}
 	if f.clientPrivateKeyPassphrase != "" {
 		cmd = append(cmd, "--from-literal=passphrase="+f.clientPrivateKeyPassphrase)
@@ -1021,7 +999,7 @@ func (f fluentdServer) deploy(oc *exutil.CLI) {
 		//create pipelinesecret
 		f.createPipelineSecret(oc, keysPath)
 		//create secret for fluentd server
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", f.serverName, "-n", f.namespace, "--from-file=ca-bundle.crt="+keysPath+"/ca.crt", "--from-file=tls.key="+keysPath+"/logging-es.key", "--from-file=tls.crt="+keysPath+"/logging-es.crt", "--from-file=ca.key="+keysPath+"/ca.key").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", f.serverName, "-n", f.namespace, "--from-file=ca-bundle.crt="+keysPath+"/ca.crt", "--from-file=tls.key="+keysPath+"/server.key", "--from-file=tls.crt="+keysPath+"/server.crt", "--from-file=ca.key="+keysPath+"/ca.key").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 	} else {
@@ -1054,14 +1032,14 @@ func (f fluentdServer) deploy(oc *exutil.CLI) {
 	}
 	cmFilePath := append(filePath, cmFileName)
 	cmFile := exutil.FixturePath(cmFilePath...)
-	c_cm_cmd := []string{"-f", cmFile, "-n", f.namespace, "-p", "NAMESPACE=" + f.namespace, "-p", "NAME=" + f.serverName}
+	cCmCmd := []string{"-f", cmFile, "-n", f.namespace, "-p", "NAMESPACE=" + f.namespace, "-p", "NAME=" + f.serverName}
 	if f.sharedKey != "" {
-		c_cm_cmd = append(c_cm_cmd, "-p", "SHARED_KEY="+f.sharedKey)
+		cCmCmd = append(cCmCmd, "-p", "SHARED_KEY="+f.sharedKey)
 	}
 	if f.clientPrivateKeyPassphrase != "" {
-		c_cm_cmd = append(c_cm_cmd, "-p", "PRIVATE_KEY_PASSPHRASE="+f.clientPrivateKeyPassphrase)
+		cCmCmd = append(cCmCmd, "-p", "PRIVATE_KEY_PASSPHRASE="+f.clientPrivateKeyPassphrase)
 	}
-	err = cm.applyFromTemplate(oc, c_cm_cmd...)
+	err = cm.applyFromTemplate(oc, cCmCmd...)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	deploy := resource{"deployment", f.serverName, f.namespace}
@@ -1105,13 +1083,11 @@ func (f fluentdServer) checkData(oc *exutil.CLI, expect bool, filename string) {
 		stdout, err := e2e.RunHostCmdWithRetries(f.namespace, f.getPodName(oc), cmd, 3*time.Second, 15*time.Second)
 		if err != nil {
 			return false, err
-		} else {
-			if (strings.Contains(stdout, filename) && expect) || (!strings.Contains(stdout, filename) && !expect) {
-				return true, nil
-			} else {
-				return false, nil
-			}
 		}
+		if (strings.Contains(stdout, filename) && expect) || (!strings.Contains(stdout, filename) && !expect) {
+			return true, nil
+		}
+		return false, nil
 	})
 	if expect {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The %s doesn't exist", filename))
@@ -1129,9 +1105,9 @@ func getInfrastructureName(oc *exutil.CLI) string {
 }
 
 // return the nodeNames
-func getNodeNames(oc *exutil.CLI, node_label string) []string {
+func getNodeNames(oc *exutil.CLI, nodeLabel string) []string {
 	var nodeNames []string
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", node_label, "-o=jsonpath={.items[*].metadata.name}").Output()
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", nodeLabel, "-o=jsonpath={.items[*].metadata.name}").Output()
 	if err == nil {
 		nodeNames = strings.Split(output, " ")
 	} else {
@@ -1204,12 +1180,12 @@ func (cw cloudwatchSpec) init(oc *exutil.CLI) cloudwatchSpec {
 func (cw cloudwatchSpec) getAWSKey(oc *exutil.CLI) (string, string) {
 	credential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system", "-o", "json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	accessKeyIdBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).Str, gjson.Get(credential, `data.aws_secret_access_key`).Str
-	accessKeyId, err1 := base64.StdEncoding.DecodeString(accessKeyIdBase64)
+	accessKeyIDBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).Str, gjson.Get(credential, `data.aws_secret_access_key`).Str
+	accessKeyID, err1 := base64.StdEncoding.DecodeString(accessKeyIDBase64)
 	o.Expect(err1).NotTo(o.HaveOccurred())
 	secureKey, err2 := base64.StdEncoding.DecodeString(secureKeyBase64)
 	o.Expect(err2).NotTo(o.HaveOccurred())
-	return string(accessKeyId), string(secureKey)
+	return string(accessKeyID), string(secureKey)
 }
 
 // Create Cloudwatch Secret. note: use credential files can avoid leak in output
@@ -1541,18 +1517,13 @@ func (cw cloudwatchSpec) applicationLogsFoundUUID(client *cloudwatchlogs.Client)
 			}
 			appLogGroupNames = append(appLogGroupNames, e)
 		}
-
-		if len(appLogGroupNames) > 0 {
-			return true
-		} else {
-			return false
-		}
+		return len(appLogGroupNames) > 0
 	}
 
-	for _, project_UUID := range cw.selNamespacesUUID {
-		logGroupNames := cw.getGroupNames(client, cw.groupPrefix+"."+project_UUID)
+	for _, projectUUID := range cw.selNamespacesUUID {
+		logGroupNames := cw.getGroupNames(client, cw.groupPrefix+"."+projectUUID)
 		if len(logGroupNames) == 0 {
-			e2e.Logf("Warn: Can not find groupnames for project " + project_UUID)
+			e2e.Logf("Warn: Can not find groupnames for project " + projectUUID)
 			logFound = false
 		}
 	}
@@ -1582,17 +1553,13 @@ func (cw cloudwatchSpec) applicationLogsFoundNamespaceName(client *cloudwatchlog
 			}
 			appLogGroupNames = append(appLogGroupNames, e)
 		}
-		if len(appLogGroupNames) > 0 {
-			return true
-		} else {
-			return false
-		}
+		return len(appLogGroupNames) > 0
 	}
 
-	for _, project_name := range cw.selAppNamespaces {
-		logGroupNames := cw.getGroupNames(client, cw.groupPrefix+"."+project_name)
+	for _, projectName := range cw.selAppNamespaces {
+		logGroupNames := cw.getGroupNames(client, cw.groupPrefix+"."+projectName)
 		if len(logGroupNames) == 0 {
-			e2e.Logf("Warn: Can not find groupnames for project " + project_name)
+			e2e.Logf("Warn: Can not find groupnames for project " + projectName)
 			logFoundAll = false
 		}
 	}
@@ -1637,18 +1604,18 @@ func (cw cloudwatchSpec) applicationLogsFoundLogType(client *cloudwatchlogs.Clie
 	}
 
 	logStreams := cw.getStreamNames(client, appLogGroupNames[0], "")
-	for _, project_name := range cw.selAppNamespaces {
+	for _, projectName := range cw.selAppNamespaces {
 		var streamFields []string
-		var project_found bool = false
+		var projectFound bool = false
 		for _, e := range logStreams {
 			streamFields = strings.Split(e, "_")
-			if streamFields[1] == project_name {
-				project_found = true
+			if streamFields[1] == projectName {
+				projectFound = true
 			}
 		}
-		if !project_found {
+		if !projectFound {
 			logFoundAll = false
-			e2e.Logf("Warn: Can not find the logStream for project " + project_name)
+			e2e.Logf("Warn: Can not find the logStream for project " + projectName)
 
 		}
 	}
@@ -1736,11 +1703,19 @@ func (cw cloudwatchSpec) logsFound() bool {
 	if infraFound && auditFound && appFound {
 		e2e.Logf("Found all expected logs")
 		return true
-	} else {
-		e2e.Logf("Error: couldn't find some type of logs. Possible reason: logs weren't generated; connect to AWS failure/timeout; Logging Bugs")
-		e2e.Logf("infraFound: %t", infraFound)
-		e2e.Logf("auditFound: %t", auditFound)
-		e2e.Logf("appFound: %t", appFound)
-		return false
 	}
+	e2e.Logf("Error: couldn't find some type of logs. Possible reason: logs weren't generated; connect to AWS failure/timeout; Logging Bugs")
+	e2e.Logf("infraFound: %t", infraFound)
+	e2e.Logf("auditFound: %t", auditFound)
+	e2e.Logf("appFound: %t", appFound)
+	return false
+}
+
+func getDataFromKafkaConsumerPod(oc *exutil.CLI, ns string, consumerName string) (string, error) {
+	consumerPods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(metav1.ListOptions{LabelSelector: "job-name=" + consumerName})
+	if err != nil {
+		return "", err
+	}
+	output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ns, consumerPods.Items[0].Name, "--since=2m").Output()
+	return output, err
 }

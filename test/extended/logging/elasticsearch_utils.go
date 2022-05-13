@@ -40,16 +40,15 @@ func waitForIndexAppear(oc *exutil.CLI, ns string, pod string, indexName string)
 		for _, index := range indices {
 			if strings.Contains(index.Index, indexName) {
 				if index.Health != "red" {
-					doc_count, _ := strconv.Atoi(index.DocsCount)
-					count += doc_count
+					docCount, _ := strconv.Atoi(index.DocsCount)
+					count += docCount
 				}
 			}
 		}
 		if count > 0 && err == nil {
 			return true, nil
-		} else {
-			return false, err
 		}
+		return false, err
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Index %s is not appeared or the doc count is 0 in last 180 seconds.", indexName))
 }
@@ -68,13 +67,11 @@ func waitForProjectLogsAppear(oc *exutil.CLI, ns string, pod string, projectName
 		logCount, err := getDocCountByQuery(oc, ns, pod, indexName, query)
 		if err != nil {
 			return false, err
-		} else {
-			if logCount > 0 {
-				return true, nil
-			} else {
-				return false, nil
-			}
 		}
+		if logCount > 0 {
+			return true, nil
+		}
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The logs of project %s weren't collected to index %s in last 180 seconds.", projectName, indexName))
 }
@@ -107,7 +104,7 @@ func (es externalES) createPipelineSecret(oc *exutil.CLI, keysPath string) {
 	// create pipeline secret if needed
 	cmd := []string{"secret", "generic", es.secretName, "-n", es.loggingNS}
 	if es.clientAuth {
-		cmd = append(cmd, "--from-file=tls.key="+keysPath+"/logging-es.key", "--from-file=tls.crt="+keysPath+"/logging-es.crt", "--from-file=ca-bundle.crt="+keysPath+"/ca.crt")
+		cmd = append(cmd, "--from-file=tls.key="+keysPath+"/client.key", "--from-file=tls.crt="+keysPath+"/client.crt", "--from-file=ca-bundle.crt="+keysPath+"/ca.crt")
 	} else if es.httpSSL && !es.clientAuth {
 		cmd = append(cmd, "--from-file=ca-bundle.crt="+keysPath+"/ca.crt")
 	}
@@ -147,7 +144,7 @@ func (es externalES) deploy(oc *exutil.CLI) {
 		// create secret for ES if needed
 		if es.httpSSL || es.clientAuth {
 			r := resource{"secret", es.serverName, es.namespace}
-			err = oc.WithoutNamespace().Run("create").Args("secret", "generic", "-n", r.namespace, r.name, "--from-file=elasticsearch.key="+keysPath+"/logging-es.key", "--from-file=elasticsearch.crt="+keysPath+"/logging-es.crt", "--from-file=admin-ca="+keysPath+"/ca.crt").Execute()
+			err = oc.WithoutNamespace().Run("create").Args("secret", "generic", "-n", r.namespace, r.name, "--from-file=elasticsearch.key="+keysPath+"/server.key", "--from-file=elasticsearch.crt="+keysPath+"/server.crt", "--from-file=admin-ca="+keysPath+"/ca.crt").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			r.WaitForResourceToAppear(oc)
 		}
@@ -220,11 +217,11 @@ func (es externalES) remove(oc *exutil.CLI) {
 }
 
 func (es externalES) getPodName(oc *exutil.CLI) string {
-	es_pods, err := oc.AdminKubeClient().CoreV1().Pods(es.namespace).List(metav1.ListOptions{LabelSelector: "app=" + es.serverName})
+	esPods, err := oc.AdminKubeClient().CoreV1().Pods(es.namespace).List(metav1.ListOptions{LabelSelector: "app=" + es.serverName})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	var names []string
-	for i := 0; i < len(es_pods.Items); i++ {
-		names = append(names, es_pods.Items[i].Name)
+	for i := 0; i < len(esPods.Items); i++ {
+		names = append(names, esPods.Items[i].Name)
 	}
 	return names[0]
 }
@@ -260,16 +257,15 @@ func (es externalES) waitForIndexAppear(oc *exutil.CLI, indexName string) {
 		for _, index := range indices {
 			if strings.Contains(index.Index, indexName) {
 				if index.Health != "red" {
-					doc_count, _ := strconv.Atoi(index.DocsCount)
-					count += doc_count
+					docCount, _ := strconv.Atoi(index.DocsCount)
+					count += docCount
 				}
 			}
 		}
 		if count > 0 && err == nil {
 			return true, nil
-		} else {
-			return false, err
 		}
+		return false, err
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Index %s didn't appear or the doc count is 0 in last 3 minutes.", indexName))
 }
@@ -288,13 +284,11 @@ func (es externalES) waitForProjectLogsAppear(oc *exutil.CLI, projectName string
 		logCount, err := es.getDocCount(oc, indexName, query)
 		if err != nil {
 			return false, err
-		} else {
-			if logCount > 0 {
-				return true, nil
-			} else {
-				return false, nil
-			}
 		}
+		if logCount > 0 {
+			return true, nil
+		}
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The logs of project %s didn't collected to index %s in last 180 seconds.", projectName, indexName))
 }
