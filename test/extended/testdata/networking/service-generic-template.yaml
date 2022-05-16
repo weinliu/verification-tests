@@ -12,6 +12,7 @@ objects:
       name: test-service
   spec:
     internalTrafficPolicy: "${INTERNAL_TRAFFIC_POLICY}"
+    externalTrafficPolicy: "${EXTERNAL_TRAFFIC_POLICY}"
     ipFamilyPolicy: "${IP_FAMILY_POLICY}" 
     ports:
     - name: http
@@ -25,6 +26,7 @@ parameters:
 - name: SERVICENAME
 - name: NAMESPACE
 - name: INTERNAL_TRAFFIC_POLICY
+- name: EXTERNAL_TRAFFIC_POLICY
 - name: IP_FAMILY_POLICY
 - name: PROTOCOL
 - name: SELECTOR

@@ -489,6 +489,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			service_type:            "ClusterIP",
 			ip_family_policy:        "",
 			internal_traffic_policy: "Cluster",
+			external_traffic_policy: "", //This no value parameter will be ignored
 			template:                genericServiceTemplate,
 		}
 		svc.ip_family_policy = "SingleStack"
@@ -533,6 +534,5 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 				CurlPod2SvcPass(oc, ns, "hello-pod2", "test-service")
 			}
 		}
-
 	})
 })

@@ -79,6 +79,7 @@ type genericServiceResource struct {
 	selector                string
 	service_type            string
 	ip_family_policy        string
+	external_traffic_policy string
 	internal_traffic_policy string
 	template                string
 }
@@ -206,14 +207,14 @@ func (ipBlock_ingress_policy *ipBlock_ingress_single) createipBlockIngressObject
 
 func (service *genericServiceResource) createServiceFromParams(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", service.template, "-p", "SERVICENAME="+service.servicename, "NAMESPACE="+service.namespace, "PROTOCOL="+service.protocol, "SELECTOR="+service.selector, "SERVICE_TYPE="+service.service_type, "IP_FAMILY_POLICY="+service.ip_family_policy, "INTERNAL_TRAFFIC_POLICY="+service.internal_traffic_policy)
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", service.template, "-p", "SERVICENAME="+service.servicename, "NAMESPACE="+service.namespace, "PROTOCOL="+service.protocol, "SELECTOR="+service.selector, "SERVICE_TYPE="+service.service_type, "IP_FAMILY_POLICY="+service.ip_family_policy, "INTERNAL_TRAFFIC_POLICY="+service.internal_traffic_policy, "EXTERNAL_TRAFFIC_POLICY="+service.external_traffic_policy)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
 		}
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create network policy %v", service.servicename))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create svc %v", service.servicename))
 }
 
 func (egressFirewall *egressFirewall2) deleteEgressFW2Object(oc *exutil.CLI) {
@@ -941,40 +942,86 @@ func getTwoNodesSameSubnet(oc *exutil.CLI, nodeList *v1.NodeList) (bool, []strin
 	return true, egressNodes
 }
 
-//getSvcIP returns IPv6 and IPv4 in vars in order on dual stack respectively and main Svc IP in case of single stack (v4 or v6) in 1st var, and nil in 2nd var
+/*getSvcIP returns IPv6 and IPv4 in vars in order on dual stack respectively and main Svc IP in case of single stack (v4 or v6) in 1st var, and nil in 2nd var.
+LoadBalancer svc will return Ingress VIP in var1, v4 or v6 and NodePort svc will return Ingress SvcIP in var1 and NodePort in var2*/
 func getSvcIP(oc *exutil.CLI, namespace string, svcName string) (string, string) {
 	ipStack := checkIpStackType(oc)
+	svctype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.type}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
 	ipFamilyType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.ipFamilyPolicy}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if (ipStack == "ipv6single") || (ipStack == "ipv4single") {
-		svcIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.clusterIPs[0]}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("The service %s IP in namespace %s is %q", svcName, namespace, svcIP)
-		return svcIP, ""
-	} else if (ipStack == "dualstack" && ipFamilyType == "PreferDualStack") || (ipStack == "dualstack" && ipFamilyType == "RequireDualStack") {
-		ipFamilyPrecedence, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.ipFamilies[0]}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		//if IPv4 is listed first in ipFamilies then clustrIPs allocation will take order as Ipv4 first and then Ipv6 else reverse
-		svcIPv4, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.clusterIPs[0]}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("The service %s IP in namespace %s is %q", svcName, namespace, svcIPv4)
-		svcIPv6, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.clusterIPs[1]}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("The service %s IP in namespace %s is %q", svcName, namespace, svcIPv6)
-		if ipFamilyPrecedence == "IPv4" {
-			e2e.Logf("The ipFamilyPrecedence is Ipv4, Ipv6")
-			return svcIPv6, svcIPv4
+	if (svctype == "ClusterIP") || (svctype == "NodePort") {
+		if (ipStack == "ipv6single") || (ipStack == "ipv4single") {
+			svcIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.clusterIPs[0]}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if svctype == "ClusterIP" {
+				e2e.Logf("The service %s IP in namespace %s is %q", svcName, namespace, svcIP)
+				return svcIP, ""
+			} else {
+				nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				e2e.Logf("The NodePort service %s IP and NodePort in namespace %s is %s %s", svcName, namespace, svcIP, nodePort)
+				return svcIP, nodePort
+			}
+		} else if (ipStack == "dualstack" && ipFamilyType == "PreferDualStack") || (ipStack == "dualstack" && ipFamilyType == "RequireDualStack") {
+			ipFamilyPrecedence, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.ipFamilies[0]}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			//if IPv4 is listed first in ipFamilies then clustrIPs allocation will take order as Ipv4 first and then Ipv6 else reverse
+			svcIPv4, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.clusterIPs[0]}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("The service %s IP in namespace %s is %q", svcName, namespace, svcIPv4)
+			svcIPv6, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.clusterIPs[1]}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("The service %s IP in namespace %s is %q", svcName, namespace, svcIPv6)
+			/*As stated Nodeport type svc will return node port value in 2nd var. We don't care about what svc address is coming in 1st var as we evetually going to get
+			node IPs later and use that in curl operation to node_ip:nodeport*/
+			if ipFamilyPrecedence == "IPv4" {
+				e2e.Logf("The ipFamilyPrecedence is Ipv4, Ipv6")
+				switch svctype {
+				case "NodePort":
+					nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					e2e.Logf("The Dual Stack NodePort service %s IP and NodePort in namespace %s is %s %s", svcName, namespace, svcIPv4, nodePort)
+					return svcIPv4, nodePort
+				default:
+					return svcIPv6, svcIPv4
+				}
+			} else {
+				e2e.Logf("The ipFamilyPrecedence is Ipv6, Ipv4")
+				switch svctype {
+				case "NodePort":
+					nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					e2e.Logf("The Dual Stack NodePort service %s IP and NodePort in namespace %s is %s %s", svcName, namespace, svcIPv6, nodePort)
+					return svcIPv6, nodePort
+				default:
+					svcIPv4, svcIPv6 = svcIPv6, svcIPv4
+					return svcIPv6, svcIPv4
+				}
+			}
 		} else {
-			e2e.Logf("The ipFamilyPrecedence is Ipv6, Ipv4")
-			svcIPv4, svcIPv6 = svcIPv6, svcIPv4
-			return svcIPv6, svcIPv4
+			//Its a Dual Stack Cluster with SingleStack ipFamilyPolicy
+			svcIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.clusterIPs[0]}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("The service %s IP in namespace %s is %q", svcName, namespace, svcIP)
+			return svcIP, ""
 		}
 	} else {
-		//Its a Dual Stack Cluster with SingleStack ipFamilyPolicy
-		svcIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.clusterIPs[0]}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("The service %s IP in namespace %s is %q", svcName, namespace, svcIP)
-		return svcIP, ""
+		//Loadbalancer will be supported for single stack Ipv4 here for mostly GCP,Azure. We can take further enhancements wrt Metal platforms in Metallb utils later
+		e2e.Logf("The serviceType is LoadBalancer")
+		err := wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
+			svcIP, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.status.loadBalancer.ingress[0].ip}").Output()
+			o.Expect(er).NotTo(o.HaveOccurred())
+			if svcIP == "" {
+				e2e.Logf("Waiting for lb service IP assignment. Trying again...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to assign lb svc IP to %v", svcName))
+		lbSvcIP, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.status.loadBalancer.ingress[0].ip}").Output()
+		e2e.Logf("The %s lb service Ingress VIP in namespace %s is %q", svcName, namespace, lbSvcIP)
+		return lbSvcIP, ""
 	}
 }
 
