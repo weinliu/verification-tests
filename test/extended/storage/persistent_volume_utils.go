@@ -153,18 +153,18 @@ func getPersistentVolumeStatus(oc *exutil.CLI, pvName string) (string, error) {
 	return pvStatus, err
 }
 
-// Use persistent volume name get the volumeid
-func getVolumeIdByPersistentVolumeName(oc *exutil.CLI, pvName string) string {
-	volumeId, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeHandle}").Output()
+// Use persistent volume name get the volumeID
+func getVolumeIDByPersistentVolumeName(oc *exutil.CLI, pvName string) string {
+	volumeID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeHandle}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("The PV %s volumeid is %q", pvName, volumeId)
-	return volumeId
+	e2e.Logf("The PV %s volumeID is %q", pvName, volumeID)
+	return volumeID
 }
 
-// Use persistent volume claim name get the volumeid
-func getVolumeIdByPersistentVolumeClaimName(oc *exutil.CLI, namespace string, pvcName string) string {
+// Use persistent volume claim name get the volumeID
+func getVolumeIDByPersistentVolumeClaimName(oc *exutil.CLI, namespace string, pvcName string) string {
 	pvName := getPersistentVolumeNameByPersistentVolumeClaim(oc, namespace, pvcName)
-	return getVolumeIdByPersistentVolumeName(oc, pvName)
+	return getVolumeIDByPersistentVolumeName(oc, pvName)
 }
 
 // Use persistent volume name to get the volumeSize
@@ -207,14 +207,12 @@ func waitPVVolSizeToGetResized(oc *exutil.CLI, namespace string, pvcName string,
 		if err != nil {
 			e2e.Logf("Err occurred: \"%v\", get PV: \"%s\" capacity failed.", err, pvName)
 			return false, err
-		} else {
-			if capacity == expandedCapactiy {
-				e2e.Logf("The PV: \"%s\" capacity expand to \"%s\"", pvName, capacity)
-				return true, nil
-			} else {
-				return false, nil
-			}
 		}
+		if capacity == expandedCapactiy {
+			e2e.Logf("The PV: \"%s\" capacity expand to \"%s\"", pvName, capacity)
+			return true, nil
+		}
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Wait for the PV :%s expand successfully timeout.", pvName))
 }
@@ -231,10 +229,9 @@ func waitForPersistentVolumeStatusAsExpected(oc *exutil.CLI, pvName string, expe
 			if err != nil && strings.Contains(interfaceToString(err), "not found") {
 				e2e.Logf("The persist volume '%s' becomes to expected status: '%s' ", pvName, expectedStatus)
 				return true, nil
-			} else {
-				e2e.Logf("The persist volume '%s' is not deleted yet", pvName)
-				return false, nil
 			}
+			e2e.Logf("The persist volume '%s' is not deleted yet", pvName)
+			return false, nil
 		})
 	} else {
 		err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
@@ -246,28 +243,25 @@ func waitForPersistentVolumeStatusAsExpected(oc *exutil.CLI, pvName string, expe
 				if strings.Contains(interfaceToString(err), "not found") {
 					e2e.Logf("Get persist volume '%s' status failed of *not fonud*, try another round", pvName)
 					return false, nil
-				} else {
-					e2e.Logf("Get persist volume '%v' status failed of: %v.", pvName, err)
-					return false, err
 				}
-			} else {
-				if status == expectedStatus {
-					e2e.Logf("The persist volume '%s' becomes to expected status: '%s' ", pvName, expectedStatus)
-					return true, nil
-				} else {
-					return false, nil
-				}
+				e2e.Logf("Get persist volume '%v' status failed of: %v.", pvName, err)
+				return false, err
 			}
+			if status == expectedStatus {
+				e2e.Logf("The persist volume '%s' becomes to expected status: '%s' ", pvName, expectedStatus)
+				return true, nil
+			}
+			return false, nil
 		})
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The persist volume '%s' didn't become to expected status'%s' ", pvName, expectedStatus))
 }
 
 // Use the retain persist volume create a new persist volume object
-func createNewPersistVolumeWithRetainVolume(oc *exutil.CLI, originPvExportJson string, storageClassName string, newPvName string) {
+func createNewPersistVolumeWithRetainVolume(oc *exutil.CLI, originPvExportJSON string, storageClassName string, newPvName string) {
 	var (
 		err            error
-		outputJsonFile string
+		outputJSONFile string
 	)
 	jsonPathList := []string{`spec.claimRef`, `spec.storageClassName`, `status`, `metadata`}
 	// vSphere: Do not specify the key storage.kubernetes.io/csiProvisionerIdentity in csi.volumeAttributes in PV specification. This key indicates dynamically provisioned PVs.
@@ -276,7 +270,7 @@ func createNewPersistVolumeWithRetainVolume(oc *exutil.CLI, originPvExportJson s
 		jsonPathList = append(jsonPathList, `spec.csi.volumeAttributes.storage\.kubernetes\.io\/csiProvisionerIdentity`)
 	}
 	for _, jsonPath := range jsonPathList {
-		originPvExportJson, err = sjson.Delete(originPvExportJson, jsonPath)
+		originPvExportJSON, err = sjson.Delete(originPvExportJSON, jsonPath)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 	pvNameParameter := map[string]interface{}{
@@ -289,15 +283,15 @@ func createNewPersistVolumeWithRetainVolume(oc *exutil.CLI, originPvExportJson s
 		"persistentVolumeReclaimPolicy": "Delete", // Seems invalid when the volumeID ever maked retain
 	}
 	for _, extraParameter := range []map[string]interface{}{pvNameParameter, retainPolicyParameter} {
-		outputJsonFile, err = jsonAddExtraParametersToFile(originPvExportJson, extraParameter)
+		outputJSONFile, err = jsonAddExtraParametersToFile(originPvExportJSON, extraParameter)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		tempJsonByte, _ := ioutil.ReadFile(outputJsonFile)
-		originPvExportJson = string(tempJsonByte)
+		tempJSONByte, _ := ioutil.ReadFile(outputJSONFile)
+		originPvExportJSON = string(tempJSONByte)
 	}
-	e2e.Logf("The new PV jsonfile of resource is %s", outputJsonFile)
-	jsonOutput, _ := ioutil.ReadFile(outputJsonFile)
+	e2e.Logf("The new PV jsonfile of resource is %s", outputJSONFile)
+	jsonOutput, _ := ioutil.ReadFile(outputJSONFile)
 	debugLogf("The file content is: \n%s", jsonOutput)
-	_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", outputJsonFile).Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", outputJSONFile).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The new persist volume:\"%s\" created", newPvName)
 }

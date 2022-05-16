@@ -99,14 +99,14 @@ func getVaildDeviceForEbsVol() string {
 //  Get the cloud provider type of the test environment
 func getCloudProvider(oc *exutil.CLI) string {
 	var (
-		err_msg error
-		output  string
+		errMsg error
+		output string
 	)
 	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
-		output, err_msg = oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		if err_msg != nil {
-			e2e.Logf("Get cloudProvider *failed with* :\"%v\",wait 5 seconds retry.", err_msg)
-			return false, err_msg
+		output, errMsg = oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+		if errMsg != nil {
+			e2e.Logf("Get cloudProvider *failed with* :\"%v\",wait 5 seconds retry.", errMsg)
+			return false, errMsg
 		}
 		e2e.Logf("The test cluster cloudProvider is :\"%s\".", strings.ToLower(output))
 		return true, nil
@@ -508,11 +508,11 @@ func waitCSOspecifiedStatusValueAsExpected(oc *exutil.CLI, specifiedStatus strin
 func checkCSOhealthy(oc *exutil.CLI) (bool, error) {
 	// CSO healthyStatus:[degradedStatus:False, progressingStatus:False, avaiableStatus:True, upgradeableStatus:True]
 	var healthyStatus = []string{"False", "False", "True", "True"}
-	csoStatusJson, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/storage", "-o", "json").Output()
-	degradedStatus := gjson.Get(csoStatusJson, `status.conditions.#(type=Degraded).status`).String()
-	progressingStatus := gjson.Get(csoStatusJson, `status.conditions.#(type=Progressing).status`).String()
-	avaiableStatus := gjson.Get(csoStatusJson, `status.conditions.#(type=Available).status`).String()
-	upgradeableStatus := gjson.Get(csoStatusJson, `status.conditions.#(type=Upgradeable).status`).String()
+	csoStatusJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/storage", "-o", "json").Output()
+	degradedStatus := gjson.Get(csoStatusJSON, `status.conditions.#(type=Degraded).status`).String()
+	progressingStatus := gjson.Get(csoStatusJSON, `status.conditions.#(type=Progressing).status`).String()
+	avaiableStatus := gjson.Get(csoStatusJSON, `status.conditions.#(type=Available).status`).String()
+	upgradeableStatus := gjson.Get(csoStatusJSON, `status.conditions.#(type=Upgradeable).status`).String()
 	e2e.Logf("CSO degradedStatus:%s, progressingStatus:%v, avaiableStatus:%v, upgradeableStatus:%v", degradedStatus, progressingStatus, avaiableStatus, upgradeableStatus)
 	return reflect.DeepEqual([]string{degradedStatus, progressingStatus, avaiableStatus, upgradeableStatus}, healthyStatus), err
 }
@@ -549,28 +549,27 @@ func checkCSIDriverInstalled(oc *exutil.CLI, supportProvisioners []string) bool 
 }
 
 //Get the Resource Group id value
-func getResourceGroupId(oc *exutil.CLI) string {
+func getResourceGroupID(oc *exutil.CLI) string {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "cluster-config-v1", "-n", "kube-system", "-o=jsonpath={.data.install-config}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	jsonOutput, err := yaml.YAMLToJSON([]byte(output))
 	o.Expect(err).NotTo(o.HaveOccurred())
-	jsonOutputString := string(jsonOutput)
-	rgid := gjson.Get(jsonOutputString, `platform.`+cloudProvider+`.resourceGroupID`)
-	return rgid.String()
+	rgid := gjson.Get(string(jsonOutput), `platform.`+cloudProvider+`.resourceGroupID`).String()
+	o.Expect(rgid).NotTo(o.BeEmpty())
+	return rgid
 }
 
 // Check if FIPS is enabled
 // Azure-file doesn't work on FIPS enabled cluster
 func checkFips(oc *exutil.CLI) bool {
-	master_node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[0].metadata.name}").Output()
+	masterNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[0].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	fips_info, err := execCommandInSpecificNode(oc, master_node, "fips-mode-setup --check")
+	fipsInfo, err := execCommandInSpecificNode(oc, masterNode, "fips-mode-setup --check")
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if strings.Contains(fips_info, "FIPS mode is disabled.") {
+	if strings.Contains(fipsInfo, "FIPS mode is disabled.") {
 		e2e.Logf("FIPS is not enabled.")
 		return false
-	} else {
-		e2e.Logf("FIPS is enabled.")
-		return true
 	}
+	e2e.Logf("FIPS is enabled.")
+	return true
 }

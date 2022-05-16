@@ -193,7 +193,7 @@ func (pvc *persistentVolumeClaim) getStatus(oc *exutil.CLI) (string, error) {
 	return pvcStatus, err
 }
 
-// Get the PersistentVolumeClaim bounded  PersistentVolume's volumeid
+// Get the PersistentVolumeClaim bounded  PersistentVolume's volumeID
 func (pvc *persistentVolumeClaim) getVolumeName(oc *exutil.CLI) string {
 	pvName, err := oc.WithoutNamespace().Run("get").Args("pvc", "-n", pvc.namespace, pvc.name, "-o=jsonpath={.spec.volumeName}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -201,13 +201,13 @@ func (pvc *persistentVolumeClaim) getVolumeName(oc *exutil.CLI) string {
 	return pvName
 }
 
-// Get the PersistentVolumeClaim bounded  PersistentVolume's volumeid
-func (pvc *persistentVolumeClaim) getVolumeId(oc *exutil.CLI) string {
+// Get the PersistentVolumeClaim bounded  PersistentVolume's volumeID
+func (pvc *persistentVolumeClaim) getVolumeID(oc *exutil.CLI) string {
 	pvName := pvc.getVolumeName(oc)
-	volumeId, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeHandle}").Output()
+	volumeID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeHandle}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("The PV %s volumeid is %q", pvName, volumeId)
-	return volumeId
+	e2e.Logf("The PV %s volumeID is %q", pvName, volumeID)
+	return volumeID
 }
 
 //  Get the description of PersistentVolumeClaim
@@ -250,9 +250,8 @@ func applyVolumeResizePatch(oc *exutil.CLI, pvcName string, namespace string, vo
 	if err != nil {
 		e2e.Logf("Execute command failed with err:%v .", err)
 		return msg, err
-	} else {
-		e2e.Logf("The command executed successfully %s", command)
 	}
+	e2e.Logf("The command executed successfully %s", command)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return msg, nil
 }
@@ -272,14 +271,12 @@ func (pvc *persistentVolumeClaim) waitResizeSuccess(oc *exutil.CLI, volResized s
 		if err != nil {
 			e2e.Logf("Err occurred: \"%v\", get PVC: \"%s\" capacity failed.", err, pvc.name)
 			return false, err
-		} else {
-			if status == volResized {
-				e2e.Logf("The PVC capacity updated to : \"%v\"", status)
-				return true, nil
-			} else {
-				return false, nil
-			}
 		}
+		if status == volResized {
+			e2e.Logf("The PVC capacity updated to : \"%v\"", status)
+			return true, nil
+		}
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The volume:%v, did not get Resized.", pvc.name))
 }
@@ -291,14 +288,12 @@ func getPersistentVolumeClaimStatusMatch(oc *exutil.CLI, namespace string, pvcNa
 		if err != nil {
 			e2e.Logf("the err:%v, to get volume status Type %v .", err, pvcName)
 			return false, err
-		} else {
-			if status == expectedValue {
-				e2e.Logf("The volume size Reached to expected status:%v", status)
-				return true, nil
-			} else {
-				return false, nil
-			}
 		}
+		if status == expectedValue {
+			e2e.Logf("The volume size Reached to expected status:%v", status)
+			return true, nil
+		}
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The volume:%v, did not reached expected status.", err))
 }
@@ -333,10 +328,9 @@ func (pvc *persistentVolumeClaim) waitStatusAsExpected(oc *exutil.CLI, expectedS
 			if err != nil && strings.Contains(interfaceToString(err), "not found") {
 				e2e.Logf("The persist volume claim '%s' becomes to expected status: '%s' ", pvc.name, expectedStatus)
 				return true, nil
-			} else {
-				e2e.Logf("The persist volume claim '%s' is not deleted yet", pvc.name)
-				return false, nil
 			}
+			e2e.Logf("The persist volume claim '%s' is not deleted yet", pvc.name)
+			return false, nil
 		})
 	} else {
 		err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
@@ -344,14 +338,13 @@ func (pvc *persistentVolumeClaim) waitStatusAsExpected(oc *exutil.CLI, expectedS
 			if err != nil {
 				e2e.Logf("Get persist volume claim '%s' status failed of: %v.", pvc.name, err)
 				return false, err
-			} else {
-				if status == expectedStatus {
-					e2e.Logf("The persist volume claim '%s' becomes to expected status: '%s' ", pvc.name, expectedStatus)
-					return true, nil
-				} else {
-					return false, nil
-				}
 			}
+			if status == expectedStatus {
+				e2e.Logf("The persist volume claim '%s' becomes to expected status: '%s' ", pvc.name, expectedStatus)
+				return true, nil
+			}
+			return false, nil
+
 		})
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The persist volume claim '%s' didn't become to expected status'%s' ", pvc.name, expectedStatus))
@@ -373,15 +366,13 @@ func (pvc *persistentVolumeClaim) waitPvcStatusToTimer(oc *exutil.CLI, expectedS
 		if err != nil {
 			e2e.Logf("Get persist volume claim '%s' status failed of: %v.", pvc.name, err)
 			return false, err
-		} else {
-			if status == expectedStatus {
-				e2e.Logf("The persist volume claim '%s' remained in the expected status '%s'", pvc.name, expectedStatus)
-				return true, nil
-			} else {
-				describePersistentVolumeClaim(oc, pvc.namespace, pvc.name)
-				return false, nil
-			}
 		}
+		if status == expectedStatus {
+			e2e.Logf("The persist volume claim '%s' remained in the expected status '%s'", pvc.name, expectedStatus)
+			return true, nil
+		}
+		describePersistentVolumeClaim(oc, pvc.namespace, pvc.name)
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The persist volume claim '%s' changed to status '%s' instead of expected status: '%s' ", pvc.name, status, expectedStatus))
 }

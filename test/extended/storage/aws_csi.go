@@ -74,14 +74,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			g.By("# Check the pvc bound pv's type as expected on the aws backend")
 			getCredentialFromCluster(oc)
-			volumeId := pvc.getVolumeId(oc)
-			o.Expect(getAwsVolumeTypeByVolumeId(volumeId)).To(o.Equal(volumeType))
+			volumeID := pvc.getVolumeID(oc)
+			o.Expect(getAwsVolumeTypeByVolumeID(volumeID)).To(o.Equal(volumeType))
 
 			if volumeType == "io1" || volumeType == "io2" {
 				volCapacityInt64, err := strconv.ParseInt(strings.TrimSuffix(pvc.capacity, "Gi"), 10, 64)
 				o.Expect(err).NotTo(o.HaveOccurred())
 				g.By("# Check the pvc bound pv's info on the aws backend, iops = iopsPerGB * volumeCapacity")
-				o.Expect(getAwsVolumeIopsByVolumeId(volumeId)).To(o.Equal(int64(volCapacityInt64 * 50)))
+				o.Expect(getAwsVolumeIopsByVolumeID(volumeID)).To(o.Equal(int64(volCapacityInt64 * 50)))
 			}
 
 			g.By("# Check the pod volume can be read and write")

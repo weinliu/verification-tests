@@ -389,20 +389,17 @@ func execCommandInSpecificPod(oc *exutil.CLI, namespace string, podName string, 
 }
 
 // Wait for pods selected with selector name to be removed
-func WaitUntilPodsAreGoneByLabel(oc *exutil.CLI, namespace string, labelName string) {
+func waitUntilPodsAreGoneByLabel(oc *exutil.CLI, namespace string, labelName string) {
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		output, err := oc.WithoutNamespace().Run("get").Args("pods", "-l", labelName, "-n", namespace).Output()
 		if err != nil {
 			return false, err
-		} else {
-			errstring := fmt.Sprintf("%v", output)
-			if strings.Contains(errstring, "No resources found") {
-				e2e.Logf(output)
-				return true, nil
-			} else {
-				return false, nil
-			}
 		}
+		if strings.Contains(output, "No resources found") {
+			e2e.Logf(fmt.Sprintf("%v", output))
+			return true, nil
+		}
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Error waiting for pods to be removed using labelName  %s", labelName))
 }
@@ -413,10 +410,8 @@ func getPodDetailsByLabel(oc *exutil.CLI, namespace string, labelName string) (s
 	if err != nil {
 		e2e.Logf("Get pod details failed with  err:%v .", err)
 		return output, err
-	} else {
-		e2e.Logf("Get pod details output is:\"%v\"", output)
 	}
-	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Get pod details output is:\"%v\"", output)
 	return output, nil
 }
 
@@ -453,10 +448,9 @@ func checkPodStatusByLabel(oc *exutil.CLI, namespace string, selectorLabel strin
 		}
 		if podflag == 1 {
 			return false, nil
-		} else {
-			e2e.Logf("%s is with expected status: \"%s\"", podsList, expectedstatus)
-			return true, nil
 		}
+		e2e.Logf("%s is with expected status: \"%s\"", podsList, expectedstatus)
+		return true, nil
 	})
 	if err != nil && podDescribe != "" {
 		e2e.Logf(podDescribe)
@@ -813,11 +807,10 @@ func deleteProjectAsAdmin(oc *exutil.CLI, namespace string) {
 		if strings.Contains(output, "not found") {
 			e2e.Logf("Project %s got deleted successfully", namespace)
 			return true, nil
-		} else {
-			return false, nil
 		}
+		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The Resources did not get deleted within the time period"))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The Project \"%s\" did not get deleted within the time period", namespace))
 }
 
 //Function to return the command combinations based on resourceName, namespace
@@ -850,9 +843,8 @@ func checkResourcesNotExist(oc *exutil.CLI, resourceType string, resourceName st
 		if strings.Contains(output, "not found") && namespace == "" {
 			e2e.Logf("No %s resource exists", resourceType)
 			return true, nil
-		} else {
-			return false, nil
 		}
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The Resources %s still exists in the namespace %s", resourceType, namespace))
 }

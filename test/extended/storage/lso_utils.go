@@ -127,20 +127,17 @@ func (lso *localStorageOperator) checkClusterCatalogSource(oc *exutil.CLI) error
 				if strings.Contains(output, "not found") {
 					g.Skip("Skip for both qeCatalogSource and redhatCatalogSource don't exist !!!")
 					return nil
-				} else {
-					e2e.Logf("Get redhatCatalogSource failed of: \"%v\"", err)
-					return err
 				}
-			} else {
-				lso.source = redhatCatalogSource
-				lso.channel = "stable"
-				e2e.Logf("Since qeCatalogSource doesn't exist, use offical: \"%s:%s\" instead", lso.source, lso.channel)
-				return nil
+				e2e.Logf("Get redhatCatalogSource failed of: \"%v\"", err)
+				return err
 			}
-		} else {
-			e2e.Logf("Get qeCatalogSource failed of: \"%v\"", err)
-			return err
+			lso.source = redhatCatalogSource
+			lso.channel = "stable"
+			e2e.Logf("Since qeCatalogSource doesn't exist, use offical: \"%s:%s\" instead", lso.source, lso.channel)
+			return nil
 		}
+		e2e.Logf("Get qeCatalogSource failed of: \"%v\"", err)
+		return err
 	}
 	e2e.Logf("qeCatalogSource exist, use qe catalogsource: \"%s:%s\" start test", lso.source, lso.channel)
 	return nil
@@ -156,9 +153,8 @@ func (lso *localStorageOperator) checkInstallSucceed(oc *exutil.CLI) (bool, erro
 	if gjson.Get(lsoCSVinfo, `status.phase`).String() == "Succeeded" && gjson.Get(lsoCSVinfo, `status.reason`).String() == "InstallSucceeded" {
 		e2e.Logf("openshift local storage operator:\"%s\" install succeed in ns/%s", lso.currentCSV, lso.namespace)
 		return true, nil
-	} else {
-		return false, nil
 	}
+	return false, nil
 }
 
 // Waiting for openshift local storage operator install succeed
@@ -215,7 +211,7 @@ func (lso *localStorageOperator) checkDiskManagerLogContains(oc *exutil.CLI, exp
 type localVolume struct {
 	name       string
 	namespace  string
-	deviceId   string
+	deviceID   string
 	fsType     string
 	scname     string
 	volumeMode string
@@ -239,10 +235,10 @@ func setLvNamespace(namespace string) localVolumeOption {
 	}
 }
 
-// Replace the default value of localVolume deviceId
-func setLvDeviceId(deviceId string) localVolumeOption {
+// Replace the default value of localVolume deviceID
+func setLvDeviceID(deviceID string) localVolumeOption {
 	return func(lv *localVolume) {
-		lv.deviceId = deviceId
+		lv.deviceID = deviceID
 	}
 }
 
@@ -279,7 +275,7 @@ func newLocalVolume(opts ...localVolumeOption) localVolume {
 	defaultLocalVolume := localVolume{
 		name:       "lv-" + getRandomString(),
 		namespace:  "",
-		deviceId:   "",
+		deviceID:   "",
 		fsType:     "ext4",
 		scname:     "lvsc-" + getRandomString(),
 		volumeMode: "Filesystem",
@@ -297,14 +293,14 @@ func (lv *localVolume) create(oc *exutil.CLI) {
 	if lv.volumeMode == "Block" {
 		deletePaths = []string{`items.0.spec.storageClassDevices.0.fsType`}
 	}
-	err := applyResourceFromTemplateDeleteParametersAsAdmin(oc, deletePaths, "--ignore-unknown-parameters=true", "-f", lv.template, "-p", "NAME="+lv.name, "NAMESPACE="+lv.namespace, "DEVICEID="+lv.deviceId,
+	err := applyResourceFromTemplateDeleteParametersAsAdmin(oc, deletePaths, "--ignore-unknown-parameters=true", "-f", lv.template, "-p", "NAME="+lv.name, "NAMESPACE="+lv.namespace, "DEVICEID="+lv.deviceID,
 		"FSTYPE="+lv.fsType, "SCNAME="+lv.scname, "VOLUMEMODE="+lv.volumeMode)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // Create localVolume CR with extra parameters
 func (lv *localVolume) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", lv.template, "-p", "NAME="+lv.name, "NAMESPACE="+lv.namespace, "DEVICEID="+lv.deviceId,
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", lv.template, "-p", "NAME="+lv.name, "NAMESPACE="+lv.namespace, "DEVICEID="+lv.deviceID,
 		"FSTYPE="+lv.fsType, "SCNAME="+lv.scname, "VOLUMEMODE="+lv.volumeMode)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }

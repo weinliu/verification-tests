@@ -37,10 +37,10 @@ func setStorageClassName(name string) storageClassOption {
 // Replace the default value of storageclass template parameter
 func setStorageClassTemplate(template string) storageClassOption {
 	return func(this *storageClass) {
-		split_result := strings.Split(template, "/")
-		if cloudProvider == "ibmcloud" && split_result[len(split_result)-1] == "storageclass-template.yaml" {
-			split_result[len(split_result)-1] = "ibm-storageclass-template.yaml"
-			this.template = strings.Replace(strings.Trim(fmt.Sprint(split_result), "[]"), " ", "/", -1)
+		splitResult := strings.Split(template, "/")
+		if cloudProvider == "ibmcloud" && splitResult[len(splitResult)-1] == "storageclass-template.yaml" {
+			splitResult[len(splitResult)-1] = "ibm-storageclass-template.yaml"
+			this.template = strings.Replace(strings.Trim(fmt.Sprint(splitResult), "[]"), " ", "/", -1)
 		} else {
 			this.template = template
 		}
@@ -187,11 +187,11 @@ func getVolumeBindingModeByStorageClassName(oc *exutil.CLI, storageClassName str
 }
 
 // Get the fileSystemId from sc
-func getFsIdDetails(oc *exutil.CLI, scName string) string {
-	fsId, err := oc.WithoutNamespace().Run("get").Args("sc", scName, "-o", "jsonpath={.parameters.fileSystemId}").Output()
+func getFsIDFromStorageClass(oc *exutil.CLI, scName string) string {
+	fsID, err := oc.WithoutNamespace().Run("get").Args("sc", scName, "-o", "jsonpath={.parameters.fileSystemId}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("The filesystem Id is %s", fsId)
-	return fsId
+	e2e.Logf("The filesystem Id is %s", fsID)
+	return fsID
 }
 
 // Define CSI Driver Privisioners const
@@ -221,10 +221,10 @@ func gererateCsiScExtraParametersByVolType(oc *exutil.CLI, csiProvisioner string
 	// aws-efs-csi
 	// https://github.com/kubernetes-sigs/aws-efs-csi-driver
 	case efsCsiDriverPrivisioner:
-		fsid := getFsIdDetails(oc, getPresetStorageClassNameByProvisioner(cloudProvider, "efs.csi.aws.com"))
+		fsID := getFsIDFromStorageClass(oc, getPresetStorageClassNameByProvisioner(cloudProvider, "efs.csi.aws.com"))
 		storageClassParameters = map[string]string{
 			"provisioningMode": volumeType,
-			"fileSystemId":     fsid,
+			"fileSystemId":     fsID,
 			"directoryPerms":   "700",
 		}
 	default:

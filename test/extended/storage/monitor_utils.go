@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	prometheusQueryUrl  string = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
+	prometheusQueryURL  string = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
 	prometheusNamespace string = "openshift-monitoring"
 	prometheusK8s       string = "prometheus-k8s"
 )
@@ -35,29 +35,29 @@ func newMonitor(oc *exutil.CLI) *monitor {
 }
 
 // Get a specified metric's value from prometheus
-func (mo *monitor) getSpecifiedMetricValue(metricName string, valueJsonPath string) (string, error) {
-	getCmd := "curl -k -s -H \"" + fmt.Sprintf("Authorization: Bearer %v", mo.token) + "\" " + prometheusQueryUrl + metricName
+func (mo *monitor) getSpecifiedMetricValue(metricName string, valueJSONPath string) (string, error) {
+	getCmd := "curl -k -s -H \"" + fmt.Sprintf("Authorization: Bearer %v", mo.token) + "\" " + prometheusQueryURL + metricName
 	respsonce, err := execCommandInSpecificPod(mo.ocClient, prometheusNamespace, "statefulsets/"+prometheusK8s, getCmd)
-	metricValue := gjson.Get(respsonce, valueJsonPath).String()
+	metricValue := gjson.Get(respsonce, valueJSONPath).String()
 	return metricValue, err
 }
 
 // Waiting for a specified metric's value update to expected
-func (mo *monitor) waitSpecifiedMetricValueAsExpected(metricName string, valueJsonPath string, expectedValue string) {
+func (mo *monitor) waitSpecifiedMetricValueAsExpected(metricName string, valueJSONPath string, expectedValue string) {
 	err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
-		realValue, err := mo.getSpecifiedMetricValue(metricName, valueJsonPath)
+		realValue, err := mo.getSpecifiedMetricValue(metricName, valueJSONPath)
 		if err != nil {
 			e2e.Logf("Can't get %v metrics, error: %s. Trying again", metricName, err)
 			return false, nil
 		}
 		if realValue == expectedValue {
-			e2e.Logf("The metric: %s's {%s} value become to expected \"%s\"", metricName, valueJsonPath, expectedValue)
+			e2e.Logf("The metric: %s's {%s} value become to expected \"%s\"", metricName, valueJSONPath, expectedValue)
 			return true, nil
 		}
-		e2e.Logf("The metric: %s's {%s} current value is \"%s\"", metricName, valueJsonPath, realValue)
+		e2e.Logf("The metric: %s's {%s} current value is \"%s\"", metricName, valueJSONPath, realValue)
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for metric: metric: %s's {%s} value become to expected timeout", metricName, valueJsonPath))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for metric: metric: %s's {%s} value become to expected timeout", metricName, valueJSONPath))
 }
 
 // GetSAToken get a token assigned to prometheus-k8s from openshift-monitoring namespace
@@ -70,13 +70,13 @@ func getSAToken(oc *exutil.CLI) string {
 }
 
 // Check the alert raied (pengding or firing)
-func checkAlertRaised(oc *exutil.CLI, alert_name string) {
+func checkAlertRaised(oc *exutil.CLI, alertName string) {
 	token := getSAToken(oc)
 	url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", prometheusK8s, "-n", prometheusNamespace, "-o=jsonpath={.spec.host}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"%s\")'", token, url, alert_name)
-	//alertAnnoCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"%s\").annotations'", token, url, alert_name)
-	//alertStateCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"%s\").state'", token, url, alert_name)
+	alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"%s\")'", token, url, alertName)
+	//alertAnnoCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"%s\").annotations'", token, url, alertName)
+	//alertStateCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"%s\").state'", token, url, alertName)
 	err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
 		result, err := exec.Command("bash", "-c", alertCMD).Output()
 		if err != nil {
@@ -91,7 +91,7 @@ func checkAlertRaised(oc *exutil.CLI, alert_name string) {
 			e2e.Logf(string(result))
 			return false, fmt.Errorf("alert state is not firing or pending")
 		}
-		e2e.Logf("Alert %s found with the status firing or pending", alert_name)
+		e2e.Logf("Alert %s found with the status firing or pending", alertName)
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "alert state is not firing or pending")
@@ -100,7 +100,7 @@ func checkAlertRaised(oc *exutil.CLI, alert_name string) {
 // Get metric with metric name
 func getStorageMetrics(oc *exutil.CLI, metricName string) string {
 	token := getSAToken(oc)
-	output, _, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-k", "-s", "-H", fmt.Sprintf("Authorization: Bearer %v", token), prometheusQueryUrl+metricName).Outputs()
+	output, _, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-k", "-s", "-H", fmt.Sprintf("Authorization: Bearer %v", token), prometheusQueryURL+metricName).Outputs()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	debugLogf("The metric outout is:\n %s", output)
 	return output
@@ -110,7 +110,7 @@ func getStorageMetrics(oc *exutil.CLI, metricName string) string {
 func checkStorageMetricsContent(oc *exutil.CLI, metricName string, content string) {
 	token := getSAToken(oc)
 	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
-		output, _, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", prometheusNamespace, "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", token), prometheusQueryUrl+metricName).Outputs()
+		output, _, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", prometheusNamespace, "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", token), prometheusQueryURL+metricName).Outputs()
 		if err != nil {
 			e2e.Logf("Can't get %v metrics, error: %s. Trying again", metricName, err)
 			return false, nil

@@ -66,9 +66,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Check the pv.spec.csi.volumeAttributes.skuname")
 		pvName := pvc.getVolumeName(oc)
-		skuname_pv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.skuname}").Output()
+		skunamePv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.skuname}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(skuname_pv).To(o.Equal("UltraSSD_LRS"))
+		o.Expect(skunamePv).To(o.Equal("UltraSSD_LRS"))
 
 	})
 

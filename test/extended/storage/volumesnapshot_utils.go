@@ -122,15 +122,15 @@ func (vs *volumeSnapshot) waitReadyToUse(oc *exutil.CLI) {
 }
 
 // Create static volumeSnapshot with specified volumeSnapshotContent
-func createVolumeSnapshotWithSnapshotHandle(oc *exutil.CLI, originVolumeSnapshotExportJson string, newVolumeSnapshotName string, volumeSnapshotContentName string, volumesnapshotNamespace string) {
+func createVolumeSnapshotWithSnapshotHandle(oc *exutil.CLI, originVolumeSnapshotExportJSON string, newVolumeSnapshotName string, volumeSnapshotContentName string, volumesnapshotNamespace string) {
 	var (
 		err            error
-		outputJsonFile string
+		outputJSONFile string
 	)
 	jsonPathList := []string{`spec.source.persistentVolumeClaimName`, `status`, `metadata`}
 
 	for _, jsonPath := range jsonPathList {
-		originVolumeSnapshotExportJson, err = sjson.Delete(originVolumeSnapshotExportJson, jsonPath)
+		originVolumeSnapshotExportJSON, err = sjson.Delete(originVolumeSnapshotExportJSON, jsonPath)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 
@@ -146,16 +146,16 @@ func createVolumeSnapshotWithSnapshotHandle(oc *exutil.CLI, originVolumeSnapshot
 	}
 
 	for _, extraParameter := range []map[string]interface{}{volumesnapshotName, volumeSnapshotContent} {
-		outputJsonFile, err = jsonAddExtraParametersToFile(originVolumeSnapshotExportJson, extraParameter)
+		outputJSONFile, err = jsonAddExtraParametersToFile(originVolumeSnapshotExportJSON, extraParameter)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		tempJsonByte, _ := ioutil.ReadFile(outputJsonFile)
-		originVolumeSnapshotExportJson = string(tempJsonByte)
+		tempJSONByte, _ := ioutil.ReadFile(outputJSONFile)
+		originVolumeSnapshotExportJSON = string(tempJSONByte)
 	}
 
-	e2e.Logf("The new volumesnapshot jsonfile of resource is %s", outputJsonFile)
-	jsonOutput, _ := ioutil.ReadFile(outputJsonFile)
+	e2e.Logf("The new volumesnapshot jsonfile of resource is %s", outputJSONFile)
+	jsonOutput, _ := ioutil.ReadFile(outputJSONFile)
 	debugLogf("The file content is: \n%s", jsonOutput)
-	_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", outputJsonFile).Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", outputJSONFile).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The new volumeSnapshot:\"%s\" created", newVolumeSnapshotName)
 

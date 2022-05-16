@@ -37,16 +37,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("Author:wduan-High-44254-[vsphere-problem-detector] should check the node hardware version and report in metric for alerter raising by CSO", func() {
 
 		g.By("# Check HW version from vsphere-problem-detector-operator log")
-		vpd_podlog, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment/vsphere-problem-detector-operator", "-n", "openshift-cluster-storage-operator", "--limit-bytes", "50000").Output()
+		vpdPodlog, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment/vsphere-problem-detector-operator", "-n", "openshift-cluster-storage-operator", "--limit-bytes", "50000").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(vpd_podlog).NotTo(o.BeEmpty())
-		o.Expect(vpd_podlog).To(o.ContainSubstring("has HW version vmx"))
+		o.Expect(vpdPodlog).NotTo(o.BeEmpty())
+		o.Expect(vpdPodlog).To(o.ContainSubstring("has HW version vmx"))
 
 		g.By("# Get the node hardware versioni")
 		re := regexp.MustCompile(`HW version vmx-([0-9][0-9])`)
-		match_res := re.FindStringSubmatch(vpd_podlog)
-		hw_version := match_res[1]
-		e2e.Logf("The node hardware version is %v", hw_version)
+		matchRes := re.FindStringSubmatch(vpdPodlog)
+		hwVersion := matchRes[1]
+		e2e.Logf("The node hardware version is %v", hwVersion)
 
 		g.By("# Check HW version from metrics")
 		token := getSAToken(oc)
@@ -54,10 +54,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		metrics, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("prometheus-k8s-0", "-c", "prometheus", "-n", "openshift-monitoring", "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", token), url).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(metrics).NotTo(o.BeEmpty())
-		o.Expect(metrics).To(o.ContainSubstring("\"hw_version\":\"vmx-" + hw_version))
+		o.Expect(metrics).To(o.ContainSubstring("\"hwVersion\":\"vmx-" + hwVersion))
 
 		g.By("# Check alert for if there is unsupported HW version")
-		if hw_version == "13" || hw_version == "14" {
+		if hwVersion == "13" || hwVersion == "14" {
 			e2e.Logf("Checking the CSIWithOldVSphereHWVersion alert")
 			checkAlertRaised(oc, "CSIWithOldVSphereHWVersion")
 		}
@@ -74,10 +74,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			"esxi version":    "Marking cluster un-upgradeable because host .* is on esxi version",
 			"vCenter version": "Marking cluster un-upgradeable because connected vcenter is on",
 		}
-		for kind, expected_mes := range mes {
+		for kind, expectedMes := range mes {
 			g.By("# Check upgradeable status and reason is expected from clusterversion")
 			e2e.Logf("%s: Check upgradeable status and reason is expected from clusterversion if %s not support", kind, kind)
-			matched, _ := regexp.MatchString(expected_mes, podlog)
+			matched, _ := regexp.MatchString(expectedMes, podlog)
 			if matched {
 				reason, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-o=jsonpath={.items[].status.conditions[?(.type=='Upgradeable')].reason}").Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -99,7 +99,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("Check metric: vsphere_vcenter_info, vsphere_esxi_version_total, vsphere_node_hw_version_total, vsphere_datastore_total, vsphere_rwx_volumes_total")
 		checkStorageMetricsContent(oc, "vsphere_vcenter_info", "api_version")
 		checkStorageMetricsContent(oc, "vsphere_esxi_version_total", "api_version")
-		checkStorageMetricsContent(oc, "vsphere_node_hw_version_total", "hw_version")
+		checkStorageMetricsContent(oc, "vsphere_node_hw_version_total", "hwVersion")
 		checkStorageMetricsContent(oc, "vsphere_datastore_total", "instance")
 		checkStorageMetricsContent(oc, "vsphere_rwx_volumes_total", "value")
 	})
@@ -108,9 +108,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("Author:wduan-High-37728-[vsphere-problem-detector] should report vsphere_cluster_check_total metric correctly", func() {
 		g.By("Check metric vsphere_cluster_check_total should contain CheckDefaultDatastore, CheckFolderPermissions, CheckTaskPermissions, CheckStorageClasses, ClusterInfo check.")
 		metric := getStorageMetrics(oc, "vsphere_cluster_check_total")
-		cluster_check_list := []string{"CheckDefaultDatastore", "CheckFolderPermissions", "CheckTaskPermissions", "CheckStorageClasses", "ClusterInfo"}
-		for i := range cluster_check_list {
-			o.Expect(metric).To(o.ContainSubstring(cluster_check_list[i]))
+		clusterCheckList := []string{"CheckDefaultDatastore", "CheckFolderPermissions", "CheckTaskPermissions", "CheckStorageClasses", "ClusterInfo"}
+		for i := range clusterCheckList {
+			o.Expect(metric).To(o.ContainSubstring(clusterCheckList[i]))
 		}
 	})
 
@@ -118,9 +118,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("Author:wduan-High-37729-[vsphere-problem-detector] should report vsphere_node_check_total metric correctly", func() {
 		g.By("Check metric vsphere_node_check_total should contain CheckNodeDiskUUID, CheckNodePerf, CheckNodeProviderID, CollectNodeESXiVersion, CollectNodeHWVersion.")
 		metric := getStorageMetrics(oc, "vsphere_node_check_total")
-		node_check_list := []string{"CheckNodeDiskUUID", "CheckNodePerf", "CheckNodeProviderID", "CollectNodeESXiVersion", "CollectNodeHWVersion"}
-		for i := range node_check_list {
-			o.Expect(metric).To(o.ContainSubstring(node_check_list[i]))
+		nodeCheckList := []string{"CheckNodeDiskUUID", "CheckNodePerf", "CheckNodeProviderID", "CollectNodeESXiVersion", "CollectNodeHWVersion"}
+		for i := range nodeCheckList {
+			o.Expect(metric).To(o.ContainSubstring(nodeCheckList[i]))
 		}
 	})
 

@@ -232,7 +232,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		oc.SetupProject() //create new project
 
 		g.By("Get the resource group id for the cluster")
-		rgid := getResourceGroupId(oc)
+		rgid := getResourceGroupID(oc)
 
 		// Set up a specified project share for all the phases
 		g.By("Create new project for the scenario")

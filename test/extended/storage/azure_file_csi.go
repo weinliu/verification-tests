@@ -46,11 +46,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		// Define the supported skuname
 		g.By("Get resource group from new created Azure-file volume")
-		sc_i := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
-		pvc_i := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc_i.name), setPersistentVolumeClaimNamespace(oc.Namespace()))
-		defer pvc_i.deleteAsAdmin(oc)
-		defer sc_i.deleteAsAdmin(oc)
-		rg, _, _ := getAzureFileVolumeHandle(oc, sc_i, pvc_i)
+		scI := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
+		pvcI := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scI.name), setPersistentVolumeClaimNamespace(oc.Namespace()))
+		defer pvcI.deleteAsAdmin(oc)
+		defer scI.deleteAsAdmin(oc)
+		rg, _, _ := getAzureFileVolumeHandle(oc, scI, pvcI)
 
 		// Set the resource definition for the scenario
 		storageClassParameters := map[string]string{
@@ -92,11 +92,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		// Define the supported skuname
 		g.By("Get storageAccount from new created Azure-file volume")
-		sc_i := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
-		pvc_i := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc_i.name), setPersistentVolumeClaimNamespace(oc.Namespace()))
-		defer pvc_i.deleteAsAdmin(oc)
-		defer sc_i.deleteAsAdmin(oc)
-		_, sa, _ := getAzureFileVolumeHandle(oc, sc_i, pvc_i)
+		scI := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
+		pvcI := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scI.name), setPersistentVolumeClaimNamespace(oc.Namespace()))
+		defer pvcI.deleteAsAdmin(oc)
+		defer scI.deleteAsAdmin(oc)
+		_, sa, _ := getAzureFileVolumeHandle(oc, scI, pvcI)
 
 		// Set the resource definition for the scenario
 		storageClassParameters := map[string]string{
@@ -138,11 +138,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		// Define the supported skuname
 		g.By("Get resourcegroup, storageAccount,sharename from new created Azure-file volume")
-		sc_i := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
-		pvc_i := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc_i.name), setPersistentVolumeClaimNamespace(oc.Namespace()))
-		defer pvc_i.deleteAsAdmin(oc)
-		defer sc_i.deleteAsAdmin(oc)
-		rg, sa, share := getAzureFileVolumeHandle(oc, sc_i, pvc_i)
+		scI := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
+		pvcI := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scI.name), setPersistentVolumeClaimNamespace(oc.Namespace()))
+		defer pvcI.deleteAsAdmin(oc)
+		defer scI.deleteAsAdmin(oc)
+		rg, sa, share := getAzureFileVolumeHandle(oc, scI, pvcI)
 
 		// Set the resource definition for the scenario
 		storageClassParameters := map[string]string{
@@ -155,7 +155,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 		sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
 		// Only suport creating pvc with same size as existing share
-		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc.name), setPersistentVolumeClaimCapacity(pvc_i.capacity))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc.name), setPersistentVolumeClaimCapacity(pvcI.capacity))
 		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 
 		g.By("Create storageclass")
@@ -180,7 +180,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// Author:rdeore-[Azure-File-CSI-Driver] [SKU-NAMES] support different skuName in storageclass
-	var azureSkuNamesCaseIdMap = map[string]string{
+	var azureSkuNamesCaseIDMap = map[string]string{
 		"50392": "Standard_LRS",    // High-50392-[Azure-File-CSI-Driver] [Standard_LRS] support different skuName in storageclass
 		"50590": "Standard_GRS",    // High-50590-[Azure-File-CSI-Driver] [Standard_GRS] support different skuName in storageclass
 		"50591": "Standard_RAGRS",  // High-50591-[Azure-File-CSI-Driver] [Standard_RAGRS] support different skuName in storageclass
@@ -191,12 +191,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	}
 	caseIds := []string{"50392", "50590", "50591", "50592", "50593", "50594", "50595"}
 	for i := 0; i < len(caseIds); i++ {
-		skuName := azureSkuNamesCaseIdMap[caseIds[i]]
+		skuName := azureSkuNamesCaseIDMap[caseIds[i]]
 
 		g.It("Author:rdeore-High-"+caseIds[i]+"-[Azure-File-CSI-Driver] [SKU-NAMES] support different skuName in storageclass with "+skuName, func() {
 			region := getClusterRegion(oc)
-			support_regions := []string{"westus2", "westeurope", "northeurope", "francecentral"}
-			if strings.Contains(skuName, "ZRS") && !contains(support_regions, region) {
+			supportRegions := []string{"westus2", "westeurope", "northeurope", "francecentral"}
+			if strings.Contains(skuName, "ZRS") && !contains(supportRegions, region) {
 				g.Skip("Current region doesn't support zone-redundant storage")
 			}
 
@@ -243,10 +243,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			g.By("#. Check the pv.spec.csi.volumeAttributes.skuname")
 			pvName := pvc.getVolumeName(oc)
-			skuname_pv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.skuname}").Output()
+			skunamePv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.skuname}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("The skuname in PV is: %v.", skuname_pv)
-			o.Expect(skuname_pv).To(o.Equal(skuName))
+			e2e.Logf("The skuname in PV is: %v.", skunamePv)
+			o.Expect(skunamePv).To(o.Equal(skuName))
 		})
 	}
 

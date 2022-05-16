@@ -521,13 +521,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			checkVolumeDetachedFromNode(oc, volName, nodeName)
 
 			g.By("Create new pod with the pvc and wait for the pod ready")
-			pod_new := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
-			pod_new.create(oc)
-			defer pod_new.deleteAsAdmin(oc)
-			pod_new.waitReady(oc)
+			podNew := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
+			podNew.create(oc)
+			defer podNew.deleteAsAdmin(oc)
+			podNew.waitReady(oc)
 
 			g.By("Check the data in the raw block volume")
-			pod_new.checkDataInRawBlockVolume(oc)
+			podNew.checkDataInRawBlockVolume(oc)
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
@@ -554,47 +554,47 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the original
-			pvc_ori := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
-			pod_ori := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_ori.name))
+			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
 
 			g.By("Create a pvc with the preset csi storageclass")
-			pvc_ori.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
-			e2e.Logf("%s", pvc_ori.scname)
-			pvc_ori.create(oc)
-			defer pvc_ori.deleteAsAdmin(oc)
+			pvcOri.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			e2e.Logf("%s", pvcOri.scname)
+			pvcOri.create(oc)
+			defer pvcOri.deleteAsAdmin(oc)
 
 			g.By("Create pod with the created pvc and wait for the pod ready")
-			pod_ori.create(oc)
-			defer pod_ori.deleteAsAdmin(oc)
-			pod_ori.waitReady(oc)
-			nodeName := getNodeNameByPod(oc, pod_ori.namespace, pod_ori.name)
+			podOri.create(oc)
+			defer podOri.deleteAsAdmin(oc)
+			podOri.waitReady(oc)
+			nodeName := getNodeNameByPod(oc, podOri.namespace, podOri.name)
 
 			g.By("Write file to volume")
-			pod_ori.checkMountedVolumeCouldRW(oc)
-			pod_ori.execCommand(oc, "sync")
+			podOri.checkMountedVolumeCouldRW(oc)
+			podOri.execCommand(oc, "sync")
 
 			// Set the resource definition for the clone
-			pvc_clone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(pvc_ori.name))
-			pod_clone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_clone.name))
+			pvcClone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(pvcOri.name))
+			podClone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcClone.name))
 
 			g.By("Create a clone pvc with the preset csi storageclass")
-			pvc_clone.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
-			e2e.Logf("%s", pvc_ori.scname)
-			pvc_clone.capacity = pvc_ori.capacity
-			pvc_clone.createWithCloneDataSource(oc)
-			defer pvc_clone.deleteAsAdmin(oc)
+			pvcClone.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			e2e.Logf("%s", pvcOri.scname)
+			pvcClone.capacity = pvcOri.capacity
+			pvcClone.createWithCloneDataSource(oc)
+			defer pvcClone.deleteAsAdmin(oc)
 
 			g.By("Create pod with the cloned pvc and wait for the pod ready")
-			pod_clone.createWithNodeSelector(oc, "kubernetes\\.io/hostname", nodeName)
-			defer pod_clone.deleteAsAdmin(oc)
-			pod_clone.waitReady(oc)
+			podClone.createWithNodeSelector(oc, "kubernetes\\.io/hostname", nodeName)
+			defer podClone.deleteAsAdmin(oc)
+			podClone.waitReady(oc)
 
 			g.By("Delete origial pvc will not impact the cloned one")
-			pod_ori.deleteAsAdmin(oc)
-			pvc_ori.deleteAsAdmin(oc)
+			podOri.deleteAsAdmin(oc)
+			pvcOri.deleteAsAdmin(oc)
 
 			g.By("Check the file exist in cloned volume")
-			output, err := pod_clone.execCommand(oc, "cat "+pod_clone.mountPath+"/testfile")
+			output, err := podClone.execCommand(oc, "cat "+podClone.mountPath+"/testfile")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).To(o.ContainSubstring("storage test"))
 
@@ -623,57 +623,57 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the original
-			pvc_ori := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("1Gi"))
-			pod_ori := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_ori.name))
+			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("1Gi"))
+			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
 
 			g.By("Create a pvc with the preset csi storageclass")
-			pvc_ori.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
-			e2e.Logf("%s", pvc_ori.scname)
-			pvc_ori.create(oc)
-			defer pvc_ori.deleteAsAdmin(oc)
+			pvcOri.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			e2e.Logf("%s", pvcOri.scname)
+			pvcOri.create(oc)
+			defer pvcOri.deleteAsAdmin(oc)
 
 			g.By("Create pod with the created pvc and wait for the pod ready")
-			pod_ori.create(oc)
-			defer pod_ori.deleteAsAdmin(oc)
-			pod_ori.waitReady(oc)
-			nodeName := getNodeNameByPod(oc, pod_ori.namespace, pod_ori.name)
+			podOri.create(oc)
+			defer podOri.deleteAsAdmin(oc)
+			podOri.waitReady(oc)
+			nodeName := getNodeNameByPod(oc, podOri.namespace, podOri.name)
 
 			g.By("Write file to volume")
-			pod_ori.checkMountedVolumeCouldRW(oc)
-			pod_ori.execCommand(oc, "sync")
+			podOri.checkMountedVolumeCouldRW(oc)
+			podOri.execCommand(oc, "sync")
 
 			// Set the resource definition for the clone
-			pvc_clone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(pvc_ori.name))
-			pod_clone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_clone.name))
+			pvcClone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(pvcOri.name))
+			podClone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcClone.name))
 
 			g.By("Create a clone pvc with the preset csi storageclass")
-			pvc_clone.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
-			cloneCapacityInt64, err := strconv.ParseInt(strings.TrimRight(pvc_ori.capacity, "Gi"), 10, 64)
+			pvcClone.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			cloneCapacityInt64, err := strconv.ParseInt(strings.TrimRight(pvcOri.capacity, "Gi"), 10, 64)
 			o.Expect(err).To(o.Not(o.HaveOccurred()))
 			cloneCapacityInt64 = cloneCapacityInt64 + getRandomNum(1, 10)
-			pvc_clone.capacity = strconv.FormatInt(cloneCapacityInt64, 10) + "Gi"
-			pvc_clone.createWithCloneDataSource(oc)
-			defer pvc_clone.deleteAsAdmin(oc)
+			pvcClone.capacity = strconv.FormatInt(cloneCapacityInt64, 10) + "Gi"
+			pvcClone.createWithCloneDataSource(oc)
+			defer pvcClone.deleteAsAdmin(oc)
 
 			g.By("Create pod with the cloned pvc and wait for the pod ready")
-			pod_clone.createWithNodeSelector(oc, "kubernetes\\.io/hostname", nodeName)
-			defer pod_clone.deleteAsAdmin(oc)
-			pod_clone.waitReady(oc)
+			podClone.createWithNodeSelector(oc, "kubernetes\\.io/hostname", nodeName)
+			defer podClone.deleteAsAdmin(oc)
+			podClone.waitReady(oc)
 
 			g.By("Check the cloned pvc size is as expected")
-			pvc_clone_size, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", pvc_clone.name, "-n", pvc_clone.namespace, "-o=jsonpath={.status.capacity.storage}").Output()
+			pvcCloneSize, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", pvcClone.name, "-n", pvcClone.namespace, "-o=jsonpath={.status.capacity.storage}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("The pvc.status.capacity.storage is %s", pvc_clone_size)
-			o.Expect(pvc_clone_size).To(o.Equal(pvc_clone.capacity))
+			e2e.Logf("The pvc.status.capacity.storage is %s", pvcCloneSize)
+			o.Expect(pvcCloneSize).To(o.Equal(pvcClone.capacity))
 
 			g.By("Check the file exist in cloned volume")
-			output, err := pod_clone.execCommand(oc, "cat "+pod_clone.mountPath+"/testfile")
+			output, err := podClone.execCommand(oc, "cat "+podClone.mountPath+"/testfile")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).To(o.ContainSubstring("storage test"))
 
 			g.By("Check could write more data")
 			blockCounts := strconv.FormatInt(cloneCapacityInt64*4*4/5, 10)
-			output1, err := pod_clone.execCommand(oc, "/bin/dd  if=/dev/zero of="+pod_clone.mountPath+"/testfile1 bs=256M count="+blockCounts)
+			output1, err := podClone.execCommand(oc, "/bin/dd  if=/dev/zero of="+podClone.mountPath+"/testfile1 bs=256M count="+blockCounts)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output1).NotTo(o.ContainSubstring("No space left on device"))
 
@@ -703,41 +703,41 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the original
-			pvc_ori := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"))
-			pod_ori := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_ori.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
+			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"))
+			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
 			g.By("Create a pvc with the preset csi storageclass")
-			pvc_ori.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
-			pvc_ori.create(oc)
-			defer pvc_ori.deleteAsAdmin(oc)
+			pvcOri.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvcOri.create(oc)
+			defer pvcOri.deleteAsAdmin(oc)
 
 			g.By("Create pod with the created pvc and wait for the pod ready")
-			pod_ori.create(oc)
-			defer pod_ori.deleteAsAdmin(oc)
-			pod_ori.waitReady(oc)
-			nodeName := getNodeNameByPod(oc, pod_ori.namespace, pod_ori.name)
+			podOri.create(oc)
+			defer podOri.deleteAsAdmin(oc)
+			podOri.waitReady(oc)
+			nodeName := getNodeNameByPod(oc, podOri.namespace, podOri.name)
 
 			g.By("Write data to volume")
-			pod_ori.writeDataIntoRawBlockVolume(oc)
-			pod_ori.execCommand(oc, "sync")
+			podOri.writeDataIntoRawBlockVolume(oc)
+			podOri.execCommand(oc, "sync")
 
 			// Set the resource definition for the clone
-			pvc_clone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimDataSourceName(pvc_ori.name))
-			pod_clone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_clone.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
+			pvcClone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimDataSourceName(pvcOri.name))
+			podClone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcClone.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
 			g.By("Create a clone pvc with the preset csi storageclass")
-			pvc_clone.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
-			pvc_clone.capacity = pvc_ori.capacity
-			pvc_clone.createWithCloneDataSource(oc)
-			defer pvc_clone.deleteAsAdmin(oc)
+			pvcClone.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvcClone.capacity = pvcOri.capacity
+			pvcClone.createWithCloneDataSource(oc)
+			defer pvcClone.deleteAsAdmin(oc)
 
 			g.By("Create pod with the cloned pvc and wait for the pod ready")
-			pod_clone.createWithNodeSelector(oc, "kubernetes\\.io/hostname", nodeName)
-			defer pod_clone.deleteAsAdmin(oc)
-			pod_clone.waitReady(oc)
+			podClone.createWithNodeSelector(oc, "kubernetes\\.io/hostname", nodeName)
+			defer podClone.deleteAsAdmin(oc)
+			podClone.waitReady(oc)
 
 			g.By("Check the data exist in cloned volume")
-			pod_clone.checkDataInRawBlockVolume(oc)
+			podClone.checkDataInRawBlockVolume(oc)
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
@@ -765,50 +765,50 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the original
-			pvc_ori := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimCapacity("1Gi"))
-			pod_ori := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_ori.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
+			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimCapacity("1Gi"))
+			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
 			g.By("Create a pvc with the preset csi storageclass")
-			pvc_ori.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
-			pvc_ori.create(oc)
-			defer pvc_ori.deleteAsAdmin(oc)
+			pvcOri.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvcOri.create(oc)
+			defer pvcOri.deleteAsAdmin(oc)
 
 			g.By("Create pod with the created pvc and wait for the pod ready")
-			pod_ori.create(oc)
-			defer pod_ori.deleteAsAdmin(oc)
-			pod_ori.waitReady(oc)
-			nodeName := getNodeNameByPod(oc, pod_ori.namespace, pod_ori.name)
+			podOri.create(oc)
+			defer podOri.deleteAsAdmin(oc)
+			podOri.waitReady(oc)
+			nodeName := getNodeNameByPod(oc, podOri.namespace, podOri.name)
 
 			g.By("Write data to volume")
-			pod_ori.writeDataIntoRawBlockVolume(oc)
-			pod_ori.execCommand(oc, "sync")
+			podOri.writeDataIntoRawBlockVolume(oc)
+			podOri.execCommand(oc, "sync")
 
 			// Set the resource definition for the clone
-			pvc_clone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimDataSourceName(pvc_ori.name))
-			pod_clone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_clone.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
+			pvcClone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimDataSourceName(pvcOri.name))
+			podClone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcClone.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
 			g.By("Create a clone pvc with the preset csi storageclass")
-			pvc_clone.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
-			cloneCapacityInt64, err := strconv.ParseInt(strings.TrimRight(pvc_ori.capacity, "Gi"), 10, 64)
+			pvcClone.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			cloneCapacityInt64, err := strconv.ParseInt(strings.TrimRight(pvcOri.capacity, "Gi"), 10, 64)
 			o.Expect(err).To(o.Not(o.HaveOccurred()))
 			cloneCapacityInt64 = cloneCapacityInt64 + getRandomNum(1, 10)
-			pvc_clone.capacity = strconv.FormatInt(cloneCapacityInt64, 10) + "Gi"
-			pvc_clone.createWithCloneDataSource(oc)
-			defer pvc_clone.deleteAsAdmin(oc)
+			pvcClone.capacity = strconv.FormatInt(cloneCapacityInt64, 10) + "Gi"
+			pvcClone.createWithCloneDataSource(oc)
+			defer pvcClone.deleteAsAdmin(oc)
 
 			g.By("Create pod with the cloned pvc and wait for the pod ready")
-			pod_clone.createWithNodeSelector(oc, "kubernetes\\.io/hostname", nodeName)
-			defer pod_clone.deleteAsAdmin(oc)
-			pod_clone.waitReady(oc)
+			podClone.createWithNodeSelector(oc, "kubernetes\\.io/hostname", nodeName)
+			defer podClone.deleteAsAdmin(oc)
+			podClone.waitReady(oc)
 
 			g.By("Check the cloned pvc size is as expected")
-			pvc_clone_size, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", pvc_clone.name, "-n", pvc_clone.namespace, "-o=jsonpath={.status.capacity.storage}").Output()
+			pvcCloneSize, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", pvcClone.name, "-n", pvcClone.namespace, "-o=jsonpath={.status.capacity.storage}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("The pvc.status.capacity.storage is %s", pvc_clone_size)
-			o.Expect(pvc_clone_size).To(o.Equal(pvc_clone.capacity))
+			e2e.Logf("The pvc.status.capacity.storage is %s", pvcCloneSize)
+			o.Expect(pvcCloneSize).To(o.Equal(pvcClone.capacity))
 
 			g.By("Check the data exist in cloned volume")
-			pod_clone.checkDataInRawBlockVolume(oc)
+			podClone.checkDataInRawBlockVolume(oc)
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
@@ -936,11 +936,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("# Wait for the pvc become to bound")
 			pvc.waitStatusAsExpected(oc, "Bound")
 
-			g.By("# Get the volumename, volumeId")
+			g.By("# Get the volumename, volumeID")
 			volumeName := pvc.getVolumeName(oc)
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv", volumeName).Execute()
-			volumeId := pvc.getVolumeId(oc)
-			defer deleteBackendVolumeByVolumeId(oc, volumeId)
+			volumeID := pvc.getVolumeID(oc)
+			defer deleteBackendVolumeByVolumeID(oc, volumeID)
 
 			g.By("# Delete the pvc and check the pv is deleted accordingly")
 			pvc.delete(oc)
@@ -948,7 +948,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			g.By("# Check the volume on backend is deleted")
 			getCredentialFromCluster(oc)
-			waitVolumeDeletedOnBackend(oc, volumeId)
+			waitVolumeDeletedOnBackend(oc, volumeID)
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
@@ -995,11 +995,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer pod.deleteAsAdmin(oc)
 			pod.waitReady(oc)
 
-			g.By("# Get the volumename, volumeId and pod located node name")
+			g.By("# Get the volumename, volumeID and pod located node name")
 			volumeName := pvc.getVolumeName(oc)
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv", volumeName).Execute()
-			volumeId := pvc.getVolumeId(oc)
-			defer deleteBackendVolumeByVolumeId(oc, volumeId)
+			volumeID := pvc.getVolumeID(oc)
+			defer deleteBackendVolumeByVolumeID(oc, volumeID)
 			originNodeName := getNodeNameByPod(oc, pod.namespace, pod.name)
 
 			g.By("# Check the pod volume can be read and write")
@@ -1024,9 +1024,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			waitForPersistentVolumeStatusAsExpected(oc, volumeName, "deleted")
 			checkVolumeNotMountOnNode(oc, volumeName, originNodeName)
 
-			g.By("# Check the volume still exists in backend by volumeId")
+			g.By("# Check the volume still exists in backend by volumeID")
 			getCredentialFromCluster(oc)
-			waitVolumeAvaiableOnBackend(oc, volumeId)
+			waitVolumeAvaiableOnBackend(oc, volumeID)
 
 			g.By("# Use the retained volume create new pv,pvc,pod and wait for the pod running")
 			newPvName := "newpv-" + getRandomString()
@@ -1053,8 +1053,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv", newPvName).Execute()
 			o.Expect(err).ShouldNot(o.HaveOccurred())
 			waitForPersistentVolumeStatusAsExpected(oc, newPvName, "deleted")
-			deleteBackendVolumeByVolumeId(oc, volumeId)
-			waitVolumeDeletedOnBackend(oc, volumeId)
+			deleteBackendVolumeByVolumeID(oc, volumeID)
+			waitVolumeDeletedOnBackend(oc, volumeID)
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
@@ -1087,7 +1087,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			dep.namespace = pvc.namespace
 
 			// Performing the Test Steps for Online resize volume
-			ResizeOnlineCommonTestSteps(oc, pvc, dep, cloudProvider, provisioner)
+			resizeOnlineCommonTestSteps(oc, pvc, dep, cloudProvider, provisioner)
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
@@ -1120,7 +1120,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			dep.namespace = pvc.namespace
 
 			// Performing the Test Steps for Online resize volume
-			ResizeOnlineCommonTestSteps(oc, pvc, dep, cloudProvider, provisioner)
+			resizeOnlineCommonTestSteps(oc, pvc, dep, cloudProvider, provisioner)
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
@@ -1153,7 +1153,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			dep.namespace = pvc.namespace
 
 			// Performing the Test Steps for Offline resize volume
-			ResizeOfflineCommonTestSteps(oc, pvc, dep, cloudProvider, provisioner)
+			resizeOfflineCommonTestSteps(oc, pvc, dep, cloudProvider, provisioner)
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
@@ -1186,7 +1186,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			dep.namespace = pvc.namespace
 
 			// Performing the Test Steps for Offline resize volume
-			ResizeOfflineCommonTestSteps(oc, pvc, dep, cloudProvider, provisioner)
+			resizeOfflineCommonTestSteps(oc, pvc, dep, cloudProvider, provisioner)
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
@@ -1231,37 +1231,37 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pod.waitReady(oc)
 
 			g.By("3. Check pod security--uid")
-			output_uid, err := pod.execCommandAsAdmin(oc, "id -u")
+			outputUID, err := pod.execCommandAsAdmin(oc, "id -u")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("%s", output_uid)
-			o.Expect(output_uid).To(o.ContainSubstring("1000160000"))
+			e2e.Logf("%s", outputUID)
+			o.Expect(outputUID).To(o.ContainSubstring("1000160000"))
 
 			g.By("4. Check pod security--fsGroup")
-			output_gid, err := pod.execCommandAsAdmin(oc, "id -G")
+			outputGid, err := pod.execCommandAsAdmin(oc, "id -G")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("%s", output_gid)
-			o.Expect(output_gid).To(o.ContainSubstring("24680"))
+			e2e.Logf("%s", outputGid)
+			o.Expect(outputGid).To(o.ContainSubstring("24680"))
 
 			g.By("5. Check pod security--selinux")
-			output_mountPath, err := pod.execCommandAsAdmin(oc, "ls -lZd "+pod.mountPath)
+			outputMountPath, err := pod.execCommandAsAdmin(oc, "ls -lZd "+pod.mountPath)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("%s", output_mountPath)
-			o.Expect(output_mountPath).To(o.ContainSubstring("24680"))
-			o.Expect(output_mountPath).To(o.ContainSubstring("system_u:object_r:container_file_t:s0:c2,c13"))
+			e2e.Logf("%s", outputMountPath)
+			o.Expect(outputMountPath).To(o.ContainSubstring("24680"))
+			o.Expect(outputMountPath).To(o.ContainSubstring("system_u:object_r:container_file_t:s0:c2,c13"))
 
 			_, err = pod.execCommandAsAdmin(oc, "touch "+pod.mountPath+"/testfile")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			output_testfile, err := pod.execCommandAsAdmin(oc, "ls -lZ "+pod.mountPath+"/testfile")
+			outputTestfile, err := pod.execCommandAsAdmin(oc, "ls -lZ "+pod.mountPath+"/testfile")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("%s", output_testfile)
-			o.Expect(output_testfile).To(o.ContainSubstring("24680"))
-			o.Expect(output_testfile).To(o.ContainSubstring("system_u:object_r:container_file_t:s0:c2,c13"))
+			e2e.Logf("%s", outputTestfile)
+			o.Expect(outputTestfile).To(o.ContainSubstring("24680"))
+			o.Expect(outputTestfile).To(o.ContainSubstring("system_u:object_r:container_file_t:s0:c2,c13"))
 
 			_, err = pod.execCommandAsAdmin(oc, "cp /hello "+pod.mountPath)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			output_execfile, err := pod.execCommandAsAdmin(oc, "cat "+pod.mountPath+"/hello")
+			outputExecfile, err := pod.execCommandAsAdmin(oc, "cat "+pod.mountPath+"/hello")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output_execfile).To(o.ContainSubstring("Hello OpenShift Storage"))
+			o.Expect(outputExecfile).To(o.ContainSubstring("Hello OpenShift Storage"))
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 
@@ -1292,7 +1292,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			// Set the resource definition for the scenario
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
-			pod_a := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			podA := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 			securityContext := map[string]interface{}{
 				"fsGroup": 10000,
 			}
@@ -1306,19 +1306,19 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
 
-			g.By("Create pod_a with the created pvc and wait pod ready")
-			pod_a.createWithExtraParameters(oc, extraParameters)
-			defer pod_a.deleteAsAdmin(oc)
-			pod_a.waitReady(oc)
+			g.By("Create podA with the created pvc and wait pod ready")
+			podA.createWithExtraParameters(oc, extraParameters)
+			defer podA.deleteAsAdmin(oc)
+			podA.waitReady(oc)
 
 			g.By("Check the fsgroup of mounted volume and new created file should be 10000")
-			pod_a.checkFsgroup(oc, "ls -lZd "+pod_a.mountPath, "10000")
-			_, err := pod_a.execCommandAsAdmin(oc, "touch "+pod_a.mountPath+"/testfile")
+			podA.checkFsgroup(oc, "ls -lZd "+podA.mountPath, "10000")
+			_, err := podA.execCommandAsAdmin(oc, "touch "+podA.mountPath+"/testfile")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			pod_a.checkFsgroup(oc, "ls -lZ "+pod_a.mountPath+"/testfile", "10000")
+			podA.checkFsgroup(oc, "ls -lZ "+podA.mountPath+"/testfile", "10000")
 
-			g.By("Delete the pod_a")
-			pod_a.delete(oc)
+			g.By("Delete the podA")
+			podA.delete(oc)
 
 			securityContext = map[string]interface{}{
 				"fsGroup": 20000,
@@ -1328,18 +1328,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				"securityContext": securityContext,
 			}
 
-			g.By("Create pod_b with the same pvc and wait pod ready")
-			pod_b := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
-			pod_b.createWithExtraParameters(oc, extraParameters)
-			defer pod_b.deleteAsAdmin(oc)
-			pod_b.waitReady(oc)
+			g.By("Create podB with the same pvc and wait pod ready")
+			podB := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			podB.createWithExtraParameters(oc, extraParameters)
+			defer podB.deleteAsAdmin(oc)
+			podB.waitReady(oc)
 
 			g.By("Check the fsgroup of mounted volume, existing file and new created file should be 20000")
-			pod_b.checkFsgroup(oc, "ls -lZd "+pod_b.mountPath, "20000")
-			pod_b.checkFsgroup(oc, "ls -lZ "+pod_b.mountPath+"/testfile", "20000")
-			_, err = pod_b.execCommandAsAdmin(oc, "touch "+pod_b.mountPath+"/testfile-new")
+			podB.checkFsgroup(oc, "ls -lZd "+podB.mountPath, "20000")
+			podB.checkFsgroup(oc, "ls -lZ "+podB.mountPath+"/testfile", "20000")
+			_, err = podB.execCommandAsAdmin(oc, "touch "+podB.mountPath+"/testfile-new")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			pod_b.checkFsgroup(oc, "ls -lZ "+pod_b.mountPath+"/testfile-new", "20000")
+			podB.checkFsgroup(oc, "ls -lZ "+podB.mountPath+"/testfile-new", "20000")
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
@@ -1368,51 +1368,51 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the original
-			pvc_ori := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
-			pod_ori := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_ori.name))
+			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
 
 			g.By("Create a pvc with the preset csi storageclass")
-			pvc_ori.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
-			pvc_ori.create(oc)
-			defer pvc_ori.deleteAsAdmin(oc)
+			pvcOri.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvcOri.create(oc)
+			defer pvcOri.deleteAsAdmin(oc)
 
 			g.By("Create pod with the created pvc and wait for the pod ready")
-			pod_ori.create(oc)
-			defer pod_ori.deleteAsAdmin(oc)
-			pod_ori.waitReady(oc)
+			podOri.create(oc)
+			defer podOri.deleteAsAdmin(oc)
+			podOri.waitReady(oc)
 
 			g.By("Write file to volume")
-			pod_ori.checkMountedVolumeCouldRW(oc)
-			pod_ori.execCommand(oc, "sync")
+			podOri.checkMountedVolumeCouldRW(oc)
+			podOri.execCommand(oc, "sync")
 
 			// Create volumesnapshot with pre-defined volumesnapshotclass
 			g.By("Create volumesnapshot and wait for ready_to_use")
-			preset_vscname := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
-			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvc_ori.name), setVolumeSnapshotVscname(preset_vscname))
+			presetVscName := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
+			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name), setVolumeSnapshotVscname(presetVscName))
 			volumesnapshot.create(oc)
 			defer volumesnapshot.delete(oc)
 			volumesnapshot.waitReadyToUse(oc)
 
 			// Set the resource definition for the restore
-			pvc_restore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
-			pod_restore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_restore.name))
+			pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
+			podRestore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name))
 
 			g.By("Create a restored pvc with the preset csi storageclass")
-			pvc_restore.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
-			pvc_restore.capacity = pvc_ori.capacity
-			pvc_restore.createWithSnapshotDataSource(oc)
-			defer pvc_restore.deleteAsAdmin(oc)
+			pvcRestore.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvcRestore.capacity = pvcOri.capacity
+			pvcRestore.createWithSnapshotDataSource(oc)
+			defer pvcRestore.deleteAsAdmin(oc)
 
 			g.By("Create pod with the restored pvc and wait for the pod ready")
-			pod_restore.create(oc)
-			defer pod_restore.deleteAsAdmin(oc)
-			pod_restore.waitReady(oc)
+			podRestore.create(oc)
+			defer podRestore.deleteAsAdmin(oc)
+			podRestore.waitReady(oc)
 
 			g.By("Check the file exist in restored volume")
-			output, err := pod_restore.execCommand(oc, "cat "+pod_restore.mountPath+"/testfile")
+			output, err := podRestore.execCommand(oc, "cat "+podRestore.mountPath+"/testfile")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).To(o.ContainSubstring("storage test"))
-			pod_restore.checkMountedVolumeCouldRW(oc)
+			podRestore.checkMountedVolumeCouldRW(oc)
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
@@ -1450,59 +1450,59 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the original
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
-			pvc_ori := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
-			pod_ori := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_ori.name))
+			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
 			storageClass.provisioner = provisioner
 			storageClass.createWithExtraParameters(oc, extraParameters)
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 
 			g.By("Create a pvc with the preset csi storageclass")
-			pvc_ori.scname = storageClass.name
-			pvc_ori.create(oc)
-			defer pvc_ori.deleteAsAdmin(oc)
+			pvcOri.scname = storageClass.name
+			pvcOri.create(oc)
+			defer pvcOri.deleteAsAdmin(oc)
 
 			g.By("Create pod with the created pvc and wait for the pod ready")
-			pod_ori.create(oc)
-			defer pod_ori.deleteAsAdmin(oc)
-			pod_ori.waitReady(oc)
+			podOri.create(oc)
+			defer podOri.deleteAsAdmin(oc)
+			podOri.waitReady(oc)
 
 			g.By("Check fstype")
-			nodeName := getNodeNameByPod(oc, pod_ori.namespace, pod_ori.name)
-			volName := pvc_ori.getVolumeName(oc)
+			nodeName := getNodeNameByPod(oc, podOri.namespace, podOri.name)
+			volName := pvcOri.getVolumeName(oc)
 			checkVolumeMountCmdContain(oc, volName, nodeName, "ext4")
 
 			g.By("Write file to volume")
-			pod_ori.checkMountedVolumeCouldRW(oc)
-			pod_ori.execCommand(oc, "sync")
+			podOri.checkMountedVolumeCouldRW(oc)
+			podOri.execCommand(oc, "sync")
 
 			// Create volumesnapshot with pre-defined volumesnapshotclass
 			g.By("Create volumesnapshot and wait for ready_to_use")
-			preset_vscname := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
-			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvc_ori.name), setVolumeSnapshotVscname(preset_vscname))
+			presetVscName := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
+			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name), setVolumeSnapshotVscname(presetVscName))
 			volumesnapshot.create(oc)
 			defer volumesnapshot.delete(oc)
 			volumesnapshot.waitReadyToUse(oc)
 
 			// Set the resource definition for the restore
-			pvc_restore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
-			pod_restore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_restore.name))
+			pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
+			podRestore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name))
 
 			g.By("Create a restored pvc with the preset csi storageclass")
-			pvc_restore.scname = storageClass.name
-			pvc_restore.capacity = pvc_ori.capacity
-			pvc_restore.createWithSnapshotDataSource(oc)
-			defer pvc_restore.deleteAsAdmin(oc)
+			pvcRestore.scname = storageClass.name
+			pvcRestore.capacity = pvcOri.capacity
+			pvcRestore.createWithSnapshotDataSource(oc)
+			defer pvcRestore.deleteAsAdmin(oc)
 
 			g.By("Create pod with the restored pvc and wait for the pod ready")
-			pod_restore.create(oc)
-			defer pod_restore.deleteAsAdmin(oc)
-			pod_restore.waitReady(oc)
+			podRestore.create(oc)
+			defer podRestore.deleteAsAdmin(oc)
+			podRestore.waitReady(oc)
 
 			g.By("Check the file exist in restored volume")
-			output, err := pod_restore.execCommand(oc, "cat "+pod_restore.mountPath+"/testfile")
+			output, err := podRestore.execCommand(oc, "cat "+podRestore.mountPath+"/testfile")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).To(o.ContainSubstring("storage test"))
-			pod_restore.checkMountedVolumeCouldRW(oc)
+			podRestore.checkMountedVolumeCouldRW(oc)
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
@@ -1540,59 +1540,59 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the original
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
-			pvc_ori := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
-			pod_ori := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_ori.name))
+			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
 			storageClass.provisioner = provisioner
 			storageClass.createWithExtraParameters(oc, extraParameters)
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 
 			g.By("Create a pvc with the preset csi storageclass")
-			pvc_ori.scname = storageClass.name
-			pvc_ori.create(oc)
-			defer pvc_ori.deleteAsAdmin(oc)
+			pvcOri.scname = storageClass.name
+			pvcOri.create(oc)
+			defer pvcOri.deleteAsAdmin(oc)
 
 			g.By("Create pod with the created pvc and wait for the pod ready")
-			pod_ori.create(oc)
-			defer pod_ori.deleteAsAdmin(oc)
-			pod_ori.waitReady(oc)
+			podOri.create(oc)
+			defer podOri.deleteAsAdmin(oc)
+			podOri.waitReady(oc)
 
 			g.By("Check fstype")
-			nodeName := getNodeNameByPod(oc, pod_ori.namespace, pod_ori.name)
-			volName := pvc_ori.getVolumeName(oc)
+			nodeName := getNodeNameByPod(oc, podOri.namespace, podOri.name)
+			volName := pvcOri.getVolumeName(oc)
 			checkVolumeMountCmdContain(oc, volName, nodeName, "xfs")
 
 			g.By("Write file to volume")
-			pod_ori.checkMountedVolumeCouldRW(oc)
-			pod_ori.execCommand(oc, "sync")
+			podOri.checkMountedVolumeCouldRW(oc)
+			podOri.execCommand(oc, "sync")
 
 			// Create volumesnapshot with pre-defined volumesnapshotclass
 			g.By("Create volumesnapshot and wait for ready_to_use")
-			preset_vscname := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
-			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvc_ori.name), setVolumeSnapshotVscname(preset_vscname))
+			presetVscName := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
+			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name), setVolumeSnapshotVscname(presetVscName))
 			volumesnapshot.create(oc)
 			defer volumesnapshot.delete(oc)
 			volumesnapshot.waitReadyToUse(oc)
 
 			// Set the resource definition for the restore
-			pvc_restore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
-			pod_restore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_restore.name))
+			pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
+			podRestore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name))
 
 			g.By("Create a restored pvc with the preset csi storageclass")
-			pvc_restore.scname = storageClass.name
-			pvc_restore.capacity = pvc_ori.capacity
-			pvc_restore.createWithSnapshotDataSource(oc)
-			defer pvc_restore.deleteAsAdmin(oc)
+			pvcRestore.scname = storageClass.name
+			pvcRestore.capacity = pvcOri.capacity
+			pvcRestore.createWithSnapshotDataSource(oc)
+			defer pvcRestore.deleteAsAdmin(oc)
 
 			g.By("Create pod with the restored pvc and wait for the pod ready")
-			pod_restore.create(oc)
-			defer pod_restore.deleteAsAdmin(oc)
-			pod_restore.waitReady(oc)
+			podRestore.create(oc)
+			defer podRestore.deleteAsAdmin(oc)
+			podRestore.waitReady(oc)
 
 			g.By("Check the file exist in restored volume")
-			output, err := pod_restore.execCommand(oc, "cat "+pod_restore.mountPath+"/testfile")
+			output, err := podRestore.execCommand(oc, "cat "+podRestore.mountPath+"/testfile")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).To(o.ContainSubstring("storage test"))
-			pod_restore.checkMountedVolumeCouldRW(oc)
+			podRestore.checkMountedVolumeCouldRW(oc)
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
@@ -1619,51 +1619,51 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
-			pvc_ori := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"))
-			pod_ori := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_ori.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
+			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"))
+			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
 			storageClass.provisioner = provisioner
 			storageClass.create(oc)
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 			g.By("Create a pvc with the csi storageclass")
-			pvc_ori.scname = storageClass.name
-			pvc_ori.create(oc)
-			defer pvc_ori.deleteAsAdmin(oc)
+			pvcOri.scname = storageClass.name
+			pvcOri.create(oc)
+			defer pvcOri.deleteAsAdmin(oc)
 
 			g.By("Create pod with the created pvc and wait for the pod ready")
-			pod_ori.create(oc)
-			defer pod_ori.deleteAsAdmin(oc)
-			pod_ori.waitReady(oc)
+			podOri.create(oc)
+			defer podOri.deleteAsAdmin(oc)
+			podOri.waitReady(oc)
 
 			g.By("Write file to raw block volume")
-			pod_ori.writeDataIntoRawBlockVolume(oc)
-			pod_ori.execCommand(oc, "sync")
+			podOri.writeDataIntoRawBlockVolume(oc)
+			podOri.execCommand(oc, "sync")
 
 			// Create volumesnapshot with pre-defined volumesnapshotclass
 			g.By("Create volumesnapshot and wait for ready_to_use")
-			preset_vscname := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
-			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvc_ori.name), setVolumeSnapshotVscname(preset_vscname))
+			presetVscName := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
+			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name), setVolumeSnapshotVscname(presetVscName))
 			volumesnapshot.create(oc)
 			defer volumesnapshot.delete(oc)
 			volumesnapshot.waitReadyToUse(oc)
 
 			// Set the resource definition for the restore
-			pvc_restore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
-			pod_restore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_restore.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
+			pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
+			podRestore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
 			g.By("Create a restored pvc with the csi storageclass")
-			pvc_restore.scname = storageClass.name
-			pvc_restore.capacity = pvc_ori.capacity
-			pvc_restore.createWithSnapshotDataSource(oc)
-			defer pvc_restore.deleteAsAdmin(oc)
+			pvcRestore.scname = storageClass.name
+			pvcRestore.capacity = pvcOri.capacity
+			pvcRestore.createWithSnapshotDataSource(oc)
+			defer pvcRestore.deleteAsAdmin(oc)
 
 			g.By("Create pod with the restored pvc and wait for the pod ready")
-			pod_restore.create(oc)
-			defer pod_restore.deleteAsAdmin(oc)
-			pod_restore.waitReady(oc)
+			podRestore.create(oc)
+			defer podRestore.deleteAsAdmin(oc)
+			podRestore.waitReady(oc)
 
 			g.By("Check the data in the raw block volume")
-			pod_restore.checkDataInRawBlockVolume(oc)
+			podRestore.checkDataInRawBlockVolume(oc)
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 
@@ -1701,8 +1701,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
-			pvc_ori := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
-			pod_ori := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_ori.name))
+			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
 
 			g.By("Create a csi storageclass with parameter 'csi.storage.k8s.io/fstype': 'ext4'")
 			storageClass.provisioner = provisioner
@@ -1710,52 +1710,52 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 
 			g.By("Create a pvc with the csi storageclass")
-			pvc_ori.scname = storageClass.name
-			pvc_ori.create(oc)
-			defer pvc_ori.deleteAsAdmin(oc)
+			pvcOri.scname = storageClass.name
+			pvcOri.create(oc)
+			defer pvcOri.deleteAsAdmin(oc)
 
 			g.By("Create pod with the created pvc and wait for the pod ready")
-			pod_ori.create(oc)
-			defer pod_ori.deleteAsAdmin(oc)
-			pod_ori.waitReady(oc)
+			podOri.create(oc)
+			defer podOri.deleteAsAdmin(oc)
+			podOri.waitReady(oc)
 
 			g.By("Write file to volume")
-			pod_ori.checkMountedVolumeCouldRW(oc)
-			pod_ori.execCommand(oc, "sync")
+			podOri.checkMountedVolumeCouldRW(oc)
+			podOri.execCommand(oc, "sync")
 
 			g.By("Create volumesnapshot and wait for ready_to_use")
-			preset_vscname := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
-			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvc_ori.name), setVolumeSnapshotVscname(preset_vscname))
+			presetVscName := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
+			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name), setVolumeSnapshotVscname(presetVscName))
 			volumesnapshot.create(oc)
 			defer volumesnapshot.delete(oc)
 			volumesnapshot.waitReadyToUse(oc)
 
-			pvc_restore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
-			pod_restore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_restore.name))
+			pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
+			podRestore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name))
 
 			g.By("Create a restored pvc with the created csi storageclass")
-			pvc_restore.scname = storageClass.name
-			oricapacityInt64, err := strconv.ParseInt(strings.TrimRight(pvc_ori.capacity, "Gi"), 10, 64)
+			pvcRestore.scname = storageClass.name
+			oricapacityInt64, err := strconv.ParseInt(strings.TrimRight(pvcOri.capacity, "Gi"), 10, 64)
 			o.Expect(err).To(o.Not(o.HaveOccurred()))
 			restorecapacityInt64 := oricapacityInt64 + getRandomNum(3, 8)
-			pvc_restore.capacity = strconv.FormatInt(restorecapacityInt64, 10) + "Gi"
-			pvc_restore.createWithSnapshotDataSource(oc)
-			defer pvc_restore.deleteAsAdmin(oc)
+			pvcRestore.capacity = strconv.FormatInt(restorecapacityInt64, 10) + "Gi"
+			pvcRestore.createWithSnapshotDataSource(oc)
+			defer pvcRestore.deleteAsAdmin(oc)
 
 			g.By("Create pod with the restored pvc and wait for the pod ready")
-			pod_restore.create(oc)
-			defer pod_restore.deleteAsAdmin(oc)
-			pod_restore.waitReady(oc)
+			podRestore.create(oc)
+			defer podRestore.deleteAsAdmin(oc)
+			podRestore.waitReady(oc)
 
 			g.By("Check the file exist in restored volume")
-			output, err := pod_restore.execCommand(oc, "cat "+pod_restore.mountPath+"/testfile")
+			output, err := podRestore.execCommand(oc, "cat "+podRestore.mountPath+"/testfile")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).To(o.ContainSubstring("storage test"))
 
 			g.By("Check could write more data")
 			restoreVolInt64 := oricapacityInt64 + 2
 			blockCounts := strconv.FormatInt(restoreVolInt64*4*4/5, 10)
-			output1, err := pod_restore.execCommand(oc, "/bin/dd  if=/dev/zero of="+pod_restore.mountPath+"/testfile1 bs=256M count="+blockCounts)
+			output1, err := podRestore.execCommand(oc, "/bin/dd  if=/dev/zero of="+podRestore.mountPath+"/testfile1 bs=256M count="+blockCounts)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output1).NotTo(o.ContainSubstring("No space left on device"))
 
@@ -1794,8 +1794,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
-			pvc_ori := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
-			pod_ori := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_ori.name))
+			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
 
 			g.By("Create a csi storageclass with parameter 'csi.storage.k8s.io/fstype': 'xfs'")
 			storageClass.provisioner = provisioner
@@ -1803,51 +1803,51 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 
 			g.By("Create a pvc with the csi storageclass")
-			pvc_ori.scname = storageClass.name
-			pvc_ori.create(oc)
-			defer pvc_ori.deleteAsAdmin(oc)
+			pvcOri.scname = storageClass.name
+			pvcOri.create(oc)
+			defer pvcOri.deleteAsAdmin(oc)
 
 			g.By("Create pod with the created pvc and wait for the pod ready")
-			pod_ori.create(oc)
-			defer pod_ori.deleteAsAdmin(oc)
-			pod_ori.waitReady(oc)
+			podOri.create(oc)
+			defer podOri.deleteAsAdmin(oc)
+			podOri.waitReady(oc)
 
 			g.By("Write file to volume")
-			pod_ori.checkMountedVolumeCouldRW(oc)
-			pod_ori.execCommand(oc, "sync")
+			podOri.checkMountedVolumeCouldRW(oc)
+			podOri.execCommand(oc, "sync")
 
 			g.By("Create volumesnapshot and wait for ready_to_use")
-			preset_vscname := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
-			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvc_ori.name), setVolumeSnapshotVscname(preset_vscname))
+			presetVscName := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
+			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name), setVolumeSnapshotVscname(presetVscName))
 			volumesnapshot.create(oc)
 			defer volumesnapshot.delete(oc)
 			volumesnapshot.waitReadyToUse(oc)
 
-			pvc_restore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
-			pod_restore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_restore.name))
+			pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
+			podRestore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name))
 
 			g.By("Create a restored pvc with the created csi storageclass")
-			pvc_restore.scname = storageClass.name
-			oricapacityInt64, err := strconv.ParseInt(strings.TrimRight(pvc_ori.capacity, "Gi"), 10, 64)
+			pvcRestore.scname = storageClass.name
+			oricapacityInt64, err := strconv.ParseInt(strings.TrimRight(pvcOri.capacity, "Gi"), 10, 64)
 			o.Expect(err).To(o.Not(o.HaveOccurred()))
 			restorecapacityInt64 := oricapacityInt64 + getRandomNum(3, 8)
-			pvc_restore.capacity = strconv.FormatInt(restorecapacityInt64, 10) + "Gi"
-			pvc_restore.createWithSnapshotDataSource(oc)
-			defer pvc_restore.deleteAsAdmin(oc)
+			pvcRestore.capacity = strconv.FormatInt(restorecapacityInt64, 10) + "Gi"
+			pvcRestore.createWithSnapshotDataSource(oc)
+			defer pvcRestore.deleteAsAdmin(oc)
 
 			g.By("Create pod with the restored pvc and wait for the pod ready")
-			pod_restore.create(oc)
-			defer pod_restore.deleteAsAdmin(oc)
-			pod_restore.waitReady(oc)
+			podRestore.create(oc)
+			defer podRestore.deleteAsAdmin(oc)
+			podRestore.waitReady(oc)
 			g.By("Check the file exist in restored volume")
-			output, err := pod_restore.execCommand(oc, "cat "+pod_restore.mountPath+"/testfile")
+			output, err := podRestore.execCommand(oc, "cat "+podRestore.mountPath+"/testfile")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).To(o.ContainSubstring("storage test"))
 
 			g.By("Check could write more data")
 			restoreVolInt64 := oricapacityInt64 + 2
 			//blockCounts := strconv.FormatInt(restoreVolInt64*4*4/5, 10)
-			output1, err := pod_restore.execCommand(oc, "fallocate -l "+fmt.Sprintf("%d", restoreVolInt64)+"G "+pod_restore.mountPath+"/testfile")
+			output1, err := podRestore.execCommand(oc, "fallocate -l "+fmt.Sprintf("%d", restoreVolInt64)+"G "+podRestore.mountPath+"/testfile")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output1).NotTo(o.ContainSubstring("No space left on device"))
 
@@ -1877,59 +1877,59 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
-			pvc_ori := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"))
-			pod_ori := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_ori.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
+			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"))
+			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
 			storageClass.provisioner = provisioner
 			storageClass.create(oc)
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 			g.By("Create a pvc with the csi storageclass")
-			pvc_ori.scname = storageClass.name
-			pvc_ori.create(oc)
-			defer pvc_ori.deleteAsAdmin(oc)
+			pvcOri.scname = storageClass.name
+			pvcOri.create(oc)
+			defer pvcOri.deleteAsAdmin(oc)
 
 			g.By("Create pod with the created pvc and wait for the pod ready")
-			pod_ori.create(oc)
-			defer pod_ori.deleteAsAdmin(oc)
-			pod_ori.waitReady(oc)
+			podOri.create(oc)
+			defer podOri.deleteAsAdmin(oc)
+			podOri.waitReady(oc)
 			g.By("Write file to raw block volume")
-			pod_ori.writeDataIntoRawBlockVolume(oc)
-			pod_ori.execCommand(oc, "sync")
+			podOri.writeDataIntoRawBlockVolume(oc)
+			podOri.execCommand(oc, "sync")
 
 			// Create volumesnapshot with pre-defined volumesnapshotclass
 			g.By("Create volumesnapshot and wait for ready_to_use")
-			preset_vscname := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
-			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvc_ori.name), setVolumeSnapshotVscname(preset_vscname))
+			presetVscName := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
+			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name), setVolumeSnapshotVscname(presetVscName))
 			volumesnapshot.create(oc)
 			defer volumesnapshot.delete(oc)
 			volumesnapshot.waitReadyToUse(oc)
 
 			// Set the resource definition for the restore
-			pvc_restore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
-			pod_restore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_restore.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
+			pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
+			podRestore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
 			g.By("Create a restored pvc with the csi storageclass")
-			pvc_restore.scname = storageClass.name
-			oricapacityInt64, err := strconv.ParseInt(strings.TrimRight(pvc_ori.capacity, "Gi"), 10, 64)
+			pvcRestore.scname = storageClass.name
+			oricapacityInt64, err := strconv.ParseInt(strings.TrimRight(pvcOri.capacity, "Gi"), 10, 64)
 			o.Expect(err).To(o.Not(o.HaveOccurred()))
 			restorecapacityInt64 := oricapacityInt64 + getRandomNum(3, 8)
-			pvc_restore.capacity = strconv.FormatInt(restorecapacityInt64, 10) + "Gi"
-			pvc_restore.capacity = pvc_ori.capacity
-			pvc_restore.createWithSnapshotDataSource(oc)
-			defer pvc_restore.deleteAsAdmin(oc)
+			pvcRestore.capacity = strconv.FormatInt(restorecapacityInt64, 10) + "Gi"
+			pvcRestore.capacity = pvcOri.capacity
+			pvcRestore.createWithSnapshotDataSource(oc)
+			defer pvcRestore.deleteAsAdmin(oc)
 
 			g.By("Create pod with the restored pvc and wait for the pod ready")
-			pod_restore.create(oc)
-			defer pod_restore.deleteAsAdmin(oc)
-			pod_restore.waitReady(oc)
+			podRestore.create(oc)
+			defer podRestore.deleteAsAdmin(oc)
+			podRestore.waitReady(oc)
 
 			g.By("Check the data in the raw block volume")
-			pod_restore.checkDataInRawBlockVolume(oc)
+			podRestore.checkDataInRawBlockVolume(oc)
 
 			g.By("Check could write more data")
 			restoreVolInt64 := oricapacityInt64 + 2
 			blockCounts := strconv.FormatInt(restoreVolInt64*4*4/5, 10)
-			output1, err := pod_restore.execCommand(oc, "/bin/dd  if=/dev/null of="+pod_restore.mountPath+" bs=256M count="+blockCounts)
+			output1, err := podRestore.execCommand(oc, "/bin/dd  if=/dev/null of="+podRestore.mountPath+" bs=256M count="+blockCounts)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output1).NotTo(o.ContainSubstring("No space left on device"))
 
@@ -1981,7 +1981,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				checkStorageclassExists(oc, scName)
 
 				if provisioner == "efs.csi.aws.com" {
-					fsid := getFsIdDetails(oc, scName)
+					fsid := getFsIDFromStorageClass(oc, scName)
 					storageClassParameters = map[string]string{
 						"provisioningMode": "efs-ap",
 						"fileSystemId":     fsid,
@@ -2162,8 +2162,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
-			pvc_ori := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
-			pod_ori := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_ori.name))
+			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
 
 			g.By("Create a csi storageclass with parameter 'csi.storage.k8s.io/fstype': 'ext4'")
 			storageClass.provisioner = provisioner
@@ -2171,18 +2171,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 
 			g.By("Create a pvc with the csi storageclass")
-			pvc_ori.scname = storageClass.name
-			pvc_ori.create(oc)
-			defer pvc_ori.deleteAsAdmin(oc)
+			pvcOri.scname = storageClass.name
+			pvcOri.create(oc)
+			defer pvcOri.deleteAsAdmin(oc)
 
 			g.By("Create pod with the created pvc and wait for the pod ready")
-			pod_ori.create(oc)
-			defer pod_ori.deleteAsAdmin(oc)
-			pod_ori.waitReady(oc)
+			podOri.create(oc)
+			defer podOri.deleteAsAdmin(oc)
+			podOri.waitReady(oc)
 
 			g.By("Create volumesnapshot with the Delete deletionpolicy volumesnapshotclass and wait it ready to use")
 			volumesnapshotClass := newVolumeSnapshotClass(setVolumeSnapshotClassTemplate(volumeSnapshotClassTemplate), setVolumeSnapshotClassDriver(provisioner), setVolumeSnapshotDeletionpolicy("Delete"))
-			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvc_ori.name), setVolumeSnapshotVscname(volumesnapshotClass.name))
+			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name), setVolumeSnapshotVscname(volumesnapshotClass.name))
 			volumesnapshotClass.create(oc)
 			volumesnapshot.create(oc)
 			defer volumesnapshot.delete(oc)
@@ -2226,7 +2226,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			g.By("Get the zone value with CSI topology key")
-			topology_path := map[string]string{
+			topologyPath := map[string]string{
 				"aws":          `topology\.ebs\.csi\.aws\.com\/zone`,
 				"azure":        `topology\.disk\.csi\.azure\.com\/zone`,
 				"alibabacloud": `topology\.diskplugin\.csi\.alibabacloud\.com\/zone`,
@@ -2235,7 +2235,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				"gcp": `topology\.gke\.io\/zone`,
 			}
 
-			topology_key := map[string]string{
+			topologyKey := map[string]string{
 				"aws":          "topology.ebs.csi.aws.com/zone",
 				"azure":        "topology.disk.csi.azure.com/zone",
 				"alibabacloud": "topology.diskplugin.csi.alibabacloud.com/zone",
@@ -2248,7 +2248,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			node := getOneSchedulableWorker(allNodes)
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node.name, "-o=jsonpath={.metadata.labels}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			zone := gjson.Get(output, topology_path[cloudProvider]).String()
+			zone := gjson.Get(output, topologyPath[cloudProvider]).String()
 			if len(zone) == 0 {
 				g.Skip("Skip for no expected topology available zone value.")
 			} else {
@@ -2262,7 +2262,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			zones := []string{zone}
 			labelExpressions := []map[string]interface{}{
-				{"key": topology_key[cloudProvider], "values": zones},
+				{"key": topologyKey[cloudProvider], "values": zones},
 			}
 			matchLabelExpressions := []map[string]interface{}{
 				{"matchLabelExpressions": labelExpressions},
@@ -2293,7 +2293,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			g.By("Check nodeAffinity in pv info")
 			pvName := pvc.getVolumeName(oc)
-			o.Expect(checkPvNodeAffinityContains(oc, pvName, topology_key[cloudProvider])).To(o.BeTrue())
+			o.Expect(checkPvNodeAffinityContains(oc, pvName, topologyKey[cloudProvider])).To(o.BeTrue())
 			o.Expect(checkPvNodeAffinityContains(oc, pvName, zone)).To(o.BeTrue())
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
@@ -2325,7 +2325,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			g.By("Get the zone value with CSI topology key")
-			topology_path := map[string]string{
+			topologyPath := map[string]string{
 				"aws":          `topology\.ebs\.csi\.aws\.com\/zone`,
 				"azure":        `topology\.disk\.csi\.azure\.com\/zone`,
 				"alibabacloud": `topology\.diskplugin\.csi\.alibabacloud\.com\/zone`,
@@ -2334,7 +2334,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				"gcp": `topology\.gke\.io\/zone`,
 			}
 
-			topology_key := map[string]string{
+			topologyKey := map[string]string{
 				"aws":          "topology.ebs.csi.aws.com/zone",
 				"azure":        "topology.disk.csi.azure.com/zone",
 				"alibabacloud": "topology.diskplugin.csi.alibabacloud.com/zone",
@@ -2347,7 +2347,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			node := getOneSchedulableWorker(allNodes)
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node.name, "-o=jsonpath={.metadata.labels}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			zone := gjson.Get(output, topology_path[cloudProvider]).String()
+			zone := gjson.Get(output, topologyPath[cloudProvider]).String()
 			if len(zone) == 0 {
 				g.Skip("Skip for no expected topology available zone value.")
 			} else {
@@ -2361,7 +2361,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			zones := []string{zone}
 			labelExpressions := []map[string]interface{}{
-				{"key": topology_key[cloudProvider], "values": zones},
+				{"key": topologyKey[cloudProvider], "values": zones},
 			}
 			matchLabelExpressions := []map[string]interface{}{
 				{"matchLabelExpressions": labelExpressions},
@@ -2389,7 +2389,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			g.By("Check nodeAffinity in pv info")
 			pvName := pvc.getVolumeName(oc)
-			o.Expect(checkPvNodeAffinityContains(oc, pvName, topology_key[cloudProvider])).To(o.BeTrue())
+			o.Expect(checkPvNodeAffinityContains(oc, pvName, topologyKey[cloudProvider])).To(o.BeTrue())
 			o.Expect(checkPvNodeAffinityContains(oc, pvName, zone)).To(o.BeTrue())
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
@@ -2416,7 +2416,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageClassParameters = map[string]string{
 				"csi.storage.k8s.io/fstype": "ext4",
 			}
-			sc_extraParameters = map[string]interface{}{
+			scExtraParameters = map[string]interface{}{
 				"parameters":           storageClassParameters,
 				"allowVolumeExpansion": true,
 			}
@@ -2426,30 +2426,30 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
-			pvc_ori := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
-			pod_ori := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_ori.name))
+			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
 
 			g.By("Create a csi storageclass with parameter 'csi.storage.k8s.io/fstype': 'ext4'")
 			storageClass.provisioner = provisioner
-			storageClass.createWithExtraParameters(oc, sc_extraParameters)
+			storageClass.createWithExtraParameters(oc, scExtraParameters)
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 
 			g.By("Create a pvc with the csi storageclass")
-			pvc_ori.scname = storageClass.name
-			pvc_ori.create(oc)
-			defer pvc_ori.deleteAsAdmin(oc)
+			pvcOri.scname = storageClass.name
+			pvcOri.create(oc)
+			defer pvcOri.deleteAsAdmin(oc)
 
 			g.By("Create pod with the created pvc and wait for the pod ready")
-			pod_ori.create(oc)
-			defer pod_ori.deleteAsAdmin(oc)
-			pod_ori.waitReady(oc)
+			podOri.create(oc)
+			defer podOri.deleteAsAdmin(oc)
+			podOri.waitReady(oc)
 
 			g.By("Write file to volume")
-			pod_ori.checkMountedVolumeCouldRW(oc)
+			podOri.checkMountedVolumeCouldRW(oc)
 
 			g.By("Create volumesnapshot with the Retain deletionpolicy volumesnapshotclass and wait it ready to use")
 			volumesnapshotClass := newVolumeSnapshotClass(setVolumeSnapshotClassTemplate(volumeSnapshotClassTemplate), setVolumeSnapshotClassDriver(provisioner), setVolumeSnapshotDeletionpolicy("Retain"))
-			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvc_ori.name), setVolumeSnapshotVscname(volumesnapshotClass.name))
+			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name), setVolumeSnapshotVscname(volumesnapshotClass.name))
 			volumesnapshotClass.create(oc)
 			defer volumesnapshotClass.deleteAsAdmin(oc)
 			volumesnapshot.create(oc)
@@ -2461,7 +2461,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			g.By("Get snapshotHandle from volumesnapshot and delete old volumesnapshot and volumesnapshotcontent")
 			vscontent := getVSContentByVSname(oc, volumesnapshot.namespace, volumesnapshot.name)
-			vscontent_sphandle, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("volumesnapshotcontent", vscontent, "-o=jsonpath={.status.snapshotHandle}").Output()
+			vsContentSnapShotHandle, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("volumesnapshotcontent", vscontent, "-o=jsonpath={.status.snapshotHandle}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			volumesnapshot.delete(oc)
 			checkResourcesNotExist(oc, "volumesnapshot", volumesnapshot.name, volumesnapshot.namespace)
@@ -2473,7 +2473,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			newVolumeSnapshotContent := newVolumeSnapshotContent(setVolumeSnapshotContentTemplate(volumeSnapshotContentTemplate),
 				setVolumeSnapshotContentName(newVolumeSnapshotContentName), setVolumeSnapshotContentVolumeSnapshotClass(volumesnapshot.name),
-				setVolumeSnapshotContentSnapshotHandle(vscontent_sphandle), setVolumeSnapshotContentRefVolumeSnapshotName(newVolumeSnapshotName),
+				setVolumeSnapshotContentSnapshotHandle(vsContentSnapShotHandle), setVolumeSnapshotContentRefVolumeSnapshotName(newVolumeSnapshotName),
 				setVolumeSnapshotContentDriver(provisioner))
 			newVolumeSnapshotContent.create(oc)
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("volumesnapshotcontent", newVolumeSnapshotContentName).Execute()
@@ -2481,24 +2481,24 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("volumesnapshot", newVolumeSnapshotName, "-n", volumesnapshot.namespace).Execute()
 
 			// Set the resource definition for the restore
-			pvc_restore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(newVolumeSnapshotName))
-			pod_restore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_restore.name))
+			pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(newVolumeSnapshotName))
+			podRestore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name))
 
 			g.By("Create a restored pvc with the preset csi storageclass")
-			pvc_restore.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
-			pvc_restore.capacity = pvc_ori.capacity
-			pvc_restore.createWithSnapshotDataSource(oc)
-			defer pvc_restore.deleteAsAdmin(oc)
+			pvcRestore.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvcRestore.capacity = pvcOri.capacity
+			pvcRestore.createWithSnapshotDataSource(oc)
+			defer pvcRestore.deleteAsAdmin(oc)
 
 			g.By("Create pod with the restored pvc and wait for the pod ready")
-			pod_restore.create(oc)
-			defer pod_restore.deleteAsAdmin(oc)
-			pod_restore.waitReady(oc)
+			podRestore.create(oc)
+			defer podRestore.deleteAsAdmin(oc)
+			podRestore.waitReady(oc)
 			g.By("Check the file exist in restored volume")
-			output, err := pod_restore.execCommand(oc, "cat "+pod_restore.mountPath+"/testfile")
+			output, err := podRestore.execCommand(oc, "cat "+podRestore.mountPath+"/testfile")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).To(o.ContainSubstring("storage test"))
-			pod_restore.checkMountedVolumeCouldRW(oc)
+			podRestore.checkMountedVolumeCouldRW(oc)
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
 	})
@@ -2573,7 +2573,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 })
 
 // Performing test steps for Online Volume Resizing
-func ResizeOnlineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep deployment, cloudProvider string, provisioner string) {
+func resizeOnlineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep deployment, cloudProvider string, provisioner string) {
 	// Set up a specified project share for all the phases
 	g.By("1. Create a pvc with the preset csi storageclass")
 	pvc.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
@@ -2631,7 +2631,7 @@ func ResizeOnlineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep 
 // Test steps for Offline Volume Resizing
 // E.g. Expand a Persistent Volume in Offline Mode (vmware doc)
 // https://docs.vmware.com/en/VMware-vSphere/7.0/vmware-vsphere-with-tanzu/GUID-90082E1C-DC01-4610-ABA2-6A4E97C18CBC.html?hWord=N4IghgNiBcIKIA8AOYB2ATABGTA1A9hAK4C2ApiAL5A
-func ResizeOfflineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep deployment, cloudProvider string, provisioner string) {
+func resizeOfflineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep deployment, cloudProvider string, provisioner string) {
 	// Set up a specified project share for all the phases
 	g.By("1. Create a pvc with the preset csi storageclass")
 	pvc.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)

@@ -40,10 +40,9 @@ func execCommandInSpecificNode(oc *exutil.CLI, nodeHostName string, command stri
 	if err != nil {
 		e2e.Logf("Execute \""+command+"\" on node \"%s\" *failed with* : \"%v\".", nodeHostName, err)
 		return msg, err
-	} else {
-		e2e.Logf("Executed \""+command+"\" on node \"%s\" *Successed* ", nodeHostName)
-		debugLogf("Executed \""+command+"\" on node \"%s\" *Output is* : \"%v\".", nodeHostName, msg)
 	}
+	e2e.Logf("Executed \""+command+"\" on node \"%s\" *Successed* ", nodeHostName)
+	debugLogf("Executed \""+command+"\" on node \"%s\" *Output is* : \"%v\".", nodeHostName, msg)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return msg, nil
 }
@@ -230,11 +229,11 @@ func checkNodeZoned(oc *exutil.CLI) bool {
 
 type node struct {
 	name         string
-	instanceId   string
+	instanceID   string
 	avaiableZone string
 	osType       string
 	osImage      string
-	osId         string
+	osID         string
 	role         string
 	scheduleable bool
 	readyStatus  string // "True", "Unknown"(Node is poweroff or disconnect), "False"
@@ -249,13 +248,13 @@ func getAllNodesInfo(oc *exutil.CLI) []node {
 		zonePath = `metadata.labels.topology\.kubernetes\.io\/zone`
 		nodeRole string
 	)
-	nodesInfoJson, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-o", "json").Output()
+	nodesInfoJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-o", "json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	nodesList := strings.Split(strings.Trim(strings.Trim(gjson.Get(nodesInfoJson, "items.#.metadata.name").String(), "["), "]"), ",")
+	nodesList := strings.Split(strings.Trim(strings.Trim(gjson.Get(nodesInfoJSON, "items.#.metadata.name").String(), "["), "]"), ",")
 	for _, nodeName := range nodesList {
 		nodeName = strings.Trim(nodeName, "\"")
-		if gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").metadata.labels.node-role\\.kubernetes\\.io\\/master").Exists() {
-			if gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").metadata.labels.node-role\\.kubernetes\\.io\\/worker").Exists() {
+		if gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").metadata.labels.node-role\\.kubernetes\\.io\\/master").Exists() {
+			if gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").metadata.labels.node-role\\.kubernetes\\.io\\/worker").Exists() {
 				nodeRole = "masterAndworker"
 			} else {
 				nodeRole = "master"
@@ -263,27 +262,27 @@ func getAllNodesInfo(oc *exutil.CLI) []node {
 		} else {
 			nodeRole = "worker"
 		}
-		nodeAvaiableZone := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+")."+zonePath).String()
+		nodeAvaiableZone := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+")."+zonePath).String()
 		// Enchancemant: It seems sometimes aws worker node miss kubernetes az label, maybe caused by other parallel cases
 		if nodeAvaiableZone == "" && cloudProvider == "aws" {
 			e2e.Logf("The node \"%s\" kubernetes az label not exist, retry get from csi az label", nodeName)
 			zonePath = `metadata.labels.topology\.ebs\.csi\.aws\.com\/zone`
-			nodeAvaiableZone = gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+")."+zonePath).String()
+			nodeAvaiableZone = gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+")."+zonePath).String()
 		}
-		readyStatus := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").status.conditions.#(type=Ready).status").String()
-		scheduleFlag := !gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").spec.unschedulable").Exists()
-		nodeOsType := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").metadata.labels.kubernetes\\.io\\/os").String()
-		nodeOsId := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").metadata.labels.node\\.openshift\\.io\\/os_id").String()
-		nodeOsImage := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").status.nodeInfo.osImage").String()
-		nodeArch := gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+").status.nodeInfo.architecture").String()
-		tempSlice := strings.Split(gjson.Get(nodesInfoJson, "items.#(metadata.name="+nodeName+")."+"spec.providerID").String(), "/")
-		nodeInstanceId := tempSlice[len(tempSlice)-1]
+		readyStatus := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").status.conditions.#(type=Ready).status").String()
+		scheduleFlag := !gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").spec.unschedulable").Exists()
+		nodeOsType := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").metadata.labels.kubernetes\\.io\\/os").String()
+		nodeOsID := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").metadata.labels.node\\.openshift\\.io\\/os_id").String()
+		nodeOsImage := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").status.nodeInfo.osImage").String()
+		nodeArch := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").status.nodeInfo.architecture").String()
+		tempSlice := strings.Split(gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+")."+"spec.providerID").String(), "/")
+		nodeInstanceID := tempSlice[len(tempSlice)-1]
 		nodes = append(nodes, node{
 			name:         nodeName,
-			instanceId:   nodeInstanceId,
+			instanceID:   nodeInstanceID,
 			avaiableZone: nodeAvaiableZone,
 			osType:       nodeOsType,
-			osId:         nodeOsId,
+			osID:         nodeOsID,
 			osImage:      nodeOsImage,
 			role:         nodeRole,
 			scheduleable: scheduleFlag,
@@ -311,7 +310,7 @@ func getSchedulableLinuxWorkers(allNodes []node) (linuxWorkers []node) {
 func getSchedulableRhelWorkers(allNodes []node) []node {
 	schedulableRhelWorkers := make([]node, 0, 6)
 	for _, myNode := range allNodes {
-		if myNode.scheduleable && myNode.osId == "rhel" && strings.Contains(myNode.role, "worker") && myNode.readyStatus == "True" {
+		if myNode.scheduleable && myNode.osID == "rhel" && strings.Contains(myNode.role, "worker") && myNode.readyStatus == "True" {
 			schedulableRhelWorkers = append(schedulableRhelWorkers, myNode)
 		}
 	}

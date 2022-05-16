@@ -72,7 +72,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		myVolume.attachToInstanceSucceed(ac, oc, myWorker)
 
 		g.By("# Create a localvolume cr use diskPath by id with the attached volume")
-		mylv.deviceId = myVolume.DeviceById
+		mylv.deviceID = myVolume.DeviceByID
 		mylv.create(oc)
 		defer mylv.deleteAsAdmin(oc)
 
@@ -106,17 +106,17 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		waitForPersistentVolumeStatusAsExpected(oc, pvName, "Available")
 
 		g.By("# Create new pvc,deployment and check the data in origin volume is cleaned up")
-		pvc_new := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"),
+		pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"),
 			setPersistentVolumeClaimCapacity(interfaceToString(getRandomNum(1, myVolume.Size))+"Gi"), setPersistentVolumeClaimStorageClassName(mylv.scname))
-		pvc_new.create(oc)
-		defer pvc_new.deleteAsAdmin(oc)
-		dep_new := newDeployment(setDeploymentTemplate(depTemplate), setDeploymentPVCName(pvc_new.name),
+		pvcNew.create(oc)
+		defer pvcNew.deleteAsAdmin(oc)
+		depNew := newDeployment(setDeploymentTemplate(depTemplate), setDeploymentPVCName(pvcNew.name),
 			setDeploymentVolumeType("volumeDevices"), setDeploymentVolumeTypePath("devicePath"), setDeploymentMountpath("/dev/dblock"))
-		dep_new.create(oc)
-		defer dep_new.deleteAsAdmin(oc)
-		dep_new.waitReady(oc)
+		depNew.create(oc)
+		defer depNew.deleteAsAdmin(oc)
+		depNew.waitReady(oc)
 		// Check the data is cleaned up in the volume
-		command := []string{"-n", dep_new.namespace, "deployment/" + dep_new.name, "--", "/bin/dd if=" + dep.mpath + " of=/tmp/testfile bs=512 count=1"}
+		command := []string{"-n", depNew.namespace, "deployment/" + depNew.name, "--", "/bin/dd if=" + dep.mpath + " of=/tmp/testfile bs=512 count=1"}
 		output, err := oc.WithoutNamespace().Run("exec").Args(command...).Output()
 		o.Expect(err).Should(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("no such file or directory"))
@@ -147,7 +147,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		myVolume.attachToInstanceSucceed(ac, oc, myWorker)
 
 		g.By("# Create a localvolume cr use diskPath by id with the attached volume")
-		mylv.deviceId = myVolume.DeviceById
+		mylv.deviceID = myVolume.DeviceByID
 		mylv.create(oc)
 		defer mylv.deleteAsAdmin(oc)
 
@@ -175,16 +175,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		waitForPersistentVolumeStatusAsExpected(oc, pvName, "Available")
 
 		g.By("# Create new pvc,pod and check the data in origin volume is cleaned up")
-		pvc_new := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylv.scname),
+		pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylv.scname),
 			setPersistentVolumeClaimCapacity(interfaceToString(getRandomNum(1, myVolume.Size))+"Gi"))
-		pvc_new.create(oc)
-		defer pvc_new.deleteAsAdmin(oc)
-		pod_new := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_new.name))
-		pod_new.create(oc)
-		defer pod_new.deleteAsAdmin(oc)
-		pod_new.waitReady(oc)
+		pvcNew.create(oc)
+		defer pvcNew.deleteAsAdmin(oc)
+		podNew := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcNew.name))
+		podNew.create(oc)
+		defer podNew.deleteAsAdmin(oc)
+		podNew.waitReady(oc)
 		// Check the data is cleaned up in the volume
-		pod_new.checkMountedVolumeDataExist(oc, false)
+		podNew.checkMountedVolumeDataExist(oc, false)
 	})
 
 	// author: pewang@redhat.com
@@ -212,7 +212,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		myVolume.attachToInstanceSucceed(ac, oc, myWorker)
 
 		g.By("# Create a localvolume cr use diskPath by id with the attached volume")
-		mylv.deviceId = myVolume.DeviceById
+		mylv.deviceID = myVolume.DeviceByID
 		mylv.create(oc)
 		defer mylv.deleteAsAdmin(oc)
 
@@ -240,16 +240,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		waitForPersistentVolumeStatusAsExpected(oc, pvName, "Available")
 
 		g.By("# Create new pvc,pod and check the data in origin volume is cleaned up")
-		pvc_new := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylv.scname),
+		pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylv.scname),
 			setPersistentVolumeClaimCapacity(interfaceToString(getRandomNum(1, myVolume.Size))+"Gi"))
-		pvc_new.create(oc)
-		defer pvc_new.deleteAsAdmin(oc)
-		pod_new := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_new.name))
-		pod_new.create(oc)
-		defer pod_new.deleteAsAdmin(oc)
-		pod_new.waitReady(oc)
+		pvcNew.create(oc)
+		defer pvcNew.deleteAsAdmin(oc)
+		podNew := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcNew.name))
+		podNew.create(oc)
+		defer podNew.deleteAsAdmin(oc)
+		podNew.waitReady(oc)
 		// Check the data is cleaned up in the volume
-		pod_new.checkMountedVolumeDataExist(oc, false)
+		podNew.checkMountedVolumeDataExist(oc, false)
 	})
 
 	// author: pewang@redhat.com
@@ -287,7 +287,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			"jsonPath":    `items.0.spec.`,
 			"tolerations": toleration,
 		}
-		mylv.deviceId = myVolume.DeviceById
+		mylv.deviceID = myVolume.DeviceByID
 		mylv.createWithExtraParameters(oc, tolerationsParameters)
 		defer mylv.deleteAsAdmin(oc)
 
@@ -327,7 +327,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		myVolume.attachToInstanceSucceed(ac, oc, myWorker)
 
 		g.By("# Create a localvolume cr use diskPath by id with the attached volume")
-		mylv.deviceId = myVolume.DeviceById
+		mylv.deviceID = myVolume.DeviceByID
 		mylv.create(oc)
 		defer mylv.deleteAsAdmin(oc)
 
@@ -352,21 +352,21 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvc.waitStatusAsExpected(oc, "deleted")
 
 			g.By("# Create new pvc,pod and check the data in origin volume is cleaned up")
-			pvc_new := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylv.scname),
+			pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylv.scname),
 				setPersistentVolumeClaimCapacity(interfaceToString(getRandomNum(1, myVolume.Size))+"Gi"))
-			pvc_new.create(oc)
-			defer pvc_new.deleteAsAdmin(oc)
-			pod_new := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_new.name))
-			pod_new.create(oc)
-			defer pod_new.deleteAsAdmin(oc)
-			pod_new.waitReady(oc)
+			pvcNew.create(oc)
+			defer pvcNew.deleteAsAdmin(oc)
+			podNew := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcNew.name))
+			podNew.create(oc)
+			defer podNew.deleteAsAdmin(oc)
+			podNew.waitReady(oc)
 			// Check the data is cleaned up in the volume
-			pod_new.checkMountedVolumeDataExist(oc, false)
+			podNew.checkMountedVolumeDataExist(oc, false)
 
 			g.By("# Delete the new pod,pvc")
-			pod_new.deleteAsAdmin(oc)
-			pvc_new.deleteAsAdmin(oc)
-			pvc_new.waitStatusAsExpected(oc, "deleted")
+			podNew.deleteAsAdmin(oc)
+			pvcNew.deleteAsAdmin(oc)
+			pvcNew.waitStatusAsExpected(oc, "deleted")
 			e2e.Logf("###### The %d loop of test LocalVolume pv cleaned up finished ######", i)
 		}
 	})
@@ -446,17 +446,17 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(len(lvPvs) == 1).Should(o.BeTrue())
 
 		g.By("# Create new pvc,deployment and check the data in origin volume is cleaned up")
-		pvc_new := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"),
+		pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"),
 			setPersistentVolumeClaimCapacity(interfaceToString(getRandomNum(1, myVolume.Size))+"Gi"), setPersistentVolumeClaimStorageClassName(mylvs.scname))
-		pvc_new.create(oc)
-		defer pvc_new.deleteAsAdmin(oc)
-		dep_new := newDeployment(setDeploymentTemplate(depTemplate), setDeploymentPVCName(pvc_new.name),
+		pvcNew.create(oc)
+		defer pvcNew.deleteAsAdmin(oc)
+		depNew := newDeployment(setDeploymentTemplate(depTemplate), setDeploymentPVCName(pvcNew.name),
 			setDeploymentVolumeType("volumeDevices"), setDeploymentVolumeTypePath("devicePath"), setDeploymentMountpath("/dev/dblock"))
-		dep_new.create(oc)
-		defer dep_new.deleteAsAdmin(oc)
-		dep_new.waitReady(oc)
+		depNew.create(oc)
+		defer depNew.deleteAsAdmin(oc)
+		depNew.waitReady(oc)
 		// Check the data is cleaned up in the volume
-		command := []string{"-n", dep_new.namespace, "deployment/" + dep_new.name, "--", "/bin/dd if=" + dep.mpath + " of=/tmp/testfile bs=512 count=1"}
+		command := []string{"-n", depNew.namespace, "deployment/" + depNew.name, "--", "/bin/dd if=" + dep.mpath + " of=/tmp/testfile bs=512 count=1"}
 		output, err := oc.WithoutNamespace().Run("exec").Args(command...).Output()
 		o.Expect(err).Should(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("no such file or directory"))
@@ -535,16 +535,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(len(lvPvs) == 1).Should(o.BeTrue())
 
 		g.By("# Create new pvc,pod and check the data in origin volume is cleaned up")
-		pvc_new := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylvs.scname),
+		pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylvs.scname),
 			setPersistentVolumeClaimCapacity(interfaceToString(getRandomNum(1, myVolume.Size))+"Gi"))
-		pvc_new.create(oc)
-		defer pvc_new.deleteAsAdmin(oc)
-		pod_new := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc_new.name))
-		pod_new.create(oc)
-		defer pod_new.deleteAsAdmin(oc)
-		pod_new.waitReady(oc)
+		pvcNew.create(oc)
+		defer pvcNew.deleteAsAdmin(oc)
+		podNew := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcNew.name))
+		podNew.create(oc)
+		defer podNew.deleteAsAdmin(oc)
+		podNew.waitReady(oc)
 		// Check the data is cleaned up in the volume
-		pod_new.checkMountedVolumeDataExist(oc, false)
+		podNew.checkMountedVolumeDataExist(oc, false)
 	})
 
 	// author: pewang@redhat.com
@@ -576,7 +576,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		myVolume.attachToInstanceSucceed(ac, oc, myWorker)
 
 		g.By("# Create a localvolume cr use diskPath by id with the attached volume")
-		mylv.deviceId = myVolume.DeviceById
+		mylv.deviceID = myVolume.DeviceByID
 		mylv.create(oc)
 		defer mylv.deleteAsAdmin(oc)
 
@@ -598,15 +598,15 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		checkVolumeNotMountOnNode(oc, pvName, nodeName)
 
 		g.By("# Create new pod and check the data in origin volume is still exist")
-		pod_new := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
-		pod_new.create(oc)
-		defer pod_new.deleteAsAdmin(oc)
-		pod_new.waitReady(oc)
+		podNew := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+		podNew.create(oc)
+		defer podNew.deleteAsAdmin(oc)
+		podNew.waitReady(oc)
 		// Check the origin wrote data is still in the volume
-		pod_new.checkMountedVolumeDataExist(oc, true)
+		podNew.checkMountedVolumeDataExist(oc, true)
 
 		g.By("# Force delete the project and check the volume umount from the node and become Available")
-		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", pod_new.namespace, "--force", "--grace-period=0").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", podNew.namespace, "--force", "--grace-period=0").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Waiting for the volume umount successfully
 		checkVolumeNotMountOnNode(oc, pvName, nodeName)

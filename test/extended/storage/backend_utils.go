@@ -69,12 +69,12 @@ func getCredentialFromCluster(oc *exutil.CLI) {
 			os.Setenv("AWS_CONFIG_FILE", stsConfigPrefix+"config")
 			os.Setenv("AWS_PROFILE", "storageAutotest"+getRandomString())
 		} else {
-			accessKeyIdBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).String(), gjson.Get(credential, `data.aws_secret_access_key`).String()
-			accessKeyId, err := base64.StdEncoding.DecodeString(accessKeyIdBase64)
+			accessKeyIDBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).String(), gjson.Get(credential, `data.aws_secret_access_key`).String()
+			accessKeyID, err := base64.StdEncoding.DecodeString(accessKeyIDBase64)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			secureKey, err := base64.StdEncoding.DecodeString(secureKeyBase64)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			os.Setenv("AWS_ACCESS_KEY_ID", string(accessKeyId))
+			os.Setenv("AWS_ACCESS_KEY_ID", string(accessKeyID))
 			os.Setenv("AWS_SECRET_ACCESS_KEY", string(secureKey))
 		}
 	case "vsphere":
@@ -91,7 +91,7 @@ func getCredentialFromCluster(oc *exutil.CLI) {
 }
 
 // Get the volume detail info by persistent volume id
-func getAwsVolumeInfoByVolumeId(volumeId string) (string, error) {
+func getAwsVolumeInfoByVolumeID(volumeID string) (string, error) {
 	mySession := session.Must(session.NewSession())
 	svc := ec2.New(mySession, aws.NewConfig())
 	input := &ec2.DescribeVolumesInput{
@@ -99,7 +99,7 @@ func getAwsVolumeInfoByVolumeId(volumeId string) (string, error) {
 			{
 				Name: aws.String("volume-id"),
 				Values: []*string{
-					aws.String(volumeId),
+					aws.String(volumeID),
 				},
 			},
 		},
@@ -109,30 +109,29 @@ func getAwsVolumeInfoByVolumeId(volumeId string) (string, error) {
 }
 
 // Get the volume status "in use" or "avaiable" by persistent volume id
-func getAwsVolumeStatusByVolumeId(volumeId string) (string, error) {
-	volumeInfo, err := getAwsVolumeInfoByVolumeId(volumeId)
+func getAwsVolumeStatusByVolumeID(volumeID string) (string, error) {
+	volumeInfo, err := getAwsVolumeInfoByVolumeID(volumeID)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	volumeStatus := gjson.Get(volumeInfo, `Volumes.0.State`).Str
-	e2e.Logf("The volume %s status is %q on aws backend", volumeId, volumeStatus)
+	e2e.Logf("The volume %s status is %q on aws backend", volumeID, volumeStatus)
 	return volumeStatus, err
 }
 
 // Delete backend volume
-func deleteBackendVolumeByVolumeId(oc *exutil.CLI, volumeId string) (string, error) {
+func deleteBackendVolumeByVolumeID(oc *exutil.CLI, volumeID string) (string, error) {
 	switch cloudProvider {
 	case "aws":
-		if strings.Contains(volumeId, "::") {
-			e2e.Logf("Delete EFS volume: \"%s\" access_points is under development", volumeId)
+		if strings.Contains(volumeID, "::") {
+			e2e.Logf("Delete EFS volume: \"%s\" access_points is under development", volumeID)
 			return "under development now", nil
-		} else {
-			mySession := session.Must(session.NewSession())
-			svc := ec2.New(mySession, aws.NewConfig())
-			deleteVolumeID := &ec2.DeleteVolumeInput{
-				VolumeId: &volumeId,
-			}
-			req, resp := svc.DeleteVolumeRequest(deleteVolumeID)
-			return interfaceToString(resp), req.Send()
 		}
+		mySession := session.Must(session.NewSession())
+		svc := ec2.New(mySession, aws.NewConfig())
+		deleteVolumeID := &ec2.DeleteVolumeInput{
+			VolumeId: aws.String(volumeID),
+		}
+		req, resp := svc.DeleteVolumeRequest(deleteVolumeID)
+		return interfaceToString(resp), req.Send()
 	case "vsphere":
 		e2e.Logf("Delete %s backend volume is under development", cloudProvider)
 		return "under development now", nil
@@ -152,30 +151,30 @@ func deleteBackendVolumeByVolumeId(oc *exutil.CLI, volumeId string) (string, err
 }
 
 //  Check the volume status becomes avaiable, status is "avaiable"
-func checkVolumeAvaiableOnBackend(volumeId string) (bool, error) {
-	volumeStatus, err := getAwsVolumeStatusByVolumeId(volumeId)
+func checkVolumeAvaiableOnBackend(volumeID string) (bool, error) {
+	volumeStatus, err := getAwsVolumeStatusByVolumeID(volumeID)
 	avaiableStatus := []string{"available"}
 	return contains(avaiableStatus, volumeStatus), err
 }
 
 //  Check the volume is deleted
-func checkVolumeDeletedOnBackend(volumeId string) (bool, error) {
-	volumeStatus, err := getAwsVolumeStatusByVolumeId(volumeId)
+func checkVolumeDeletedOnBackend(volumeID string) (bool, error) {
+	volumeStatus, err := getAwsVolumeStatusByVolumeID(volumeID)
 	deletedStatus := []string{""}
 	return contains(deletedStatus, volumeStatus), err
 }
 
 //  Waiting the volume become avaiable
-func waitVolumeAvaiableOnBackend(oc *exutil.CLI, volumeId string) {
+func waitVolumeAvaiableOnBackend(oc *exutil.CLI, volumeID string) {
 	switch cloudProvider {
 	case "aws":
-		if strings.Contains(volumeId, "::") {
-			e2e.Logf("Get EFS volume: \"%s\" status is under development", volumeId)
+		if strings.Contains(volumeID, "::") {
+			e2e.Logf("Get EFS volume: \"%s\" status is under development", volumeID)
 		} else {
 			err := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
-				volumeStatus, errinfo := checkVolumeAvaiableOnBackend(volumeId)
+				volumeStatus, errinfo := checkVolumeAvaiableOnBackend(volumeID)
 				if errinfo != nil {
-					e2e.Logf("the err:%v, wait for volume %v to become avaiable.", errinfo, volumeId)
+					e2e.Logf("the err:%v, wait for volume %v to become avaiable.", errinfo, volumeID)
 					return volumeStatus, errinfo
 				}
 				if !volumeStatus {
@@ -183,7 +182,7 @@ func waitVolumeAvaiableOnBackend(oc *exutil.CLI, volumeId string) {
 				}
 				return volumeStatus, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The volume:%v, is not avaiable.", volumeId))
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The volume:%v, is not avaiable.", volumeID))
 		}
 	case "vsphere":
 		e2e.Logf("Get %s backend volume status is under development", cloudProvider)
@@ -199,16 +198,16 @@ func waitVolumeAvaiableOnBackend(oc *exutil.CLI, volumeId string) {
 }
 
 //  Waiting the volume become deleted
-func waitVolumeDeletedOnBackend(oc *exutil.CLI, volumeId string) {
+func waitVolumeDeletedOnBackend(oc *exutil.CLI, volumeID string) {
 	switch cloudProvider {
 	case "aws":
-		if strings.Contains(volumeId, "::") {
-			e2e.Logf("Get EFS volume: \"%s\" status is under development", volumeId)
+		if strings.Contains(volumeID, "::") {
+			e2e.Logf("Get EFS volume: \"%s\" status is under development", volumeID)
 		} else {
 			err := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
-				volumeStatus, errinfo := checkVolumeDeletedOnBackend(volumeId)
+				volumeStatus, errinfo := checkVolumeDeletedOnBackend(volumeID)
 				if errinfo != nil {
-					e2e.Logf("the err:%v, wait for volume %v to be deleted.", errinfo, volumeId)
+					e2e.Logf("the err:%v, wait for volume %v to be deleted.", errinfo, volumeID)
 					return volumeStatus, errinfo
 				}
 				if !volumeStatus {
@@ -216,7 +215,7 @@ func waitVolumeDeletedOnBackend(oc *exutil.CLI, volumeId string) {
 				}
 				return volumeStatus, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The volume:%v, still exist.", volumeId))
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The volume:%v, still exist.", volumeID))
 		}
 	case "vsphere":
 		e2e.Logf("Get %s backend volume status is under development", cloudProvider)
@@ -232,20 +231,20 @@ func waitVolumeDeletedOnBackend(oc *exutil.CLI, volumeId string) {
 }
 
 // Get the volume type by volume id
-func getAwsVolumeTypeByVolumeId(volumeId string) string {
-	volumeInfo, err := getAwsVolumeInfoByVolumeId(volumeId)
+func getAwsVolumeTypeByVolumeID(volumeID string) string {
+	volumeInfo, err := getAwsVolumeInfoByVolumeID(volumeID)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	volumeType := gjson.Get(volumeInfo, `Volumes.0.VolumeType`).Str
-	e2e.Logf("The volume %s type is %q on aws backend", volumeId, volumeType)
+	e2e.Logf("The volume %s type is %q on aws backend", volumeID, volumeType)
 	return volumeType
 }
 
 // Get the volume iops by volume id
-func getAwsVolumeIopsByVolumeId(volumeId string) int64 {
-	volumeInfo, err := getAwsVolumeInfoByVolumeId(volumeId)
+func getAwsVolumeIopsByVolumeID(volumeID string) int64 {
+	volumeInfo, err := getAwsVolumeInfoByVolumeID(volumeID)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	volumeIops := gjson.Get(volumeInfo, `Volumes.0.Iops`).Int()
-	e2e.Logf("The volume %s Iops is %d on aws backend", volumeId, volumeIops)
+	e2e.Logf("The volume %s Iops is %d on aws backend", volumeID, volumeIops)
 	return volumeIops
 }
 
@@ -262,10 +261,10 @@ type ebsVolume struct {
 	Size             int64  // The size of the volume, in GiBs
 	VolumeType       string // Valid Values: standard | io1 | io2 | gp2 | sc1 | st1 | gp3
 	Device           string
-	VolumeId         string
+	volumeID         string
 	attachedNode     string
 	State            string // Valid Values: creating | available | in-use | deleting | deleted | error
-	DeviceById       string
+	DeviceByID       string
 }
 
 // function option mode to change the default values of ebs volume attribute
@@ -332,11 +331,12 @@ func (vol *ebsVolume) create(ac *ec2.EC2) string {
 		VolumeType:       aws.String(vol.VolumeType),
 	}
 	volInfo, err := ac.CreateVolume(volumeInput)
+	debugLogf("EBS Volume info:\n%+v", volInfo)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	volumeId := gjson.Get(interfaceToString(volInfo), `VolumeId`).String()
-	o.Expect(volumeId).NotTo(o.Equal(""))
-	vol.VolumeId = volumeId
-	return volumeId
+	volumeID := gjson.Get(interfaceToString(volInfo), `VolumeId`).String()
+	o.Expect(volumeID).NotTo(o.Equal(""))
+	vol.volumeID = volumeID
+	return volumeID
 }
 
 // Create ebs volume on aws backend and waiting for state value to "avaiable"
@@ -345,7 +345,7 @@ func (vol *ebsVolume) createAndReadyToUse(ac *ec2.EC2) {
 	vol.waitStateAsExpected(ac, "available")
 	vol.State = "available"
 	e2e.Logf("The ebs volume : \"%s\" [regin:\"%s\",az:\"%s\",size:\"%dGi\"] is ReadyToUse",
-		vol.VolumeId, os.Getenv("AWS_REGION"), vol.AvailabilityZone, vol.Size)
+		vol.volumeID, os.Getenv("AWS_REGION"), vol.AvailabilityZone, vol.Size)
 }
 
 // Get the ebs volume detail info
@@ -355,7 +355,7 @@ func (vol *ebsVolume) getInfo(ac *ec2.EC2) (string, error) {
 			{
 				Name: aws.String("volume-id"),
 				Values: []*string{
-					aws.String(vol.VolumeId),
+					aws.String(vol.volumeID),
 				},
 			},
 		},
@@ -368,8 +368,8 @@ func (vol *ebsVolume) getInfo(ac *ec2.EC2) (string, error) {
 func (vol *ebsVolume) attachToInstance(ac *ec2.EC2, instance node) *ec2.VolumeAttachment {
 	volumeInput := &ec2.AttachVolumeInput{
 		Device:     aws.String(vol.Device),
-		InstanceId: aws.String(instance.instanceId),
-		VolumeId:   aws.String(vol.VolumeId),
+		InstanceId: aws.String(instance.instanceID),
+		VolumeId:   aws.String(vol.volumeID),
 	}
 	req, resp := ac.AttachVolumeRequest(volumeInput)
 	err := req.Send()
@@ -382,7 +382,7 @@ func (vol *ebsVolume) attachToInstance(ac *ec2.EC2, instance node) *ec2.VolumeAt
 			volumeInput.Device = aws.String(vol.Device)
 			req, resp = ac.AttachVolumeRequest(volumeInput)
 			e2e.Logf("Attached to \"%s\" failed of \"%+v\" try next*%d* Device \"%s\"",
-				instance.instanceId, err, i, vol.Device)
+				instance.instanceID, err, i, vol.Device)
 			err = req.Send()
 			debugLogf("Req:\"%+v\", Resp:\"%+v\"", req, resp)
 			if err == nil {
@@ -391,7 +391,7 @@ func (vol *ebsVolume) attachToInstance(ac *ec2.EC2, instance node) *ec2.VolumeAt
 		}
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
-	vol.attachedNode = instance.instanceId
+	vol.attachedNode = instance.instanceID
 	return resp
 }
 
@@ -405,13 +405,13 @@ func (vol *ebsVolume) waitStateAsExpected(ac *ec2.EC2, expectedState string) {
 		}
 		if gjson.Get(volInfo, `Volumes.0.State`).String() == expectedState {
 			e2e.Logf("The ebs volume : \"%s\" [regin:\"%s\",az:\"%s\",size:\"%dGi\"] is as expected \"%s\"",
-				vol.VolumeId, os.Getenv("AWS_REGION"), vol.AvailabilityZone, vol.Size, expectedState)
+				vol.volumeID, os.Getenv("AWS_REGION"), vol.AvailabilityZone, vol.Size, expectedState)
 			vol.State = expectedState
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for ebs volume : \"%s\" state to  \"%s\" time out", vol.VolumeId, expectedState))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for ebs volume : \"%s\" state to  \"%s\" time out", vol.volumeID, expectedState))
 }
 
 // Waiting for the ebs volume attach to node succeed
@@ -423,22 +423,22 @@ func (vol *ebsVolume) waitAttachSucceed(ac *ec2.EC2) {
 			return false, errinfo
 		}
 		if gjson.Get(volInfo, `Volumes.0.Attachments.0.State`).String() == "attached" {
-			e2e.Logf("The ebs volume : \"%s\" attached to instance \"%s\" succeed", vol.VolumeId, vol.attachedNode)
+			e2e.Logf("The ebs volume : \"%s\" attached to instance \"%s\" succeed", vol.volumeID, vol.attachedNode)
 			vol.State = "in-use"
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for the ebs volume \"%s\" attach to node %s timeout", vol.VolumeId, vol.attachedNode))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for the ebs volume \"%s\" attach to node %s timeout", vol.volumeID, vol.attachedNode))
 }
 
 // Attach the ebs volume to specified instance and wait for attach succeed
 func (vol *ebsVolume) attachToInstanceSucceed(ac *ec2.EC2, oc *exutil.CLI, instance node) {
 	vol.attachToInstance(ac, instance)
 	vol.waitAttachSucceed(ac)
-	vol.attachedNode = instance.instanceId
+	vol.attachedNode = instance.instanceID
 	// RHEL type deviceid generate basic rule
-	if instance.osId == "rhel" {
+	if instance.osID == "rhel" {
 		deviceInfo, err := execCommandInSpecificNode(oc, instance.name, "lsblk -J")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		sameSizeDevices := gjson.Get(deviceInfo, `blockdevices.#(size=`+strconv.FormatInt(vol.Size, 10)+`G)#.name`).Array()
@@ -448,15 +448,15 @@ func (vol *ebsVolume) attachToInstanceSucceed(ac *ec2.EC2, oc *exutil.CLI, insta
 		o.Expect(devices).NotTo(o.BeEmpty())
 		for _, device := range devices {
 			if strings.Split(device, "")[len(device)-1] == strings.Split(vol.Device, "")[len(vol.Device)-1] {
-				vol.DeviceById = "/dev/" + device
+				vol.DeviceByID = "/dev/" + device
 				break
 			}
 		}
 	} else {
 		// RHCOS type deviceid generate basic rule
-		vol.DeviceById = "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_vol" + strings.TrimLeft(vol.VolumeId, "vol-")
+		vol.DeviceByID = "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_vol" + strings.TrimLeft(vol.volumeID, "vol-")
 	}
-	e2e.Logf("Volume : \"%s\" attach to instance \"%s\" [Device:\"%s\", ById:\"%s\"]", vol.VolumeId, vol.attachedNode, vol.Device, vol.DeviceById)
+	e2e.Logf("Volume : \"%s\" attach to instance \"%s\" [Device:\"%s\", ById:\"%s\"]", vol.volumeID, vol.attachedNode, vol.Device, vol.DeviceByID)
 }
 
 // Request detach the ebs volume from instance
@@ -465,10 +465,10 @@ func (vol *ebsVolume) detach(ac *ec2.EC2) error {
 		Device:     aws.String(vol.Device),
 		InstanceId: aws.String(vol.attachedNode),
 		Force:      aws.Bool(false),
-		VolumeId:   aws.String(vol.VolumeId),
+		VolumeId:   aws.String(vol.volumeID),
 	}
 	if vol.attachedNode == "" {
-		e2e.Logf("The ebs volume \"%s\" is not attached to any node,no need to detach", vol.VolumeId)
+		e2e.Logf("The ebs volume \"%s\" is not attached to any node,no need to detach", vol.volumeID)
 		return nil
 	}
 	req, resp := ac.DetachVolumeRequest(volumeInput)
@@ -488,7 +488,7 @@ func (vol *ebsVolume) detachSucceed(ac *ec2.EC2) {
 // Delete the ebs volume
 func (vol *ebsVolume) delete(ac *ec2.EC2) error {
 	deleteVolumeID := &ec2.DeleteVolumeInput{
-		VolumeId: aws.String(vol.VolumeId),
+		VolumeId: aws.String(vol.volumeID),
 	}
 	req, resp := ac.DeleteVolumeRequest(deleteVolumeID)
 	err := req.Send()

@@ -74,10 +74,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			g.By("Check the pv.spec.csi.volumeAttributes.skuname")
 			pvName := pvc.getVolumeName(oc)
-			skuname_pv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.skuname}").Output()
+			skunamePv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.skuname}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("The skuname in PV is: %v.", skuname_pv)
-			o.Expect(skuname_pv).To(o.Equal(skuname))
+			e2e.Logf("The skuname in PV is: %v.", skunamePv)
+			o.Expect(skunamePv).To(o.Equal(skuname))
 		}
 	})
 
@@ -85,8 +85,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-49625 - [Azure-Disk-CSI-Driver] support different skuName in storageclass with Premium_ZRS, StandardSSD_ZRS
 	g.It("Author:wduan-High-49625-[Azure-Disk-CSI-Driver] support different skuName in storageclass with Premium_ZRS, StandardSSD_ZRS", func() {
 		region := getClusterRegion(oc)
-		support_regions := []string{"westus2", "westeurope", "northeurope", "francecentral"}
-		if !contains(support_regions, region) {
+		supportRegions := []string{"westus2", "westeurope", "northeurope", "francecentral"}
+		if !contains(supportRegions, region) {
 			g.Skip("Current region doesn't support zone-redundant storage")
 		}
 
@@ -138,10 +138,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			g.By("Check the pv.spec.csi.volumeAttributes.skuname")
 			pvName := pvc.getVolumeName(oc)
-			skuname_pv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.skuname}").Output()
+			skunamePv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.skuname}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("The skuname in PV is: %v.", skuname_pv)
-			o.Expect(skuname_pv).To(o.Equal(skuname))
+			e2e.Logf("The skuname in PV is: %v.", skunamePv)
+			o.Expect(skunamePv).To(o.Equal(skuname))
 
 			g.By("Delete pod")
 			nodeName := getNodeNameByPod(oc, pod.namespace, pod.name)
@@ -153,11 +153,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("Create new pod and schedule to another node")
 			schedulableLinuxWorkers := getSchedulableLinuxWorkers(getAllNodesInfo(oc))
 			if len(schedulableLinuxWorkers) >= 2 {
-				pod_new := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
-				pod_new.createWithNodeAffinity(oc, "kubernetes.io/hostname", "NotIn", nodeList)
-				defer pod_new.deleteAsAdmin(oc)
-				pod_new.waitReady(oc)
-				output, err := pod_new.execCommand(oc, "cat "+pod_new.mountPath+"/testfile")
+				podNew := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+				podNew.createWithNodeAffinity(oc, "kubernetes.io/hostname", "NotIn", nodeList)
+				defer podNew.deleteAsAdmin(oc)
+				podNew.waitReady(oc)
+				output, err := podNew.execCommand(oc, "cat "+podNew.mountPath+"/testfile")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				o.Expect(output).To(o.ContainSubstring("storage test"))
 			} else {

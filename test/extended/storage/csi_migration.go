@@ -135,7 +135,7 @@ func postCheckCommonTestSteps(oc *exutil.CLI, scName string, pvcName string, dep
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("# Wait for the deployment scale down completed and check nodes has no mounted volume")
-	WaitUntilPodsAreGoneByLabel(oc.AsAdmin(), namespace, "app")
+	waitUntilPodsAreGoneByLabel(oc.AsAdmin(), namespace, "app")
 	// Offline resize need the volume is detached from the node and when resize completely then comsume the volume
 	checkVolumeNotMountOnNode(oc.AsAdmin(), volName, nodeName)
 
