@@ -1032,7 +1032,7 @@ func (sts *statefulset) matchPvcNumWithReplicasNo(oc *exutil.CLI) bool {
 
 // Waiting the Statefulset become ready
 func (sts *statefulset) waitReady(oc *exutil.CLI) {
-	err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		stsReady, err := sts.checkReady(oc)
 		if err != nil {
 			return stsReady, err
