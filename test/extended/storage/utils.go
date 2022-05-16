@@ -222,7 +222,7 @@ func jsonAddExtraParametersToFile(jsonInput string, extraParameters map[string]i
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 	}
-	if cloudProvider == "ibmcloud" && !gjson.Get(jsonInput, `items.0.parameters.profile`).Bool() {
+	if cloudProvider == "ibmcloud" && !gjson.Get(jsonInput, `items.0.parameters.profile`).Bool() && strings.EqualFold(gjson.Get(jsonInput, `items.0.kind`).String(), "storageclass") {
 		jsonInput, err = sjson.Set(jsonInput, jsonPath+"parameters.profile", "10iops-tier")
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
