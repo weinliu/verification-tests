@@ -832,3 +832,26 @@ func checkPodStatus(oc *exutil.CLI, podLabel string, namespace string, expected 
         })
         exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the state of pod with %s is not expected %s", podLabel, expected))
 }
+
+func locateDockerCred(oc *exutil.CLI, dst string)(string, string, error) {
+        err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dst, "--confirm").Execute()
+        o.Expect(err).NotTo(o.HaveOccurred())
+
+	homePath := os.Getenv("HOME")
+	dockerCreFile := homePath+"/.docker/config.json"
+	_, err = os.Stat(homePath + "/.docker/config.json")
+	if os.IsNotExist(err) {
+		err1 := os.MkdirAll(homePath+"/.docker", 0700)
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		copyFile(dst+"/"+".dockerconfigjson", homePath+"/.docker/config.json")
+                return dockerCreFile, homePath, nil
+        }
+        if err != nil {
+                return "", "", err
+        }
+	copyFile(homePath+"/.docker/config.json", homePath+"/.docker/config.json.back")
+	copyFile(dst+"/"+".dockerconfigjson", homePath+"/.docker/config.json")
+	return dockerCreFile, homePath, nil
+
+}
+
