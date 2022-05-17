@@ -880,6 +880,9 @@ func searchLogsInLoki(oc *exutil.CLI, cloNS string, lokiNS string, pod string, l
 	if logType == "audit" {
 		// audit logs
 		cmd = "curl -G -s  \"http://loki-server." + lokiNS + ".svc:3100/loki/api/v1/query\" --data-urlencode 'query={ log_type=\"" + logType + "\"}'"
+	} else if logType == "infra" {
+		// infrastructure logs
+		cmd = "curl -G -s  \"http://loki-server." + lokiNS + ".svc:3100/loki/api/v1/query\" --data-urlencode 'query={ log_type=\"infrastructure\"}'"
 	} else {
 		// Journal system Infra logs
 		cmd = "curl -G -s  \"http://loki-server." + lokiNS + ".svc:3100/loki/api/v1/query\" --data-urlencode 'query={ tag=\"journal.system\"}'"
