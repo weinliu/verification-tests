@@ -3203,72 +3203,45 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: scolange@redhat.com
-	g.It("ConnectedOnly-Author:scolange-Medium-24586-Prevent Operator Conflicts in OperatorHub", func() {
-		SkipARM64(oc)
+	g.It("Author:scolange-Medium-24586-Prevent Operator Conflicts in OperatorHub", func() {
 		var (
 			itName              = g.CurrentGinkgoTestDescription().TestText
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			og                  = operatorGroupDescription{
 				name:      "og-singlenamespace",
-				namespace: "",
+				namespace: oc.Namespace(),
 				template:  ogSingleTemplate,
 			}
-			catsrc = catalogSourceDescription{
-				name:        "catsrc-24586-operator",
-				namespace:   "",
-				displayName: "Test Catsrc 24586 Operators",
-				publisher:   "Red Hat",
-				sourceType:  "grpc",
-				address:     "quay.io/olmqe/mta-index:24586",
-				template:    catsrcImageTemplate,
-			}
 			sub1 = subscriptionDescription{
-				subName:                "mta-operator1",
-				namespace:              "",
-				channel:                "alpha",
+				subName:                "sub-24586-1",
+				namespace:              oc.Namespace(),
+				catalogSourceName:      "qe-app-registry",
+				catalogSourceNamespace: "openshift-marketplace",
 				ipApproval:             "Automatic",
-				operatorPackage:        "mta-operator",
-				catalogSourceName:      catsrc.name,
-				catalogSourceNamespace: "",
-				startingCSV:            "windup-operator.0.0.5",
-				currentCSV:             "",
-				installedCSV:           "",
-				template:               subTemplate,
+				channel:                "beta",
+				operatorPackage:        "learn",
 				singleNamespace:        true,
+				template:               subTemplate,
 			}
 			sub2 = subscriptionDescription{
-				subName:                "mta-operator2",
-				namespace:              "",
-				channel:                "alpha",
+				subName:                "sub-24586-2",
+				namespace:              oc.Namespace(),
+				catalogSourceName:      "qe-app-registry",
+				catalogSourceNamespace: "openshift-marketplace",
 				ipApproval:             "Automatic",
-				operatorPackage:        "mta-operator",
-				catalogSourceName:      catsrc.name,
-				catalogSourceNamespace: "",
-				startingCSV:            "windup-operator.0.0.5",
-				currentCSV:             "",
-				installedCSV:           "",
-				template:               subTemplate,
+				channel:                "beta",
+				operatorPackage:        "learn",
 				singleNamespace:        true,
+				template:               subTemplate,
 			}
 		)
 		dr := make(describerResrouce)
 		dr.addIr(itName)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
-		og.namespace = oc.Namespace()
-		catsrc.namespace = oc.Namespace()
-		sub1.namespace = oc.Namespace()
-		sub2.namespace = oc.Namespace()
-		sub1.catalogSourceNamespace = catsrc.namespace
-		sub2.catalogSourceNamespace = catsrc.namespace
 
 		g.By("Create og")
 		og.create(oc, itName, dr)
-
-		g.By("Create catsrc")
-		catsrc.createWithCheck(oc, itName, dr)
 
 		g.By("Create operator1")
 		sub1.create(oc, itName, dr)
