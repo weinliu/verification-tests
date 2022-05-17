@@ -14,7 +14,7 @@ objects:
         - args:
             - sleep
             - 4h
-          image: quay.io/prometheus/busybox
+          image: quay.io/openshifttest/busybox@sha256:afe605d272837ce1732f390966166c2afff5391208ddd57de10942748694049d
           imagePullPolicy: Always
           name: "${NAME}"
       nodeSelector:
