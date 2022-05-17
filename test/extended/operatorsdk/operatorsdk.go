@@ -1532,6 +1532,12 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	// author: xzha@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:xzha-Critical-38101-implement IndexImageCatalogCreator", func() {
 		operatorsdkCLI.showInfo = true
+		g.By(fmt.Sprintf("0) check the cluster proxy configuration"))
+		httpProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if httpProxy != "" {
+			g.Skip("Skip for cluster with proxy")
+		}
 
 		g.By("step: create new project")
 		oc.SetupProject()
