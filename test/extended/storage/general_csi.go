@@ -1061,7 +1061,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: ropatil@redhat.com
-	// [CSI Driver] [Dynamic PV] [Filesystem] volumes resize on-line
+	// [CSI Driver] [Dynamic PV] [Filesystem default] volumes resize on-line
 	g.It("Author:ropatil-Critical-45984-[CSI Driver] [Dynamic PV] [Filesystem default] volumes resize on-line", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
@@ -1085,6 +1085,100 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 			pvc.namespace = oc.Namespace()
 			dep.namespace = pvc.namespace
+
+			// Performing the Test Steps for Online resize volume
+			resizeOnlineCommonTestSteps(oc, pvc, dep, cloudProvider, provisioner)
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
+	// author: ropatil@redhat.com
+	// [CSI Driver] [Dynamic PV] [Filesystem ext4] volumes resize on-line
+	g.It("Author:ropatil-Critical-51160-[CSI Driver] [Dynamic PV] [Filesystem ext4] volumes resize on-line", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			deploymentTemplate     = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+			storageClassParameters = map[string]string{
+				"csi.storage.k8s.io/fstype": "ext4",
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+		// Set up a specified project share for all the phases
+		g.By("0. Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+			// Set the resource definition for the scenario
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+			pvc.namespace = oc.Namespace()
+			dep.namespace = pvc.namespace
+
+			g.By("#. Create csi storageclass")
+			storageClass.provisioner = provisioner
+			storageClass.createWithExtraParameters(oc, extraParameters)
+			defer storageClass.deleteAsAdmin(oc)
+
+			// Performing the Test Steps for Online resize volume
+			resizeOnlineCommonTestSteps(oc, pvc, dep, cloudProvider, provisioner)
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
+	// author: ropatil@redhat.com
+	// [CSI Driver] [Dynamic PV] [Filesystem xfs] volumes resize on-line
+	g.It("Author:ropatil-Critical-51139-[CSI Driver] [Dynamic PV] [Filesystem xfs] volumes resize on-line", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			deploymentTemplate     = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+			storageClassParameters = map[string]string{
+				"csi.storage.k8s.io/fstype": "xfs",
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+		// Set up a specified project share for all the phases
+		g.By("0. Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+			// Set the resource definition for the scenario
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+			pvc.namespace = oc.Namespace()
+			dep.namespace = pvc.namespace
+
+			g.By("#. Create csi storageclass")
+			storageClass.provisioner = provisioner
+			storageClass.createWithExtraParameters(oc, extraParameters)
+			defer storageClass.deleteAsAdmin(oc)
 
 			// Performing the Test Steps for Online resize volume
 			resizeOnlineCommonTestSteps(oc, pvc, dep, cloudProvider, provisioner)
@@ -1127,7 +1221,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: ropatil@redhat.com
-	// [CSI Driver] [Dynamic PV] [Filesystem] volumes resize off-line
+	// [CSI Driver] [Dynamic PV] [Filesystem default] volumes resize off-line
 	g.It("Author:ropatil-Critical-41452-[CSI Driver] [Dynamic PV] [Filesystem default] volumes resize off-line", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "csi.vsphere.vmware.com"}
@@ -1151,6 +1245,100 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 			pvc.namespace = oc.Namespace()
 			dep.namespace = pvc.namespace
+
+			// Performing the Test Steps for Offline resize volume
+			resizeOfflineCommonTestSteps(oc, pvc, dep, cloudProvider, provisioner)
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
+	// author: ropatil@redhat.com
+	// [CSI Driver] [Dynamic PV] [Filesystem ext4] volumes resize off-line
+	g.It("Author:ropatil-Critical-51161-[CSI Driver] [Dynamic PV] [Filesystem ext4] volumes resize off-line", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "csi.vsphere.vmware.com"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			deploymentTemplate     = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+			storageClassParameters = map[string]string{
+				"csi.storage.k8s.io/fstype": "ext4",
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		g.By("0. Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+			// Set the resource definition for the scenario
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+			pvc.namespace = oc.Namespace()
+			dep.namespace = pvc.namespace
+
+			g.By("#. Create csi storageclass")
+			storageClass.provisioner = provisioner
+			storageClass.createWithExtraParameters(oc, extraParameters)
+			defer storageClass.deleteAsAdmin(oc)
+
+			// Performing the Test Steps for Offline resize volume
+			resizeOfflineCommonTestSteps(oc, pvc, dep, cloudProvider, provisioner)
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
+	// author: ropatil@redhat.com
+	// [CSI Driver] [Dynamic PV] [Filesystem xfs] volumes resize off-line
+	g.It("Author:ropatil-Critical-51140-[CSI Driver] [Dynamic PV] [Filesystem xfs] volumes resize off-line", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "csi.vsphere.vmware.com"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			deploymentTemplate     = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+			storageClassParameters = map[string]string{
+				"csi.storage.k8s.io/fstype": "xfs",
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		g.By("0. Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+			// Set the resource definition for the scenario
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+			pvc.namespace = oc.Namespace()
+			dep.namespace = pvc.namespace
+
+			g.By("#. Create csi storageclass")
+			storageClass.provisioner = provisioner
+			storageClass.createWithExtraParameters(oc, extraParameters)
+			defer storageClass.deleteAsAdmin(oc)
 
 			// Performing the Test Steps for Offline resize volume
 			resizeOfflineCommonTestSteps(oc, pvc, dep, cloudProvider, provisioner)
@@ -2575,30 +2763,25 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 // Performing test steps for Online Volume Resizing
 func resizeOnlineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep deployment, cloudProvider string, provisioner string) {
 	// Set up a specified project share for all the phases
-	g.By("1. Create a pvc with the preset csi storageclass")
-	pvc.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
-	e2e.Logf("%s", pvc.scname)
+	g.By("#. Create a pvc with the csi storageclass")
 	pvc.create(oc)
 	defer pvc.deleteAsAdmin(oc)
 
-	g.By("2. Create deployment with the created pvc and wait for the pod ready")
+	g.By("#. Create deployment with the created pvc and wait for the pod ready")
 	dep.create(oc)
 	defer dep.deleteAsAdmin(oc)
 
-	g.By("3. Wait for the deployment ready")
+	g.By("#. Wait for the deployment ready")
 	dep.waitReady(oc)
 
-	g.By("4. Check the pvc status to Bound")
-	o.Expect(getPersistentVolumeClaimStatus(oc, pvc.namespace, pvc.name)).To(o.Equal("Bound"))
-
-	g.By("5. Write data in pod")
+	g.By("#. Write data in pod")
 	if dep.typepath == "mountPath" {
 		dep.checkPodMountedVolumeCouldRW(oc)
 	} else {
 		dep.writeDataBlockType(oc)
 	}
 
-	g.By("6. Apply the patch to Resize the pvc volume")
+	g.By("#. Apply the patch to Resize the pvc volume")
 	capacityInt64, err := strconv.ParseInt(strings.TrimRight(pvc.capacity, "Gi"), 10, 64)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	capacityInt64 = capacityInt64 + getRandomNum(1, 10)
@@ -2606,11 +2789,11 @@ func resizeOnlineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep 
 	o.Expect(applyVolumeResizePatch(oc, pvc.name, pvc.namespace, expandedCapactiy)).To(o.ContainSubstring("patched"))
 	pvc.capacity = expandedCapactiy
 
-	g.By("7. Waiting for the pvc capacity update sucessfully")
+	g.By("#. Waiting for the pvc capacity update sucessfully")
 	waitPVVolSizeToGetResized(oc, pvc.namespace, pvc.name, pvc.capacity)
 	pvc.waitResizeSuccess(oc, pvc.capacity)
 
-	g.By("8. Check origin data intact and write new data in pod")
+	g.By("#. Check origin data intact and write new data in pod")
 	if dep.typepath == "mountPath" {
 		dep.getPodMountedVolumeData(oc)
 		// After volume expand write 80% data of the new capacity should succeed
@@ -2633,40 +2816,35 @@ func resizeOnlineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep 
 // https://docs.vmware.com/en/VMware-vSphere/7.0/vmware-vsphere-with-tanzu/GUID-90082E1C-DC01-4610-ABA2-6A4E97C18CBC.html?hWord=N4IghgNiBcIKIA8AOYB2ATABGTA1A9hAK4C2ApiAL5A
 func resizeOfflineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep deployment, cloudProvider string, provisioner string) {
 	// Set up a specified project share for all the phases
-	g.By("1. Create a pvc with the preset csi storageclass")
-	pvc.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
-	e2e.Logf("%s", pvc.scname)
+	g.By("#. Create a pvc with the csi storageclass")
 	pvc.create(oc)
 	defer pvc.deleteAsAdmin(oc)
 
-	g.By("2. Create deployment with the created pvc and wait for the pod ready")
+	g.By("#. Create deployment with the created pvc and wait for the pod ready")
 	dep.create(oc)
 	defer dep.deleteAsAdmin(oc)
 
-	g.By("3. Wait for the deployment ready")
+	g.By("#. Wait for the deployment ready")
 	dep.waitReady(oc)
 
-	g.By("4. Check the pvc status to Bound")
-	o.Expect(getPersistentVolumeClaimStatus(oc, pvc.namespace, pvc.name)).To(o.Equal("Bound"))
-
-	g.By("5. Write data in pod")
+	g.By("#. Write data in pod")
 	if dep.typepath == "mountPath" {
 		dep.checkPodMountedVolumeCouldRW(oc)
 	} else {
 		dep.writeDataBlockType(oc)
 	}
 
-	g.By("6. Get the volume mounted on the pod located node and Scale down the replicas number to 0")
+	g.By("#. Get the volume mounted on the pod located node and Scale down the replicas number to 0")
 	volName := pvc.getVolumeName(oc)
 	nodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
 	dep.scaleReplicas(oc, "0")
 
-	g.By("7. Wait for the deployment scale down completed and check nodes has no mounted volume")
+	g.By("#. Wait for the deployment scale down completed and check nodes has no mounted volume")
 	dep.waitReady(oc)
 	// Offline resize need the volume is detached from the node and when resize completely then comsume the volume
 	checkVolumeDetachedFromNode(oc, volName, nodeName)
 
-	g.By("8. Apply the patch to Resize the pvc volume")
+	g.By("#. Apply the patch to Resize the pvc volume")
 	capacityInt64, err := strconv.ParseInt(strings.TrimRight(pvc.capacity, "Gi"), 10, 64)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	capacityInt64 = capacityInt64 + getRandomNum(1, 10)
@@ -2674,25 +2852,24 @@ func resizeOfflineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep
 	o.Expect(applyVolumeResizePatch(oc, pvc.name, pvc.namespace, expandedCapactiy)).To(o.ContainSubstring("patched"))
 	pvc.capacity = expandedCapactiy
 
-	g.By("9. Check the pvc resizing status type and wait for the backend volume resized")
+	g.By("#. Check the pvc resizing status type and wait for the backend volume resized")
 	if dep.typepath == "mountPath" {
 		getPersistentVolumeClaimStatusMatch(oc, dep.namespace, pvc.name, "FileSystemResizePending")
 	} else {
 		getPersistentVolumeClaimStatusType(oc, dep.namespace, dep.pvcname)
 	}
-
 	waitPVVolSizeToGetResized(oc, pvc.namespace, pvc.name, pvc.capacity)
 
-	g.By("10. Scale up the replicas number to 1")
+	g.By("#. Scale up the replicas number to 1")
 	dep.scaleReplicas(oc, "1")
 
-	g.By("11. Get the pod status by label Running")
+	g.By("#. Get the pod status by label Running")
 	dep.waitReady(oc)
 
-	g.By("12. Waiting for the pvc size update sucessfully")
+	g.By("#. Waiting for the pvc size update sucessfully")
 	pvc.waitResizeSuccess(oc, pvc.capacity)
 
-	g.By("13. Check origin data intact and write new data in pod")
+	g.By("#. Check origin data intact and write new data in pod")
 	if dep.typepath == "mountPath" {
 		dep.getPodMountedVolumeData(oc)
 		// After volume expand write 80% data of the new capacity should succeed
