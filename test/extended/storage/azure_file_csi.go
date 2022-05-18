@@ -18,6 +18,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		storageTeamBaseDir   string
 		storageClassTemplate string
 		pvcTemplate          string
+		podTemplate          string
 		deploymentTemplate   string
 	)
 
@@ -33,6 +34,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
 		storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
 		pvcTemplate = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+		podTemplate = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
 		deploymentTemplate = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
 
 	})
@@ -281,6 +283,54 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		info, err := pvc.getDescription(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(info).To(o.ContainSubstring("driver does not support block volume"))
+	})
+
+	// author: wduan@redhat.com
+	// OCP-50732 - [Azure-File-CSI-Driver] specify shareNamePrefix in storageclass
+	g.It("Author:wduan-Medium-50732-[Azure-File-CSI-Driver] specify shareNamePrefix in storageclass", func() {
+		// Set up a specified project share for all the phases
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		// Set the resource definition for the scenario
+		prefix := getRandomString()
+		storageClassParameters := map[string]string{
+			"shareNamePrefix": prefix,
+		}
+		extraParameters := map[string]interface{}{
+			"parameters": storageClassParameters,
+		}
+
+		sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc.name))
+		pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+		g.By("Create storageclass")
+		sc.createWithExtraParameters(oc, extraParameters)
+		defer sc.deleteAsAdmin(oc)
+
+		g.By("Create PVC")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("Create pod")
+		pod.create(oc)
+		defer pod.deleteAsAdmin(oc)
+		pod.waitReady(oc)
+
+		g.By("Check the pod mounted volume can be read and write")
+		pod.checkMountedVolumeCouldRW(oc)
+
+		g.By("Check the pod mounted volume have the exec right")
+		pod.checkMountedVolumeHaveExecRight(oc)
+
+		g.By("Check pv has the prefix in the pv.spec.csi.volumeHandle")
+		pvName := pvc.getVolumeName(oc)
+		volumeHandle, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeHandle}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The Azure-File volumeHandle is: %v.", volumeHandle)
+		o.Expect(volumeHandle).To(o.ContainSubstring(prefix))
+
 	})
 })
 
