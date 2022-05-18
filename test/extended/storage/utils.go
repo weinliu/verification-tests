@@ -573,3 +573,54 @@ func checkFips(oc *exutil.CLI) bool {
 	e2e.Logf("FIPS is enabled.")
 	return true
 }
+
+// Convert strings slice to integer slice
+func stringSliceToIntSlice(strSlice []string) ([]int, []error) {
+	var (
+		intSlice = make([]int, 0, len(strSlice))
+		errSlice = make([]error, 0, len(strSlice))
+	)
+	for _, strElement := range strSlice {
+		intElement, err := strconv.Atoi(strElement)
+		if err != nil {
+			errSlice = append(errSlice, err)
+		}
+		intSlice = append(intSlice, intElement)
+	}
+	return intSlice, errSlice
+}
+
+// Compare cluster versions
+// versionA, versionB should be the same length
+// E.g. [{versionA: "4.10.1", versionB: "4.10.12"}, {versionA: "4.10", versionB: "4.11}]
+// IF versionA above versionB return "bool:true"
+// ELSE return "bool:false" (Contains versionA = versionB)
+func versionIsAbove(versionA, versionB string) bool {
+	var (
+		subVersionStringA, subVersionStringB = make([]string, 0, 5), make([]string, 0, 5)
+		subVersionIntA, subVersionIntB       = make([]int, 0, 5), make([]int, 0, 5)
+		errList                              = make([]error, 0, 5)
+	)
+	subVersionStringA = strings.Split(versionA, ".")
+	subVersionIntA, errList = stringSliceToIntSlice(subVersionStringA)
+	o.Expect(errList).Should(o.HaveLen(0))
+	subVersionStringB = strings.Split(versionB, ".")
+	subVersionIntB, errList = stringSliceToIntSlice(subVersionStringB)
+	o.Expect(errList).Should(o.HaveLen(0))
+	o.Expect(len(subVersionIntA)).Should(o.Equal(len(subVersionIntB)))
+	var minusRes int
+	for i := 0; i < len(subVersionIntA); i++ {
+		minusRes = subVersionIntA[i] - subVersionIntB[i]
+		if minusRes > 0 {
+			e2e.Logf("Version:\"%s\" is above Version:\"%s\"", versionA, versionB)
+			return true
+		}
+		if minusRes == 0 {
+			continue
+		}
+		e2e.Logf("Version:\"%s\" is below Version:\"%s\"", versionA, versionB)
+		return false
+	}
+	e2e.Logf("Version:\"%s\" is the same with Version:\"%s\"", versionA, versionB)
+	return false
+}

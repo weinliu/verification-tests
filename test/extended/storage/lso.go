@@ -18,6 +18,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		oc          = exutil.NewCLI("storage-lso", exutil.KubeConfigPath())
 		ac          *ec2.EC2
 		allNodes    []node
+		testChannel string
 		lsoBaseDir  string
 		lsoTemplate string
 		myLso       localStorageOperator
@@ -31,7 +32,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 		lsoBaseDir = exutil.FixturePath("testdata", "storage")
 		lsoTemplate = filepath.Join(lsoBaseDir, "/lso/lso-subscription-template.yaml")
-		myLso = newLso(setLsoChannel(getClusterVersionChannel(oc)), setLsoTemplate(lsoTemplate))
+		testChannel = getClusterVersionChannel(oc)
+		if versionIsAbove(testChannel, "4.10") {
+			testChannel = "stable"
+		}
+		myLso = newLso(setLsoChannel(testChannel), setLsoTemplate(lsoTemplate))
 		o.Expect(myLso.checkClusterCatalogSource(oc)).NotTo(o.HaveOccurred())
 		myLso.install(oc)
 		myLso.waitInstallSucceed(oc)

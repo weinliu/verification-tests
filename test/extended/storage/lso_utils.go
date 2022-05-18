@@ -151,7 +151,7 @@ func (lso *localStorageOperator) checkInstallSucceed(oc *exutil.CLI) (bool, erro
 		return false, nil
 	}
 	if gjson.Get(lsoCSVinfo, `status.phase`).String() == "Succeeded" && gjson.Get(lsoCSVinfo, `status.reason`).String() == "InstallSucceeded" {
-		e2e.Logf("openshift local storage operator:\"%s\" install succeed in ns/%s", lso.currentCSV, lso.namespace)
+		e2e.Logf("openshift local storage operator:\"%s\" In channel:\"%s\" install succeed in ns/%s", lso.currentCSV, lso.channel, lso.namespace)
 		return true, nil
 	}
 	return false, nil
