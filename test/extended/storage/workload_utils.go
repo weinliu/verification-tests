@@ -1292,7 +1292,7 @@ func (ds *daemonset) checkPodMountedVolumeCouldRead(oc *exutil.CLI) {
 
 // Waiting the Daemonset to become ready
 func (ds *daemonset) waitReady(oc *exutil.CLI) {
-	err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		dsReady, err := ds.checkReady(oc)
 		if err != nil {
 			return dsReady, err
