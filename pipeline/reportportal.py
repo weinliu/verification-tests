@@ -472,9 +472,15 @@ class ReportPortalClient:
                 for attrKey in attrKeyList:
                     if attMap["custom_fields"].__contains__(attrKey) is True:
                         if attrKey == "products":
-                            attDict[attrKey] = {"action": "add", "value":attMap["custom_fields"][attrKey][0]}
+                            productName = "\"\""
+                            if attMap["custom_fields"][attrKey][0] != "":
+                                productName = attMap["custom_fields"][attrKey][0]
+                            attDict[attrKey] = {"action": "add", "value":productName}
                         else:
-                            attDict[attrKey] = {"action": "add", "value":attMap["custom_fields"][attrKey]}
+                            attrValue = "\"\""
+                            if attMap["custom_fields"][attrKey] != "":
+                                attrValue = attMap["custom_fields"][attrKey]
+                            attDict[attrKey] = {"action": "add", "value":attrValue}
                 # "env_private_cluster":          {"action": "add", "value":attMap["custom_fields"]["env_private_cluster"]},
                 # "env_networking_address":       {"action": "add", "value":attMap["custom_fields"]["env_networking_address"]},
                 # "products":                     {"action": "add", "value":attMap["custom_fields"]["products"][0]},
