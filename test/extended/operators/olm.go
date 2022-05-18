@@ -1457,7 +1457,6 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("Author:bandrade-Medium-24850-Allow users to edit the deployment of an active CSV [Flaky]", func() {
-		SkipARM64(oc)
 		g.By("1) Install the OperatorGroup in a random project")
 		dr := make(describerResrouce)
 		itName := g.CurrentGinkgoTestDescription().TestText
@@ -1473,33 +1472,34 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) Install the etcdoperator v0.9.4 with Automatic approval")
+		g.By("2) Install the learn operator with Automatic approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+
 		sub := subscriptionDescription{
 			subName:                "sub-24850",
 			namespace:              oc.Namespace(),
-			catalogSourceName:      "community-operators",
+			catalogSourceName:      "qe-app-registry",
 			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "singlenamespace-alpha",
 			ipApproval:             "Automatic",
-			operatorPackage:        "etcd",
-			startingCSV:            "etcdoperator.v0.9.4",
+			channel:                "beta",
+			operatorPackage:        "learn",
 			singleNamespace:        true,
 			template:               subTemplate,
 		}
+
 		sub.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.4", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
 		g.By("3) Get pod name")
-		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "name=etcd-operator-alm-owned", "-n", oc.Namespace(), "-o=jsonpath={.items..metadata.name}").Output()
+		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "name=learn-operator", "-n", oc.Namespace(), "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("4) Patch the deploy object by adding an environment variable")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("set").Args("env", "deploy/etcd-operator", "A=B", "-n", oc.Namespace()).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("set").Args("env", "deploy/learn-operator", "A=B", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("5) Get restarted pod name")
-		podNameAfterPatch, err := oc.AsAdmin().Run("get").Args("pods", "-l", "name=etcd-operator-alm-owned", "-n", oc.Namespace(), "-o=jsonpath={.items..metadata.name}").Output()
+		podNameAfterPatch, err := oc.AsAdmin().Run("get").Args("pods", "-l", "name=learn-operator", "-n", oc.Namespace(), "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(podName).NotTo(o.Equal(podNameAfterPatch))
 
