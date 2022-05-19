@@ -481,11 +481,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// author: shudili@redhat.com
 	g.It("Author:shudili-Low-49131-check haproxy's version", func() {
-		var exp_version = "2.2.20"
+		var expVersion = "2.2.22"
 		g.By("rsh to a default router pod and get the HAProxy's version")
-		haproxyVer :=  getHAProxyVersion(oc)
-		g.By("show haproxy version("+haproxyVer+"), and check if it is updated successfully")
-		o.Expect(haproxyVer).To(o.ContainSubstring(exp_version))
+		haproxyVer := getHAProxyVersion(oc)
+		g.By("show haproxy version(" + haproxyVer + "), and check if it is updated successfully")
+		o.Expect(haproxyVer).To(o.ContainSubstring(expVersion))
 	})
 
 	// author: shudili@redhat.com
@@ -524,9 +524,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("patch livenessProbe and readinessProbe with 5s to the router deployment")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("deployment", routerDeploymentName, "--type=strategic", "--patch="+timeout5, "-n", "openshift-ingress").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/" + podname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/" + podname))
-		err = waitForPodWithLabelReady(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller=" + ingctrl.name)
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+		err = waitForPodWithLabelReady(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+ingctrl.name)
 		exutil.AssertWaitPollNoErr(err, "new router pod failed to be ready state within allowed time!")
 		podname = getRouterPod(oc, ingctrl.name)
 
@@ -541,9 +541,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("patch livenessProbe and readinessProbe with max 2147483647s to the router deployment")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("deployment", routerDeploymentName, "--type=strategic", "--patch="+timeoutmax, "-n", "openshift-ingress").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/" + podname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/" + podname))
-		err = waitForPodWithLabelReady(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller=" + ingctrl.name)
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+		err = waitForPodWithLabelReady(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+ingctrl.name)
 		exutil.AssertWaitPollNoErr(err, "new router pod failed to be ready state within allowed time!")
 		podname = getRouterPod(oc, ingctrl.name)
 
@@ -598,12 +598,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("try to patch livenessProbe and readinessProbe with a minus number -1 to the router deployment")
 		routerDeploymentName := "router-" + ingctrl.name
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("deployment", routerDeploymentName, "--type=strategic", "--patch=" + timeoutMinus, "-n", "openshift-ingress").Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("deployment", routerDeploymentName, "--type=strategic", "--patch="+timeoutMinus, "-n", "openshift-ingress").Output()
 		o.Expect(output).To(o.ContainSubstring("spec.template.spec.containers[0].livenessProbe.timeoutSeconds: Invalid value: -1: must be greater than or equal to 0"))
 		o.Expect(output).To(o.ContainSubstring("spec.template.spec.containers[0].readinessProbe.timeoutSeconds: Invalid value: -1: must be greater than or equal to 0"))
 
 		g.By("try to patch livenessProbe and readinessProbe with string type of value to the router deployment")
-		output, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("deployment", routerDeploymentName, "--type=strategic", "--patch=" + timeoutString, "-n", "openshift-ingress").Output()
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("deployment", routerDeploymentName, "--type=strategic", "--patch="+timeoutString, "-n", "openshift-ingress").Output()
 		o.Expect(output).To(o.ContainSubstring("The request is invalid: patch: Invalid value: \"map[spec:map[template:map[spec:map[containers:[map[livenessProbe:map[timeoutSeconds:abc] name:router readinessProbe:map[timeoutSeconds:abc]]]]]]]\": unrecognized type: int32"))
 	})
 })
