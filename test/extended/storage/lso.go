@@ -2,6 +2,7 @@ package storage
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/service/ec2"
@@ -377,7 +378,107 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("Author:pewang-High-32978-Medium-33905-[LSO] [block volume] LocalVolumeSet CR with maxDeviceCount shold provision matched device and could be used by Pod [Serial]", func() {
+	// Bug 1915732 - [RFE] Enable volume resizing for local storage PVs
+	// https://bugzilla.redhat.com/show_bug.cgi?id=1915732
+	// [LSO] [Filesystem types] [Resize] LocalVolume CR related pv could be expanded capacity manually
+	lsoFsTypesResizeTestSuit := map[string]string{
+		"50951": "ext4", // Author:pewang-High-50951-[LSO] [Filesystem ext4] [Resize] LocalVolume CR related pv could be expanded capacity manually
+		"51171": "ext3", // Author:pewang-High-51171-[LSO] [Filesystem ext3] [Resize] LocalVolume CR related pv could be expanded capacity manually
+		"51172": "xfs",  // Author:pewang-High-51172-[LSO] [Filesystem xfs]  [Resize] LocalVolume CR related pv could be expanded capacity manually
+	}
+	caseIds := []string{"50951", "51171", "51172"}
+	for i := 0; i < len(caseIds); i++ {
+		fsType := lsoFsTypesResizeTestSuit[caseIds[i]]
+		g.It("Author:pewang-High-"+caseIds[i]+"-[LSO] [Filesystem "+fsType+"] [Resize] LocalVolume CR related pv could be expanded capacity manually", func() {
+			// Set the resource definition for the scenario
+			var (
+				pvcTemplate       = filepath.Join(lsoBaseDir, "pvc-template.yaml")
+				podTemplate       = filepath.Join(lsoBaseDir, "pod-template.yaml")
+				lvTemplate        = filepath.Join(lsoBaseDir, "/lso/localvolume-template.yaml")
+				mylv              = newLocalVolume(setLvNamespace(myLso.namespace), setLvTemplate(lvTemplate), setLvFstype(fsType))
+				pvc               = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylv.scname))
+				pod               = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+				randomExpandInt64 = getRandomNum(5, 10)
+			)
+
+			g.By("# Create a new project for the scenario")
+			oc.SetupProject() //create new project
+
+			g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
+			myWorker := getOneSchedulableWorker(allNodes)
+			myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone))
+			defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
+			myVolume.createAndReadyToUse(ac)
+			// Attach the volume to a schedulable linux worker node
+			defer myVolume.detachSucceed(ac)
+			myVolume.attachToInstanceSucceed(ac, oc, myWorker)
+
+			g.By("# Create a localvolume cr use diskPath by id with the attached volume")
+			mylv.deviceID = myVolume.DeviceByID
+			mylv.create(oc)
+			defer mylv.deleteAsAdmin(oc)
+
+			g.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
+			originVolumeCapacity := myVolume.Size
+			pvc.capacity = interfaceToString(originVolumeCapacity) + "Gi"
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+			pod.create(oc)
+			defer pod.deleteAsAdmin(oc)
+			pod.waitReady(oc)
+
+			g.By("# Check the pod volume can be read and write and have the exec right")
+			pod.checkMountedVolumeCouldRW(oc)
+			pod.checkMountedVolumeHaveExecRight(oc)
+
+			g.By("# Expand the volume on backend and waiting for resize complete")
+			myVolume.expandSucceed(ac, myVolume.Size+randomExpandInt64)
+
+			g.By("# Patch the LV CR related storageClass allowVolumeExpansion:true")
+			scPatchPath := `{"allowVolumeExpansion":true}`
+			patchResourceAsAdmin(oc, "", "sc/"+mylv.scname, scPatchPath, "merge")
+
+			g.By("# Patch the pv capacity to expandCapacity")
+			pvName := pvc.getVolumeName(oc)
+			expandCapacity := strconv.FormatInt(myVolume.ExpandSize, 10) + "Gi"
+			pvPatchPath := `{"spec":{"capacity":{"storage":"` + expandCapacity + `"}}}`
+			patchResourceAsAdmin(oc, "", "pv/"+pvName, pvPatchPath, "merge")
+
+			g.By("# Patch the pvc capacity to expandCapacity")
+			pvc.expand(oc, expandCapacity)
+			pvc.waitResizeSuccess(oc, expandCapacity)
+
+			g.By("# Check pod mount volume size updated and the origin data still exist")
+			o.Expect(pod.getPodMountFsVolumeSize(oc)).Should(o.Equal(myVolume.ExpandSize))
+			pod.checkMountedVolumeDataExist(oc, true)
+
+			g.By("# Write larger than origin capacity and less than new capacity data should succeed")
+			msg, err := pod.execCommand(oc, "fallocate -l "+strconv.FormatInt(originVolumeCapacity+getRandomNum(1, 3), 10)+"G "+pod.mountPath+"/"+getRandomString()+" ||true")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(msg).NotTo(o.ContainSubstring("No space left on device"))
+
+			g.By("# Delete pod and pvc and check the related pv's status")
+			pod.delete(oc)
+			pvc.delete(oc)
+			pvc.waitStatusAsExpected(oc, "deleted")
+			waitForPersistentVolumeStatusAsExpected(oc, pvName, "Available")
+
+			g.By("# Create new pvc,pod and check the data in origin volume is cleaned up")
+			pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylv.scname),
+				setPersistentVolumeClaimCapacity(interfaceToString(getRandomNum(originVolumeCapacity, myVolume.ExpandSize))+"Gi"))
+			pvcNew.create(oc)
+			defer pvcNew.deleteAsAdmin(oc)
+			podNew := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcNew.name))
+			podNew.create(oc)
+			defer podNew.deleteAsAdmin(oc)
+			podNew.waitReady(oc)
+			// Check the data is cleaned up in the volume
+			podNew.checkMountedVolumeDataExist(oc, false)
+		})
+	}
+
+	// author: pewang@redhat.com
+	g.It("Author:pewang-High-32978-Medium-33905-[LSO] [block volume] LocalVolumeSet CR with maxDeviceCount should provision matched device and could be used by Pod [Serial]", func() {
 		// Set the resource definition for the scenario
 		var (
 			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
@@ -468,7 +569,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("Author:pewang-Medium-33725-Medium-33726-High-32979-[LSO] [Filesystem ext4] LocalVolumeSet CR with minSize and maxSize shold provision matched device and could be used by Pod [Serial]", func() {
+	g.It("Author:pewang-Medium-33725-Medium-33726-High-32979-[LSO] [Filesystem ext4] LocalVolumeSet CR with minSize and maxSize should provision matched device and could be used by Pod [Serial]", func() {
 		// Set the resource definition for the scenario
 		var (
 			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")

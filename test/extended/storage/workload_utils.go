@@ -322,6 +322,15 @@ func (pod *pod) waitReady(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod %s not ready", pod.name))
 }
 
+// Get the pod mount filesystem type volume size by df command
+func (pod *pod) getPodMountFsVolumeSize(oc *exutil.CLI) int64 {
+	sizeString, err := pod.execCommand(oc, "df -BG|grep "+pod.mountPath+"|awk '{print $2}'")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	sizeInt64, err := strconv.ParseInt(strings.TrimSuffix(sizeString, "G"), 10, 64)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return sizeInt64
+}
+
 //  Get the phase, status of specified pod
 func getPodStatus(oc *exutil.CLI, namespace string, podName string) (string, error) {
 	podStatus, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.phase}").Output()

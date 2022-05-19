@@ -265,6 +265,7 @@ type ebsVolume struct {
 	attachedNode     string
 	State            string // Valid Values: creating | available | in-use | deleting | deleted | error
 	DeviceByID       string
+	ExpandSize       int64
 }
 
 // function option mode to change the default values of ebs volume attribute
@@ -414,6 +415,26 @@ func (vol *ebsVolume) waitStateAsExpected(ac *ec2.EC2, expectedState string) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for ebs volume : \"%s\" state to  \"%s\" time out", vol.volumeID, expectedState))
 }
 
+// Waiting for the ebs volume size to expected value
+func (vol *ebsVolume) waitSizeAsExpected(ac *ec2.EC2, expectedSize int64) {
+	var expectedSizeString = strconv.FormatInt(expectedSize, 10)
+	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		volInfo, errinfo := vol.getInfo(ac)
+		if errinfo != nil {
+			e2e.Logf("Get ebs volume failed :%v, wait for next round get.", errinfo)
+			return false, errinfo
+		}
+		if gjson.Get(volInfo, `Volumes.0.Size`).String() == expectedSizeString {
+			e2e.Logf("The ebs volume : \"%s\" [regin:\"%s\",az:\"%s\",size:\"%dGi\"] is expand to \"%sGi\"",
+				vol.volumeID, os.Getenv("AWS_REGION"), vol.AvailabilityZone, vol.Size, expectedSizeString)
+			vol.Size = expectedSize
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for ebs volume : \"%s\" expand to \"%sGi\" time out", vol.volumeID, expectedSizeString))
+}
+
 // Waiting for the ebs volume attach to node succeed
 func (vol *ebsVolume) waitAttachSucceed(ac *ec2.EC2) {
 	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
@@ -507,4 +528,24 @@ func (vol *ebsVolume) deleteSucceed(ac *ec2.EC2) {
 func (vol *ebsVolume) detachAndDeleteSucceed(ac *ec2.EC2) {
 	vol.detachSucceed(ac)
 	vol.deleteSucceed(ac)
+}
+
+// Send expand the EBS volume capacity request
+func (vol *ebsVolume) expand(ac *ec2.EC2, expandCapacity int64) error {
+	expandVolumeInput := &ec2.ModifyVolumeInput{
+		Size:     aws.Int64(expandCapacity),
+		VolumeId: aws.String(vol.volumeID),
+	}
+	req, resp := ac.ModifyVolumeRequest(expandVolumeInput)
+	err := req.Send()
+	debugLogf("Resp:\"%+v\", Err:\"%+v\"", resp, err)
+	vol.ExpandSize = expandCapacity
+	return err
+}
+
+// Expand the EBS volume capacity and wait for the expandation succeed
+func (vol *ebsVolume) expandSucceed(ac *ec2.EC2, expandCapacity int64) {
+	err := vol.expand(ac, expandCapacity)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	vol.waitSizeAsExpected(ac, expandCapacity)
 }

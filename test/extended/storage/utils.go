@@ -624,3 +624,18 @@ func versionIsAbove(versionA, versionB string) bool {
 	e2e.Logf("Version:\"%s\" is the same with Version:\"%s\"", versionA, versionB)
 	return false
 }
+
+// Patch a specified resource
+// E.g. oc patch -n <namespace> <resourceKind> <resourceName> -p <JSONPatch> --type=<patchType>
+// type parameter that you can set to one of these values:
+// Parameter value	Merge type
+// 1. json	JSON Patch, RFC 6902
+// 2. merge	JSON Merge Patch, RFC 7386
+// 3. strategic	Strategic merge patch
+func patchResourceAsAdmin(oc *exutil.CLI, namespace, resourceKindAndName, JSONPatch, patchType string) {
+	if namespace == "" {
+		o.Expect(oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceKindAndName, "-p", JSONPatch, "--type="+patchType).Output()).To(o.ContainSubstring("patched"))
+	} else {
+		o.Expect(oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", namespace, resourceKindAndName, "-p", JSONPatch, "--type="+patchType).Output()).To(o.ContainSubstring("patched"))
+	}
+}

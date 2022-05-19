@@ -217,6 +217,13 @@ func (pvc *persistentVolumeClaim) getDescription(oc *exutil.CLI) (string, error)
 	return output, err
 }
 
+// Expand the PersistentVolumeClaim capacity, e.g. expandCapacity string "10Gi"
+func (pvc *persistentVolumeClaim) expand(oc *exutil.CLI, expandCapacity string) {
+	expandPatchPath := "{\"spec\":{\"resources\":{\"requests\":{\"storage\":\"" + expandCapacity + "\"}}}}"
+	patchResourceAsAdmin(oc, pvc.namespace, "pvc/"+pvc.name, expandPatchPath, "merge")
+	pvc.capacity = expandCapacity
+}
+
 //  Get specified PersistentVolumeClaim status
 func getPersistentVolumeClaimStatus(oc *exutil.CLI, namespace string, pvcName string) (string, error) {
 	pvcStatus, err := oc.WithoutNamespace().Run("get").Args("pvc", "-n", namespace, pvcName, "-o=jsonpath={.status.phase}").Output()
