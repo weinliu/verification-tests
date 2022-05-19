@@ -3,7 +3,6 @@
 const fs = require('fs');
 const path = require('path');
 const wp = require('@cypress/webpack-preprocessor');
-const selectTestsWithGrep = require('cypress-select-tests/grep')
 
 module.exports = (on, config) => {
   const options = {
@@ -59,7 +58,7 @@ module.exports = (on, config) => {
       });
     });
   });
-  on('file:preprocessor', wp(options), selectTestsWithGrep(config))
+  require('cypress-grep/src/plugin')(config)
   // `config` is the resolved Cypress config
   config.baseUrl = `${process.env.BRIDGE_BASE_ADDRESS || 'http://localhost:9000'}${(
     process.env.BRIDGE_BASE_PATH || '/'

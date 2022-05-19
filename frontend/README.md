@@ -33,10 +33,11 @@ export LOGIN_IDP=kube:admin
 export LOGIN_USERNAME=testuser
 export LOGIN_PASSWORD=testpassword
 export KUBECONFIG_PATH=/path/to/kubeconfig
+export LOGIN_UP_PAIR=uiauto1:redhat(optional)
 ```
 ### Start Cypress and add/run/debug your tests
 ```bash
-./node_modules/cypress/bin/cypress open
-./node_modules/cypress/bin/cypress run --env grep="Smoke"
+npx cypress open
+npx cypress run --env grep="Smoke"
 
 ```

@@ -3,7 +3,7 @@ import { checkErrors } from '../upstream/support';
 import { nav } from '../upstream/views/nav';
 import { Overview } from '../views/overview';
 
-describe('Allow dynamic plugins to proxy to services on the cluster (OCP-45629, admin)', () => {
+describe('Dynamic plugins features', () => {
     before(() => {
         // deploy plugin manifests
         cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
@@ -26,7 +26,7 @@ describe('Allow dynamic plugins to proxy to services on the cluster (OCP-45629, 
         cy.exec(`oc delete namespace console-demo-plugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
         cy.logout;
     });
-    it('dynamic plugins proxy to services on the cluster', () => {
+    it('(OCP-45629, admin) dynamic plugins proxy to services on the cluster', () => {
         // demo plugin in Dev perspective
         cy.get('.pf-c-alert__action-group', {timeout: 240000}).within(() => {
             cy.get('button').contains('Refresh').click();

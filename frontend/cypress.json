@@ -1,13 +1,18 @@
 {
   "integrationFolder": "tests",
   "screenshotsFolder": "./gui_test_screenshots/cypress/screenshots",
+  "screenshotOnRunFailure": true,
+  "trashAssetsBeforeRuns": true,
   "videosFolder": "./gui_test_screenshots/cypress/videos",
   "video": true,
   "reporter": "./node_modules/cypress-multi-reporters",
   "reporterOptions": {
     "configFile": "reporter-config.json"
   },
-  "supportFile": "cypress/support/",
+  "env": {
+    "grepFilterSpecs": true
+  },
+  "supportFile": "cypress/support/index.js",
   "pluginsFile": "plugins/index.js",
   "fixturesFolder": "fixtures",
   "defaultCommandTimeout": 300000,

@@ -3,7 +3,7 @@ import { Overview } from '../../views/overview';
 import { preferNotifications } from '../../views/user-preferences';
 import testConfigMap from '../../fixtures/cluster-monitoring-config.json';
 import testAlert from '../../fixtures/testalert.json';
-describe('Add notification drawer settings to User Preference (OCP-45305,admin)', () => {
+describe('Notification drawer tests', () => {
   let $cmexisting = 0;
   before(() => {
     cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
@@ -38,7 +38,7 @@ describe('Add notification drawer settings to User Preference (OCP-45305,admin)'
     cy.logout;
   })
 
-  it('check alert on overview page and notification drawer list (admin)', () => {
+  it('(OCP-45305,admin) check alert on overview page and notification drawer list (admin)', () => {
     preferNotifications.navToNotificationsTab();
     preferNotifications.setHideNotifications();
     Overview.navToDashboard();

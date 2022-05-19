@@ -3,7 +3,7 @@ import { detailsPage } from '../upstream/views/details-page';
 import { listPage  } from '../upstream/views/list-page';
 import { logsPage } from '../views/logs';
 
-describe('Access to Node logs (OCP-43996,admin)', () => {
+describe('Access to Node logs', () => {
     before(() => {
         cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
@@ -18,7 +18,7 @@ describe('Access to Node logs (OCP-43996,admin)', () => {
         cy.logout;
     });
 
-    it('View Master Node Logs', () => {
+    it('(OCP-43996,admin) View Master Node Logs', () => {
         cy.visit('/k8s/cluster/nodes?rowFilter-node-role=master');
         listPage.rows.shouldBeLoaded();
         listPage.rows.clickFirstLinkInFirstRow();
@@ -34,7 +34,7 @@ describe('Access to Node logs (OCP-43996,admin)', () => {
         logsPage.selectLogFile('audit.log');
         logsPage.logWindowLoaded();
     });
-    it('View Worker Node logs', () => {
+    it('(OCP-43996,admin) View Worker Node logs', () => {
         cy.visit('/k8s/cluster/nodes?rowFilter-node-role=worker');
         listPage.rows.shouldBeLoaded();
         listPage.rows.clickFirstLinkInFirstRow();

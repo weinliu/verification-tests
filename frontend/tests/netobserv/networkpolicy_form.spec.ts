@@ -14,7 +14,7 @@ const ns_label_key = 'kubernetes.io/metadata.name'
 const fixtureFile = 'network_policy_form_test'
 const operatingProject = 'test0'
 
-describe('Console Network Policies form tests (OCP-41858, OCP-45303, NETOBSERV)', function () {
+describe('(OCP-41858, OCP-45303, NETOBSERV) Console Network Policies form tests', function () {
     before('any test', function () {
         let tmpFile = `/tmp/${helperfuncs.getRandomName()}`
         cy.writeFile(tmpFile, JSON.stringify(testFixture))

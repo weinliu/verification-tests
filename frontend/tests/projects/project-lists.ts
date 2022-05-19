@@ -30,7 +30,7 @@ describe('project list tests', () => {
         cy.logout;
     });
 
-    it('normal user able to filter projects with Requester (OCP-43131, admin)', () => {
+    it('(OCP-43131, admin) normal user able to filter projects with Requester', () => {
         cy.visit('/k8s/cluster/projects');
         listPage.rows.shouldBeLoaded();
         projectsPage.checkProjectExists("userone-project");
@@ -48,7 +48,7 @@ describe('project list tests', () => {
         listPage.filter.clearAllFilters();
     });
 
-    it('cluster admin user able to filter all projects with Requester (OCP-43131, admin)', () => {
+    it('(OCP-43131, admin) cluster admin user able to filter all projects with Requester', () => {
         cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${login_user_two} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
         cy.visit('/k8s/cluster/projects');
         // filter by System

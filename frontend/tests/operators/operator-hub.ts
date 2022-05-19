@@ -19,7 +19,7 @@ describe('Operator Hub tests', () => {
         cy.logout;
     });
 
-    it('Check source labels on the operator hub page tiles (OCP-45874)', () => {
+    it('(OCP-45874) Check source labels on the operator hub page tiles', () => {
         operatorHubPage.goTo()
         operatorHubPage.isLoaded()
         operatorHubPage.checkCustomCatalog(OperatorHubSelector.CUSTOM_CATALOG)
