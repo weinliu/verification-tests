@@ -115,14 +115,12 @@ func getSSHBastionHost(oc *exutil.CLI, iaasPlatform string) string {
 
 	if iaasPlatform == "vsphere" {
 		return "bastion.vmc.ci.openshift.org"
-	} else {
-		msg, err := oc.WithoutNamespace().Run("get").Args("service", "--all-namespaces", "-l=run=ssh-bastion", "-o=go-template='{{ with (index (index .items 0).status.loadBalancer.ingress 0) }}{{ or .hostname .ip }}{{end}}'").Output()
-		if err != nil || msg == "" {
-			e2e.Failf("SSH bastion is not installed yet")
-		}
-		msg = removeOuterQuotes(msg)
-		return (msg)
 	}
+	msg, err := oc.WithoutNamespace().Run("get").Args("service", "--all-namespaces", "-l=run=ssh-bastion", "-o=go-template='{{ with (index (index .items 0).status.loadBalancer.ingress 0) }}{{ or .hostname .ip }}{{end}}'").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(msg).NotTo(o.BeEmpty())
+	msg = removeOuterQuotes(msg)
+	return (msg)
 }
 
 // A private function to translate the workload/pod/deployment name
@@ -149,9 +147,8 @@ func getAdministratorNameByPlatform(iaasPlatform string) (admin string) {
 func getBastionSSHUser(iaasPlatform string) (user string) {
 	if iaasPlatform == "vsphere" {
 		return "openshift-qe"
-	} else {
-		return "core"
 	}
+	return "core"
 }
 
 func runPSCommand(bastionHost string, windowsHost string, command string, privateKey string, iaasPlatform string) (result string, err error) {
@@ -160,6 +157,24 @@ func runPSCommand(bastionHost string, windowsHost string, command string, privat
 	cmd := "chmod 600 " + privateKey + "; ssh -i " + privateKey + " -t -o StrictHostKeyChecking=no -o ProxyCommand=\"ssh -i " + privateKey + " -A -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -W %h:%p " + getBastionSSHUser(iaasPlatform) + "@" + bastionHost + "\" " + windowsUser + "@" + windowsHost + " 'powershell " + command + "'"
 	msg, err := exec.Command("bash", "-c", cmd).CombinedOutput()
 	return string(msg), err
+}
+
+// Returns a map with the uptime for each windows node,
+// being the key the IP of the node and the value the
+// uptime parsed as a time.Time value.
+func getWindowsNodesUptime(oc *exutil.CLI, privateKey string, iaasPlatform string) map[string]time.Time {
+	bastionHost := getSSHBastionHost(oc, iaasPlatform)
+	layout := "1/2/2006 3:04:05 PM"
+	var winUptime map[string]time.Time = make(map[string]time.Time)
+	winInternalIP := getWindowsInternalIPs(oc)
+	for _, winhost := range winInternalIP {
+		uptime, err := runPSCommand(bastionHost, winhost, "Get-CimInstance -ClassName Win32_OperatingSystem | Select LastBootUpTime", privateKey, iaasPlatform)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		winUptime[winhost], err = time.Parse(layout, strings.TrimSpace(strings.Split(uptime, "\r\n")[4]))
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+
+	return winUptime
 }
 
 func createLinuxWorkload(oc *exutil.CLI, namespace string) {
