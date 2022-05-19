@@ -17,6 +17,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	netutils "k8s.io/utils/net"
 )
 
 type pingPodResource struct {
@@ -679,6 +680,32 @@ func getNodeIPv4(oc *exutil.CLI, namespace string, nodeName string) string {
 	return nodeipv4
 }
 
+//Return IPv6 and IPv4 in vars respectively for Dual Stack and IPv4/IPv6 in 2nd var for single stack Clusters, and var1 will be nil in those cases
+func getNodeIP(oc *exutil.CLI, nodeName string) (string, string) {
+	ipStack := checkIpStackType(oc)
+	if (ipStack == "ipv6single") || (ipStack == "ipv4single") {
+		e2e.Logf("Its a Single Stack Cluster, either IPv4 or IPv6")
+		InternalIP, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[0].address}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The node's Internal IP is %q", InternalIP)
+		return "", InternalIP
+	} else {
+		e2e.Logf("Its a Dual Stack Cluster")
+		InternalIP1, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[0].address}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The node's 1st Internal IP is %q", InternalIP1)
+		InternalIP2, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[1].address}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The node's 2nd Internal IP is %q", InternalIP2)
+		if netutils.IsIPv6String(InternalIP1) {
+			return InternalIP1, InternalIP2
+		} else {
+			return InternalIP2, InternalIP1
+
+		}
+	}
+}
+
 func getLeaderInfo(oc *exutil.CLI, namespace string, cmName string, networkType string) string {
 	if networkType == "ovnkubernetes" {
 		output1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-n", namespace, "-o=jsonpath={.metadata.annotations.control-plane\\.alpha\\.kubernetes\\.io/leader}").OutputToFile("oc_describe_nodes.txt")
@@ -687,7 +714,7 @@ func getLeaderInfo(oc *exutil.CLI, namespace string, cmName string, networkType 
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		leaderNodeName := strings.Trim(strings.TrimSpace(string(output2)), "\"")
 		e2e.Logf("The leader node name is %s", leaderNodeName)
-		leaderNodeIP := getNodeIPv4(oc, namespace, leaderNodeName)
+		_, leaderNodeIP := getNodeIP(oc, leaderNodeName)
 		e2e.Logf("The leader node's IP is: %v", leaderNodeIP)
 		return leaderNodeIP
 	} else {
