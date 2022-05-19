@@ -1466,4 +1466,49 @@ spec:
 			}
 		}
 	})
+
+	// author: zxiao@redhat.com
+	g.It("Author:zxiao-Low-27665-Check if the kube-storage-version-migrator operator related manifests has been loaded", func() {
+		resource := "customresourcedefinition"
+		resourceNames := []string{"storagestates.migration.k8s.io", "storageversionmigrations.migration.k8s.io", "kubestorageversionmigrators.operator.openshift.io"}
+		g.By("1) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "]")
+		CheckIfResourceAvailable(oc, resource, resourceNames)
+
+		resource = "clusteroperators"
+		resourceNames = []string{"kube-storage-version-migrator"}
+		g.By("2) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "]")
+		CheckIfResourceAvailable(oc, resource, resourceNames)
+
+		resource = "configmap"
+		resourceNames = []string{"config", "openshift-kube-storage-version-migrator-operator-lock"}
+		namespace := "openshift-kube-storage-version-migrator-operator"
+		g.By("3) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
+		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+
+		resource = "service"
+		resourceNames = []string{"metrics"}
+		g.By("4) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "]")
+		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+
+		resource = "serviceaccount"
+		resourceNames = []string{"kube-storage-version-migrator-operator"}
+		g.By("5) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
+		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+
+		resource = "deployment"
+		resourceNames = []string{"kube-storage-version-migrator-operator"}
+		g.By("6) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
+		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+
+		resource = "serviceaccount"
+		resourceNames = []string{"kube-storage-version-migrator-sa"}
+		namespace = "openshift-kube-storage-version-migrator"
+		g.By("7) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
+		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+
+		resource = "deployment"
+		resourceNames = []string{"migrator"}
+		g.By("8) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
+		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+	})
 })

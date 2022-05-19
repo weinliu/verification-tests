@@ -107,6 +107,19 @@ func WaitEncryptionKeyMigration(oc *exutil.CLI, secret string) (bool, error) {
 	return true, nil
 }
 
+// CheckIfResourceAvailable :
+func CheckIfResourceAvailable(oc *exutil.CLI, resource string, resourceNames []string, namespace ...string) {
+	args := append([]string{resource}, resourceNames...)
+	if len(namespace) == 1 {
+		args = append(args, "-n", namespace[0]) // HACK: implement no namespace input
+	}
+	out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(args...).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	for _, resourceName := range resourceNames {
+		o.Expect(out).Should(o.ContainSubstring(resourceName))
+	}
+}
+
 func waitCoBecomes(oc *exutil.CLI, coName string, waitTime int, expectedStatus map[string]string) error {
 	return wait.Poll(5*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
 		gottenStatus := getCoStatus(oc, coName, expectedStatus)
