@@ -765,6 +765,155 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 
+	// author: huirwang@redhat.com
+	g.It("ConnectedOnly-Author:huirwang-Longduration-NonPreRelease-Medium-47033-If an egress node is NotReady traffic is still load balanced between available egress nodes. [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
+
+		g.By("1. create new namespace\n")
+		oc.SetupProject()
+		ns1 := oc.Namespace()
+
+		g.By("2. Label EgressIP node\n")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 3 {
+			g.Skip("Not enough worker nodes for this test, skip the case!!")
+		}
+
+		g.By("3. Apply EgressLabel Key for this test on 3 nodes.\n")
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, egressNodeLabel, "true")
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, egressNodeLabel)
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, egressNodeLabel, "true")
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, egressNodeLabel)
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[2].Name, egressNodeLabel, "true")
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[2].Name, egressNodeLabel)
+
+		g.By("4. Apply label to namespace\n")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
+
+		g.By("5. Create an egressip object\n")
+		sub1 := getIfaddrFromNode(nodeList.Items[0].Name, oc)
+		freeIP1 := findUnUsedIPsOnNode(oc, nodeList.Items[0].Name, sub1, 1)
+		o.Expect(len(freeIP1) == 1).Should(o.BeTrue())
+		sub2 := getIfaddrFromNode(nodeList.Items[1].Name, oc)
+		freeIP2 := findUnUsedIPsOnNode(oc, nodeList.Items[1].Name, sub2, 1)
+		o.Expect(len(freeIP2) == 1).Should(o.BeTrue())
+		sub3 := getIfaddrFromNode(nodeList.Items[2].Name, oc)
+		freeIP3 := findUnUsedIPsOnNode(oc, nodeList.Items[2].Name, sub3, 1)
+		o.Expect(len(freeIP3) == 1).Should(o.BeTrue())
+
+		egressip1 := egressIPResource1{
+			name:      "egressip-47033",
+			template:  egressIPTemplate,
+			egressIP1: freeIP1[0],
+			egressIP2: freeIP2[0],
+		}
+		egressip1.createEgressIPObject1(oc)
+		defer egressip1.deleteEgressIPObject1(oc)
+
+		g.By("6. Update an egressip object with three egressips.\n")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressip/egressip-47033", "-p", "{\"spec\":{\"egressIPs\":[\""+freeIP1[0]+"\",\""+freeIP2[0]+"\",\""+freeIP3[0]+"\"]}}", "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("7. Create a pod \n")
+		pod1 := pingPodResourceNode{
+			name:      "hello-pod",
+			namespace: ns1,
+			nodename:  nodeList.Items[0].Name,
+			template:  pingPodNodeTemplate,
+		}
+		pod1.createPingPodNode(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		g.By("8. Check source IP is randomly one of egress ips.\n")
+		e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
+		egressIPMaps2 := getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps2) == 3).Should(o.BeTrue())
+		sourceIP, err := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..15}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf(sourceIP)
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIP1[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIP2[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIP3[0]))
+
+		g.By("9. Stop one egress node.\n")
+		var instance []string
+		var zone string
+		switch ci.CheckPlatform(oc) {
+		case "aws":
+			e2e.Logf("\n AWS is detected \n")
+			defer checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
+			defer startInstanceOnAWS(a, nodeList.Items[1].Name)
+			stopInstanceOnAWS(a, nodeList.Items[1].Name)
+			checkNodeStatus(oc, nodeList.Items[1].Name, "NotReady")
+		case "gcp":
+			// for gcp, remove the postfix "c.openshift-qe.internal" to get its instance name
+			instance = strings.Split(nodeList.Items[1].Name, ".")
+			e2e.Logf("\n\n\n the worker node to be shutdown is: %v\n\n\n", instance[0])
+			infraID, err := exutil.GetInfraId(oc)
+			zone, err = getZoneOfInstanceFromGcp(oc, infraID, instance[0])
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer checkNodeStatus(oc, instance[0], "Ready")
+			defer startInstanceOnGcp(oc, instance[0], zone)
+			err = stopInstanceOnGcp(oc, instance[0], zone)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, nodeList.Items[1].Name, "NotReady")
+		default:
+			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
+			g.Skip("Not support cloud provider for auto egressip cases for now.")
+		}
+
+		g.By("10. Check EgressIP updated in EIP object, sourceIP contains 2 IPs. \n")
+		egressipErr := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+			egressIPMaps2 = getAssignedEIPInEIPObject(oc, egressip1.name)
+			if len(egressIPMaps2) != 2 {
+				return false, nil
+			}
+			sourceIP, err := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..15}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
+			e2e.Logf(sourceIP)
+			if err != nil {
+				return false, nil
+			}
+			if strings.Contains(sourceIP, egressIPMaps2[0]["egressIP"]) && strings.Contains(sourceIP, egressIPMaps2[1]["egressIP"]) {
+				sourceIPSlice := findIP(sourceIP)
+				if len(unique(sourceIPSlice)) == 2 {
+					return true, nil
+				}
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("The source Ip is not same as the egressIP expected!"))
+
+		g.By("11. Start the stopped egress node \n")
+		switch ci.CheckPlatform(oc) {
+		case "aws":
+			defer checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
+			startInstanceOnAWS(a, nodeList.Items[1].Name)
+			checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
+		case "gcp":
+			defer checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
+			err = startInstanceOnGcp(oc, instance[0], zone)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
+		default:
+			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
+			g.Skip("Not support cloud provider for auto egressip cases for now.")
+		}
+
+		g.By("12. Check source IP is randomly one of 3 egress IPs.\n")
+		e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
+		sourceIP, err = execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..15}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf(sourceIP)
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIP1[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIP2[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIP3[0]))
+	})
+
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {

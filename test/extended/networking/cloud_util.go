@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	ci "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -77,7 +79,7 @@ func updateAwsIntSvcSecurityRule(a *exutil.AwsClient, oc *exutil.CLI, dstPort in
 func installIPEchoServiceOnAWS(a *exutil.AwsClient, oc *exutil.CLI) (string, error) {
 	user := os.Getenv("SSH_CLOUD_PRIV_AWS_USER")
 	if user == "" {
-		user = "ec2-user"
+		user = "core"
 	}
 
 	sshkey := os.Getenv("SSH_CLOUD_PRIV_KEY")
@@ -264,4 +266,75 @@ func startInstanceOnGcp(oc *exutil.CLI, nodeName string, zone string) error {
 func stopInstanceOnGcp(oc *exutil.CLI, nodeName string, zone string) error {
 	err := getgcloudClient(oc).StopInstance(nodeName, zone)
 	return err
+}
+
+//start one AWS instance
+func startInstanceOnAWS(a *exutil.AwsClient, hostname string) {
+	instanceID, err := a.GetAwsInstanceIDFromHostname(hostname)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	stateErr := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		state, err := a.GetAwsInstanceState(instanceID)
+		if err != nil {
+			e2e.Logf("%v", err)
+			return false, nil
+		}
+		if state == "running" {
+			e2e.Logf("The instance  is running")
+			return true, nil
+		}
+		if state == "stopped" {
+			err = a.StartInstance(instanceID)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return true, nil
+		}
+		e2e.Logf("The instance  is in %v,not in a state from which it can be started.", state)
+		return false, nil
+
+	})
+	exutil.AssertWaitPollNoErr(stateErr, fmt.Sprintf("The instance  is not in a state from which it can be started."))
+}
+
+func stopInstanceOnAWS(a *exutil.AwsClient, hostname string) {
+	instanceID, err := a.GetAwsInstanceIDFromHostname(hostname)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	stateErr := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		state, err := a.GetAwsInstanceState(instanceID)
+		if err != nil {
+			e2e.Logf("%v", err)
+			return false, nil
+		}
+		if state == "stopped" {
+			e2e.Logf("The instance  is already stopped.")
+			return true, nil
+		}
+		if state == "running" {
+			err = a.StopInstance(instanceID)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return true, nil
+		}
+		e2e.Logf("The instance is in %v,not in a state from which it can be stopped.", state)
+		return false, nil
+
+	})
+	exutil.AssertWaitPollNoErr(stateErr, fmt.Sprintf("The instance  is not in a state from which it can be stopped."))
+}
+
+func findIP(input string) []string {
+	numBlock := "(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])"
+	regexPattern := numBlock + "\\." + numBlock + "\\." + numBlock + "\\." + numBlock
+
+	regEx := regexp.MustCompile(regexPattern)
+	return regEx.FindAllString(input, -1)
+}
+
+func unique(s []string) []string {
+	inResult := make(map[string]bool)
+	var result []string
+	for _, str := range s {
+		if _, ok := inResult[str]; !ok {
+			inResult[str] = true
+			result = append(result, str)
+		}
+	}
+	return result
 }
