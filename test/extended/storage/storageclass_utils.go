@@ -157,6 +157,7 @@ func checkStorageclassExists(oc *exutil.CLI, sc string) {
 		if output != sc {
 			return false, nil
 		}
+		e2e.Logf("storageClass %s is installed successfully\n", sc)
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Could not find the storageclass %v", sc))
