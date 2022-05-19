@@ -23,8 +23,8 @@ import (
 //If excludewinnode is true, skip checking windows nodes daemonset status
 //For daemonset or deployment have random name, getting name before use this function
 
+//WaitOprResourceReady used for checking if deployment/daemonset/statefulset is ready
 func WaitOprResourceReady(oc *CLI, kind, name, namespace string, islongduration bool, excludewinnode bool) {
-
 	//If islongduration is true, it will sleep 720s, otherwise 180s
 	var timeDurationSec int
 	if islongduration {
@@ -86,15 +86,15 @@ func WaitOprResourceReady(oc *CLI, kind, name, namespace string, islongduration 
 		if isCreated && len(kindNames) != 0 && desiredNum == readyNum {
 			e2e.Logf("The %v is successfully progressed and running normally", kindNames)
 			return true, nil
-		} else {
-			e2e.Logf("The %v is not ready or running normally", kindNames)
-			return false, nil
 		}
+		e2e.Logf("The %v is not ready or running normally", kindNames)
+		return false, nil
+
 	})
 	AssertWaitPollNoErr(waitErr, fmt.Sprintf("the pod of %v is not running", name))
 }
 
-//Check if NFD Installed base on the cluster labels
+//IsNodeLabeledByNFD Check if NFD Installed base on the cluster labels
 func IsNodeLabeledByNFD(oc *CLI) bool {
 	workNode, _ := GetFirstWorkerNode(oc)
 	Output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", workNode, "-o", "jsonpath='{.metadata.annotations}'").Output()
@@ -106,6 +106,7 @@ func IsNodeLabeledByNFD(oc *CLI) bool {
 	return false
 }
 
+//CountNodeNumByOS used for count how many worker node by windows or linux
 func CountNodeNumByOS(oc *CLI) (linuxNum int, windowsNum int) {
 	//Count how many windows node and linux node
 	linuxNodeNames, err := GetAllNodesbyOSType(oc, "linux")
@@ -120,26 +121,27 @@ func CountNodeNumByOS(oc *CLI) (linuxNum int, windowsNum int) {
 	return linuxNum, windowsNum
 }
 
+//GetFirstLinuxMachineSets used for getting first linux worker nodes name
 func GetFirstLinuxMachineSets(oc *CLI) string {
 	machinesets, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-machine-api").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	machinesets_array := strings.Split(machinesets, " ")
+	machinesetsArray := strings.Split(machinesets, " ")
 	//Remove windows machineset
-	for i, machineset := range machinesets_array {
+	for i, machineset := range machinesetsArray {
 		if machineset == "windows" {
-			machinesets_array = append(machinesets_array[:i], machinesets_array[i+1:]...)
+			machinesetsArray = append(machinesetsArray[:i], machinesetsArray[i+1:]...)
 			e2e.Logf("%T,%v", machinesets, machinesets)
 		}
 	}
-	return machinesets_array[0]
+	return machinesetsArray[0]
 }
 
-// installNFD attempts to install the Node Feature Discovery operator and verify that it is running
+//InstallNFD attempts to install the Node Feature Discovery operator and verify that it is running
 func InstallNFD(oc *CLI, nfdNamespace string) {
 	var (
-		nfd_namespace_file     = FixturePath("testdata", "psap", "nfd", "nfd-namespace.yaml")
-		nfd_operatorgroup_file = FixturePath("testdata", "psap", "nfd", "nfd-operatorgroup.yaml")
-		nfd_sub_file           = FixturePath("testdata", "psap", "nfd", "nfd-sub.yaml")
+		nfdNamespaceFile     = FixturePath("testdata", "psap", "nfd", "nfd-namespace.yaml")
+		nfdOperatorgroupFile = FixturePath("testdata", "psap", "nfd", "nfd-operatorgroup.yaml")
+		nfdSubFile           = FixturePath("testdata", "psap", "nfd", "nfd-sub.yaml")
 	)
 	// check if NFD namespace already exists
 	nsName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", nfdNamespace).Output()
@@ -147,7 +149,7 @@ func InstallNFD(oc *CLI, nfdNamespace string) {
 	// if an error is thrown, namespace does not exist, create and continue with installation
 	if strings.Contains(nsName, "NotFound") || strings.Contains(nsName, "No resources") || err != nil {
 		e2e.Logf("NFD namespace not found - creating namespace and installing NFD ...")
-		CreateClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", nfd_namespace_file)
+		CreateClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", nfdNamespaceFile)
 	} else {
 		e2e.Logf("NFD namespace found - checking if NFD is installed ...")
 	}
@@ -155,7 +157,7 @@ func InstallNFD(oc *CLI, nfdNamespace string) {
 	ogName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("OperatorGroup", "openshift-nfd", "-n", nfdNamespace).Output()
 	if strings.Contains(ogName, "NotFound") || strings.Contains(ogName, "No resources") || err != nil {
 		// create NFD operator group from template
-		ApplyNsResourceFromTemplate(oc, nfdNamespace, "--ignore-unknown-parameters=true", "-f", nfd_operatorgroup_file)
+		ApplyNsResourceFromTemplate(oc, nfdNamespace, "--ignore-unknown-parameters=true", "-f", nfdOperatorgroupFile)
 	} else {
 		e2e.Logf("NFD operatorgroup found - continue to check subscription ...")
 	}
@@ -172,7 +174,7 @@ func InstallNFD(oc *CLI, nfdNamespace string) {
 	subName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("Subscription", "-n", nfdNamespace).Output()
 	if strings.Contains(subName, "NotFound") || strings.Contains(subName, "No resources") || !strings.Contains(subName, "nfd") || err != nil {
 		// create NFD operator group from template
-		ApplyNsResourceFromTemplate(oc, nfdNamespace, "--ignore-unknown-parameters=true", "-f", nfd_sub_file, "-p", "CHANNEL="+channel, "SOURCE="+source)
+		ApplyNsResourceFromTemplate(oc, nfdNamespace, "--ignore-unknown-parameters=true", "-f", nfdSubFile, "-p", "CHANNEL="+channel, "SOURCE="+source)
 	} else {
 		e2e.Logf("NFD subscription found - continue to check pod status ...")
 	}
@@ -182,11 +184,11 @@ func InstallNFD(oc *CLI, nfdNamespace string) {
 
 }
 
-//Create NFD Instance in different namespace
+//CreateNFDInstance used for create NFD Instance in different namespace
 func CreateNFDInstance(oc *CLI, namespace string) {
 
 	var (
-		nfd_instance_file = FixturePath("testdata", "psap", "nfd", "nfd-instance.yaml")
+		nfdInstanceFile = FixturePath("testdata", "psap", "nfd", "nfd-instance.yaml")
 	)
 	// get cluster version and create NFD instance from template
 	clusterVersion, _, err := GetClusterVersion(oc)
@@ -197,7 +199,7 @@ func CreateNFDInstance(oc *CLI, namespace string) {
 	e2e.Logf("NFD Instance is: %v", nfdinstanceName)
 	if strings.Contains(nfdinstanceName, "NotFound") || strings.Contains(nfdinstanceName, "No resources") || err != nil {
 		// create NFD operator group from template
-		ApplyNsResourceFromTemplate(oc, namespace, "--ignore-unknown-parameters=true", "-f", nfd_instance_file, "-p", "IMAGE=quay.io/openshift/origin-node-feature-discovery:"+clusterVersion, "NAMESPACE="+namespace)
+		ApplyNsResourceFromTemplate(oc, namespace, "--ignore-unknown-parameters=true", "-f", nfdInstanceFile, "-p", "IMAGE=quay.io/openshift/origin-node-feature-discovery:"+clusterVersion, "NAMESPACE="+namespace)
 	} else {
 		e2e.Logf("NFD instance found - continue to check pod status ...")
 	}
@@ -207,27 +209,26 @@ func CreateNFDInstance(oc *CLI, namespace string) {
 	WaitOprResourceReady(oc, "daemonset", "nfd-worker", namespace, false, true)
 }
 
-//Get operator Packagemanifest source name
+//GetOperatorPKGManifestSource used for getting operator Packagemanifest source name
 func GetOperatorPKGManifestSource(oc *CLI, pkgManifestName, namespace string) (string, error) {
 	catalogSourceNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if strings.Contains(catalogSourceNames, "qe-app-registry") || err != nil {
 		//If the catalogsource qe-app-registry exist, prefer to use qe-app-registry, not use redhat-operators or certificate-operator ...
 		return "qe-app-registry", nil
-	} else {
-		soureName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", pkgManifestName, "-n", namespace, "-o=jsonpath={.status.catalogSource}").Output()
-		return soureName, err
 	}
+	soureName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", pkgManifestName, "-n", namespace, "-o=jsonpath={.status.catalogSource}").Output()
+	return soureName, err
 }
 
-//Get operator Packagemanifest default channel
+//GetOperatorPKGManifestDefaultChannel to getting operator Packagemanifest default channel
 func GetOperatorPKGManifestDefaultChannel(oc *CLI, pkgManifestName, namespace string) (string, error) {
 	channel, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", pkgManifestName, "-n", namespace, "-o", "jsonpath={.status.defaultChannel}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return channel, err
 }
 
-//It's not a template yaml file, the yaml shouldn't include namespace, we specify namespace by parameter.
+//ApplyOperatorResourceByYaml - It's not a template yaml file, the yaml shouldn't include namespace, we specify namespace by parameter.
 func ApplyOperatorResourceByYaml(oc *CLI, namespace string, yamlfile string) {
 	if len(namespace) == 0 {
 		//Create cluster-wide resource
@@ -240,7 +241,7 @@ func ApplyOperatorResourceByYaml(oc *CLI, namespace string, yamlfile string) {
 	}
 }
 
-//It's not a template yaml file, the yaml shouldn't include namespace, we specify namespace by parameter.
+//CleanupOperatorResourceByYaml - It's not a template yaml file, the yaml shouldn't include namespace, we specify namespace by parameter.
 func CleanupOperatorResourceByYaml(oc *CLI, namespace string, yamlfile string) {
 	if len(namespace) == 0 {
 		//Delete cluster-wide resource
@@ -253,7 +254,7 @@ func CleanupOperatorResourceByYaml(oc *CLI, namespace string, yamlfile string) {
 	}
 }
 
-//trunct pods logs by filter
+//AssertOprPodLogsbyFilterWithDuration used for truncting pods logs by filter
 func AssertOprPodLogsbyFilterWithDuration(oc *CLI, podName string, namespace string, filter string, timeDurationSec int, minimalMatch int) {
 	podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-oname").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -278,16 +279,15 @@ func AssertOprPodLogsbyFilterWithDuration(oc *CLI, podName string, namespace str
 				matchNumber = matchNumber - 1
 				e2e.Logf("The result is: %v", loglines[matchNumber])
 				return true, nil
-			} else {
-				e2e.Logf("Can not find the key words in pod logs by: %v", filter)
-				return false, nil
 			}
+			e2e.Logf("Can not find the key words in pod logs by: %v", filter)
+			return false, nil
 		})
 		AssertWaitPollNoErr(waitErr, fmt.Sprintf("the pod of %v is not running", podName))
 	}
 }
 
-//trunct pods logs by filter
+//AssertOprPodLogsbyFilter trunct pods logs by filter
 func AssertOprPodLogsbyFilter(oc *CLI, podName string, namespace string, filter string, minimalMatch int) bool {
 	podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-oname").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -319,6 +319,7 @@ func AssertOprPodLogsbyFilter(oc *CLI, podName string, namespace string, filter 
 	return isMatch
 }
 
+//WaitForNoPodsAvailableByKind used for checking no pods in a certain namespace
 func WaitForNoPodsAvailableByKind(oc *CLI, kind string, name string, namespace string) {
 	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 		kindNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(kind, name, "-n", namespace, "-oname").Output()
@@ -326,20 +327,19 @@ func WaitForNoPodsAvailableByKind(oc *CLI, kind string, name string, namespace s
 			//Check if the new profiles name applied on a node
 			e2e.Logf("All the pod has been terminated:\n %v", kindNames)
 			return true, nil
-		} else {
-			e2e.Logf("The pod is still terminating, waiting for a while: \n%v", kindNames)
-			return false, nil
 		}
+		e2e.Logf("The pod is still terminating, waiting for a while: \n%v", kindNames)
+		return false, nil
 	})
 	AssertWaitPollNoErr(err, "No pod was found ...")
 }
 
-// installPAO attempts to install the Performance Add-On operator and verify that it is running
+//InstallPAO attempts to install the Performance Add-On operator and verify that it is running
 func InstallPAO(oc *CLI, paoNamespace string) {
 	var (
-		pao_namespace_file     = FixturePath("testdata", "psap", "pao", "pao-namespace.yaml")
-		pao_operatorgroup_file = FixturePath("testdata", "psap", "pao", "pao-operatorgroup.yaml")
-		pao_sub_file           = FixturePath("testdata", "psap", "pao", "pao-subscription.yaml")
+		paoNamespaceFile     = FixturePath("testdata", "psap", "pao", "pao-namespace.yaml")
+		paoOperatorgroupFile = FixturePath("testdata", "psap", "pao", "pao-operatorgroup.yaml")
+		paoSubFile           = FixturePath("testdata", "psap", "pao", "pao-subscription.yaml")
 	)
 	// check if PAO namespace already exists
 	nsName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", paoNamespace).Output()
@@ -347,7 +347,7 @@ func InstallPAO(oc *CLI, paoNamespace string) {
 	// if an error is thrown, namespace does not exist, create and continue with installation
 	if strings.Contains(nsName, "NotFound") || strings.Contains(nsName, "No resources") || err != nil {
 		e2e.Logf("PAO namespace not found - creating namespace and installing PAO ...")
-		CreateClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pao_namespace_file)
+		CreateClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", paoNamespaceFile)
 	} else {
 		e2e.Logf("PAO namespace found - checking if PAO is installed ...")
 	}
@@ -355,7 +355,7 @@ func InstallPAO(oc *CLI, paoNamespace string) {
 	ogName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("OperatorGroup", "openshift-performance-addon-operator", "-n", paoNamespace).Output()
 	if strings.Contains(ogName, "NotFound") || strings.Contains(ogName, "No resources") || err != nil {
 		// create PAO operator group from template
-		ApplyNsResourceFromTemplate(oc, paoNamespace, "--ignore-unknown-parameters=true", "-f", pao_operatorgroup_file)
+		ApplyNsResourceFromTemplate(oc, paoNamespace, "--ignore-unknown-parameters=true", "-f", paoOperatorgroupFile)
 	} else {
 		e2e.Logf("PAO operatorgroup found - continue to check subscription ...")
 	}
@@ -372,7 +372,7 @@ func InstallPAO(oc *CLI, paoNamespace string) {
 	subName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("Subscription", "-n", paoNamespace).Output()
 	if strings.Contains(subName, "NotFound") || strings.Contains(subName, "No resources") || !strings.Contains(subName, "performance-operator") || err != nil {
 		// create PAO operator group from template
-		ApplyNsResourceFromTemplate(oc, paoNamespace, "--ignore-unknown-parameters=true", "-f", pao_sub_file, "-p", "CHANNEL="+channel, "SOURCE="+source)
+		ApplyNsResourceFromTemplate(oc, paoNamespace, "--ignore-unknown-parameters=true", "-f", paoSubFile, "-p", "CHANNEL="+channel, "SOURCE="+source)
 	} else {
 		e2e.Logf("PAO subscription found - continue to check pod status ...")
 	}
@@ -381,42 +381,42 @@ func InstallPAO(oc *CLI, paoNamespace string) {
 	WaitOprResourceReady(oc, "deployment", "performance-operator", paoNamespace, false, false)
 }
 
+//IsPAOInstalled used for deploying Performance Add-on Operator
 func IsPAOInstalled(oc *CLI) bool {
 	var isInstalled bool
 	deployments, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-A").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if strings.Contains(deployments, "performance-operator") {
 		isInstalled = true
-		return isInstalled
 	} else {
 		e2e.Logf("PAO doesn't installed - will install pao ...")
 		isInstalled = false
-		return isInstalled
 	}
+	return isInstalled
 }
 
+//IsPAOInOperatorHub used for checking if PAO exist in OperatorHub
 func IsPAOInOperatorHub(oc *CLI) bool {
 	var havePAO bool
 	packagemanifest, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-A").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if strings.Contains(packagemanifest, "performance-addon-operator") {
 		havePAO = true
-		return havePAO
 	} else {
 		e2e.Logf("No PAO packagemanifet detect in operatorhub - skip ...")
 		havePAO = false
-		return havePAO
 	}
+	return havePAO
 }
 
-// Base64 Encode
+//StringToBASE64 Base64 Encode
 func StringToBASE64(src string) string {
 	// plaintext, err := base64.StdEncoding.DecodeString(src)
 	stdEnc := base64.StdEncoding.EncodeToString([]byte(src))
 	return string(stdEnc)
 }
 
-// Base64 Decode
+//BASE64DecodeStr Base64 Decode
 func BASE64DecodeStr(src string) string {
 	plaintext, err := base64.StdEncoding.DecodeString(src)
 	if err != nil {

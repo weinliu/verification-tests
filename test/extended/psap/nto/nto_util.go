@@ -144,8 +144,11 @@ func assertIfMasterNodeChangesApplied(oc *exutil.CLI, masterNodeName string) {
 func assertIfMCPChangesAppliedByName(oc *exutil.CLI, mcpName string, timeDurationMin int) {
 	err := wait.Poll(1*time.Minute, time.Duration(timeDurationMin)*time.Minute, func() (bool, error) {
 		var (
-			mcpCheckMachineCount string
-			err                  error
+			mcpCheckMachineCount        string
+			mcpCheckReadyMachineCount   string
+			mcpCheckUpdatedMachineCount string
+			mcpDegradedMachineCount     string
+			err                         error
 		)
 
 		//For master node, only make sure one of master is ready.
@@ -156,12 +159,19 @@ func assertIfMCPChangesAppliedByName(oc *exutil.CLI, mcpName string, timeDuratio
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		mcpCheckReadyMachineCount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.readyMachineCount}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		mcpCheckUpdatedMachineCount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.updatedMachineCount}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		mcpDegradedMachineCount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.degradedMachineCount}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		//Do not check master err due to sometimes SNO can not accesss api server when server rebooted
+		if strings.Contains(mcpName, "master") {
+			mcpCheckReadyMachineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.readyMachineCount}").Output()
+			mcpCheckUpdatedMachineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.updatedMachineCount}").Output()
+			mcpDegradedMachineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.degradedMachineCount}").Output()
+		} else {
+			mcpCheckReadyMachineCount, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.readyMachineCount}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			mcpCheckUpdatedMachineCount, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.updatedMachineCount}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			mcpDegradedMachineCount, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.degradedMachineCount}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		if mcpCheckMachineCount == mcpCheckReadyMachineCount && mcpCheckMachineCount == mcpCheckUpdatedMachineCount && mcpDegradedMachineCount == "0" {
 			e2e.Logf("MachineConfigPool checks succeeded!")
@@ -175,29 +185,29 @@ func assertIfMCPChangesAppliedByName(oc *exutil.CLI, mcpName string, timeDuratio
 
 // getMaxUserWatchesValue parses out the line determining max_user_watches in inotify.conf
 func getMaxUserWatchesValue(inotify string) string {
-	re_line := regexp.MustCompile(`fs.inotify.max_user_watches = \d+`)
-	re_value := regexp.MustCompile(`\d+`)
-	max_user_watches := re_line.FindString(inotify)
-	max_user_watches_value := re_value.FindString(max_user_watches)
-	return max_user_watches_value
+	reLine := regexp.MustCompile(`fs.inotify.max_user_watches = \d+`)
+	reValue := regexp.MustCompile(`\d+`)
+	maxUserWatches := reLine.FindString(inotify)
+	maxUserWatchesValue := reValue.FindString(maxUserWatches)
+	return maxUserWatchesValue
 }
 
 // getMaxUserInstancesValue parses out the line determining max_user_instances in inotify.conf
 func getMaxUserInstancesValue(inotify string) string {
-	re_line := regexp.MustCompile(`fs.inotify.max_user_instances = \d+`)
-	re_value := regexp.MustCompile(`\d+`)
-	max_user_instances := re_line.FindString(inotify)
-	max_user_instances_value := re_value.FindString(max_user_instances)
-	return max_user_instances_value
+	reLine := regexp.MustCompile(`fs.inotify.max_user_instances = \d+`)
+	reValue := regexp.MustCompile(`\d+`)
+	maxUserInstances := reLine.FindString(inotify)
+	maxUserInstancesValue := reValue.FindString(maxUserInstances)
+	return maxUserInstancesValue
 }
 
 // getKernelPidMaxValue parses out the line determining pid_max in the kernel
 func getKernelPidMaxValue(kernel string) string {
-	re_line := regexp.MustCompile(`kernel.pid_max = \d+`)
-	re_value := regexp.MustCompile(`\d+`)
-	pid_max := re_line.FindString(kernel)
-	pid_max_value := re_value.FindString(pid_max)
-	return pid_max_value
+	reLine := regexp.MustCompile(`kernel.pid_max = \d+`)
+	reValue := regexp.MustCompile(`\d+`)
+	pidMax := reLine.FindString(kernel)
+	pidMaxValue := reValue.FindString(pidMax)
+	return pidMaxValue
 }
 
 //Compare if the sysctl parameter is equal to specified value on all the node
@@ -205,8 +215,8 @@ func compareSpecifiedValueByNameOnLabelNode(oc *exutil.CLI, labelNodeName, sysct
 
 	regexpstr, _ := regexp.Compile(sysctlparm + ".*")
 	output, err := exutil.DebugNodeWithChroot(oc, labelNodeName, "sysctl", sysctlparm)
-	conntrack_max := regexpstr.FindString(output)
-	e2e.Logf("The value is %v on %v", conntrack_max, labelNodeName)
+	conntrackMax := regexpstr.FindString(output)
+	e2e.Logf("The value is %v on %v", conntrackMax, labelNodeName)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(output).To(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
 
@@ -221,8 +231,8 @@ func compareSysctlDifferentFromSpecifiedValueByName(oc *exutil.CLI, sysctlparm, 
 	regexpstr, _ := regexp.Compile(sysctlparm + ".*")
 	for i := 0; i < nodeListSize; i++ {
 		output, err := exutil.DebugNodeWithChroot(oc, nodeList[i], "sysctl", sysctlparm)
-		conntrack_max := regexpstr.FindString(output)
-		e2e.Logf("The value is %v on %v", conntrack_max, nodeList[i])
+		conntrackMax := regexpstr.FindString(output)
+		e2e.Logf("The value is %v on %v", conntrackMax, nodeList[i])
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).NotTo(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
 	}
@@ -239,8 +249,8 @@ func compareSysctlValueOnSepcifiedNodeByName(oc *exutil.CLI, tunedNodeName, sysc
 	regexpstr, _ := regexp.Compile(sysctlparm + ".*")
 	for i := 0; i < nodeListSize; i++ {
 		output, err := exutil.DebugNodeWithChroot(oc, nodeList[i], "sysctl", sysctlparm)
-		conntrack_max := regexpstr.FindString(output)
-		e2e.Logf("The value is %v on %v", conntrack_max, nodeList[i])
+		conntrackMax := regexpstr.FindString(output)
+		e2e.Logf("The value is %v on %v", conntrackMax, nodeList[i])
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if nodeList[i] == tunedNodeName {
 			o.Expect(output).To(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
@@ -319,10 +329,9 @@ func (ntoRes ntoResource) assertTunedProfileApplied(oc *exutil.CLI) {
 			//Check if the new profiles name applied on a node
 			e2e.Logf("Current profile for each node: \n%v", output)
 			return true, nil
-		} else {
-			e2e.Logf("The profile %v is not applied on node, try next around \n", ntoRes.name)
-			return false, nil
 		}
+		e2e.Logf("The profile %v is not applied on node, try next around \n", ntoRes.name)
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "New tuned profile isn't applied correctly, please check")
 }
@@ -337,9 +346,8 @@ func isOneMasterNode(oc *exutil.CLI) bool {
 	masterNodes, _ := exutil.GetClusterNodesBy(oc, "master")
 	if len(masterNodes) == 1 {
 		return true
-	} else {
-		return false
 	}
+	return false
 }
 
 func isSNOCluster(oc *exutil.CLI) bool {
@@ -349,9 +357,8 @@ func isSNOCluster(oc *exutil.CLI) bool {
 	workerNodes, _ := exutil.GetClusterNodesBy(oc, "worker")
 	if len(masterNodes) == 1 && len(workerNodes) == 1 && masterNodes[0] == workerNodes[0] {
 		return true
-	} else {
-		return false
 	}
+	return false
 }
 
 func assertAffineDefaultCPUSets(oc *exutil.CLI, tunedPodName, namespace string) bool {
@@ -380,10 +387,9 @@ func assertAffineDefaultCPUSets(oc *exutil.CLI, tunedPodName, namespace string) 
 	if isMatch0 && (isMatch1 || isMatch2) {
 		e2e.Logf("assert affine default cpusets result: %v", true)
 		return true
-	} else {
-		e2e.Logf("assert affine default cpusets result: %v", false)
-		return false
 	}
+	e2e.Logf("assert affine default cpusets result: %v", false)
+	return false
 }
 
 func assertDebugSettings(oc *exutil.CLI, tunedNodeName string, ntoNamespace string, isDebug string) bool {
@@ -396,16 +402,12 @@ func assertDebugSettings(oc *exutil.CLI, tunedNodeName string, ntoNamespace stri
 	isMatch := regDebugCheck.MatchString(nodeProfile)
 	loglines := regDebugCheck.FindAllString(nodeProfile, -1)
 	e2e.Logf("The result is: %v", loglines[0])
-	if isMatch {
-		return true
-	} else {
-		return false
-	}
+	return isMatch
 }
 
 func getDefaultSMPAffinityBitMaskbyCPUCores(oc *exutil.CLI, workerNodeName string) string {
-	//Currently support 32core cpu worker nodes
-	smpbitMask := 0xffffffff
+	//Currently support 48core cpu worker nodes
+	smpbitMask := 0xffffffffffff
 	smpbitMaskIntStr := fmt.Sprintf("%d", smpbitMask)
 
 	//Get CPU number in specified worker nodes
@@ -417,7 +419,7 @@ func getDefaultSMPAffinityBitMaskbyCPUCores(oc *exutil.CLI, workerNodeName strin
 	e2e.Logf("the total cpu numbers in worker nodes %v is : %v", workerNodeName, cpuNumStr)
 
 	//Get corresponding smpMask
-	rightMoveBit := 32 - cpuNumInt
+	rightMoveBit := 48 - cpuNumInt
 	smpMaskInt, err := strconv.Atoi(smpbitMaskIntStr)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	smpMaskStr := fmt.Sprintf("%x", smpMaskInt>>rightMoveBit)
@@ -427,7 +429,7 @@ func getDefaultSMPAffinityBitMaskbyCPUCores(oc *exutil.CLI, workerNodeName strin
 
 //Convert hex into int string
 func hexToInt(x string) string {
-	base, err := strconv.ParseInt(x, 16, 10)
+	base, err := strconv.ParseInt(x, 16, 64)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strconv.FormatInt(base, 10)
 }
@@ -458,13 +460,13 @@ func assertDefaultIRQSMPAffinityAffectedBitMask(defaultSMPBitMask string, isolat
 
 	if defaultSMPBitMaskInt == isolatedCPUInt {
 		isMatch = true
-		return isMatch
 	} else {
 		isMatch = false
-		return isMatch
 	}
+	return isMatch
 }
 
+//AssertTunedAppliedMC Check if customed tuned applied via MCP
 func AssertTunedAppliedMC(oc *exutil.CLI, mcpName string, filter string) {
 	mcNameList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mc", "--no-headers", "-oname").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -483,6 +485,7 @@ func AssertTunedAppliedMC(oc *exutil.CLI, mcpName string, filter string) {
 	o.Expect(mcOutput).To(o.ContainSubstring(filter))
 }
 
+//AssertTunedAppliedToNode Check if customed tuned applied to a certain node
 func AssertTunedAppliedToNode(oc *exutil.CLI, tunedNodeName string, filter string) bool {
 	cmdLineOutput, err := exutil.DebugNode(oc, tunedNodeName, "cat", "/proc/cmdline")
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -512,10 +515,9 @@ func assertNTOPodLogsLastLines(oc *exutil.CLI, namespace string, ntoPod string, 
 			loglines := regNTOPodLogs.FindAllString(ntoPodLogs, -1)
 			e2e.Logf("The logs of nto pod %v is: \n%v", ntoPod, loglines[0])
 			return true, nil
-		} else {
-			e2e.Logf("The keywords of nto pod isn't found, try next ...")
-			return false, nil
 		}
+		e2e.Logf("The keywords of nto pod isn't found, try next ...")
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "The tuned pod's log doesn't contain the keywords, please check")
 }
@@ -531,6 +533,7 @@ func getServiceENDPoint(oc *exutil.CLI, namespace string) string {
 	return endPointIP
 }
 
+//AssertNTOCertificateRotate used for check if NTO certificate rotate
 func AssertNTOCertificateRotate(oc *exutil.CLI, ntoNamespace string, tunedNodeName string, encodeBase64OpenSSLOutputBefore string, encodeBase64OpenSSLExpireDateBefore string) {
 
 	metricEndpoint := getServiceENDPoint(oc, ntoNamespace)
@@ -550,15 +553,14 @@ func AssertNTOCertificateRotate(oc *exutil.CLI, ntoNamespace string, tunedNodeNa
 		if encodeBase64OpenSSLOutputBefore != encodeBase64OpenSSLOutputAfter && encodeBase64OpenSSLExpireDateBefore != encodeBase64OpenSSLExpireDateAfter {
 			e2e.Logf("The certificate has been updated ...")
 			return true, nil
-		} else {
-			e2e.Logf("The certificate isn't updated, try next round ...")
-			return false, nil
 		}
+		e2e.Logf("The certificate isn't updated, try next round ...")
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "The NTO certificate isn't rotate, please check")
 }
 
-func compareCertificateBetweenOpenSSLandTlsSecret(oc *exutil.CLI, ntoNamespace string, tunedNodeName string) {
+func compareCertificateBetweenOpenSSLandTLSSecret(oc *exutil.CLI, ntoNamespace string, tunedNodeName string) {
 
 	metricEndpoint := getServiceENDPoint(oc, ntoNamespace)
 	err := wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
@@ -570,16 +572,15 @@ func compareCertificateBetweenOpenSSLandTlsSecret(oc *exutil.CLI, ntoNamespace s
 		//Extract tls.crt from secret node-tuning-operator-tls
 		encodeBase64tlsCertOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "secret", "node-tuning-operator-tls", `-ojsonpath='{ .data.tls\.crt }'`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		tmpTlsCertOutput := strings.Trim(encodeBase64tlsCertOutput, "'")
-		tlsCertOutput := exutil.BASE64DecodeStr(tmpTlsCertOutput)
+		tmpTLSCertOutput := strings.Trim(encodeBase64tlsCertOutput, "'")
+		tlsCertOutput := exutil.BASE64DecodeStr(tmpTLSCertOutput)
 
 		if strings.Contains(tlsCertOutput, openSSLOutputAfter) {
 			e2e.Logf("The certificate is the same ...")
 			return true, nil
-		} else {
-			e2e.Logf("The certificate is different, try next round ...")
-			return false, nil
 		}
+		e2e.Logf("The certificate is different, try next round ...")
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "The certificate is different, please check")
 }
@@ -599,9 +600,8 @@ func assertIFChannel(oc *exutil.CLI, namespace string, tunedNodeName string) boo
 	isMatch := regChannel.MatchString(ethToolsOutput)
 	if isMatch {
 		return true
-	} else {
-		return false
 	}
+	return false
 }
 
 func compareSpecifiedValueByNameOnLabelNodewithRetry(oc *exutil.CLI, ntoNamespace, nodeName, sysctlparm, specifiedvalue string) {
@@ -618,10 +618,8 @@ func compareSpecifiedValueByNameOnLabelNodewithRetry(oc *exutil.CLI, ntoNamespac
 		isMatch := regexpstr.MatchString(sysctlOutput)
 		if isMatch {
 			return true, nil
-		} else {
-			return false, nil
 		}
-
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "The certificate is different, please check")
 }
@@ -654,4 +652,18 @@ func assertIOTimeOutandMaxRetries(oc *exutil.CLI, ntoNamespace string) {
 		e2e.Logf("The value of io_timeout is : %v on node %v", timeoutOutput, nodeList[i])
 		o.Expect(timeoutOutput).To(o.ContainSubstring("4294967295"))
 	}
+}
+
+func confirmedTunedReady(oc *exutil.CLI, ntoNamespace string, tunedName string, timeDurationSec int) {
+	err := wait.Poll(10*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
+
+		tunedStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("tuned", "-n", ntoNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if strings.Contains(tunedStatus, tunedName) {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "tuned is not ready")
 }

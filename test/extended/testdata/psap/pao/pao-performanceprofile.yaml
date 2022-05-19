@@ -8,8 +8,6 @@ objects:
     metadata:
       name: performance
     spec:
-      additionalKernelArgs:
-      - nosmt
       cpu:
         isolated: "1"
         reserved: "0"
