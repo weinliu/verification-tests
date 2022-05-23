@@ -108,10 +108,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
 		g.By("3. Find an unused IP on the node, use it as egressIP address, add it to netnamespace of the first project")
-		freeIps := findUnUsedIPsOnNode(oc, egressNode, sub1, 1)
-		o.Expect(len(freeIps) == 1).Should(o.BeTrue())
+		freeIPs := findUnUsedIPsOnNode(oc, egressNode, sub1, 1)
+		o.Expect(len(freeIPs) == 1).Should(o.BeTrue())
 
-		patchResourceAsAdmin(oc, "netnamespace/"+pod1.namespace, "{\"egressIPs\":[\""+freeIps[0]+"\"]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+pod1.namespace, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
 		defer patchResourceAsAdmin(oc, "netnamespace/"+pod1.namespace, "{\"egressIPs\":[]}")
 
 		g.By("4. Verify egressCIDRs and egressIPs on the node")
@@ -120,13 +120,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		ip, err := getEgressIPonSDNHost(oc, nodeList.Items[0].Name, 1)
 		e2e.Logf("\n\n\n got egressIP as -->%v<--\n\n\n", ip)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(freeIps[0]).Should(o.BeElementOf(ip))
+		o.Expect(freeIPs[0]).Should(o.BeElementOf(ip))
 
 		g.By("4.From first namespace, check source IP is EgressIP")
 		e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
 		sourceIP, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(sourceIP).Should(o.BeElementOf(freeIps[0]))
+		o.Expect(sourceIP).Should(o.BeElementOf(freeIPs[0]))
 
 		g.By("5. Create second namespace, create a test pod in it")
 		oc.SetupProject()
@@ -143,13 +143,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		waitPodReady(oc, pod2.namespace, pod2.name)
 
 		g.By("6. Add same egressIP address to netnamespace of the second project")
-		patchResourceAsAdmin(oc, "netnamespace/"+pod2.namespace, "{\"egressIPs\":[\""+freeIps[0]+"\"]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+pod2.namespace, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
 		defer patchResourceAsAdmin(oc, "netnamespace/"+pod2.namespace, "{\"egressIPs\":[]}")
 
 		g.By("7. check egressIP again after second netnamespace is patched with same egressIP")
 		ip, err = getEgressIPonSDNHost(oc, nodeList.Items[0].Name, 1)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(freeIps[0]).Should(o.BeElementOf(ip))
+		o.Expect(freeIPs[0]).Should(o.BeElementOf(ip))
 
 		g.By("8.Check source IP again from first project, curl command should not succeed, error is expected")
 		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
@@ -181,15 +181,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[]}")
 
 		g.By("2. Find 6 unused IPs from one egress node")
-		freeIps := findUnUsedIPsOnNode(oc, egressNode1, sub, 6)
-		o.Expect(len(freeIps) == 6).Should(o.BeTrue())
+		freeIPs := findUnUsedIPsOnNode(oc, egressNode1, sub, 6)
+		o.Expect(len(freeIPs) == 6).Should(o.BeTrue())
 
 		g.By("3. Create 6 namespaces, apply one egressIP from the freeIPs to each namespace")
 		var ns = [6]string{}
 		for i := 0; i < 6; i++ {
 			oc.SetupProject()
 			ns[i] = oc.Namespace()
-			patchResourceAsAdmin(oc, "netnamespace/"+ns[i], "{\"egressIPs\":[\""+freeIps[i]+"\"]}")
+			patchResourceAsAdmin(oc, "netnamespace/"+ns[i], "{\"egressIPs\":[\""+freeIPs[i]+"\"]}")
 			defer patchResourceAsAdmin(oc, "netnamespace/"+ns[i], "{\"egressIPs\":[]}")
 		}
 
@@ -199,8 +199,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		ip2, err := getEgressIPonSDNHost(oc, egressNode2, 3)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for i := 0; i < 3; i++ {
-			o.Expect(ip1[i]).Should(o.BeElementOf(freeIps))
-			o.Expect(ip2[i]).Should(o.BeElementOf(freeIps))
+			o.Expect(ip1[i]).Should(o.BeElementOf(freeIPs))
+			o.Expect(ip2[i]).Should(o.BeElementOf(freeIPs))
 		}
 	})
 
@@ -225,13 +225,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[]}")
 
 		g.By("2. Find 3 unused IPs from one egress node")
-		freeIps := findUnUsedIPsOnNode(oc, egressNode1, sub, 3)
-		o.Expect(len(freeIps) == 3).Should(o.BeTrue())
+		freeIPs := findUnUsedIPsOnNode(oc, egressNode1, sub, 3)
+		o.Expect(len(freeIPs) == 3).Should(o.BeTrue())
 
 		g.By("3. Create one namespace, apply 3 egressIP to the namespace")
 		oc.SetupProject()
 		ns := oc.Namespace()
-		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIps[0]+"\",\""+freeIps[1]+"\",\""+freeIps[2]+"\"]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIPs[0]+"\",\""+freeIPs[1]+"\",\""+freeIPs[2]+"\"]}")
 		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
 
 		g.By("4. Check egressIP for each node, each node should have 1 egressIP addresses assigned from the pool")
@@ -239,8 +239,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ip2, err := getEgressIPonSDNHost(oc, egressNode2, 1)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(ip1[0]).Should(o.BeElementOf(freeIps))
-		o.Expect(ip2[0]).Should(o.BeElementOf(freeIps))
+		o.Expect(ip1[0]).Should(o.BeElementOf(freeIPs))
+		o.Expect(ip2[0]).Should(o.BeElementOf(freeIPs))
 	})
 
 	// author: jechen@redhat.com
@@ -268,8 +268,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[]}")
 
 		g.By("2. Find 2 unused IPs from one egress node")
-		freeIps := findUnUsedIPsOnNode(oc, egressNode1, sub, 2)
-		o.Expect(len(freeIps) == 2).Should(o.BeTrue())
+		freeIPs := findUnUsedIPsOnNode(oc, egressNode1, sub, 2)
+		o.Expect(len(freeIPs) == 2).Should(o.BeTrue())
 
 		g.By("3. Create a namespaces, apply the both egressIPs to the namespace, and create a test pod on the egress node")
 
@@ -284,14 +284,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		podns.createPingPodNode(oc)
 		waitPodReady(oc, podns.namespace, podns.name)
 
-		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIps[0]+"\", \""+freeIps[1]+"\"]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIPs[0]+"\", \""+freeIPs[1]+"\"]}")
 		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
 
 		// check the source IP that the test pod uses
 		g.By("4. get egressIP on the node where test pod resides")
 		ip, err := getEgressIPonSDNHost(oc, egressNode1, 1)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(ip[0]).Should(o.BeElementOf(freeIps))
+		o.Expect(ip[0]).Should(o.BeElementOf(freeIPs))
 
 		g.By("5.Check source IP from the test pod for 5 times, it should always use the egressIP of the egressNode that it resides on")
 		for i := 0; i < 5; i++ {
@@ -330,26 +330,26 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
 		g.By("3. Find an unused IP on the node, use it as egressIP address, add it to the egress node and netnamespace of the project")
-		freeIps := findUnUsedIPsOnNode(oc, egressNode, sub1, 1)
-		o.Expect(len(freeIps) == 1).Should(o.BeTrue())
+		freeIPs := findUnUsedIPsOnNode(oc, egressNode, sub1, 1)
+		o.Expect(len(freeIPs) == 1).Should(o.BeTrue())
 
-		patchResourceAsAdmin(oc, "netnamespace/"+pod1.namespace, "{\"egressIPs\":[\""+freeIps[0]+"\"]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+pod1.namespace, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
 		defer patchResourceAsAdmin(oc, "netnamespace/"+pod1.namespace, "{\"egressIPs\":[]}")
 
-		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[\""+freeIps[0]+"\"]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[]}")
 
 		g.By("4. Verify egressIPs on the node")
 		ip, err := getEgressIPonSDNHost(oc, nodeList.Items[0].Name, 1)
 		e2e.Logf("\n\n\n got egressIP as -->%v<--\n\n\n", ip)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(freeIps[0]).Should(o.BeElementOf(ip))
+		o.Expect(freeIPs[0]).Should(o.BeElementOf(ip))
 
 		g.By("5.From the namespace, check source IP is EgressIP")
 		e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
 		sourceIPErr := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 			sourceIP, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
-			if !contains(freeIps, sourceIP) || err != nil {
+			if !contains(freeIPs, sourceIP) || err != nil {
 				e2e.Logf("\n got sourceIP as %v while egressIP is %v, or got the error: %v\n", sourceIP, ip, err)
 				return false, nil
 			}
@@ -366,7 +366,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("7.check source IP is EgressIP again")
 		sourceIPErr = wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 			sourceIP, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
-			if !contains(freeIps, sourceIP) || err != nil {
+			if !contains(freeIPs, sourceIP) || err != nil {
 				e2e.Logf("\n got sourceIP as %v while egressIP is %v, or got the error: %v\n", sourceIP, ip, err)
 				return false, nil
 			}
@@ -413,13 +413,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[]}")
 
 		g.By("3. Find 2 unused IPs from one egress node")
-		freeIps := findUnUsedIPsOnNode(oc, egressNode1, sub, 2)
-		o.Expect(len(freeIps) == 2).Should(o.BeTrue())
+		freeIPs := findUnUsedIPsOnNode(oc, egressNode1, sub, 2)
+		o.Expect(len(freeIPs) == 2).Should(o.BeTrue())
 
 		g.By("4. Create a namespaces, apply the both egressIPs to the namespace, but create a test pod on the third non-egressIP node")
 		oc.SetupProject()
 		ns := oc.Namespace()
-		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIps[0]+"\", \""+freeIps[1]+"\"]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIPs[0]+"\", \""+freeIPs[1]+"\"]}")
 		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
 
 		podns := pingPodResourceNode{
@@ -435,8 +435,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		sourceIP, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(sourceIP)
-		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps[0]))
-		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps[1]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs[1]))
 	})
 
 	// author: jechen@redhat.com
@@ -471,19 +471,19 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("2. Find 2 unused IPs from one egress node")
 		sub := getIfaddrFromNode(egressNode1, oc)
-		freeIps := findUnUsedIPsOnNode(oc, egressNode1, sub, 2)
-		o.Expect(len(freeIps) == 2).Should(o.BeTrue())
+		freeIPs := findUnUsedIPsOnNode(oc, egressNode1, sub, 2)
+		o.Expect(len(freeIPs) == 2).Should(o.BeTrue())
 
 		g.By("3. Patch egressIP address to egressIP nodes")
-		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressIPs\":[\""+freeIps[0]+"\"]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressIPs\":[]}")
-		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressIPs\":[\""+freeIps[1]+"\"]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressIPs\":[\""+freeIPs[1]+"\"]}")
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressIPs\":[]}")
 
 		g.By("4. Create a namespaces, apply the both egressIPs to the namespace, but create a test pod on the third non-egressIP node")
 		oc.SetupProject()
 		ns := oc.Namespace()
-		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIps[0]+"\", \""+freeIps[1]+"\"]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIPs[0]+"\", \""+freeIPs[1]+"\"]}")
 		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
 
 		podns := pingPodResourceNode{
@@ -499,8 +499,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		sourceIP, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(sourceIP)
-		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps[0]))
-		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps[1]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs[1]))
 	})
 
 	// author: jechen@redhat.com
@@ -523,13 +523,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		sub := getIfaddrFromNode(egressNode1, oc)
 
 		g.By("2. Find 2 unused IPs from one egress node")
-		freeIps := findUnUsedIPsOnNode(oc, egressNode1, sub, 2)
-		o.Expect(len(freeIps) == 2).Should(o.BeTrue())
+		freeIPs := findUnUsedIPsOnNode(oc, egressNode1, sub, 2)
+		o.Expect(len(freeIPs) == 2).Should(o.BeTrue())
 
 		g.By("3. Patch egressIP address to egressIP nodes")
-		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressIPs\":[\""+freeIps[0]+"\"]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressIPs\":[]}")
-		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressIPs\":[\""+freeIps[1]+"\"]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressIPs\":[\""+freeIPs[1]+"\"]}")
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressIPs\":[]}")
 
 		g.By("3. Create a namespaces, apply the both egressIPs to the namespace, and create a test pod on the egress node")
@@ -545,21 +545,21 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		podns.createPingPodNode(oc)
 		waitPodReady(oc, podns.namespace, podns.name)
 
-		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIps[0]+"\", \""+freeIps[1]+"\"]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIPs[0]+"\", \""+freeIPs[1]+"\"]}")
 		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
 
 		// check the source IP that the test pod uses
 		g.By("4. get egressIP on the node where test pod resides")
 		ip, err := getEgressIPonSDNHost(oc, egressNode1, 1)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(ip[0]).Should(o.BeElementOf(freeIps))
+		o.Expect(ip[0]).Should(o.BeElementOf(freeIPs))
 
 		g.By("5.Check source IP from the test pod for 10 times, it should always use the egressIP of the egressNode that it resides on")
 		sourceIP, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(sourceIP)
-		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps[0]))
-		o.Expect(sourceIP).ShouldNot(o.ContainSubstring(freeIps[1]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs[0]))
+		o.Expect(sourceIP).ShouldNot(o.ContainSubstring(freeIPs[1]))
 	})
 
 	// author: jechen@redhat.com
@@ -575,24 +575,24 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressCIDRs\":[]}")
 
 		g.By("2. Find 5 unused IPs from the egress node")
-		freeIps := findUnUsedIPsOnNode(oc, egressNode, sub, 5)
-		o.Expect(len(freeIps) == 5).Should(o.BeTrue())
+		freeIPs := findUnUsedIPsOnNode(oc, egressNode, sub, 5)
+		o.Expect(len(freeIPs) == 5).Should(o.BeTrue())
 
 		g.By("3. Create a namespace, patch one egressIP from the freeIPs to the netnamespace, repeat 5 times, replaces the egressIP each time")
 		oc.SetupProject()
 		ns := oc.Namespace()
 
 		for i := 0; i < 5; i++ {
-			patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIps[i]+"\"]}")
+			patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIPs[i]+"\"]}")
 			defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
 		}
 
 		g.By("4. check egressIP for the node, it should have only the last egressIP from the freeIPs as its egressIP address")
 		ip, err := getEgressIPonSDNHost(oc, egressNode, 1)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(ip[0]).Should(o.BeElementOf(freeIps[4]))
+		o.Expect(ip[0]).Should(o.BeElementOf(freeIPs[4]))
 		for i := 0; i < 4; i++ {
-			o.Expect(ip[0]).ShouldNot(o.BeElementOf(freeIps[i]))
+			o.Expect(ip[0]).ShouldNot(o.BeElementOf(freeIPs[i]))
 		}
 	})
 
@@ -633,8 +633,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[]}")
 
 		g.By("3. Find 1 unused IPs from one egress node")
-		freeIps := findUnUsedIPsOnNode(oc, egressNode1, sub, 1)
-		o.Expect(len(freeIps) == 1).Should(o.BeTrue())
+		freeIPs := findUnUsedIPsOnNode(oc, egressNode1, sub, 1)
+		o.Expect(len(freeIPs) == 1).Should(o.BeTrue())
 
 		g.By("4. Create a namespaces, apply the egressIP to the namespace, and create a test pod on a non-egress node")
 		oc.SetupProject()
@@ -650,11 +650,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", podns.name, "-n", podns.namespace).Execute()
 		waitPodReady(oc, podns.namespace, podns.name)
 
-		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIps[0]+"\"]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
 		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
 
 		g.By("5. Find the host that is assigned the egressIP address")
-		foundHost := SDNHostwEgressIP(oc, egressNodes, freeIps[0])
+		foundHost := SDNHostwEgressIP(oc, egressNodes, freeIPs[0])
 		e2e.Logf("\n\n\n foundHost that has the egressIP: %v\n\n\n", foundHost)
 		o.Expect(foundHost).NotTo(o.BeEmpty())
 
@@ -676,14 +676,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("8. check if egressIP address is moved to the other egressIP node after original host is rebooted")
 		ip, err := getEgressIPonSDNHost(oc, hostLeft[0], 1)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(ip[0]).Should(o.BeElementOf(freeIps))
+		o.Expect(ip[0]).Should(o.BeElementOf(freeIPs))
 
 		g.By("9.From the namespace, check source IP is egressIP address")
 		sourceIP, err := e2e.RunHostCmd(podns.namespace, podns.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
-		if !contains(freeIps, sourceIP) || err != nil {
+		if !contains(freeIPs, sourceIP) || err != nil {
 			err = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
 				sourceIP, err := e2e.RunHostCmd(podns.namespace, podns.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
-				if !contains(freeIps, sourceIP) || err != nil {
+				if !contains(freeIPs, sourceIP) || err != nil {
 					e2e.Logf("\n got sourceIP as %v while egressIP is %v, or got the error: %v\n, try again", sourceIP, ip, err)
 					return false, nil
 				}
@@ -692,7 +692,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to get sourceIP:%s", err))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(sourceIP).Should(o.BeElementOf(freeIps[0]))
+		o.Expect(sourceIP).Should(o.BeElementOf(freeIPs[0]))
 	})
 
 	// author: jechen@redhat.com
@@ -725,12 +725,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNodes[2], "{\"egressCIDRs\":[]}")
 
 		// Find 1 unused IPs from each egress node
-		freeIps1 := findUnUsedIPsOnNode(oc, nodeList.Items[0].Name, sub1, 1)
-		o.Expect(len(freeIps1) == 1).Should(o.BeTrue())
-		freeIps2 := findUnUsedIPsOnNode(oc, nodeList.Items[1].Name, sub2, 1)
-		o.Expect(len(freeIps2) == 1).Should(o.BeTrue())
-		freeIps3 := findUnUsedIPsOnNode(oc, nodeList.Items[2].Name, sub3, 1)
-		o.Expect(len(freeIps3) == 1).Should(o.BeTrue())
+		freeIPs1 := findUnUsedIPsOnNode(oc, nodeList.Items[0].Name, sub1, 1)
+		o.Expect(len(freeIPs1) == 1).Should(o.BeTrue())
+		freeIPs2 := findUnUsedIPsOnNode(oc, nodeList.Items[1].Name, sub2, 1)
+		o.Expect(len(freeIPs2) == 1).Should(o.BeTrue())
+		freeIPs3 := findUnUsedIPsOnNode(oc, nodeList.Items[2].Name, sub3, 1)
+		o.Expect(len(freeIPs3) == 1).Should(o.BeTrue())
 
 		g.By("2. Create a namespaces, patch all egressIPs to the namespace, and create a test pod on a non-egress node")
 		oc.SetupProject()
@@ -744,19 +744,19 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		podns.createPingPodNode(oc)
 		waitPodReady(oc, podns.namespace, podns.name)
 
-		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIps1[0]+"\", \""+freeIps2[0]+"\", \""+freeIps3[0]+"\"]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIPs1[0]+"\", \""+freeIPs2[0]+"\", \""+freeIPs3[0]+"\"]}")
 		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
 
 		g.By("3.Check source IP from the test pod for 10 times, it should use any egressIP address as its sourceIP")
 		sourceIP, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("\n Get sourceIP as: %v\n", sourceIP)
-		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps1[0]))
-		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps2[0]))
-		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps3[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs1[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs2[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs3[0]))
 
 		g.By("4. Find the host that is assigned the first egressIP address")
-		foundHost := SDNHostwEgressIP(oc, egressNodes, freeIps1[0])
+		foundHost := SDNHostwEgressIP(oc, egressNodes, freeIPs1[0])
 		e2e.Logf("\n\n\n foundHost that has the egressIP: %v\n\n\n", foundHost)
 		o.Expect(foundHost).NotTo(o.BeEmpty())
 
@@ -766,7 +766,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		switch ci.CheckPlatform(oc) {
 		case "aws":
 			e2e.Logf("\n AWS is detected \n")
-			g.Skip("Skip the rest temporarily.")
+			defer checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
+			defer startInstanceOnAWS(a, nodeList.Items[1].Name)
+			stopInstanceOnAWS(a, nodeList.Items[1].Name)
+			checkNodeStatus(oc, nodeList.Items[1].Name, "NotReady")
 		case "gcp":
 			// for gcp, remove the postfix "c.openshift-qe.internal" to get its instance name
 			instance = strings.Split(foundHost, ".")
@@ -774,6 +777,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			infraID, err := exutil.GetInfraId(oc)
 			zone, err = getZoneOfInstanceFromGcp(oc, infraID, instance[0])
 			o.Expect(err).NotTo(o.HaveOccurred())
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			defer startInstanceOnGcp(oc, instance[0], zone)
 			err = stopInstanceOnGcp(oc, instance[0], zone)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, foundHost, "NotReady")
@@ -786,20 +791,21 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		sourceIP, err = execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("\n Get sourceIP as: %v\n", sourceIP)
-		o.Expect(sourceIP).ShouldNot(o.ContainSubstring(freeIps1[0]))
-		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps2[0]))
-		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps3[0]))
+		o.Expect(sourceIP).ShouldNot(o.ContainSubstring(freeIPs1[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs2[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs3[0]))
 
 		g.By("7. Bring the host back up")
 		switch ci.CheckPlatform(oc) {
 		case "aws":
-			e2e.Logf("\n AWS is detected \n")
-			g.Skip("Skip the rest temporarliy.")
+			defer checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
+			startInstanceOnAWS(a, nodeList.Items[1].Name)
+			checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
 		case "gcp":
 			defer checkNodeStatus(oc, foundHost, "Ready")
 			err = startInstanceOnGcp(oc, instance[0], zone)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			checkNodeStatus(oc, foundHost, "NotReady")
+			checkNodeStatus(oc, foundHost, "Ready")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
 			g.Skip("Not support cloud provider for auto egressip cases for now.")
@@ -807,4 +813,120 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 
+	// author: jechen@redhat.com
+	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-46561-[Manual EgressIP] If some egress node is unavailable, pods continue use other available egressIPs after a short delay. [Disruptive][Slow]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+
+		g.By("1. Get list of nodes, get subnet and an unused ip address from each node, add egressIP to each egress node")
+		var egressNodes []string
+		nodeNum := 4
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < nodeNum {
+			g.Skip("Not enough worker nodes for this test, skip the case!!")
+		}
+
+		// choose first 3 nodes as egress nodes
+		for i := 0; i < (nodeNum - 1); i++ {
+			egressNodes = append(egressNodes, nodeList.Items[i].Name)
+		}
+		sub1 := getIfaddrFromNode(nodeList.Items[0].Name, oc)
+		sub2 := getIfaddrFromNode(nodeList.Items[1].Name, oc)
+		sub3 := getIfaddrFromNode(nodeList.Items[2].Name, oc)
+
+		// Find 1 unused IPs from each egress node
+		freeIPs1 := findUnUsedIPsOnNode(oc, egressNodes[0], sub1, 1)
+		o.Expect(len(freeIPs1) == 1).Should(o.BeTrue())
+		freeIPs2 := findUnUsedIPsOnNode(oc, egressNodes[1], sub2, 1)
+		o.Expect(len(freeIPs2) == 1).Should(o.BeTrue())
+		freeIPs3 := findUnUsedIPsOnNode(oc, egressNodes[2], sub3, 1)
+		o.Expect(len(freeIPs3) == 1).Should(o.BeTrue())
+
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNodes[0], "{\"egressIPs\":[\""+freeIPs1[0]+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNodes[0], "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNodes[1], "{\"egressIPs\":[\""+freeIPs2[0]+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNodes[1], "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNodes[2], "{\"egressIPs\":[\""+freeIPs3[0]+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNodes[2], "{\"egressIPs\":[]}")
+
+		g.By("2. Create a namespaces, patch all egressIPs to the namespace, and create a test pod on a non-egress node")
+		oc.SetupProject()
+		ns := oc.Namespace()
+		podns := pingPodResourceNode{
+			name:      "hello-pod",
+			namespace: ns,
+			nodename:  nodeList.Items[nodeNum-1].Name,
+			template:  pingPodNodeTemplate,
+		}
+		podns.createPingPodNode(oc)
+		waitPodReady(oc, podns.namespace, podns.name)
+
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIPs1[0]+"\", \""+freeIPs2[0]+"\", \""+freeIPs3[0]+"\"]}")
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+
+		g.By("3.Check source IP from the test pod for 10 times, it should use any egressIP address as its sourceIP")
+		sourceIP, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n Get sourceIP as: %v\n", sourceIP)
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs1[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs2[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs3[0]))
+
+		g.By("4. Find the host that is assigned the first egressIP address")
+		foundHost := SDNHostwEgressIP(oc, egressNodes, freeIPs1[0])
+		e2e.Logf("\n\n\n foundHost that has the egressIP: %v\n\n\n", foundHost)
+		o.Expect(foundHost).NotTo(o.BeEmpty())
+
+		g.By("5. Get the zone info for the host, shutdown the host that has the first egressIP address")
+		var instance []string
+		var zone string
+		switch ci.CheckPlatform(oc) {
+		case "aws":
+			e2e.Logf("\n AWS is detected \n")
+			defer checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
+			defer startInstanceOnAWS(a, nodeList.Items[1].Name)
+			stopInstanceOnAWS(a, nodeList.Items[1].Name)
+			checkNodeStatus(oc, nodeList.Items[1].Name, "NotReady")
+		case "gcp":
+			// for gcp, remove the postfix "c.openshift-qe.internal" to get its instance name
+			instance = strings.Split(foundHost, ".")
+			e2e.Logf("\n\n\n the worker node to be shutdown is: %v\n\n\n", instance[0])
+			infraID, err := exutil.GetInfraId(oc)
+			zone, err = getZoneOfInstanceFromGcp(oc, infraID, instance[0])
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			defer startInstanceOnGcp(oc, instance[0], zone)
+			err = stopInstanceOnGcp(oc, instance[0], zone)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "NotReady")
+		default:
+			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
+			g.Skip("Not support cloud provider for auto egressip cases for now.")
+		}
+
+		g.By("6.From the namespace, check source IP is egressIP address")
+		sourceIP, err = execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n Get sourceIP as: %v\n", sourceIP)
+		o.Expect(sourceIP).ShouldNot(o.ContainSubstring(freeIPs1[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs2[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs3[0]))
+
+		g.By("7. Bring the host back up")
+		switch ci.CheckPlatform(oc) {
+		case "aws":
+			defer checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
+			startInstanceOnAWS(a, nodeList.Items[1].Name)
+			checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
+		case "gcp":
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			err = startInstanceOnGcp(oc, instance[0], zone)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "Ready")
+		default:
+			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
+			g.Skip("Not support cloud provider for auto egressip cases for now.")
+		}
+	})
 })
