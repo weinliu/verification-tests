@@ -16,3 +16,23 @@ export namespace podsPageUtils {
         cy.visit(`./k8s/ns/${project}/pods/${podName}`).byTestSelector('details-item-value__Pod IP').should('be.visible').invoke('text').as(`${podName}IP`)
     }
 }
+
+export const podsPage = {
+    goToPodsInAllNamespaces: () => {
+        // go to the page
+        cy.visit('/k8s/all-namespaces/pods');
+        // check for the page to be loaded by checking for the columns in the page to be displayed
+        cy.get('.pf-c-table__text').should('exist')
+    },
+    goToPodsForGivenNamespace: (namespace: String) => {
+        // go to the page
+        cy.visit('/k8s/ns/'+namespace+'/pods');
+        // check for the page to be loaded by checking for the columns in the page to be displayed
+        cy.get('.pf-c-table__text').should('exist')
+    },
+    // this is to make sure the page is loaded,
+    // the pods page is loaded when the columns are displayed hence checking for this condition
+    isLoaded: () => {
+        cy.get('.pf-c-table__text').should('exist')
+    },
+}
