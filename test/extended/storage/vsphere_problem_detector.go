@@ -54,7 +54,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		metrics, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("prometheus-k8s-0", "-c", "prometheus", "-n", "openshift-monitoring", "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", token), url).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(metrics).NotTo(o.BeEmpty())
-		o.Expect(metrics).To(o.ContainSubstring("\"hwVersion\":\"vmx-" + hwVersion))
+		o.Expect(metrics).To(o.ContainSubstring("\"hw_version\":\"vmx-" + hwVersion))
 
 		g.By("# Check alert for if there is unsupported HW version")
 		if hwVersion == "13" || hwVersion == "14" {
@@ -64,7 +64,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author:wduan@redhat.com
-	g.It("Author:wduan-Medium-44664-The vSphere cluster is marked as unupgradable if vcenter, esxi versions or HW versions are unsupported", func() {
+	g.It("Author:wduan-Medium-44664-[vsphere-problem-detector] The vSphere cluster is marked as unupgradable if vcenter, esxi versions or HW versions are unsupported", func() {
 		g.By("# Get log from vsphere-problem-detector-operator")
 		podlog, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment/vsphere-problem-detector-operator", "-n", "openshift-cluster-storage-operator").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -99,7 +99,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("Check metric: vsphere_vcenter_info, vsphere_esxi_version_total, vsphere_node_hw_version_total, vsphere_datastore_total, vsphere_rwx_volumes_total")
 		checkStorageMetricsContent(oc, "vsphere_vcenter_info", "api_version")
 		checkStorageMetricsContent(oc, "vsphere_esxi_version_total", "api_version")
-		checkStorageMetricsContent(oc, "vsphere_node_hw_version_total", "hwVersion")
+		checkStorageMetricsContent(oc, "vsphere_node_hw_version_total", "hw_version")
 		checkStorageMetricsContent(oc, "vsphere_datastore_total", "instance")
 		checkStorageMetricsContent(oc, "vsphere_rwx_volumes_total", "value")
 	})

@@ -15,18 +15,7 @@ import (
 
 // Execute command in node
 func execCommandInSpecificNode(oc *exutil.CLI, nodeHostName string, command string) (string, error) {
-	// Adapt Pod Security changed on k8s v1.23+
-	// https://kubernetes.io/docs/tutorials/security/cluster-level-pss/
-	const debugCmdWarning string = "Warning: would violate PodSecurity \"restricted:latest\": " +
-		"host namespaces (hostNetwork=true, hostPID=true), hostPath volumes (volume \"host\"), " +
-		"privileged (container \"container-00\" must not set securityContext.privileged=true), " +
-		"allowPrivilegeEscalation != false (container \"container-00\" must set securityContext.allowPrivilegeEscalation=false), " +
-		"unrestricted capabilities (container \"container-00\" must set securityContext.capabilities.drop=[\"ALL\"]), " +
-		"restricted volume types (volume \"host\" uses restricted volume type \"hostPath\"), " +
-		"runAsNonRoot != true (pod or container \"container-00\" must set securityContext.runAsNonRoot=true), " +
-		"runAsUser=0 (container \"container-00\" must not set runAsUser=0), seccompProfile (pod or container \"container-00\" " +
-		"must set securityContext.seccompProfile.type to \"RuntimeDefault\" or \"Localhost\")"
-
+	var output string
 	debugPodNamespace := oc.Namespace()
 	// Check whether current namespace is Active
 	nsState, err := oc.AsAdmin().Run("get").Args("ns/"+oc.Namespace(), "-o=jsonpath={.status.phase}", "--ignore-not-found").Output()
@@ -34,17 +23,23 @@ func execCommandInSpecificNode(oc *exutil.CLI, nodeHostName string, command stri
 		debugPodNamespace = "default"
 	}
 	argsCmd := []string{"-n", debugPodNamespace, "node/" + nodeHostName, "-q", "--", "chroot", "/host", "bin/sh", "-c", command}
-	msg, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args(argsCmd...).Output()
-	// Remove the oc debug node output warning
-	msg = strings.TrimSpace(strings.TrimPrefix(msg, debugCmdWarning))
+	stdOut, stdErr, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args(argsCmd...).Outputs()
+	debugLogf("Executed \""+command+"\" on node \"%s\":\n*stdErr* :\"%s\"\n*stdOut* :\"%s\".", nodeHostName, stdErr, stdOut)
+	// Adapt Pod Security changed on k8s v1.23+
+	// https://kubernetes.io/docs/tutorials/security/cluster-level-pss/
+	// Ignore the oc debug node output warning info: "Warning: would violate PodSecurity "restricted:latest": host namespaces (hostNetwork=true, hostPID=true), ..."
+	if strings.ContainsAny(stdErr, "warning") {
+		output = stdOut
+	} else {
+		output = strings.Join([]string{stdErr, stdOut}, "\n")
+	}
 	if err != nil {
 		e2e.Logf("Execute \""+command+"\" on node \"%s\" *failed with* : \"%v\".", nodeHostName, err)
-		return msg, err
+		return output, err
 	}
+	debugLogf("Executed \""+command+"\" on node \"%s\" *Output is* : \"%v\".", nodeHostName, output)
 	e2e.Logf("Executed \""+command+"\" on node \"%s\" *Successed* ", nodeHostName)
-	debugLogf("Executed \""+command+"\" on node \"%s\" *Output is* : \"%v\".", nodeHostName, msg)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return msg, nil
+	return output, nil
 }
 
 // Check the Volume mounted on the Node

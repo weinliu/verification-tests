@@ -639,3 +639,15 @@ func patchResourceAsAdmin(oc *exutil.CLI, namespace, resourceKindAndName, JSONPa
 		o.Expect(oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", namespace, resourceKindAndName, "-p", JSONPatch, "--type="+patchType).Output()).To(o.ContainSubstring("patched"))
 	}
 }
+
+//  Get the oc client version major.minor x.x (e.g. 4.11)
+func getClientVersion(oc *exutil.CLI) string {
+	output, err := oc.WithoutNamespace().AsAdmin().Run("version").Args("-o", "json").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	clientVersion := gjson.Get(output, `clientVersion.gitVersion`).String()
+	o.Expect(clientVersion).NotTo(o.BeEmpty())
+	tempSlice := strings.Split(clientVersion, ".")
+	clientVersion = tempSlice[0] + "." + tempSlice[1]
+	e2e.Logf("The oc client version is : \"%s\"", clientVersion)
+	return clientVersion
+}
