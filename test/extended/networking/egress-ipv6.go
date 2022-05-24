@@ -30,7 +30,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	// author: huirwang@redhat.com
 	g.It("Author:huirwang-Medium-43466-EgressIP works well with ipv6 address. [Serial]", func() {
-		ipStackType := checkIpStackType(oc)
+		ipStackType := checkIPStackType(oc)
 		if ipStackType == "ipv4single" {
 			g.Skip("Current env is ipv4 single stack cluster, skip this test!!!")
 		}
@@ -89,7 +89,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	// author: huirwang@redhat.com
 	g.It("Author:huirwang-High-43465-Both ipv4 and ipv6 addresses can be configured on dualstack as egressip. [Serial]", func() {
-		ipStackType := checkIpStackType(oc)
+		ipStackType := checkIPStackType(oc)
 		if ipStackType != "dualstack" {
 			g.Skip("Current env is not dualstack cluster, skip this case!!!")
 		}
@@ -119,12 +119,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("Create an egressip object")
 
 		g.By("Find unsued ipv4 address")
-		sub_ipv4, _ := getDefaultSubnet(oc)
-		ipv4s := findUnUsedIPs(oc, sub_ipv4, 1)
+		subIpv4, _ := getDefaultSubnet(oc)
+		ipv4s := findUnUsedIPs(oc, subIpv4, 1)
 
 		g.By("Find unsued ipv6 address")
-		sub_ipv6, _ := getDefaultIPv6Subnet(oc)
-		ipv6s, _ := findUnUsedIPv6(oc, sub_ipv6, 1)
+		subIpv6, _ := getDefaultIPv6Subnet(oc)
+		ipv6s, _ := findUnUsedIPv6(oc, subIpv6, 1)
 
 		egressip1 := egressIPResource1{
 			name:      "egressip-43465",
@@ -157,7 +157,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	// author: huirwang@redhat.com
 	g.It("Author:huirwang-High-43464-EgressFirewall works with IPv6 address.", func() {
-		ipStackType := checkIpStackType(oc)
+		ipStackType := checkIPStackType(oc)
 		if ipStackType == "ipv4single" {
 			g.Skip("Current env is ipv4 single cluster, skip the test!!!")
 		}

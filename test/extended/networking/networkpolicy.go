@@ -171,26 +171,26 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		oc.SetupProject()
 		ns2 := oc.Namespace()
 		g.By("create a hello-pod on 2nd namesapce on same node as first namespace")
-		pod1_ns2 := pingPodResourceNode{
+		pod1Ns2 := pingPodResourceNode{
 			name:      "hello-pod",
 			namespace: ns2,
 			nodename:  nodeList.Items[0].Name,
 			template:  pingPodNodeTemplate,
 		}
-		pod1_ns2.createPingPodNode(oc)
-		waitPodReady(oc, pod1_ns2.namespace, pod1_ns2.name)
+		pod1Ns2.createPingPodNode(oc)
+		waitPodReady(oc, pod1Ns2.namespace, pod1Ns2.name)
 
 		g.By("create another hello-pod on 2nd namesapce but on different node")
-		pod2_ns2 := pingPodResourceNode{
+		pod2Ns2 := pingPodResourceNode{
 			name:      "hello-pod-other-node",
 			namespace: ns2,
 			nodename:  nodeList.Items[1].Name,
 			template:  pingPodNodeTemplate,
 		}
-		pod2_ns2.createPingPodNode(oc)
-		waitPodReady(oc, pod2_ns2.namespace, pod2_ns2.name)
+		pod2Ns2.createPingPodNode(oc)
+		waitPodReady(oc, pod2Ns2.namespace, pod2Ns2.name)
 
-		helloPodName_ns2 := getPodName(oc, ns2, "name=hello-pod")
+		helloPodNameNs2 := getPodName(oc, ns2, "name=hello-pod")
 
 		g.By("create default deny ingress type networkpolicy in 2nd namespace")
 		createResourceFromFile(oc, ns2, ingressTypeFile)
@@ -199,14 +199,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(output).To(o.ContainSubstring("default-deny-ingress"))
 
 		g.By("3. Get IP of the test pods in second namespace.")
-		hellopodIP1_ns2 := getPodIPv4(oc, ns2, helloPodName_ns2[0])
-		hellopodIP2_ns2 := getPodIPv4(oc, ns2, helloPodName_ns2[1])
+		hellopodIP1Ns2 := getPodIPv4(oc, ns2, helloPodNameNs2[0])
+		hellopodIP2Ns2 := getPodIPv4(oc, ns2, helloPodNameNs2[1])
 
 		g.By("4. Curl both ns2 pods from ns1.")
-		_, err = e2e.RunHostCmd(ns1, podns1.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(hellopodIP1_ns2, "8080"))
+		_, err = e2e.RunHostCmd(ns1, podns1.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(hellopodIP1Ns2, "8080"))
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
-		_, err = e2e.RunHostCmd(ns1, podns1.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(hellopodIP2_ns2, "8080"))
+		_, err = e2e.RunHostCmd(ns1, podns1.name, "curl --connect-timeout 5  -s "+net.JoinHostPort(hellopodIP2Ns2, "8080"))
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
 	})
@@ -220,7 +220,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			pingPodNodeTemplate          = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 		)
 
-		ipStackType := checkIpStackType(oc)
+		ipStackType := checkIPStackType(oc)
 		if ipStackType == "ipv4single" {
 			g.Skip("This case requires dualstack or Single Stack Ipv6 cluster")
 		}
@@ -264,32 +264,32 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod3ns1.createPingPodNode(oc)
 		waitPodReady(oc, pod3ns1.namespace, pod3ns1.name)
 
-		helloPod1ns1_IPv6, helloPod1ns1_IPv4 := getPodIP(oc, ns1, pod1ns1.name)
-		helloPod1ns1_IPv4_with_cidr := helloPod1ns1_IPv4 + "/32"
-		helloPod1ns1_IPv6_with_cidr := helloPod1ns1_IPv6 + "/128"
+		helloPod1ns1IPv6, helloPod1ns1IPv4 := getPodIP(oc, ns1, pod1ns1.name)
+		helloPod1ns1IPv4WithCidr := helloPod1ns1IPv4 + "/32"
+		helloPod1ns1IPv6WithCidr := helloPod1ns1IPv6 + "/128"
 
 		if ipStackType == "dualstack" {
 			g.By("create ipBlock Ingress Dual CIDRs Policy in ns1")
-			np_ipBlockNS1 := ipBlock_ingress_dual{
+			npIPBlockNS1 := ipBlockIngressDual{
 				name:      "ipblock-dual-cidrs-ingress",
 				template:  ipBlockIngressTemplateDual,
-				cidr_ipv4: helloPod1ns1_IPv4_with_cidr,
-				cidr_ipv6: helloPod1ns1_IPv6_with_cidr,
+				cidrIpv4:  helloPod1ns1IPv4WithCidr,
+				cidrIpv6:  helloPod1ns1IPv6WithCidr,
 				namespace: ns1,
 			}
-			np_ipBlockNS1.createipBlockIngressObjectDual(oc)
+			npIPBlockNS1.createipBlockIngressObjectDual(oc)
 
 			output, err := oc.Run("get").Args("networkpolicy").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).To(o.ContainSubstring("ipblock-dual-cidrs-ingress"))
 		} else {
-			np_ipBlockNS1 := ipBlock_ingress_single{
+			npIPBlockNS1 := ipBlockIngressSingle{
 				name:      "ipblock-single-cidr-ingress",
 				template:  ipBlockIngressTemplateSingle,
-				cidr:      helloPod1ns1_IPv6_with_cidr,
+				cidr:      helloPod1ns1IPv6WithCidr,
 				namespace: ns1,
 			}
-			np_ipBlockNS1.createipBlockIngressObjectSingle(oc)
+			npIPBlockNS1.createipBlockIngressObjectSingle(oc)
 
 			output, err := oc.Run("get").Args("networkpolicy").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -340,28 +340,28 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("networkpolicy", "ipblock-single-cidr-ingress", "-n", ns1).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
-		helloPod2ns2_IPv6, helloPod2ns2_IPv4 := getPodIP(oc, ns2, pod2ns2.name)
-		helloPod2ns2_IPv4_with_cidr := helloPod2ns2_IPv4 + "/32"
-		helloPod2ns2_IPv6_with_cidr := helloPod2ns2_IPv6 + "/128"
+		helloPod2ns2IPv6, helloPod2ns2IPv4 := getPodIP(oc, ns2, pod2ns2.name)
+		helloPod2ns2IPv4WithCidr := helloPod2ns2IPv4 + "/32"
+		helloPod2ns2IPv6WithCidr := helloPod2ns2IPv6 + "/128"
 
 		if ipStackType == "dualstack" {
 			g.By("create ipBlock Ingress Dual CIDRs Policy in ns1 again but with ipblock for pod2 ns2")
-			np_ipBlockNS1_new := ipBlock_ingress_dual{
+			npIPBlockNS1New := ipBlockIngressDual{
 				name:      "ipblock-dual-cidrs-ingress",
 				template:  ipBlockIngressTemplateDual,
-				cidr_ipv4: helloPod2ns2_IPv4_with_cidr,
-				cidr_ipv6: helloPod2ns2_IPv6_with_cidr,
+				cidrIpv4:  helloPod2ns2IPv4WithCidr,
+				cidrIpv6:  helloPod2ns2IPv6WithCidr,
 				namespace: ns1,
 			}
-			np_ipBlockNS1_new.createipBlockIngressObjectDual(oc)
+			npIPBlockNS1New.createipBlockIngressObjectDual(oc)
 		} else {
-			np_ipBlockNS1_new := ipBlock_ingress_single{
+			npIPBlockNS1New := ipBlockIngressSingle{
 				name:      "ipblock-single-cidr-ingress",
 				template:  ipBlockIngressTemplateSingle,
-				cidr:      helloPod2ns2_IPv6_with_cidr,
+				cidr:      helloPod2ns2IPv6WithCidr,
 				namespace: ns1,
 			}
-			np_ipBlockNS1_new.createipBlockIngressObjectSingle(oc)
+			npIPBlockNS1New.createipBlockIngressObjectSingle(oc)
 		}
 		g.By("Checking connectivity from pod2 ns2 to pod3 ns1")
 		CurlPod2PodPass(oc, ns2, "hello-pod2", ns1, "hello-pod3")
@@ -412,7 +412,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
 		err = waitForPodWithLabelReady(oc, ns1, "name=hellosdn")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=hellosdn not ready")
-		hellosdnPodName_ns1 := getPodName(oc, ns1, "name=hellosdn")
+		hellosdnPodNameNs1 := getPodName(oc, ns1, "name=hellosdn")
 
 		g.By("create egress type networkpolicy in ns1")
 		createResourceFromFile(oc, ns1, egressTypeFile)
@@ -430,11 +430,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=hellosdn not ready")
 
 		g.By("Get IP of the test pods in second namespace.")
-		hellosdnPodName_ns2 := getPodName(oc, ns2, "name=hellosdn")
-		hellosdnPodIP1_ns2 := getPodIPv4(oc, ns2, hellosdnPodName_ns2[0])
+		hellosdnPodNameNs2 := getPodName(oc, ns2, "name=hellosdn")
+		hellosdnPodIP1Ns2 := getPodIPv4(oc, ns2, hellosdnPodNameNs2[0])
 
 		g.By("curl from ns1 hellosdn pod to ns2 pod")
-		_, err = e2e.RunHostCmd(ns1, hellosdnPodName_ns1[0], "curl --connect-timeout 5  -s "+net.JoinHostPort(hellosdnPodIP1_ns2, "8080"))
+		_, err = e2e.RunHostCmd(ns1, hellosdnPodNameNs1[0], "curl --connect-timeout 5  -s "+net.JoinHostPort(hellosdnPodIP1Ns2, "8080"))
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
 
@@ -482,17 +482,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("Create a test service backing up both the above pods")
 		svc := genericServiceResource{
-			servicename:             "test-service",
-			namespace:               ns,
-			protocol:                "TCP",
-			selector:                "hello-pod",
-			service_type:            "ClusterIP",
-			ip_family_policy:        "",
-			internal_traffic_policy: "Cluster",
-			external_traffic_policy: "", //This no value parameter will be ignored
-			template:                genericServiceTemplate,
+			servicename:           "test-service",
+			namespace:             ns,
+			protocol:              "TCP",
+			selector:              "hello-pod",
+			serviceType:           "ClusterIP",
+			ipFamilyPolicy:        "",
+			internalTrafficPolicy: "Cluster",
+			externalTrafficPolicy: "", //This no value parameter will be ignored
+			template:              genericServiceTemplate,
 		}
-		svc.ip_family_policy = "SingleStack"
+		svc.ipFamilyPolicy = "SingleStack"
 		svc.createServiceFromParams(oc)
 
 		g.By("create allow-from-same-namespace ingress networkpolicy in ns")
@@ -517,14 +517,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		CurlNode2PodPass(oc, pod1.nodename, ns, "hello-pod1")
 		CurlNode2PodPass(oc, pod2.nodename, ns, "hello-pod2")
 
-		ipStackType := checkIpStackType(oc)
+		ipStackType := checkIPStackType(oc)
 
 		if ipStackType == "dualstack" {
 			g.By("Delete testservice from ns")
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "test-service", "-n", ns).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			g.By("Checking pod to svc:port behavior now on with PreferDualStack Service")
-			svc.ip_family_policy = "PreferDualStack"
+			svc.ipFamilyPolicy = "PreferDualStack"
 			svc.createServiceFromParams(oc)
 			for i := 0; i < 5; i++ {
 				g.By("curl from hello-pod1 to service:port")

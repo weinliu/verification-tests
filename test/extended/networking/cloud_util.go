@@ -92,11 +92,11 @@ func installIPEchoServiceOnAWS(a *exutil.AwsClient, oc *exutil.CLI) (string, err
 	ips := getAwsIntSvcIPs(a, oc)
 	publicIP, ok := ips["publicIP"]
 	if !ok {
-		return "", fmt.Errorf("No public IP found for Int Svc instance")
+		return "", fmt.Errorf("no public IP found for Int Svc instance")
 	}
 	privateIP, ok := ips["privateIP"]
 	if !ok {
-		return "", fmt.Errorf("No private IP found for Int Svc instance")
+		return "", fmt.Errorf("no private IP found for Int Svc instance")
 	}
 
 	sshClient := exutil.SshClient{User: user, Host: publicIP, Port: 22, PrivateKey: sshkey}

@@ -11,9 +11,9 @@ objects:
     labels:
       name: test-service
   spec:
-    internalTrafficPolicy: "${INTERNAL_TRAFFIC_POLICY}"
-    externalTrafficPolicy: "${EXTERNAL_TRAFFIC_POLICY}"
-    ipFamilyPolicy: "${IP_FAMILY_POLICY}" 
+    internalTrafficPolicy: "${internalTrafficPolicy}"
+    externalTrafficPolicy: "${externalTrafficPolicy}"
+    ipFamilyPolicy: "${ipFamilyPolicy}" 
     ports:
     - name: http
       port: 27017
@@ -21,14 +21,14 @@ objects:
       targetPort: 8080
     selector:
       name: "${SELECTOR}"
-    type: "${SERVICE_TYPE}"
+    type: "${serviceType}"
 parameters:
 - name: SERVICENAME
 - name: NAMESPACE
-- name: INTERNAL_TRAFFIC_POLICY
-- name: EXTERNAL_TRAFFIC_POLICY
-- name: IP_FAMILY_POLICY
+- name: internalTrafficPolicy
+- name: externalTrafficPolicy
+- name: ipFamilyPolicy
 - name: PROTOCOL
 - name: SELECTOR
-- name: SERVICE_TYPE
+- name: serviceType
 - name: PORT

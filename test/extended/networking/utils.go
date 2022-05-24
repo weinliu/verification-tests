@@ -58,15 +58,15 @@ type egressFirewall2 struct {
 	template  string
 }
 
-type ipBlock_ingress_dual struct {
+type ipBlockIngressDual struct {
 	name      string
 	namespace string
-	cidr_ipv4 string
-	cidr_ipv6 string
+	cidrIpv4  string
+	cidrIpv6  string
 	template  string
 }
 
-type ipBlock_ingress_single struct {
+type ipBlockIngressSingle struct {
 	name      string
 	namespace string
 	cidr      string
@@ -74,15 +74,15 @@ type ipBlock_ingress_single struct {
 }
 
 type genericServiceResource struct {
-	servicename             string
-	namespace               string
-	protocol                string
-	selector                string
-	service_type            string
-	ip_family_policy        string
-	external_traffic_policy string
-	internal_traffic_policy string
-	template                string
+	servicename           string
+	namespace             string
+	protocol              string
+	selector              string
+	serviceType           string
+	ipFamilyPolicy        string
+	externalTrafficPolicy string
+	internalTrafficPolicy string
+	template              string
 }
 
 func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
@@ -182,9 +182,9 @@ func (egressFirewall *egressFirewall2) createEgressFW2Object(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create EgressFW2 %v", egressFirewall.name))
 }
 
-func (ipBlock_ingress_policy *ipBlock_ingress_dual) createipBlockIngressObjectDual(oc *exutil.CLI) {
+func (ipBlock_ingress_policy *ipBlockIngressDual) createipBlockIngressObjectDual(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipBlock_ingress_policy.template, "-p", "NAME="+ipBlock_ingress_policy.name, "NAMESPACE="+ipBlock_ingress_policy.namespace, "CIDR_IPv6="+ipBlock_ingress_policy.cidr_ipv6, "CIDR_IPv4="+ipBlock_ingress_policy.cidr_ipv4)
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipBlock_ingress_policy.template, "-p", "NAME="+ipBlock_ingress_policy.name, "NAMESPACE="+ipBlock_ingress_policy.namespace, "cidrIpv6="+ipBlock_ingress_policy.cidrIpv6, "cidrIpv4="+ipBlock_ingress_policy.cidrIpv4)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
@@ -194,7 +194,7 @@ func (ipBlock_ingress_policy *ipBlock_ingress_dual) createipBlockIngressObjectDu
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create network policy %v", ipBlock_ingress_policy.name))
 }
 
-func (ipBlock_ingress_policy *ipBlock_ingress_single) createipBlockIngressObjectSingle(oc *exutil.CLI) {
+func (ipBlock_ingress_policy *ipBlockIngressSingle) createipBlockIngressObjectSingle(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipBlock_ingress_policy.template, "-p", "NAME="+ipBlock_ingress_policy.name, "NAMESPACE="+ipBlock_ingress_policy.namespace, "CIDR="+ipBlock_ingress_policy.cidr)
 		if err1 != nil {
@@ -208,7 +208,7 @@ func (ipBlock_ingress_policy *ipBlock_ingress_single) createipBlockIngressObject
 
 func (service *genericServiceResource) createServiceFromParams(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", service.template, "-p", "SERVICENAME="+service.servicename, "NAMESPACE="+service.namespace, "PROTOCOL="+service.protocol, "SELECTOR="+service.selector, "SERVICE_TYPE="+service.service_type, "IP_FAMILY_POLICY="+service.ip_family_policy, "INTERNAL_TRAFFIC_POLICY="+service.internal_traffic_policy, "EXTERNAL_TRAFFIC_POLICY="+service.external_traffic_policy)
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", service.template, "-p", "SERVICENAME="+service.servicename, "NAMESPACE="+service.namespace, "PROTOCOL="+service.protocol, "SELECTOR="+service.selector, "serviceType="+service.serviceType, "ipFamilyPolicy="+service.ipFamilyPolicy, "internalTrafficPolicy="+service.internalTrafficPolicy, "externalTrafficPolicy="+service.externalTrafficPolicy)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
@@ -222,12 +222,12 @@ func (egressFirewall *egressFirewall2) deleteEgressFW2Object(oc *exutil.CLI) {
 	removeResource(oc, true, true, "egressfirewall", egressFirewall.name, "-n", egressFirewall.namespace)
 }
 
-func (pingPod *pingPodResource) deletePingPod(oc *exutil.CLI) {
-	removeResource(oc, false, true, "pod", pingPod.name, "-n", pingPod.namespace)
+func (pod *pingPodResource) deletePingPod(oc *exutil.CLI) {
+	removeResource(oc, false, true, "pod", pod.name, "-n", pod.namespace)
 }
 
-func (pingPodNode *pingPodResourceNode) deletePingPodNode(oc *exutil.CLI) {
-	removeResource(oc, false, true, "pod", pingPodNode.name, "-n", pingPodNode.namespace)
+func (pod *pingPodResourceNode) deletePingPodNode(oc *exutil.CLI) {
+	removeResource(oc, false, true, "pod", pod.name, "-n", pod.namespace)
 }
 
 func removeResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) {
@@ -399,15 +399,16 @@ func getDefaultSubnet(oc *exutil.CLI) (string, error) {
 	int1, _ := getDefaultInterface(oc)
 	getDefaultSubnetCmd := "/usr/sbin/ip -4 -brief a show " + int1
 	subnet1, err := execCommandInNetworkingPod(oc, getDefaultSubnetCmd)
+	defSubnet := strings.Fields(subnet1)[2]
 	if err != nil {
 		e2e.Logf("Cannot get default subnet, errors: %v", err)
 		return "", err
 	}
-	defSubnet := strings.Fields(subnet1)[2]
 	e2e.Logf("Get the default subnet: %s", defSubnet)
 	return defSubnet, nil
 }
 
+//Hosts function return the host network CIDR
 func Hosts(cidr string) ([]string, error) {
 	ip, ipnet, err := net.ParseCIDR(cidr)
 	if err != nil {
@@ -513,12 +514,11 @@ func findUnUsedIPv6(oc *exutil.CLI, cidr string, number int) ([]string, error) {
 func ipv6EchoServer(isIPv6 bool) string {
 	if isIPv6 {
 		return "[2620:52:0:4974:def4:1ff:fee7:8144]:8085"
-	} else {
-		return "10.73.116.56:8085"
 	}
+	return "10.73.116.56:8085"
 }
 
-func checkIpStackType(oc *exutil.CLI) string {
+func checkIPStackType(oc *exutil.CLI) string {
 	svcNetwork, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("network.operator", "cluster", "-o=jsonpath={.spec.serviceNetwork}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if strings.Count(svcNetwork, ":") >= 2 && strings.Count(svcNetwork, ".") >= 2 {
@@ -542,9 +542,9 @@ func installSctpModule(oc *exutil.CLI, configFile string) {
 func checkSctpModule(oc *exutil.CLI, nodeName string) {
 	err := wait.Poll(30*time.Second, 15*time.Minute, func() (bool, error) {
 		// Check nodes status to make sure all nodes are up after rebooting caused by load-sctp-module
-		nodes_status, err := oc.AsAdmin().Run("get").Args("node").Output()
+		nodesStatus, err := oc.AsAdmin().Run("get").Args("node").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("oc_get_nodes: %v", nodes_status)
+		e2e.Logf("oc_get_nodes: %v", nodesStatus)
 		status, _ := oc.AsAdmin().Run("debug").Args("node/"+nodeName, "--", "cat", "/sys/module/sctp/initstate").Output()
 		if strings.Contains(status, "live") {
 			e2e.Logf("stcp module is installed in the %s", nodeName)
@@ -682,86 +682,76 @@ func getNodeIPv4(oc *exutil.CLI, namespace string, nodeName string) string {
 
 //Return IPv6 and IPv4 in vars respectively for Dual Stack and IPv4/IPv6 in 2nd var for single stack Clusters, and var1 will be nil in those cases
 func getNodeIP(oc *exutil.CLI, nodeName string) (string, string) {
-	ipStack := checkIpStackType(oc)
+	ipStack := checkIPStackType(oc)
 	if (ipStack == "ipv6single") || (ipStack == "ipv4single") {
 		e2e.Logf("Its a Single Stack Cluster, either IPv4 or IPv6")
 		InternalIP, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[0].address}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("The node's Internal IP is %q", InternalIP)
 		return "", InternalIP
-	} else {
-		e2e.Logf("Its a Dual Stack Cluster")
-		InternalIP1, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[0].address}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("The node's 1st Internal IP is %q", InternalIP1)
-		InternalIP2, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[1].address}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("The node's 2nd Internal IP is %q", InternalIP2)
-		if netutils.IsIPv6String(InternalIP1) {
-			return InternalIP1, InternalIP2
-		} else {
-			return InternalIP2, InternalIP1
-
-		}
 	}
+	e2e.Logf("Its a Dual Stack Cluster")
+	InternalIP1, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[0].address}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The node's 1st Internal IP is %q", InternalIP1)
+	InternalIP2, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[1].address}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The node's 2nd Internal IP is %q", InternalIP2)
+	if netutils.IsIPv6String(InternalIP1) {
+		return InternalIP1, InternalIP2
+	}
+	return InternalIP2, InternalIP1
 }
 
 func getLeaderInfo(oc *exutil.CLI, namespace string, cmName string, networkType string) string {
+	output1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-n", namespace, "-o=jsonpath={.metadata.annotations.control-plane\\.alpha\\.kubernetes\\.io/leader}").OutputToFile("oc_describe_nodes.txt")
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	output2, err2 := exec.Command("bash", "-c", "cat "+output1+" |  jq -r .holderIdentity").Output()
+	o.Expect(err2).NotTo(o.HaveOccurred())
+	leaderNodeName := strings.Trim(strings.TrimSpace(string(output2)), "\"")
+	e2e.Logf("The leader node name is %s", leaderNodeName)
 	if networkType == "ovnkubernetes" {
-		output1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-n", namespace, "-o=jsonpath={.metadata.annotations.control-plane\\.alpha\\.kubernetes\\.io/leader}").OutputToFile("oc_describe_nodes.txt")
-		o.Expect(err1).NotTo(o.HaveOccurred())
-		output2, err2 := exec.Command("bash", "-c", "cat "+output1+" |  jq -r .holderIdentity").Output()
-		o.Expect(err2).NotTo(o.HaveOccurred())
-		leaderNodeName := strings.Trim(strings.TrimSpace(string(output2)), "\"")
-		e2e.Logf("The leader node name is %s", leaderNodeName)
 		_, leaderNodeIP := getNodeIP(oc, leaderNodeName)
 		e2e.Logf("The leader node's IP is: %v", leaderNodeIP)
 		return leaderNodeIP
-	} else {
-		output1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-n", namespace, "-o=jsonpath={.metadata.annotations.control-plane\\.alpha\\.kubernetes\\.io/leader}").OutputToFile("oc_describe_nodes.txt")
-		o.Expect(err1).NotTo(o.HaveOccurred())
-		output2, err2 := exec.Command("bash", "-c", "cat "+output1+" |  jq -r .holderIdentity").Output()
-		o.Expect(err2).NotTo(o.HaveOccurred())
-		leaderNodeName := strings.Trim(strings.TrimSpace(string(output2)), "\"")
-		e2e.Logf("The leader node name is %s", leaderNodeName)
-		oc_get_pods, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-sdn", "pod", "-l app=sdn", "-o=wide").OutputToFile("ocgetpods.txt")
-		o.Expect(err3).NotTo(o.HaveOccurred())
-		raw_grep_output, err3 := exec.Command("bash", "-c", "cat "+oc_get_pods+" | grep "+leaderNodeName+" | awk '{print $1}'").Output()
-		o.Expect(err3).NotTo(o.HaveOccurred())
-		leaderPodName := strings.TrimSpace(string(raw_grep_output))
-		e2e.Logf("The leader Pod's name: %v", leaderPodName)
-		return leaderPodName
 	}
+	ocGetPods, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-sdn", "pod", "-l app=sdn", "-o=wide").OutputToFile("ocgetpods.txt")
+	o.Expect(err3).NotTo(o.HaveOccurred())
+	rawGrepOutput, err3 := exec.Command("bash", "-c", "cat "+ocGetPods+" | grep "+leaderNodeName+" | awk '{print $1}'").Output()
+	o.Expect(err3).NotTo(o.HaveOccurred())
+	leaderPodName := strings.TrimSpace(string(rawGrepOutput))
+	e2e.Logf("The leader Pod's name: %v", leaderPodName)
+	return leaderPodName
 }
 
 func checkSDNMetrics(oc *exutil.CLI, url string, metrics string) {
-	var metrics_output []byte
-	var metrics_log []byte
+	var metricsOutput []byte
+	var metricsLog []byte
 	olmToken, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	metrics_err := wait.Poll(5*time.Second, 10*time.Second, func() (bool, error) {
+	metricsErr := wait.Poll(5*time.Second, 10*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), fmt.Sprintf("%s", url)).OutputToFile("metrics.txt")
 		if err != nil {
 			e2e.Logf("Can't get metrics and try again, the error is:%s", err)
 			return false, nil
 		}
-		metrics_log, _ = exec.Command("bash", "-c", "cat "+output+" ").Output()
-		metrics_string := string(metrics_log)
-		if strings.Contains(metrics_string, "ovnkube_master_pod") {
-			metrics_output, _ = exec.Command("bash", "-c", "cat "+output+" | grep "+metrics+" | awk 'NR==1{print $2}'").Output()
+		metricsLog, _ = exec.Command("bash", "-c", "cat "+output+" ").Output()
+		metricsString := string(metricsLog)
+		if strings.Contains(metricsString, "ovnkube_master_pod") {
+			metricsOutput, _ = exec.Command("bash", "-c", "cat "+output+" | grep "+metrics+" | awk 'NR==1{print $2}'").Output()
 		} else {
-			metrics_output, _ = exec.Command("bash", "-c", "cat "+output+" | grep "+metrics+" | awk 'NR==3{print $2}'").Output()
+			metricsOutput, _ = exec.Command("bash", "-c", "cat "+output+" | grep "+metrics+" | awk 'NR==3{print $2}'").Output()
 		}
-		metrics_value := strings.TrimSpace(string(metrics_output))
-		if metrics_value != "" {
-			e2e.Logf("The output of the metrics for %s is : %v", metrics, metrics_value)
+		metricsValue := strings.TrimSpace(string(metricsOutput))
+		if metricsValue != "" {
+			e2e.Logf("The output of the metrics for %s is : %v", metrics, metricsValue)
 		} else {
 			e2e.Logf("Can't get metrics for %s:", metrics)
 			return false, nil
 		}
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(metrics_err, fmt.Sprintf("Fail to get metric and the error is:%s", metrics_err))
+	exutil.AssertWaitPollNoErr(metricsErr, fmt.Sprintf("Fail to get metric and the error is:%s", metricsErr))
 }
 
 func getEgressCIDRs(oc *exutil.CLI, node string) string {
@@ -832,35 +822,35 @@ func findTwoNodesWithSameSubnet(oc *exutil.CLI, nodeList *v1.NodeList) (bool, [2
 }
 
 func getSDNMetrics(oc *exutil.CLI, podName string) string {
-	var metrics_log string
-	metrics_err := wait.Poll(5*time.Second, 10*time.Second, func() (bool, error) {
+	var metricsLog string
+	metricsErr := wait.Poll(5*time.Second, 10*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-sdn", fmt.Sprintf("%s", podName), "--", "curl", "localhost:29100/metrics").OutputToFile("metrics.txt")
 		if err != nil {
 			e2e.Logf("Can't get metrics and try again, the error is:%s", err)
 			return false, nil
 		}
-		metrics_log = output
+		metricsLog = output
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(metrics_err, fmt.Sprintf("Fail to get metric and the error is:%s", metrics_err))
-	return metrics_log
+	exutil.AssertWaitPollNoErr(metricsErr, fmt.Sprintf("Fail to get metric and the error is:%s", metricsErr))
+	return metricsLog
 }
 
 func getOVNMetrics(oc *exutil.CLI, url string) string {
-	var metrics_log string
+	var metricsLog string
 	olmToken, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	metrics_err := wait.Poll(5*time.Second, 10*time.Second, func() (bool, error) {
+	metricsErr := wait.Poll(5*time.Second, 10*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), fmt.Sprintf("%s", url)).OutputToFile("metrics.txt")
 		if err != nil {
 			e2e.Logf("Can't get metrics and try again, the error is:%s", err)
 			return false, nil
 		}
-		metrics_log = output
+		metricsLog = output
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(metrics_err, fmt.Sprintf("Fail to get metric and the error is:%s", metrics_err))
-	return metrics_log
+	exutil.AssertWaitPollNoErr(metricsErr, fmt.Sprintf("Fail to get metric and the error is:%s", metricsErr))
+	return metricsLog
 }
 
 func checkIPsec(oc *exutil.CLI) string {
@@ -871,7 +861,7 @@ func checkIPsec(oc *exutil.CLI) string {
 
 func getAssignedEIPInEIPObject(oc *exutil.CLI, egressIPObject string) []map[string]string {
 	var egressIPs string
-	egressip_err := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+	egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
 		egressIPStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressip", egressIPObject, "-ojsonpath={.status.items}").Output()
 		if err != nil {
 			e2e.Logf("Wait to get EgressIP object applied,try next round. %v", err)
@@ -885,7 +875,7 @@ func getAssignedEIPInEIPObject(oc *exutil.CLI, egressIPObject string) []map[stri
 		e2e.Logf("egressIPStatus: %v", egressIPs)
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(egressip_err, fmt.Sprintf("Failed to apply egressIPs:%s", egressip_err))
+	exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to apply egressIPs:%s", egressipErr))
 
 	var egressIPJsonMap []map[string]string
 	json.Unmarshal([]byte(egressIPs), &egressIPJsonMap)
@@ -905,7 +895,7 @@ func checkNodeStatus(oc *exutil.CLI, nodeName string, expectedStatus string) {
 	} else if expectedStatus == "NotReady" {
 		expectedStatus1 = "Unknown"
 	} else {
-		err1 := fmt.Errorf(" TBD supported node status.")
+		err1 := fmt.Errorf("TBD supported node status")
 		o.Expect(err1).NotTo(o.HaveOccurred())
 	}
 	err := wait.Poll(10*time.Second, 6*time.Minute, func() (bool, error) {
@@ -925,7 +915,7 @@ func checkNodeStatus(oc *exutil.CLI, nodeName string, expectedStatus string) {
 
 func updateEgressIPObject(oc *exutil.CLI, egressIPObjectName string, egressIP string) {
 	patchResourceAsAdmin(oc, "egressip/"+egressIPObjectName, "{\"spec\":{\"egressIPs\":[\""+egressIP+"\"]}}")
-	egressip_err := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+	egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
 		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("egressip", egressIPObjectName, "-o=jsonpath={.status.items[*]}").Output()
 		if err != nil {
 			e2e.Logf("Wait to get EgressIP object applied,try next round. %v", err)
@@ -938,7 +928,7 @@ func updateEgressIPObject(oc *exutil.CLI, egressIPObjectName string, egressIP st
 		}
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(egressip_err, fmt.Sprintf("Failed to apply new egressIPs:%s", egressip_err))
+	exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to apply new egressIPs:%s", egressipErr))
 }
 
 func getTwoNodesSameSubnet(oc *exutil.CLI, nodeList *v1.NodeList) (bool, []string) {
@@ -972,7 +962,7 @@ func getTwoNodesSameSubnet(oc *exutil.CLI, nodeList *v1.NodeList) (bool, []strin
 /*getSvcIP returns IPv6 and IPv4 in vars in order on dual stack respectively and main Svc IP in case of single stack (v4 or v6) in 1st var, and nil in 2nd var.
 LoadBalancer svc will return Ingress VIP in var1, v4 or v6 and NodePort svc will return Ingress SvcIP in var1 and NodePort in var2*/
 func getSvcIP(oc *exutil.CLI, namespace string, svcName string) (string, string) {
-	ipStack := checkIpStackType(oc)
+	ipStack := checkIPStackType(oc)
 	svctype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.type}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	ipFamilyType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.ipFamilyPolicy}").Output()
@@ -984,12 +974,12 @@ func getSvcIP(oc *exutil.CLI, namespace string, svcName string) (string, string)
 			if svctype == "ClusterIP" {
 				e2e.Logf("The service %s IP in namespace %s is %q", svcName, namespace, svcIP)
 				return svcIP, ""
-			} else {
-				nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
-				o.Expect(err).NotTo(o.HaveOccurred())
-				e2e.Logf("The NodePort service %s IP and NodePort in namespace %s is %s %s", svcName, namespace, svcIP, nodePort)
-				return svcIP, nodePort
 			}
+			nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("The NodePort service %s IP and NodePort in namespace %s is %s %s", svcName, namespace, svcIP, nodePort)
+			return svcIP, nodePort
+
 		} else if (ipStack == "dualstack" && ipFamilyType == "PreferDualStack") || (ipStack == "dualstack" && ipFamilyType == "RequireDualStack") {
 			ipFamilyPrecedence, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.ipFamilies[0]}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1054,7 +1044,7 @@ func getSvcIP(oc *exutil.CLI, namespace string, svcName string) (string, string)
 
 //getPodIP returns IPv6 and IPv4 in vars in order on dual stack respectively and main IP in case of single stack (v4 or v6) in 1st var, and nil in 2nd var
 func getPodIP(oc *exutil.CLI, namespace string, podName string) (string, string) {
-	ipStack := checkIpStackType(oc)
+	ipStack := checkIPStackType(oc)
 	if (ipStack == "ipv6single") || (ipStack == "ipv4single") {
 		podIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.podIPs[0].ip}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1072,6 +1062,7 @@ func getPodIP(oc *exutil.CLI, namespace string, podName string) (string, string)
 	return "", ""
 }
 
+//CurlPod2PodPass checks connectivity across pods regardless of network addressing type on cluster
 func CurlPod2PodPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, namespaceDst string, podNameDst string) {
 	podIP1, podIP2 := getPodIP(oc, namespaceDst, podNameDst)
 	if podIP2 != "" {
@@ -1085,6 +1076,7 @@ func CurlPod2PodPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, nam
 	}
 }
 
+//CurlPod2PodFail ensures no connectivity from a pod to pod regardless of network addressing type on cluster
 func CurlPod2PodFail(oc *exutil.CLI, namespaceSrc string, podNameSrc string, namespaceDst string, podNameDst string) {
 	podIP1, podIP2 := getPodIP(oc, namespaceDst, podNameDst)
 	if podIP2 != "" {
@@ -1098,39 +1090,42 @@ func CurlPod2PodFail(oc *exutil.CLI, namespaceSrc string, podNameSrc string, nam
 	}
 }
 
+//CurlNode2PodPass checks node to pod connectivity regardless of network addressing type on cluster
 func CurlNode2PodPass(oc *exutil.CLI, nodeName string, namespace string, podName string) {
 	//getPodIP returns IPv6 and IPv4 in order on dual stack in PodIP1 and PodIP2 respectively and main IP in case of single stack (v4 or v6) in PodIP1, and nil in PodIP2
 	podIP1, podIP2 := getPodIP(oc, namespace, podName)
 	if podIP2 != "" {
-		podv6_url := net.JoinHostPort(podIP1, "8080")
-		podv4_url := net.JoinHostPort(podIP2, "8080")
-		_, err := exutil.DebugNode(oc, nodeName, "curl", podv4_url, "-s", "--connect-timeout", "5")
+		podv6URL := net.JoinHostPort(podIP1, "8080")
+		podv4URL := net.JoinHostPort(podIP2, "8080")
+		_, err := exutil.DebugNode(oc, nodeName, "curl", podv4URL, "-s", "--connect-timeout", "5")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = exutil.DebugNode(oc, nodeName, "curl", podv6_url, "-s", "--connect-timeout", "5")
+		_, err = exutil.DebugNode(oc, nodeName, "curl", podv6URL, "-s", "--connect-timeout", "5")
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else {
-		pod_url := net.JoinHostPort(podIP1, "8080")
-		_, err := exutil.DebugNode(oc, nodeName, "curl", pod_url, "-s", "--connect-timeout", "5")
+		podURL := net.JoinHostPort(podIP1, "8080")
+		_, err := exutil.DebugNode(oc, nodeName, "curl", podURL, "-s", "--connect-timeout", "5")
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 }
 
+//CurlNode2SvcPass checks node to svc connectivity regardless of network addressing type on cluster
 func CurlNode2SvcPass(oc *exutil.CLI, nodeName string, namespace string, svcName string) {
 	svcIP1, svcIP2 := getSvcIP(oc, namespace, svcName)
 	if svcIP2 != "" {
-		svcv6_url := net.JoinHostPort(svcIP1, "27017")
-		svcv4_url := net.JoinHostPort(svcIP2, "27017")
-		_, err := exutil.DebugNode(oc, nodeName, "curl", svcv4_url, "-s", "--connect-timeout", "5")
+		svc6URL := net.JoinHostPort(svcIP1, "27017")
+		svc4URL := net.JoinHostPort(svcIP2, "27017")
+		_, err := exutil.DebugNode(oc, nodeName, "curl", svc4URL, "-s", "--connect-timeout", "5")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = exutil.DebugNode(oc, nodeName, "curl", svcv6_url, "-s", "--connect-timeout", "5")
+		_, err = exutil.DebugNode(oc, nodeName, "curl", svc6URL, "-s", "--connect-timeout", "5")
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else {
-		svc_url := net.JoinHostPort(svcIP1, "27017")
-		_, err := exutil.DebugNode(oc, nodeName, "curl", svc_url, "-s", "--connect-timeout", "5")
+		svcURL := net.JoinHostPort(svcIP1, "27017")
+		_, err := exutil.DebugNode(oc, nodeName, "curl", svcURL, "-s", "--connect-timeout", "5")
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 }
 
+//CurlPod2SvcPass checks pod to svc connectivity regardless of network addressing type on cluster
 func CurlPod2SvcPass(oc *exutil.CLI, namespace string, podNameSrc string, svcName string) {
 	svcIP1, svcIP2 := getSvcIP(oc, namespace, svcName)
 	if svcIP2 != "" {
@@ -1144,6 +1139,7 @@ func CurlPod2SvcPass(oc *exutil.CLI, namespace string, podNameSrc string, svcNam
 	}
 }
 
+//CurlPod2SvcFail ensures no connectivity from a pod to svc regardless of network addressing type on cluster
 func CurlPod2SvcFail(oc *exutil.CLI, namespace string, podNameSrc string, svcName string) {
 	svcIP1, svcIP2 := getSvcIP(oc, namespace, svcName)
 	if svcIP2 != "" {
@@ -1168,7 +1164,7 @@ func checkProxy(oc *exutil.CLI) bool {
 	return false
 }
 
-// find out which egress node has the egressIP
+// SDNHostwEgressIP find out which egress node has the egressIP
 func SDNHostwEgressIP(oc *exutil.CLI, node []string, egressip string) string {
 	var ip []string
 	var foundHost string

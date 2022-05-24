@@ -13,11 +13,11 @@ objects:
     ingress:
     - from:
       - ipBlock:
-          cidr: "${CIDR_IPv4}"
+          cidr: "${cidrIpv4}"
       - ipBlock: 
-          cidr: "${CIDR_IPv6}"
+          cidr: "${cidrIpv6}"
 parameters:
 - name: NAME  
-- name: CIDR_IPv4
-- name: CIDR_IPv6
+- name: cidrIpv4
+- name: cidrIpv6
 - name: NAMESPACE

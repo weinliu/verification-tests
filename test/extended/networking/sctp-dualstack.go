@@ -53,7 +53,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		err2 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=sctpserver")
 		exutil.AssertWaitPollNoErr(err2, "sctpServerPod is not running")
 
-		ipStackType := checkIpStackType(oc)
+		ipStackType := checkIPStackType(oc)
 
 		g.By("test ipv4 in ipv4 cluster or dualstack cluster")
 		if ipStackType == "ipv4single" || ipStackType == "dualstack" {
@@ -145,7 +145,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		err2 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=sctpserver")
 		exutil.AssertWaitPollNoErr(err2, "sctpServerPod is not running")
 
-		ipStackType := checkIpStackType(oc)
+		ipStackType := checkIPStackType(oc)
 
 		g.By("test ipv4 singlestack cluster")
 		if ipStackType == "ipv4single" {
