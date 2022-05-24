@@ -1,4 +1,4 @@
-package image_registry
+package imageregistry
 
 import (
 	"encoding/base64"
@@ -30,16 +30,16 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		updatePolicy         = `"maxSurge":0,"maxUnavailable":"10%"`
 		monitoringns         = "openshift-monitoring"
 		promPod              = "prometheus-k8s-0"
-		patchAuthUrl         = `"authURL":"invalid"`
+		patchAuthURL         = `"authURL":"invalid"`
 		patchRegion          = `"regionName":"invaild"`
 		patchDomain          = `"domain":"invaild"`
-		patchDomainId        = `"domainID":"invalid"`
-		patchTenantId        = `"tenantID":"invalid"`
+		patchDomainID        = `"domainID":"invalid"`
+		patchTenantID        = `"tenantID":"invalid"`
 		authErrInfo          = `Get "invalid/": unsupported`
 		regionErrInfo        = "No suitable endpoint could be found"
 		domainErrInfo        = "Failed to authenticate provider client"
-		domainIdErrInfo      = "You must provide exactly one of DomainID or DomainName"
-		tenantIdErrInfo      = "Authentication failed"
+		domainIDErrInfo      = "You must provide exactly one of DomainID or DomainName"
+		tenantIDErrInfo      = "Authentication failed"
 		queryCredentialMode  = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=cco_credentials_mode"
 		imageRegistryBaseDir = exutil.FixturePath("testdata", "image_registry")
 		requireRules         = "requiredDuringSchedulingIgnoredDuringExecution"
@@ -191,20 +191,19 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			if len(podList.Items) != 3 {
 				e2e.Logf("Continue to next round")
 				return false, nil
-			} else {
-				for _, pod := range podList.Items {
-					if pod.Status.Phase != corev1.PodRunning {
-						e2e.Logf("Continue to next round")
-						return false, nil
-					}
-				}
-				return true, nil
 			}
+			for _, pod := range podList.Items {
+				if pod.Status.Phase != corev1.PodRunning {
+					e2e.Logf("Continue to next round")
+					return false, nil
+				}
+			}
+			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Image registry pod list is not 3")
 
 		g.By("At least 2 pods in different nodes")
-		_, numj = comparePodHostIp(oc)
+		_, numj = comparePodHostIP(oc)
 		o.Expect(numj >= 2).To(o.BeTrue())
 
 		g.By("Set image registry replica to 4")
@@ -223,20 +222,19 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			if len(podList.Items) != 4 {
 				e2e.Logf("Continue to next round")
 				return false, nil
-			} else {
-				for _, pod := range podList.Items {
-					if pod.Status.Phase != corev1.PodRunning {
-						e2e.Logf("Continue to next round")
-						return false, nil
-					}
-				}
-				return true, nil
 			}
+			for _, pod := range podList.Items {
+				if pod.Status.Phase != corev1.PodRunning {
+					e2e.Logf("Continue to next round")
+					return false, nil
+				}
+			}
+			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Image registry pod list is not 4")
 
 		g.By("Check 2 pods in the same node")
-		numi, _ = comparePodHostIp(oc)
+		numi, _ = comparePodHostIP(oc)
 		o.Expect(numi >= 1).To(o.BeTrue())
 	})
 
@@ -648,24 +646,23 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if o.Expect(output).To(o.ContainSubstring(successInfo)) {
 				return true, nil
-			} else {
-				e2e.Logf("Continue to next round")
-				return false, nil
 			}
+			e2e.Logf("Continue to next round")
+			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Import failed"))
 		g.By("Get blobs from the default registry")
-		getUrl := "curl -Lks -u \"" + oc.Username() + ":" + token + "\" -I HEAD https://" + defroute + "/v2/" + oc.Namespace() + "/myimage@sha256:0000000000000000000000000000000000000000000000000000000000000000"
-		curlOutput, err := exec.Command("bash", "-c", getUrl).Output()
+		getURL := "curl -Lks -u \"" + oc.Username() + ":" + token + "\" -I HEAD https://" + defroute + "/v2/" + oc.Namespace() + "/myimage@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+		curlOutput, err := exec.Command("bash", "-c", getURL).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(curlOutput)).To(o.ContainSubstring("404 Not Found"))
 		podsOfImageRegistry := []corev1.Pod{}
-		podsOfImageRegistry = ListPodStartingWith("image-registry", oc, "openshift-image-registry")
+		podsOfImageRegistry = listPodStartingWith("image-registry", oc, "openshift-image-registry")
 		if len(podsOfImageRegistry) == 0 {
 			e2e.Failf("Error retrieving logs")
 		}
 		foundErrLog := false
-		foundErrLog = DePodLogs(podsOfImageRegistry, oc, errInfo)
+		foundErrLog = dePodLogs(podsOfImageRegistry, oc, errInfo)
 		o.Expect(foundErrLog).To(o.BeTrue())
 	})
 
@@ -710,10 +707,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			if strings.Contains(registriesstatus, "default-route-openshift-image-registry.apps") {
 				e2e.Logf("registries.conf updated")
 				return true, nil
-			} else {
-				e2e.Logf("registries.conf not update")
-				return false, nil
 			}
+			e2e.Logf("registries.conf not update")
+			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "registries.conf not update")
 
@@ -735,10 +731,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			if strings.Contains(registriesstatus, "location = \"docker.io\"") {
 				e2e.Logf("registries.conf updated")
 				return true, nil
-			} else {
-				e2e.Logf("registries.conf not update")
-				return false, nil
 			}
+			e2e.Logf("registries.conf not update")
+			return false, nil
+
 		})
 		exutil.AssertWaitPollNoErr(err, "registries.conf not contains docker.io")
 
@@ -773,7 +769,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Set invalid authURL in image registry crd")
 		foundErrLog := false
-		foundErrLog = setImageregistryConfigs(oc, patchAuthUrl, authErrInfo)
+		foundErrLog = setImageregistryConfigs(oc, patchAuthURL, authErrInfo)
 		o.Expect(foundErrLog).To(o.BeTrue())
 
 		g.By("Set invalid regionName")
@@ -788,12 +784,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Set invalid domainID")
 		foundErrLog = false
-		foundErrLog = setImageregistryConfigs(oc, patchDomainId, domainIdErrInfo)
+		foundErrLog = setImageregistryConfigs(oc, patchDomainID, domainIDErrInfo)
 		o.Expect(foundErrLog).To(o.BeTrue())
 
 		g.By("Set invalid tenantID")
 		foundErrLog = false
-		foundErrLog = setImageregistryConfigs(oc, patchTenantId, tenantIdErrInfo)
+		foundErrLog = setImageregistryConfigs(oc, patchTenantID, tenantIDErrInfo)
 		o.Expect(foundErrLog).To(o.BeTrue())
 	})
 
@@ -958,10 +954,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			tag, err = awsGetBucketTagging(aws, bucket)
 			if err != nil && strings.Contains(tag, "The specified bucket does not exist") {
 				return true, nil
-			} else {
-				e2e.Logf("bucket still exist, go next round")
-				return false, nil
 			}
+			e2e.Logf("bucket still exist, go next round")
+			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "the bucket isn't been deleted")
 
@@ -975,10 +970,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			bucket, _ = oc.AsAdmin().Run("get").Args("config.image", "-o=jsonpath={..spec.storage.s3.bucket}").Output()
 			if strings.Compare(bucket, "") != 0 {
 				return true, nil
-			} else {
-				e2e.Logf("not update")
-				return false, nil
 			}
+			e2e.Logf("not update")
+			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Can't get bucket")
 
@@ -994,14 +988,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			authHeader         string
 			after              = make(map[string]int)
 			before             = make(map[string]int)
-			data               PrometheusImageregistryQueryHttp
+			data               prometheusImageregistryQueryHTTP
 			err                error
 			fails              = 0
 			failItems          = ""
 			l                  int
 			msg                string
-			prometheusUrl      = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1"
-			prometheusUrlQuery string
+			prometheusURL      = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1"
+			prometheusURLQuery string
 			query              string
 			token              string
 			metrics            = []string{"imageregistry_http_request_duration_seconds_count",
@@ -1024,8 +1018,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Collect metrics at start")
 		for _, query = range metrics {
-			prometheusUrlQuery = fmt.Sprintf("%v/query?query=%v", prometheusUrl, query)
-			msg, _, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "-i", "--", "curl", "-k", "-H", authHeader, prometheusUrlQuery).Outputs()
+			prometheusURLQuery = fmt.Sprintf("%v/query?query=%v", prometheusURL, query)
+			msg, _, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "-i", "--", "curl", "-k", "-H", authHeader, prometheusURLQuery).Outputs()
 			o.Expect(msg).NotTo(o.BeEmpty())
 			json.Unmarshal([]byte(msg), &data)
 			l = len(data.Data.Result) - 1
@@ -1037,8 +1031,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Collect metrics again")
 		for _, query = range metrics {
-			prometheusUrlQuery = fmt.Sprintf("%v/query?query=%v", prometheusUrl, query)
-			msg, _, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "-i", "--", "curl", "-k", "-H", authHeader, prometheusUrlQuery).Outputs()
+			prometheusURLQuery = fmt.Sprintf("%v/query?query=%v", prometheusURL, query)
+			msg, _, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "-i", "--", "curl", "-k", "-H", authHeader, prometheusURLQuery).Outputs()
 			o.Expect(msg).NotTo(o.BeEmpty())
 			json.Unmarshal([]byte(msg), &data)
 			l = len(data.Data.Result) - 1
@@ -1231,15 +1225,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			if len(podList.Items) != 3 {
 				e2e.Logf("Continue to next round")
 				return false, nil
-			} else {
-				for _, pod := range podList.Items {
-					if pod.Status.Phase != corev1.PodRunning {
-						e2e.Logf("Continue to next round")
-						return false, nil
-					}
-				}
-				return true, nil
 			}
+			for _, pod := range podList.Items {
+				if pod.Status.Phase != corev1.PodRunning {
+					e2e.Logf("Continue to next round")
+					return false, nil
+				}
+			}
+			return true, nil
 		})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		foundrequiredRules = foundAffinityRules(oc, preRules)
@@ -1296,10 +1289,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(regionEndpoint, "https://s3.us-gov-west-1.amazonaws.com") {
 				return true, nil
-			} else {
-				e2e.Logf("regionEndpoint not found, go next round")
-				return false, nil
 			}
+			e2e.Logf("regionEndpoint not found, go next round")
+			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "regionEndpoint not found")
 
@@ -1308,9 +1300,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			registryDegrade := checkRegistryDegraded(oc)
 			if registryDegrade {
 				return false, nil
-			} else {
-				return true, nil
 			}
+			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Image registry is degraded")
 
@@ -1510,10 +1501,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 				o.Expect(err).NotTo(o.HaveOccurred())
 				if strings.Contains(output, `{"labelSelector":{"matchLabels":{"docker-registry":"bar"}},"maxSkew":2,"topologyKey":"zone","whenUnsatisfiable":"ScheduleAnyway"}`) {
 					return true, nil
-				} else {
-					e2e.Logf("Continue to next round")
-					return false, nil
 				}
+				e2e.Logf("Continue to next round")
+				return false, nil
 			})
 			exutil.AssertWaitPollNoErr(err, "The topology has not been overridden")
 
@@ -1562,7 +1552,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 			e2e.Logf("Zone: %v . Doesn't conform Each zone have one worker", zone)
 			g.By("Only check pods on different worker")
-			samenum, diffnum := comparePodHostIp(oc)
+			samenum, diffnum := comparePodHostIP(oc)
 			e2e.Logf("%v %v", samenum, diffnum)
 			o.Expect(samenum == 0).To(o.BeTrue())
 			o.Expect(diffnum == 1).To(o.BeTrue())
@@ -1600,7 +1590,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", 4)
 
 			g.By("Check if image registry pods run in each zone")
-			samenum, diffnum := comparePodHostIp(oc)
+			samenum, diffnum := comparePodHostIP(oc)
 			e2e.Logf("%v %v", samenum, diffnum)
 			o.Expect(samenum == 1).To(o.BeTrue())
 			o.Expect(diffnum == 5).To(o.BeTrue())
@@ -1666,9 +1656,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			if podsStatus != "Pending Pending Running" {
 				e2e.Logf("the pod status is %v, continue to next round", podsStatus)
 				return false, nil
-			} else {
-				return true, nil
 			}
+			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Pods list are not one Running two Pending")
 

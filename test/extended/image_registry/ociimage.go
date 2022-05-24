@@ -1,4 +1,4 @@
-package image_registry
+package imageregistry
 
 import (
 	"fmt"

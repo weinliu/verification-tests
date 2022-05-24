@@ -1,4 +1,4 @@
-package image_registry
+package imageregistry
 
 import (
 	"context"
@@ -36,7 +36,7 @@ const (
 	ok               = true
 )
 
-type PrometheusResponse struct {
+type prometheusResponse struct {
 	Status string                 `json:"status"`
 	Error  string                 `json:"error"`
 	Data   prometheusResponseData `json:"data"`
@@ -48,7 +48,7 @@ type prometheusResponseData struct {
 }
 
 // tbuskey@redhat.com for OCP-22056
-type PrometheusImageregistryQueryHttp struct {
+type prometheusImageregistryQueryHTTP struct {
 	Data struct {
 		Result []struct {
 			Metric struct {
@@ -68,7 +68,7 @@ type PrometheusImageregistryQueryHttp struct {
 	Status string `json:"status"`
 }
 
-func ListPodStartingWith(prefix string, oc *exutil.CLI, namespace string) (pod []corev1.Pod) {
+func listPodStartingWith(prefix string, oc *exutil.CLI, namespace string) (pod []corev1.Pod) {
 	podsToAll := []corev1.Pod{}
 	podList, err := oc.AdminKubeClient().CoreV1().Pods(namespace).List(metav1.ListOptions{})
 	if err != nil {
@@ -83,7 +83,7 @@ func ListPodStartingWith(prefix string, oc *exutil.CLI, namespace string) (pod [
 	return podsToAll
 }
 
-func DePodLogs(pods []corev1.Pod, oc *exutil.CLI, matchlogs string) bool {
+func dePodLogs(pods []corev1.Pod, oc *exutil.CLI, matchlogs string) bool {
 	for _, pod := range pods {
 		depOutput, err := oc.AsAdmin().Run("logs").WithoutNamespace().Args("pod/"+pod.Name, "-n", pod.Namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -103,12 +103,12 @@ func getBearerTokenURLViaPod(ns string, execPodName string, url string, bearer s
 	return output, nil
 }
 
-func runQuery(queryUrl, ns, execPodName, bearerToken string) (*PrometheusResponse, error) {
-	contents, err := getBearerTokenURLViaPod(ns, execPodName, queryUrl, bearerToken)
+func runQuery(queryURL, ns, execPodName, bearerToken string) (*prometheusResponse, error) {
+	contents, err := getBearerTokenURLViaPod(ns, execPodName, queryURL, bearerToken)
 	if err != nil {
 		return nil, fmt.Errorf("unable to execute query %v", err)
 	}
-	var result PrometheusResponse
+	var result prometheusResponse
 	if err := json.Unmarshal([]byte(contents), &result); err != nil {
 		return nil, fmt.Errorf("unable to parse query response: %v", err)
 	}
@@ -120,8 +120,8 @@ func runQuery(queryUrl, ns, execPodName, bearerToken string) (*PrometheusRespons
 	return &result, nil
 }
 
-func metricReportStatus(queryUrl, ns, execPodName, bearerToken string, value model.SampleValue) bool {
-	result, err := runQuery(queryUrl, ns, execPodName, bearerToken)
+func metricReportStatus(queryURL, ns, execPodName, bearerToken string, value model.SampleValue) bool {
+	result, err := runQuery(queryURL, ns, execPodName, bearerToken)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if result.Data.Result[0].Value == value {
 		return true
@@ -212,16 +212,16 @@ func doAction(oc *exutil.CLI, action string, asAdmin bool, withoutNamespace bool
 	return "", nil
 }
 
-func comparePodHostIp(oc *exutil.CLI) (int, int) {
-	var hostsIp = []string{}
+func comparePodHostIP(oc *exutil.CLI) (int, int) {
+	var hostsIP = []string{}
 	var numi, numj int
 	podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(metav1.ListOptions{LabelSelector: "docker-registry=default"})
 	for _, pod := range podList.Items {
-		hostsIp = append(hostsIp, pod.Status.HostIP)
+		hostsIP = append(hostsIP, pod.Status.HostIP)
 	}
-	for i := 0; i < len(hostsIp)-1; i++ {
-		for j := i + 1; j < len(hostsIp); j++ {
-			if hostsIp[i] == hostsIp[j] {
+	for i := 0; i < len(hostsIP)-1; i++ {
+		for j := i + 1; j < len(hostsIP); j++ {
+			if hostsIP[i] == hostsIP[j] {
 				numi++
 			} else {
 				numj++
@@ -233,7 +233,7 @@ func comparePodHostIp(oc *exutil.CLI) (int, int) {
 
 func imagePruneLog(oc *exutil.CLI, matchlogs string) bool {
 	podsOfImagePrune := []corev1.Pod{}
-	podsOfImagePrune = ListPodStartingWith("image-pruner", oc, "openshift-image-registry")
+	podsOfImagePrune = listPodStartingWith("image-pruner", oc, "openshift-image-registry")
 	for _, pod := range podsOfImagePrune {
 		depOutput, err := oc.AsAdmin().Run("logs").WithoutNamespace().Args("pod/"+pod.Name, "-n", pod.Namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -274,9 +274,8 @@ func configureRegistryStorageToEmptyDir(oc *exutil.CLI) {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if len(podList.Items) == 1 && podList.Items[0].Status.Phase == corev1.PodRunning {
 				return true, nil
-			} else {
-				e2e.Logf("Continue to next round")
 			}
+			e2e.Logf("Continue to next round")
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Image registry pod list is not 1")
@@ -427,15 +426,14 @@ func recoverRegistryDefaultPods(oc *exutil.CLI) {
 			if len(podList.Items) != 2 {
 				e2e.Logf("Continue to next round")
 				return false, nil
-			} else {
-				for _, pod := range podList.Items {
-					if pod.Status.Phase != corev1.PodRunning {
-						e2e.Logf("Continue to next round")
-						return false, nil
-					}
-				}
-				return true, nil
 			}
+			for _, pod := range podList.Items {
+				if pod.Status.Phase != corev1.PodRunning {
+					e2e.Logf("Continue to next round")
+					return false, nil
+				}
+			}
+			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Image registry pod list is not 2")
 	case "None", "VSphere":
@@ -489,15 +487,14 @@ func checkPodsRunningWithLabel(oc *exutil.CLI, namespace string, label string, n
 		if len(podList.Items) != number {
 			e2e.Logf("the pod number is not %d, Continue to next round", number)
 			return false, nil
-		} else {
-			for _, pod := range podList.Items {
-				if pod.Status.Phase != corev1.PodRunning {
-					e2e.Logf("Continue to next round")
-					return false, nil
-				}
-			}
-			return true, nil
 		}
+		for _, pod := range podList.Items {
+			if pod.Status.Phase != corev1.PodRunning {
+				e2e.Logf("Continue to next round")
+				return false, nil
+			}
+		}
+		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pods list are not %d", number))
 }
@@ -524,10 +521,9 @@ func getRegistryDefaultRoute(oc *exutil.CLI) (defaultroute string) {
 		if len(defroute) == 0 || err != nil {
 			e2e.Logf("Continue to next round")
 			return false, nil
-		} else {
-			defaultroute = defroute
-			return true, nil
 		}
+		defaultroute = defroute
+		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "Did not find registry route")
 	return defaultroute
@@ -544,10 +540,9 @@ func setImageregistryConfigs(oc *exutil.CLI, pathinfo string, matchlogs string) 
 		if strings.Contains(output, matchlogs) {
 			foundInfo = true
 			return true, nil
-		} else {
-			e2e.Logf("Continue to next round")
-			return false, nil
 		}
+		e2e.Logf("Continue to next round")
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "No image registry error info found")
 	return foundInfo
@@ -562,10 +557,9 @@ func recoverRegistrySwiftSet(oc *exutil.CLI) {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(output, matchInfo) {
 			return true, nil
-		} else {
-			e2e.Logf("Continue to next round")
-			return false, nil
 		}
+		e2e.Logf("Continue to next round")
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "Image registry is degrade")
 }
@@ -640,20 +634,20 @@ func checkRegistryDegraded(oc *exutil.CLI) bool {
 func getCreditFromCluster(oc *exutil.CLI) (string, string, string) {
 	credential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system", "-o", "json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	accessKeyIdBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).Str, gjson.Get(credential, `data.aws_secret_access_key`).Str
-	accessKeyId, err1 := base64.StdEncoding.DecodeString(accessKeyIdBase64)
+	accessKeyIDBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).Str, gjson.Get(credential, `data.aws_secret_access_key`).Str
+	accessKeyID, err1 := base64.StdEncoding.DecodeString(accessKeyIDBase64)
 	o.Expect(err1).NotTo(o.HaveOccurred())
 	secureKey, err2 := base64.StdEncoding.DecodeString(secureKeyBase64)
 	o.Expect(err2).NotTo(o.HaveOccurred())
 	clusterRegion, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 	o.Expect(err3).NotTo(o.HaveOccurred())
-	return string(accessKeyId), string(secureKey), string(clusterRegion)
+	return string(accessKeyID), string(secureKey), string(clusterRegion)
 }
 
 func getAWSClient(oc *exutil.CLI) *s3.Client {
-	accessKeyId, secureKey, clusterRegion := getCreditFromCluster(oc)
+	accessKeyID, secureKey, clusterRegion := getCreditFromCluster(oc)
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyId, secureKey, "")),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyID, secureKey, "")),
 		config.WithRegion(clusterRegion))
 
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -922,10 +916,9 @@ func createSimpleRunPod(oc *exutil.CLI, image, expectInfo string) {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(output, expectInfo) {
 			return true, nil
-		} else {
-			e2e.Logf("Continue to next round")
-			return false, nil
 		}
+		e2e.Logf("Continue to next round")
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "Pod doesn't pull expected image")
 }
@@ -939,10 +932,9 @@ func newAppUseImageStream(oc *exutil.CLI, ns, imagestream, expectInfo string) {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(output, expectInfo) {
 			return true, nil
-		} else {
-			e2e.Logf("Continue to next round")
-			return false, nil
 		}
+		e2e.Logf("Continue to next round")
+		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "Pod doesn't pull expected image")
 }

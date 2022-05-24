@@ -1,4 +1,4 @@
-package image_registry
+package imageregistry
 
 import (
 	"fmt"
@@ -57,12 +57,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		podsOfImagePrune := []corev1.Pod{}
 		foundImagePruneLog := false
 		err = wait.Poll(25*time.Second, 3*time.Minute, func() (bool, error) {
-			podsOfImagePrune = ListPodStartingWith("image-pruner", oc, "openshift-image-registry")
+			podsOfImagePrune = listPodStartingWith("image-pruner", oc, "openshift-image-registry")
 			if len(podsOfImagePrune) == 0 {
 				e2e.Logf("Go to next round")
 				return false, nil
 			}
-			foundImagePruneLog = DePodLogs(podsOfImagePrune, oc, logInfo)
+			foundImagePruneLog = dePodLogs(podsOfImagePrune, oc, logInfo)
 			if foundImagePruneLog != true {
 				e2e.Logf("Go to next round")
 				return false, nil
@@ -73,7 +73,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Check the log of image pruner and expected info about:Only API objects will be removed")
 		foundWarnPruneLog := true
-		foundWarnPruneLog = DePodLogs(podsOfImagePrune, oc, warnInfo)
+		foundWarnPruneLog = dePodLogs(podsOfImagePrune, oc, warnInfo)
 		o.Expect(!foundWarnPruneLog).To(o.BeTrue())
 	})
 
@@ -238,12 +238,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		podsOfImagePrune := []corev1.Pod{}
 		foundImagePruneLog := false
 		err = wait.PollImmediate(30*time.Second, 2*time.Minute, func() (bool, error) {
-			podsOfImagePrune = ListPodStartingWith("image-pruner", oc, "openshift-image-registry")
+			podsOfImagePrune = listPodStartingWith("image-pruner", oc, "openshift-image-registry")
 			if len(podsOfImagePrune) == 0 {
 				e2e.Logf("Go to next round")
 				return false, nil
 			}
-			foundImagePruneLog = DePodLogs(podsOfImagePrune, oc, logInfo)
+			foundImagePruneLog = dePodLogs(podsOfImagePrune, oc, logInfo)
 			if foundImagePruneLog != true {
 				e2e.Logf("Go to next round")
 				return false, nil

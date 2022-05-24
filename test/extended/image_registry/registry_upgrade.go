@@ -1,4 +1,4 @@
-package image_registry
+package imageregistry
 
 import (
 	"strings"
@@ -30,10 +30,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			if strings.Contains(registriesstatus, "location = \"untrusted.com\"") && strings.Contains(registriesstatus, "location = \"insecure.com\"") {
 				e2e.Logf("registries.conf updated")
 				return true, nil
-			} else {
-				e2e.Logf("registries.conf not update")
-				return false, nil
 			}
+			e2e.Logf("registries.conf not update")
+			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "registries.conf not contains registrysources")
 	})
