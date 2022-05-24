@@ -122,43 +122,35 @@ type objectTableRef struct {
 	name      string
 }
 
+//Hive Configurations
 const (
-	HIVE_NAMESPACE            = "hive"
-	AWS_BASE_DOMAIN           = "qe.devcluster.openshift.com"
-	AWS_REGION                = "us-east-2"
-	OCP49_RELEASE_IMAGE       = "quay.io/openshift-release-dev/ocp-release:4.9.0-rc.6-x86_64"
-	AWS_CREDS                 = "aws-creds"
-	PULL_SECRET               = "pull-secret"
-	CLUSTER_INSTALL_TIMEOUT   = 3600
-	DEFAULT_TIMEOUT           = 120
-	CLUSTER_RESUME_TIMEOUT    = 600
-	CLUSTER_UNINSTALL_TIMEOUT = 1800
-	CLUSTER_POOL              = "ClusterPool"
-	CLUSTER_DEPLOYMENT        = "ClusterDeployment"
-	CLUSTER_IMAGE_SET         = "ClusterImageSet"
-	CLUSTER_CLAIM             = "ClusterClaim"
-	MACHINE_POOL              = "MachinePool"
-	MACHINE_SET               = "MachineSet"
-	MACHINE                   = "Machine"
-	SYNC_SET                  = "SyncSet"
-	CONFIG_MAP                = "ConfigMap"
+	HiveNamespace           = "hive" //Hive Namespace
+	AWSBaseDomain           = "qe.devcluster.openshift.com"
+	AWSRegion               = "us-east-2"
+	OCP49eleaseImage        = "quay.io/openshift-release-dev/ocp-release:4.9.0-rc.6-x86_64"
+	AWSCreds                = "aws-creds"
+	PullSecret              = "pull-secret"
+	ClusterInstallTimeout   = 3600
+	DefaultTimeout          = 120
+	ClusterResumeTimeout    = 600
+	ClusterUninstallTimeout = 1800
 )
 
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
-	var cfgFileJson string
+	var cfgFileJSON string
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + "hive-resource-cfg.json")
 		if err != nil {
 			e2e.Logf("the err:%v, and try next round", err)
 			return false, nil
 		}
-		cfgFileJson = output
+		cfgFileJSON = output
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "fail to create config file")
 
-	e2e.Logf("the file of resource is %s", cfgFileJson)
-	return oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", cfgFileJson).Execute()
+	e2e.Logf("the file of resource is %s", cfgFileJSON)
+	return oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", cfgFileJSON).Execute()
 }
 
 func getRandomString() string {
@@ -190,7 +182,7 @@ func (sub *subscription) create(oc *exutil.CLI) {
 	if strings.Compare(sub.approval, "Automatic") == 0 {
 		sub.findInstalledCSV(oc)
 	} else {
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "UpgradePending", ok, DEFAULT_TIMEOUT, []string{"sub", sub.name, "-n", sub.namespace, "-o=jsonpath={.status.state}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "UpgradePending", ok, DefaultTimeout, []string{"sub", sub.name, "-n", sub.namespace, "-o=jsonpath={.status.state}"}).check(oc)
 	}
 }
 
@@ -206,10 +198,10 @@ func (sub *subscription) createIfNotExist(oc *exutil.CLI) {
 		if strings.Compare(sub.approval, "Automatic") == 0 {
 			sub.findInstalledCSV(oc)
 		} else {
-			newCheck("expect", "get", asAdmin, withoutNamespace, compare, "UpgradePending", ok, DEFAULT_TIMEOUT, []string{"sub", sub.name, "-n", sub.namespace, "-o=jsonpath={.status.state}"}).check(oc)
+			newCheck("expect", "get", asAdmin, withoutNamespace, compare, "UpgradePending", ok, DefaultTimeout, []string{"sub", sub.name, "-n", sub.namespace, "-o=jsonpath={.status.state}"}).check(oc)
 		}
 		//wait for pod running
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DEFAULT_TIMEOUT, []string{"pod", "--selector=control-plane=hive-operator", "-n",
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=hive-operator", "-n",
 			sub.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
 	} else {
 		e2e.Logf("hive subscription already exists.")
@@ -218,7 +210,7 @@ func (sub *subscription) createIfNotExist(oc *exutil.CLI) {
 }
 
 func (sub *subscription) findInstalledCSV(oc *exutil.CLI) {
-	newCheck("expect", "get", asAdmin, withoutNamespace, compare, "AtLatestKnown", ok, DEFAULT_TIMEOUT, []string{"sub", sub.name, "-n", sub.namespace, "-o=jsonpath={.status.state}"}).check(oc)
+	newCheck("expect", "get", asAdmin, withoutNamespace, compare, "AtLatestKnown", ok, DefaultTimeout, []string{"sub", sub.name, "-n", sub.namespace, "-o=jsonpath={.status.state}"}).check(oc)
 	installedCSV := getResource(oc, asAdmin, withoutNamespace, "sub", sub.name, "-n", sub.namespace, "-o=jsonpath={.status.installedCSV}")
 	o.Expect(installedCSV).NotTo(o.BeEmpty())
 	if strings.Compare(sub.installedCSV, installedCSV) != 0 {
@@ -240,18 +232,18 @@ func (hc *hiveconfig) createIfNotExist(oc *exutil.CLI) {
 		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", hc.template, "-p", "LOGLEVEL="+hc.logLevel, "TARGETNAMESPACE="+hc.targetNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		//wait for pods running
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-clustersync", ok, DEFAULT_TIMEOUT, []string{"pod", "--selector=control-plane=clustersync",
-			"-n", HIVE_NAMESPACE, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DEFAULT_TIMEOUT, []string{"pod", "--selector=control-plane=clustersync", "-n",
-			HIVE_NAMESPACE, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", ok, DEFAULT_TIMEOUT, []string{"pod", "--selector=control-plane=controller-manager",
-			"-n", HIVE_NAMESPACE, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DEFAULT_TIMEOUT, []string{"pod", "--selector=control-plane=controller-manager", "-n",
-			HIVE_NAMESPACE, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", ok, DEFAULT_TIMEOUT, []string{"pod", "--selector=app=hiveadmission",
-			"-n", HIVE_NAMESPACE, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running", ok, DEFAULT_TIMEOUT, []string{"pod", "--selector=app=hiveadmission", "-n",
-			HIVE_NAMESPACE, "-o=jsonpath={.items[*].status.phase}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-clustersync", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=clustersync",
+			"-n", HiveNamespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=clustersync", "-n",
+			HiveNamespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=controller-manager",
+			"-n", HiveNamespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=controller-manager", "-n",
+			HiveNamespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", ok, DefaultTimeout, []string{"pod", "--selector=app=hiveadmission",
+			"-n", HiveNamespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running", ok, DefaultTimeout, []string{"pod", "--selector=app=hiveadmission", "-n",
+			HiveNamespace, "-o=jsonpath={.items[*].status.phase}"}).check(oc)
 	} else {
 		e2e.Logf("hivconfig already exists.")
 	}
@@ -408,15 +400,15 @@ func expectedResource(oc *exutil.CLI, action string, asAdmin bool, withoutNamesp
 		}
 		return ret
 	}
-	var interval, time_out time.Duration
-	if timeout >= CLUSTER_INSTALL_TIMEOUT {
-		time_out = time.Duration(timeout/60) * time.Minute
+	var interval, inputTimeout time.Duration
+	if timeout >= ClusterInstallTimeout {
+		inputTimeout = time.Duration(timeout/60) * time.Minute
 		interval = 6 * time.Minute
 	} else {
-		time_out = time.Duration(timeout) * time.Second
+		inputTimeout = time.Duration(timeout) * time.Second
 		interval = time.Duration(timeout/60) * time.Second
 	}
-	return wait.Poll(interval, time_out, func() (bool, error) {
+	return wait.Poll(interval, inputTimeout, func() (bool, error) {
 		output, err := doAction(oc, action, asAdmin, withoutNamespace, parameters...)
 		if err != nil {
 			e2e.Logf("the get error is %v, and try next", err)
@@ -455,9 +447,9 @@ func cleanupObjects(oc *exutil.CLI, objs ...objectTableRef) {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		//For ClusterPool or ClusterDeployment, need to wait ClusterDeployment delete done
-		if v.kind == CLUSTER_POOL || v.kind == CLUSTER_DEPLOYMENT {
+		if v.kind == "ClusterPool" || v.kind == "ClusterDeployment" {
 			e2e.Logf("Wait ClusterDeployment delete done for %s", v.name)
-			newCheck("expect", "get", asAdmin, withoutNamespace, contain, v.name, nok, CLUSTER_UNINSTALL_TIMEOUT, []string{CLUSTER_DEPLOYMENT, "-A"}).check(oc)
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, v.name, nok, ClusterUninstallTimeout, []string{"ClusterDeployment", "-A"}).check(oc)
 		}
 	}
 }
@@ -506,11 +498,11 @@ func createAWSCreds(oc *exutil.CLI, namespace string) {
 func extractRelfromImg(image string) string {
 	index := strings.Index(image, ":")
 	if index != -1 {
-		temp_str := image[index+1 : len(image)]
-		index = strings.Index(temp_str, "-")
+		tempStr := image[index+1:]
+		index = strings.Index(tempStr, "-")
 		if index != -1 {
-			e2e.Logf("Extracted OCP release: %s", temp_str[:index])
-			return temp_str[:index]
+			e2e.Logf("Extracted OCP release: %s", tempStr[:index])
+			return tempStr[:index]
 		}
 	}
 	e2e.Logf("Failed to extract OCP release from Image.")
@@ -521,13 +513,13 @@ func extractRelfromImg(image string) string {
 //Return string CD list such as "pool-44945-2bbln5m47s\n pool-44945-f8xlv6m6s"
 func getCDlistfromPool(oc *exutil.CLI, pool string) string {
 	fileName := "cd_output_" + getRandomString() + ".txt"
-	cd_output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cd", "-A").OutputToFile(fileName)
+	cdOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cd", "-A").OutputToFile(fileName)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	defer os.Remove(cd_output)
-	pool_cd_list, err := exec.Command("bash", "-c", "cat "+cd_output+" | grep "+pool+" | awk '{print $1}'").Output()
+	defer os.Remove(cdOutput)
+	poolCdList, err := exec.Command("bash", "-c", "cat "+cdOutput+" | grep "+pool+" | awk '{print $1}'").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("CD list is %s for pool %s", pool_cd_list, pool)
-	return string(pool_cd_list)
+	e2e.Logf("CD list is %s for pool %s", poolCdList, pool)
+	return string(poolCdList)
 }
 
 //Get cluster kubeconfig file

@@ -44,19 +44,19 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		hcTemp := filepath.Join(testDataDir, "hiveconfig.yaml")
 
 		ns = hiveNameSpace{
-			name:     HIVE_NAMESPACE,
+			name:     HiveNamespace,
 			template: nsTemp,
 		}
 
 		og = operatorGroup{
 			name:      "hive-og",
-			namespace: HIVE_NAMESPACE,
+			namespace: HiveNamespace,
 			template:  ogTemp,
 		}
 
 		sub = subscription{
 			name:            "hive-sub",
-			namespace:       HIVE_NAMESPACE,
+			namespace:       HiveNamespace,
 			channel:         "alpha",
 			approval:        "Automatic",
 			operatorName:    "hive-operator",
@@ -70,7 +70,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 		hc = hiveconfig{
 			logLevel:        "debug",
-			targetNamespace: HIVE_NAMESPACE,
+			targetNamespace: HiveNamespace,
 			template:        hcTemp,
 		}
 
@@ -92,34 +92,34 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	//author: lwan@redhat.com
 	g.It("ConnectedOnly-Author:lwan-Critical-29670-install/uninstall hive operator from OperatorHub", func() {
 		g.By("Check Subscription...")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "AllCatalogSourcesHealthy", ok, DEFAULT_TIMEOUT, []string{"sub", sub.name, "-n",
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "AllCatalogSourcesHealthy", ok, DefaultTimeout, []string{"sub", sub.name, "-n",
 			sub.namespace, "-o=jsonpath={.status.conditions[0].reason}"}).check(oc)
 
 		g.By("Check Hive Operator pods are created !!!")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-operator", ok, DEFAULT_TIMEOUT, []string{"pod", "--selector=control-plane=hive-operator",
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-operator", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=hive-operator",
 			"-n", sub.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		g.By("Check Hive Operator pods are in running state !!!")
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DEFAULT_TIMEOUT, []string{"pod", "--selector=control-plane=hive-operator", "-n",
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=hive-operator", "-n",
 			sub.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
 		g.By("Hive Operator sucessfully installed !!! ")
 
 		g.By("Check hive-clustersync pods are created !!!")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-clustersync", ok, DEFAULT_TIMEOUT, []string{"pod", "--selector=control-plane=clustersync",
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-clustersync", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=clustersync",
 			"-n", sub.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		g.By("Check hive-clustersync pods are in running state !!!")
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DEFAULT_TIMEOUT, []string{"pod", "--selector=control-plane=clustersync", "-n",
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=clustersync", "-n",
 			sub.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
 		g.By("Check hive-controllers pods are created !!!")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", ok, DEFAULT_TIMEOUT, []string{"pod", "--selector=control-plane=controller-manager",
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=controller-manager",
 			"-n", sub.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		g.By("Check hive-controllers pods are in running state !!!")
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DEFAULT_TIMEOUT, []string{"pod", "--selector=control-plane=controller-manager", "-n",
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=controller-manager", "-n",
 			sub.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
 		g.By("Check hiveadmission pods are created !!!")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", ok, DEFAULT_TIMEOUT, []string{"pod", "--selector=app=hiveadmission",
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hiveadmission", ok, DefaultTimeout, []string{"pod", "--selector=app=hiveadmission",
 			"-n", sub.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		g.By("Check hiveadmission pods are in running state !!!")
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running", ok, DEFAULT_TIMEOUT, []string{"pod", "--selector=app=hiveadmission", "-n",
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running", ok, DefaultTimeout, []string{"pod", "--selector=app=hiveadmission", "-n",
 			sub.namespace, "-o=jsonpath={.items[*].status.phase}"}).check(oc)
 		g.By("Hive controllers,clustersync and hiveadmission sucessfully installed !!! ")
 	})
@@ -131,22 +131,22 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 33832 is for AWS - skipping test ...")
 		}
-		testCaseId := "33832"
-		poolName := "pool-" + testCaseId
+		testCaseID := "33832"
+		poolName := "pool-" + testCaseID
 		imageSetName := poolName + "-imageset"
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP49_RELEASE_IMAGE,
+			releaseImage: OCP49eleaseImage,
 			template:     imageSetTemp,
 		}
 
 		g.By("Create ClusterImageSet...")
-		defer cleanupObjects(oc, objectTableRef{CLUSTER_IMAGE_SET, "", imageSetName})
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
 		imageSet.create(oc)
 
 		g.By("Check if ClusterImageSet was created successfully")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DEFAULT_TIMEOUT, []string{CLUSTER_IMAGE_SET}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
 
 		oc.SetupProject()
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
@@ -162,12 +162,12 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			name:           poolName,
 			namespace:      oc.Namespace(),
 			fake:           "false",
-			baseDomain:     AWS_BASE_DOMAIN,
+			baseDomain:     AWSBaseDomain,
 			imageSetRef:    imageSetName,
 			platformType:   "aws",
-			credRef:        AWS_CREDS,
-			region:         AWS_REGION,
-			pullSecretRef:  PULL_SECRET,
+			credRef:        AWSCreds,
+			region:         AWSRegion,
+			pullSecretRef:  PullSecret,
 			size:           1,
 			maxSize:        1,
 			runningCount:   0,
@@ -175,12 +175,12 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			hibernateAfter: "360m",
 			template:       poolTemp,
 		}
-		defer cleanupObjects(oc, objectTableRef{CLUSTER_POOL, oc.Namespace(), poolName})
+		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
 		pool.create(oc)
 		g.By("Check if ClusterPool created successfully and become ready")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, poolName, ok, DEFAULT_TIMEOUT, []string{CLUSTER_POOL, "-n", oc.Namespace()}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, poolName, ok, DefaultTimeout, []string{"ClusterPool", "-n", oc.Namespace()}).check(oc)
 		poolReadyString := "\"ready\":1"
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, poolReadyString, ok, CLUSTER_INSTALL_TIMEOUT, []string{CLUSTER_POOL, poolName, "-n", oc.Namespace(), "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, poolReadyString, ok, ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status}"}).check(oc)
 
 		g.By("Create ClusterClaim...")
 		claimTemp := filepath.Join(testDataDir, "clusterclaim.yaml")
@@ -191,11 +191,11 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			clusterPoolName: poolName,
 			template:        claimTemp,
 		}
-		defer cleanupObjects(oc, objectTableRef{CLUSTER_CLAIM, oc.Namespace(), claimName})
+		defer cleanupObjects(oc, objectTableRef{"ClusterClaim", oc.Namespace(), claimName})
 		claim.create(oc)
 		g.By("Check if ClusterClaim created successfully and become running")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, claimName, ok, DEFAULT_TIMEOUT, []string{CLUSTER_CLAIM, "-n", oc.Namespace()}).check(oc)
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, CLUSTER_RESUME_TIMEOUT, []string{CLUSTER_CLAIM, "-n", oc.Namespace()}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, claimName, ok, DefaultTimeout, []string{"ClusterClaim", "-n", oc.Namespace()}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterClaim", "-n", oc.Namespace()}).check(oc)
 	})
 
 	//author: jshu@redhat.com
@@ -205,18 +205,18 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 25310 is for AWS - skipping test ...")
 		}
-		testCaseId := "25310"
-		cdName := "cluster-" + testCaseId
+		testCaseID := "25310"
+		cdName := "cluster-" + testCaseID
 		imageSetName := cdName + "-imageset"
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP49_RELEASE_IMAGE,
+			releaseImage: OCP49eleaseImage,
 			template:     imageSetTemp,
 		}
 
 		g.By("Create ClusterImageSet...")
-		defer cleanupObjects(oc, objectTableRef{CLUSTER_IMAGE_SET, "", imageSetName})
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
 		imageSet.create(oc)
 
 		oc.SetupProject()
@@ -233,9 +233,9 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		installConfigSecret := installConfig{
 			name1:      installConfigSecretName,
 			namespace:  oc.Namespace(),
-			baseDomain: AWS_BASE_DOMAIN,
+			baseDomain: AWSBaseDomain,
 			name2:      cdName,
-			region:     AWS_REGION,
+			region:     AWSRegion,
 			template:   installConfigTemp,
 		}
 		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
@@ -247,17 +247,17 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			fake:                "false",
 			name:                cdName,
 			namespace:           oc.Namespace(),
-			baseDomain:          AWS_BASE_DOMAIN,
+			baseDomain:          AWSBaseDomain,
 			clusterName:         cdName,
 			platformType:        "aws",
-			credRef:             AWS_CREDS,
-			region:              AWS_REGION,
+			credRef:             AWSCreds,
+			region:              AWSRegion,
 			imageSetRef:         imageSetName,
 			installConfigSecret: installConfigSecretName,
-			pullSecretRef:       PULL_SECRET,
+			pullSecretRef:       PullSecret,
 			template:            clusterTemp,
 		}
-		defer cleanupObjects(oc, objectTableRef{CLUSTER_DEPLOYMENT, oc.Namespace(), cdName})
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
 		cluster.create(oc)
 
 		g.By("Create worker and infra MachinePool ...")
@@ -275,28 +275,28 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		}
 
 		defer cleanupObjects(oc,
-			objectTableRef{MACHINE_POOL, oc.Namespace(), cdName + "-worker"},
-			objectTableRef{MACHINE_POOL, oc.Namespace(), cdName + "-infra"},
+			objectTableRef{"MachinePool", oc.Namespace(), cdName + "-worker"},
+			objectTableRef{"MachinePool", oc.Namespace(), cdName + "-infra"},
 		)
 		workermp.create(oc)
 		inframp.create(oc)
 
 		g.By("Check if ClusterDeployment created successfully and become Provisioned")
 		e2e.Logf("test OCP-25310")
-		//newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, DEFAULT_TIMEOUT, []string{CLUSTER_DEPLOYMENT, cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, CLUSTER_INSTALL_TIMEOUT, []string{CLUSTER_DEPLOYMENT, cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+		//newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 		e2e.Logf("test OCP-33374")
-		ocp_version := extractRelfromImg(OCP49_RELEASE_IMAGE)
-		if ocp_version == "" {
+		ocpVersion := extractRelfromImg(OCP49eleaseImage)
+		if ocpVersion == "" {
 			g.Fail("Case failed because no OCP version extracted from Image")
 		}
 
-		if ocp_version != "" {
-			newCheck("expect", "get", asAdmin, withoutNamespace, contain, ocp_version, ok, DEFAULT_TIMEOUT, []string{CLUSTER_DEPLOYMENT, cdName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.labels}"}).check(oc)
+		if ocpVersion != "" {
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, ocpVersion, ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.labels}"}).check(oc)
 		}
 		e2e.Logf("test OCP-39747")
-		if ocp_version != "" {
-			newCheck("expect", "get", asAdmin, withoutNamespace, contain, ocp_version, ok, DEFAULT_TIMEOUT, []string{CLUSTER_DEPLOYMENT, cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.installVersion}"}).check(oc)
+		if ocpVersion != "" {
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, ocpVersion, ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.installVersion}"}).check(oc)
 		}
 
 		g.By("OCP-23165:Hive supports remote Machine Set Management for AWS")
@@ -307,40 +307,40 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
 		kubeconfig := tmpDir + "/kubeconfig"
 		e2e.Logf("Check worker machinepool .status.replicas = 3")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "3", ok, DEFAULT_TIMEOUT, []string{MACHINE_POOL, cdName + "-worker", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "3", ok, DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
 		e2e.Logf("Check infra machinepool .status.replicas = 1 ")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, DEFAULT_TIMEOUT, []string{MACHINE_POOL, cdName + "-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
-		machinesetsname := getResource(oc, asAdmin, withoutNamespace, MACHINE_POOL, cdName+"-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.machineSets[?(@.replicas==1)].name}")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+		machinesetsname := getResource(oc, asAdmin, withoutNamespace, "MachinePool", cdName+"-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.machineSets[?(@.replicas==1)].name}")
 		o.Expect(machinesetsname).NotTo(o.BeEmpty())
 		e2e.Logf("Remote cluster machineset list: %s", machinesetsname)
 		e2e.Logf("Check machineset %s created on remote cluster", machinesetsname)
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, machinesetsname, ok, DEFAULT_TIMEOUT, []string{"--kubeconfig=" + kubeconfig, MACHINE_SET, "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].metadata.name}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, machinesetsname, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].metadata.name}"}).check(oc)
 		e2e.Logf("Check only 1 machineset up")
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1", ok, 5*DEFAULT_TIMEOUT, []string{"--kubeconfig=" + kubeconfig, MACHINE_SET, "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].status.availableReplicas}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1", ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].status.availableReplicas}"}).check(oc)
 		e2e.Logf("Check only one machines in Running status")
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DEFAULT_TIMEOUT, []string{"--kubeconfig=" + kubeconfig, MACHINE, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=infra", "-o=jsonpath={.items[*].status.phase}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=infra", "-o=jsonpath={.items[*].status.phase}"}).check(oc)
 		e2e.Logf("Patch infra machinepool .spec.replicas to 3")
-		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DEFAULT_TIMEOUT, []string{MACHINE_POOL, cdName + "-infra", "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"replicas": 3}}`}).check(oc)
-		machinesetsname = getResource(oc, asAdmin, withoutNamespace, MACHINE_POOL, cdName+"-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.machineSets[?(@.replicas==1)].name}")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"replicas": 3}}`}).check(oc)
+		machinesetsname = getResource(oc, asAdmin, withoutNamespace, "MachinePool", cdName+"-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.machineSets[?(@.replicas==1)].name}")
 		o.Expect(machinesetsname).NotTo(o.BeEmpty())
 		e2e.Logf("Remote cluster machineset list: %s", machinesetsname)
 		e2e.Logf("Check machineset %s created on remote cluster", machinesetsname)
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, machinesetsname, ok, 5*DEFAULT_TIMEOUT, []string{"--kubeconfig=" + kubeconfig, MACHINE_SET, "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].metadata.name}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, machinesetsname, ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].metadata.name}"}).check(oc)
 		e2e.Logf("Check machinesets scale up to 3")
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1 1 1", ok, 5*DEFAULT_TIMEOUT, []string{"--kubeconfig=" + kubeconfig, MACHINE_SET, "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].status.availableReplicas}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1 1 1", ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].status.availableReplicas}"}).check(oc)
 		e2e.Logf("Check 3 machines in Running status")
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running Running", ok, DEFAULT_TIMEOUT, []string{"--kubeconfig=" + kubeconfig, MACHINE, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=infra", "-o=jsonpath={.items[*].status.phase}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=infra", "-o=jsonpath={.items[*].status.phase}"}).check(oc)
 		e2e.Logf("Patch infra machinepool .spec.replicas to 2")
-		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DEFAULT_TIMEOUT, []string{MACHINE_POOL, cdName + "-infra", "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"replicas": 2}}`}).check(oc)
-		machinesetsname = getResource(oc, asAdmin, withoutNamespace, MACHINE_POOL, cdName+"-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.machineSets[?(@.replicas==1)].name}")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"replicas": 2}}`}).check(oc)
+		machinesetsname = getResource(oc, asAdmin, withoutNamespace, "MachinePool", cdName+"-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.machineSets[?(@.replicas==1)].name}")
 		o.Expect(machinesetsname).NotTo(o.BeEmpty())
 		e2e.Logf("Remote cluster machineset list: %s", machinesetsname)
 		e2e.Logf("Check machineset %s created on remote cluster", machinesetsname)
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, machinesetsname, ok, 5*DEFAULT_TIMEOUT, []string{"--kubeconfig=" + kubeconfig, MACHINE_SET, "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].metadata.name}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, machinesetsname, ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].metadata.name}"}).check(oc)
 		e2e.Logf("Check machinesets scale down to 2")
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1 1", ok, 5*DEFAULT_TIMEOUT, []string{"--kubeconfig=" + kubeconfig, MACHINE_SET, "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].status.availableReplicas}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1 1", ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].status.availableReplicas}"}).check(oc)
 		e2e.Logf("Check 2 machines in Running status")
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running", ok, DEFAULT_TIMEOUT, []string{"--kubeconfig=" + kubeconfig, MACHINE, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=infra", "-o=jsonpath={.items[*].status.phase}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=infra", "-o=jsonpath={.items[*].status.phase}"}).check(oc)
 	})
 
 	//author: jshu@redhat.com
@@ -350,22 +350,22 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 44945 is for AWS - skipping test ...")
 		}
-		testCaseId := "44945"
-		poolName := "pool-" + testCaseId
+		testCaseID := "44945"
+		poolName := "pool-" + testCaseID
 		imageSetName := poolName + "-imageset"
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP49_RELEASE_IMAGE,
+			releaseImage: OCP49eleaseImage,
 			template:     imageSetTemp,
 		}
 
 		g.By("Create ClusterImageSet...")
-		defer cleanupObjects(oc, objectTableRef{CLUSTER_IMAGE_SET, "", imageSetName})
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
 		imageSet.create(oc)
 
 		e2e.Logf("Check if ClusterImageSet was created successfully")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DEFAULT_TIMEOUT, []string{CLUSTER_IMAGE_SET}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
 
 		oc.SetupProject()
 		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
@@ -381,12 +381,12 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			name:           poolName,
 			namespace:      oc.Namespace(),
 			fake:           "false",
-			baseDomain:     AWS_BASE_DOMAIN,
+			baseDomain:     AWSBaseDomain,
 			imageSetRef:    imageSetName,
 			platformType:   "aws",
-			credRef:        AWS_CREDS,
-			region:         AWS_REGION,
-			pullSecretRef:  PULL_SECRET,
+			credRef:        AWSCreds,
+			region:         AWSRegion,
+			pullSecretRef:  PullSecret,
 			size:           2,
 			maxSize:        2,
 			runningCount:   0,
@@ -394,33 +394,33 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			hibernateAfter: "10m",
 			template:       poolTemp,
 		}
-		defer cleanupObjects(oc, objectTableRef{CLUSTER_POOL, oc.Namespace(), poolName})
+		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
 		pool.create(oc)
 		e2e.Logf("Check if ClusterPool created successfully and become ready")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, CLUSTER_INSTALL_TIMEOUT, []string{CLUSTER_POOL, poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.ready}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.ready}"}).check(oc)
 
 		e2e.Logf("OCP-44945, step 2: check all cluster are in Hibernating status")
 		cdListStr := getCDlistfromPool(oc, poolName)
 		var cdArray []string
 		cdArray = strings.Split(strings.TrimSpace(cdListStr), "\n")
 		for i := range cdArray {
-			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, CLUSTER_RESUME_TIMEOUT, []string{CLUSTER_DEPLOYMENT, cdArray[i], "-n", cdArray[i]}).check(oc)
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i]}).check(oc)
 		}
 
 		e2e.Logf("OCP-37528, step 3: check hibernateAfter and powerState fields")
 		for i := range cdArray {
-			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, DEFAULT_TIMEOUT, []string{CLUSTER_DEPLOYMENT, cdArray[i], "-n", cdArray[i], "-o=jsonpath={.spec.powerState}"}).check(oc)
-			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "10m", ok, DEFAULT_TIMEOUT, []string{CLUSTER_DEPLOYMENT, cdArray[i], "-n", cdArray[i], "-o=jsonpath={.spec.hibernateAfter}"}).check(oc)
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, DefaultTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i], "-o=jsonpath={.spec.powerState}"}).check(oc)
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "10m", ok, DefaultTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i], "-o=jsonpath={.spec.hibernateAfter}"}).check(oc)
 		}
 
 		g.By("OCP-44945, step 5: Patch .spec.runningCount=1...")
-		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DEFAULT_TIMEOUT, []string{CLUSTER_POOL, poolName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"runningCount":1}}`}).check(oc)
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"runningCount":1}}`}).check(oc)
 
 		e2e.Logf("OCP-44945, step 6: Check the unclaimed clusters in the pool, CD whose creationTimestamp is the oldest becomes Running")
 		var oldestCD, oldestCDTimestamp string
 		oldestCDTimestamp = ""
 		for i := range cdArray {
-			creationTimestamp := getResource(oc, asAdmin, withoutNamespace, CLUSTER_DEPLOYMENT, cdArray[i], "-n", cdArray[i], "-o=jsonpath={.metadata.creationTimestamp}")
+			creationTimestamp := getResource(oc, asAdmin, withoutNamespace, "ClusterDeployment", cdArray[i], "-n", cdArray[i], "-o=jsonpath={.metadata.creationTimestamp}")
 			e2e.Logf("CD %d is %s, creationTimestamp is %s", i, cdArray[i], creationTimestamp)
 			if strings.Compare(oldestCDTimestamp, "") == 0 || strings.Compare(oldestCDTimestamp, creationTimestamp) > 0 {
 				oldestCDTimestamp = creationTimestamp
@@ -428,18 +428,18 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			}
 		}
 		e2e.Logf("The CD with the oldest creationTimestamp is %s", oldestCD)
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, CLUSTER_RESUME_TIMEOUT, []string{CLUSTER_DEPLOYMENT, oldestCD, "-n", oldestCD}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterDeployment", oldestCD, "-n", oldestCD}).check(oc)
 
 		g.By("OCP-44945, step 7: Patch pool.spec.runningCount=3...")
-		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DEFAULT_TIMEOUT, []string{CLUSTER_POOL, poolName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"runningCount":3}}`}).check(oc)
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"runningCount":3}}`}).check(oc)
 
 		e2e.Logf("OCP-44945, step 7: check runningCount=3 but pool size is still 2")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "3", ok, DEFAULT_TIMEOUT, []string{CLUSTER_POOL, poolName, "-n", oc.Namespace(), "-o=jsonpath={.spec.runningCount}"}).check(oc)
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, DEFAULT_TIMEOUT, []string{CLUSTER_POOL, poolName, "-n", oc.Namespace(), "-o=jsonpath={.spec.size}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "3", ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.spec.runningCount}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.spec.size}"}).check(oc)
 
 		e2e.Logf("OCP-44945, step 7: All CDs in the pool become Running")
 		for i := range cdArray {
-			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, CLUSTER_RESUME_TIMEOUT, []string{CLUSTER_DEPLOYMENT, cdArray[i], "-n", cdArray[i]}).check(oc)
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i]}).check(oc)
 		}
 
 		g.By("OCP-44945, step 8: Claim a CD from the pool...")
@@ -451,26 +451,26 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			clusterPoolName: poolName,
 			template:        claimTemp,
 		}
-		defer cleanupObjects(oc, objectTableRef{CLUSTER_CLAIM, oc.Namespace(), claimName})
+		defer cleanupObjects(oc, objectTableRef{"ClusterClaim", oc.Namespace(), claimName})
 		claim.create(oc)
 
 		e2e.Logf("OCP-44945, step 8: Check the claimed CD is the one whose creationTimestamp is the oldest")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, oldestCD, ok, CLUSTER_RESUME_TIMEOUT, []string{CLUSTER_CLAIM, claimName, "-n", oc.Namespace()}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, oldestCD, ok, ClusterResumeTimeout, []string{"ClusterClaim", claimName, "-n", oc.Namespace()}).check(oc)
 		e2e.Logf("OCP-44945, step 9: Check CD's ClaimedTimestamp is set")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "claimedTimestamp", ok, DEFAULT_TIMEOUT, []string{CLUSTER_DEPLOYMENT, oldestCD, "-n", oldestCD, "-o=jsonpath={.spec.clusterPoolRef}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "claimedTimestamp", ok, DefaultTimeout, []string{"ClusterDeployment", oldestCD, "-n", oldestCD, "-o=jsonpath={.spec.clusterPoolRef}"}).check(oc)
 
 		e2e.Logf("OCP-37528, step 5: Check the claimed CD is in Running status")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, DEFAULT_TIMEOUT, []string{CLUSTER_DEPLOYMENT, oldestCD, "-n", oldestCD, "-o=jsonpath={.spec.powerState}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, DefaultTimeout, []string{"ClusterDeployment", oldestCD, "-n", oldestCD, "-o=jsonpath={.spec.powerState}"}).check(oc)
 		e2e.Logf("OCP-37528, step 6: Check the claimed CD is in Hibernating status due to hibernateAfter=10m")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, CLUSTER_RESUME_TIMEOUT+5*DEFAULT_TIMEOUT, []string{CLUSTER_DEPLOYMENT, oldestCD, "-n", oldestCD, "-o=jsonpath={.spec.powerState}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterResumeTimeout+5*DefaultTimeout, []string{"ClusterDeployment", oldestCD, "-n", oldestCD, "-o=jsonpath={.spec.powerState}"}).check(oc)
 
 		g.By("OCP-37527, step 4: patch the CD to Running...")
-		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DEFAULT_TIMEOUT, []string{CLUSTER_DEPLOYMENT, oldestCD, "-n", oldestCD, "--type", "merge", "-p", `{"spec":{"powerState": "Running"}}`}).check(oc)
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", oldestCD, "-n", oldestCD, "--type", "merge", "-p", `{"spec":{"powerState": "Running"}}`}).check(oc)
 		e2e.Logf("Wait for CD to be Running")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, CLUSTER_RESUME_TIMEOUT, []string{CLUSTER_DEPLOYMENT, oldestCD, "-n", oldestCD, "-o=jsonpath={.spec.powerState}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterDeployment", oldestCD, "-n", oldestCD, "-o=jsonpath={.spec.powerState}"}).check(oc)
 		e2e.Logf("OCP-37527, step 5: CD becomes Hibernating again due to hibernateAfter=10m")
-		//patch makes CD to be Running soon but it needs more time to get back from Hibernation actually so overall timer is CLUSTER_RESUME_TIMEOUT + hibernateAfter
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, CLUSTER_RESUME_TIMEOUT+5*DEFAULT_TIMEOUT, []string{CLUSTER_DEPLOYMENT, oldestCD, "-n", oldestCD, "-o=jsonpath={.spec.powerState}"}).check(oc)
+		//patch makes CD to be Running soon but it needs more time to get back from Hibernation actually so overall timer is ClusterResumeTimeout + hibernateAfter
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterResumeTimeout+5*DefaultTimeout, []string{"ClusterDeployment", oldestCD, "-n", oldestCD, "-o=jsonpath={.spec.powerState}"}).check(oc)
 	})
 
 	//author: jshu@redhat.com
@@ -480,18 +480,18 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 23040 is for AWS - skipping test ...")
 		}
-		testCaseId := "23040"
-		cdName := "cluster-" + testCaseId
+		testCaseID := "23040"
+		cdName := "cluster-" + testCaseID
 		imageSetName := cdName + "-imageset"
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP49_RELEASE_IMAGE,
+			releaseImage: OCP49eleaseImage,
 			template:     imageSetTemp,
 		}
 
 		g.By("Create ClusterImageSet...")
-		defer cleanupObjects(oc, objectTableRef{CLUSTER_IMAGE_SET, "", imageSetName})
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
 		imageSet.create(oc)
 
 		oc.SetupProject()
@@ -508,9 +508,9 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		installConfigSecret := installConfig{
 			name1:      installConfigSecretName,
 			namespace:  oc.Namespace(),
-			baseDomain: AWS_BASE_DOMAIN,
+			baseDomain: AWSBaseDomain,
 			name2:      cdName,
-			region:     AWS_REGION,
+			region:     AWSRegion,
 			template:   installConfigTemp,
 		}
 		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
@@ -522,23 +522,23 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			fake:                "false",
 			name:                cdName,
 			namespace:           oc.Namespace(),
-			baseDomain:          AWS_BASE_DOMAIN,
+			baseDomain:          AWSBaseDomain,
 			clusterName:         cdName,
 			platformType:        "aws",
-			credRef:             AWS_CREDS,
-			region:              AWS_REGION,
+			credRef:             AWSCreds,
+			region:              AWSRegion,
 			imageSetRef:         imageSetName,
 			installConfigSecret: installConfigSecretName,
-			pullSecretRef:       PULL_SECRET,
+			pullSecretRef:       PullSecret,
 			template:            clusterTemp,
 		}
-		defer cleanupObjects(oc, objectTableRef{CLUSTER_DEPLOYMENT, oc.Namespace(), cdName})
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
 		cluster.create(oc)
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, CLUSTER_INSTALL_TIMEOUT, []string{CLUSTER_DEPLOYMENT, cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
 		g.By("Create SyncSet...")
-		syncSetName := testCaseId + "-syncset"
-		configMapName := testCaseId + "-configmap"
+		syncSetName := testCaseID + "-syncset"
+		configMapName := testCaseID + "-configmap"
 		syncTemp := filepath.Join(testDataDir, "syncset.yaml")
 		sync := syncSet{
 			name:        syncSetName,
@@ -559,8 +559,8 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		kubeconfig := tmpDir + "/kubeconfig"
 
 		e2e.Logf("Check if syncSet is created successfully.")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, syncSetName, ok, DEFAULT_TIMEOUT, []string{SYNC_SET, syncSetName, "-n", oc.Namespace()}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, syncSetName, ok, DefaultTimeout, []string{"SyncSet", syncSetName, "-n", oc.Namespace()}).check(oc)
 		e2e.Logf("Check if configMap in syncSet is applied in the cluster.")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, configMapName, ok, DEFAULT_TIMEOUT, []string{"--kubeconfig=" + kubeconfig, CONFIG_MAP, configMapName}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, configMapName, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapName}).check(oc)
 	})
 })
