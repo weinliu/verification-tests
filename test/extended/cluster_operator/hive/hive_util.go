@@ -1,6 +1,7 @@
 package hive
 
 import (
+	"bufio"
 	"fmt"
 	"math/rand"
 	"os"
@@ -122,18 +123,61 @@ type objectTableRef struct {
 	name      string
 }
 
+//Azure
+type azureInstallConfig struct {
+	name1      string
+	namespace  string
+	baseDomain string
+	name2      string
+	resGroup   string
+	azureType  string
+	region     string
+	template   string
+}
+
+type azureClusterDeployment struct {
+	fake                string
+	name                string
+	namespace           string
+	baseDomain          string
+	clusterName         string
+	platformType        string
+	credRef             string
+	region              string
+	resGroup            string
+	azureType           string
+	imageSetRef         string
+	installConfigSecret string
+	pullSecretRef       string
+	template            string
+}
+
 //Hive Configurations
 const (
 	HiveNamespace           = "hive" //Hive Namespace
-	AWSBaseDomain           = "qe.devcluster.openshift.com"
-	AWSRegion               = "us-east-2"
-	OCP49eleaseImage        = "quay.io/openshift-release-dev/ocp-release:4.9.0-rc.6-x86_64"
-	AWSCreds                = "aws-creds"
+	OCP49ReleaseImage       = "quay.io/openshift-release-dev/ocp-release:4.9.0-rc.6-x86_64"
+	OCP410ReleaseImage      = "quay.io/openshift-release-dev/ocp-release:4.10.14-x86_64"
 	PullSecret              = "pull-secret"
 	ClusterInstallTimeout   = 3600
 	DefaultTimeout          = 120
 	ClusterResumeTimeout    = 600
 	ClusterUninstallTimeout = 1800
+)
+
+//AWS Configurations
+const (
+	AWSBaseDomain = "qe.devcluster.openshift.com" //AWS BaseDomain
+	AWSRegion     = "us-east-2"
+	AWSCreds      = "aws-creds"
+)
+
+//Azure Configurations
+const (
+	AzureBaseDomain = "qe.azure.devcluster.openshift.com" //Azure BaseDomain
+	AzureRegion     = "centralus"
+	AzureCreds      = "azure-credentials"
+	AzureRESGroup   = "os4-common"
+	AzurePublic     = "AzurePublicCloud"
 )
 
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
@@ -285,6 +329,17 @@ func (sync *syncSet) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+//Azure
+func (config *azureInstallConfig) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", config.template, "-p", "NAME1="+config.name1, "NAMESPACE="+config.namespace, "BASEDOMAIN="+config.baseDomain, "NAME2="+config.name2, "RESGROUP="+config.resGroup, "AZURETYPE="+config.azureType, "REGION="+config.region)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (cluster *azureClusterDeployment) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cluster.template, "-p", "FAKE="+cluster.fake, "NAME="+cluster.name, "NAMESPACE="+cluster.namespace, "BASEDOMAIN="+cluster.baseDomain, "CLUSTERNAME="+cluster.clusterName, "PLATFORMTYPE="+cluster.platformType, "CREDREF="+cluster.credRef, "REGION="+cluster.region, "RESGROUP="+cluster.resGroup, "AZURETYPE="+cluster.azureType, "IMAGESETREF="+cluster.imageSetRef, "INSTALLCONFIGSECRET="+cluster.installConfigSecret, "PULLSECRETREF="+cluster.pullSecretRef)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) string {
 	var result string
 	err := wait.Poll(3*time.Second, 120*time.Second, func() (bool, error) {
@@ -317,6 +372,16 @@ func doAction(oc *exutil.CLI, action string, asAdmin bool, withoutNamespace bool
 	return "", nil
 }
 
+//Check the resource meets the expect
+//parameter method: expect or present
+//parameter action: get, patch, delete, ...
+//parameter executor: asAdmin or not
+//parameter inlineNamespace: withoutNamespace or not
+//parameter expectAction: Compare or not
+//parameter expectContent: expected string
+//parameter expect: ok, expected to have expectContent; mok, not expected to have expectContent
+//parameter timeout: use CLUSTER_INSTALL_TIMEOUT de default, and CLUSTER_INSTALL_TIMEOUT, CLUSTER_RESUME_TIMEOUT etc in different scenarios
+//parameter resource: resource
 func newCheck(method string, action string, executor bool, inlineNamespace bool, expectAction bool,
 	expectContent string, expect bool, timeout int, resource []string) checkDescription {
 	return checkDescription{
@@ -435,6 +500,7 @@ func expectedResource(oc *exutil.CLI, action string, asAdmin bool, withoutNamesp
 	})
 }
 
+//clean up the object resource
 func cleanupObjects(oc *exutil.CLI, objs ...objectTableRef) {
 	for _, v := range objs {
 		e2e.Logf("Start to remove: %v", v)
@@ -495,6 +561,38 @@ func createAWSCreds(oc *exutil.CLI, namespace string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+//Create Azure credentials in current project namespace
+func createAzureCreds(oc *exutil.CLI, namespace string) {
+	dirname := "/tmp/" + oc.Namespace() + "-creds"
+	err := os.MkdirAll(dirname, 0777)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	defer os.RemoveAll(dirname)
+
+	var azureClientID, azureClientSecret, azureSubscriptionID, azureTenantID string
+	azureClientID, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/azure-credentials", "-n", "kube-system", "--template='{{.data.azure_client_id | base64decode}}'").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	azureClientSecret, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/azure-credentials", "-n", "kube-system", "--template='{{.data.azure_client_secret | base64decode}}'").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	azureSubscriptionID, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/azure-credentials", "-n", "kube-system", "--template='{{.data.azure_subscription_id | base64decode}}'").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	azureTenantID, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/azure-credentials", "-n", "kube-system", "--template='{{.data.azure_tenant_id | base64decode}}'").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	//Convert credentials to osServicePrincipal.json format
+	output := fmt.Sprintf("{\"subscriptionId\":\"%s\",\"clientId\":\"%s\",\"clientSecret\":\"%s\",\"tenantId\":\"%s\"}", azureSubscriptionID[1:len(azureSubscriptionID)-1], azureClientID[1:len(azureClientID)-1], azureClientSecret[1:len(azureClientSecret)-1], azureTenantID[1:len(azureTenantID)-1])
+	outputFile, outputErr := os.OpenFile(dirname+"/osServicePrincipal.json", os.O_CREATE|os.O_WRONLY, 0666)
+	o.Expect(outputErr).NotTo(o.HaveOccurred())
+	defer outputFile.Close()
+	outputWriter := bufio.NewWriter(outputFile)
+	writeByte, writeError := outputWriter.WriteString(output)
+	o.Expect(writeError).NotTo(o.HaveOccurred())
+	writeError = outputWriter.Flush()
+	o.Expect(writeError).NotTo(o.HaveOccurred())
+	e2e.Logf("%d byte written to osServicePrincipal.json", writeByte)
+	err = oc.Run("create").Args("secret", "generic", AzureCreds, "--from-file="+dirname+"/osServicePrincipal.json", "-n", namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+//Reutrn Rlease version from Image
 func extractRelfromImg(image string) string {
 	index := strings.Index(image, ":")
 	if index != -1 {

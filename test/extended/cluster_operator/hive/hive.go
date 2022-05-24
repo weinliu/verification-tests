@@ -137,7 +137,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP49eleaseImage,
+			releaseImage: OCP49ReleaseImage,
 			template:     imageSetTemp,
 		}
 
@@ -179,8 +179,8 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		pool.create(oc)
 		g.By("Check if ClusterPool created successfully and become ready")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, poolName, ok, DefaultTimeout, []string{"ClusterPool", "-n", oc.Namespace()}).check(oc)
-		poolReadyString := "\"ready\":1"
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, poolReadyString, ok, ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status}"}).check(oc)
+		//runningCount is 0 so pool status should be standby: 1, ready: 0
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
 
 		g.By("Create ClusterClaim...")
 		claimTemp := filepath.Join(testDataDir, "clusterclaim.yaml")
@@ -211,7 +211,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP49eleaseImage,
+			releaseImage: OCP49ReleaseImage,
 			template:     imageSetTemp,
 		}
 
@@ -286,7 +286,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		//newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 		e2e.Logf("test OCP-33374")
-		ocpVersion := extractRelfromImg(OCP49eleaseImage)
+		ocpVersion := extractRelfromImg(OCP49ReleaseImage)
 		if ocpVersion == "" {
 			g.Fail("Case failed because no OCP version extracted from Image")
 		}
@@ -356,7 +356,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP49eleaseImage,
+			releaseImage: OCP49ReleaseImage,
 			template:     imageSetTemp,
 		}
 
@@ -397,7 +397,8 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
 		pool.create(oc)
 		e2e.Logf("Check if ClusterPool created successfully and become ready")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.ready}"}).check(oc)
+		//runningCount is 0 so pool status should be standby: 2, ready: 0
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
 
 		e2e.Logf("OCP-44945, step 2: check all cluster are in Hibernating status")
 		cdListStr := getCDlistfromPool(oc, poolName)
@@ -486,7 +487,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP49eleaseImage,
+			releaseImage: OCP49ReleaseImage,
 			template:     imageSetTemp,
 		}
 
@@ -562,5 +563,71 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, syncSetName, ok, DefaultTimeout, []string{"SyncSet", syncSetName, "-n", oc.Namespace()}).check(oc)
 		e2e.Logf("Check if configMap in syncSet is applied in the cluster.")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, configMapName, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapName}).check(oc)
+	})
+
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-High-25447-Hive API support for Azure[Serial]", func() {
+		if iaasPlatform != "azure" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 25447 is for Azure - skipping test ...")
+		}
+		testCaseID := "25447"
+		cdName := "cluster-" + testCaseID
+		imageSetName := cdName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: OCP410ReleaseImage,
+			template:     imageSetTemp,
+		}
+
+		g.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		oc.SetupProject()
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and azure-credentials to target namespace for the cluster
+		g.By("Copy Azure platform credentials...")
+		createAzureCreds(oc, oc.Namespace())
+
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Create Azure Install-Config Secret...")
+		installConfigTemp := filepath.Join(testDataDir, "azure-install-config.yaml")
+		installConfigSecretName := cdName + "-install-config"
+		installConfigSecret := azureInstallConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: AzureBaseDomain,
+			name2:      cdName,
+			region:     AzureRegion,
+			resGroup:   AzureRESGroup,
+			azureType:  AzurePublic,
+			template:   installConfigTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
+		installConfigSecret.create(oc)
+
+		g.By("Create Azure ClusterDeployment...")
+		clusterTemp := filepath.Join(testDataDir, "clusterdeployment-azure.yaml")
+		cluster := azureClusterDeployment{
+			fake:                "false",
+			name:                cdName,
+			namespace:           oc.Namespace(),
+			baseDomain:          AzureBaseDomain,
+			clusterName:         cdName,
+			platformType:        "azure",
+			credRef:             AzureCreds,
+			region:              AzureRegion,
+			resGroup:            AzureRESGroup,
+			azureType:           AzurePublic,
+			imageSetRef:         imageSetName,
+			installConfigSecret: installConfigSecretName,
+			pullSecretRef:       PullSecret,
+			template:            clusterTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
+		cluster.create(oc)
+		g.By("Check Azure ClusterDeployment installed flag is true")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 	})
 })

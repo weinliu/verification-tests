@@ -47,6 +47,7 @@ require (
 	k8s.io/kubectl v0.0.0
 	k8s.io/kubernetes v1.21.0
 	k8s.io/legacy-cloud-providers v0.0.0
+	k8s.io/utils v0.0.0-20191114184206-e782cd3c129f
 	sigs.k8s.io/yaml v1.1.0
 )
 
