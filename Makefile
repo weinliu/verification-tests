@@ -19,7 +19,7 @@ check-code:
 	./hack/check-code.sh master
 
 pr-test:
-	python ./hack/pr.py
+	python3 ./hack/pr.py
 
 # Include the library makefile
 include $(addprefix ./, bindata.mk)
