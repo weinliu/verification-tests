@@ -1722,3 +1722,98 @@ func getDataFromKafkaConsumerPod(oc *exutil.CLI, ns string, consumerName string)
 	output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ns, consumerPods.Items[0].Name, "--since=2m").Output()
 	return output, err
 }
+
+type kafka struct {
+	namespace    string
+	kafkasvcName string
+	zoosvcName   string
+	authtype     string //Name the kafka folders under testdata same as the authtype (options: sasl_plaintext, sasl_ssl, ssl, plaintext, mutual_sasl_ssl)
+}
+
+func (r kafka) deployZookeeper(oc *exutil.CLI) {
+	kafkaFilePath := exutil.FixturePath("testdata", "logging", "external-log-stores", "kafka")
+	zookeeperConfigDir := filepath.Join(kafkaFilePath, "zookeeper-configmap")
+
+	//create zookeeper configmap/svc/StatefulSet
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", r.zoosvcName, "-n", r.namespace, "--from-file=init.sh="+zookeeperConfigDir+"/init.sh", "--from-file=log4j.properties="+zookeeperConfigDir+"/log4j.properties", "--from-file=zookeeper.properties="+zookeeperConfigDir+"/zookeeper.properties").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	zoosvcFile := filepath.Join(kafkaFilePath, "zookeeper-svc.yaml")
+	zoosvc := resource{"Service", r.zoosvcName, r.namespace}
+	err = zoosvc.applyFromTemplate(oc, "-n", r.namespace, "-f", zoosvcFile, "-p", "NAME="+r.zoosvcName, "-p", "NAMESPACE="+r.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	zoosfsFile := filepath.Join(kafkaFilePath, "zookeeper-statefulset.yaml")
+	zoosfs := resource{"StatefulSet", r.zoosvcName, r.namespace}
+	err = zoosfs.applyFromTemplate(oc, "-n", r.namespace, "-f", zoosfsFile, "-p", "NAME="+r.zoosvcName, "-p", "NAMESPACE="+r.namespace, "-p", "SERVICENAME="+zoosvc.name, "-p", "CM_NAME="+r.zoosvcName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	waitForPodReadyWithLabel(oc, r.namespace, "app="+r.zoosvcName)
+}
+
+func (r kafka) deployKafka(oc *exutil.CLI) {
+	kafkaFilePath := exutil.FixturePath("testdata", "logging", "external-log-stores", "kafka", r.authtype)
+	kafkaConfigDir := filepath.Join(kafkaFilePath, "kafka-configmap")
+	consumerConfigDir := filepath.Join(kafkaFilePath, "consumer-configmap")
+
+	//create kafka secrets
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "kafka-client-cert", "-n", r.namespace, "--from-literal=username=admin", "--from-literal=password=admin-secret").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "kafka-fluentd", "-n", r.namespace, "--from-literal=username=admin", "--from-literal=password=admin-secret").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	//create ClusterRole
+	crFile := filepath.Join(kafkaFilePath, "kafka-clusterrole.yaml")
+	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", crFile).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	//create ClusterRoleBinding
+	output, err := oc.AsAdmin().WithoutNamespace().Run("process").Args("-f", kafkaFilePath+"/kafka-clusterrolebinding.yaml", "-p", "NAMESPACE="+r.namespace).OutputToFile(getRandomString() + ".json")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", output).Execute()
+
+	//create kafka configmap
+	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", r.kafkasvcName, "-n", r.namespace, "--from-file=init.sh="+kafkaConfigDir+"/init.sh", "--from-file=log4j.properties="+kafkaConfigDir+"/log4j.properties", "--from-file=server.properties="+kafkaConfigDir+"/server.properties", "--from-file=kafka_server_jaas.conf="+kafkaConfigDir+"/kafka_server_jaas.conf").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	//create kafka svc
+	svcFile := filepath.Join(kafkaFilePath, "kafka-svc.yaml")
+	svc := resource{"Service", r.kafkasvcName, r.namespace}
+	err = svc.applyFromTemplate(oc, "-f", svcFile, "-n", r.namespace, "-p", "NAME="+r.kafkasvcName, "-p", "NAMESPACE="+r.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	//create kafka StatefulSet
+	sfsFile := filepath.Join(kafkaFilePath, "kafka-statefulset.yaml")
+	sfs := resource{"StatefulSet", r.kafkasvcName, r.namespace}
+	err = sfs.applyFromTemplate(oc, "-f", sfsFile, "-n", r.namespace, "-p", "NAME="+r.kafkasvcName, "-p", "NAMESPACE="+r.namespace, "-p", "CM_NAME="+r.kafkasvcName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	waitForPodReadyWithLabel(oc, r.namespace, "app="+r.kafkasvcName)
+
+	//create kafka-consumer deployment
+	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", "kafka-client", "-n", r.namespace, "--from-file=client.properties="+consumerConfigDir+"/client.properties", "--from-file=kafka_client_jaas.conf="+consumerConfigDir+"/kafka_client_jaas.conf", "--from-file=sasl-producer.properties="+consumerConfigDir+"/sasl-producer.properties").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	//create kafka deployment
+	deployFile := filepath.Join(kafkaFilePath, "kafka-consumer-deployment.yaml")
+	deploy := resource{"deployment", "kafka-consumer-sals-plaintext", r.namespace}
+	err = deploy.applyFromTemplate(oc, "-f", deployFile, "-n", r.namespace, "NAMESPACE="+r.namespace, "-p", "CM_NAME="+"kafka-client")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	WaitForDeploymentPodsToBeReady(oc, r.namespace, "kafka-consumer-sals-plaintext")
+}
+
+func (r kafka) removeZookeeper(oc *exutil.CLI) {
+	resource{"configmap", r.zoosvcName, r.namespace}.clear(oc)
+	resource{"svc", r.zoosvcName, r.namespace}.clear(oc)
+	resource{"statefulset", r.zoosvcName, r.namespace}.clear(oc)
+}
+
+func (r kafka) removeKafka(oc *exutil.CLI) {
+	resource{"secret", "kafka-client-cert", r.namespace}.clear(oc)
+	resource{"secret", "kafka-fluentd", r.namespace}.clear(oc)
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrole/kafka-node-reader").Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding/kafka-node-reader-binding").Execute()
+	resource{"configmap", r.kafkasvcName, r.namespace}.clear(oc)
+	resource{"svc", r.kafkasvcName, r.namespace}.clear(oc)
+	resource{"statefulset", r.kafkasvcName, r.namespace}.clear(oc)
+	resource{"configmap", "kafka-client", r.namespace}.clear(oc)
+	resource{"deployment", "kafka-consumer-sals-plaintext", r.namespace}.clear(oc)
+}

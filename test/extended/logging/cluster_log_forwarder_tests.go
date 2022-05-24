@@ -874,5 +874,48 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", consumer.namespace, consumer.name))
 			}
 		})
+		// author gkarager@redhat.com
+		g.It("CPaasrunOnly-Author:gkarager-Mediam-45368-Forward logs to kafka using sals_plaintext[Serial][Slow]", func() {
+			g.By("create log producer")
+			appProj := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploy kafka")
+			kafka := kafka{cloNS, "kafka", "zookeeper", "sasl_plaintext"}
+			defer kafka.removeZookeeper(oc)
+			kafka.deployZookeeper(oc)
+			defer kafka.removeKafka(oc)
+			kafka.deployKafka(oc)
+
+			g.By("Create clusterlogforwarder/instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "45368.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", cloNS, "-f", clfTemplate)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("deploy collector pods")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
+			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+
+			g.By("Check app logs in kafka consumer pod")
+			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", cloNS, "-l", "component=kafka-consumer", "-o", "name").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+				consumerPodLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(consumerPodPodName, "-n", cloNS).Output()
+				if err != nil {
+					return false, err
+				}
+				if strings.Contains(consumerPodLogs, appProj) {
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", cloNS, consumerPodPodName))
+		})
 	})
 })
