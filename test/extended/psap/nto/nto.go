@@ -1929,4 +1929,92 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("defaultTunedCreateTimeBefore is : %v defaultTunedCreateTimeAfter is: %v", defaultTunedCreateTimeBefore, defaultTunedCreateTimeAfter)
 
 	})
+	g.It("Author:liqcui-Medium-41552-NTO Operator Report per-node Tuned profile application status[Disruptive].", func() {
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		//NTO will provides two default tuned, one is openshift-control-plane, another is openshift-node
+		g.By("Check the default tuned profile list per nodes")
+		profileOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("profile", "-n", ntoNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(profileOutput).NotTo(o.BeEmpty())
+		o.Expect(profileOutput).To(o.ContainSubstring("openshift-control-plane"))
+		o.Expect(profileOutput).To(o.ContainSubstring("openshift-node"))
+	})
+
+	g.It("Author:liqcui-Medium-50052-NTO RHCOS-shipped stalld systemd units should use SCHED_FIFO to run stalld[Disruptive].", func() {
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+		//Use the first worker node as labeled node
+		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-stalld-").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "openshift-stalld", "-n", ntoNamespace, "--ignore-not-found").Execute()
+		defer exutil.DebugNodeWithChroot(oc, tunedNodeName, "/usr/bin/throttlectl", "on")
+
+		g.By("Set off for /usr/bin/throttlectl before enable stalld")
+		_, err = exutil.DebugNodeWithChroot(oc, tunedNodeName, "/usr/bin/throttlectl", "off")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Label the node with node-role.kubernetes.io/worker-stalld=")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-stalld=", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create openshift-stalld tuned profile")
+		exutil.CreateNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", stalldTunedFile, "-p", "STALLD_STATUS=start,enable")
+
+		g.By("Check if new profile in in rendered tuned")
+		renderCheck, err := getTunedRender(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).To(o.ContainSubstring("openshift-stalld"))
+
+		g.By("Check openshift-stalld tuned profile should be automatically created")
+		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNames).To(o.ContainSubstring("openshift-stalld"))
+
+		g.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Check if new NTO profile was applied")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-stalld")
+
+		g.By("Check if profile openshift-stalld applied on nodes")
+		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeProfileName).To(o.ContainSubstring("openshift-stalld"))
+
+		g.By("Check current profile for each node")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Check if stalld service is running ...")
+		stalldStatus, err := exutil.DebugNodeWithChroot(oc, tunedNodeName, "systemctl", "status", "stalld")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(stalldStatus).NotTo(o.BeEmpty())
+		o.Expect(stalldStatus).To(o.ContainSubstring("active (running)"))
+
+		g.By("Get stalld PID on labeled node ...")
+		stalldPID, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "/bin/bash", "-c", "ps -efL| grep stalld | grep -v grep | awk '{print $2}'").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(stalldPID).NotTo(o.BeEmpty())
+
+		g.By("Get status of chrt -p stalld PID on labeled node ...")
+		chrtStalldPIDOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "/bin/bash", "-c", "chrt -ap "+stalldPID).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(chrtStalldPIDOutput).NotTo(o.BeEmpty())
+		o.Expect(chrtStalldPIDOutput).To(o.ContainSubstring("SCHED_FIFO"))
+		e2e.Logf("chrtStalldPIDOutput is :\n %v", chrtStalldPIDOutput)
+	})
 })
