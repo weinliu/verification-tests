@@ -331,7 +331,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("Author:xiyuan-Medium-33177-only one long-running daemonset should be created by FIO", func() {
+	g.It("Author:xiyuan-Medium-33177-only one long-running daemonset should be created by FIO [Serial]", func() {
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
 		catsrc.namespace = oc.Namespace()
@@ -583,7 +583,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("Author:xiyuan-Medium-27755-check nodeSelector works for operator file-integrity-operator", func() {
+	g.It("Author:xiyuan-Medium-27755-check nodeSelector works for operator file-integrity-operator [Serial]", func() {
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
 		catsrc.namespace = oc.Namespace()
