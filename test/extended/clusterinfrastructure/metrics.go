@@ -118,12 +118,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		ms.CreateMachineSet(oc)
 
 		g.By("Update machineset with invalid instanceType(or other similar field)")
-		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", patchstr, "--type=merge").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/"+machinesetName, "-n", "openshift-machine-api", "-p", patchstr, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		clusterinfra.WaitForMachineFailed(oc, machinesetName)
 
-		machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
+		machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check metrics mapi_instance_create_failed is shown")

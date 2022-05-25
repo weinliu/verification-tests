@@ -32,7 +32,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with empty clusterID")
-		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/machineset-45772", "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"selector":{"matchLabels":{"machine.openshift.io/cluster-api-cluster": null}}}}`, "--type=merge").Output()
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/machineset-45772", "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"selector":{"matchLabels":{"machine.openshift.io/cluster-api-cluster": null}}}}`, "--type=merge").Output()
 		o.Expect(out).To(o.ContainSubstring("selector is immutable"))
 	})
 
@@ -46,14 +46,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			defer ms.DeleteMachineSet(oc)
 			ms.CreateMachineSet(oc)
 			g.By("Update machineset with acceleratedNetworking: true")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"acceleratedNetworking":true,"vmSize":"Standard_D4s_v3"}}}}}}`, "--type=merge").Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"acceleratedNetworking":true,"vmSize":"Standard_D4s_v3"}}}}}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			//test when set acceleratedNetworking: true, machine running needs nearly 9 minutes. so change the method timeout as 10 minutes.
 			clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 			g.By("Check machine with acceleratedNetworking: true")
-			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.acceleratedNetworking}").Output()
+			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.acceleratedNetworking}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("out:%s", out)
 			o.Expect(out).To(o.ContainSubstring("true"))
@@ -71,13 +71,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			defer ms.DeleteMachineSet(oc)
 			ms.CreateMachineSet(oc)
 			g.By("Update machineset with Ephemeral OS Disks - OS cache placement")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"vmSize":"Standard_D4s_v3","osDisk":{"diskSizeGB":30,"cachingType":"ReadOnly","diskSettings":{"ephemeralStorageLocation":"Local"},"managedDisk":{"storageAccountType":""}}}}}}}}`, "--type=merge").Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"vmSize":"Standard_D4s_v3","osDisk":{"diskSizeGB":30,"cachingType":"ReadOnly","diskSettings":{"ephemeralStorageLocation":"Local"},"managedDisk":{"storageAccountType":""}}}}}}}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 			g.By("Check machine with Ephemeral OS Disks - OS cache placement")
-			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.osDisk.diskSettings.ephemeralStorageLocation}").Output()
+			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.osDisk.diskSettings.ephemeralStorageLocation}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("out:%s", out)
 			o.Expect(out).To(o.ContainSubstring("Local"))
@@ -90,7 +90,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		clusterinfra.SkipConditionally(oc)
 		if clusterinfra.CheckPlatform(oc) == "azure" {
 			defaultWorkerMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
-			region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset/"+defaultWorkerMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
+			region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io/"+defaultWorkerMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			infrastructureName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.infrastructureName}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -114,13 +114,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 				 Therefore, if machine created successfully with the availability set,
 				 then it can prove that the availability set has been created when the default worker machineset is created.
 				*/
-				err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"availabilitySet":"`+availabilitySetName+`"}}}}}}`, "--type=merge").Execute()
+				err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"availabilitySet":"`+availabilitySetName+`"}}}}}}`, "--type=merge").Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
 
 				clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 				g.By("Check machine with availabilitySet")
-				out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.availabilitySet}").Output()
+				out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.availabilitySet}").Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				e2e.Logf("out:%s", out)
 				o.Expect(out == availabilitySetName).To(o.BeTrue())
@@ -139,18 +139,18 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with lifecycle hook")
-		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"lifecycleHooks":{"preDrain":[{"name":"drain1","owner":"drain-controller1"}],"preTerminate":[{"name":"terminate2","owner":"terminate-controller2"}]}}}}}`, "--type=merge").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"lifecycleHooks":{"preDrain":[{"name":"drain1","owner":"drain-controller1"}],"preTerminate":[{"name":"terminate2","owner":"terminate-controller2"}]}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Delete newly created machine by scaling " + machinesetName + " to 0")
-		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("--replicas=0", "-n", "openshift-machine-api", "machineset", machinesetName).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("--replicas=0", "-n", "openshift-machine-api", "machinesets.machine.openshift.io", machinesetName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Wait for machine to go into Deleting phase")
 		err = wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
-			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].status.phase}").Output()
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].status.phase}").Output()
 			if output != "Deleting" {
 				e2e.Logf("machine is not in Deleting phase and waiting up to 2 seconds ...")
 				return false, nil
@@ -161,18 +161,18 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.AssertWaitPollNoErr(err, "Check machine phase failed")
 
 		g.By("Check machine stuck in Deleting phase because of lifecycle hook")
-		outDrain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].status.conditions[0]}").Output()
+		outDrain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].status.conditions[0]}").Output()
 		e2e.Logf("outDrain:%s", outDrain)
 		o.Expect(strings.Contains(outDrain, "\"message\":\"Drain operation currently blocked by: [{Name:drain1 Owner:drain-controller1}]\"") && strings.Contains(outDrain, "\"reason\":\"HookPresent\"") && strings.Contains(outDrain, "\"status\":\"False\"") && strings.Contains(outDrain, "\"type\":\"Drainable\"")).To(o.BeTrue())
 
-		outTerminate, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].status.conditions[2]}").Output()
+		outTerminate, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].status.conditions[2]}").Output()
 		e2e.Logf("outTerminate:%s", outTerminate)
 		o.Expect(strings.Contains(outTerminate, "\"message\":\"Terminate operation currently blocked by: [{Name:terminate2 Owner:terminate-controller2}]\"") && strings.Contains(outTerminate, "\"reason\":\"HookPresent\"") && strings.Contains(outTerminate, "\"status\":\"False\"") && strings.Contains(outTerminate, "\"type\":\"Terminable\"")).To(o.BeTrue())
 
 		g.By("Update machine without lifecycle hook")
-		machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].metadata.name}").Output()
+		machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machine/"+machineName, "-n", "openshift-machine-api", "-p", `[{"op": "remove", "path": "/spec/lifecycleHooks/preDrain"},{"op": "remove", "path": "/spec/lifecycleHooks/preTerminate"}]`, "--type=json").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machines.machine.openshift.io/"+machineName, "-n", "openshift-machine-api", "-p", `[{"op": "remove", "path": "/spec/lifecycleHooks/preDrain"},{"op": "remove", "path": "/spec/lifecycleHooks/preTerminate"}]`, "--type=json").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
@@ -185,7 +185,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
-		machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].metadata.name}").Output()
+		machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		checkItems := []struct {
@@ -208,7 +208,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		for i, checkItem := range checkItems {
 			g.By("Update machine with invalid lifecycle hook")
-			out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machine/"+machineName, "-n", "openshift-machine-api", "-p", checkItem.patchstr, "--type=merge").Output()
+			out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machines.machine.openshift.io/"+machineName, "-n", "openshift-machine-api", "-p", checkItem.patchstr, "--type=merge").Output()
 			e2e.Logf("out"+strconv.Itoa(i)+":%s", out)
 			o.Expect(strings.Contains(out, checkItem.errormsg)).To(o.BeTrue())
 		}
@@ -224,17 +224,17 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			defer ms.DeleteMachineSet(oc)
 			ms.CreateMachineSet(oc)
 			g.By("Update machineset with GPU")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"a2-highgpu-1g","onHostMaintenance":"Terminate","restartPolicy":"Always"}}}}}}`, "--type=merge").Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"a2-highgpu-1g","onHostMaintenance":"Terminate","restartPolicy":"Always"}}}}}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 			g.By("Check machine with GPU")
-			machineType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.machineType}").Output()
+			machineType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.machineType}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			onHostMaintenance, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.onHostMaintenance}").Output()
+			onHostMaintenance, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.onHostMaintenance}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			restartPolicy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.restartPolicy}").Output()
+			restartPolicy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.restartPolicy}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			e2e.Logf("machineType:%s, onHostMaintenance:%s, restartPolicy:%s", machineType, onHostMaintenance, restartPolicy)
@@ -249,7 +249,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		machineList := clusterinfra.ListAllMachineNames(oc)
 		for _, machineName := range machineList {
 			nodeName := clusterinfra.GetNodeNameFromMachine(oc, machineName)
-			machineProviderID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", machineName, "-o=jsonpath={.spec.providerID}", "-n", machineAPINamespace).Output()
+			machineProviderID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", machineName, "-o=jsonpath={.spec.providerID}", "-n", machineAPINamespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			nodeProviderID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.spec.providerID}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -283,7 +283,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 				g.Skip("Not support region for the case for now.")
 			}
 			g.By("Update machineset with windows ami")
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"metadata":{"labels":{"machine.openshift.io/os-id": "Windows"}},"spec":{"providerSpec":{"value":{"ami":{"id":"`+amiId+`"}}}}}}}`, "--type=merge").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"metadata":{"labels":{"machine.openshift.io/os-id": "Windows"}},"spec":{"providerSpec":{"value":{"ami":{"id":"`+amiId+`"}}}}}}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			clusterinfra.WaitForMachineProvisioned(oc, machinesetName)
@@ -301,13 +301,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			defer ms.DeleteMachineSet(oc)
 			ms.CreateMachineSet(oc)
 			g.By("Update machineset with gp3 iops 5000")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"blockDevices":[{"ebs":{"volumeType":"gp3","iops":5000}}]}}}}}}`, "--type=merge").Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"blockDevices":[{"ebs":{"volumeType":"gp3","iops":5000}}]}}}}}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 			g.By("Check on aws instance with gp3 iops 5000")
-			instanceId, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-o=jsonpath={.items[0].status.providerStatus.instanceId}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
+			instanceId, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-o=jsonpath={.items[0].status.providerStatus.instanceId}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			c2sConfigPrefix, stsConfigPrefix := clusterinfra.GetAwsCredentialFromCluster(oc)
@@ -328,7 +328,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
 		}
 		randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
-		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset/"+randomMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
+		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io/"+randomMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if region == "northcentralus" || region == "westus" || region == "usgovvirginia" {
 			g.Skip("Skip this test scenario because it is not supported on the " + region + " region, because this region doesn't have zones")
@@ -339,12 +339,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		ms := clusterinfra.MachineSetDescription{"machineset-33040", 0}
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/machineset-33040", "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"spotVMOptions":{}}}}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/machineset-33040", "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"spotVMOptions":{}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterinfra.WaitForMachinesRunning(oc, 1, "machineset-33040")
 
 		g.By("Check machine and node were labelled as an `interruptible-instance`")
-		machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines", "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
+		machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
 		o.Expect(machine).NotTo(o.BeEmpty())
 		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
 		o.Expect(node).NotTo(o.BeEmpty())
@@ -362,12 +362,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with networkInterfaceType: EFA")
-		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"networkInterfaceType":"EFA","instanceType":"m5dn.24xlarge"}}}}}}`, "--type=merge").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"networkInterfaceType":"EFA","instanceType":"m5dn.24xlarge"}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check machine with networkInterfaceType: EFA")
-		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.networkInterfaceType}").Output()
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.networkInterfaceType}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("out:%s", out)
 		o.Expect(out).Should(o.Equal("EFA"))
@@ -385,14 +385,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset with networkInterfaceType: invalid")
-		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"networkInterfaceType":"invalid","instanceType":"m5dn.24xlarge"}}}}}}`, "--type=merge").Output()
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"networkInterfaceType":"invalid","instanceType":"m5dn.24xlarge"}}}}}}`, "--type=merge").Output()
 		o.Expect(strings.Contains(out, "Invalid value")).To(o.BeTrue())
 
 		g.By("Update machineset with not supported instance types")
-		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"networkInterfaceType":"EFA","instanceType":"m6i.xlarge"}}}}}}`, "--type=merge").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"networkInterfaceType":"EFA","instanceType":"m6i.xlarge"}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterinfra.WaitForMachineFailed(oc, machinesetName)
-		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].status.errorMessage}").Output()
+		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].status.errorMessage}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("out:%s", out)
 		o.Expect(strings.Contains(out, "not supported")).To(o.BeTrue())
@@ -411,16 +411,16 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		ms.CreateMachineSet(oc)
 
 		g.By("Update machineset with invalid disk type")
-		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `[{"op":"replace","path":"/spec/template/spec/providerSpec/value/disks/0/type","value":"invalid"}]`, "--type=json").Output()
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/"+machinesetName, "-n", "openshift-machine-api", "-p", `[{"op":"replace","path":"/spec/template/spec/providerSpec/value/disks/0/type","value":"invalid"}]`, "--type=json").Output()
 		o.Expect(strings.Contains(out, "Unsupported value")).To(o.BeTrue())
 
 		g.By("Update machineset with pd-balanced disk type")
-		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", "openshift-machine-api", "-p", `[{"op":"replace","path":"/spec/replicas","value": 1},{"op":"replace","path":"/spec/template/spec/providerSpec/value/disks/0/type","value":"pd-balanced"}]`, "--type=json").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/"+machinesetName, "-n", "openshift-machine-api", "-p", `[{"op":"replace","path":"/spec/replicas","value": 1},{"op":"replace","path":"/spec/template/spec/providerSpec/value/disks/0/type","value":"pd-balanced"}]`, "--type=json").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 		g.By("Check machine with pd-balanced disk type")
-		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.disks[0].type}").Output()
+		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.disks[0].type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("out:%s", out)
 		o.Expect(out).Should(o.Equal("pd-balanced"))

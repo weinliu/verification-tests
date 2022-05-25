@@ -123,7 +123,7 @@ func CountNodeNumByOS(oc *CLI) (linuxNum int, windowsNum int) {
 
 //GetFirstLinuxMachineSets used for getting first linux worker nodes name
 func GetFirstLinuxMachineSets(oc *CLI) string {
-	machinesets, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-machine-api").Output()
+	machinesets, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io", "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-machine-api").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	machinesetsArray := strings.Split(machinesets, " ")
 	//Remove windows machineset

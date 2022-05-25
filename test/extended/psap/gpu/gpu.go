@@ -58,7 +58,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// For clean up GPU machineset in case of error during test case execution or after testcase completes execution
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("machineset", gpuMachinesetName, "-n", "openshift-machine-api", "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("machinesets.machine.openshift.io", gpuMachinesetName, "-n", "openshift-machine-api", "--ignore-not-found").Execute()
 
 		if !checkGPU {
 			e2e.Logf("No worker node detected with GPU instance, creating a g4dn.xlarge machineset ...")

@@ -27,5 +27,5 @@ func (mhc *mhcDescription) createMhc(oc *exutil.CLI) {
 
 func (mhc *mhcDescription) deleteMhc(oc *exutil.CLI) error {
 	e2e.Logf("Deleting machinehealthcheck ...")
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("machinehealthcheck", mhc.name, "-n", mhc.namespace).Execute()
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("machinehealthchecks.machine.openshift.io", mhc.name, "-n", mhc.namespace).Execute()
 }

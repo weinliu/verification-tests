@@ -80,7 +80,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			defer ms.DeleteMachineSet(oc)
 			ms.CreateMachineSet(oc)
 			g.By("Update machineset with instanceType")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/machineset-45430", "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"instanceType": "m5.4xlarge"}}}}}}`, "--type=merge").Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/machineset-45430", "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"instanceType": "m5.4xlarge"}}}}}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create MachineAutoscaler")
@@ -178,10 +178,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		*/
 		time.Sleep(300 * time.Second)
 		g.By("Check machineset could scale down based on utilizationThreshold")
-		out, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", machinesetName, "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io", machinesetName, "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
 		machinesRunning, _ := strconv.Atoi(out)
 
-		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-o=jsonpath={.items[0].status.nodeRef.name}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-o=jsonpath={.items[0].status.nodeRef.name}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodeInfoFile, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("node", nodeName, "-n", machineAPINamespace).OutputToFile("OCP-47656-nodeinfo.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())

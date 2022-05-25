@@ -259,7 +259,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		}
 		mutliOSMachineset, err := getMachineset(oc, iaasPlatform, winVersion, machinesetName, machinesetMultiOSFileName)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.WithoutNamespace().Run("delete").Args("machineset", mutliOSMachineset, "-n", "openshift-machine-api").Output()
+		defer oc.WithoutNamespace().Run("delete").Args("machinesets.machine.openshift.io", mutliOSMachineset, "-n", "openshift-machine-api").Output()
 		createMachineset(oc, "availWindowsMachineSet"+machinesetName)
 		waitForMachinesetReady(oc, mutliOSMachineset, 10, 1)
 		// Here we fetch machine IP from machineset
@@ -302,7 +302,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		// creating byoh machineset
 		machineset, err := getMachineset(oc, iaasPlatform, winVersion, machinesetName, machinesetFileName)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.WithoutNamespace().Run("delete").Args("machineset", machineset, "-n", "openshift-machine-api").Output()
+		defer oc.WithoutNamespace().Run("delete").Args("machinesets.machine.openshift.io", machineset, "-n", "openshift-machine-api").Output()
 		createMachineset(oc, "availWindowsMachineSetbyoh")
 		address := fetchAddress(oc, addressType, machineset)
 		setConfigmap(oc, address[0], user, "config-map.yaml")
@@ -348,7 +348,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		addressType := "ip"
 		machineset, err := getMachineset(oc, iaasPlatform, winVersion, machinesetName, machinesetFileName)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.WithoutNamespace().Run("delete").Args("machineset", machineset, "-n", "openshift-machine-api").Output()
+		defer oc.WithoutNamespace().Run("delete").Args("machinesets.machine.openshift.io", machineset, "-n", "openshift-machine-api").Output()
 		createMachineset(oc, "availWindowsMachineSetbyoh")
 		address := fetchAddress(oc, addressType, machineset)
 		defer oc.WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", "openshift-windows-machine-config-operator").Output()

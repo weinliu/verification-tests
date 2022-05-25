@@ -25,7 +25,7 @@ type MachineSetwithLabelDescription struct {
 func (ms *MachineSetwithLabelDescription) CreateMachineSet(oc *exutil.CLI) {
 	e2e.Logf("Creating a new MachineSets with labels ...")
 	machinesetName := GetRandomMachineSetName(oc)
-	machineSetJson, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", machinesetName, "-n", machineAPINamespace, "-o=json").OutputToFile("machineset.json")
+	machineSetJson, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io", machinesetName, "-n", machineAPINamespace, "-o=json").OutputToFile("machineset.json")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	bytes, _ := ioutil.ReadFile(machineSetJson)
@@ -49,13 +49,13 @@ func (ms *MachineSetwithLabelDescription) CreateMachineSet(oc *exutil.CLI) {
 // DeleteMachineSet delete a machineset
 func (ms *MachineSetwithLabelDescription) DeleteMachineSet(oc *exutil.CLI) error {
 	e2e.Logf("Deleting a MachineSets ...")
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("machineset", ms.Name, "-n", machineAPINamespace).Execute()
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("machinesets.machine.openshift.io", ms.Name, "-n", machineAPINamespace).Execute()
 }
 
 func (ms *MachineSetwithLabelDescription) AssertLabelledMachinesRunningDeleteIfNot(oc *exutil.CLI, machineNumber int, machineSetName string) {
 	e2e.Logf("Waiting for the machines Running ...")
 	pollErr := wait.Poll(60*time.Second, 720*time.Second, func() (bool, error) {
-		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
+		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io", machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
 		machinesRunning, _ := strconv.Atoi(msg)
 		if machinesRunning != machineNumber {
 			e2e.Logf("Expected %v  machine are not Running yet and waiting up to 1 minutes ...", machineNumber)

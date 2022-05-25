@@ -185,11 +185,11 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		}
 
 		g.By("Export the machine config file for 1st master node")
-		output, err := oc.AsAdmin().Run("get").Args("machines", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath={.items[*].metadata.name}").Output()
+		output, err := oc.AsAdmin().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		masterMachineNameList := strings.Fields(output)
 		machineYmlFile := ""
-		machineYmlFile, err = oc.AsAdmin().Run("get").Args("machines", "-n", "openshift-machine-api", masterMachineNameList[0], "-o", "yaml").OutputToFile("machine.yaml")
+		machineYmlFile, err = oc.AsAdmin().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", masterMachineNameList[0], "-o", "yaml").OutputToFile("machine.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newMachineConfigFile := strings.Replace(machineYmlFile, "machine.yaml", "machineUpd.yaml", -1)
 		defer exec.Command("bash", "-c", "rm -f "+machineYmlFile).Output()
