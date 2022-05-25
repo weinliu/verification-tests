@@ -1511,4 +1511,83 @@ spec:
 		g.By("8) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
 		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
 	})
+	// author: jmekkatt@redhat.com
+	g.It("Author:jmekkatt-High-50188-An informational error on kube-apiserver in case an admission webhook is installed for a virtual resource [Serial]", func() {
+		var (
+			validatingWebhookName = "test-validating-cfg"
+			mutatingWebhookName   = "test-mutating-cfg"
+			validatingWebhook     = getTestDataFilePath("ValidatingWebhookConfiguration-with-virtualresources.yaml")
+			mutatingWebhook       = getTestDataFilePath("MutatingWebhookConfiguration-with-virtualresources.yaml")
+			kubeApiserverCoStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		)
+
+		g.By("1) Create a ValidatingWebhookConfiguration with virtual resource reference.")
+		defer func() {
+			oc.Run("delete").Args("ValidatingWebhookConfiguration", validatingWebhookName, "--ignore-not-found").Execute()
+		}()
+		err := oc.Run("create").Args("-f", validatingWebhook).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err := oc.Run("get").Args("ValidatingWebhookConfiguration", validatingWebhookName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(validatingWebhookName), "Validating webhook not present in cluster.")
+		e2e.Logf(output)
+		e2e.Logf("Test step-1 has passed : Creation of ValidatingWebhookConfiguration with virtual resource reference succeeded.")
+
+		g.By("2) Check for kube-apiserver operator status after virtual resource reference for a validating webhook added.")
+		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		e2e.Logf("Test step-2 has passed : Kube-apiserver operators are in normal after virtual resource reference for a validating webhook added.")
+
+		g.By("3) Check for information message on kube-apiserver cluster w.r.t virtual resource reference for a validating webhook")
+
+		output, err = oc.Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath='{.status.conditions[?(@.type=="VirtualResourceAdmissionError")]}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("kube-apiserver reports the virtual resource error in Validating admission webhook as \n %s ", string(output))
+		o.Expect(output).Should(o.And(
+			o.MatchRegexp(`"message":"Validating webhook.*virtual resource.*"`),
+			o.MatchRegexp(`"reason":"AdmissionWebhookMatchesVirtualResource"`),
+			o.MatchRegexp(`"status":"True"`),
+			o.MatchRegexp(`"type":"VirtualResourceAdmissionError"`)), "Mismatch in admission errors reported")
+		err = oc.Run("delete").Args("ValidatingWebhookConfiguration", validatingWebhookName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Test step-3 has passed : Kube-apiserver reports expected informational errors after virtual resource reference for a validating webhook added.")
+
+		g.By("4) Create a MutatingWebhookConfiguration with a virtual resource reference.")
+		defer func() {
+			oc.Run("delete").Args("MutatingWebhookConfiguration", mutatingWebhookName, "--ignore-not-found").Execute()
+		}()
+		err = oc.Run("create").Args("-f", mutatingWebhook).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err = oc.Run("get").Args("MutatingWebhookConfiguration", mutatingWebhookName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(mutatingWebhookName), "Mutating webhook not present in cluster.")
+		e2e.Logf(output)
+		e2e.Logf("Test step-4 has passed : Creation of MutatingWebhookConfiguration with virtual resource reference succeeded.")
+
+		g.By("5) Check for kube-apiserver operator status after virtual resource reference for a Mutating webhook added.")
+		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		e2e.Logf("Test step-5 has passed : Kube-apiserver operators are in normal after virtual resource reference for a mutating webhook added.")
+
+		g.By("6) Check for information message on kube-apiserver cluster w.r.t virtual resource reference for mutating webhook")
+		output, err = oc.Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath='{.status.conditions[?(@.type=="VirtualResourceAdmissionError")]}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("kube-apiserver reports the virtual resource error in Mutating admission webhook as \n %s ", string(output))
+		o.Expect(output).Should(o.And(
+			o.MatchRegexp(`"message":"Mutating webhook.*virtual resource.*"`),
+			o.MatchRegexp(`"reason":"AdmissionWebhookMatchesVirtualResource"`),
+			o.MatchRegexp(`"status":"True"`),
+			o.MatchRegexp(`"type":"VirtualResourceAdmissionError"`)), "Mismatch in admission errors reported")
+		err = oc.Run("delete").Args("MutatingWebhookConfiguration", mutatingWebhookName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Test step-6 has passed : Kube-apiserver reports expected informational errors after virtual resource reference for a mutating webhook added.")
+
+		g.By("7) Check for webhook admission error free kube-apiserver cluster after deleting webhooks.")
+		output, err = oc.Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath='{.status.conditions[?(@.type=="VirtualResourceAdmissionError")]}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.And(
+			o.MatchRegexp(`"type":"VirtualResourceAdmissionError"`),
+			o.MatchRegexp(`"status":"False"`)), "VirtualResourceAdmissionError is wrongly set for kube-apiserver.")
+		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		e2e.Logf("Test step-7 has passed : No webhook admission error seen after purging webhooks.")
+		e2e.Logf("All test case steps are passed.!")
+	})
 })

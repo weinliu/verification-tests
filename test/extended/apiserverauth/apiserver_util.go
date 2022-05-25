@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -246,4 +247,18 @@ func checkResources(oc *exutil.CLI, dirname string) map[string]string {
 		resUsedDet[key] = string(output)
 	}
 	return resUsedDet
+}
+
+func getTestDataFilePath(filename string) string {
+	// returns the file path of the testdata files with respect to apiserverauth subteam.
+	baseDir := exutil.FixturePath("testdata", "apiserverauth")
+	filePath := filepath.Join(baseDir, filename)
+	return filePath
+}
+
+func checkCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]string) {
+	// Check ,compare and assert the current cluster operator status against the expected status given.
+	currentCoStatus := getCoStatus(oc, coName, statusToCompare)
+	o.Expect(reflect.DeepEqual(currentCoStatus, statusToCompare)).To(o.Equal(true), "Wrong %s CO status reported, actual status : %s", coName, currentCoStatus)
+
 }
