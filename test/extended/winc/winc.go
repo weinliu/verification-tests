@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -291,18 +292,29 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-42496-byoh-Configure Windows instance with DNS [Slow] [Disruptive]", func() {
 		bastionHost := getSSHBastionHost(oc, iaasPlatform)
 		// use config map to fetch the actual Windows version
+		clusterVersions, _, err := exutil.GetClusterVersion(oc)
+		clusterVersion, err := strconv.ParseFloat(clusterVersions, 64)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		winVersion := "2019"
+		if clusterVersion > 4.9 {
+			winVersion = "2022"
+		} else if iaasPlatform == "vsphere" {
+			winVersion = "2004"
+		}
 		machinesetName := "byoh"
-		addressType := "dns"
+		addressType := "InternalDNS"
 		user := getAdministratorNameByPlatform(iaasPlatform)
 		machinesetFileName := "aws_byoh_machineset.yaml"
 		if iaasPlatform == "azure" {
 			machinesetFileName = "azure_byoh_machineset.yaml"
+		} else if iaasPlatform == "vsphere" {
+			machinesetFileName = "vsphere_byoh_machineset.yaml"
 		}
 		// creating byoh machineset
 		machineset, err := getMachineset(oc, iaasPlatform, winVersion, machinesetName, machinesetFileName)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.WithoutNamespace().Run("delete").Args("machinesets.machine.openshift.io", machineset, "-n", "openshift-machine-api").Output()
+		defer oc.WithoutNamespace().Run("delete").Args("machineset", machineset, "-n", "openshift-machine-api").Output()
+		defer os.Remove("availWindowsMachineSetbyoh")
 		createMachineset(oc, "availWindowsMachineSetbyoh")
 		address := fetchAddress(oc, addressType, machineset)
 		setConfigmap(oc, address[0], user, "config-map.yaml")
@@ -339,13 +351,23 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-42516-byoh-Configure Windows instance with IP [Slow][Disruptive]", func() {
 		namespace := "winc-42516"
 		user := getAdministratorNameByPlatform(iaasPlatform)
+		clusterVersions, _, err := exutil.GetClusterVersion(oc)
+		clusterVersion, err := strconv.ParseFloat(clusterVersions, 64)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		winVersion := "2019"
+		if clusterVersion > 4.9 {
+			winVersion = "2022"
+		} else if iaasPlatform == "vsphere" {
+			winVersion = "2004"
+		}
 		machinesetName := "byoh"
 		machinesetFileName := "aws_byoh_machineset.yaml"
 		if iaasPlatform == "azure" {
 			machinesetFileName = "azure_byoh_machineset.yaml"
+		} else if iaasPlatform == "vsphere" {
+			machinesetFileName = "vsphere_byoh_machineset.yaml"
 		}
-		addressType := "ip"
+		addressType := "InternalIP"
 		machineset, err := getMachineset(oc, iaasPlatform, winVersion, machinesetName, machinesetFileName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.WithoutNamespace().Run("delete").Args("machinesets.machine.openshift.io", machineset, "-n", "openshift-machine-api").Output()

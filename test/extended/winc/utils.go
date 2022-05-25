@@ -205,6 +205,7 @@ func createWindowsWorkload(oc *exutil.CLI, namespace string, workloadFile string
 	windowsWebServer := getFileContent("winc", workloadFile)
 	windowsWebServer = strings.ReplaceAll(windowsWebServer, "<windows_container_image>", containerImage)
 	tempFileName := namespace + "-windows-workload"
+	defer os.Remove(namespace + "-windows-workload")
 	ioutil.WriteFile(tempFileName, []byte(windowsWebServer), 0644)
 	oc.WithoutNamespace().Run("create").Args("-f", tempFileName, "-n", namespace).Output()
 	// Wait up to 30 minutes for Windows workload ready in case of Windows image is not pre-pulled
@@ -363,6 +364,17 @@ func getMachineset(oc *exutil.CLI, iaasPlatform, winVersion string, machineSetNa
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<SKU>", sku)
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<name>", machineSetName)
 		windowsMachineSetName = machineSetName
+	} else if iaasPlatform == "vsphere" {
+		windowsMachineSet = getFileContent("winc", "vsphere_byoh_machineset.yaml")
+		template := "openshift-qe-winserver-ver-2004"
+		if winVersion == "2022" {
+			template = "openshift-qe-winserver-2022"
+		}
+		infrastructureID, err = oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<infrastructureID>", infrastructureID)
+		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<template>", template)
+		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<name>", machineSetName)
+		windowsMachineSetName = machineSetName
 	} else {
 		e2e.Failf("IAAS platform: %s is not automated yet", iaasPlatform)
 	}
@@ -411,6 +423,7 @@ func createRuntimeClass(oc *exutil.CLI, runtimeClassFile, node string) error {
 	buildID, err := getWindowsBuildID(oc, node)
 	e2e.Logf("-------- Windows build ID is " + buildID + "-----------")
 	runtimeClass = strings.ReplaceAll(runtimeClass, "<kernelID>", buildID)
+	defer os.Remove(runtimeClassFile)
 	ioutil.WriteFile(runtimeClassFile, []byte(runtimeClass), 0644)
 	_, err = oc.WithoutNamespace().Run("create").Args("-f", runtimeClassFile).Output()
 	return err
@@ -431,38 +444,27 @@ func checkLBConnectivity(attempts int, externalIP string) bool {
 }
 
 func fetchAddress(oc *exutil.CLI, addressType string, machinesetName string) []string {
-
-	if addressType == "dns" {
-		addressType = "InternalDNS"
-	} else {
-		addressType = "InternalIP"
-	}
 	machineAddresses := ""
-	poolErr := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+	pollErr := wait.Poll(5*time.Second, 100*time.Second, func() (bool, error) {
 		var err error
-		machineAddresses, err = oc.WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-ojsonpath={.items[?(@.metadata.labels.machine\\.openshift\\.io\\/cluster-api-machineset==\""+machinesetName+"\")].status.addresses[?(@.type==\""+addressType+"\")].address}", "-n", "openshift-machine-api").Output()
-		if err != nil {
-			e2e.Logf("trying next round")
-			return false, nil
-		}
-		if machineAddresses == "" {
+		machineAddresses, err = oc.WithoutNamespace().Run("get").Args("machine", "-ojsonpath={.items[?(@.metadata.labels.machine\\.openshift\\.io\\/cluster-api-machineset==\""+machinesetName+"\")].status.addresses[?(@.type==\""+addressType+"\")].address}", "-n", "openshift-machine-api").Output()
+		if err != nil || machineAddresses == "" {
 			e2e.Logf("Did not get address, trying next round")
 			return false, nil
 		}
 		return true, nil
 	})
-	if poolErr != nil {
-		e2e.Failf("Failed to get address")
-	}
+	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Windows machine is not provisioned after waiting up to 100 seconds ..."))
+
 	// Filter out any IPv6 address which could have been configured in the machine
-	ipv4MachineAddresses := []string{}
+	machinesAddressesArray := []string{}
 	for _, machineAddress := range strings.Split(string(machineAddresses), " ") {
-		if ip4or6(machineAddress) == "version 4" {
-			ipv4MachineAddresses = append(ipv4MachineAddresses, machineAddress)
+		if addressType == "InternalDNS" || ip4or6(machineAddress) == "version 4" {
+			machinesAddressesArray = append(machinesAddressesArray, machineAddress)
 		}
 	}
-	e2e.Logf("Machine Address is %v", ipv4MachineAddresses)
-	return ipv4MachineAddresses
+	e2e.Logf("Machine Address is %v", machinesAddressesArray)
+	return machinesAddressesArray
 }
 
 func ip4or6(s string) string {
@@ -482,6 +484,7 @@ func setConfigmap(oc *exutil.CLI, address string, administrator string, configMa
 	configmap = getFileContent("winc", configMapFile)
 	configmap = strings.ReplaceAll(configmap, "<address>", address)
 	configmap = strings.ReplaceAll(configmap, "<username>", administrator)
+	defer os.Remove("configMapFile")
 	ioutil.WriteFile("configMapFile", []byte(configmap), 0644)
 	_, err := oc.WithoutNamespace().Run("create").Args("-f", "configMapFile").Output()
 	return err
