@@ -30,18 +30,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	cachev1alpha1 "github.com/example-inc/memcached-operator/api/v1alpha1"
+	cachev1alpha1 "github.com/example-inc/memcached-operator-44295/api/v1alpha1"
 )
 
-// MemcachedReconciler reconciles a Memcached object
-type MemcachedReconciler struct {
+// Memcached44295Reconciler reconciles a Memcached object
+type Memcached44295Reconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=cache.example.com,resources=memcacheds,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=cache.example.com,resources=memcacheds/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=cache.example.com,resources=memcacheds/finalizers,verbs=update
+//+kubebuilder:rbac:groups=cache.example.com,resources=memcached44295s,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=cache.example.com,resources=memcached44295s/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=cache.example.com,resources=memcached44295s/finalizers,verbs=update
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 
@@ -54,11 +54,11 @@ type MemcachedReconciler struct {
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.0/pkg/reconcile
-func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *Memcached44295Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
 
 	// Fetch the Memcached instance
-	memcached := &cachev1alpha1.Memcached{}
+	memcached := &cachev1alpha1.Memcached44295{}
 	err := r.Get(ctx, req.NamespacedName, memcached)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -134,7 +134,7 @@ func (r *MemcachedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 }
 
 // deploymentForMemcached returns a memcached Deployment object
-func (r *MemcachedReconciler) deploymentForMemcached(m *cachev1alpha1.Memcached) *appsv1.Deployment {
+func (r *Memcached44295Reconciler) deploymentForMemcached(m *cachev1alpha1.Memcached44295) *appsv1.Deployment {
 	ls := labelsForMemcached(m.Name)
 	replicas := m.Spec.Size
 
@@ -154,9 +154,9 @@ func (r *MemcachedReconciler) deploymentForMemcached(m *cachev1alpha1.Memcached)
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
-						Image:   "memcached:1.4.36-alpine",
+						Image:   "quay.io/olmqe/memcached-docker:multi-arch",
 						Name:    "memcached",
-						Command: []string{"memcached", "-m=64", "-o", "modern", "-v"},
+						Command: []string{"memcached", "-o", "modern", "-v"},
 						Ports: []corev1.ContainerPort{{
 							ContainerPort: 11211,
 							Name:          "memcached",
@@ -187,9 +187,9 @@ func getPodNames(pods []corev1.Pod) []string {
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *MemcachedReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *Memcached44295Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&cachev1alpha1.Memcached{}).
+		For(&cachev1alpha1.Memcached44295{}).
 		Owns(&appsv1.Deployment{}).
 		Complete(r)
 }

@@ -1700,7 +1700,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		quayCLI := container.NewQuayCLI()
 		imageTag := "quay.io/olmqe/memcached-operator:44295-" + getRandomString()
 		tmpBasePath := "/tmp/ocp-44295-" + getRandomString()
-		tmpPath := filepath.Join(tmpBasePath, "memcached-operator")
+		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-44295")
 		nsSystem := "system-ocp44295" + getRandomString()
 		nsOperator := "memcached-operator-system-ocp44295" + getRandomString()
 		defer os.RemoveAll(tmpBasePath)
@@ -1715,19 +1715,19 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			_, err = makeCLI.Run("undeploy").Args().Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
-		output, err := operatorsdkCLI.Run("init").Args("--domain=example.com", "--plugins=go.kubebuilder.io/v3", "--repo=github.com/example-inc/memcached-operator").Output()
+		output, err := operatorsdkCLI.Run("init").Args("--domain=example.com", "--plugins=go.kubebuilder.io/v3", "--repo=github.com/example-inc/memcached-operator-44295").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Writing scaffold for you to edit"))
 		o.Expect(output).To(o.ContainSubstring("Next: define a resource with"))
 
 		g.By("step: Create a Memcached API.")
-		output, err = operatorsdkCLI.Run("create").Args("api", "--resource=true", "--controller=true", "--group=cache", "--version=v1alpha1", "--kind=Memcached").Output()
+		output, err = operatorsdkCLI.Run("create").Args("api", "--resource=true", "--controller=true", "--group=cache", "--version=v1alpha1", "--kind=Memcached44295").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Update dependencies"))
 		o.Expect(output).To(o.ContainSubstring("Next"))
 
 		g.By("step: update API")
-		err = copy(filepath.Join(dataPath, "memcached_types.go"), filepath.Join(tmpPath, "api", "v1alpha1", "memcached_types.go"))
+		err = copy(filepath.Join(dataPath, "memcached_types.go"), filepath.Join(tmpPath, "api", "v1alpha1", "memcached44295_types.go"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = makeCLI.Run("generate").Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1737,13 +1737,13 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("step: modify namespace and controllers")
-		crFilePath := filepath.Join(tmpPath, "config", "samples", "cache_v1alpha1_memcached.yaml")
+		crFilePath := filepath.Join(tmpPath, "config", "samples", "cache_v1alpha1_memcached44295.yaml")
 		exec.Command("bash", "-c", fmt.Sprintf("sed -i '$d' %s", crFilePath)).Output()
 		exec.Command("bash", "-c", fmt.Sprintf("sed -i '$a\\  size: 3' %s", crFilePath)).Output()
 		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/name: system/name: system-ocp44295/g' `grep -rl \"name: system\" %s`", tmpPath)).Output()
 		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/namespace: system/namespace: %s/g'  `grep -rl \"namespace: system\" %s`", nsSystem, tmpPath)).Output()
-		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/namespace: memcached-operator-system/namespace: %s/g'  `grep -rl \"namespace: memcached-operator-system\" %s`", nsOperator, tmpPath)).Output()
-		err = copy(filepath.Join(dataPath, "memcached_controller.go"), filepath.Join(tmpPath, "controllers", "memcached_controller.go"))
+		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/namespace: memcached-operator-44295-system/namespace: %s/g'  `grep -rl \"namespace: memcached-operator-44295-system\" %s`", nsOperator, tmpPath)).Output()
+		err = copy(filepath.Join(dataPath, "memcached_controller.go"), filepath.Join(tmpPath, "controllers", "memcached44295_controller.go"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("step: Build the operator image")
@@ -1761,39 +1761,43 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 
 		g.By("step: Push the operator image")
-		output, err = makeCLI.Run("docker-push").Args("IMG=" + imageTag).Output()
+		_, err = makeCLI.Run("docker-push").Args("IMG=" + imageTag).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Writing manifest to image destination"))
+
+		g.By("step: Install kustomize")
+		kustomizePath := "/root/kustomize"
+		binPath := filepath.Join(tmpPath, "bin")
+		exec.Command("bash", "-c", fmt.Sprintf("cp %s %s", kustomizePath, binPath)).Output()
 
 		g.By("step: Install the CRD")
 		output, err = makeCLI.Run("install").Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("memcacheds.cache.example.com"))
+		o.Expect(output).To(o.ContainSubstring("memcached44295s.cache.example.com"))
 
 		g.By("step: Deploy the operator")
 		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("deployment.apps/memcached-operator-controller-manager"))
+		o.Expect(output).To(o.ContainSubstring("deployment.apps/memcached-operator-44295-controller-manager"))
 
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			lines := strings.Split(podList, "\n")
 			for _, line := range lines {
-				if strings.Contains(line, "memcached-operator-controller-manager") {
-					e2e.Logf("found pod memcached-operator-controller-manager")
+				if strings.Contains(line, "memcached-operator-44295-controller-manager") {
+					e2e.Logf("found pod memcached-operator-44295-controller-manager")
 					if strings.Contains(line, "Running") {
-						e2e.Logf("the status of pod memcached-operator-controller-manager is Running")
+						e2e.Logf("the status of pod memcached-operator-44295-controller-manager is Running")
 						return true, nil
 					}
-					e2e.Logf("the status of pod memcached-operator-controller-manager is not Running")
+					e2e.Logf("the status of pod memcached-operator-44295-controller-manager is not Running")
 					return false, nil
 				}
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached-operator-controller-manager in project %s", nsOperator))
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/memcached-operator-controller-manager", "-c", "manager", "-n", nsOperator).Output()
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached-operator-44295-controller-manager in project %s", nsOperator))
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/memcached-operator-44295-controller-manager", "-c", "manager", "-n", nsOperator).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("Starting workers"))
 
@@ -1803,31 +1807,31 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(msg, "memcached-sample") {
-				e2e.Logf("found pod memcached-sample")
+			if strings.Contains(msg, "memcached44295-sample") {
+				e2e.Logf("found pod memcached44295-sample")
 				return true, nil
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached-sample in project %s", nsOperator))
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached44295-sample in project %s", nsOperator))
 
 		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/memcached-sample", "-n", nsOperator).Output()
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/memcached44295-sample", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "3 desired | 3 updated | 3 total | 3 available | 0 unavailable") {
-				e2e.Logf("deployment/memcached-sample is created successfully")
+				e2e.Logf("deployment/memcached44295-sample is created successfully")
 				return true, nil
 			}
 			return false, nil
 		})
 		if waitErr != nil {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/memcached-sample", "-n", nsOperator).Output()
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/memcached44295-sample", "-n", nsOperator).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf(msg)
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", nsOperator).Output()
 			e2e.Logf(msg)
 		}
-		exutil.AssertWaitPollNoErr(waitErr, "the status of deployment/memcached-sample is wrong")
+		exutil.AssertWaitPollNoErr(waitErr, "the status of deployment/memcached44295-sample is wrong")
 
 		g.By("OCP 44295 SUCCESS")
 	})

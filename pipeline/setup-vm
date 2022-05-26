@@ -177,6 +177,13 @@ cp -f ~/.docker/auto/config.json ~/.docker
 podman login quay.io 
 cd $CURRENTDIR
 
+if [ ! -f "/root/kustomize" ]; then
+    echo "install kustomize"
+    sudo wget "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
+    sudo chmod +x install_kustomize.sh
+    sudo ./install_kustomize.sh 3.8.7 /root
+fi
+
 if [[ "x${http_proxy_tmp}x" != "xx" ]] || [[ "x${https_proxy_tmp}x" != "xx" ]]; then
     echo "set env http_proxy https_proxy"
     export http_proxy=${http_proxy_tmp}
