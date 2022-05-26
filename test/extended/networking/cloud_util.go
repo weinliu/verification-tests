@@ -169,7 +169,7 @@ func execCommandInSDNPodOnNode(oc *exutil.CLI, nodeName, command string) (string
 	o.Expect(err).NotTo(o.HaveOccurred())
 	msg, err := exutil.RemoteShPodWithBash(oc, "openshift-sdn", sdnPodName, command)
 	if err != nil {
-		e2e.Logf("Execute ovn command failed with  err:%v .", err)
+		e2e.Logf("Execute sdn command failed with  err:%v .", err)
 		return msg, err
 	}
 	return msg, nil

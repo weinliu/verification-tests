@@ -376,7 +376,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("ConnectedOnly-Author:jechen-High-46555-[Automatic EgressIP] Random egressIP is used on a pod that is not on a node hosting an egressIP . [Disruptive]", func() {
+	g.It("ConnectedOnly-Author:jechen-High-46555-46962-[Automatic EgressIP] Random egressIP is used on a pod that is not on a node hosting an egressIP, and random outages with egressIP . [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -431,7 +431,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		podns.createPingPodNode(oc)
 		waitPodReady(oc, podns.namespace, podns.name)
 
-		g.By("5.Check source IP from the test pod for 10 times, it should use either egressIP address as its sourceIP")
+		g.By("5.Check SDN pod log of the non-egress node, there should be no 'may be offline' error log ")
+		sdnPodName, err := exutil.GetPodName(oc, "openshift-sdn", "app=sdn", nonEgressNode)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sdnPodName).NotTo(o.BeEmpty())
+		podlogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(sdnPodName, "-n", "openshift-sdn", "-c", "sdn").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podlogs).NotTo(o.ContainSubstring("may be offline"))
+
+		g.By("6.Check source IP from the test pod for 10 times, it should use either egressIP address as its sourceIP")
 		sourceIP, err := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(sourceIP)
