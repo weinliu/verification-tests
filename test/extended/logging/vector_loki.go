@@ -13,10 +13,10 @@ import (
 )
 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
-	var oc = exutil.NewCLI("logfwd-namespace", exutil.KubeConfigPath())
 	defer g.GinkgoRecover()
 
 	var (
+		oc             = exutil.NewCLI("vector-loki-namespace", exutil.KubeConfigPath())
 		eo             = "elasticsearch-operator"
 		clo            = "cluster-logging-operator"
 		cloPackageName = "cluster-logging"
