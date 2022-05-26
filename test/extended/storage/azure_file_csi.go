@@ -330,7 +330,96 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("The Azure-File volumeHandle is: %v.", volumeHandle)
 		o.Expect(volumeHandle).To(o.ContainSubstring(prefix))
+	})
 
+	// author: wduan@redhat.com
+	// OCP-50919 - [Azure-File-CSI-Driver] support smb file share protocol
+	g.It("Author:wduan-High-50919-[Azure-File-CSI-Driver] support smb file share protocol", func() {
+		// Set up a specified project share for all the phases
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		// Set the resource definition for the scenario
+		storageClassParameters := map[string]string{
+			"protocol": "smb",
+		}
+		extraParameters := map[string]interface{}{
+			"parameters": storageClassParameters,
+		}
+		sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc.name))
+		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
+		g.By("Create storageclass")
+		sc.createWithExtraParameters(oc, extraParameters)
+		defer sc.deleteAsAdmin(oc)
+
+		g.By("Create PVC")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("Create deployment")
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+		dep.waitReady(oc)
+
+		g.By("Check the deployment's pod mounted volume can be read and write")
+		dep.checkPodMountedVolumeCouldRW(oc)
+
+		g.By("Check the deployment's pod mounted volume have the exec right")
+		dep.checkPodMountedVolumeHaveExecRight(oc)
+
+		g.By("Check pv has protocol parameter in the pv.spec.csi.volumeAttributes.protocol")
+		pvName := pvc.getVolumeName(oc)
+		protocol, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.protocol}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The protocol is: %v.", protocol)
+		o.Expect(protocol).To(o.ContainSubstring("smb"))
+	})
+
+	// author: wduan@redhat.com
+	// OCP-50918 - [Azure-File-CSI-Driver] support nfs file share protocol
+	g.It("Author:wduan-High-50918-[Azure-File-CSI-Driver] support nfs file share protocol", func() {
+		// Set up a specified project share for all the phases
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		// Set the resource definition for the scenario
+		storageClassParameters := map[string]string{
+			"protocol": "nfs",
+		}
+		extraParameters := map[string]interface{}{
+			"parameters": storageClassParameters,
+		}
+		sc := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("file.csi.azure.com"), setStorageClassVolumeBindingMode("Immediate"))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(sc.name))
+		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
+		g.By("Create storageclass")
+		sc.createWithExtraParameters(oc, extraParameters)
+		defer sc.deleteAsAdmin(oc)
+
+		g.By("Create PVC")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("Create deployment")
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+		dep.waitReady(oc)
+
+		g.By("Check the deployment's pod mounted volume can be read and write")
+		dep.checkPodMountedVolumeCouldRW(oc)
+
+		g.By("Check the deployment's pod mounted volume have the exec right")
+		dep.checkPodMountedVolumeHaveExecRight(oc)
+
+		g.By("Check pv has protocol parameter in the pv.spec.csi.volumeAttributes.protocol")
+		pvName := pvc.getVolumeName(oc)
+		protocol, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeAttributes.protocol}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The protocol is: %v.", protocol)
+		o.Expect(protocol).To(o.ContainSubstring("nfs"))
 	})
 })
 
