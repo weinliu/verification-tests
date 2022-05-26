@@ -33,6 +33,6 @@ spec:
     spec:
       containers:
       - name: linux-webserver
-        image: quay.io/openshifttest/nginx-alpine:multiarch-winc
+        image: quay.io/openshifttest/hello-openshift:multiarch-winc
         ports:
         - containerPort: 8080
