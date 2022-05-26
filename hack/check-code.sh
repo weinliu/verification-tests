@@ -27,7 +27,7 @@ echo "run 'git diff-tree --no-commit-id --name-only -r $commit1..$commit2'"
 modified_files_check=""
 modified_files=$(git diff-tree --no-commit-id --name-only -r $commit1..$commit2 | \
 	grep "^test" | grep ".go$" | grep -v "bindata.go$" | grep -v "Godeps" | \
-	grep -v "third_party")
+	grep -v "third_party" | grep -v "test/extended/testdata")
 if [ -n "${modified_files}" ]; then
     for f in $modified_files;
     do
