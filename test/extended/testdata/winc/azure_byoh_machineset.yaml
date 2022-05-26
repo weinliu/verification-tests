@@ -20,6 +20,7 @@ spec:
       metadata:
         labels:
           node-role.kubernetes.io/worker: ""
+          type: byoh-node
       providerSpec:
         value:
           apiVersion: azureproviderconfig.openshift.io/v1beta1
