@@ -325,7 +325,8 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	// author: rugong@redhat.com
 	// It is destructive case, will change scc restricted, so adding [Disruptive]
 	g.It("Author:rugong-Medium-20052-New field forbiddenSysctls for SCC [Disruptive]", func() {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("scc", "restricted", "-o", "yaml").Output()
+		// In 4.11 and above, we should use SCC "restricted-v2"
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("scc", "restricted-v2", "-o", "yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		re := regexp.MustCompile("(?m)[\r\n]+^  (uid|resourceVersion):.*$")
 		output = re.ReplaceAllString(output, "")
@@ -333,7 +334,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		err = ioutil.WriteFile(path, []byte(output), 0644)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.Remove(path)
-		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted", "-p", `{"allowedUnsafeSysctls":["kernel.msg*"]}`, "--type=merge").Output()
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "-p", `{"allowedUnsafeSysctls":["kernel.msg*"]}`, "--type=merge").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
 			g.By("Restoring the restricted SCC before exiting the scenario")
@@ -346,7 +347,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		err = oc.Run("create").Args("-f", podYaml).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted", "-p", `{"forbiddenSysctls":["kernel.msg*"]}`, "--type=merge").Output()
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "-p", `{"forbiddenSysctls":["kernel.msg*"]}`, "--type=merge").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("sysctl overlaps with kernel.msg"))
 		e2e.Logf("oc patch scc failed, this is expected.")
@@ -355,14 +356,14 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Restore the SCC successfully.")
 
-		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted", "-p", `{"forbiddenSysctls":["kernel.msg*"]}`, "--type=merge").Output()
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "-p", `{"forbiddenSysctls":["kernel.msg*"]}`, "--type=merge").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		output, err = oc.Run("delete").Args("po", "busybox").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("create").Args("-f", podYaml).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted", "-p", `{"allowedUnsafeSysctls":["kernel.msg*"]}`, "--type=merge").Output()
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "-p", `{"allowedUnsafeSysctls":["kernel.msg*"]}`, "--type=merge").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		e2e.Logf("oc patch scc failed, this is expected.")
 
@@ -370,7 +371,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Restore the SCC successfully.")
 
-		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted", "-p", `{"forbiddenSysctls":["kernel.shm_rmid_forced"]}`, "--type=merge").Output()
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "-p", `{"forbiddenSysctls":["kernel.shm_rmid_forced"]}`, "--type=merge").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		output, err = oc.Run("delete").Args("po", "busybox").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -383,7 +384,8 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	// author: rugong@redhat.com
 	// It is destructive case, will change scc restricted, so adding [Disruptive]
 	g.It("Author:rugong-Medium-20050-New field allowedUnsafeSysctls for SCC [Disruptive]", func() {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("scc", "restricted", "-o", "yaml").Output()
+		// In 4.11 and above, we should use SCC "restricted-v2"
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("scc", "restricted-v2", "-o", "yaml").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// uid and resourceVersion must be removed, otherwise "Operation cannot be fulfilled" error will occur when running oc replace in later steps
 		re := regexp.MustCompile("(?m)[\r\n]+^  (uid|resourceVersion):.*$")
@@ -401,7 +403,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(output).To(o.ContainSubstring(`unsafe sysctl "kernel.msgmax" is not allowed`))
 		e2e.Logf("Failed to create pod, this is expected.")
 
-		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted", `--type=json`, `-p=[{"op": "add", "path": "/allowedUnsafeSysctls", "value":["kernel.msg*"]}]`).Output()
+		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", `--type=json`, `-p=[{"op": "add", "path": "/allowedUnsafeSysctls", "value":["kernel.msg*"]}]`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
 			g.By("Restoring the restricted SCC before exiting the scenario")
