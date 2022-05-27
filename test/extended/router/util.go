@@ -132,18 +132,18 @@ func waitForResourceToDisappear(oc *exutil.CLI, ns, rsname string) error {
 	return wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
 		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(rsname, "-n", ns).Output()
 		e2e.Logf("check resource %v and got: %v", rsname, status)
+		primary := false
 		if err != nil {
 			if strings.Contains(status, "NotFound") {
 				e2e.Logf("the resource is disappeared!")
-				return true, nil
+				primary = true
 			} else {
 				e2e.Logf("failed to get the resource: %v, retrying...", err)
-				return false, nil
 			}
 		} else {
 			e2e.Logf("the resource is still there, retrying...")
-			return false, nil
 		}
+		return primary, nil
 	})
 }
 
@@ -181,7 +181,7 @@ func setEnvVariable(oc *exutil.CLI, ns, resource, envstring string) {
 }
 
 // Generic function to collect resource values with jsonpath option
-func fetchJsonPathValue(oc *exutil.CLI, ns, resource, searchline string) string {
+func fetchJSONPathValue(oc *exutil.CLI, ns, resource, searchline string) string {
 	searchLine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, resource, "-o=jsonpath={"+searchline+"}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("the searchline has result:%v", searchLine)
@@ -242,10 +242,10 @@ func readHaproxyConfig(oc *exutil.CLI, routerPodName, searchString1, grepOption,
 func getHAProxyVersion(oc *exutil.CLI) string {
 	var proxyVersion = "notFound"
 	routerpod := getRouterPod(oc, "default")
-	haproxy_output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "haproxy -v | grep version").Output()
+	haproxyOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "haproxy -v | grep version").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	haproxyRe := regexp.MustCompile("([0-9\\.]+)-([0-9a-z]+)")
-	haproxyInfo := haproxyRe.FindStringSubmatch(haproxy_output)
+	haproxyInfo := haproxyRe.FindStringSubmatch(haproxyOutput)
 	if len(haproxyInfo) > 0 {
 		proxyVersion = haproxyInfo[0]
 	}
@@ -357,7 +357,7 @@ func patchGlobalResourceAsAdmin(oc *exutil.CLI, resource, patch string) {
 
 // this function helps to get the ipv4 address of the given pod
 func getPodv4Address(oc *exutil.CLI, podName, namespace string) string {
-	podIPv4, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", podName, namespace, "-o=jsonpath={.status.podIP}").Output()
+	podIPv4, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, "-n", namespace, "-o=jsonpath={.status.podIP}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("IP of the %s pod in namespace %s is %q ", podName, namespace, podIPv4)
 	return podIPv4
@@ -371,7 +371,7 @@ func describePod(oc *exutil.CLI, podName, namespace string) string {
 }
 
 // this function will replace the octate of the ipaddress with the given value
-func replaceIpOctet(ipaddress string, octet int, octetValue string) string {
+func replaceIPOctet(ipaddress string, octet int, octetValue string) string {
 	ipList := strings.Split(ipaddress, ".")
 	ipList[octet] = octetValue
 	vip := strings.Join(ipList, ".")
@@ -416,13 +416,14 @@ func ensureClusterOperatorProgress(oc *exutil.CLI, coName string) {
 	jsonPath := "-o=jsonpath={.status.conditions[?(@.type==\"Progressing\")].status}"
 	waitErr := wait.Poll(3*time.Second, 120*time.Second, func() (bool, error) {
 		status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/"+coName, jsonPath).Output()
+		primary := false
 		if strings.Compare(status, "True") == 0 {
 			e2e.Logf("Progressing status is True.")
-			return true, nil
+			primary = true
 		} else {
 			e2e.Logf("Progressing status is not True, wait and try again...")
-			return false, nil
 		}
+		return primary, nil
 	})
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but CO %v didn't goto Progressing status."))
 }
@@ -436,20 +437,20 @@ func ensureClusterOperatorNormal(oc *exutil.CLI, coName string) {
 	var count = 0
 	waitErr := wait.Poll(3*time.Second, 300*time.Second, func() (bool, error) {
 		status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/"+coName, jsonPath).Output()
+		primary := false
 		if strings.Compare(status, "TrueFalseFalse") == 0 {
 			count++
 			if count == 5 {
 				e2e.Logf("got %v successive good status (%v), the CO is stable!", count, status)
-				return true, nil
+				primary = true
 			} else {
 				e2e.Logf("got %v successive good status (%v), try again...", count, status)
-				return false, nil
 			}
 		} else {
 			count = 0
 			e2e.Logf("CO status is still abnormal (%v), wait and try again...", status)
-			return false, nil
 		}
+		return primary, nil
 	})
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but CO %v is still abnoraml.", coName))
 }
@@ -482,10 +483,10 @@ func restoreDNSOperatorDefault(oc *exutil.CLI) {
 //this function is to get all dns pods' names, the return is the string slice of all dns pods' names, together with an error
 func getAllDNSPodsNames(oc *exutil.CLI) []string {
 	podList := []string{}
-	output_pods, err := oc.AsAdmin().Run("get").Args("pods", "-n", "openshift-dns").Output()
+	outputPods, err := oc.AsAdmin().Run("get").Args("pods", "-n", "openshift-dns").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	podsRe := regexp.MustCompile("dns-default-[a-z0-9]+")
-	pods := podsRe.FindAllStringSubmatch(output_pods, -1)
+	pods := podsRe.FindAllStringSubmatch(outputPods, -1)
 	if len(pods) > 0 {
 		for i := 0; i < len(pods); i++ {
 			podList = append(podList, pods[i][0])
@@ -516,7 +517,7 @@ func getOneCorefileStat(oc *exutil.CLI, dnspodname string) [][]string {
 //the value of parameter attrList should be from the getOneCorefileStat or getAllCorefilesStat function, it is related to the time before patching something to the dns operator
 func waitAllCorefilesUpdated(oc *exutil.CLI, attrList [][]string) [][]string {
 	cmd := "stat /etc/coredns/..data/Corefile | grep Modify"
-	updated_attrList := [][]string{}
+	updatedAttrList := [][]string{}
 	for _, dnspod := range attrList {
 		dnspodname := dnspod[0]
 		dnspodattr := dnspod[1]
@@ -524,36 +525,37 @@ func waitAllCorefilesUpdated(oc *exutil.CLI, attrList [][]string) [][]string {
 		waitErr := wait.Poll(3*time.Second, 120*time.Second, func() (bool, error) {
 			output, _ := oc.AsAdmin().Run("exec").Args("-n", "openshift-dns", dnspodname, "-c", "dns", "--", "bash", "-c", cmd).Output()
 			count++
+			primary := false
 			if dnspodattr != output {
 				e2e.Logf(dnspodname + " Corefile is updated")
-				updated_attrList = append(updated_attrList, []string{dnspodname, output})
-				return true, nil
+				updatedAttrList = append(updatedAttrList, []string{dnspodname, output})
+				primary = true
 			} else {
 				//reduce the logs
 				if count%10 == 1 {
 					e2e.Logf(dnspodname + " Corefile isn't updated , wait and try again...")
 				}
-				return false, nil
 			}
+			return primary, nil
 		})
 		if waitErr != nil {
-			updated_attrList = append(updated_attrList, []string{dnspodname, dnspodattr})
+			updatedAttrList = append(updatedAttrList, []string{dnspodname, dnspodattr})
 		}
 		exutil.AssertWaitPollNoErr(waitErr, dnspodname+" Corefile isn't updated")
 	}
-	return updated_attrList
+	return updatedAttrList
 }
 
 //this function is to wait for Corefile(s) is updated
 func waitCorefileUpdated(oc *exutil.CLI, attrList [][]string) [][]string {
-	updated_attrList := waitAllCorefilesUpdated(oc, attrList)
-	return updated_attrList
+	updatedAttrList := waitAllCorefilesUpdated(oc, attrList)
+	return updatedAttrList
 }
 
 // this fucntion will return the master pod who has the virtual ip
 func getVipOwnerPod(oc *exutil.CLI, ns string, podname []string, vip string) string {
 	cmd := fmt.Sprintf("ip address |grep %s", vip)
-	var primary_node string
+	var primaryNode string
 	for i := 0; i < len(podname); i++ {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, podname[i], "--", "bash", "-c", cmd).Output()
 		if len(podname) == 1 && output == "command terminated with exit code 1" {
@@ -563,13 +565,13 @@ func getVipOwnerPod(oc *exutil.CLI, ns string, podname []string, vip string) str
 			e2e.Logf("This Pod %v does not have the VIP", podname[i])
 		} else if o.Expect(output).To(o.ContainSubstring(vip)) {
 			e2e.Logf("The pod owning the VIP is %v", podname[i])
-			primary_node = podname[i]
+			primaryNode = podname[i]
 			break
 		} else {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 	}
-	return primary_node
+	return primaryNode
 }
 
 // this function will remove the given element from the slice
@@ -590,13 +592,14 @@ func waitForPreemptPod(oc *exutil.CLI, ns string, pod string, vip string) {
 	cmd := fmt.Sprintf("ip address |grep %s", vip)
 	waitErr := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, pod, "--", "bash", "-c", cmd).Output()
+		primary := false
 		if o.Expect(output).To(o.ContainSubstring(vip)) {
 			e2e.Logf("The new pod %v preempt to become Primary", pod)
-			return true, nil
+			primary = true
 		} else {
 			e2e.Logf("pod failed to become Primary yet, retrying...", output)
-			return false, nil
 		}
+		return primary, nil
 	})
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached, pod failed to become Primary"))
 }

@@ -81,7 +81,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("set the HA virtual IP for the failover group")
 		podName := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		ipv4Address := getPodv4Address(oc, oc.Namespace(), podName[0])
-		virtualIP := replaceIpOctet(ipv4Address, 3, "100")
+		virtualIP := replaceIPOctet(ipv4Address, 3, "100")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_VIRTUAL_IPS="+virtualIP)
 
 		g.By("set other ipfailover env varibales")
@@ -186,7 +186,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("set the HA virtual IP for the failover group")
 		podNames := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		ipv4Address := getPodv4Address(oc, oc.Namespace(), podNames[0])
-		virtualIP := replaceIpOctet(ipv4Address, 3, "100")
+		virtualIP := replaceIPOctet(ipv4Address, 3, "100")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_VIRTUAL_IPS="+virtualIP)
 
 		g.By("verify the HA virtual ip ENV variable")
@@ -198,14 +198,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(checkenv).To(o.ContainSubstring("OPENSHIFT_HA_VIRTUAL_IPS=" + virtualIP))
 
 		g.By("find the primary and the secondary pod")
-		primary_pod := getVipOwnerPod(oc, oc.Namespace(), newPodName, virtualIP)
-		secondary_pod := slicingElement(primary_pod, newPodName)
+		primaryPod := getVipOwnerPod(oc, oc.Namespace(), newPodName, virtualIP)
+		secondaryPod := slicingElement(primaryPod, newPodName)
 		g.By("restarting the ipfailover primary pod")
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", oc.Namespace(), "pod", primary_pod).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", oc.Namespace(), "pod", primaryPod).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("verify whether the other pod becomes master and it has the VIP")
-		_ = getVipOwnerPod(oc, oc.Namespace(), secondary_pod, virtualIP)
+		_ = getVipOwnerPod(oc, oc.Namespace(), secondaryPod, virtualIP)
 	})
 
 	// author: mjoseph@redhat.com
@@ -234,7 +234,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("set the HA virtual IP for the failover group")
 		podNames := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		ipv4Address := getPodv4Address(oc, oc.Namespace(), podNames[0])
-		virtualIP := replaceIpOctet(ipv4Address, 3, "100")
+		virtualIP := replaceIPOctet(ipv4Address, 3, "100")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_VIRTUAL_IPS="+virtualIP)
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `OPENSHIFT_HA_PREEMPTION=preempt_delay 60`)
 
@@ -249,22 +249,22 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(checkenv1).To(o.ContainSubstring("preempt_delay 60"))
 
 		g.By("find the primary and the secondary pod")
-		primary_pod := getVipOwnerPod(oc, oc.Namespace(), newPodName, virtualIP)
-		secondary_pod := slicingElement(primary_pod, newPodName)
+		primaryPod := getVipOwnerPod(oc, oc.Namespace(), newPodName, virtualIP)
+		secondaryPod := slicingElement(primaryPod, newPodName)
 		g.By("restarting the ipfailover primary pod")
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", oc.Namespace(), "pod", primary_pod).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", oc.Namespace(), "pod", primaryPod).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("verify whether the other pod becomes primary and it has the VIP")
-		_ = getVipOwnerPod(oc, oc.Namespace(), secondary_pod, virtualIP)
+		_ = getVipOwnerPod(oc, oc.Namespace(), secondaryPod, virtualIP)
 
 		g.By("verify the new pod preempts the exiting primary after the delay expires")
 		latestpods := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		// Identifying the new pod from the other
-		futurePrimary_pod := slicingElement(secondary_pod[0], latestpods)
+		futurePrimaryPod := slicingElement(secondaryPod[0], latestpods)
 		// Waiting till the preempt delay 60 seconds expires
 		time.Sleep(60 * time.Second)
-		waitForPreemptPod(oc, oc.Namespace(), futurePrimary_pod[0], virtualIP)
+		waitForPreemptPod(oc, oc.Namespace(), futurePrimaryPod[0], virtualIP)
 	})
 
 	// author: mjoseph@redhat.com
@@ -305,7 +305,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(checkenv).To(o.ContainSubstring("HA_EXCLUDED_VRRP_IDS=9"))
 
 		g.By("verify the excluded VIP is removed from the router_ids of ipfailover pods")
-		router_Ids := readPodData(oc, newPodName[0], oc.Namespace(), `cat /etc/keepalived/keepalived.conf`, `virtual_router_id`)
-		o.Expect(router_Ids).NotTo(o.ContainSubstring(`virtual_router_id 9`))
+		routerIds := readPodData(oc, newPodName[0], oc.Namespace(), `cat /etc/keepalived/keepalived.conf`, `virtual_router_id`)
+		o.Expect(routerIds).NotTo(o.ContainSubstring(`virtual_router_id 9`))
 	})
 })

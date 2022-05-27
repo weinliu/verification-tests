@@ -310,7 +310,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("Patch ingresscontroller with negative values for the tuningOptions settings and check the ingress operator config post the change")
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"tuningOptions\" :{\"clientFinTimeout\": \"-7s\",\"clientTimeout\": \"-33s\",\"serverFinTimeout\": \"-3s\",\"serverTimeout\": \"-27s\",\"tlsInspectDelay\": \"-11s\",\"tunnelTimeout\": \"-1h\"}}}")
-		output := fetchJsonPathValue(oc, "openshift-ingress-operator", "ingresscontroller/"+ingctrl.name, ".spec.tuningOptions")
+		output := fetchJSONPathValue(oc, "openshift-ingress-operator", "ingresscontroller/"+ingctrl.name, ".spec.tuningOptions")
 		o.Expect(output).To(o.ContainSubstring("{\"clientFinTimeout\":\"-7s\",\"clientTimeout\":\"-33s\",\"serverFinTimeout\":\"-3s\",\"serverTimeout\":\"-27s\",\"tlsInspectDelay\":\"-11s\",\"tunnelTimeout\":\"-1h\"}"))
 
 		g.By("Check the timeout option set in the haproxy pods post the changes applied")
@@ -605,5 +605,108 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("try to patch livenessProbe and readinessProbe with string type of value to the router deployment")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("deployment", routerDeploymentName, "--type=strategic", "--patch="+timeoutString, "-n", "openshift-ingress").Output()
 		o.Expect(output).To(o.ContainSubstring("The request is invalid: patch: Invalid value: \"map[spec:map[template:map[spec:map[containers:[map[livenessProbe:map[timeoutSeconds:abc] name:router readinessProbe:map[timeoutSeconds:abc]]]]]]]\": unrecognized type: int32"))
+	})
+
+	// author: shudili@redhat.com
+	g.It("Author:shudili-Medium-42940-User can customize HAProxy 2.0 Error Page", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			srvrcInfo           = "web-server-rc"
+			srvName             = "service-unsecure"
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+			http404page         = filepath.Join(buildPruningBaseDir, "error-page-404.http")
+			http503page         = filepath.Join(buildPruningBaseDir, "error-page-503.http")
+			cmName              = "my-custom-error-code-pages-42940"
+			patchHTTPErrorPage  = "{\"spec\": {\"httpErrorCodePages\": {\"name\": \"" + cmName + "\"}}}"
+			ingctrl             = ingctrlNodePortDescription{
+				name:      "ocp42940",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+			ingctrlResource = "ingresscontrollers/" + ingctrl.name
+		)
+
+		g.By("Create a ConfigMap with custom 404 and 503 error pages")
+		cmCrtErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", cmName, "--from-file="+http404page, "--from-file="+http503page, "-n", "openshift-config").Execute()
+		o.Expect(cmCrtErr).NotTo(o.HaveOccurred())
+		defer deleteConfigMap(oc, "openshift-config", cmName)
+		cmOutput, cmErr := oc.WithoutNamespace().AsAdmin().Run("get").Args("configmap", "-n", "openshift-config").Output()
+		o.Expect(cmErr).NotTo(o.HaveOccurred())
+		o.Expect(cmOutput).To(o.ContainSubstring(cmName))
+		cmOutput, cmErr = oc.WithoutNamespace().AsAdmin().Run("get").Args("configmap", cmName, "-o=jsonpath={.data}", "-n", "openshift-config").Output()
+		o.Expect(cmErr).NotTo(o.HaveOccurred())
+		o.Expect(cmOutput).To(o.ContainSubstring("error-page-404.http"))
+		o.Expect(cmOutput).To(o.ContainSubstring("Custom error page:The requested document was not found"))
+		o.Expect(cmOutput).To(o.ContainSubstring("error-page-503.http"))
+		o.Expect(cmOutput).To(o.ContainSubstring("Custom error page:The requested application is not available"))
+
+		g.By("Create one custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("patch the custom ingresscontroller with the http error code pages")
+		podname := getRouterPod(oc, ingctrl.name)
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchHTTPErrorPage)
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+		err = waitForPodWithLabelReady(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, "new router pod failed to be ready state within allowed time!")
+
+		g.By("get one custom ingress-controller router pod's IP")
+		podname = getRouterPod(oc, ingctrl.name)
+		podIP := getPodv4Address(oc, podname, "openshift-ingress")
+
+		g.By("Deploy a project with a client pod, a backend pod and its service resources")
+		oc.SetupProject()
+		project1 := oc.Namespace()
+		g.By("create a client pod")
+		createResourceFromFile(oc, project1, clientPod)
+		err = waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+		g.By("create an unsecure service and its backend pod")
+		createResourceFromFile(oc, project1, testPodSvc)
+		err = waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
+
+		g.By("Expose an route with the unsecure service inside the project")
+		routehost := srvName + "-" + project1 + "." + ingctrl.domain
+		output, SrvErr := oc.Run("expose").Args("service", srvName, "--hostname="+routehost).Output()
+		o.Expect(SrvErr).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(srvName))
+
+		g.By("curl a normal route from the client pod")
+		toDst := routehost + ":80:" + podIP
+		output, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-i", "http://"+routehost, "--resolve", toDst).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("200 OK"))
+
+		g.By("curl a non-existing route, expect to get custom http 404 Not Found error")
+		notExistRoute := "notexistroute" + "-" + project1 + "." + ingctrl.domain
+		toDst2 := notExistRoute + ":80:" + podIP
+		output, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-v", "http://"+notExistRoute, "--resolve", toDst2).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("404 Not Found"))
+		o.Expect(output).To(o.ContainSubstring("Custom error page:The requested document was not found"))
+
+		g.By("delete the backend pod and try to curl the route, expect to get custom http 503 Service Unavailable")
+		podname, err = oc.Run("get").Args("pods", "-l", "name="+srvrcInfo, "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("delete").Args("replicationcontroller", srvrcInfo).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForResourceToDisappear(oc, project1, "pod/"+podname)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+		output, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-v", "http://"+routehost, "--resolve", toDst).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("503 Service Unavailable"))
+		o.Expect(output).To(o.ContainSubstring("Custom error page:The requested application is not available"))
 	})
 })
