@@ -70,14 +70,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=collector"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			auditLogs := searchLogsInLoki(oc, cloNS, lokiNS, podList.Items[0].Name, "audit")
-			o.Expect(auditLogs.Lokistatus).Should(o.Equal("success"))
+			o.Expect(auditLogs.Status).Should(o.Equal("success"))
 			o.Expect(auditLogs.Data.Result[0].Stream.LogType).Should(o.Equal("audit"))
 			o.Expect(auditLogs.Data.Stats.Summary.BytesProcessedPerSecond).ShouldNot(o.BeZero())
 			e2e.Logf("Audit Logs Query is a success")
 
 			g.By("Searching for Infra Logs in Loki")
 			infraLogs := searchLogsInLoki(oc, cloNS, lokiNS, podList.Items[0].Name, "infra")
-			o.Expect(infraLogs.Lokistatus).Should(o.Equal("success"))
+			o.Expect(infraLogs.Status).Should(o.Equal("success"))
 			o.Expect(infraLogs.Data.Result[0].Stream.LogType).Should(o.Equal("infrastructure"))
 			o.Expect(infraLogs.Data.Stats.Summary.BytesProcessedPerSecond).ShouldNot(o.BeZero())
 			e2e.Logf("Infra Logs Query is a success")
@@ -87,12 +87,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
 				appLogs := searchAppLogsInLokiByNamespace(oc, cloNS, lokiNS, podList.Items[0].Name, appProj)
-				if appLogs.Lokistatus == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Result[0].Stream.LogType == "application" && appLogs.Data.Result[0].Stream.KubernetesPodName == appPodName.Items[0].Name {
+				if appLogs.Status == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Result[0].Stream.LogType == "application" && appLogs.Data.Result[0].Stream.KubernetesPodName == appPodName.Items[0].Name {
 					return true, nil
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed searching for application logs in Loki"))
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("failed searching for %s logs in Loki", "application"))
 			e2e.Logf("Application Logs Query is a success")
 
 		})
@@ -130,12 +130,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
 				appLogs := searchAppLogsInLokiByTenantKey(oc, cloNS, lokiNS, podList.Items[0].Name, tenantKey, appProj)
-				if appLogs.Lokistatus == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Result[0].Stream.LogType == "application" && appLogs.Data.Result[0].Stream.KubernetesPodName == appPodName.Items[0].Name {
+				if appLogs.Status == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Result[0].Stream.LogType == "application" && appLogs.Data.Result[0].Stream.KubernetesPodName == appPodName.Items[0].Name {
 					return true, nil
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed searching for application logs in Loki"))
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed searching for %s logs in Loki", "application"))
 			e2e.Logf("Application Logs Query using namespace as tenantKey is a success")
 
 		})
@@ -178,24 +178,24 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
 				appLogs := searchAppLogsInLokiByLabelKeys(oc, cloNS, lokiNS, podList.Items[0].Name, labelKeys, podLabel)
-				if appLogs.Lokistatus == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Stats.Ingester.TotalLinesSent != 0 {
+				if appLogs.Status == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Stats.Ingester.TotalLinesSent != 0 {
 					return true, nil
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed searching for application logs in Loki"))
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed searching for %s logs in Loki", "application"))
 			e2e.Logf("App logs found with matching LabelKey: " + labelKeys + " and pod Label: " + podLabel)
 
 			g.By("Searching for Application Logs in Loki using LabelKey - Negative match")
 			labelKeys = "kubernetes_pod_labels_negative"
 			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
 				appLogs := searchAppLogsInLokiByLabelKeys(oc, cloNS, lokiNS, podList.Items[0].Name, labelKeys, podLabel)
-				if appLogs.Lokistatus == "success" && appLogs.Data.Stats.Store.TotalChunksDownloaded == 0 && appLogs.Data.Stats.Summary.BytesProcessedPerSecond == 0 {
+				if appLogs.Status == "success" && appLogs.Data.Stats.Store.TotalChunksDownloaded == 0 && appLogs.Data.Stats.Summary.BytesProcessedPerSecond == 0 {
 					return true, nil
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed searching for application logs in Loki"))
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed searching for %s logs in Loki", "application"))
 			e2e.Logf("No App logs found with matching LabelKey: " + labelKeys + " and pod Label: " + podLabel)
 
 		})
@@ -234,12 +234,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			tenantKeyID := "logging-centos-logtest"
 			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
 				appLogs := searchAppLogsInLokiByTenantKey(oc, cloNS, lokiNS, podList.Items[0].Name, tenantKey, tenantKeyID)
-				if appLogs.Lokistatus == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Result[0].Stream.LogType == "application" && appLogs.Data.Result[0].Stream.KubernetesPodName == appPodName.Items[0].Name {
+				if appLogs.Status == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Result[0].Stream.LogType == "application" && appLogs.Data.Result[0].Stream.KubernetesPodName == appPodName.Items[0].Name {
 					return true, nil
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed searching for application logs in Loki"))
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed searching for %s logs in Loki", "application"))
 			e2e.Logf("Application Logs Query using kubernetes.container_name as tenantKey is a success")
 		})
 

@@ -37,4 +37,3 @@ parameters:
 - name: DATA_PROJECT
 - name: STRUCTURED_TYPE_KEY
   value: kubernetes.labels.none
-

@@ -541,21 +541,21 @@ type PruneNamespace struct {
 	}
 }
 */
-type LokiLogQuery struct {
-	Lokistatus string `json:"status"`
-	Data       struct {
+type lokiQueryResponse struct {
+	Status string `json:"status"`
+	Data   struct {
 		ResultType string `json:"resultType"`
 		Result     []struct {
 			Stream struct {
 				LogType                 string `json:"log_type"`
 				Tag                     string `json:"tag"`
 				FluentdThread           string `json:"fluentd_thread"`
-				KubernetesContainerName string `json:"kubernetes_container_name"`
+				KubernetesContainerName string `json:"kubernetes_container_name,omitempty"`
 				KubernetesHost          string `json:"kubernetes_host"`
-				KubernetesNamespaceName string `json:"kubernetes_namespace_name"`
-				KubernetesPodName       string `json:"kubernetes_pod_name"`
+				KubernetesNamespaceName string `json:"kubernetes_namespace_name,omitempty"`
+				KubernetesPodName       string `json:"kubernetes_pod_name,omitempty"`
 			} `json:"stream"`
-			Values []string `json:"values"`
+			Values []interface{} `json:"values"`
 		} `json:"result"`
 		Stats struct {
 			Summary struct {

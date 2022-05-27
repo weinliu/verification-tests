@@ -32,4 +32,3 @@ parameters:
   value: "kubernetes.namespace_name"
 - name: URL
   required: true
-

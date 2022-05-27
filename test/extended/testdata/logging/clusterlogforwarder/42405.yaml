@@ -36,4 +36,3 @@ parameters:
   value: "https://elasticsearch-server.openshift-logging.svc:9200"
 - name: PIPELINE_SECRET_NAME
   value: "pipelinesecret"
-

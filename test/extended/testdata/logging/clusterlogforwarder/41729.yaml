@@ -43,4 +43,3 @@ parameters:
   value: https://elasticsearch.openshift-logging.svc:9200
 - name: SECRET_NAME
   value: collector
-

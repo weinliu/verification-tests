@@ -26,4 +26,3 @@ parameters:
   value: "instance"
 - name: NAMESPACE
   value: "openshift-logging"
-

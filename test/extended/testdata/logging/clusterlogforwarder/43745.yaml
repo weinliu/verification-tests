@@ -30,4 +30,3 @@ parameters:
   value: "loki"
 - name: LOKINAMESPACE
   value: "loki-aosqe"
-

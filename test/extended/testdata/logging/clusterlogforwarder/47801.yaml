@@ -33,4 +33,3 @@ parameters:
   value: "kubernetes.labels.app"
 - name: URL
   required: true
-

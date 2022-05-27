@@ -234,7 +234,7 @@ func WaitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name strin
 		deployment, err := oc.AdminKubeClient().AppsV1().Deployments(namespace).Get(name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				e2e.Logf("Waiting for availability of %s deployment\n", name)
+				e2e.Logf("Waiting for availability of deployment/%s\n", name)
 				return false, nil
 			}
 			return false, err
@@ -249,13 +249,33 @@ func WaitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name strin
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment %s is not availabile", name))
 }
 
+func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
+	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
+		ss, err := oc.AdminKubeClient().AppsV1().StatefulSets(namespace).Get(name, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				e2e.Logf("Waiting for availability of %s statefulset\n", name)
+				return false, nil
+			}
+			return false, err
+		}
+		if ss.Status.ReadyReplicas == *ss.Spec.Replicas && ss.Status.UpdatedReplicas == *ss.Spec.Replicas {
+			e2e.Logf("statefulset %s available (%d/%d)\n", name, ss.Status.ReadyReplicas, *ss.Spec.Replicas)
+			return true, nil
+		}
+		e2e.Logf("Waiting for full availability of %s statefulset (%d/%d)\n", name, ss.Status.ReadyReplicas, *ss.Spec.Replicas)
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("statefulset %s is not availabile", name))
+}
+
 //WaitForDaemonsetPodsToBeReady waits for all the pods controlled by the ds to be ready
 func WaitForDaemonsetPodsToBeReady(oc *exutil.CLI, ns string, name string) {
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
 		daemonset, err := oc.AdminKubeClient().AppsV1().DaemonSets(ns).Get(name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				e2e.Logf("Waiting for availability of %s daemonset\n", name)
+				e2e.Logf("Waiting for availability of daemonset/%s\n", name)
 				return false, nil
 			}
 			return false, err
@@ -274,11 +294,11 @@ func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
 		pods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(metav1.ListOptions{LabelSelector: label})
 		if err != nil {
-			if apierrors.IsNotFound(err) {
-				e2e.Logf("Waiting for availability of pod with label %s\n", label)
-				return false, nil
-			}
 			return false, err
+		}
+		if len(pods.Items) == 0 {
+			e2e.Logf("Waiting for pod with label %s to appear\n", label)
+			return false, nil
 		}
 		ready := true
 		for _, pod := range pods.Items {
@@ -416,7 +436,7 @@ func (r resource) deleteClusterLogging(oc *exutil.CLI) {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s/%s is not deleted", resources[i].kind, resources[i].name))
 	}
 	// remove all the pvcs in the namespace
-	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", r.namespace, "pvc", "--all").Execute()
+	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", r.namespace, "pvc", "-l", "logging-cluster=elasticsearch").Execute()
 }
 
 func (r resource) createClusterLogging(oc *exutil.CLI, parameters ...string) {
@@ -534,6 +554,12 @@ func (r resource) assertResourceStatus(oc *exutil.CLI, content string, exptdStat
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s %s value for %s is not %s", r.kind, r.name, content, exptdStatus))
 }
 
+func getRouteAddress(oc *exutil.CLI, ns, routeName string) string {
+	route, err := oc.AdminRouteClient().RouteV1().Routes(ns).Get(routeName, metav1.GetOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return route.Spec.Host
+}
+
 type prometheusQueryResult struct {
 	Data struct {
 		Result []struct {
@@ -567,14 +593,13 @@ type prometheusQueryResult struct {
 // action: it can be "GET", "get", "Get", "POST", "post", "Post"
 func queryPrometheus(oc *exutil.CLI, token string, path string, query string, action string) (prometheusQueryResult, error) {
 	var bearerToken string
+	var err error
 	if token == "" {
-		bearerToken, _ = oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
+		bearerToken, _ = oc.AsAdmin().WithoutNamespace().Run("create").Args("token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
 	} else {
 		bearerToken = token
 	}
-	route, err := oc.AdminRouteClient().RouteV1().Routes("openshift-monitoring").Get("prometheus-k8s", metav1.GetOptions{})
-	o.Expect(err).NotTo(o.HaveOccurred())
-	prometheusURL := "https://" + route.Spec.Host + path
+	prometheusURL := "https://" + getRouteAddress(oc, "openshift-monitoring", "prometheus-k8s") + path
 	if query != "" {
 		prometheusURL = prometheusURL + "query=" + url.QueryEscape(query)
 	}
@@ -874,46 +899,46 @@ func (r rsyslog) checkData(oc *exutil.CLI, expect bool, filename string) {
 	}
 }
 
-func searchLogsInLoki(oc *exutil.CLI, cloNS string, lokiNS string, pod string, logType string) LokiLogQuery {
+func searchLogsInLoki(oc *exutil.CLI, cloNS string, lokiNS string, pod string, logType string) lokiQueryResponse {
 	//This function to be used only for audit or infra (Journal system) logs only
 	cmd := ""
 	if logType == "audit" {
 		// audit logs
-		cmd = "curl -G -s  \"http://loki-server." + lokiNS + ".svc:3100/loki/api/v1/query\" --data-urlencode 'query={ log_type=\"" + logType + "\"}'"
+		cmd = "curl -G -s  \"http://loki-server." + lokiNS + ".svc:3100/loki/api/v1/query?limit=3\" --data-urlencode 'query={ log_type=\"" + logType + "\"}'"
 	} else if logType == "infra" {
 		// infrastructure logs
-		cmd = "curl -G -s  \"http://loki-server." + lokiNS + ".svc:3100/loki/api/v1/query\" --data-urlencode 'query={ log_type=\"infrastructure\"}'"
+		cmd = "curl -G -s  \"http://loki-server." + lokiNS + ".svc:3100/loki/api/v1/query?limit=3\" --data-urlencode 'query={ log_type=\"infrastructure\"}'"
 	} else {
 		// Journal system Infra logs
-		cmd = "curl -G -s  \"http://loki-server." + lokiNS + ".svc:3100/loki/api/v1/query\" --data-urlencode 'query={ tag=\"journal.system\"}'"
+		cmd = "curl -G -s  \"http://loki-server." + lokiNS + ".svc:3100/loki/api/v1/query?limit=3\" --data-urlencode 'query={ tag=\"journal.system\"}'"
 	}
 	stdout, err := e2e.RunHostCmdWithRetries(cloNS, pod, cmd, 3*time.Second, 30*time.Second)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
-	res := LokiLogQuery{}
+	res := lokiQueryResponse{}
 	json.Unmarshal([]byte(stdout), &res)
 	return res
 }
-func searchAppLogsInLokiByNamespace(oc *exutil.CLI, cloNS string, lokiNS string, pod string, appNS string) LokiLogQuery {
-	cmd := "curl -G -s  \"http://loki-server." + lokiNS + ".svc:3100/loki/api/v1/query\" --data-urlencode 'query={ kubernetes_namespace_name=\"" + appNS + "\"}'"
+func searchAppLogsInLokiByNamespace(oc *exutil.CLI, cloNS string, lokiNS string, pod string, appNS string) lokiQueryResponse {
+	cmd := "curl -G -s  \"http://loki-server." + lokiNS + ".svc:3100/loki/api/v1/query?limit=3\" --data-urlencode 'query={ kubernetes_namespace_name=\"" + appNS + "\"}'"
 	stdout, err := e2e.RunHostCmdWithRetries(cloNS, pod, cmd, 3*time.Second, 30*time.Second)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
-	res := LokiLogQuery{}
+	res := lokiQueryResponse{}
 	json.Unmarshal([]byte(stdout), &res)
 	return res
 }
-func searchAppLogsInLokiByTenantKey(oc *exutil.CLI, cloNS string, lokiNS string, pod string, tenantKey string, tenantKeyID string) LokiLogQuery {
-	cmd := "curl -G -s  \"http://loki-server." + lokiNS + ".svc:3100/loki/api/v1/query\" --data-urlencode 'query={" + tenantKey + "=\"" + tenantKeyID + "\"}'"
+func searchAppLogsInLokiByTenantKey(oc *exutil.CLI, cloNS string, lokiNS string, pod string, tenantKey string, tenantKeyID string) lokiQueryResponse {
+	cmd := "curl -G -s  \"http://loki-server." + lokiNS + ".svc:3100/loki/api/v1/query?limit=3\" --data-urlencode 'query={" + tenantKey + "=\"" + tenantKeyID + "\"}'"
 	stdout, err := e2e.RunHostCmdWithRetries(cloNS, pod, cmd, 3*time.Second, 30*time.Second)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
-	res := LokiLogQuery{}
+	res := lokiQueryResponse{}
 	json.Unmarshal([]byte(stdout), &res)
 	return res
 }
-func searchAppLogsInLokiByLabelKeys(oc *exutil.CLI, cloNS string, lokiNS string, pod string, labelKeys string, podLabel string) LokiLogQuery {
-	cmd := "curl -G -s  \"http://loki-server." + lokiNS + ".svc:3100/loki/api/v1/query\" --data-urlencode 'query={" + labelKeys + "=\"" + podLabel + "\"}'"
+func searchAppLogsInLokiByLabelKeys(oc *exutil.CLI, cloNS string, lokiNS string, pod string, labelKeys string, podLabel string) lokiQueryResponse {
+	cmd := "curl -G -s  \"http://loki-server." + lokiNS + ".svc:3100/loki/api/v1/query?limit=3\" --data-urlencode 'query={" + labelKeys + "=\"" + podLabel + "\"}'"
 	stdout, err := e2e.RunHostCmdWithRetries(cloNS, pod, cmd, 3*time.Second, 30*time.Second)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
-	res := LokiLogQuery{}
+	res := lokiQueryResponse{}
 	json.Unmarshal([]byte(stdout), &res)
 	return res
 }
@@ -1180,7 +1205,7 @@ func (cw cloudwatchSpec) init(oc *exutil.CLI) cloudwatchSpec {
 }
 
 // Get the AWS key from cluster
-func (cw cloudwatchSpec) getAWSKey(oc *exutil.CLI) (string, string) {
+func getAWSKey(oc *exutil.CLI) (string, string) {
 	credential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system", "-o", "json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	accessKeyIDBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).Str, gjson.Get(credential, `data.aws_secret_access_key`).Str

@@ -43,4 +43,3 @@ parameters:
   value: kubernetes.namespace_name
 - name: STRUCTURED_TYPE_NAME
   value: fall-in-index
-

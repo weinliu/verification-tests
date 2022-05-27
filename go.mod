@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	cloud.google.com/go v0.38.0
+	github.com/Azure/azure-storage-blob-go v0.15.0
 	github.com/RangelReale/osincli v0.0.0-20160924135400-fababb0555f2
 	github.com/aws/aws-sdk-go v1.43.10
 	github.com/aws/aws-sdk-go-v2 v1.13.0
@@ -31,12 +32,14 @@ require (
 	github.com/prometheus/common v0.6.0
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
+	github.com/stretchr/testify v1.7.0
 	github.com/tidwall/gjson v1.11.0
 	github.com/tidwall/pretty v1.2.0
 	github.com/tidwall/sjson v1.2.3
 	golang.org/x/crypto v0.0.0-20210421170649-83a5a9bb288b
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
 	golang.org/x/tools v0.1.4 // indirect
+	google.golang.org/api v0.6.1-0.20190607001116-5213b8090861
 	k8s.io/api v0.17.1
 	k8s.io/apimachinery v0.17.1
 	k8s.io/apiserver v0.17.1

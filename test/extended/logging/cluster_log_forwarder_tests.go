@@ -436,21 +436,21 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=collector"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			auditLogs := searchLogsInLoki(oc, cloNS, lokiNS, podList.Items[0].Name, "audit")
-			o.Expect(auditLogs.Lokistatus).Should(o.Equal("success"))
+			o.Expect(auditLogs.Status).Should(o.Equal("success"))
 			o.Expect(auditLogs.Data.Result[0].Stream.LogType).Should(o.Equal("audit"))
 			o.Expect(auditLogs.Data.Stats.Summary.BytesProcessedPerSecond).ShouldNot(o.BeZero())
 			e2e.Logf("Audit Logs Query is a success")
 
 			g.By("Searching for Infra Logs in Loki")
 			infraLogs := searchLogsInLoki(oc, cloNS, lokiNS, podList.Items[0].Name, "infrastructure")
-			o.Expect(infraLogs.Lokistatus).Should(o.Equal("success"))
+			o.Expect(infraLogs.Status).Should(o.Equal("success"))
 			o.Expect(infraLogs.Data.Result[0].Stream.LogType).Should(o.Equal("infrastructure"))
 			o.Expect(infraLogs.Data.Stats.Summary.BytesProcessedPerSecond).ShouldNot(o.BeZero())
 			e2e.Logf("Infra Logs Query is a success")
 
 			g.By("Searching for Application Logs in Loki")
 			appLogs := searchAppLogsInLokiByNamespace(oc, cloNS, lokiNS, podList.Items[0].Name, appProj)
-			o.Expect(appLogs.Lokistatus).Should(o.Equal("success"))
+			o.Expect(appLogs.Status).Should(o.Equal("success"))
 			o.Expect(appLogs.Data.Result[0].Stream.LogType).Should(o.Equal("application"))
 			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -533,7 +533,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			appLogs := searchAppLogsInLokiByTenantKey(oc, cloNS, lokiNS, podList.Items[0].Name, tenantKey, appPodName.Items[0].Name)
-			o.Expect(appLogs.Lokistatus).Should(o.Equal("success"))
+			o.Expect(appLogs.Status).Should(o.Equal("success"))
 			o.Expect(appLogs.Data.Result[0].Stream.LogType).Should(o.Equal("application"))
 			o.Expect(appLogs.Data.Result[0].Stream.KubernetesPodName).Should(o.Equal(appPodName.Items[0].Name))
 			o.Expect(appLogs.Data.Stats.Summary.BytesProcessedPerSecond).ShouldNot(o.BeZero())
@@ -579,7 +579,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			appLogs := searchAppLogsInLokiByTenantKey(oc, cloNS, lokiNS, podList.Items[0].Name, tenantKey, appProj)
-			o.Expect(appLogs.Lokistatus).Should(o.Equal("success"))
+			o.Expect(appLogs.Status).Should(o.Equal("success"))
 			o.Expect(appLogs.Data.Result[0].Stream.LogType).Should(o.Equal("application"))
 			o.Expect(appLogs.Data.Result[0].Stream.KubernetesPodName).Should(o.Equal(appPodName.Items[0].Name))
 			o.Expect(appLogs.Data.Stats.Summary.BytesProcessedPerSecond).ShouldNot(o.BeZero())
@@ -631,7 +631,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=collector"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			appLogs := searchAppLogsInLokiByLabelKeys(oc, cloNS, lokiNS, podList.Items[0].Name, labelKeys, podLabel)
-			o.Expect(appLogs.Lokistatus).Should(o.Equal("success"))
+			o.Expect(appLogs.Status).Should(o.Equal("success"))
 			o.Expect(appLogs.Data.Result).ShouldNot(o.BeEmpty())
 			o.Expect(appLogs.Data.Stats.Summary.BytesProcessedPerSecond).ShouldNot(o.BeZero())
 			o.Expect(appLogs.Data.Stats.Ingester.TotalLinesSent).ShouldNot((o.BeZero()))
@@ -642,7 +642,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			labelKeys = "kubernetes_labels_negative"
 			appLogs = searchAppLogsInLokiByLabelKeys(oc, cloNS, lokiNS, podList.Items[0].Name, labelKeys, podLabel)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(appLogs.Lokistatus).Should(o.Equal("success"))
+			o.Expect(appLogs.Status).Should(o.Equal("success"))
 			o.Expect(appLogs.Data.Result).Should(o.BeEmpty())
 			o.Expect(appLogs.Data.Stats.Summary.BytesProcessedPerSecond).Should(o.BeZero())
 			o.Expect(appLogs.Data.Stats.Store.TotalChunksDownloaded).Should((o.BeZero()))
@@ -678,7 +678,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if platform != "aws" {
 				g.Skip("Skip for non-supported platform, the support platform is AWS!!!")
 			}
-			cw.awsKeyID, cw.awsKey = cw.getAWSKey(oc)
+			cw.awsKeyID, cw.awsKey = getAWSKey(oc)
 
 			g.By("create log producer")
 			appProj := oc.Namespace()
@@ -712,7 +712,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if platform != "aws" {
 				g.Skip("Skip for non-supported platform, the support platform is AWS!!!")
 			}
-			cw.awsKeyID, cw.awsKey = cw.getAWSKey(oc)
+			cw.awsKeyID, cw.awsKey = getAWSKey(oc)
 			cw.groupPrefix = "qeauto" + getInfrastructureName(oc)
 			cw.groupType = "namespaceName"
 			// Disable audit, so the test be more stable
@@ -750,7 +750,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if platform != "aws" {
 				g.Skip("Skip for non-supported platform, the support platform is AWS!!!")
 			}
-			cw.awsKeyID, cw.awsKey = cw.getAWSKey(oc)
+			cw.awsKeyID, cw.awsKey = getAWSKey(oc)
 			cw.groupPrefix = "qeauto" + getInfrastructureName(oc)
 			cw.groupType = "namespaceUUID"
 			// Disable audit, so the test be more stable

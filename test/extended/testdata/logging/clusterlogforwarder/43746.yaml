@@ -32,4 +32,3 @@ parameters:
   value: "loki-aosqe"
 - name: TENANTKEY
   value: "kubernetes.pod_name"
-

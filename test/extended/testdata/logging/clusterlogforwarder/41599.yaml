@@ -19,7 +19,7 @@ objects:
           matchLabels:
             run: centos-logtest-qa-1
             test: centos-logtest-qa-1
-        namespaces: 
+        namespaces:
         - ${APP_NAMESPACE_QA}
     - name: myLogsDev1
       application:
@@ -27,7 +27,7 @@ objects:
           matchLabels:
             run: centos-logtest-dev-1
             test: centos-logtest-dev-1
-        namespaces: 
+        namespaces:
         - ${APP_NAMESPACE_DEV}
 parameters:
 - name: NAME
@@ -38,7 +38,3 @@ parameters:
   value: "appnamespaceqa"
 - name: APP_NAMESPACE_DEV
   value: "appnamespacedev"
-
-
-
-
