@@ -1342,7 +1342,7 @@ func (cw cloudwatchSpec) getStreamNames(client *cloudwatchlogs.Client, groupName
 		})
 	}
 	if err != nil {
-		e2e.Logf("Warn:DescribeLogStreams failed \n %v", err)
+		e2e.Logf("Warn: DescribeLogStreams failed \n %v", err)
 		return logStreamNames
 	}
 
@@ -1406,7 +1406,7 @@ type cloudwatchStreamResult struct {
 func (cw cloudwatchSpec) infrastructureLogsFound(client *cloudwatchlogs.Client) bool {
 	var infraLogGroupNames []string
 	var logFoundAll bool = true
-	var streamsFound []*cloudwatchStreamResult
+	var streamsToVerify []*cloudwatchStreamResult
 
 	logGroupNames := cw.getGroupNames(client, cw.groupPrefix)
 	for _, e := range logGroupNames {
@@ -1420,20 +1420,20 @@ func (cw cloudwatchSpec) infrastructureLogsFound(client *cloudwatchlogs.Client) 
 	if len(infraLogGroupNames) == 0 {
 		return false
 	}
-
+	//Construct the stream pattern
 	for _, e := range cw.nodes {
-		streamsFound = append(streamsFound, &cloudwatchStreamResult{streamPattern: strings.Split(e, ".")[0] + ".journal.system", logType: "journal", streamFound: false})
-		streamsFound = append(streamsFound, &cloudwatchStreamResult{streamPattern: e + ".kubernetes.var.log.containers", logType: "container", streamFound: false})
+		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{streamPattern: strings.Split(e, ".")[0] + ".journal.system", logType: "journal", streamFound: false})
+		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{streamPattern: e + ".kubernetes.var.log.pods", logType: "container", streamFound: false})
 	}
 
-	for _, e := range streamsFound {
+	for _, e := range streamsToVerify {
 		logStreams := cw.getStreamNames(client, infraLogGroupNames[0], e.streamPattern)
 		if len(logStreams) > 0 {
 			e.streamFound = true
 		}
 	}
 
-	for _, e := range streamsFound {
+	for _, e := range streamsToVerify {
 		if !e.streamFound {
 			e2e.Logf("Warn: can not find the stream matching " + e.streamPattern)
 			logFoundAll = false
@@ -1452,7 +1452,7 @@ func (cw cloudwatchSpec) infrastructureLogsFound(client *cloudwatchlogs.Client) 
 func (cw cloudwatchSpec) auditLogsFound(client *cloudwatchlogs.Client) bool {
 	var logFoundAll bool = true
 	var auditLogGroupNames []string
-	var streamsFound []*cloudwatchStreamResult
+	var streamsToVerify []*cloudwatchStreamResult
 
 	for _, e := range cw.getGroupNames(client, cw.groupPrefix) {
 		r, _ := regexp.Compile(`.*\.audit$`)
@@ -1474,21 +1474,21 @@ func (cw cloudwatchSpec) auditLogsFound(client *cloudwatchlogs.Client) bool {
 
 	//Method 1: Not all type of audit logs can be are produced on each node. so this method is comment comment
 	/*for _, e := range cw.masters {
-		streamsFound = append(streamsFound, &cloudwatchStreamResult{ streamPattern: e+".k8s-audit.log", logType: "k8saudit", streamFound: false})
-		streamsFound = append(streamsFound, &cloudwatchStreamResult{ streamPattern: e+".openshift-audit.log", logType: "ocpaudit", streamFound: false})
-		streamsFound = append(streamsFound, &cloudwatchStreamResult{ streamPattern: e+".linux-audit.log", logType: "linuxaudit", streamFound: false})
-		streamsFound = append(streamsFound, &cloudwatchStreamResult{ streamPattern: e+".ovn-audit.log", logType: "ovnaudit", streamFound: ovnFoundInit})
+		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{ streamPattern: e+".k8s-audit.log", logType: "k8saudit", streamFound: false})
+		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{ streamPattern: e+".openshift-audit.log", logType: "ocpaudit", streamFound: false})
+		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{ streamPattern: e+".linux-audit.log", logType: "linuxaudit", streamFound: false})
+		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{ streamPattern: e+".ovn-audit.log", logType: "ovnaudit", streamFound: ovnFoundInit})
 	}
 
 	for _, e := range cw.workers {
-		streamsFound = append(streamsFound, &cloudwatchStreamResult{ streamPattern: e+".k8s-audit.log", logType: "k8saudit", streamFound: false})
-		streamsFound = append(streamsFound, &cloudwatchStreamResult{ streamPattern: e+".openshift-audit.log", logType: "ocpaudit", streamFound: false})
-		streamsFound = append(streamsFound, &cloudwatchStreamResult{ streamPattern: e+".linux-audit.log", logType: "linuxaudit", streamFound: false})
-		streamsFound = append(streamsFound, &cloudwatchStreamResult{ streamPattern: e+".ovn-audit.log", logType: "ovnaudit", streamFound: ovnFoundInit})
+		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{ streamPattern: e+".k8s-audit.log", logType: "k8saudit", streamFound: false})
+		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{ streamPattern: e+".openshift-audit.log", logType: "ocpaudit", streamFound: false})
+		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{ streamPattern: e+".linux-audit.log", logType: "linuxaudit", streamFound: false})
+		streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{ streamPattern: e+".ovn-audit.log", logType: "ovnaudit", streamFound: ovnFoundInit})
 	}
 
 
-	for _, e := range streamsFound {
+	for _, e := range streamsToVerify {
 		logStreams := cw.getStreamNames(client, auditLogGroupNames[0], e.streamPattern)
 		if len(logStreams)>0 {
 			e.streamFound=true
@@ -1497,14 +1497,14 @@ func (cw cloudwatchSpec) auditLogsFound(client *cloudwatchlogs.Client) bool {
 
 	// Method 2: Only search logstream whose suffix is audit.log. the potential issues 1) No audit log on all nodes 2) The stream size > the buffer to large cluster.
 	// TBD: produce audit message on every node
-	streamsFound = append(streamsFound, &cloudwatchStreamResult{streamPattern: ".k8s-audit.log$", logType: "k8saudit", streamFound: false})
-	streamsFound = append(streamsFound, &cloudwatchStreamResult{streamPattern: ".openshift-audit.log$", logType: "ocpaudit", streamFound: false})
-	streamsFound = append(streamsFound, &cloudwatchStreamResult{streamPattern: ".linux-audit.log$", logType: "linuxaudit", streamFound: false})
-	streamsFound = append(streamsFound, &cloudwatchStreamResult{streamPattern: ".ovn-audit.log", logType: "ovnaudit", streamFound: ovnFoundInit})
+	streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{streamPattern: ".k8s-audit.log$", logType: "k8saudit", streamFound: false})
+	streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{streamPattern: ".openshift-audit.log$", logType: "ocpaudit", streamFound: false})
+	streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{streamPattern: ".linux-audit.log$", logType: "linuxaudit", streamFound: false})
+	streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{streamPattern: ".ovn-audit.log", logType: "ovnaudit", streamFound: ovnFoundInit})
 
 	logStreams := cw.getStreamNames(client, auditLogGroupNames[0], "")
 
-	for _, e := range streamsFound {
+	for _, e := range streamsToVerify {
 		for _, streamName := range logStreams {
 			match, _ := regexp.MatchString(e.streamPattern, streamName)
 			if match {
@@ -1513,7 +1513,7 @@ func (cw cloudwatchSpec) auditLogsFound(client *cloudwatchlogs.Client) bool {
 		}
 	}
 
-	for _, e := range streamsFound {
+	for _, e := range streamsToVerify {
 		if !e.streamFound {
 			e2e.Logf("Warn: failed to find stream matching " + e.streamPattern)
 			logFoundAll = false
@@ -1600,6 +1600,9 @@ func (cw cloudwatchSpec) applicationLogsFoundNamespaceName(client *cloudwatchlog
 // logStream Example:
 //    kubernetes.var.log.containers.centos-logtest-tvffh_aosqe-log-json-1638427743_centos-logtest-56a00a8f6a2e43281bce6d44d33e93b600352f2234610a093c4d254a49d9bf4e.log
 //    kubernetes.var.log.containers.loki-server-6f8485b8ff-b4p8w_loki-aosqe_loki-c7a4e4fa4370062e53803ac5acecc57f6217eb2bb603143ac013755819ed5fdb.log
+//    The stream name changed from containers to pods
+//    kubernetes.var.log.pods.openshift-image-registry_image-registry-7f5dbdbc69-vwddg_425a4fbc-6a20-4919-8cd2-8bebd5d9b5cd.registry.0.log
+//    pods.
 func (cw cloudwatchSpec) applicationLogsFoundLogType(client *cloudwatchlogs.Client) bool {
 	var logFoundAll bool = true
 	var appLogGroupNames []string
