@@ -2773,7 +2773,94 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
 	})
+	// author: chaoyang@redhat.com
+	// [CSI Driver] [Dynamic PV] [Filesystem with RWX Accessmode] volumes resize on-line
+	g.It("Author:chaoyang-High-51258-[CSI Driver] [Dynamic PV] [Filesystem] volumes resize with RWX access mode", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"file.csi.azure.com"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			dsTemplate             = filepath.Join(storageTeamBaseDir, "ds-template.yaml")
+			storageClassParameters = map[string]string{
+				"csi.storage.k8s.io/fstype": "ext4",
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
 
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name),
+				setPersistentVolumeClaimAccessmode("ReadWriteMany"))
+			ds := newDaemonSet(setDsTemplate(dsTemplate))
+
+			g.By("# Create csi storageclass")
+			storageClass.provisioner = provisioner
+			storageClass.createWithExtraParameters(oc, extraParameters)
+			defer storageClass.deleteAsAdmin(oc)
+
+			g.By("# Create PVC with above storageclass")
+			pvc.namespace = oc.Namespace()
+			pvc.create(oc)
+			pvc.waitStatusAsExpected(oc, "Bound")
+			pvName := getPersistentVolumeNameByPersistentVolumeClaim(oc, pvc.namespace, pvc.name)
+			defer deleteSpecifiedResource(oc.AsAdmin(), "pv", pvName, "")
+			defer pvc.deleteAsAdmin(oc)
+
+			g.By("# Create daemonset pod with the created pvc and wait for the pod ready")
+			ds.pvcname = pvc.name
+			ds.create(oc)
+			defer ds.deleteAsAdmin(oc)
+			ds.waitReady(oc)
+
+			//add step to make sure pv is deleted after testing
+			//defer deleteSpecifiedResource(oc.AsAdmin(), "pv", pvc.getVolumeName(oc), "")
+
+			g.By("# Check the pods can write data inside volume")
+			ds.checkPodMountedVolumeCouldWrite(oc)
+
+			g.By("# Apply the patch to Resize the pvc volume")
+			originSizeInt64, err := strconv.ParseInt(strings.TrimRight(pvc.capacity, "Gi"), 10, 64)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			expandSizeInt64 := originSizeInt64 + getRandomNum(5, 10)
+			expandedCapactiy := strconv.FormatInt(expandSizeInt64, 10) + "Gi"
+			pvc.expand(oc, expandedCapactiy)
+
+			g.By("# Waiting for the pv and pvc capacity update to the expand capacity sucessfully")
+			waitPVVolSizeToGetResized(oc, pvc.namespace, pvc.name, pvc.capacity)
+			pvc.waitResizeSuccess(oc, pvc.capacity)
+
+			g.By("# Check the original data from pods")
+			ds.checkPodMountedVolumeCouldRead(oc)
+
+			g.By("# Check volume size in each pod should same with expand volume size")
+			for _, podName := range ds.getPodsList(oc) {
+				sizeString, err := execCommandInSpecificPod(oc, ds.namespace, podName, "df -BG | grep "+ds.mpath+"|awk '{print $2}'")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				sizeInt64, err := strconv.ParseInt(strings.TrimSuffix(sizeString, "G"), 10, 64)
+				o.Expect(expandSizeInt64).To(o.Equal(sizeInt64))
+			}
+
+			g.By("# Write larger than original capacity data and less than new capacity data")
+			msg, err := execCommandInSpecificPod(oc, ds.namespace, ds.getPodsList(oc)[0], "fallocate -l "+strconv.FormatInt(originSizeInt64+getRandomNum(1, 3), 10)+"G "+ds.mpath+"/"+getRandomString()+" ||true")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(msg).NotTo(o.ContainSubstring("No space left on device"))
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
 })
 
 // Performing test steps for Online Volume Resizing
