@@ -1336,7 +1336,16 @@ nulla pariatur.`
 		verifyDriftConfig(mcp, rf, newMode, useForceFile)
 	})
 
-	g.It("Author:sregidor-Longduration-NonPreRelease-High-45508-cordon node before node drain [Serial]", func() {
+	g.It("Author:sregidor-Longduration-NonPreRelease-High-51381-cordon node before node drain. OCP >= 4.11 [Serial]", func() {
+		g.By("Capture initial migration-controller logs")
+		ctrlerContainer := "machine-config-controller"
+		ctrlerPod, podsErr := getMachineConfigControllerPod(oc)
+		o.Expect(podsErr).NotTo(o.HaveOccurred())
+		o.Expect(ctrlerPod).NotTo(o.BeEmpty())
+
+		initialCtrlerLogs, initErr := exutil.GetSpecificPodLogs(oc, "openshift-machine-config-operator", ctrlerContainer, ctrlerPod, "")
+		o.Expect(initErr).NotTo(o.HaveOccurred())
+
 		g.By("Create a MC to deploy a config file")
 		fileMode := "0644" // decimal 420
 		filePath := "/etc/chrony.conf"
@@ -1357,10 +1366,13 @@ nulla pariatur.`
 
 		o.Eventually(workerNode.PollIsCordoned(), fmt.Sprintf("%dm", mcp.estimateWaitTimeInMinutes()), "20s").Should(o.BeTrue(), "Worker node must be cordoned")
 
+		searchRegexp := fmt.Sprintf("(?s)%s: initiating cordon.*node %s: Evicted pod", workerNode.GetName(), workerNode.GetName())
 		o.Eventually(func() string {
-			podAllLogs, _ := exutil.GetSpecificPodLogs(oc, "openshift-machine-config-operator", "machine-config-daemon", workerNode.GetMachineConfigDaemon(), "")
-			return podAllLogs
-		}, "5m", "10s").Should(o.MatchRegexp("(?s)Node has been successfully cordoned.*Update prepared; beginning drain"), "Node should be cordoned before being drained")
+			podAllLogs, _ := exutil.GetSpecificPodLogs(oc, "openshift-machine-config-operator", ctrlerContainer, ctrlerPod, "")
+			// Remove the part of the log captured at the beginning of the test.
+			// We only check the part of the log that this TC generates and ignore the previously generated logs
+			return strings.Replace(podAllLogs, initialCtrlerLogs, "", 1)
+		}, "5m", "10s").Should(o.MatchRegexp(searchRegexp), "Node should be cordoned before being drained")
 
 		g.By("Wait until worker MCP has finished the configuration. No machine should be degraded.")
 		mcp.waitForComplete()
