@@ -114,14 +114,14 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		defer oc.Run("delete").Args("secret/my-secret", "-n", oc.Namespace()).Execute()
 
 		imageSouceS := "--from=quay.io/openshift-release-dev/ocp-release:4.5.8-x86_64"
-		imageToS := "--to=" + serInfo.serviceUrl + "/zhouytest/test-release"
-		imageToReleaseS := "--to-release-image=" + serInfo.serviceUrl + "/zhouytest/ocptest-release:4.5.8-x86_64"
+		imageToS := "--to=" + serInfo.serviceURL + "/zhouytest/test-release"
+		imageToReleaseS := "--to-release-image=" + serInfo.serviceURL + "/zhouytest/ocptest-release:4.5.8-x86_64"
 		imagePullSecretS := "-a " + "/etc/foo/" + ".dockerconfigjson"
 
 		pod43032 := podMirror{
 			name:            "mypod43032",
 			namespace:       oc.Namespace(),
-			cliImageId:      cliImage,
+			cliImageID:      cliImage,
 			imagePullSecret: imagePullSecretS,
 			imageSource:     imageSouceS,
 			imageTo:         imageToS,
@@ -224,14 +224,14 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err1).NotTo(o.HaveOccurred())
 
 		imageSouceS := "--from=quay.io/openshift-release-dev/ocp-release:4.5.5-x86_64"
-		imageToS := "--to=" + serInfo.serviceUrl + "/zhouytest/test-release"
+		imageToS := "--to=" + serInfo.serviceURL + "/zhouytest/test-release"
 		imageToReleaseS := "--apply-release-image-signature"
 		imagePullSecretS := "-a " + "/etc/foo/" + ".dockerconfigjson"
 
 		pod43034 := podMirror{
 			name:            "mypod43034",
 			namespace:       oc.Namespace(),
-			cliImageId:      cliImage,
+			cliImageID:      cliImage,
 			imagePullSecret: imagePullSecretS,
 			imageSource:     imageSouceS,
 			imageTo:         imageToS,
@@ -345,7 +345,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		pod48681 := debugPodUsingDefinition{
 			name:       "pod48681",
 			namespace:  oc.Namespace(),
-			cliImageId: cliImage,
+			cliImageID: cliImage,
 			template:   debugPodUsingDefinitionT,
 		}
 
@@ -569,6 +569,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 })
 
+// ClientVersion ...
 type ClientVersion struct {
 	BuildDate    string `json:"buildDate"`
 	Compiler     string `json:"compiler"`
@@ -581,6 +582,7 @@ type ClientVersion struct {
 	Platform     string `json:"platform"`
 }
 
+// ServerVersion ...
 type ServerVersion struct {
 	BuildDate    string `json:"buildDate"`
 	Compiler     string `json:"compiler"`
@@ -593,6 +595,7 @@ type ServerVersion struct {
 	Platform     string `json:"platform"`
 }
 
+// VersionInfo ...
 type VersionInfo struct {
 	ClientInfo       ClientVersion `json:"ClientVersion"`
 	OpenshiftVersion string        `json:"openshiftVersion"`

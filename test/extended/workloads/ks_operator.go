@@ -253,4 +253,96 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		}
 
 	})
+
+	//It is destructive case, will make kube-scheduler roll out, so adding [Disruptive]. One rollout costs about 5mins, so adding [Slow]
+	g.It("Longduration-NonPreRelease-Author:knarra-High-50931-Validate HighNodeUtilization profile 4.10 and above [Disruptive][Slow]", func() {
+		patchYamlToRestore := `[{"op": "remove", "path": "/spec/profile"}]`
+
+		g.By("Set profile to HighNodeUtilization")
+		patchYamlTraceAll := `[{"op": "add", "path": "/spec/profile", "value":"HighNodeUtilization"}]`
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("Scheduler", "cluster", "--type=json", "-p", patchYamlTraceAll).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer func() {
+			e2e.Logf("Restoring the scheduler cluster's logLevel")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("Scheduler", "cluster", "--type=json", "-p", patchYamlToRestore).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Checking KSO operator should be in Progressing and Available after rollout and recovery")
+			e2e.Logf("Checking kube-scheduler operator should be in Progressing in 100 seconds")
+			expectedStatus := map[string]string{"Progressing": "True"}
+			err = waitCoBecomes(oc, "kube-scheduler", 100, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not start progressing in 100 seconds")
+			e2e.Logf("Checking kube-scheduler operator should be Available in 1500 seconds")
+			expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			err = waitCoBecomes(oc, "kube-scheduler", 1500, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not becomes available in 1500 seconds")
+
+		}()
+
+		g.By("Checking KSO operator should be in Progressing and Available after rollout and recovery")
+		e2e.Logf("Checking kube-scheduler operator should be in Progressing in 100 seconds")
+		expectedStatus := map[string]string{"Progressing": "True"}
+		err = waitCoBecomes(oc, "kube-scheduler", 100, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not start progressing in 100 seconds")
+		e2e.Logf("Checking kube-scheduler operator should be Available in 1500 seconds")
+		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err = waitCoBecomes(oc, "kube-scheduler", 1500, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not becomes available in 1500 seconds")
+
+		//Get the kube-scheduler pod name & check logs
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-kube-scheduler", "pods", "-l", "app=openshift-kube-scheduler", "-o=jsonpath={.items[0].metadata.name}").Output()
+		schedulerLogs, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args(podName, "-n", "openshift-kube-scheduler").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if match, _ := regexp.MatchString("score.*\n.*disabled.*\n.*NodeResourcesBalancedAllocation.*\n.*weight.*0.*", schedulerLogs); !match {
+			e2e.Failf("Enabling HighNodeUtilization Profile failed: %v", err)
+		}
+	})
+
+	//It is destructive case, will make kube-scheduler roll out, so adding [Disruptive]. One rollout costs about 5mins, so adding [Slow]
+	g.It("Longduration-NonPreRelease-Author:knarra-High-50932-Validate NoScoring profile 4.10 and above [Disruptive][Slow]", func() {
+		patchYamlToRestore := `[{"op": "remove", "path": "/spec/profile"}]`
+
+		g.By("Set profile to NoScoring")
+		patchYamlTraceAll := `[{"op": "add", "path": "/spec/profile", "value":"NoScoring"}]`
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("Scheduler", "cluster", "--type=json", "-p", patchYamlTraceAll).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer func() {
+			e2e.Logf("Restoring the scheduler cluster's logLevel")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("Scheduler", "cluster", "--type=json", "-p", patchYamlToRestore).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Checking KSO operator should be in Progressing and Available after rollout and recovery")
+			e2e.Logf("Checking kube-scheduler operator should be in Progressing in 100 seconds")
+			expectedStatus := map[string]string{"Progressing": "True"}
+			err = waitCoBecomes(oc, "kube-scheduler", 100, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not start progressing in 100 seconds")
+			e2e.Logf("Checking kube-scheduler operator should be Available in 1500 seconds")
+			expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			err = waitCoBecomes(oc, "kube-scheduler", 1500, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not becomes available in 1500 seconds")
+
+		}()
+
+		g.By("Checking KSO operator should be in Progressing and Available after rollout and recovery")
+		e2e.Logf("Checking kube-scheduler operator should be in Progressing in 100 seconds")
+		expectedStatus := map[string]string{"Progressing": "True"}
+		err = waitCoBecomes(oc, "kube-scheduler", 100, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not start progressing in 100 seconds")
+		e2e.Logf("Checking kube-scheduler operator should be Available in 1500 seconds")
+		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err = waitCoBecomes(oc, "kube-scheduler", 1500, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not becomes available in 1500 seconds")
+
+		//Get the kube-scheduler pod name and check logs
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-kube-scheduler", "pods", "-l", "app=openshift-kube-scheduler", "-o=jsonpath={.items[0].metadata.name}").Output()
+		schedulerLogs, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args(podName, "-n", "openshift-kube-scheduler").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if match, _ := regexp.MatchString("score.*\n.*disabled.*\n.*name:.'*'.*\n.*weight.*0.*", schedulerLogs); !match {
+			e2e.Failf("Enabling NoScoring Profile failed: %v", err)
+		}
+	})
 })

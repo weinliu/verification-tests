@@ -152,6 +152,7 @@ type podTolerate struct {
 	template       string
 }
 
+// ControlplaneInfo ...
 type ControlplaneInfo struct {
 	HolderIdentity       string `json:"holderIdentity"`
 	LeaseDurationSeconds int    `json:"leaseDurationSeconds"`
@@ -161,10 +162,10 @@ type ControlplaneInfo struct {
 }
 
 type serviceInfo struct {
-	serviceIp   string
+	serviceIP   string
 	namespace   string
 	servicePort string
-	serviceUrl  string
+	serviceURL  string
 	serviceName string
 }
 
@@ -176,7 +177,7 @@ type registry struct {
 type podMirror struct {
 	name            string
 	namespace       string
-	cliImageId      string
+	cliImageID      string
 	imagePullSecret string
 	imageSource     string
 	imageTo         string
@@ -184,11 +185,11 @@ type podMirror struct {
 	template        string
 }
 
-type debugPodUsingDefinition struct{
-        name         string
-        namespace    string
-        cliImageId   string
-        template     string
+type debugPodUsingDefinition struct {
+	name       string
+	namespace  string
+	cliImageID string
+	template   string
 }
 
 func (pod *podNodeSelector) createPodNodeSelector(oc *exutil.CLI) {
@@ -325,21 +326,21 @@ func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 	return oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
 }
 
-func applyResourceFromTemplate48681(oc *exutil.CLI, parameters ...string) (error, string) {
-        var configFile string
-        err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
-                output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + "workload-config.json")
-                if err != nil {
-                        e2e.Logf("the err:%v, and try next round", err)
-                        return false, nil
-                }
-                configFile = output
-                return true, nil
-        })
-        exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to process %v", parameters))
+func applyResourceFromTemplate48681(oc *exutil.CLI, parameters ...string) (string, error) {
+	var configFile string
+	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + "workload-config.json")
+		if err != nil {
+			e2e.Logf("the err:%v, and try next round", err)
+			return false, nil
+		}
+		configFile = output
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to process %v", parameters))
 
-        e2e.Logf("the file of resource is %s", configFile)
-        return oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Execute(), configFile
+	e2e.Logf("the file of resource is %s", configFile)
+	return configFile, oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
 }
 
 func describePod(oc *exutil.CLI, namespace string, podName string) string {
@@ -491,13 +492,13 @@ func getLeaderKCM(oc *exutil.CLI) string {
 		e2e.Failf("unable to decode with error: %v", err)
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
-	leaderIp := strings.Split(contronplanInfo.HolderIdentity, "_")[0]
+	leaderIP := strings.Split(contronplanInfo.HolderIdentity, "_")[0]
 
 	out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	masterList := strings.Fields(out)
 	for _, masterNode := range masterList {
-		if matched, _ := regexp.MatchString(leaderIp, masterNode); matched {
+		if matched, _ := regexp.MatchString(leaderIP, masterNode); matched {
 			e2e.Logf("Find the leader of KCM :%s\n", masterNode)
 			leaderKCM = masterNode
 			break
@@ -538,18 +539,18 @@ func (registry *registry) createregistry(oc *exutil.CLI) serviceInfo {
 	exutil.AssertWaitPollNoErr(err, "pod of deployment=registry is not got")
 
 	e2e.Logf("Get the service info of the registry")
-	reg_svc_ip, err := oc.AsAdmin().Run("get").Args("svc", "registry", "-n", registry.namespace, "-o=jsonpath={.spec.clusterIP}").Output()
+	regSvcIP, err := oc.AsAdmin().Run("get").Args("svc", "registry", "-n", registry.namespace, "-o=jsonpath={.spec.clusterIP}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	reg_svc_port, err := oc.AsAdmin().Run("get").Args("svc", "registry", "-n", registry.namespace, "-o=jsonpath={.spec.ports[0].port}").Output()
+	regSvcPort, err := oc.AsAdmin().Run("get").Args("svc", "registry", "-n", registry.namespace, "-o=jsonpath={.spec.ports[0].port}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	reg_svc_url := reg_svc_ip + ":" + reg_svc_port
-	reg_name := "registry"
+	regSvcURL := regSvcIP + ":" + regSvcPort
+	regName := "registry"
 	svc := serviceInfo{
-		serviceIp:   reg_svc_ip,
+		serviceIP:   regSvcIP,
 		namespace:   registry.namespace,
-		servicePort: reg_svc_port,
-		serviceUrl:  reg_svc_url,
-		serviceName: reg_name,
+		servicePort: regSvcPort,
+		serviceURL:  regSvcURL,
+		serviceName: regName,
 	}
 	return svc
 
@@ -563,14 +564,14 @@ func (registry *registry) deleteregistry(oc *exutil.CLI) {
 
 func (pod *podMirror) createPodMirror(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "CLIIMAGEID="+pod.cliImageId, "IMAGEPULLSECRET="+pod.imagePullSecret, "IMAGESOURCE="+pod.imageSource, "IMAGETO="+pod.imageTo, "IMAGETORELEASE="+pod.imageToRelease)
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "CLIIMAGEID="+pod.cliImageID, "IMAGEPULLSECRET="+pod.imagePullSecret, "IMAGESOURCE="+pod.imageSource, "IMAGETO="+pod.imageTo, "IMAGETORELEASE="+pod.imageToRelease)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
 		}
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod %s with %s is not created successfully", pod.name, pod.cliImageId))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod %s with %s is not created successfully", pod.name, pod.cliImageID))
 }
 
 func createPullSecret(oc *exutil.CLI, namespace string) {
@@ -590,7 +591,7 @@ func getCliImage(oc *exutil.CLI) string {
 func getScanNodesLabels(oc *exutil.CLI, nodeList []string, expected string) []string {
 	var machedLabelsNodeNames []string
 	for _, nodeName := range nodeList {
-		nodeLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName,  "-o=jsonpath={.metadata.labels}").Output()
+		nodeLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.metadata.labels}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if matched, _ := regexp.MatchString(expected, nodeLabels); matched {
 			machedLabelsNodeNames = append(machedLabelsNodeNames, nodeName)
@@ -617,7 +618,7 @@ func checkMustgatherPodNode(oc *exutil.CLI) {
 
 	e2e.Logf("make sure all the nodes in nodeNameList are not windows node")
 	expectedNodeLabels := getScanNodesLabels(oc, nodeNameList, "windows")
-	if  expectedNodeLabels == nil {
+	if expectedNodeLabels == nil {
 		e2e.Logf("must-gather scheduled as expected, no windows node found in the cluster")
 	} else {
 		e2e.Failf("Scheduled the must-gather pod to windows node: %v", expectedNodeLabels)
@@ -625,14 +626,14 @@ func checkMustgatherPodNode(oc *exutil.CLI) {
 }
 
 func (pod *debugPodUsingDefinition) createDebugPodUsingDefinition(oc *exutil.CLI) {
-    err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-        err1, outputFile := applyResourceFromTemplate48681(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "CLIIMAGEID="+pod.cliImageId)
-        if err1 != nil {
-            e2e.Logf("the err:%v, and try next round", err1)
-            return false, nil
-        }
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		outputFile, err1 := applyResourceFromTemplate48681(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "CLIIMAGEID="+pod.cliImageID)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
 		e2e.Logf("Waiting for pod running")
-        err := wait.PollImmediate(5*time.Second, 1*time.Minute, func() (bool, error) {
+		err := wait.PollImmediate(5*time.Second, 1*time.Minute, func() (bool, error) {
 			phase, err := oc.AsAdmin().Run("get").Args("pods", pod.name, "--template", "{{.status.phase}}", "-n", pod.namespace).Output()
 			if err != nil {
 				return false, nil
@@ -642,216 +643,247 @@ func (pod *debugPodUsingDefinition) createDebugPodUsingDefinition(oc *exutil.CLI
 			}
 			return true, nil
 		})
-        exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod has not been started successfully"))
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod has not been started successfully"))
 
-        debugPod, err := oc.Run("debug").Args("-f", outputFile).Output()
-        o.Expect(err).NotTo(o.HaveOccurred())
-        if match, _ := regexp.MatchString("Starting pod/pod48681-debug", debugPod); !match {
-            e2e.Failf("Image debug container is being started instead of debug pod using the pod definition yaml file")
-        }
-        return true, nil
-    })
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod %s with %s is not created successfully", pod.name, pod.cliImageId))
+		debugPod, err := oc.Run("debug").Args("-f", outputFile).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if match, _ := regexp.MatchString("Starting pod/pod48681-debug", debugPod); !match {
+			e2e.Failf("Image debug container is being started instead of debug pod using the pod definition yaml file")
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod %s with %s is not created successfully", pod.name, pod.cliImageID))
 }
 
-
 func createDeployment(oc *exutil.CLI, namespace string, deployname string) {
-        err := oc.Run("create").Args("-n", namespace, "deployment", deployname, "--image=quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e", "--replicas=20").Execute()
-        o.Expect(err).NotTo(o.HaveOccurred())
+	err := oc.Run("create").Args("-n", namespace, "deployment", deployname, "--image=quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e", "--replicas=20").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func triggerSucceedDeployment(oc *exutil.CLI, namespace string, deployname string, num int, expectedPods int) {
-        for i := 0; i < num; i++ {
-                err := oc.Run("set").Args("-n", namespace, "env", "deployment", deployname, "paramtest=test"+strconv.Itoa(i)).Execute()
-                o.Expect(err).NotTo(o.HaveOccurred())
-                _, currentRsName := getCurrentRs(oc, namespace, "app="+deployname)
-                err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
-                        availablePodNum, errGet := oc.Run("get").Args("-n", namespace, "rs", currentRsName, "-o=jsonpath='{.status.availableReplicas}'").Output()
-                        if errGet != nil {
-                                e2e.Logf("Err Occurred: %v", errGet)
-                                return false, errGet
-                        }
-                        availableNum, _ := strconv.Atoi(strings.ReplaceAll(availablePodNum,"'", ""))
-                        if availableNum != expectedPods {
-                                e2e.Logf("new triggered apps not deploy successfully, wait more times")
-                                return false, nil
-                        }
-                        return true, nil
-                })
-                exutil.AssertWaitPollNoErr(err, fmt.Sprintf("failed to deploy %v", deployname))
+	for i := 0; i < num; i++ {
+		err := oc.Run("set").Args("-n", namespace, "env", "deployment", deployname, "paramtest=test"+strconv.Itoa(i)).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, currentRsName := getCurrentRs(oc, namespace, "app="+deployname)
+		err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+			availablePodNum, errGet := oc.Run("get").Args("-n", namespace, "rs", currentRsName, "-o=jsonpath='{.status.availableReplicas}'").Output()
+			if errGet != nil {
+				e2e.Logf("Err Occurred: %v", errGet)
+				return false, errGet
+			}
+			availableNum, _ := strconv.Atoi(strings.ReplaceAll(availablePodNum, "'", ""))
+			if availableNum != expectedPods {
+				e2e.Logf("new triggered apps not deploy successfully, wait more times")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("failed to deploy %v", deployname))
 
-        }
+	}
 }
 func triggerFailedDeployment(oc *exutil.CLI, namespace string, deployname string) {
-        patchYaml := `[{"op": "replace", "path": "/spec/template/spec/containers/0/image", "value": "quay.io/openshifttest/hello-openshift:nonexist"}]`
-        err := oc.Run("patch").Args("-n", namespace, "deployment", deployname, "--type=json", "-p", patchYaml).Execute()
-        o.Expect(err).NotTo(o.HaveOccurred())
+	patchYaml := `[{"op": "replace", "path": "/spec/template/spec/containers/0/image", "value": "quay.io/openshifttest/hello-openshift:nonexist"}]`
+	err := oc.Run("patch").Args("-n", namespace, "deployment", deployname, "--type=json", "-p", patchYaml).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func getShouldPruneRSFromPrune(oc *exutil.CLI, pruneRsNumCMD string, pruneRsCMD string, prunedNum int) []string {
-        e2e.Logf("Get pruned rs name by dry-run")
-        e2e.Logf("pruneRsNumCMD %v:", pruneRsNumCMD)
-        err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
-                pruneRsNum, err := exec.Command("bash", "-c", pruneRsNumCMD).Output()
-                o.Expect(err).NotTo(o.HaveOccurred())
-                pruneNum, err := strconv.Atoi(strings.ReplaceAll(string(pruneRsNum),"\n", ""))
-                o.Expect(err).NotTo(o.HaveOccurred())
-                if pruneNum != prunedNum {
-                        e2e.Logf("pruneNum is not equal %v: ", prunedNum)
-                        return false, nil
-                }
-                return true, nil
-        })
-        exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Check pruned RS failed"))
+	e2e.Logf("Get pruned rs name by dry-run")
+	e2e.Logf("pruneRsNumCMD %v:", pruneRsNumCMD)
+	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+		pruneRsNum, err := exec.Command("bash", "-c", pruneRsNumCMD).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		pruneNum, err := strconv.Atoi(strings.ReplaceAll(string(pruneRsNum), "\n", ""))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if pruneNum != prunedNum {
+			e2e.Logf("pruneNum is not equal %v: ", prunedNum)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Check pruned RS failed"))
 
-        e2e.Logf("pruneRsCMD %v:", pruneRsCMD)
-        pruneRsName, err := exec.Command("bash", "-c", pruneRsCMD).Output()
-        o.Expect(err).NotTo(o.HaveOccurred())
-        pruneRsList := strings.Fields(strings.ReplaceAll(string(pruneRsName),"\n", " "))
-        sort.Strings(pruneRsList)
-        e2e.Logf("pruneRsList %v:", pruneRsList)
-        return pruneRsList
+	e2e.Logf("pruneRsCMD %v:", pruneRsCMD)
+	pruneRsName, err := exec.Command("bash", "-c", pruneRsCMD).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	pruneRsList := strings.Fields(strings.ReplaceAll(string(pruneRsName), "\n", " "))
+	sort.Strings(pruneRsList)
+	e2e.Logf("pruneRsList %v:", pruneRsList)
+	return pruneRsList
 }
 
-func getCompeletedRsInfo(oc *exutil.CLI, namespace string, deployname string) (completedRsList []string, completedRsNum int){
-        out, err := oc.Run("get").Args("-n", namespace, "rs", "--sort-by={.metadata.creationTimestamp}", "-o=jsonpath='{.items[?(@.spec.replicas == 0)].metadata.name}'").Output()
-        o.Expect(err).NotTo(o.HaveOccurred())
-        e2e.Logf("string out %v:", out)
-        totalCompletedRsList := strings.Fields(strings.ReplaceAll(out, "'", ""))
-        totalCompletedRsListNum := len(totalCompletedRsList)
-        return totalCompletedRsList, totalCompletedRsListNum
+func getCompeletedRsInfo(oc *exutil.CLI, namespace string, deployname string) (completedRsList []string, completedRsNum int) {
+	out, err := oc.Run("get").Args("-n", namespace, "rs", "--sort-by={.metadata.creationTimestamp}", "-o=jsonpath='{.items[?(@.spec.replicas == 0)].metadata.name}'").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("string out %v:", out)
+	totalCompletedRsList := strings.Fields(strings.ReplaceAll(out, "'", ""))
+	totalCompletedRsListNum := len(totalCompletedRsList)
+	return totalCompletedRsList, totalCompletedRsListNum
 }
 
-func getShouldPruneRSFromCreateTime(totalCompletedRsList []string, totalCompletedRsListNum int,  keepNum int) []string {
-        rsList := totalCompletedRsList[0:(totalCompletedRsListNum - keepNum)]
-        sort.Strings(rsList)
-        e2e.Logf("rsList %v:", rsList)
-        return rsList
+func getShouldPruneRSFromCreateTime(totalCompletedRsList []string, totalCompletedRsListNum int, keepNum int) []string {
+	rsList := totalCompletedRsList[0:(totalCompletedRsListNum - keepNum)]
+	sort.Strings(rsList)
+	e2e.Logf("rsList %v:", rsList)
+	return rsList
 
 }
 
-func comparePrunedRS(rsList []string, pruneRsList []string) bool{
-        e2e.Logf("Check pruned rs whether right")
-        if !reflect.DeepEqual(rsList, pruneRsList) {
-                return false
-        }
-        return true
+func comparePrunedRS(rsList []string, pruneRsList []string) bool {
+	e2e.Logf("Check pruned rs whether right")
+	if !reflect.DeepEqual(rsList, pruneRsList) {
+		return false
+	}
+	return true
 }
 
-
-func checkRunningRsList(oc *exutil.CLI, namespace string, deployname string) []string{
-        e2e.Logf("Get all the running RSs")
-        out, err := oc.Run("get").Args("-n", namespace, "rs", "-o=jsonpath='{.items[?(@.spec.replicas > 0)].metadata.name}'").Output()
-        o.Expect(err).NotTo(o.HaveOccurred())
-        runningRsList := strings.Fields(strings.ReplaceAll(out, "'", ""))
-        sort.Strings(runningRsList)
-        e2e.Logf("runningRsList %v:", runningRsList)
-        return runningRsList
+func checkRunningRsList(oc *exutil.CLI, namespace string, deployname string) []string {
+	e2e.Logf("Get all the running RSs")
+	out, err := oc.Run("get").Args("-n", namespace, "rs", "-o=jsonpath='{.items[?(@.spec.replicas > 0)].metadata.name}'").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	runningRsList := strings.Fields(strings.ReplaceAll(out, "'", ""))
+	sort.Strings(runningRsList)
+	e2e.Logf("runningRsList %v:", runningRsList)
+	return runningRsList
 }
 
 func pruneCompletedRs(oc *exutil.CLI, parameters ...string) {
-        e2e.Logf("Delete all the completed RSs")
-        err := oc.AsAdmin().WithoutNamespace().Run("adm").Args(parameters...).Execute()
-        o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Delete all the completed RSs")
+	err := oc.AsAdmin().WithoutNamespace().Run("adm").Args(parameters...).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func getRemainingRs(oc *exutil.CLI, namespace string, deployname string) []string {
-        e2e.Logf("Get all the remaining RSs")
-        remainRs, err := oc.WithoutNamespace().Run("get").Args("rs", "-l", "app="+deployname, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
-        o.Expect(err).NotTo(o.HaveOccurred())
-        remainRsList := strings.Fields(string(remainRs))
-        sort.Strings(remainRsList)
-        e2e.Logf("remainRsList %v:", remainRsList)
-        return remainRsList
+	e2e.Logf("Get all the remaining RSs")
+	remainRs, err := oc.WithoutNamespace().Run("get").Args("rs", "-l", "app="+deployname, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	remainRsList := strings.Fields(string(remainRs))
+	sort.Strings(remainRsList)
+	e2e.Logf("remainRsList %v:", remainRsList)
+	return remainRsList
 }
 
-
 func getCurrentRs(oc *exutil.CLI, projectName string, labels string) (string, string) {
-        var podTHash, rsName string
-        currentGeneration, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", projectName, "-l", labels, "-o=jsonpath={.items[*].status.observedGeneration}").Output()
-        o.Expect(err).NotTo(o.HaveOccurred())
-        output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("rs", "-n", projectName, "-l", labels, "-o=jsonpath={.items[*].metadata.name}").Output()
-        o.Expect(err).NotTo(o.HaveOccurred())
-        rsNameList := strings.Fields(output)
-        for _, rsname := range rsNameList {
-                version, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("rs", rsname, "-n", projectName, "-o=jsonpath={.metadata.annotations.deployment\\.kubernetes\\.io/revision}").Output()
-                o.Expect(err).NotTo(o.HaveOccurred())
-                if matched, _ := regexp.MatchString(currentGeneration, version); matched {
-                        podTHash, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("rs", rsname, "-n", projectName, "-o=jsonpath={.spec.selector.matchLabels.pod-template-hash}").Output()
+	var podTHash, rsName string
+	currentGeneration, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", projectName, "-l", labels, "-o=jsonpath={.items[*].status.observedGeneration}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("rs", "-n", projectName, "-l", labels, "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	rsNameList := strings.Fields(output)
+	for _, rsname := range rsNameList {
+		version, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("rs", rsname, "-n", projectName, "-o=jsonpath={.metadata.annotations.deployment\\.kubernetes\\.io/revision}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString(currentGeneration, version); matched {
+			podTHash, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("rs", rsname, "-n", projectName, "-o=jsonpath={.spec.selector.matchLabels.pod-template-hash}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-                        e2e.Logf("%s is the current rs", rsname)
-                        rsName = rsname
+			e2e.Logf("%s is the current rs", rsname)
+			rsName = rsname
 			break
-                }
-        }
-        return podTHash, rsName
+		}
+	}
+	return podTHash, rsName
 }
 
 func copyFile(source string, dest string) {
-        bytesRead, err := ioutil.ReadFile(source)
-        o.Expect(err).NotTo(o.HaveOccurred())
-        err = ioutil.WriteFile(dest, bytesRead, 0644)
-        o.Expect(err).NotTo(o.HaveOccurred())
+	bytesRead, err := ioutil.ReadFile(source)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = ioutil.WriteFile(dest, bytesRead, 0644)
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func locatePodmanCred(oc *exutil.CLI, dst string) error {
-        err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dst, "--confirm").Execute()
-        o.Expect(err).NotTo(o.HaveOccurred())
+	err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dst, "--confirm").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 
-        key := "XDG_RUNTIME_DIR"
-        currentRuntime, ex := os.LookupEnv(key)
-        if !ex {
-                err = os.MkdirAll("/tmp/configocmirror/containers", 0700)
-                o.Expect(err).NotTo(o.HaveOccurred())
-                os.Setenv(key, "/tmp/configocmirror")
-                copyFile(dst+"/"+".dockerconfigjson", "/tmp/configocmirror/containers/auth.json")
-                return nil
-        }
-        _, err = os.Stat(currentRuntime + "containers/auth.json")
-        if os.IsNotExist(err) {
-                err1 := os.MkdirAll(currentRuntime+"containers", 0700)
-                o.Expect(err1).NotTo(o.HaveOccurred())
-                copyFile(dst+"/"+".dockerconfigjson", "/tmp/configocmirror/containers/auth.json")
-                return nil
-        }
-        if err != nil {
-                return err
-        }
-        return nil
+	key := "XDG_RUNTIME_DIR"
+	currentRuntime, ex := os.LookupEnv(key)
+	if !ex {
+		err = os.MkdirAll("/tmp/configocmirror/containers", 0700)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		os.Setenv(key, "/tmp/configocmirror")
+		copyFile(dst+"/"+".dockerconfigjson", "/tmp/configocmirror/containers/auth.json")
+		return nil
+	}
+	_, err = os.Stat(currentRuntime + "containers/auth.json")
+	if os.IsNotExist(err) {
+		err1 := os.MkdirAll(currentRuntime+"containers", 0700)
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		copyFile(dst+"/"+".dockerconfigjson", "/tmp/configocmirror/containers/auth.json")
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func checkPodStatus(oc *exutil.CLI, podLabel string, namespace string, expected string) {
-        err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
-                output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", podLabel, "-o=jsonpath={.items[*].status.phase}").Output()
-                o.Expect(err).NotTo(o.HaveOccurred())
-                e2e.Logf("the result of pod:%v", output)
-                if strings.Contains(output, expected) && (!(strings.Contains(strings.ToLower(output), "error"))) && (!(strings.Contains(strings.ToLower(output), "crashLoopbackOff"))) {
-                        return true, nil
-                }
-                return false, nil
-        })
-        exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the state of pod with %s is not expected %s", podLabel, expected))
+	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "-l", podLabel, "-o=jsonpath={.items[*].status.phase}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("the result of pod:%v", output)
+		if strings.Contains(output, expected) && (!(strings.Contains(strings.ToLower(output), "error"))) && (!(strings.Contains(strings.ToLower(output), "crashLoopbackOff"))) {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the state of pod with %s is not expected %s", podLabel, expected))
 }
 
-func locateDockerCred(oc *exutil.CLI, dst string)(string, string, error) {
-        err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dst, "--confirm").Execute()
-        o.Expect(err).NotTo(o.HaveOccurred())
+func locateDockerCred(oc *exutil.CLI, dst string) (string, string, error) {
+	err := oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dst, "--confirm").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 
 	homePath := os.Getenv("HOME")
-	dockerCreFile := homePath+"/.docker/config.json"
+	dockerCreFile := homePath + "/.docker/config.json"
 	_, err = os.Stat(homePath + "/.docker/config.json")
 	if os.IsNotExist(err) {
 		err1 := os.MkdirAll(homePath+"/.docker", 0700)
 		o.Expect(err1).NotTo(o.HaveOccurred())
 		copyFile(dst+"/"+".dockerconfigjson", homePath+"/.docker/config.json")
-                return dockerCreFile, homePath, nil
-        }
-        if err != nil {
-                return "", "", err
-        }
+		return dockerCreFile, homePath, nil
+	}
+	if err != nil {
+		return "", "", err
+	}
 	copyFile(homePath+"/.docker/config.json", homePath+"/.docker/config.json.back")
 	copyFile(dst+"/"+".dockerconfigjson", homePath+"/.docker/config.json")
 	return dockerCreFile, homePath, nil
 
 }
 
+func waitCoBecomes(oc *exutil.CLI, coName string, waitTime int, expectedStatus map[string]string) error {
+	return wait.Poll(5*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+		gottenStatus := getCoStatus(oc, coName, expectedStatus)
+		eq := reflect.DeepEqual(expectedStatus, gottenStatus)
+		if eq {
+			eq := reflect.DeepEqual(expectedStatus, map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"})
+			if eq {
+				// For True False False, we want to wait some bit more time and double check, to ensure it is stably healthy
+				time.Sleep(100 * time.Second)
+				gottenStatus := getCoStatus(oc, coName, expectedStatus)
+				eq := reflect.DeepEqual(expectedStatus, gottenStatus)
+				if eq {
+					e2e.Logf("Given operator %s becomes available/non-progressing/non-degraded", coName)
+					return true, nil
+				}
+			} else {
+				e2e.Logf("Given operator %s becomes %s", coName, gottenStatus)
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+}
+
+func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]string) map[string]string {
+	newStatusToCompare := make(map[string]string)
+	for key := range statusToCompare {
+		args := fmt.Sprintf(`-o=jsonpath={.status.conditions[?(.type == '%s')].status}`, key)
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", args, coName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newStatusToCompare[key] = status
+	}
+	return newStatusToCompare
+}
