@@ -1,51 +1,63 @@
 # encoding: utf-8
 #!/usr/bin/env python3
-import re, os, time, subprocess
+import re, os, sys, time, subprocess
 
 # get the updated content
 # ToDo: to infer the test case ID when the test case content updates, not the title update
 # `git show master..` can get all the updated commits content
 commitAuthor = os.popen('git log -n 1 --pretty=format:"%an"', 'r').read()
 print("author is ", commitAuthor)
+print("get updated files under test/extended")
 if commitAuthor == "ci-robot":
     commitStr=os.popen('git log -n 1 --pretty=format:"%p"', 'r').read()
     commit1 = commitStr.split()[0]
     commit2 = os.popen('git log -n 1 --pretty=format:"%h"', 'r').read()
-    commands = 'git diff '+commit1+' '+commit2
 else:
-    commands = 'git diff master..'
+    commit1="master"
+    commit2= os.popen('git rev-parse --short HEAD | xargs echo -n', 'r').read()
+commands = 'git diff-tree --no-commit-id --name-only -r '+commit1+' '+commit2 +' |grep "^test" | grep ".go$" | grep -v "bindata.go$" | grep -v "third_party" | grep -v "test/extended/testdata"'
 print (commands)
 process = subprocess.Popen(commands, shell=True, stdout=subprocess.PIPE)
 process.wait()
-content, _ = process.communicate()
-# content = '''
-# +    g.It("Medium-34883-SDK stamp on Operator bundle image", func() {
-# +   g.It("ConnectedOnly-High-37826-Low-23170-Medium-20979-High-37442-use an PullSecret for the private Catalog Source image [Serial]", func() {
+modifedFiles, _ = process.communicate()
+print(modifedFiles.decode("utf-8").strip(os.linesep))
+if not modifedFiles:
+    print("no go file is modified")
+    sys.exit(0)
 
-print ("=======updated content========")
-for line in str(content).split("\\n"):
-    print(line)
-print ("=======updated content========")
-
-#time.sleep(10800)
-# get the test case IDs
-print("Search the updated cases")
 caseList=[]
 patternIt = re.compile('.*\-(\d{5,})\-')
-for lineIndex in str(content).split("\\n"):
-    if "g.It" not in lineIndex:
-        continue
-    if "#" in lineIndex:
-        continue
-    if not lineIndex.startswith("+"):
-        continue
-    if re.search("VMonly|NonUnifyCI｜CPaasrunOnly｜ProdrunOnly｜StagerunOnly", lineIndex):
-        continue
-    caseString = lineIndex.split("\"")[1]
-    caseIDs = patternIt.findall(caseString)
-    for caseID in caseIDs:
-        if caseID not in caseList:
-            caseList.append(caseID)
+for filename in modifedFiles.decode("utf-8").strip(os.linesep).split():
+    print("Search the updated cases for "+filename)
+    diffcommands = 'git diff '+commit1 +' ' +commit2 + ' -- ' + filename.strip(os.linesep) +'|grep g.It > /tmp/git_diff.log'
+    print(diffcommands)
+    process = subprocess.Popen(diffcommands, shell=True, stdout=subprocess.PIPE)
+    try:
+        outs, errs = process.communicate(timeout=300)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        raise Exception(diffcommands +" timeout")
+
+    print ("=======updated content========")
+    with open("/tmp/git_diff.log", 'r', encoding='utf-8') as content:
+        for line in content:
+            lineIndex = str(line)
+            print(lineIndex)
+            if "g.It" not in lineIndex:
+                continue
+            if "#" in lineIndex:
+                continue
+            if not lineIndex.startswith("+"):
+                continue
+            if re.search("VMonly|NonUnifyCI｜CPaasrunOnly｜ProdrunOnly｜StagerunOnly", lineIndex):
+                continue
+            caseString = lineIndex.split("\"")[1]
+            caseIDs = patternIt.findall(caseString)
+            for caseID in caseIDs:
+                if caseID not in caseList:
+                    caseList.append(caseID)
+    print ("=======updated content========")
+    
 print(caseList)
 if caseList:
     testcaseIDs = "|".join(caseList)
@@ -55,7 +67,7 @@ if caseList:
     cases, err = process.communicate()
     if patternIt.findall(str(cases)):
         # run test case
-        commands = './bin/extended-platform-tests run all --dry-run |grep -E "'+ testcaseIDs + '" |grep -v Security_and_Compliance |./bin/extended-platform-tests run -f -'
+        commands = './bin/extended-platform-tests run all --dry-run |grep -E "'+ testcaseIDs + '" |grep -v Security_and_Compliance |./bin/extended-platform-tests run --timeout 45m -f -'
         print (commands)
         process = subprocess.Popen(commands, shell=True, stdout=subprocess.PIPE)
         out, err = process.communicate()
