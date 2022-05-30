@@ -9116,11 +9116,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 				template:    catsrcCmTemplate,
 			}
 			sub = subscriptionDescription{
-				subName:                "ditto-operator-21824",
+				subName:                "kubeturbo21824-operator-21824",
 				namespace:              "", //must be set in iT
-				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "ditto-operator",
+				operatorPackage:        "kubeturbo21824",
 				catalogSourceName:      "catsrc-21824",
 				catalogSourceNamespace: "", //must be set in iT
 				startingCSV:            "",
@@ -9147,18 +9146,40 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 
 		g.By("Create sub and cannot succeed")
 		sub.createWithoutCheck(oc, itName, dr)
-		err := newCheck("expect", asAdmin, withoutNamespace, compare, "", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}"}).checkWithoutAssert(oc)
-		if err != nil {
-			output := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status}")
-			e2e.Logf(output)
-		}
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("status.state of sub %s is not empty", sub.subName))
+		err := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+			subStatus := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].message}")
+			e2e.Logf(subStatus)
+			if strings.Contains(subStatus, "invalid") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("status.conditions of sub %s doesn't have expect meesage", sub.subName))
+
+		sub.findInstalledCSV(oc, itName, dr)
+		err = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+			csvPhase := getResource(oc, asAdmin, withoutNamespace, "csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.requirementStatus}")
+			e2e.Logf(csvPhase)
+			if strings.Contains(csvPhase, "NotPresent") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("status.requirementStatus of csv %s is not correct", sub.installedCSV))
 		sub.delete(itName, dr)
+		sub.deleteCSV(itName, dr)
+		cm.delete(itName, dr)
+		catsrc.delete(itName, dr)
 
 		g.By("update cm to correct crd")
+		cm.name = "cm-21824-correct"
 		cm.template = cmCorrect
 		cm.create(oc, itName, dr)
-		sub.createWithoutCheck(oc, itName, dr)
+		catsrc.name = "catsrc-21824-correct"
+		catsrc.address = cm.name
+		catsrc.create(oc, itName, dr)
+		sub.catalogSourceName = catsrc.name
+		sub.create(oc, itName, dr)
 
 		g.By("sub succeed and csv succeed")
 		sub.findInstalledCSV(oc, itName, dr)
