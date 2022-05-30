@@ -9,6 +9,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -45,12 +46,20 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Critical-49168-Deploy lokistack on s3[Serial]", func() {
 			platform := clusterinfra.CheckPlatform(oc)
 			if platform != "aws" {
-				g.Skip("Skip for non-supported platform, the support platform is AWS!!!")
+				g.Skip("Skip for non-supported platform, the supported platform is AWS!!!")
 			}
 			// skip the case on aws sts clusters
 			_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get("aws-creds", metav1.GetOptions{})
 			if apierrors.IsNotFound(err) {
 				g.Skip("Skip for non-supported matrix")
+			}
+			// check the remaning resources in the cluster
+			requestedMemory, err := k8sresource.ParseQuantity("10Gi")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			requestedCPU, err := k8sresource.ParseQuantity("6")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !compareClusterResources(oc, requestedCPU.MilliValue(), requestedMemory.MilliValue()) {
+				g.Skip("Skip for the cluster doesn't have enough resources for loki stack to deploy")
 			}
 
 			sc, err := getStorageClassName(oc)
@@ -71,8 +80,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Critical-49169-Deploy lokistack on GCS[Serial]", func() {
 			platform := clusterinfra.CheckPlatform(oc)
 			if platform != "gcp" {
-				g.Skip("Skip for non-supported platform, the support platform is GCP!!!")
+				g.Skip("Skip for non-supported platform, the supported platform is GCP!!!")
 			}
+			// check the remaning resources in the cluster
+			requestedMemory, err := k8sresource.ParseQuantity("10Gi")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			requestedCPU, err := k8sresource.ParseQuantity("6")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !compareClusterResources(oc, requestedCPU.MilliValue(), requestedMemory.MilliValue()) {
+				g.Skip("Skip for the cluster doesn't have enough resources for loki stack to deploy")
+			}
+
 			sc, err := getStorageClassName(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			// deploy loki
@@ -91,8 +109,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Critical-49171-Deploy lokistack on azure[Serial]", func() {
 			platform := clusterinfra.CheckPlatform(oc)
 			if platform != "azure" {
-				g.Skip("Skip for non-supported platform, the support platform is AZURE!!!")
+				g.Skip("Skip for non-supported platform, the supported platform is AZURE!!!")
 			}
+			// check the remaning resources in the cluster
+			requestedMemory, err := k8sresource.ParseQuantity("10Gi")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			requestedCPU, err := k8sresource.ParseQuantity("6")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !compareClusterResources(oc, requestedCPU.MilliValue(), requestedMemory.MilliValue()) {
+				g.Skip("Skip for the cluster doesn't have enough resources for loki stack to deploy")
+			}
+
 			sc, err := getStorageClassName(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			// deploy loki
@@ -111,7 +138,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Critical-49364-Forward logs to LokiStack with gateway using fluentd as the collector[Serial]", func() {
 			platform := clusterinfra.CheckPlatform(oc)
 			if platform != "aws" && platform != "gcp" && platform != "azure" {
-				g.Skip("Skip for non-supported platform, the support platform are AWS, GCP and Azure!!!")
+				g.Skip("Skip for non-supported platform, the supported platforms are AWS, GCP and Azure!!!")
 			}
 			if platform == "aws" {
 				// skip the case on aws sts clusters
@@ -120,8 +147,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 					g.Skip("Skip for non-supported matrix")
 				}
 			}
+			// check the remaning resources in the cluster
+			requestedMemory, err := k8sresource.ParseQuantity("10Gi")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			requestedCPU, err := k8sresource.ParseQuantity("6")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !compareClusterResources(oc, requestedCPU.MilliValue(), requestedMemory.MilliValue()) {
+				g.Skip("Skip for the cluster doesn't have enough resources for loki stack to deploy")
+			}
+
 			appProj := oc.Namespace()
-			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			sc, err := getStorageClassName(oc)
@@ -161,7 +197,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			//check logs in loki stack
 			g.By("check logs in loki")
-			bearerToken, _ := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", "logcollector", "-n", cloNS).Output()
+			bearerToken := getSAToken(oc, "logcollector", cloNS)
 			lc := lokiClient{"", "", "http://" + getRouteAddress(oc, ls.namespace, ls.name), "", bearerToken, "", 5, "", true}
 			for _, logType := range []string{"application", "infrastructure"} {
 				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
@@ -185,13 +221,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			_ = oc.AsAdmin().WithoutNamespace().Run("create").Args("sa", sa.name, "-n", sa.namespace).Execute()
 			defer removeLokiStackPermissionFromSA(oc, sa.name)
 			grantLokiPermissionsToSA(oc, sa.name, sa.name, sa.namespace)
-			token, _ := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", sa.name, "-n", sa.namespace).Output()
+			token := getSAToken(oc, sa.name, sa.namespace)
 
 			lcAudit := lokiClient{"", "", "http://" + getRouteAddress(oc, ls.namespace, ls.name), "", token, "", 5, "", true}
 			err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
 				res, err := lcAudit.queryRange("audit", "{log_type=\"audit\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
 				if err != nil {
-					fmt.Printf("\n\n\ngot err when getting %s logs: %v\n\n\n", "audit", err)
+					fmt.Printf("\n\n\ngot err when getting audit logs: %v\n\n\n", err)
 					return false, err
 				}
 				if len(res.Data.Result) > 0 {

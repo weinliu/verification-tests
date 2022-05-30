@@ -25,6 +25,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	"google.golang.org/api/iterator"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -439,13 +440,13 @@ func getStorageType(oc *exutil.CLI) string {
 
 // lokiStack contains the configurations of loki stack
 type lokiStack struct {
-	name              string
-	namespace         string
-	tSize             string
-	storageType       string
-	storageSecret     string
-	replicationFactor string
-	storageClass      string
+	name              string // lokiStack name
+	namespace         string // lokiStack namespace
+	tSize             string // size
+	storageType       string // the backend storage type, currently support s3, gcs and azure
+	storageSecret     string // the secret name for loki to use to connect to backend storage
+	replicationFactor string // replicationFactor
+	storageClass      string // storage class name
 	bucketName        string // the butcket or the container name where loki stores it's data in
 	template          string // the file used to create the loki stack
 }
@@ -790,4 +791,125 @@ func (b *queryStringBuilder) setFloat(name string, value float64) {
 // parameters added to the builder calling Set functions.
 func (b *queryStringBuilder) encode() string {
 	return b.values.Encode()
+}
+
+// getSchedulableLinuxWorkerNodes returns a group of nodes that match the requirements:
+// os: linux, role: worker, status: ready, schedulable
+func getSchedulableLinuxWorkerNodes(oc *exutil.CLI) ([]v1.Node, error) {
+	var nodes, workers []v1.Node
+	linuxNodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
+	// get schedulable linux worker nodes
+	for _, node := range linuxNodes.Items {
+		if _, ok := node.Labels["node-role.kubernetes.io/worker"]; ok && !node.Spec.Unschedulable {
+			workers = append(workers, node)
+		}
+	}
+	// get ready nodes
+	for _, worker := range workers {
+		for _, con := range worker.Status.Conditions {
+			if con.Type == "Ready" && con.Status == "True" {
+				nodes = append(nodes, worker)
+				break
+			}
+		}
+	}
+	return nodes, err
+}
+
+// getPodsNodesMap returns all the running pods in each node
+func getPodsNodesMap(oc *exutil.CLI, nodes []v1.Node) map[string][]v1.Pod {
+	podsMap := make(map[string][]v1.Pod)
+	projects, err := oc.AdminKubeClient().CoreV1().Namespaces().List(metav1.ListOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// get pod list in each node
+	for _, project := range projects.Items {
+		pods, err := oc.AdminKubeClient().CoreV1().Pods(project.Name).List(metav1.ListOptions{})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, pod := range pods.Items {
+			if pod.Status.Phase != "Failed" && pod.Status.Phase != "Succeeded" {
+				podsMap[pod.Spec.NodeName] = append(podsMap[pod.Spec.NodeName], pod)
+			}
+		}
+	}
+
+	exist := func(a string, b []string) bool {
+		for _, c := range b {
+			if c == a {
+				return true
+			}
+		}
+		return false
+	}
+	var nodeNames []string
+	for _, node := range nodes {
+		nodeNames = append(nodeNames, node.Name)
+	}
+	// if the key is not in nodes list, remove the element from the map
+	for podmap := range podsMap {
+		if !exist(podmap, nodeNames) {
+			delete(podsMap, podmap)
+		}
+	}
+	return podsMap
+}
+
+type resList struct {
+	cpu    int64
+	memory int64
+}
+
+// getRequestedResourcesNodesMap returns the requested CPU and Memory in each node
+func getRequestedResourcesNodesMap(oc *exutil.CLI, nodes []v1.Node) map[string]resList {
+	rmap := make(map[string]resList)
+	podsMap := getPodsNodesMap(oc, nodes)
+	for nodeName := range podsMap {
+		var totalRequestedCPU, totalRequestedMemory int64
+		for _, pod := range podsMap[nodeName] {
+			for _, container := range pod.Spec.Containers {
+				totalRequestedCPU += container.Resources.Requests.Cpu().MilliValue()
+				totalRequestedMemory += container.Resources.Requests.Memory().MilliValue()
+			}
+		}
+		rmap[nodeName] = resList{totalRequestedCPU, totalRequestedMemory}
+	}
+	return rmap
+}
+
+// getAllocatableResourcesNodesMap returns the allocatable CPU and Memory in each node
+func getAllocatableResourcesNodesMap(nodes []v1.Node) map[string]resList {
+	rmap := make(map[string]resList)
+	for _, node := range nodes {
+		rmap[node.Name] = resList{node.Status.Allocatable.Cpu().MilliValue(), node.Status.Allocatable.Memory().MilliValue()}
+	}
+	return rmap
+}
+
+// getRemainingResourcesNodesMap returns the remaning CPU and Memory in each node
+func getRemainingResourcesNodesMap(oc *exutil.CLI, nodes []v1.Node) map[string]resList {
+	rmap := make(map[string]resList)
+	requested := getRequestedResourcesNodesMap(oc, nodes)
+	allocatable := getAllocatableResourcesNodesMap(nodes)
+
+	for _, node := range nodes {
+		rmap[node.Name] = resList{allocatable[node.Name].cpu - requested[node.Name].cpu, allocatable[node.Name].memory - requested[node.Name].memory}
+	}
+	return rmap
+}
+
+// compareClusterResources compares the remaning resource with the requested resource provide by user
+func compareClusterResources(oc *exutil.CLI, cpu, memory int64) bool {
+	nodes, err := getSchedulableLinuxWorkerNodes(oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	var remainingCPU, remainingMemory int64
+	re := getRemainingResourcesNodesMap(oc, nodes)
+	for _, node := range nodes {
+		remainingCPU += re[node.Name].cpu
+		remainingMemory += re[node.Name].memory
+	}
+
+	if remainingCPU > cpu && remainingMemory > memory {
+		return true
+	}
+	return false
 }

@@ -560,6 +560,28 @@ func getRouteAddress(oc *exutil.CLI, ns, routeName string) string {
 	return route.Spec.Host
 }
 
+func getSAToken(oc *exutil.CLI, name, ns string) string {
+	sa, err := oc.AdminKubeClient().CoreV1().ServiceAccounts(ns).Get(name, metav1.GetOptions{})
+	if err != nil {
+		return ""
+	}
+	var secret string
+	for _, t := range sa.Secrets {
+		if strings.Contains(t.Name, name+"-token") {
+			secret = t.Name
+		}
+	}
+	dirname := "/tmp/" + oc.Namespace() + "-sa"
+	defer os.RemoveAll(dirname)
+	err = os.MkdirAll(dirname, 0777)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/"+secret, "-n", ns, "--confirm", "--to="+dirname).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	bearerToken, err := os.ReadFile(dirname + "/token")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return string(bearerToken)
+}
+
 type prometheusQueryResult struct {
 	Data struct {
 		Result []struct {
@@ -595,7 +617,7 @@ func queryPrometheus(oc *exutil.CLI, token string, path string, query string, ac
 	var bearerToken string
 	var err error
 	if token == "" {
-		bearerToken, _ = oc.AsAdmin().WithoutNamespace().Run("create").Args("token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
+		bearerToken = getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 	} else {
 		bearerToken = token
 	}

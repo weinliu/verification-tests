@@ -73,6 +73,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Check for Vector logs in Elasticsearch")
 			podList, err = oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
 			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.container_name\": \"collector\"}}}"
 			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "*", checkLog)
 			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Vector logs should not be collected")
