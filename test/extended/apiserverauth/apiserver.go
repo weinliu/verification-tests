@@ -760,7 +760,7 @@ spec:
 
 		g.By("Check the abnormal pods")
 		var podLogs []byte
-		errPod := wait.Poll(15*time.Second, 600*time.Second, func() (bool, error) {
+		errPod := wait.Poll(15*time.Second, 900*time.Second, func() (bool, error) {
 			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile("OCP-40667/pod.log")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			cmd = fmt.Sprintf(`cat %v | grep -i 'clusterbuster' | grep -ivE 'Running|Completed|namespace' || true`, dirname+"pod.log")
