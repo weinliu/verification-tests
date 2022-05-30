@@ -24,14 +24,14 @@ const (
 
 // RemoteFile handles files located remotely in a node
 type RemoteFile struct {
-	node     node
+	node     Node
 	fullPath string
 	statData map[string]string
 	content  string
 }
 
 // NewRemoteFile creates a new instance of RemoteFile
-func NewRemoteFile(node node, fullPath string) *RemoteFile {
+func NewRemoteFile(node Node, fullPath string) *RemoteFile {
 	return &RemoteFile{node: node, fullPath: fullPath}
 }
 
@@ -64,7 +64,7 @@ func (rf *RemoteFile) fetchTextContent() error {
 	return nil
 }
 
-// Modify the remote file's permissions, setting the provided new permissions using `chmod newperm`
+// PushNewPermissions modifies the remote file's permissions, setting the provided new permissions using `chmod newperm`
 func (rf *RemoteFile) PushNewPermissions(newperm string) error {
 	_, err := rf.node.DebugNodeWithChroot("sh", "-c", fmt.Sprintf("chmod %s %s", newperm, rf.fullPath))
 	if err != nil {
@@ -73,7 +73,7 @@ func (rf *RemoteFile) PushNewPermissions(newperm string) error {
 	return nil
 }
 
-// Modify the remote file's content
+// PushNewTextContent modifies the remote file's content
 func (rf *RemoteFile) PushNewTextContent(newTextContent string) error {
 	_, err := rf.node.DebugNodeWithChroot("sh", "-c", fmt.Sprintf("echo -n '%s' > '%s'", newTextContent, rf.fullPath))
 	if err != nil {

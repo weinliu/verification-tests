@@ -25,6 +25,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+// MachineConfig struct is used to handle MachineConfig resources in OCP
 type MachineConfig struct {
 	name           string
 	template       string
@@ -33,32 +34,38 @@ type MachineConfig struct {
 	skipWaitForMcp bool
 }
 
+// MachineConfigPool struct is used to handle MachineConfigPool resources in OCP
 type MachineConfigPool struct {
 	template string
 	*Resource
 }
 
+// PodDisruptionBudget struct is used to handle PodDisruptionBudget resources in OCP
 type PodDisruptionBudget struct {
 	name      string
 	namespace string
 	template  string
 }
 
+// KubeletConfig struct is used to handle KubeletConfig resources in OCP
 type KubeletConfig struct {
 	*Resource
 	template string
 }
 
+// ContainerRuntimeConfig struct is used to handle ContainerRuntimeConfig resources in OCP
 type ContainerRuntimeConfig struct {
 	*Resource
 	template string
 }
 
+// ImageContentSourcePolicy struct is used to handle ImageContentSourcePolicy resources in OCP
 type ImageContentSourcePolicy struct {
 	name     string
 	template string
 }
 
+// TextToVerify is a helper struct to verify configurations using the `createMcAndVerifyMCValue` function
 type TextToVerify struct {
 	textToVerifyForMC   string
 	textToVerifyForNode string
@@ -66,6 +73,7 @@ type TextToVerify struct {
 	needChroot          bool
 }
 
+// NewMachineConfigPool create a NewMachineConfigPool struct
 func NewMachineConfigPool(oc *exutil.CLI, name string) *MachineConfigPool {
 	return &MachineConfigPool{Resource: NewResource(oc, "mcp", name)}
 }
@@ -104,6 +112,7 @@ func (mc *MachineConfig) delete(oc *exutil.CLI) {
 	mcp.waitForComplete()
 }
 
+// NewKubeletConfig create a NewKubeletConfig struct
 func NewKubeletConfig(oc *exutil.CLI, name string, template string) *KubeletConfig {
 	return &KubeletConfig{Resource: NewResource(oc, "KubeletConfig", name), template: template}
 }
@@ -167,6 +176,7 @@ func (icsp *ImageContentSourcePolicy) delete(oc *exutil.CLI) {
 	mcp.waitForComplete()
 }
 
+// NewContainerRuntimeConfig creates a ContainerRuntimeConfig struct
 func NewContainerRuntimeConfig(oc *exutil.CLI, name string, template string) *ContainerRuntimeConfig {
 	return &ContainerRuntimeConfig{Resource: NewResource(oc, "ContainerRuntimeConfig", name), template: template}
 }
@@ -275,6 +285,14 @@ func (mcp *MachineConfigPool) getDegradedMachineCount() (int, error) {
 	return dmachineCount, nil
 }
 
+func (mcp *MachineConfigPool) pollMachineCount() func() string {
+	return mcp.Poll(`{.status.machineCount}`)
+}
+
+func (mcp *MachineConfigPool) pollReadyMachineCount() func() string {
+	return mcp.Poll(`{.status.readyMachineCount}`)
+}
+
 func (mcp *MachineConfigPool) pollDegradedMachineCount() func() string {
 	return mcp.Poll(`{.status.degradedMachineCount}`)
 }
@@ -304,7 +322,8 @@ func (mcp *MachineConfigPool) estimateWaitTimeInMinutes() int {
 
 }
 
-func (mcp *MachineConfigPool) GetNodes() ([]node, error) {
+// GetNodes returns a list with the nodes that belong to the machine config pool
+func (mcp *MachineConfigPool) GetNodes() ([]Node, error) {
 	labels := JSON(mcp.GetOrFail(`{.spec.nodeSelector.matchLabels}`))
 	o.Expect(labels.Exists()).Should(o.BeTrue(), fmt.Sprintf("The pool %s has no machLabels value defined", mcp.GetName()))
 	nodeList := NewNodeList(mcp.oc)
@@ -315,7 +334,9 @@ func (mcp *MachineConfigPool) GetNodes() ([]node, error) {
 	return nodeList.GetAll()
 }
 
-func (mcp *MachineConfigPool) GetSortedNodes() ([]node, error) {
+// GetSortedNodes returns a list with the nodes that belong to the machine config pool in the same order used to update them
+//  when a configuration is applied
+func (mcp *MachineConfigPool) GetSortedNodes() ([]Node, error) {
 
 	poolNodes, err := mcp.GetNodes()
 	if err != nil {
@@ -328,7 +349,7 @@ func (mcp *MachineConfigPool) GetSortedNodes() ([]node, error) {
 
 // GetSortedUpdatedNodes returns the list of the UpdatedNodes sorted by the time when they started to be updated.
 //	If maxUnavailable>0, then the function will fail if more that maxUpdatingNodes are being updated at the same time
-func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []node {
+func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []Node {
 	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
 	e2e.Logf("Waiting %s in pool %s for all nodes to start updating.", timeToWait, mcp.name)
 
@@ -336,7 +357,7 @@ func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []node {
 	o.Expect(errget).NotTo(o.HaveOccurred(), fmt.Sprintf("Cannot get nodes in pool %s", mcp.GetName()))
 
 	pendingNodes := poolNodes
-	updatedNodes := []node{}
+	updatedNodes := []Node{}
 	err := wait.Poll(20*time.Second, timeToWait, func() (bool, error) {
 		// If there are degraded machines, stop polling, directly fail
 		degradedstdout, degradederr := mcp.getDegradedMachineCount()
@@ -362,7 +383,7 @@ func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []node {
 			}
 		}
 
-		remainingNodes := []node{}
+		remainingNodes := []Node{}
 		for _, node := range pendingNodes {
 			if node.IsUpdating() {
 				e2e.Logf("Node %s is UPDATING", node.GetName())
@@ -492,7 +513,7 @@ func setDataForPullSecret(oc *exutil.CLI, configFile string) (string, error) {
 	return oc.AsAdmin().WithoutNamespace().Run("set").Args("data", "secret/pull-secret", "-n", "openshift-config", "--from-file=.dockerconfigjson="+configFile).Output()
 }
 
-func getCommitId(oc *exutil.CLI, component string, clusterVersion string) (string, error) {
+func getCommitID(oc *exutil.CLI, component string, clusterVersion string) (string, error) {
 	secretFile, secretErr := getPullSecret(oc)
 	if secretErr != nil {
 		return "", secretErr
@@ -501,12 +522,12 @@ func getCommitId(oc *exutil.CLI, component string, clusterVersion string) (strin
 	if ocErr != nil {
 		return "", ocErr
 	}
-	commitId, cmdErr := exec.Command("bash", "-c", "cat "+outFilePath+" | grep "+component+" | awk '{print $3}'").Output()
-	return strings.TrimSuffix(string(commitId), "\n"), cmdErr
+	commitID, cmdErr := exec.Command("bash", "-c", "cat "+outFilePath+" | grep "+component+" | awk '{print $3}'").Output()
+	return strings.TrimSuffix(string(commitID), "\n"), cmdErr
 }
 
-func getGoVersion(component string, commitId string) (float64, error) {
-	curlOutput, curlErr := exec.Command("bash", "-c", "curl -Lks https://raw.githubusercontent.com/openshift/"+component+"/"+commitId+"/go.mod | egrep '^go'").Output()
+func getGoVersion(component string, commitID string) (float64, error) {
+	curlOutput, curlErr := exec.Command("bash", "-c", "curl -Lks https://raw.githubusercontent.com/openshift/"+component+"/"+commitID+"/go.mod | egrep '^go'").Output()
 	if curlErr != nil {
 		return 0, curlErr
 	}
@@ -523,12 +544,12 @@ func getStatusCondition(oc *exutil.CLI, resource string, ctype string) (map[stri
 	jsonstr = strings.Trim(jsonstr, "'")
 	jsonbytes := []byte(jsonstr)
 	var datamap map[string]interface{}
-	if jsonerr := json.Unmarshal(jsonbytes, &datamap); jsonerr != nil {
+	jsonerr := json.Unmarshal(jsonbytes, &datamap)
+	if jsonerr != nil {
 		return nil, jsonerr
-	} else {
-		e2e.Logf("umarshalled json: %v", datamap)
-		return datamap, jsonerr
 	}
+	e2e.Logf("umarshalled json: %v", datamap)
+	return datamap, jsonerr
 }
 
 func containsMultipleStrings(sourceString string, expectedStrings []string) bool {
@@ -618,7 +639,7 @@ func jsonEncode(s string) string {
 	return string(e)
 }
 
-func getUrlEncodedFileConfig(destinationPath string, content string, mode string) string {
+func getURLEncodedFileConfig(destinationPath string, content string, mode string) string {
 	encodedContent := url.PathEscape(content)
 
 	return getFileConfig(destinationPath, "data:,"+encodedContent, mode)
@@ -719,7 +740,7 @@ func AddToAllMachineSets(oc *exutil.CLI, delta int) error {
 	return waitErr
 }
 
-func sortNodeList(nodes []node) []node {
+func sortNodeList(nodes []Node) []Node {
 	sort.Slice(nodes, func(l, r int) bool {
 		lMetadata := JSON(nodes[l].GetOrFail("{.metadata}"))
 		rMetadata := JSON(nodes[r].GetOrFail("{.metadata}"))

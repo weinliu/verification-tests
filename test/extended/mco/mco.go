@@ -97,16 +97,17 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(float64(timecost)).Should(o.BeNumerically("<", 10.0))
 	})
 
-	g.It("Author:mhanss-NonPreRelease-Critical-43043-Critical-43064-create/delete custom machine config pool [Disruptive]", func() {
+	g.It("Author:mhanss-NonPreRelease-Critical-43048-Critical-43064-create/delete custom machine config pool [Disruptive]", func() {
 		g.By("get worker node to change the label")
 		nodeList := NewNodeList(oc)
 		workerNode := nodeList.GetAllWorkerNodesOrFail()[0]
 
 		g.By("Add label as infra to the existing node")
-		labelOutput, err := workerNode.AddCustomLabel("infra")
+		infraLabel := "node-role.kubernetes.io/infra"
+		labelOutput, err := workerNode.AddLabel(infraLabel, "")
 		defer func() {
 			// ignore output, just focus on error handling, if error is occurred, fail this case
-			_, deletefailure := workerNode.DeleteCustomLabel("infra")
+			_, deletefailure := workerNode.DeleteLabel(infraLabel)
 			o.Expect(deletefailure).NotTo(o.HaveOccurred())
 		}()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -121,29 +122,35 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		mcp := NewMachineConfigPool(oc.AsAdmin(), mcpName)
 		mcp.template = mcpTemplate
 		defer mcp.delete()
-		defer waitForNodeDoesNotContain(oc, workerNode.name, mcpName)
+		// We need to wait for the label to be delete before removing the MCP. Otherwise the worker pool
+		// becomes Degraded.
 		defer func() {
 			// ignore output, just focus on error handling, if error is occurred, fail this case
-			_, deletefailure := workerNode.DeleteCustomLabel(mcpName)
+			_, deletefailure := workerNode.DeleteLabel(infraLabel)
 			o.Expect(deletefailure).NotTo(o.HaveOccurred())
+			_ = workerNode.WaitForLabelRemoved(infraLabel)
 		}()
 		mcp.create()
+
+		g.By("Check MCP status")
+		o.Consistently(mcp.pollDegradedMachineCount(), "30s", "10s").Should(o.Equal("0"), "There are degraded nodes in pool")
+		o.Eventually(mcp.pollDegradedStatus(), "1m", "20s").Should(o.Equal("False"), "The pool status is 'Degraded'")
+		o.Eventually(mcp.pollUpdatedStatus(), "1m", "20s").Should(o.Equal("True"), "The pool is reporting that it is not updated")
+		o.Eventually(mcp.pollMachineCount(), "1m", "10s").Should(o.Equal("1"), "The pool should report 1 machine count")
+		o.Eventually(mcp.pollReadyMachineCount(), "1m", "10s").Should(o.Equal("1"), "The pool should report 1 machine ready")
+
 		e2e.Logf("Custom mcp is created successfully!")
 
 		g.By("Remove custom label from the node")
-		unlabeledOutput, err := workerNode.DeleteCustomLabel(mcpName)
+		unlabeledOutput, err := workerNode.DeleteLabel(infraLabel)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(unlabeledOutput).Should(o.ContainSubstring(workerNode.name))
-		e2e.Logf("Wait for label removal")
-		waitForNodeDoesNotContain(oc, workerNode.name, mcpName)
+		o.Expect(workerNode.WaitForLabelRemoved(infraLabel)).Should(o.Succeed(),
+			fmt.Sprintf("Label %s has not been removed from node %s", infraLabel, workerNode.GetName()))
 		e2e.Logf("Label removed")
 
 		g.By("Check custom infra label is removed from the node")
-		nodeOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/infra").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(nodeOut).Should(o.ContainSubstring("No resources found"))
-
-		nodeList.ByLabel("node-role.kubernetes.io/infra")
+		nodeList.ByLabel(infraLabel)
 		infraNodes, err := nodeList.GetAll()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(infraNodes)).Should(o.Equal(0))
@@ -686,7 +693,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(cvErr).NotTo(o.HaveOccurred())
 		o.Expect(clusterVersion).NotTo(o.BeEmpty())
 		e2e.Logf("cluster version is %s", clusterVersion)
-		commitID, commitErr := getCommitId(oc, "machine-config", clusterVersion)
+		commitID, commitErr := getCommitID(oc, "machine-config", clusterVersion)
 		o.Expect(commitErr).NotTo(o.HaveOccurred())
 		o.Expect(commitID).NotTo(o.BeEmpty())
 		e2e.Logf("machine config commit id is %s", commitID)
@@ -1078,7 +1085,7 @@ nulla pariatur.`
 		g.By("Create a MC to deploy a config file")
 		filePath := "/etc/mco-test-file"
 		fileContent := "MCO test file\n"
-		fileConfig := getUrlEncodedFileConfig(filePath, fileContent, "")
+		fileConfig := getURLEncodedFileConfig(filePath, fileContent, "")
 
 		mcName := "mco-drift-test-file"
 		mc := MachineConfig{name: mcName, pool: "worker"}
@@ -1174,7 +1181,7 @@ nulla pariatur.`
 		filePath := "/etc/mco-test-file"
 		fileContent := "MCO test file\n"
 		fileMode := "0400" // decimal 256
-		fileConfig := getUrlEncodedFileConfig(filePath, fileContent, fileMode)
+		fileConfig := getURLEncodedFileConfig(filePath, fileContent, fileMode)
 
 		mcName := "mco-drift-test-file-permissions"
 		mc := MachineConfig{name: mcName, pool: "worker"}
@@ -1407,7 +1414,7 @@ nulla pariatur.`
 		filePath := "/etc/TC-49568-mco-test-file-order"
 		fileContent := "MCO test file order\n"
 		fileMode := "0400" // decimal 256
-		fileConfig := getUrlEncodedFileConfig(filePath, fileContent, fileMode)
+		fileConfig := getURLEncodedFileConfig(filePath, fileContent, fileMode)
 
 		mcName := "mco-test-file-order"
 		mc := MachineConfig{name: mcName, pool: "worker"}
@@ -1466,7 +1473,7 @@ nulla pariatur.`
 		filePath := "/etc/TC-49672-mco-test-file-order"
 		fileContent := "MCO test file order 2\n"
 		fileMode := "0400" // decimal 256
-		fileConfig := getUrlEncodedFileConfig(filePath, fileContent, fileMode)
+		fileConfig := getURLEncodedFileConfig(filePath, fileContent, fileMode)
 
 		mcName := "mco-test-file-order2"
 		mc := MachineConfig{name: mcName, pool: "worker"}
@@ -1618,7 +1625,7 @@ nulla pariatur.`
 
 })
 
-func createMcAndVerifyMCValue(oc *exutil.CLI, stepText string, mcName string, workerNode node, textToVerify TextToVerify, cmd ...string) {
+func createMcAndVerifyMCValue(oc *exutil.CLI, stepText string, mcName string, workerNode Node, textToVerify TextToVerify, cmd ...string) {
 	g.By(fmt.Sprintf("Create new MC to add the %s", stepText))
 	mcTemplate := generateTemplateAbsolutePath(mcName + ".yaml")
 	mc := MachineConfig{name: mcName, template: mcTemplate, pool: "worker"}
@@ -1658,7 +1665,7 @@ func skipTestIfClusterVersion(oc *exutil.CLI, operator, constraintVersion string
 }
 
 // skipTestIfOsIsNotCoreOs it will either skip the test case in case of worker node is not CoreOS or will return the CoreOS worker node
-func skipTestIfOsIsNotCoreOs(oc *exutil.CLI) node {
+func skipTestIfOsIsNotCoreOs(oc *exutil.CLI) Node {
 	allCoreOs := NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()
 	if len(allCoreOs) == 0 {
 		g.Skip("CoreOs is required to execute this test case!")
@@ -1667,7 +1674,7 @@ func skipTestIfOsIsNotCoreOs(oc *exutil.CLI) node {
 }
 
 // skipTestIfOsIsNotCoreOs it will either skip the test case in case of worker node is not CoreOS or will return the CoreOS worker node
-func skipTestIfOsIsNotRhelOs(oc *exutil.CLI) node {
+func skipTestIfOsIsNotRhelOs(oc *exutil.CLI) Node {
 	allRhelOs := NewNodeList(oc).GetAllRhelWokerNodesOrFail()
 	if len(allRhelOs) == 0 {
 		g.Skip("RhelOs is required to execute this test case!")
@@ -1814,7 +1821,7 @@ func verifyDriftConfig(mcp *MachineConfigPool, rf *RemoteFile, newMode string, f
 //   that the sorted lists have the same order one by one. We can only make sure that the steps
 //   defined by maxUnavailable have the right order.
 //   If step=1, it is the same as comparing that both lists are equal.
-func checkUpdatedLists(l []node, r []node, step int) bool {
+func checkUpdatedLists(l []Node, r []Node, step int) bool {
 	if len(l) != len(r) {
 		e2e.Logf("Compared lists have different size")
 		return false

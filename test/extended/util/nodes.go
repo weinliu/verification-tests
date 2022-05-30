@@ -4,19 +4,20 @@ import (
 	"strings"
 )
 
+// GetFirstLinuxWorkerNode returns the first linux worker node in the cluster
 func GetFirstLinuxWorkerNode(oc *CLI) (string, error) {
 	var (
 		workerNode string
 		err        error
 	)
-	workerNode, err = getFirstNodeByOsId(oc, "worker", "rhcos")
+	workerNode, err = getFirstNodeByOsID(oc, "worker", "rhcos")
 	if len(workerNode) == 0 {
-		workerNode, err = getFirstNodeByOsId(oc, "worker", "rhel")
+		workerNode, err = getFirstNodeByOsID(oc, "worker", "rhel")
 	}
 	return workerNode, err
 }
 
-// GetAllNodes returns a list of the names of all linux/windows nodes in the cluster have both linux and windows node
+// GetAllNodesbyOSType returns a list of the names of all linux/windows nodes in the cluster have both linux and windows node
 func GetAllNodesbyOSType(oc *CLI, ostype string) ([]string, error) {
 	var nodesArray []string
 	nodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "kubernetes.io/os="+ostype, "-o", "jsonpath='{.items[*].metadata.name}'").Output()
@@ -25,10 +26,9 @@ func GetAllNodesbyOSType(oc *CLI, ostype string) ([]string, error) {
 	//So need to check if string is empty.
 	if len(nodesStr) == 0 {
 		return nodesArray, err
-	} else {
-		nodesArray = strings.Split(nodesStr, " ")
-		return nodesArray, err
 	}
+	nodesArray = strings.Split(nodesStr, " ")
+	return nodesArray, err
 }
 
 // GetAllNodes returns a list of the names of all nodes in the cluster
@@ -65,7 +65,7 @@ func DebugNodeWithOptions(oc *CLI, nodeName string, options []string, cmd ...str
 	return debugNode(oc, nodeName, options, false, cmd...)
 }
 
-// DebugNodeWithOptions launch debug container with options e.g. --image
+// DebugNodeWithOptionsAndChroot launch debug container using chroot and with options e.g. --image
 func DebugNodeWithOptionsAndChroot(oc *CLI, nodeName string, options []string, cmd ...string) (string, error) {
 	return debugNode(oc, nodeName, options, true, cmd...)
 }
@@ -90,32 +90,32 @@ func debugNode(oc *CLI, nodeName string, cmdOptions []string, needChroot bool, c
 	return oc.AsAdmin().Run("debug").Args(cargs...).Output()
 }
 
-// DeleteCustomLabelFromNode delete the custom label from the node
-func DeleteCustomLabelFromNode(oc *CLI, node string, label string) (string, error) {
-	return oc.AsAdmin().WithoutNamespace().Run("label").Args("node", node, "node-role.kubernetes.io/"+label+"-").Output()
+// DeleteLabelFromNode delete the custom label from the node
+func DeleteLabelFromNode(oc *CLI, node string, label string) (string, error) {
+	return oc.AsAdmin().WithoutNamespace().Run("label").Args("node", node, label+"-").Output()
 }
 
-// AddCustomLabelToNode add the custom label to the node
-func AddCustomLabelToNode(oc *CLI, node string, label string) (string, error) {
-	return oc.AsAdmin().WithoutNamespace().Run("label").Args("node", node, "node-role.kubernetes.io/"+label+"=").Output()
+// AddLabelToNode add the custom label to the node
+func AddLabelToNode(oc *CLI, node string, label string, value string) (string, error) {
+	return oc.AsAdmin().WithoutNamespace().Run("label").Args("node", node, label+"="+value).Output()
 }
 
 // GetFirstCoreOsWorkerNode returns the first CoreOS worker node
 func GetFirstCoreOsWorkerNode(oc *CLI) (string, error) {
-	return getFirstNodeByOsId(oc, "worker", "rhcos")
+	return getFirstNodeByOsID(oc, "worker", "rhcos")
 }
 
 // GetFirstRhelWorkerNode returns the first rhel worker node
 func GetFirstRhelWorkerNode(oc *CLI) (string, error) {
-	return getFirstNodeByOsId(oc, "worker", "rhel")
+	return getFirstNodeByOsID(oc, "worker", "rhel")
 }
 
-// getFirstNodeByOsId returns the cluster node by role and os id
-func getFirstNodeByOsId(oc *CLI, role string, osId string) (string, error) {
+// getFirstNodeByOsID returns the cluster node by role and os id
+func getFirstNodeByOsID(oc *CLI, role string, osID string) (string, error) {
 	nodes, err := GetClusterNodesBy(oc, role)
 	for _, node := range nodes {
 		stdout, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node/"+node, "-o", "jsonpath=\"{.metadata.labels.node\\.openshift\\.io/os_id}\"").Output()
-		if strings.Trim(stdout, "\"") == osId {
+		if strings.Trim(stdout, "\"") == osID {
 			return node, err
 		}
 	}
