@@ -589,7 +589,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Fluentd should
 			o.Expect(err).NotTo(o.HaveOccurred())
 			value, _ := strconv.Atoi(result.Data.Result[0].Value[1].(string))
 			o.Expect(value > 0).To(o.BeTrue())
-			o.Expect(result.Data.Result[0].Metric.Path).NotTo(o.BeEmpty())
 			o.Expect(len(result.Data.Result) > 0).To(o.BeTrue())
 		}
 	})
