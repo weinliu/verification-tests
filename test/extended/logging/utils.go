@@ -1795,9 +1795,9 @@ func (r kafka) deployKafka(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	//create ClusterRoleBinding
-	output, err := oc.AsAdmin().WithoutNamespace().Run("process").Args("-f", kafkaFilePath+"/kafka-clusterrolebinding.yaml", "-p", "NAMESPACE="+r.namespace).OutputToFile(getRandomString() + ".json")
+	output, err := oc.AsAdmin().WithoutNamespace().Run("process").Args("-n", r.namespace, "-f", kafkaFilePath+"/kafka-clusterrolebinding.yaml", "-p", "NAMESPACE="+r.namespace).OutputToFile(getRandomString() + ".json")
 	o.Expect(err).NotTo(o.HaveOccurred())
-	oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", output).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", output, "-n", r.namespace).Execute()
 
 	//create kafka configmap
 	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", r.kafkasvcName, "-n", r.namespace, "--from-file=init.sh="+kafkaConfigDir+"/init.sh", "--from-file=log4j.properties="+kafkaConfigDir+"/log4j.properties", "--from-file=server.properties="+kafkaConfigDir+"/server.properties", "--from-file=kafka_server_jaas.conf="+kafkaConfigDir+"/kafka_server_jaas.conf").Execute()
