@@ -1511,6 +1511,7 @@ spec:
 		g.By("8) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
 		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
 	})
+
 	// author: jmekkatt@redhat.com
 	g.It("Author:jmekkatt-High-50188-An informational error on kube-apiserver in case an admission webhook is installed for a virtual resource [Serial]", func() {
 		var (
@@ -1589,5 +1590,45 @@ spec:
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 		e2e.Logf("Test step-7 has passed : No webhook admission error seen after purging webhooks.")
 		e2e.Logf("All test case steps are passed.!")
+	})
+
+	// author: zxiao@redhat.com
+	g.It("Author:zxiao-Low-21246-Check the exposed prometheus metrics of operators", func() {
+		g.By("1) get serviceaccount token")
+		token, err := exutil.GetSAToken(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		resources := []string{"openshift-apiserver-operator", "kube-apiserver-operator", "kube-storage-version-migrator-operator", "kube-controller-manager-operator"}
+		patterns := []string{"workqueue_adds", "workqueue_depth", "workqueue_queue_duration", "workqueue_retries", "workqueue_work_duration"}
+		step := 2
+		for _, resource := range resources {
+			g.By(fmt.Sprintf("%v) For resource %s, check the exposed prometheus metrics", step, resource))
+
+			namespace := resource
+			if strings.Contains(resource, "kube-") {
+				// need to add openshift prefix for kube resource
+				namespace = "openshift-" + resource
+			}
+
+			label := "app=" + resource
+			g.By(fmt.Sprintf("%v.1) wait for a pod with label %s to be ready within 15 mins", step, label))
+			pods, err := exutil.GetAllPodsWithLabel(oc, namespace, label)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(pods).ShouldNot(o.BeEmpty())
+			pod := pods[0]
+			exutil.AssertPodToBeReady(oc, pod, namespace)
+
+			g.By(fmt.Sprintf("%v.2) request exposed prometheus metrics on pod %s", step, pod))
+			command := []string{pod, "-n", namespace, "--", "curl", "--connect-timeout", "30", "--retry", "3", "-N", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", token), "https://localhost:8443/metrics"}
+			output, err := oc.Run("exec").Args(command...).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By(fmt.Sprintf("%v.3) check the output if it contains the following patterns: %s", step, strings.Join(patterns, ", ")))
+			for _, pattern := range patterns {
+				o.Expect(output).Should(o.ContainSubstring(pattern))
+			}
+			// increment step
+			step++
+		}
 	})
 })
