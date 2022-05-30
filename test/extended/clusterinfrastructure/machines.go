@@ -268,22 +268,22 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			ms.CreateMachineSet(oc)
 			region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			var amiId string
+			var amiID string
 			switch region {
 			case "us-east-1", "us-iso-east-1":
-				amiId = "ami-0d9cdd823beb0f50b"
+				amiID = "ami-0d9cdd823beb0f50b"
 			case "us-east-2":
-				amiId = "ami-0e05cb5a56f9043da"
+				amiID = "ami-0e05cb5a56f9043da"
 			case "cn-north-1":
-				amiId = "ami-07a0c9b547ce24896"
+				amiID = "ami-07a0c9b547ce24896"
 			case "us-gov-west-1":
-				amiId = "ami-0fc1f8653c0f1c371"
+				amiID = "ami-0fc1f8653c0f1c371"
 			default:
 				e2e.Logf("Not support region for the case for now.")
 				g.Skip("Not support region for the case for now.")
 			}
 			g.By("Update machineset with windows ami")
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"metadata":{"labels":{"machine.openshift.io/os-id": "Windows"}},"spec":{"providerSpec":{"value":{"ami":{"id":"`+amiId+`"}}}}}}}`, "--type=merge").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/"+machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"metadata":{"labels":{"machine.openshift.io/os-id": "Windows"}},"spec":{"providerSpec":{"value":{"ami":{"id":"`+amiID+`"}}}}}}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			clusterinfra.WaitForMachineProvisioned(oc, machinesetName)
@@ -307,13 +307,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
 			g.By("Check on aws instance with gp3 iops 5000")
-			instanceId, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-o=jsonpath={.items[0].status.providerStatus.instanceId}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
+			instanceID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-o=jsonpath={.items[0].status.providerStatus.instanceId}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			c2sConfigPrefix, stsConfigPrefix := clusterinfra.GetAwsCredentialFromCluster(oc)
 			defer clusterinfra.DeleteAwsCredentialTmpFile(c2sConfigPrefix, stsConfigPrefix)
 
-			volumeInfo, err := clusterinfra.GetAwsVolumeInfoAttachedToInstanceId(instanceId)
+			volumeInfo, err := clusterinfra.GetAwsVolumeInfoAttachedToInstanceId(instanceID)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			e2e.Logf("volumeInfo:%s", volumeInfo)
@@ -424,5 +424,41 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("out:%s", out)
 		o.Expect(out).Should(o.Equal("pd-balanced"))
+	})
+
+	// author: zhsun@redhat.com
+	g.It("NonPreRelease-Author:zhsun-Medium-50731-Enable IMDSv2 on existing worker machines via machine set [Disruptive][Slow]", func() {
+		clusterinfra.SkipConditionally(oc)
+		if iaasPlatform != "aws" {
+			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
+		}
+		g.By("Create a new machineset")
+		machinesetName := "machineset-50731"
+		ms := clusterinfra.MachineSetDescription{machinesetName, 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		g.By("Update machineset with imds required")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"metadataServiceOptions":{"authentication":"Required"}}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", machineAPINamespace, "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.metadataServiceOptions.authentication}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("out:%s", out)
+		o.Expect(out).Should(o.ContainSubstring("Required"))
+
+		g.By("Update machineset with imds optional")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"metadataServiceOptions":{"authentication":"Optional"}}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("machine", machineName, "-n", machineAPINamespace).Execute()
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
+		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-n", machineAPINamespace, "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[*].spec.providerSpec.value.metadataServiceOptions.authentication}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).Should(o.ContainSubstring("Optional"))
+
+		g.By("Update machine with invalid authentication ")
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machineset/"+machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"metadataServiceOptions":{"authentication":"invalid"}}}}}}}`, "--type=merge").Output()
+		o.Expect(strings.Contains(out, "Invalid value: \"invalid\": Allowed values are either 'Optional' or 'Required'")).To(o.BeTrue())
 	})
 })
