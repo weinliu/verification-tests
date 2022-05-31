@@ -1,9 +1,11 @@
 package hive
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
@@ -474,10 +476,11 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterResumeTimeout+5*DefaultTimeout, []string{"ClusterDeployment", oldestCD, "-n", oldestCD, "-o=jsonpath={.spec.powerState}"}).check(oc)
 	})
 
-	//author: jshu@redhat.com
+	//author: jshu@redhat.com lwan@redhat.com
+	//OCP-23040, OCP-42113, OCP-34719, OCP-41250, OCP-24000, OCP-25334, OCP-23876
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "23040"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-23040-Hive to create SyncSet resource[Serial]", func() {
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-High-23040-Hive to create SyncSet resource[Serial]", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 23040 is for AWS - skipping test ...")
 		}
@@ -487,7 +490,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP49ReleaseImage,
+			releaseImage: OCP410ReleaseImage,
 			template:     imageSetTemp,
 		}
 
@@ -535,22 +538,27 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		}
 		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
 		cluster.create(oc)
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
-		g.By("Create SyncSet...")
-		syncSetName := testCaseID + "-syncset"
-		configMapName := testCaseID + "-configmap"
-		syncTemp := filepath.Join(testDataDir, "syncset.yaml")
-		sync := syncSet{
+		g.By("Create SyncSet for resource apply......")
+		syncSetName := testCaseID + "-syncset1"
+		configMapName := testCaseID + "-configmap1"
+		configMapNamespace := testCaseID + "-" + getRandomString() + "-hive1"
+		resourceMode := "Sync"
+		syncTemp := filepath.Join(testDataDir, "syncset-resource.yaml")
+		syncResource := syncSetResource{
 			name:        syncSetName,
 			namespace:   oc.Namespace(),
+			namespace2:  configMapNamespace,
 			cdrefname:   cdName,
 			cmname:      configMapName,
-			cmnamespace: "default",
+			cmnamespace: configMapNamespace,
+			ramode:      resourceMode,
 			template:    syncTemp,
 		}
-		defer cleanupObjects(oc, objectTableRef{"SYNCSET", oc.Namespace(), syncSetName})
-		sync.create(oc)
+		defer cleanupObjects(oc, objectTableRef{"SyncSet", oc.Namespace(), syncSetName})
+		syncResource.create(oc)
+		e2e.Logf("Check ClusterDeployment is installed.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
 		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
 		err := os.MkdirAll(tmpDir, 0777)
@@ -561,8 +569,180 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 		e2e.Logf("Check if syncSet is created successfully.")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, syncSetName, ok, DefaultTimeout, []string{"SyncSet", syncSetName, "-n", oc.Namespace()}).check(oc)
-		e2e.Logf("Check if configMap in syncSet is applied in the cluster.")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, configMapName, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapName}).check(oc)
+
+		g.By("Test Syncset Resource part......")
+		e2e.Logf("OCP-34719, step 3: Check if clustersync and clustersynclease are created successfully.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace()}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"ClusterSyncLease", cdName, "-n", oc.Namespace()}).check(oc)
+		e2e.Logf("OCP-42113: Check if there is STATUS in clustersync tabular output.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "STATUS", ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace()}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "MESSAGE", ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace(), "-o", "wide"}).check(oc)
+		e2e.Logf("OCP-34719, step 4: Check clustersync will record all syncsets first success time.")
+		successMessage := "All SyncSets and SelectorSyncSets have been applied to the cluster"
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, successMessage, ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Success", ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace(), fmt.Sprintf("-o=jsonpath={.status.syncSets[?(@.name==\"%s\")].result}", syncSetName)}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "", nok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.firstSuccessTime}"}).check(oc)
+		e2e.Logf("OCP-34719, step 5: Check firstSuccessTime won't be changed when there are new syncset created.")
+		firstSuccessTime, err := time.Parse(time.RFC3339, getResource(oc, asAdmin, withoutNamespace, "ClusterSync", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.firstSuccessTime}"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		syncSetName2 := testCaseID + "-syncset2"
+		configMapName2 := testCaseID + "-configmap2"
+		configMapNamespace2 := testCaseID + "-" + getRandomString() + "-hive2"
+		syncTemp2 := filepath.Join(testDataDir, "syncset-resource.yaml")
+		syncResource2 := syncSetResource{
+			name:        syncSetName2,
+			namespace:   oc.Namespace(),
+			namespace2:  configMapNamespace2,
+			cdrefname:   cdName,
+			ramode:      resourceMode,
+			cmname:      configMapName2,
+			cmnamespace: configMapNamespace2,
+			template:    syncTemp2,
+		}
+		defer cleanupObjects(oc, objectTableRef{"SyncSet", oc.Namespace(), syncSetName2})
+		syncResource2.create(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, syncSetName2, ok, DefaultTimeout, []string{"SyncSet", syncSetName2, "-n", oc.Namespace()}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Success", ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace(), fmt.Sprintf("-o=jsonpath={.status.syncSets[?(@.name==\"%s\")].result}", syncSetName2)}).check(oc)
+		updatedFirstSuccessTime, err := time.Parse(time.RFC3339, getResource(oc, asAdmin, withoutNamespace, "ClusterSync", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.firstSuccessTime}"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !updatedFirstSuccessTime.Equal(firstSuccessTime) {
+			e2e.Failf("firstSuccessTime changed when new SyncSet is created")
+		}
+		e2e.Logf("Check if configMaps are stored in resourcesToDelete field in ClusterSync CR and they are applied on the target cluster.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, configMapName, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapName, "-n", configMapNamespace}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, configMapName, ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace(), fmt.Sprintf("-o=jsonpath={.status.syncSets[?(@.name==\"%s\")].resourcesToDelete[?(.kind==\"ConfigMap\")].name}", syncSetName)}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, configMapName2, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapName2, "-n", configMapNamespace2}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, configMapName2, ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace(), fmt.Sprintf("-o=jsonpath={.status.syncSets[?(@.name==\"%s\")].resourcesToDelete[?(.kind==\"ConfigMap\")].name}", syncSetName2)}).check(oc)
+		e2e.Logf("OCP-34719, step 6: Check Resource can be deleted from target cluster via SyncSet when resourceApplyMode is Sync.")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"SyncSet", syncSetName2, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"resourceApplyMode": "Sync"}}`}).check(oc)
+		patchYaml := `
+spec:
+  resources:
+  - apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: ` + configMapNamespace2
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"SyncSet", syncSetName2, "-n", oc.Namespace(), "--type", "merge", "-p", patchYaml}).check(oc)
+		e2e.Logf("Check if ConfigMap %s has deleted from target cluster and clusterSync CR.", configMapName2)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, configMapName2, nok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", "-n", configMapNamespace2}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, configMapName2, nok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace(), fmt.Sprintf("-o=jsonpath={.status.syncSets[?(@.name==\"%s\")].resourcesToDelete[?(.kind==\"ConfigMap\")].name}", syncSetName2)}).check(oc)
+		e2e.Logf("OCP-41250: Check Resource won't be deleted from target cluster via SyncSet when resourceApplyMode is Upsert.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, configMapNamespace2, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Namespace", configMapNamespace2}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, configMapNamespace2, ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace(), fmt.Sprintf("-o=jsonpath={.status.syncSets[?(@.name==\"%s\")].resourcesToDelete[?(.kind==\"Namespace\")].name}", syncSetName2)}).check(oc)
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"SyncSet", syncSetName2, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"resourceApplyMode": "Upsert"}}`}).check(oc)
+		e2e.Logf("Check if resourcesToDelete field is gone in ClusterSync CR.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "", ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace(), fmt.Sprintf("-o=jsonpath={.status.syncSets[?(@.name==\"%s\")].resourcesToDelete}", syncSetName2)}).check(oc)
+		e2e.Logf("Delete Namespace CR from SyncSet, check if Namespace is still exit in target cluster")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"SyncSet", syncSetName2, "-n", oc.Namespace(), "--type", "json", "-p", `[{"op": "replace", "path": "/spec/resources", "value":[]}]`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, configMapNamespace2, nok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace(), fmt.Sprintf("-o=jsonpath={.status.syncSets[?(@.name==\"%s\")].resourcesToDelete[?(.kind==\"Namespace\")].name}", syncSetName2)}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, configMapNamespace2, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Namespace", configMapNamespace2}).check(oc)
+		e2e.Logf("OCP-34719, step 8: Create a bad SyncSet, check if there will be error message in ClusterSync CR.")
+		syncSetName3 := testCaseID + "-syncset3"
+		configMapName3 := testCaseID + "-configmap3"
+		configMapNamespace3 := testCaseID + "-" + getRandomString() + "-hive3"
+		syncTemp3 := filepath.Join(testDataDir, "syncset-resource.yaml")
+		syncResource3 := syncSetResource{
+			name:        syncSetName3,
+			namespace:   oc.Namespace(),
+			namespace2:  configMapNamespace3,
+			cdrefname:   cdName,
+			ramode:      resourceMode,
+			cmname:      configMapName3,
+			cmnamespace: "namespace-non-exist",
+			template:    syncTemp3,
+		}
+		defer cleanupObjects(oc, objectTableRef{"SyncSet", oc.Namespace(), syncSetName3})
+		syncResource3.create(oc)
+		errorMessage := fmt.Sprintf("SyncSet %s is failing", syncSetName3)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, syncSetName3, ok, DefaultTimeout, []string{"SyncSet", syncSetName3, "-n", oc.Namespace()}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, errorMessage, ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Failed")].message}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "True", ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Failed")].status}`}).check(oc)
+
+		g.By("OCP-23876: Test Syncset Patch part......")
+		e2e.Logf("Create a test ConfigMap CR on target cluster.")
+		configMapNameInRemote := testCaseID + "-patch-test"
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("--kubeconfig="+kubeconfig, "ConfigMap", configMapNameInRemote, "-n", configMapNamespace).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("--kubeconfig="+kubeconfig, "configmap", configMapNameInRemote, "--from-literal=foo=bar", "-n", configMapNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, configMapNameInRemote, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapNameInRemote, "-n", configMapNamespace}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "bar", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapNameInRemote, "-n", configMapNamespace, "-o=jsonpath={.data.foo}"}).check(oc)
+		syncSetPatchName := testCaseID + "-syncset-patch"
+		syncPatchTemp := filepath.Join(testDataDir, "syncset-patch.yaml")
+		patchContent := `{ "data": { "foo": "baz-strategic" } }`
+		patchType := "strategic"
+		syncPatch := syncSetPatch{
+			name:        syncSetPatchName,
+			namespace:   oc.Namespace(),
+			cdrefname:   cdName,
+			cmname:      configMapNameInRemote,
+			cmnamespace: configMapNamespace,
+			pcontent:    patchContent,
+			patchType:   patchType,
+			template:    syncPatchTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"SyncSet", oc.Namespace(), syncSetPatchName})
+		syncPatch.create(oc)
+		e2e.Logf("Check if SyncSetPatch is created successfully.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, syncSetPatchName, ok, DefaultTimeout, []string{"SyncSet", syncSetPatchName, "-n", oc.Namespace()}).check(oc)
+		e2e.Logf("Check if SyncSetPatch works well when in strategic patch type.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "strategic", ok, DefaultTimeout, []string{"SyncSet", syncSetPatchName, "-n", oc.Namespace(), fmt.Sprintf("-o=jsonpath={.spec.patches[?(@.name==\"%s\")].patchType}", configMapNameInRemote)}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "baz-strategic", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapNameInRemote, "-n", configMapNamespace, "-o=jsonpath={.data.foo}"}).check(oc)
+		e2e.Logf("Check if SyncSetPatch works well when in merge patch type.")
+		patchYaml = `
+spec:
+  patches:
+  - apiVersion: v1
+    kind: ConfigMap
+    name: ` + configMapNameInRemote + `
+    namespace: ` + configMapNamespace + `
+    patch: |-
+      { "data": { "foo": "baz-merge" } }
+    patchType: merge`
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"SyncSet", syncSetPatchName, "-n", oc.Namespace(), "--type", "merge", "-p", patchYaml}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "merge", ok, DefaultTimeout, []string{"SyncSet", syncSetPatchName, "-n", oc.Namespace(), fmt.Sprintf("-o=jsonpath={.spec.patches[?(@.name==\"%s\")].patchType}", configMapNameInRemote)}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "baz-merge", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapNameInRemote, "-n", configMapNamespace, "-o=jsonpath={.data.foo}"}).check(oc)
+		e2e.Logf("Check if SyncSetPatch works well when in json patch type.")
+		patchYaml = `
+spec:
+  patches:
+  - apiVersion: v1
+    kind: ConfigMap
+    name: ` + configMapNameInRemote + `
+    namespace: ` + configMapNamespace + `
+    patch: |-
+      [ { "op": "replace", "path": "/data/foo", "value": "baz-json" } ]
+    patchType: json`
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"SyncSet", syncSetPatchName, "-n", oc.Namespace(), "--type", "merge", "-p", patchYaml}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "json", ok, DefaultTimeout, []string{"SyncSet", syncSetPatchName, "-n", oc.Namespace(), fmt.Sprintf("-o=jsonpath={.spec.patches[?(@.name==\"%s\")].patchType}", configMapNameInRemote)}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "baz-json", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapNameInRemote, "-n", configMapNamespace, "-o=jsonpath={.data.foo}"}).check(oc)
+
+		g.By("OCP-25334: Test Syncset SecretReference part......")
+		syncSetSecretName := testCaseID + "-syncset-secret"
+		syncSecretTemp := filepath.Join(testDataDir, "syncset-secret.yaml")
+		sourceName := testCaseID + "-secret"
+		e2e.Logf("Create temp Secret in current namespace.")
+		defer cleanupObjects(oc, objectTableRef{"Secret", oc.Namespace(), sourceName})
+		err = oc.Run("create").Args("secret", "generic", sourceName, "--from-literal=testkey=testvalue", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, sourceName, ok, DefaultTimeout, []string{"Secret", sourceName, "-n", oc.Namespace()}).check(oc)
+		e2e.Logf("Check Secret won't exit on target cluster before syncset-secret created.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, sourceName, nok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Secret", "-n", configMapNamespace}).check(oc)
+		syncSecret := syncSetSecret{
+			name:       syncSetSecretName,
+			namespace:  oc.Namespace(),
+			cdrefname:  cdName,
+			sname:      sourceName,
+			snamespace: oc.Namespace(),
+			tname:      sourceName,
+			tnamespace: configMapNamespace,
+			template:   syncSecretTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"SyncSet", oc.Namespace(), syncSetSecretName})
+		syncSecret.create(oc)
+		e2e.Logf("Check if syncset-secret is created successfully.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, syncSetSecretName, ok, DefaultTimeout, []string{"SyncSet", syncSetSecretName, "-n", oc.Namespace()}).check(oc)
+		e2e.Logf("Check if the Secret is copied to the target cluster.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, sourceName, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Secret", sourceName, "-n", configMapNamespace}).check(oc)
 	})
 
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-High-25447-Hive API support for Azure[Serial]", func() {

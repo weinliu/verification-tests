@@ -109,13 +109,37 @@ type machinepool struct {
 	template    string
 }
 
-type syncSet struct {
+type syncSetResource struct {
+	name        string
+	namespace   string
+	namespace2  string
+	cdrefname   string
+	ramode      string
+	cmname      string
+	cmnamespace string
+	template    string
+}
+
+type syncSetPatch struct {
 	name        string
 	namespace   string
 	cdrefname   string
 	cmname      string
 	cmnamespace string
+	pcontent    string
+	patchType   string
 	template    string
+}
+
+type syncSetSecret struct {
+	name       string
+	namespace  string
+	cdrefname  string
+	sname      string
+	snamespace string
+	tname      string
+	tnamespace string
+	template   string
 }
 
 type objectTableRef struct {
@@ -344,8 +368,18 @@ func (machine *machinepool) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func (sync *syncSet) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", sync.template, "-p", "NAME="+sync.name, "NAMESPACE="+sync.namespace, "CDREFNAME="+sync.cdrefname, "CMNAME="+sync.cmname, "CMNAMESPACE="+sync.cmnamespace)
+func (syncresource *syncSetResource) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", syncresource.template, "-p", "NAME="+syncresource.name, "NAMESPACE="+syncresource.namespace, "CDREFNAME="+syncresource.cdrefname, "NAMESPACE2="+syncresource.namespace2, "RAMODE="+syncresource.ramode, "CMNAME="+syncresource.cmname, "CMNAMESPACE="+syncresource.cmnamespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (syncpatch *syncSetPatch) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", syncpatch.template, "-p", "NAME="+syncpatch.name, "NAMESPACE="+syncpatch.namespace, "CDREFNAME="+syncpatch.cdrefname, "CMNAME="+syncpatch.cmname, "CMNAMESPACE="+syncpatch.cmnamespace, "PCONTENT="+syncpatch.pcontent, "PATCHTYPE="+syncpatch.patchType)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (syncsecret *syncSetSecret) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", syncsecret.template, "-p", "NAME="+syncsecret.name, "NAMESPACE="+syncsecret.namespace, "CDREFNAME="+syncsecret.cdrefname, "SNAME="+syncsecret.sname, "SNAMESPACE="+syncsecret.snamespace, "TNAME="+syncsecret.tname, "TNAMESPACE="+syncsecret.tnamespace)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -404,7 +438,7 @@ func doAction(oc *exutil.CLI, action string, asAdmin bool, withoutNamespace bool
 //parameter inlineNamespace: withoutNamespace or not
 //parameter expectAction: Compare or not
 //parameter expectContent: expected string
-//parameter expect: ok, expected to have expectContent; mok, not expected to have expectContent
+//parameter expect: ok, expected to have expectContent; nok, not expected to have expectContent
 //parameter timeout: use CLUSTER_INSTALL_TIMEOUT de default, and CLUSTER_INSTALL_TIMEOUT, CLUSTER_RESUME_TIMEOUT etc in different scenarios
 //parameter resource: resource
 func newCheck(method string, action string, executor bool, inlineNamespace bool, expectAction bool,
