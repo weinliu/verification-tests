@@ -103,6 +103,7 @@ func (n *Node) GetNodeHostname() (string, error) {
 // ForceReapplyConfiguration create the file `/run/machine-config-daemon-force` in the node
 //  in order to force MCO to reapply the current configuration
 func (n *Node) ForceReapplyConfiguration() error {
+	e2e.Logf("Forcing reapply configuration in node %s", n.GetName())
 	_, err := n.DebugNodeWithChroot("touch", "/run/machine-config-daemon-force")
 
 	return err

@@ -1110,9 +1110,12 @@ nulla pariatur.`
 		o.Expect(rf.GetTextContent()).To(o.Equal(fileContent))
 		o.Expect(rf.GetNpermissions()).To(o.Equal(defaultMode))
 
-		g.By("Verfiy drift config behavior")
-		defer o.Expect(rf.PushNewPermissions(defaultMode)).NotTo(o.HaveOccurred())
-		defer o.Expect(rf.PushNewTextContent(fileContent)).NotTo(o.HaveOccurred())
+		g.By("Verify drift config behavior")
+		defer func() {
+			_ = rf.PushNewPermissions(defaultMode)
+			_ = rf.PushNewTextContent(fileContent)
+			_ = mcp.WaitForNotDegradedStatus()
+		}()
 
 		newMode := "0400"
 		useForceFile := false
@@ -1205,9 +1208,12 @@ nulla pariatur.`
 		o.Expect(rf.GetTextContent()).To(o.Equal(fileContent))
 		o.Expect(rf.GetNpermissions()).To(o.Equal(fileMode))
 
-		g.By("Verfiy drift config behavior")
-		defer o.Expect(rf.PushNewPermissions(fileMode)).NotTo(o.HaveOccurred())
-		defer o.Expect(rf.PushNewTextContent(fileContent)).NotTo(o.HaveOccurred())
+		g.By("Verify drift config behavior")
+		defer func() {
+			_ = rf.PushNewPermissions(fileMode)
+			_ = rf.PushNewTextContent(fileContent)
+			_ = mcp.WaitForNotDegradedStatus()
+		}()
 
 		newMode := "0644"
 		useForceFile := true
@@ -1243,9 +1249,12 @@ nulla pariatur.`
 		o.Expect(rf.GetTextContent()).To(o.Equal(fileContent))
 		o.Expect(rf.GetNpermissions()).To(o.Equal(defaultMode))
 
-		g.By("Verfiy drift config behavior")
-		defer o.Expect(rf.PushNewPermissions(defaultMode)).NotTo(o.HaveOccurred())
-		defer o.Expect(rf.PushNewTextContent(fileContent)).NotTo(o.HaveOccurred())
+		g.By("Verfy drift config behavior")
+		defer func() {
+			_ = rf.PushNewPermissions(defaultMode)
+			_ = rf.PushNewTextContent(fileContent)
+			_ = mcp.WaitForNotDegradedStatus()
+		}()
 
 		newMode := "0400"
 		useForceFile := true
@@ -1283,9 +1292,12 @@ nulla pariatur.`
 		o.Expect(rf.GetTextContent()).To(o.Equal(fileContent))
 		o.Expect(rf.GetNpermissions()).To(o.Equal(defaultMode))
 
-		g.By("Verfiy drift config behavior")
-		defer o.Expect(rf.PushNewPermissions(defaultMode)).NotTo(o.HaveOccurred())
-		defer o.Expect(rf.PushNewTextContent(fileContent)).NotTo(o.HaveOccurred())
+		g.By("Verify drift config behavior")
+		defer func() {
+			_ = rf.PushNewPermissions(defaultMode)
+			_ = rf.PushNewTextContent(fileContent)
+			_ = mcp.WaitForNotDegradedStatus()
+		}()
 
 		newMode := "0400"
 		useForceFile := true
@@ -1334,9 +1346,12 @@ nulla pariatur.`
 				o.ContainSubstring("Hello from MCO test service"),
 				o.ContainSubstring("example.service: Succeeded.")))
 
-		g.By("Verfiy drift config behavior")
-		defer o.Expect(rf.PushNewPermissions(defaultMode)).NotTo(o.HaveOccurred())
-		defer o.Expect(rf.PushNewTextContent(fileContent)).NotTo(o.HaveOccurred())
+		g.By("Verify drift config behavior")
+		defer func() {
+			_ = rf.PushNewPermissions(defaultMode)
+			_ = rf.PushNewTextContent(fileContent)
+			_ = mcp.WaitForNotDegradedStatus()
+		}()
 
 		newMode := "0400"
 		useForceFile := true
@@ -1760,9 +1775,9 @@ func verifyDriftConfig(mcp *MachineConfigPool, rf *RemoteFile, newMode string, f
 	o.Expect(rferr).NotTo(o.HaveOccurred())
 
 	o.Expect(rf.GetTextContent()).To(o.Equal(newContent), "File content should be updated")
-	o.Eventually(mcp.pollDegradedMachineCount(), "5m", "15s").Should(o.Equal("1"), "There should be 1 degraded machine")
-	o.Eventually(mcp.pollDegradedStatus(), "5m", "15s").Should(o.Equal("True"), "The worker MCP should report a True Degraded status")
-	o.Eventually(mcp.pollUpdatedStatus(), "5m", "15s").Should(o.Equal("False"), "The worker MCP should report a False Updated status")
+	o.Eventually(mcp.pollDegradedMachineCount(), "10m", "30s").Should(o.Equal("1"), "There should be 1 degraded machine")
+	o.Eventually(mcp.pollDegradedStatus(), "10m", "30s").Should(o.Equal("True"), "The worker MCP should report a True Degraded status")
+	o.Eventually(mcp.pollUpdatedStatus(), "10m", "30s").Should(o.Equal("False"), "The worker MCP should report a False Updated status")
 
 	g.By("Verify that node annotations describe the reason for the Degraded status")
 	reason := workerNode.GetAnnotationOrFail("machineconfiguration.openshift.io/reason")
@@ -1776,9 +1791,9 @@ func verifyDriftConfig(mcp *MachineConfigPool, rf *RemoteFile, newMode string, f
 		o.Expect(rf.PushNewTextContent(origContent)).NotTo(o.HaveOccurred())
 	}
 
-	o.Eventually(mcp.pollDegradedMachineCount(), "5m", "10s").Should(o.Equal("0"), "There should be no degraded machines")
-	o.Eventually(mcp.pollDegradedStatus(), "5m", "10s").Should(o.Equal("False"), "The worker MCP should report a False Degraded status")
-	o.Eventually(mcp.pollUpdatedStatus(), "5m", "10s").Should(o.Equal("True"), "The worker MCP should report a True Updated status")
+	o.Eventually(mcp.pollDegradedMachineCount(), "10m", "30s").Should(o.Equal("0"), "There should be no degraded machines")
+	o.Eventually(mcp.pollDegradedStatus(), "10m", "30s").Should(o.Equal("False"), "The worker MCP should report a False Degraded status")
+	o.Eventually(mcp.pollUpdatedStatus(), "10m", "30s").Should(o.Equal("True"), "The worker MCP should report a True Updated status")
 	rferr = rf.Fetch()
 	o.Expect(rferr).NotTo(o.HaveOccurred())
 	o.Expect(rf.GetTextContent()).To(o.Equal(origContent), "Original file content should be restored")
@@ -1793,9 +1808,9 @@ func verifyDriftConfig(mcp *MachineConfigPool, rf *RemoteFile, newMode string, f
 	o.Expect(rferr).NotTo(o.HaveOccurred())
 
 	o.Expect(rf.GetNpermissions()).To(o.Equal(newMode), "%s File permissions should be %s", rf.fullPath, newMode)
-	o.Eventually(mcp.pollDegradedMachineCount(), "5m", "15s").Should(o.Equal("1"), "There should be 1 degraded machine")
-	o.Eventually(mcp.pollDegradedStatus(), "5m", "15s").Should(o.Equal("True"), "The worker MCP should report a True Degraded status")
-	o.Eventually(mcp.pollUpdatedStatus(), "5m", "15s").Should(o.Equal("False"), "The worker MCP should report a False Updated status")
+	o.Eventually(mcp.pollDegradedMachineCount(), "10m", "30s").Should(o.Equal("1"), "There should be 1 degraded machine")
+	o.Eventually(mcp.pollDegradedStatus(), "10m", "30s").Should(o.Equal("True"), "The worker MCP should report a True Degraded status")
+	o.Eventually(mcp.pollUpdatedStatus(), "10m", "30s").Should(o.Equal("False"), "The worker MCP should report a False Updated status")
 
 	g.By("Verify that node annotations describe the reason for the Degraded status")
 	reason = workerNode.GetAnnotationOrFail("machineconfiguration.openshift.io/reason")
@@ -1807,9 +1822,9 @@ func verifyDriftConfig(mcp *MachineConfigPool, rf *RemoteFile, newMode string, f
 	o.Expect(rferr).NotTo(o.HaveOccurred())
 
 	o.Expect(rf.GetNpermissions()).To(o.Equal(origMode), "%s File permissions should be %s", rf.fullPath, origMode)
-	o.Eventually(mcp.pollDegradedMachineCount(), "5m", "15s").Should(o.Equal("0"), "There should be no degraded machines")
-	o.Eventually(mcp.pollDegradedStatus(), "5m", "15s").Should(o.Equal("False"), "The worker MCP should report a False Degraded status")
-	o.Eventually(mcp.pollUpdatedStatus(), "5m", "15s").Should(o.Equal("True"), "The worker MCP should report a True Updated status")
+	o.Eventually(mcp.pollDegradedMachineCount(), "10m", "30s").Should(o.Equal("0"), "There should be no degraded machines")
+	o.Eventually(mcp.pollDegradedStatus(), "10m", "30s").Should(o.Equal("False"), "The worker MCP should report a False Degraded status")
+	o.Eventually(mcp.pollUpdatedStatus(), "10m", "30s").Should(o.Equal("True"), "The worker MCP should report a True Updated status")
 
 	g.By("Verify that node annotations have been cleaned")
 	reason = workerNode.GetAnnotationOrFail("machineconfiguration.openshift.io/reason")

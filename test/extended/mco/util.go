@@ -297,6 +297,11 @@ func (mcp *MachineConfigPool) pollDegradedMachineCount() func() string {
 	return mcp.Poll(`{.status.degradedMachineCount}`)
 }
 
+// GetDegradedStatus returns the value of the 'Degraded' condition in the MCP
+func (mcp *MachineConfigPool) GetDegradedStatus() (string, error) {
+	return mcp.Get(`{.status.conditions[?(@.type=="Degraded")].status}`)
+}
+
 func (mcp *MachineConfigPool) pollDegradedStatus() func() string {
 	return mcp.Poll(`{.status.conditions[?(@.type=="Degraded")].status}`)
 }
@@ -405,6 +410,27 @@ func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []Node {
 
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Could not get the list of updated nodes on mcp %s", mcp.name))
 	return updatedNodes
+}
+
+// WaitForNotDegradedStatus waits until MCP is not degraded, if the condition times out the returned error is != nil
+func (mcp MachineConfigPool) WaitForNotDegradedStatus() error {
+	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
+	e2e.Logf("Waiting %s for MCP %s status to be not degraded.", timeToWait, mcp.name)
+
+	err := wait.Poll(1*time.Minute, timeToWait, func() (bool, error) {
+		stdout, err := mcp.GetDegradedStatus()
+		if err != nil {
+			e2e.Logf("the err:%v, and try next round", err)
+			return false, nil
+		}
+		if strings.Contains(stdout, "False") {
+			e2e.Logf("MCP Updated status is True %s", mcp.name)
+			return true, nil
+		}
+		return false, nil
+	})
+
+	return err
 }
 
 func (mcp *MachineConfigPool) waitForComplete() {
