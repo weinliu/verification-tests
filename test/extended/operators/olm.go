@@ -2914,7 +2914,6 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: scolange@redhat.com
 	g.It("Author:scolange-Medium-42069-component not found log should be debug level", func() {
-		SkipARM64(oc)
 		var since = "--since=60s"
 		var snooze time.Duration = 90
 		var tail = "--tail=10"
