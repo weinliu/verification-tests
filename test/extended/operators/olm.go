@@ -8998,61 +8998,44 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 
 	// It will cover test case: OCP-24664, author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-24664-CRD updates if new schemas are backwards compatible", func() {
-		SkipARM64(oc)
 		var (
 			itName              = g.CurrentGinkgoTestDescription().TestText
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogTemplate          = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-			cmLearnV1Template   = filepath.Join(buildPruningBaseDir, "cm-learn-v1.yaml")
-			cmLearnV2Template   = filepath.Join(buildPruningBaseDir, "cm-learn-v2.yaml")
-			catsrcCmTemplate    = filepath.Join(buildPruningBaseDir, "catalogsource-configmap.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			og                  = operatorGroupDescription{
 				name:      "og-singlenamespace",
 				namespace: "",
 				template:  ogTemplate,
 			}
-			cmLearn = configMapDescription{
-				name:      "cm-learn-operators",
-				namespace: "", //must be set in iT
-				template:  cmLearnV1Template,
+			catsrc = catalogSourceDescription{
+				name:        "nginx-24664-index",
+				namespace:   oc.Namespace(),
+				displayName: "nginx-24664",
+				publisher:   "OLM QE",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/nginx-operator-index-24664:multi-arch",
+				template:    catsrcImageTemplate,
 			}
-			catsrcLearn = catalogSourceDescription{
-				name:        "catsrc-learn-operators",
-				namespace:   "", //must be set in iT
-				displayName: "Learn Operators",
-				publisher:   "Community",
-				sourceType:  "configmap",
-				address:     "cm-learn-operators",
-				template:    catsrcCmTemplate,
-			}
-			subLearn = subscriptionDescription{
-				subName:                "learn-operator",
+			sub = subscriptionDescription{
+				subName:                "nginx-operator-24664",
 				namespace:              "", //must be set in iT
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "learn-operator",
-				catalogSourceName:      "catsrc-learn-operators",
+				operatorPackage:        "nginx-operator-24664",
+				catalogSourceName:      catsrc.name,
 				catalogSourceNamespace: "", //must be set in iT
-				startingCSV:            "",
-				currentCSV:             "learn-operator.v0.0.1", //it matches to that in cm, so set it.
-				installedCSV:           "",
 				template:               subTemplate,
 				singleNamespace:        true,
 			}
-			cm     = cmLearn
-			catsrc = catsrcLearn
-			sub    = subLearn
-			crd    = crdDescription{
-				name: "learns.app.learn.com",
+			crd = crdDescription{
+				name: "nginx24664s.cache.example.com",
 			}
 		)
 
-		defer crd.delete(oc)
-
 		//oc.TeardownProject()
 		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
-		cm.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
@@ -9064,9 +9047,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		g.By("Create og")
 		og.create(oc, itName, dr)
 
-		g.By("Create configmap of csv")
-		cm.create(oc, itName, dr)
-
 		g.By("Create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
 
@@ -9075,13 +9055,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		newCheck("expect", asUser, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "v2", nok, []string{"crd", crd.name, "-A", "-o=jsonpath={.status.storedVersions}"}).check(oc)
 
-		g.By("update the cm to update csv definition")
-		cm.template = cmLearnV2Template
-		cm.create(oc, itName, dr)
-
 		g.By("update channel of Sub")
 		sub.patch(oc, "{\"spec\": {\"channel\": \"beta\"}}")
-		sub.expectCSV(oc, itName, dr, "learn-operator.v0.0.2")
+		err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			status := getResource(oc, asAdmin, withoutNamespace, "csv", "nginx-operator-24664.v0.0.2", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
+			if strings.Compare(status, "Succeeded") == 0 {
+				e2e.Logf("csv nginx-operator-24664.v0.0.2 is Succeeded")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "csv nginx-operator-24664.v0.0.2 is not Succeeded")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "v2", ok, []string{"crd", crd.name, "-A", "-o=jsonpath={.status.storedVersions}"}).check(oc)
 	})
 
