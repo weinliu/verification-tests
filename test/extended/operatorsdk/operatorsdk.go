@@ -1393,6 +1393,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		makeCLI.ExecCommandPath = tmpPath
 
 		defer func() {
+			quayCLI := container.NewQuayCLI()
+			quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
+		}()
+
+		defer func() {
 			g.By("delete nginx-sample")
 			filePath := filepath.Join(tmpPath, "config", "samples", "demo_v1_nginx34426.yaml")
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", filePath, "-n", nsOperator).Output()
