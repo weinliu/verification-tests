@@ -7042,7 +7042,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		g.By("All PASS\n")
 	})
 
-	// author: tbuskey@redhat.com, test case OCP-40972
 	g.It("Author:xzha-High-40972-Provide more specific text when no candidates for Subscription spec", func() {
 		var (
 			itName              = g.CurrentGinkgoTestDescription().TestText
@@ -7054,12 +7053,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			exists              bool
 			failures            = 0
 			failureNames        = ""
-			since               = "--since=360s"
 			msg                 string
 			s                   string
-			snooze              time.Duration = 360
+			snooze              time.Duration = 300
 			step                string
-			tail                = "--tail=100"
 			waitErr             error
 		)
 
@@ -7072,14 +7069,13 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				template:  ogTemplate,
 			}
 			subOriginal = subscriptionDescription{
-				subName:                "etcd-40972",
+				subName:                "learn-40972",
 				namespace:              oc.Namespace(),
-				catalogSourceName:      "community-operators",
+				catalogSourceName:      "qe-app-registry",
 				catalogSourceNamespace: "openshift-marketplace",
 				ipApproval:             "Automatic",
-				channel:                "singlenamespace-alpha",
-				operatorPackage:        "etcd",
-				startingCSV:            "etcdoperator.v0.9.2",
+				channel:                "beta",
+				operatorPackage:        "learn",
 				singleNamespace:        true,
 				template:               subFile,
 			}
@@ -7095,24 +7091,18 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(exists).To(o.BeTrue())
 
-		g.By("2, Get the OLM catalog pod name for log query")
-		catPodname, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "--selector=app=catalog-operator", "-o=jsonpath={.items..metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(catPodname).NotTo(o.BeEmpty())
-
-		g.By("3, Create og")
+		g.By("2, Create og")
 		og.create(oc, itName, dr)
-		defer og.delete(itName, dr)
 
-		g.By("1/4 bad package name")
+		g.By("1/3 bad package name")
 		sub = subOriginal
 		sub.operatorPackage = "xyzzy"
 		s = fmt.Sprintf("no operators found in package %v in the catalog referenced by subscription %v", sub.operatorPackage, sub.subName)
-		step = "1/4"
+		step = "1/3"
 
 		sub.createWithoutCheck(oc, itName, dr)
 		waitErr = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args(catPodname, "-n", "openshift-operator-lifecycle-manager", tail, since).Output()
+			msg, err = oc.AsAdmin().Run("get").Args("sub", sub.subName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[*].message}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, s) {
 				return true, nil
@@ -7127,16 +7117,16 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.deleteCSV(itName, dr)
 		sub.delete(itName, dr)
 
-		g.By("2/4 bad catalog name")
+		g.By("2/3 bad catalog name")
 		e2e.Logf("catpodname %v", catPodname)
 		sub = subOriginal
 		sub.catalogSourceName = "xyzzy"
 		s = fmt.Sprintf("no operators found from catalog %v in namespace openshift-marketplace referenced by subscription %v", sub.catalogSourceName, sub.subName)
-		step = "2/4"
+		step = "2/3"
 
 		sub.createWithoutCheck(oc, itName, dr)
 		waitErr = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args(catPodname, "-n", "openshift-operator-lifecycle-manager", tail, since).Output()
+			msg, err = oc.AsAdmin().Run("get").Args("sub", sub.subName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[*].message}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, s) {
 				return true, nil
@@ -7151,15 +7141,15 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.deleteCSV(itName, dr)
 		sub.delete(itName, dr)
 
-		g.By("3/4 bad channel")
+		g.By("3/3 bad channel")
 		sub = subOriginal
 		sub.channel = "xyzzy"
-		s = fmt.Sprintf("no operators found in channel %v of package etcd in the catalog referenced by subscription %v", sub.channel, sub.subName)
-		step = "3/4"
+		s = fmt.Sprintf("no operators found in channel %v of package %v in the catalog referenced by subscription %v", sub.channel, sub.operatorPackage, sub.subName)
+		step = "3/3"
 
 		sub.createWithoutCheck(oc, itName, dr)
 		waitErr = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args(catPodname, "-n", "openshift-operator-lifecycle-manager", tail, since).Output()
+			msg, err = oc.AsAdmin().Run("get").Args("sub", sub.subName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[*].message}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, s) {
 				return true, nil
@@ -7177,12 +7167,12 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		g.By("4/4 bad CSV")
 		sub = subOriginal
 		sub.startingCSV = "xyzzy.v0.9.2"
-		s = fmt.Sprintf("no operators found with name %v in channel singlenamespace-alpha of package etcd in the catalog referenced by subscription %v", sub.startingCSV, sub.subName)
+		s = fmt.Sprintf("no operators found with name %v in channel beta of package %v in the catalog referenced by subscription %v", sub.startingCSV, sub.operatorPackage, sub.subName)
 		step = "4/4"
 
 		sub.createWithoutCheck(oc, itName, dr)
 		waitErr = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args(catPodname, "-n", "openshift-operator-lifecycle-manager", tail, since).Output()
+			msg, err = oc.AsAdmin().Run("get").Args("sub", sub.subName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[*].message}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, s) {
 				return true, nil
