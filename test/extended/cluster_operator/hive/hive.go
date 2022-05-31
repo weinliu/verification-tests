@@ -630,4 +630,169 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		g.By("Check Azure ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 	})
+
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-33854-Hive supports Azure ClusterPool [Serial]", func() {
+		if iaasPlatform != "azure" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 33854 is for Azure - skipping test ...")
+		}
+		testCaseID := "33854"
+		poolName := "pool-" + testCaseID
+		imageSetName := poolName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: OCP410ReleaseImage,
+			template:     imageSetTemp,
+		}
+
+		g.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		g.By("Check if ClusterImageSet was created successfully")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
+
+		oc.SetupProject()
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and azure-credentials to target namespace for the cluster
+		g.By("Copy Azure platform credentials...")
+		createAzureCreds(oc, oc.Namespace())
+
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Create ClusterPool...")
+		poolTemp := filepath.Join(testDataDir, "clusterpool-azure.yaml")
+		pool := azureClusterPool{
+			name:           poolName,
+			namespace:      oc.Namespace(),
+			fake:           "false",
+			baseDomain:     AzureBaseDomain,
+			imageSetRef:    imageSetName,
+			platformType:   "azure",
+			credRef:        AzureCreds,
+			region:         AzureRegion,
+			resGroup:       AzureRESGroup,
+			pullSecretRef:  PullSecret,
+			size:           1,
+			maxSize:        1,
+			runningCount:   0,
+			maxConcurrent:  1,
+			hibernateAfter: "360m",
+			template:       poolTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
+		pool.create(oc)
+		g.By("Check if Azure ClusterPool created successfully and become ready")
+		//runningCount is 0 so pool status should be standby: 1, ready: 0
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
+
+		g.By("Check if CD is Hibernating")
+		cdListStr := getCDlistfromPool(oc, poolName)
+		var cdArray []string
+		cdArray = strings.Split(strings.TrimSpace(cdListStr), "\n")
+		for i := range cdArray {
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i]}).check(oc)
+		}
+
+		g.By("Patch pool.spec.lables.test=test...")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"labels":{"test":"test"}}}`}).check(oc)
+
+		g.By("The existing CD in the pool has no test label")
+		for i := range cdArray {
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "test", nok, DefaultTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i], "-o=jsonpath={.metadata.labels}"}).check(oc)
+		}
+
+		g.By("The new CD in the pool should have the test label")
+		e2e.Logf("Delete the old CD in the pool")
+		newCheck("expect", "delete", asAdmin, withoutNamespace, contain, "delete", ok, ClusterUninstallTimeout, []string{"ClusterDeployment", cdArray[0], "-n", cdArray[0]}).check(oc)
+		e2e.Logf("Get the CD list from the pool again.")
+		cdListStr = getCDlistfromPool(oc, poolName)
+		cdArray = strings.Split(strings.TrimSpace(cdListStr), "\n")
+		for i := range cdArray {
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "test", ok, DefaultTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i], "-o=jsonpath={.metadata.labels}"}).check(oc)
+		}
+	})
+
+	//For simplicity, replace --simulate-bootstrap-failure with not copying aws-creds to make install failed
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-35990-Hive support limiting install attempt[Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 35990 is for AWS - skipping test ...")
+		}
+		testCaseID := "35990"
+		cdName := "cluster-" + testCaseID
+		imageSetName := cdName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: OCP410ReleaseImage,
+			template:     imageSetTemp,
+		}
+
+		g.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		oc.SetupProject()
+		e2e.Logf("Don't copy AWS platform credentials to make install failed.")
+
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Create Install-Config Secret...")
+		installConfigTemp := filepath.Join(testDataDir, "aws-install-config.yaml")
+		installConfigSecretName := cdName + "-install-config"
+		installConfigSecret := installConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   installConfigTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
+		installConfigSecret.create(oc)
+
+		g.By("Create ClusterDeployment with installAttemptsLimit=0...")
+		clusterTemp := filepath.Join(testDataDir, "clusterdeployment.yaml")
+		clusterLimit0 := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          imageSetName,
+			installConfigSecret:  installConfigSecretName,
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 0,
+			template:             clusterTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
+		clusterLimit0.create(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "InstallAttemptsLimitReached", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"ProvisionStopped\")].reason}"}).check(oc)
+		o.Expect(checkResourceNumber(oc, "pods", cdName)).To(o.Equal(0))
+		g.By("Delete the ClusterDeployment and recreate it with installAttemptsLimit=1...")
+		cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
+		clusterLimit1 := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          imageSetName,
+			installConfigSecret:  installConfigSecretName,
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 1,
+			template:             clusterTemp,
+		}
+		clusterLimit1.create(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace()}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "InstallAttemptsLimitReached", nok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"ProvisionStopped\")].reason}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"pods", "-n", oc.Namespace()}).check(oc)
+	})
 })

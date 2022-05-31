@@ -29,6 +29,7 @@ objects:
         name: "${INSTALLCONFIGSECRET}"
     pullSecretRef:
       name: "${PULLSECRETREF}"
+    installAttemptsLimit: ${{INSTALLATTEMPTSLIMIT}}
 parameters:
 - name: FAKE
 - name: NAME
@@ -41,3 +42,5 @@ parameters:
 - name: IMAGESETREF
 - name: INSTALLCONFIGSECRET
 - name: PULLSECRETREF
+- name: INSTALLATTEMPTSLIMIT
+  value: "3"

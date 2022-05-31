@@ -88,18 +88,19 @@ type installConfig struct {
 }
 
 type clusterDeployment struct {
-	fake                string
-	name                string
-	namespace           string
-	baseDomain          string
-	clusterName         string
-	platformType        string
-	credRef             string
-	region              string
-	imageSetRef         string
-	installConfigSecret string
-	pullSecretRef       string
-	template            string
+	fake                 string
+	name                 string
+	namespace            string
+	baseDomain           string
+	clusterName          string
+	platformType         string
+	credRef              string
+	region               string
+	imageSetRef          string
+	installConfigSecret  string
+	pullSecretRef        string
+	installAttemptsLimit int
+	template             string
 }
 
 type machinepool struct {
@@ -150,6 +151,25 @@ type azureClusterDeployment struct {
 	installConfigSecret string
 	pullSecretRef       string
 	template            string
+}
+
+type azureClusterPool struct {
+	name           string
+	namespace      string
+	fake           string
+	baseDomain     string
+	imageSetRef    string
+	platformType   string
+	credRef        string
+	region         string
+	resGroup       string
+	pullSecretRef  string
+	size           int
+	maxSize        int
+	runningCount   int
+	maxConcurrent  int
+	hibernateAfter string
+	template       string
 }
 
 //Hive Configurations
@@ -315,7 +335,7 @@ func (config *installConfig) create(oc *exutil.CLI) {
 }
 
 func (cluster *clusterDeployment) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cluster.template, "-p", "FAKE="+cluster.fake, "NAME="+cluster.name, "NAMESPACE="+cluster.namespace, "BASEDOMAIN="+cluster.baseDomain, "CLUSTERNAME="+cluster.clusterName, "PLATFORMTYPE="+cluster.platformType, "CREDREF="+cluster.credRef, "REGION="+cluster.region, "IMAGESETREF="+cluster.imageSetRef, "INSTALLCONFIGSECRET="+cluster.installConfigSecret, "PULLSECRETREF="+cluster.pullSecretRef)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cluster.template, "-p", "FAKE="+cluster.fake, "NAME="+cluster.name, "NAMESPACE="+cluster.namespace, "BASEDOMAIN="+cluster.baseDomain, "CLUSTERNAME="+cluster.clusterName, "PLATFORMTYPE="+cluster.platformType, "CREDREF="+cluster.credRef, "REGION="+cluster.region, "IMAGESETREF="+cluster.imageSetRef, "INSTALLCONFIGSECRET="+cluster.installConfigSecret, "PULLSECRETREF="+cluster.pullSecretRef, "INSTALLATTEMPTSLIMIT="+strconv.Itoa(cluster.installAttemptsLimit))
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -337,6 +357,11 @@ func (config *azureInstallConfig) create(oc *exutil.CLI) {
 
 func (cluster *azureClusterDeployment) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cluster.template, "-p", "FAKE="+cluster.fake, "NAME="+cluster.name, "NAMESPACE="+cluster.namespace, "BASEDOMAIN="+cluster.baseDomain, "CLUSTERNAME="+cluster.clusterName, "PLATFORMTYPE="+cluster.platformType, "CREDREF="+cluster.credRef, "REGION="+cluster.region, "RESGROUP="+cluster.resGroup, "AZURETYPE="+cluster.azureType, "IMAGESETREF="+cluster.imageSetRef, "INSTALLCONFIGSECRET="+cluster.installConfigSecret, "PULLSECRETREF="+cluster.pullSecretRef)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (pool *azureClusterPool) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pool.template, "-p", "NAME="+pool.name, "NAMESPACE="+pool.namespace, "FAKE="+pool.fake, "BASEDOMAIN="+pool.baseDomain, "IMAGESETREF="+pool.imageSetRef, "PLATFORMTYPE="+pool.platformType, "CREDREF="+pool.credRef, "REGION="+pool.region, "RESGROUP="+pool.resGroup, "PULLSECRETREF="+pool.pullSecretRef, "SIZE="+strconv.Itoa(pool.size), "MAXSIZE="+strconv.Itoa(pool.maxSize), "RUNNINGCOUNT="+strconv.Itoa(pool.runningCount), "MAXCONCURRENT="+strconv.Itoa(pool.maxConcurrent), "HIBERNATEAFTER="+pool.hibernateAfter)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -627,4 +652,11 @@ func getClusterKubeconfig(oc *exutil.CLI, clustername, namespace, dir string) {
 	e2e.Logf("Extract cluster %s kubeconfig to %s", clustername, dir)
 	err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/"+kubeconfigsecretname, "-n", namespace, "--to="+dir, "--confirm").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+//Check resource number after filtering
+func checkResourceNumber(oc *exutil.CLI, resourceType string, filterName string) int {
+	resourceOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resourceType, "-A").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Count(resourceOutput, filterName)
 }
