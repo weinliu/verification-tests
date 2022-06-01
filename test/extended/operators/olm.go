@@ -3612,7 +3612,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	})
 
-	// author: jiazha@redhat.c
+	// author: jiazha@redhat.com
 	g.It("Author:jiazha-Medium-21126-OLM Subscription status says CSV is installed when it is not", func() {
 		g.By("1) Install the OperatorGroup in a random project")
 		dr := make(describerResrouce)
@@ -3629,23 +3629,23 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) Install the etcdoperator v0.9.4 with Manual approval")
+		g.By("2) Install learn-operator.v0.0.3 with Manual approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-21126",
 			namespace:              oc.Namespace(),
-			catalogSourceName:      "community-operators",
+			catalogSourceName:      "qe-app-registry",
 			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "singlenamespace-alpha",
+			channel:                "beta",
 			ipApproval:             "Manual",
-			operatorPackage:        "etcd",
-			startingCSV:            "etcdoperator.v0.9.4",
+			operatorPackage:        "learn",
+			startingCSV:            "learn-operator.v0.0.3",
 			singleNamespace:        true,
 			template:               subTemplate,
 		}
 		defer sub.delete(itName, dr)
 		sub.create(oc, itName, dr)
-		g.By("3) Check the etcdoperator v0.9.4 related resources")
+		g.By("3) Check the learn-operator.v0.0.3 related resources")
 		// the installedCSV should be NULL
 		newCheck("expect", asAdmin, withoutNamespace, compare, "", ok, []string{"sub", "sub-21126", "-n", oc.Namespace(), "-o=jsonpath={.status.installedCSV}"}).check(oc)
 		// the state should be UpgradePending
@@ -3653,9 +3653,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		// the InstallPlan should not approved
 		newCheck("expect", asAdmin, withoutNamespace, compare, "false", ok, []string{"installplan", sub.getIP(oc), "-n", oc.Namespace(), "-o=jsonpath={.spec.approved}"}).check(oc)
 		// should no etcdoperator.v0.9.4 CSV found
-		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "etcdoperator.v0.9.4", "-n", oc.Namespace()).Output()
+		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "learn-operator.v0.0.3", "-n", oc.Namespace()).Output()
 		if !strings.Contains(msg, "not found") {
-			e2e.Failf("still found the etcdoperator.v0.9.4 in namespace:%s, msg:%v", oc.Namespace(), msg)
+			e2e.Failf("still found the learn-operator.v0.0.3 in namespace:%s, msg:%v", oc.Namespace(), msg)
 		}
 	})
 
@@ -3669,7 +3669,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			o.Expect(version).NotTo(o.BeEmpty())
 			o.Expect(clusterversion).To(o.Equal(version))
 		}
-		g.By("2) subscribe to an operator, for example, etcd-operator")
+		g.By("2) subscribe to an operator: learn-operator, the multi-arch one")
 		dr := make(describerResrouce)
 		itName := g.CurrentGinkgoTestDescription().TestText
 		dr.addIr(itName)
@@ -3689,24 +3689,26 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2-1) subscribe to the etcdoperator v0.9.4 with Automatic approval")
+		g.By("2-1) subscribe to the learn-operator v0.0.3 with Automatic approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-22615",
 			namespace:              "olm-upgrade-22615",
-			catalogSourceName:      "community-operators",
+			catalogSourceName:      "qe-app-registry",
 			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "singlenamespace-alpha",
+			channel:                "beta",
 			ipApproval:             "Automatic",
-			operatorPackage:        "etcd",
-			startingCSV:            "etcdoperator.v0.9.4",
+			operatorPackage:        "learn",
+			startingCSV:            "learn-operator.v0.0.3",
 			singleNamespace:        true,
 			template:               subTemplate,
 		}
-		// defer sub.delete(itName, dr), keep the resource so that checking it after upgrading
+		// keep the resource so that checking it after upgrading
+		// defer sub.delete(itName, dr)
 		sub.create(oc, itName, dr)
-		// defer sub.deleteCSV(itName, dr), keep the resource so that checking it after upgrading
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.4", "-n", "olm-upgrade-22615", "-o=jsonpath={.status.phase}"}).check(oc)
+		// keep the resource so that checking it after upgrading
+		// defer sub.deleteCSV(itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", "olm-upgrade-22615", "-o=jsonpath={.status.phase}"}).check(oc)
 
 		//This step cover a upgrade bug: https://bugzilla.redhat.com/show_bug.cgi?id=2015950
 		g.By("3) Create 300 secret in openshift-operator-lifecycle-manager project")
@@ -3741,7 +3743,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			o.Expect(upgradeableStatus).To(o.Equal("True"))
 		}
 		g.By("3) Check the installed operator status")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.4", "-n", "olm-upgrade-22615", "-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", "olm-upgrade-22615", "-o=jsonpath={.status.phase}"}).check(oc)
 		_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", "olm-upgrade-22615").Output()
 		if err != nil {
 			e2e.Failf("Fail to delete project, error:%v", err)
