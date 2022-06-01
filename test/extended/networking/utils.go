@@ -7,16 +7,19 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	ci "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	netutils "k8s.io/utils/net"
 )
 
@@ -85,6 +88,15 @@ type genericServiceResource struct {
 	template              string
 }
 
+type testPodMultinetwork struct {
+	name      string
+	namespace string
+	nodename  string
+	nadname   string
+	labelname string
+	template  string
+}
+
 func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace)
@@ -100,6 +112,18 @@ func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
 func (pod *pingPodResourceNode) createPingPodNode(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "NODENAME="+pod.nodename)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create pod %v", pod.name))
+}
+
+func (pod *testPodMultinetwork) createTestPodMultinetwork(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "NODENAME="+pod.nodename, "LABELNAME="+pod.labelname, "NADNAME="+pod.nadname)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
@@ -1203,4 +1227,140 @@ func isValueInList(value string, list []string) bool {
 		}
 	}
 	return false
+}
+
+// getPodMultiNetwork is designed to get both v4 and v6 addresses from pod's secondary interface(net1) which is not in the cluster's SDN or OVN network
+// currently the v4 address of pod's secondary interface is always displyed before v6 address no matter the order configred in the net-attach-def YAML file
+func getPodMultiNetwork(oc *exutil.CLI, namespace string, podName string) (string, string) {
+	cmd1 := "ip a sho net1 | awk 'NR==3{print $2}' |grep -Po '((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])'"
+	cmd2 := "ip a sho net1 | awk 'NR==5{print $2}' |grep -Po '([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}'"
+	podIPv4, err := e2e.RunHostCmd(namespace, podName, cmd1)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	podIPv6, err1 := e2e.RunHostCmd(namespace, podName, cmd2)
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	return podIPv4, podIPv6
+}
+
+//Pinging pod's secondary interfaces should pass
+func curlPod2PodMultiNetworkPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPv4 string, podIPv6 string) {
+	msg, err := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(strings.Contains(msg, "Hello OpenShift!")).To(o.BeTrue())
+	//MultiNetworkPolicy not support ipv6 yet, disabel ipv6 curl right now
+	//msg1, err1 := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl -g -6 [" +podIPv6+ "]:8080  --connect-timeout 5")
+	//o.Expect(err1).NotTo(o.HaveOccurred())
+	//o.Expect(strings.Contains(msg1, "Hello OpenShift!")).To(o.BeTrue())
+}
+
+//Pinging pod's secondary interfaces should fail
+func curlPod2PodMultiNetworkFail(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPv4 string, podIPv6 string) {
+	_, err := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
+	o.Expect(err).To(o.HaveOccurred())
+	//MultiNetworkPolicy not support ipv6 yet, disabel ipv6 curl right now
+	//_, err1 := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl -g -6 [" +podIPv6+ "]:8080  --connect-timeout 5")
+	//o.Expect(err1).To(o.HaveOccurred())
+}
+
+//This function will bring 2 namespaces, 5 pods and 2 NADs for all multus multinetworkpolicy cases
+func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo string) {
+	nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if len(nodeList.Items) < 2 {
+		g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+	}
+
+	buildPruningBaseDir := exutil.FixturePath("testdata", "networking/multinetworkpolicy")
+	netAttachDefFile1 := filepath.Join(buildPruningBaseDir, "MultiNetworkPolicy-NAD1.yaml")
+	netAttachDefFile2 := filepath.Join(buildPruningBaseDir, "MultiNetworkPolicy-NAD2.yaml")
+	pingPodTemplate := filepath.Join(buildPruningBaseDir, "MultiNetworkPolicy-pod-template.yaml")
+	patchSResource := "networks.operator.openshift.io/cluster"
+
+	g.By("1. Enable MacvlanNetworkpolicy in the cluster")
+	patchResourceAsAdmin(oc, patchSResource, patchInfo)
+
+	g.By("2. Create first namespace")
+	nserr1 := oc.Run("new-project").Args(ns1).Execute()
+	o.Expect(nserr1).NotTo(o.HaveOccurred())
+	_, proerr1 := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "user="+ns1).Output()
+	o.Expect(proerr1).NotTo(o.HaveOccurred())
+
+	g.By("3. Create MultiNetworkPolicy-NAD1 in ns1")
+	err1 := oc.AsAdmin().Run("create").Args("-f", netAttachDefFile1, "-n", ns1).Execute()
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	output, err2 := oc.Run("get").Args("net-attach-def", "-n", ns1).Output()
+	o.Expect(err2).NotTo(o.HaveOccurred())
+	o.Expect(output).To(o.ContainSubstring("macvlan-nad1"))
+
+	g.By("4. Create 1st pod in ns1")
+	pod1ns1 := testPodMultinetwork{
+		name:      "blue-pod-1",
+		namespace: ns1,
+		nodename:  nodeList.Items[0].Name,
+		nadname:   "macvlan-nad1",
+		labelname: "blue-openshift",
+		template:  pingPodTemplate,
+	}
+	pod1ns1.createTestPodMultinetwork(oc)
+	waitPodReady(oc, pod1ns1.namespace, pod1ns1.name)
+
+	g.By("5. Create second pod in ns1")
+	pod2ns1 := testPodMultinetwork{
+		name:      "blue-pod-2",
+		namespace: ns1,
+		nodename:  nodeList.Items[1].Name,
+		nadname:   "macvlan-nad1",
+		labelname: "blue-openshift",
+		template:  pingPodTemplate,
+	}
+	pod2ns1.createTestPodMultinetwork(oc)
+	waitPodReady(oc, pod2ns1.namespace, pod2ns1.name)
+
+	g.By("6. Create third pod in ns1")
+	pod3ns1 := testPodMultinetwork{
+		name:      "red-pod-1",
+		namespace: ns1,
+		nodename:  nodeList.Items[0].Name,
+		nadname:   "macvlan-nad1",
+		labelname: "red-openshift",
+		template:  pingPodTemplate,
+	}
+	pod3ns1.createTestPodMultinetwork(oc)
+	waitPodReady(oc, pod3ns1.namespace, pod3ns1.name)
+
+	g.By("7. Create second namespace")
+	nserr2 := oc.Run("new-project").Args(ns2).Execute()
+	o.Expect(nserr2).NotTo(o.HaveOccurred())
+	_, proerr2 := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "user="+ns2).Output()
+	o.Expect(proerr2).NotTo(o.HaveOccurred())
+
+	g.By("8. Create MultiNetworkPolicy-NAD2 in ns2")
+	err4 := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", netAttachDefFile2, "-n", ns2).Execute()
+	o.Expect(err4).NotTo(o.HaveOccurred())
+	output, err5 := oc.Run("get").Args("net-attach-def", "-n", ns2).Output()
+	o.Expect(err5).NotTo(o.HaveOccurred())
+	o.Expect(output).To(o.ContainSubstring("macvlan-nad2"))
+
+	g.By("9. Create 1st pod in ns2")
+	pod1ns2 := testPodMultinetwork{
+		name:      "blue-pod-3",
+		namespace: ns2,
+		nodename:  nodeList.Items[0].Name,
+		nadname:   "macvlan-nad2",
+		labelname: "blue-openshift",
+		template:  pingPodTemplate,
+	}
+	pod1ns2.createTestPodMultinetwork(oc)
+	waitPodReady(oc, pod1ns2.namespace, pod1ns2.name)
+
+	g.By("10. Create second pod in ns2")
+	pod2ns2 := testPodMultinetwork{
+		name:      "red-pod-2",
+		namespace: ns2,
+		nodename:  nodeList.Items[0].Name,
+		nadname:   "macvlan-nad2",
+		labelname: "red-openshift",
+		template:  pingPodTemplate,
+	}
+	pod2ns2.createTestPodMultinetwork(oc)
+	waitPodReady(oc, pod2ns2.namespace, pod2ns2.name)
 }
