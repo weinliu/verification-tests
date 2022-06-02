@@ -25,6 +25,8 @@ type persistentVolume struct {
 	scname        string
 	template      string
 	volumeMode    string
+	volumeKind    string
+	nfsServerIP   string
 }
 
 // function option mode to change the default values of PersistentVolume Object attributes, e.g. name, namespace, accessmode, capacity, volumemode etc.
@@ -54,7 +56,7 @@ func setPersistentVolumeAccessMode(accessmode string) persistentVolumeOption {
 // Replace the default value of PersistentVolume capacity attribute
 func setPersistentVolumeCapacity(capacity string) persistentVolumeOption {
 	return func(this *persistentVolume) {
-		this.accessmode = capacity
+		this.capacity = capacity
 	}
 }
 
@@ -93,6 +95,20 @@ func setPersistentVolumeMode(volumeMode string) persistentVolumeOption {
 	}
 }
 
+// Replace the default value of PersistentVolume nfsServerIP attribute
+func setPersistentVolumeNfsServerIP(nfsServerIP string) persistentVolumeOption {
+	return func(this *persistentVolume) {
+		this.nfsServerIP = nfsServerIP
+	}
+}
+
+// Replace the default value of PersistentVolume volumeKind attribute
+func setPersistentVolumeKind(volumeKind string) persistentVolumeOption {
+	return func(this *persistentVolume) {
+		this.volumeKind = volumeKind
+	}
+}
+
 //  Create a new customized PersistentVolume object
 func newPersistentVolume(opts ...persistentVolumeOption) persistentVolume {
 	var defaultVolSize string
@@ -117,6 +133,7 @@ func newPersistentVolume(opts ...persistentVolumeOption) persistentVolume {
 		reclaimPolicy: "Delete",
 		scname:        "slow",
 		volumeMode:    "Filesystem",
+		volumeKind:    "csi",
 	}
 
 	for _, o := range opts {
@@ -128,8 +145,36 @@ func newPersistentVolume(opts ...persistentVolumeOption) persistentVolume {
 
 // Create new PersistentVolume with customized attributes
 func (pv *persistentVolume) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplateAsAdmin(oc, "--ignore-unknown-parameters=true", "-f", pv.template, "-p", "NAME="+pv.name, "ACCESSMODE="+pv.accessmode, "CAPACITY="+pv.capacity,
-		"DRIVER="+pv.driver, "VOLUMEHANDLE="+pv.volumeHandle, "RECLAIMPOLICY="+pv.reclaimPolicy, "SCNAME="+pv.scname, "VOLUMEMODE="+pv.volumeMode)
+	var pvExtraParameters map[string]interface{}
+	switch pv.volumeKind {
+	// nfs kind PersistentVolume
+	case "nfs":
+		nfsParameters := map[string]string{
+			"path":   "/",
+			"server": pv.nfsServerIP,
+		}
+		pvExtraParameters = map[string]interface{}{
+			"jsonPath": `items.0.spec.`,
+			"nfs":      nfsParameters,
+		}
+	// csi kind PersistentVolume
+	default:
+		csiParameter := map[string]string{
+			"driver":       pv.driver,
+			"volumeHandle": pv.volumeHandle,
+		}
+		pvExtraParameters = map[string]interface{}{
+			"jsonPath": `items.0.spec.`,
+			"csi":      csiParameter,
+		}
+	}
+	pv.createWithExtraParameters(oc, pvExtraParameters)
+}
+
+//  Create a new PersistentVolume with extra parameters
+func (pv *persistentVolume) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", pv.template, "-p", "NAME="+pv.name, "ACCESSMODE="+pv.accessmode,
+		"CAPACITY="+pv.capacity, "RECLAIMPOLICY="+pv.reclaimPolicy, "SCNAME="+pv.scname, "VOLUMEMODE="+pv.volumeMode)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

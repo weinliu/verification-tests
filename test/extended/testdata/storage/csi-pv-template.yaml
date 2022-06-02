@@ -13,9 +13,6 @@ objects:
       - ${ACCESSMODE}
     capacity:
       storage: ${CAPACITY}
-    csi:
-      driver: ${DRIVER}
-      volumeHandle: ${VOLUMEHANDLE} # e.g. "file:a7d6fcdd-1cbd-4e73-a54f-a3c77586b155"
     persistentVolumeReclaimPolicy: ${RECLAIMPOLICY} # Retain, Delete
     storageClassName: ${SCNAME}
     volumeMode: ${VOLUMEMODE}   # Filesystem, Block
@@ -24,8 +21,6 @@ parameters:
 - name: NAME
 - name: ACCESSMODE
 - name: CAPACITY
-- name: DRIVER
-- name: VOLUMEHANDLE
 - name: RECLAIMPOLICY
 - name: SCNAME
 - name: VOLUMEMODE
