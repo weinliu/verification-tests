@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/service/ec2"
 	g "github.com/onsi/ginkgo"
@@ -517,7 +518,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer mylvs.deleteAsAdmin(oc)
 		mylvs.waitDeviceProvisioned(oc)
 
-		g.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
+		g.By("# Create a pvc use the localVolumeSet storageClass and create a pod consume the pvc")
 		pvc.capacity = interfaceToString(getRandomNum(1, myVolume.Size)) + "Gi"
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
@@ -612,7 +613,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer mylvs.deleteAsAdmin(oc)
 		mylvs.waitDeviceProvisioned(oc)
 
-		g.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
+		g.By("# Create a pvc use the localVolumeSet storageClass and create a pod consume the pvc")
 		pvc.capacity = interfaceToString(getRandomNum(1, myVolume.Size)) + "Gi"
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
@@ -621,15 +622,17 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pod.waitReady(oc)
 
 		g.By("# Check the volume fsType as expected")
-		volName := pvc.getVolumeName(oc)
-		checkVolumeMountCmdContain(oc, volName, myWorker.name, "ext4")
+		pvName := pvc.getVolumeName(oc)
+		checkVolumeMountCmdContain(oc, pvName, myWorker.name, "ext4")
 
 		g.By("# Check the pod volume can be read and write and have the exec right")
 		pod.checkMountedVolumeCouldRW(oc)
 		pod.checkMountedVolumeHaveExecRight(oc)
 
+		g.By("# Check the pv OwnerReference has no node related")
+		o.Expect(oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.metadata.ownerReferences[?(@.kind==\"Node\")].name}").Output()).Should(o.BeEmpty())
+
 		g.By("# Delete pod and pvc and check the related pv's status")
-		pvName := pvc.getVolumeName(oc)
 		pod.delete(oc)
 		pvc.delete(oc)
 		pvc.waitStatusAsExpected(oc, "deleted")
@@ -720,5 +723,72 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("Check the diskManager log has no deleter configmap err reported")
 		myLso.checkDiskManagerLogContains(oc, "deleter could not get provisioner configmap", false)
+	})
+
+	// author: pewang@redhat.com
+	// Customer Scenario:
+	// https://bugzilla.redhat.com/show_bug.cgi?id=2061447
+	g.It("Author:pewang-High-51520-[LSO] LocalVolume CR provisioned volume should have no ownerReferences with Node [Disruptive]", func() {
+		// Set the resource definition for the scenario
+		var (
+			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
+			depTemplate = filepath.Join(lsoBaseDir, "dep-template.yaml")
+			lvTemplate  = filepath.Join(lsoBaseDir, "/lso/localvolume-template.yaml")
+			mylv        = newLocalVolume(setLvNamespace(myLso.namespace), setLvTemplate(lvTemplate), setLvFstype("ext4"))
+			pvc         = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylv.scname))
+			dep         = newDeployment(setDeploymentTemplate(depTemplate), setDeploymentPVCName(pvc.name))
+			pvName      string
+		)
+
+		g.By("# Create a new project for the scenario")
+		oc.SetupProject() //create new project
+
+		g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
+		myWorker := getOneSchedulableWorker(allNodes)
+		myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone))
+		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
+		myVolume.createAndReadyToUse(ac)
+		// Attach the volume to a schedulable linux worker node
+		defer myVolume.detachSucceed(ac)
+		myVolume.attachToInstanceSucceed(ac, oc, myWorker)
+
+		g.By("# Create a localvolume cr use diskPath by id with the attached volume")
+		mylv.deviceID = myVolume.DeviceByID
+		mylv.create(oc)
+		defer mylv.deleteAsAdmin(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv", pvName).Execute()
+
+		g.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
+		pvc.capacity = interfaceToString(getRandomNum(1, myVolume.Size)) + "Gi"
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+		dep.waitReady(oc)
+
+		g.By("# Check the pod volume can be read and write")
+		dep.checkPodMountedVolumeCouldRW(oc)
+
+		g.By("# Check the pv OwnerReference has no node related")
+		pvName = pvc.getVolumeName(oc)
+		o.Expect(oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.metadata.ownerReferences[?(@.kind==\"Node\")].name}").Output()).Should(o.BeEmpty())
+
+		g.By("# Get the pod locate node's name and cordon the node")
+		o.Expect(getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])).Should(o.Equal(myWorker.name))
+		// Cordon the node
+		o.Expect(oc.AsAdmin().WithoutNamespace().Run("adm").Args("cordon", "node/"+myWorker.name).Execute()).NotTo(o.HaveOccurred())
+		// Make sure uncordon the node even if case failed in next several steps
+		defer dep.waitReady(oc)
+		defer uncordonSpecificNode(oc, myWorker.name)
+
+		g.By("# Delete the node and check the pv's status not become Terminating for 60s")
+		deleteSpecifiedResource(oc.AsAdmin(), "node", myWorker.name, "")
+		defer waitNodeAvaiable(oc, myWorker.name)
+		defer rebootInstanceAndWaitSucceed(ac, myWorker.instanceID)
+		// Check the localVolume CR provisioned volume not become "Terminating" after the node object is deleted
+		o.Consistently(func() string {
+			volState, _ := getPersistentVolumeStatus(oc, pvName)
+			return volState
+		}, 60*time.Second, 5*time.Second).ShouldNot(o.Equal("Terminating"))
 	})
 })

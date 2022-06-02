@@ -31,7 +31,7 @@ func execCommandInSpecificNode(oc *exutil.CLI, nodeHostName string, command stri
 	if strings.ContainsAny(stdErr, "warning") {
 		output = stdOut
 	} else {
-		output = strings.Join([]string{stdErr, stdOut}, "\n")
+		output = strings.TrimSpace(strings.Join([]string{stdErr, stdOut}, "\n"))
 	}
 	if err != nil {
 		e2e.Logf("Execute \""+command+"\" on node \"%s\" *failed with* : \"%v\".", nodeHostName, err)
@@ -184,8 +184,8 @@ func waitNodeAvaiable(oc *exutil.CLI, nodeName string) {
 	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 		nodeInfo, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes/"+nodeName, "-o", "json").Output()
 		if err != nil {
-			e2e.Logf("Err Occurred: %v", err)
-			return false, err
+			e2e.Logf("Get node status Err Occurred: \"%v\", try next round", err)
+			return false, nil
 		}
 		if !gjson.Get(nodeInfo, `spec.unschedulable`).Exists() && gjson.Get(nodeInfo, `status.conditions.#(type=Ready).status`).String() == "True" {
 			e2e.Logf("Node: \"%s\" is ready to use", nodeName)

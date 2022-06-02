@@ -307,12 +307,19 @@ func (lv *localVolume) createWithExtraParameters(oc *exutil.CLI, extraParameters
 
 // Delete localVolume CR
 func (lv *localVolume) deleteAsAdmin(oc *exutil.CLI) {
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("sc/" + lv.scname).Execute()
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("localvolume/"+lv.name, "-n", lv.namespace).Execute()
 	lvPvs, _ := getPvNamesOfSpecifiedSc(oc, lv.scname)
+	// Temp avoid known issue of PV couldn't become avaiable may cause delete LocalVolume CR stucked will remove the extra step later
+	// Delete the localvolume CR provisioned PVs before delete the CR accually it should do after delete the CR but just for temp avoid the known issue
+	// https://bugzilla.redhat.com/show_bug.cgi?id=2091873
 	for _, pv := range lvPvs {
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv/" + pv).Execute()
 	}
+	// Delete the localvolume CR
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("localvolume/"+lv.name, "-n", lv.namespace).Execute()
+	for _, pv := range lvPvs {
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv/" + pv).Execute()
+	}
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("sc/" + lv.scname).Execute()
 	command := "rm -rf /mnt/local-storage/" + lv.scname
 	workers := getWorkersList(oc)
 	for _, worker := range workers {
@@ -420,12 +427,12 @@ func (lvs *localVolumeSet) createWithExtraParameters(oc *exutil.CLI, extraParame
 
 // Delete localVolumeSet CR
 func (lvs *localVolumeSet) deleteAsAdmin(oc *exutil.CLI) {
+	lvsPvs, _ := getPvNamesOfSpecifiedSc(oc, lvs.scname)
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("localvolumeSet/"+lvs.name, "-n", lvs.namespace).Execute()
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("sc/" + lvs.scname).Execute()
-	lvPvs, _ := getPvNamesOfSpecifiedSc(oc, lvs.scname)
-	for _, pv := range lvPvs {
+	for _, pv := range lvsPvs {
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv/" + pv).Execute()
 	}
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("sc/" + lvs.scname).Execute()
 	command := "rm -rf /mnt/local-storage/" + lvs.scname
 	workers := getWorkersList(oc)
 	for _, worker := range workers {

@@ -193,7 +193,7 @@ func (pvc *persistentVolumeClaim) getStatus(oc *exutil.CLI) (string, error) {
 	return pvcStatus, err
 }
 
-// Get the PersistentVolumeClaim bounded  PersistentVolume's volumeID
+// Get the PersistentVolumeClaim bounded  PersistentVolume's name
 func (pvc *persistentVolumeClaim) getVolumeName(oc *exutil.CLI) string {
 	pvName, err := oc.WithoutNamespace().Run("get").Args("pvc", "-n", pvc.namespace, pvc.name, "-o=jsonpath={.spec.volumeName}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())

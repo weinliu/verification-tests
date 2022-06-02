@@ -549,3 +549,27 @@ func (vol *ebsVolume) expandSucceed(ac *ec2.EC2, expandCapacity int64) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	vol.waitSizeAsExpected(ac, expandCapacity)
 }
+
+// Send reboot instance request
+func rebootInstance(ac *ec2.EC2, instanceID string) error {
+	rebootInstancesInput := &ec2.RebootInstancesInput{
+		InstanceIds: []*string{aws.String(instanceID)},
+	}
+	req, resp := ac.RebootInstancesRequest(rebootInstancesInput)
+	err := req.Send()
+	debugLogf("Resp:\"%+v\", Err:\"%+v\"", resp, err)
+	return err
+}
+
+// Reboot specified instance and wait for rebooting succeed
+func rebootInstanceAndWaitSucceed(ac *ec2.EC2, instanceID string) {
+	err := rebootInstance(ac, instanceID)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Send reboot Instance:\"%+s\" request Succeed", instanceID)
+	instancesInput := &ec2.DescribeInstancesInput{
+		InstanceIds: []*string{aws.String(instanceID)},
+	}
+	err = ac.WaitUntilInstanceRunning(instancesInput)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Reboot Instance:\"%+s\" Succeed", instanceID)
+}
