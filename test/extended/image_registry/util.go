@@ -796,6 +796,10 @@ func expectedResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, isCom
 		return false, nil
 	})
 }
+func exposeService(oc *exutil.CLI, ns, resource, name, port string) {
+	err := oc.WithoutNamespace().Run("expose").Args(resource, "--name="+name, "--port="+port, "-n", ns).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
 
 func exposeEdgeRoute(oc *exutil.CLI, ns, route, service string) string {
 	err := oc.WithoutNamespace().Run("create").Args("route", "edge", route, "--service="+service, "-n", ns).Execute()
@@ -804,6 +808,7 @@ func exposeEdgeRoute(oc *exutil.CLI, ns, route, service string) string {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return regRoute
 }
+
 func listRepositories(oc *exutil.CLI, regRoute, expect string) {
 	curlCmd := fmt.Sprintf("curl -k  https://%s/v2/_catalog | grep %s", regRoute, expect)
 	result, err := exec.Command("bash", "-c", curlCmd).Output()
@@ -811,17 +816,18 @@ func listRepositories(oc *exutil.CLI, regRoute, expect string) {
 	o.Expect(string(result)).To(o.ContainSubstring(expect))
 }
 
-func setSecureRegistryWithoutAuth(oc *exutil.CLI, ns, regName string) string {
-	err := oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--name", regName, "quay.io/openshifttest/registry@sha256:01493571d994fd021da18c1f87aba1091482df3fc20825f443b4e60b3416c820", "-n", ns).Execute()
+func setSecureRegistryWithoutAuth(oc *exutil.CLI, ns, regName, image string) string {
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("deploy", regName, "--image="+image, "--port=5000", "-n", ns).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"pods", "-n", ns, "-l", "deployment=" + regName}).check(oc)
+	newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"pods", "-n", ns, "-l", "app=" + regName}).check(oc)
+	exposeService(oc, ns, "deploy/"+regName, regName, "8080")
 	regRoute := exposeEdgeRoute(oc, ns, regName, regName)
 	listRepositories(oc, regRoute, "repositories")
 	return regRoute
 }
 
-func setSecureRegistryEnableAuth(oc *exutil.CLI, ns, regName, htpasswdFile string) string {
-	regRoute := setSecureRegistryWithoutAuth(oc, ns, regName)
+func setSecureRegistryEnableAuth(oc *exutil.CLI, ns, regName, htpasswdFile, image string) string {
+	regRoute := setSecureRegistryWithoutAuth(oc, ns, regName, image)
 	ge1 := saveGeneration(oc, ns, "deployment/"+regName)
 	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "htpasswd", "--from-file="+htpasswdFile, "-n", ns).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -909,7 +915,7 @@ func saveGlobalProxy(oc *exutil.CLI) (string, string, string) {
 
 func createSimpleRunPod(oc *exutil.CLI, image, expectInfo string) {
 	podName := getRandomString()
-	err := oc.AsAdmin().WithoutNamespace().Run("run").Args(podName, "--image="+image, "-n", oc.Namespace(), "--", "sleep", "300").Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("run").Args(podName, "--image="+image, "-n", oc.Namespace(), "--image-pull-policy=Always", "--", "sleep", "300").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	err = wait.Poll(3*time.Second, 2*time.Minute, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", podName, "-n", oc.Namespace()).Output()
@@ -988,4 +994,19 @@ func saveImageRegistryAuth(oc *exutil.CLI, regRoute, ns string) (string, error) 
 		return tempDataFile, err
 	}
 	return tempDataFile, nil
+}
+
+func getSAToken(oc *exutil.CLI, sa, ns string) (string, error) {
+	e2e.Logf("Getting a token assgined to specific serviceaccount from %s namespace...", ns)
+	token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", sa, "-n", ns).Output()
+	if err != nil {
+		if strings.Contains(token, "unknown command") { // oc client is old version, create token is not supported
+			e2e.Logf("oc create token is not supported by current client, use oc sa get-token instead")
+			token, err = oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", sa, "-n", ns).Output()
+		} else {
+			return "", err
+		}
+	}
+
+	return token, err
 }

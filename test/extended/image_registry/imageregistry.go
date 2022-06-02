@@ -52,8 +52,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			g.Skip("Skip for non-supported platform")
 		}
 		g.By("Skip test when the cluster is with STS credential")
-		token, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("-n", "openshift-monitoring", "get-token", "prometheus-k8s").Output()
+		token, err := getSAToken(oc, "prometheusK8s", "openshift-monitoring")
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(token).NotTo(o.BeEmpty())
 		result, err := getBearerTokenURLViaPod(monitoringns, promPod, queryCredentialMode, token)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(result, "manualpodidentity") {
@@ -247,26 +248,19 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: xiuwang@redhat.com
 	g.It("DisconnectedOnly-Author:xiuwang-High-43715-Image registry pullthough should support pull image from the mirror registry with auth via imagecontentsourcepolicy", func() {
-		g.By("Check the imagestream imported with digest id using pullthrough policy")
-		out := getResource(oc, asAdmin, withoutNamespace, "is/jenkins", "-n", "openshift", "-o=jsonpath={.spec.tags[0]['from.name', 'referencePolicy.type']}")
-		o.Expect(out).To(o.ContainSubstring("Local"))
-		o.Expect(out).To(o.ContainSubstring("@sha256"))
-
-		g.By("Create a pod using the imagestream")
+		g.By("Create a imagestream using payload image with pullthrough policy")
 		oc.SetupProject()
-		err := oc.Run("new-app").Args("jenkins-ephemeral").Execute()
+		err := exutil.WaitForAnImageStreamTag(oc, "openshift", "tools", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().Run("tag").Args("openshift/tools:latest", "mytools:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "mytools", "latest")
 
-		err = wait.Poll(25*time.Second, 1*time.Minute, func() (bool, error) {
-			podList, err := oc.KubeClient().CoreV1().Pods(oc.Namespace()).List(metav1.ListOptions{LabelSelector: "deploymentconfig=jenkins"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if len(podList.Items) == 1 {
-				return true, nil
-			}
-			return false, nil
-
-		})
-		exutil.AssertWaitPollNoErr(err, "Pulling image via icsp is failed")
+		g.By("Check the imagestream imported with digest id using pullthrough policy")
+		err = oc.Run("set").Args("image-lookup", "mytools", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		expectInfo := `Successfully pulled image "image-registry.openshift-image-registry.svc:5000/` + oc.Namespace()
+		createSimpleRunPod(oc, "mytools", expectInfo)
 	})
 
 	// author: wewang@redhat.com
@@ -522,8 +516,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			g.Skip("Skip for non-supported platform")
 		}
 		g.By("Check if the cluster is with STS credential")
-		token, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("-n", "openshift-monitoring", "get-token", "prometheus-k8s").Output()
+		token, err := getSAToken(oc, "prometheusK8s", "openshift-monitoring")
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(token).NotTo(o.BeEmpty())
 		result, err := getBearerTokenURLViaPod(monitoringns, promPod, queryCredentialMode, token)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(result, "manualpodidentity") {
@@ -619,8 +614,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Get token from secret")
 		oc.SetupProject()
-		token, err := oc.WithoutNamespace().AsAdmin().Run("serviceaccounts").Args("get-token", "builder", "-n", oc.Namespace()).Output()
+		token, err := getSAToken(oc, "builder", oc.Namespace())
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(token).NotTo(o.BeEmpty())
 
 		g.By("Create a secret for user-defined route")
 		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("secret", "docker-registry", "mysecret", "--docker-server="+userroute, "--docker-username="+oc.Username(), "--docker-password="+token, "-n", oc.Namespace()).Execute()
@@ -685,8 +681,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Get token from secret")
 		oc.SetupProject()
-		token, err := oc.WithoutNamespace().AsAdmin().Run("serviceaccounts").Args("get-token", "builder", "-n", oc.Namespace()).Output()
+		token, err := getSAToken(oc, "builder", oc.Namespace())
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(token).NotTo(o.BeEmpty())
 
 		g.By("Create a secret for user-defined route")
 		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("secret", "docker-registry", "secret33051", "--docker-server="+host, "--docker-username="+oc.Username(), "--docker-password="+token, "-n", oc.Namespace()).Execute()
@@ -1011,7 +1008,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		)
 
 		g.By("Get Prometheus token")
-		token, err = oc.AsAdmin().WithoutNamespace().Run("sa").Args("-n", "openshift-monitoring", "get-token", "prometheus-k8s").Output()
+		token, err = getSAToken(oc, "prometheusK8s", "openshift-monitoring")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(token).NotTo(o.BeEmpty())
 		authHeader = fmt.Sprintf("Authorization: Bearer %v", token)
@@ -1162,7 +1159,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		htpasswdFile, err := generateHtpasswdFile(tempDataDir, regUser, regPass)
 		defer os.RemoveAll(htpasswdFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		regRoute := setSecureRegistryEnableAuth(oc, oc.Namespace(), "myregistry", htpasswdFile)
+		regRoute := setSecureRegistryEnableAuth(oc, oc.Namespace(), "myregistry", htpasswdFile, "quay.io/openshifttest/registry@sha256:01493571d994fd021da18c1f87aba1091482df3fc20825f443b4e60b3416c820")
 
 		g.By("Push image to private registry")
 		newAuthFile, err := appendPullSecretAuth(originAuth, regRoute, regUser, regPass)
@@ -1330,7 +1327,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		htpasswdFile, err := generateHtpasswdFile(tempDataDir, regUser, regPass)
 		defer os.RemoveAll(htpasswdFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		regRoute := setSecureRegistryEnableAuth(oc, oc.Namespace(), "myregistry", htpasswdFile)
+		regRoute := setSecureRegistryEnableAuth(oc, oc.Namespace(), "myregistry", htpasswdFile, "quay.io/openshifttest/registry@sha256:01493571d994fd021da18c1f87aba1091482df3fc20825f443b4e60b3416c820")
 
 		g.By("Create secret for the private registry")
 		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("secret", "docker-registry", "myregistry-auth", "--docker-username="+regUser, "--docker-password="+regPass, "--docker-server="+regRoute, "-n", oc.Namespace()).Execute()
@@ -1765,12 +1762,54 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		imageblob, err := exec.Command("bash", "-c", cmd).Output()
 		e2e.Logf(" imageblob is %s", imageblob)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		token, err := oc.WithoutNamespace().AsAdmin().Run("sa").Args("get-token", "builder", "-n", oc.Namespace()).Output()
+		token, err := getSAToken(oc, "builder", oc.Namespace())
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(token).NotTo(o.BeEmpty())
 		cmd = "curl -Lks -u " + oc.Username() + ":" + token + " -I HEAD https://" + regRoute + "/v2/" + oc.Namespace() + "/test-49455/blobs/" + string(imageblob)
 		curlOutput, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(curlOutput)).To(o.ContainSubstring(storageclient))
+	})
+
+	// author: xiuwang@redhat.com
+	g.It("Author:xiuwang-Low-51055-Image pullthrough does pass 429 errors back to capable clients", func() {
+
+		g.By("Create a registry could limit quota")
+		oc.SetupProject()
+		regRoute := setSecureRegistryWithoutAuth(oc, oc.Namespace(), "myregistry", "quay.io/openshifttest/registry-toomany-request@sha256:ca50d2c9b289b0bf5a22f7aa73f68586cf38de2878c63465eacf74c032a6211d")
+		o.Expect(regRoute).NotTo(o.BeEmpty())
+		err := oc.Run("set").Args("resources", "deploy/myregistry", "--requests=cpu=100m,memory=128Mi").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkPodsRunningWithLabel(oc, oc.Namespace(), "app=myregistry", 1)
+
+		limitURL := "curl -k -XPOST -d 'c=150' https://" + regRoute
+		_, err = exec.Command("bash", "-c", limitURL).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Push image to the limit registry")
+		myimage := regRoute + "/" + oc.Namespace() + "/myimage:latest"
+		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", myimage, "--insecure", "--keep-manifest-list=true", "--filter-by-os=.*").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("import-image").Args("test-51055", "--from", myimage, "--confirm", "--reference-policy=local", "--insecure").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "test-51055", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Limit the registry quota")
+		limitURL = "curl -k -XPOST -d 'c=1' https://" + regRoute
+		_, err = exec.Command("bash", "-c", limitURL).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create pod with the imagestream")
+		err = oc.Run("set").Args("image-lookup", "test-51055", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		expectInfo := "429 Too Many Requests"
+		createSimpleRunPod(oc, "test-51055:latest", expectInfo)
+		output, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args("deploy/image-registry", "--since=10s", "-n", "openshift-image-registry").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("unable to pullthrough manifest"))
+		o.Expect(output).To(o.ContainSubstring("err.code=toomanyrequests"))
+
 	})
 
 })
