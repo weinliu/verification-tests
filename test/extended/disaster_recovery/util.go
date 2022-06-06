@@ -1,4 +1,4 @@
-package disaster_recovery
+package disasterrecovery
 
 import (
 	g "github.com/onsi/ginkgo"
@@ -93,17 +93,17 @@ func getUserNameAndKeyonBationByPlatform(iaasPlatform string, privateKey string)
 	return user, keyOnBastion
 }
 
-func getNodeInternalIpListByLabel(oc *exutil.CLI, labelKey string) []string {
+func getNodeInternalIPListByLabel(oc *exutil.CLI, labelKey string) []string {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", labelKey, "-o=jsonpath='{.items[*].status.addresses[?(.type==\"InternalIP\")].address}'").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	nodeInternalIpList := strings.Fields(strings.ReplaceAll(output, "'", ""))
-	return nodeInternalIpList
+	nodeInternalIPList := strings.Fields(strings.ReplaceAll(output, "'", ""))
+	return nodeInternalIPList
 }
 
 // Run the etcdrestroe shell script command on master or node
-func runPSCommand(bastionHost string, nodeInternalIp string, command string, privateKeyForClusterNode string, privateKeyForBastion string, userForBastion string) (result string, err error) {
+func runPSCommand(bastionHost string, nodeInternalIP string, command string, privateKeyForClusterNode string, privateKeyForBastion string, userForBastion string) (result string, err error) {
 	var msg []byte
-	msg, err = exec.Command("bash", "-c", "chmod 600 "+privateKeyForBastion+"; ssh -i "+privateKeyForBastion+" -t -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "+userForBastion+"@"+bastionHost+" sudo -i ssh  -o StrictHostKeyChecking=no  -o UserKnownHostsFile=/dev/null -i "+privateKeyForClusterNode+" core@"+nodeInternalIp+" "+command).CombinedOutput()
+	msg, err = exec.Command("bash", "-c", "chmod 600 "+privateKeyForBastion+"; ssh -i "+privateKeyForBastion+" -t -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "+userForBastion+"@"+bastionHost+" sudo -i ssh  -o StrictHostKeyChecking=no  -o UserKnownHostsFile=/dev/null -i "+privateKeyForClusterNode+" core@"+nodeInternalIP+" "+command).CombinedOutput()
 	return string(msg), err
 }
 
@@ -139,10 +139,10 @@ func waitForOperatorRestart(oc *exutil.CLI, operatorName string) {
 	exutil.AssertWaitPollNoErr(err, "clusteroperator is not recovered to normal")
 }
 
-func waitForContainerDisappear(bastionHost string, nodeInternalIp string, command string, privateKeyForClusterNode string, privateKeyForBastion string, userForBastion string) {
+func waitForContainerDisappear(bastionHost string, nodeInternalIP string, command string, privateKeyForClusterNode string, privateKeyForBastion string, userForBastion string) {
 	g.By("Wait for the container to disappear")
 	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
-		msg, err := runPSCommand(bastionHost, nodeInternalIp, command, privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+		msg, err := runPSCommand(bastionHost, nodeInternalIP, command, privateKeyForClusterNode, privateKeyForBastion, userForBastion)
 		if err != nil {
 			e2e.Logf("Fail to get container, error: %s. Trying again", err)
 			return false, nil
@@ -157,8 +157,8 @@ func waitForContainerDisappear(bastionHost string, nodeInternalIp string, comman
 }
 
 //Check if the iaasPlatform in the supported list
-func in(target string, str_array []string) bool {
-	for _, element := range str_array {
+func in(target string, strArray []string) bool {
+	for _, element := range strArray {
 		if target == element {
 			return true
 		}
@@ -191,6 +191,20 @@ func waitMachineStatusRunning(oc *exutil.CLI, newMasterMachineName string) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "The machine is not Running as expected")
+}
+
+//make sure correct number of machines are present
+func waitforDesiredMachineCount(oc *exutil.CLI, machineCount int) {
+	err := wait.Poll(60*time.Second, 480*time.Second, func() (bool, error) {
+		output, errGetMachine := oc.AsAdmin().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath='{.items[*].metadata.name}'").Output()
+		o.Expect(errGetMachine).NotTo(o.HaveOccurred())
+		machineNameList := strings.Fields(output)
+		if len(machineNameList) == machineCount {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "The machine count didn't match")
 }
 
 //update new machine file

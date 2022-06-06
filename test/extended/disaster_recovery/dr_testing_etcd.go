@@ -1,4 +1,4 @@
-package disaster_recovery
+package disasterrecovery
 
 import (
 	"fmt"
@@ -81,15 +81,15 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 
 		g.By("select all the master node")
 		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
-		masterNodeInternalIpList := getNodeInternalIpListByLabel(oc, "node-role.kubernetes.io/master=")
+		masterNodeInternalIPList := getNodeInternalIPListByLabel(oc, "node-role.kubernetes.io/master=")
 
 		userForBastion, privateKeyForClusterNode := getUserNameAndKeyonBationByPlatform(iaasPlatform, privateKeyForBastion)
 		e2e.Logf("user on bastion is  : %v", userForBastion)
 		e2e.Logf("key on bastion is  : %v", privateKeyForClusterNode)
 
 		g.By("Run the backup on the first master")
-		defer runPSCommand(bastionHost, masterNodeInternalIpList[0], "sudo rm -rf /home/core/assets/backup", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
-		msg, err := runPSCommand(bastionHost, masterNodeInternalIpList[0], "sudo /usr/local/bin/cluster-backup.sh /home/core/assets/backup", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+		defer runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo rm -rf /home/core/assets/backup", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+		msg, err := runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo /usr/local/bin/cluster-backup.sh /home/core/assets/backup", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
 		if err != nil {
 			e2e.Logf("backup is failed , the msg is : %v", msg)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -98,27 +98,27 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 
 		g.By("Stop the static pods on any other control plane nodes")
 		//if assert err the cluster will be unavailable
-		for i := 1; i < len(masterNodeInternalIpList); i++ {
-			_, err := runPSCommand(bastionHost, masterNodeInternalIpList[i], "sudo mv /etc/kubernetes/manifests/etcd-pod.yaml /tmp", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+		for i := 1; i < len(masterNodeInternalIPList); i++ {
+			_, err := runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo mv /etc/kubernetes/manifests/etcd-pod.yaml /tmp", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForContainerDisappear(bastionHost, masterNodeInternalIpList[i], "sudo crictl ps | grep etcd | grep -v operator", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+			waitForContainerDisappear(bastionHost, masterNodeInternalIPList[i], "sudo crictl ps | grep etcd | grep -v operator", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
 
-			_, err = runPSCommand(bastionHost, masterNodeInternalIpList[i], "sudo mv /etc/kubernetes/manifests/kube-apiserver-pod.yaml /tmp", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+			_, err = runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo mv /etc/kubernetes/manifests/kube-apiserver-pod.yaml /tmp", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForContainerDisappear(bastionHost, masterNodeInternalIpList[i], "sudo crictl ps | grep kube-apiserver | grep -v operator", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+			waitForContainerDisappear(bastionHost, masterNodeInternalIPList[i], "sudo crictl ps | grep kube-apiserver | grep -v operator", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
 
-			_, err = runPSCommand(bastionHost, masterNodeInternalIpList[i], "sudo cp -r /var/lib/etcd/ /tmp; sudo  rm -rf /var/lib/etcd", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+			_, err = runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo cp -r /var/lib/etcd/ /tmp; sudo  rm -rf /var/lib/etcd", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
 		g.By("Run the restore script on the recovery control plane host")
-		msg, err = runPSCommand(bastionHost, masterNodeInternalIpList[0], "sudo -E /usr/local/bin/cluster-restore.sh /home/core/assets/backup", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+		msg, err = runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo -E /usr/local/bin/cluster-restore.sh /home/core/assets/backup", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("static-pod-resources"))
 
 		g.By("Restart the kubelet service on all control plane hosts")
 		for i := 0; i < len(masterNodeList); i++ {
-			_, _ = runPSCommand(bastionHost, masterNodeInternalIpList[i], "sudo systemctl restart kubelet.service", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+			_, _ = runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo systemctl restart kubelet.service", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
 
 		}
 
@@ -200,8 +200,8 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		o.Expect(updateMachineYmlFile(machineYmlFile, masterMachineNameList[0], newMasterMachineNameSuffix)).To(o.BeTrue())
 
 		g.By("Create new machine")
-		result_file, _ := exec.Command("bash", "-c", "cat "+newMachineConfigFile).Output()
-		e2e.Logf("####newMasterMachineNameSuffix is %s\n", string(result_file))
+		resultFile, _ := exec.Command("bash", "-c", "cat "+newMachineConfigFile).Output()
+		e2e.Logf("####newMasterMachineNameSuffix is %s\n", string(resultFile))
 		_, err = oc.AsAdmin().Run("create").Args("-n", "openshift-machine-api", "-f", newMachineConfigFile).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitMachineStatusRunning(oc, newMasterMachineNameSuffix)
@@ -210,6 +210,59 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		_, err = oc.AsAdmin().Run("delete").Args("-n", "openshift-machine-api", "machine", masterMachineNameList[0]).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(getNodeListByLabel(oc, "node-role.kubernetes.io/master="))).To(o.Equal(masterNodeCount))
+	})
+
+	// author: skundu@redhat.com
+	g.It("Longduration-Author:skundu-NonPreRelease-Critical-51109-Delete an existing machine at first and then add a new one. [Disruptive]", func() {
+		g.By("Test for delete an existing machine at first and then add a new one")
+
+		g.By("Get all the master node name & count")
+		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
+		masterNodeCount := len(masterNodeList)
+
+		g.By("Make sure all the etcd pods are running")
+		defer o.Expect(checkEtcdPodStatus(oc)).To(o.BeTrue())
+		podAllRunning := checkEtcdPodStatus(oc)
+		if podAllRunning != true {
+			g.Skip("The ectd pods are not running")
+		}
+
+		g.By("Export the machine config file for first master node")
+		output, errMachineConfig := oc.AsAdmin().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(errMachineConfig).NotTo(o.HaveOccurred())
+		masterMachineNameList := strings.Fields(output)
+		machineYmlFile := ""
+		machineYmlFile, errMachineYaml := oc.AsAdmin().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", masterMachineNameList[0], "-o", "yaml").OutputToFile("machine.yaml")
+		o.Expect(errMachineYaml).NotTo(o.HaveOccurred())
+		newMachineConfigFile := strings.Replace(machineYmlFile, "machine.yaml", "machineUpd.yaml", -1)
+		defer func() { o.Expect(os.Remove(machineYmlFile)).NotTo(o.HaveOccurred()) }()
+		defer func() { o.Expect(os.Remove(newMachineConfigFile)).NotTo(o.HaveOccurred()) }()
+
+		g.By("Update machineYmlFile to newMachineYmlFile:")
+		newMasterMachineNameSuffix := masterMachineNameList[0] + "-new"
+		o.Expect(updateMachineYmlFile(machineYmlFile, masterMachineNameList[0], newMasterMachineNameSuffix)).To(o.BeTrue())
+
+		g.By("At first delete machine of the master node without adding new one")
+		errMachineDelete := oc.AsAdmin().Run("delete").Args("-n", "openshift-machine-api", "--wait=false", "machine", masterMachineNameList[0]).Execute()
+		o.Expect(errMachineDelete).NotTo(o.HaveOccurred())
+		g.By("Make sure the node count is not reduced. Machine deletion hooks will prevent the deletion of the node before addition of the new one")
+		o.Expect(len(getNodeListByLabel(oc, "node-role.kubernetes.io/master="))).To(o.Equal(masterNodeCount))
+
+		g.By("Verify that the machine is getting deleted...")
+		machineStatusOutput, errVerifyDelete := oc.AsAdmin().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o", "jsonpath={.items[*].status.phase}").Output()
+		o.Expect(errVerifyDelete).NotTo(o.HaveOccurred())
+		masterMachineStatus := strings.Fields(machineStatusOutput)
+		o.Expect(string(masterMachineStatus[0])).To(o.Equal("Deleting"))
+
+		g.By("Creating new machine")
+		resultFile, _ := exec.Command("bash", "-c", "cat "+newMachineConfigFile).Output()
+		e2e.Logf("####newMasterMachineNameSuffix is %s\n", string(resultFile))
+		errMachineCreation := oc.AsAdmin().Run("create").Args("-n", "openshift-machine-api", "-f", newMachineConfigFile).Execute()
+		o.Expect(errMachineCreation).NotTo(o.HaveOccurred())
+		waitMachineStatusRunning(oc, newMasterMachineNameSuffix)
+		g.By("Verify that the machine is deleted. The machine count is same as before.")
+		waitforDesiredMachineCount(oc, len(masterMachineNameList))
+
 	})
 
 })
