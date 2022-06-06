@@ -1867,3 +1867,33 @@ func (r kafka) removeKafka(oc *exutil.CLI) {
 	resource{"configmap", "kafka-client", r.namespace}.clear(oc)
 	resource{"deployment", "kafka-consumer-sals-plaintext", r.namespace}.clear(oc)
 }
+
+func deleteEventRouter(oc *exutil.CLI, namespace string) {
+	e2e.Logf("Deleting Event Router and its resources")
+	r := []resource{{"deployment", "", namespace}, {"configmaps", "", namespace}, {"serviceaccounts", "", namespace}}
+	for i := 0; i < len(r); i++ {
+		rName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, r[i].kind, "-l", "app=eventrouter", "-o=jsonpath={.items[0].metadata.name}").Output()
+		if err != nil {
+			errstring := fmt.Sprintf("%v", rName)
+			if strings.Contains(errstring, "NotFound") || strings.Contains(errstring, "the server doesn't have a resource type") || strings.Contains(errstring, "array index out of bounds") {
+				e2e.Logf("%s not found for Event Router", r[i].kind)
+				continue
+			}
+		}
+		r[i].name = rName
+		err = r[i].clear(oc)
+		if err != nil {
+			e2e.Logf("could not delete %s/%s", r[i].kind, r[i].name)
+		}
+	}
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrole", "-l", "app=eventrouter").Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebindings", "-l", "app=eventrouter").Execute()
+}
+
+func (r resource) createEventRouter(oc *exutil.CLI, parameters ...string) {
+	// delete Event Router first.
+	deleteEventRouter(oc, r.namespace)
+	parameters = append(parameters, "-l", "app=eventrouter", "-p", "EVENT_ROUTER_NAME="+r.name)
+	err := r.applyFromTemplate(oc, parameters...)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
