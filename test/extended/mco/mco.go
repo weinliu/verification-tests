@@ -649,6 +649,10 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Medium-43245-bump initial drain sleeps down to 1min [Disruptive]", func() {
+		g.By("Start machine-config-controller logs capture")
+		mcc := NewController(oc.AsAdmin())
+		mcc.IgnoreLogsBeforeNow()
+
 		g.By("Create a pod disruption budget to set minAvailable to 1")
 		oc.SetupProject()
 		nsName := oc.Namespace()
@@ -680,11 +684,31 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Eventually(workerNode.Poll(`{.spec.taints[?(@.effect=="NoSchedule")].effect}`),
 			"20m", "1m").Should(o.Equal("NoSchedule"), fmt.Sprintf("Node %s was not cordoned", workerNode.name))
 
-		g.By("Check mcd logs to see the sleep interval b/w failed drains")
-		podLogs := waitForNumberOfLinesInPodLogs(oc, "openshift-machine-config-operator", "machine-config-daemon", workerNode.GetMachineConfigDaemon(), "Draining", 6)
+		g.By("Check MCC logs to see the sleep interval b/w failed drains")
+		var podLogs string
+		// Wait until trying drain for 6 times
+		waitErr := wait.Poll(1*time.Minute, 15*time.Minute, func() (bool, error) {
+			logs, _ := mcc.GetFilteredLogsAsList(workerNode.GetName() + ".*Drain failed")
+			if len(logs) > 5 {
+				podLogs = strings.Join(logs, "\n")
+				return true, nil
+			}
+
+			return false, nil
+		})
+		o.Expect(waitErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Cannot get 'Drain failed' log lines from controller for node %s", workerNode.GetName()))
+		e2e.Logf("Drain log lines for node %s:\n %s", workerNode.GetName(), podLogs)
 		timestamps := filterTimestampFromLogs(podLogs, 6)
+		e2e.Logf("Timestamps %s", timestamps)
+		// First 5 retries should be queued every 1 minute. We check 1 min < time < 2.7 min
 		o.Expect(getTimeDifferenceInMinute(timestamps[0], timestamps[1])).Should(o.BeNumerically("<=", 2.7))
+		o.Expect(getTimeDifferenceInMinute(timestamps[0], timestamps[1])).Should(o.BeNumerically(">=", 1))
+		o.Expect(getTimeDifferenceInMinute(timestamps[3], timestamps[4])).Should(o.BeNumerically("<=", 2.7))
+		o.Expect(getTimeDifferenceInMinute(timestamps[3], timestamps[4])).Should(o.BeNumerically(">=", 1))
+		// From 5 retries on, they should be queued ever 5 minutes instead. We check 5 min < time < 6.7 min
 		o.Expect(getTimeDifferenceInMinute(timestamps[4], timestamps[5])).Should(o.BeNumerically("<=", 6.7))
+		// MCO team is deciding if this behavior will continue or all retries will be requeued after 1min. Right now all of them are using 1 minute.
+		//o.Expect(getTimeDifferenceInMinute(timestamps[4], timestamps[5])).Should(o.BeNumerically(">=", 5))
 	})
 
 	g.It("Author:rioliu-NonPreRelease-High-43278-security fix for unsafe cipher [Serial]", func() {
