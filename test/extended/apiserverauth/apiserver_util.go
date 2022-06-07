@@ -19,6 +19,26 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+type admissionWebhook struct {
+	name             string
+	webhookname      string
+	servicenamespace string
+	servicename      string
+	namespace        string
+	apigroups        string
+	apiversions      string
+	operations       string
+	resources        string
+	template         string
+}
+
+// createAdmissionWebhookFromTemplate : Used for creating different admission hooks from pre-existing template.
+func (admissionHook *admissionWebhook) createAdmissionWebhookFromTemplate(oc *exutil.CLI) {
+	exutil.CreateClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", admissionHook.template, "-p", "NAME="+admissionHook.name, "WEBHOOKNAME="+admissionHook.webhookname,
+		"SERVICENAMESPACE="+admissionHook.servicenamespace, "SERVICENAME="+admissionHook.servicename, "NAMESPACE="+admissionHook.namespace, "APIGROUPS="+admissionHook.apigroups, "APIVERSIONS="+admissionHook.apiversions,
+		"OPERATIONS="+admissionHook.operations, "RESOURCES="+admissionHook.resources)
+}
+
 // GetEncryptionPrefix :
 func GetEncryptionPrefix(oc *exutil.CLI, key string) (string, error) {
 	var etcdPodName string

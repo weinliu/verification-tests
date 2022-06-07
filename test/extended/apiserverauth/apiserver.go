@@ -1730,4 +1730,167 @@ spec:
 		o.Expect(out).To(o.ContainSubstring(fmt.Sprintf("fallback to last-known-good revision %v took place", PreRevision)))
 		e2e.Logf("Step 6, Test Passed")
 	})
+
+	// author: jmekkatt@redhat.com
+	g.It("PreChkUpgrade-NonPreRelease-Author:jmekkatt-High-50362-Prepare Upgrade checks when cluster has bad admission webhooks [Serial]", func() {
+		var (
+			namespace                  = "ocp-50362"
+			serviceName                = "example-service"
+			serviceNamespace           = "example-namespace"
+			badValidatingWebhookName   = "test-validating-cfg"
+			badMutatingWebhookName     = "test-mutating-cfg"
+			badCrdWebhookName          = "testcrdwebhooks.tests.com"
+			badValidatingWebhook       = getTestDataFilePath("ValidatingWebhookConfigurationTemplate.yaml")
+			badMutatingWebhook         = getTestDataFilePath("MutatingWebhookConfigurationTemplate.yaml")
+			badCrdWebhook              = getTestDataFilePath("CRDWebhookConfigurationTemplate.yaml")
+			kubeApiserverCoStatus      = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			webHookErrorConditionTypes = []string{`ValidatingAdmissionWebhookConfigurationError`, `MutatingAdmissionWebhookConfigurationError`, `CRDConversionWebhookConfigurationError`, `VirtualResourceAdmissionError`}
+			reason                     = "WebhookServiceNotFound"
+			status                     = "True"
+		)
+
+		validatingWebHook := admissionWebhook{
+			name:             badValidatingWebhookName,
+			webhookname:      "test.validating.com",
+			servicenamespace: serviceNamespace,
+			servicename:      serviceName,
+			namespace:        namespace,
+			apigroups:        "",
+			apiversions:      "v1",
+			operations:       "CREATE",
+			resources:        "pods",
+			template:         badValidatingWebhook,
+		}
+
+		mutatingWebHook := admissionWebhook{
+			name:             badMutatingWebhookName,
+			webhookname:      "test.mutating.com",
+			servicenamespace: serviceNamespace,
+			servicename:      serviceName,
+			namespace:        namespace,
+			apigroups:        "authorization.k8s.io",
+			apiversions:      "v1",
+			operations:       "*",
+			resources:        "subjectaccessreviews",
+			template:         badMutatingWebhook,
+		}
+
+		crdWebHook := admissionWebhook{
+			name:             badCrdWebhookName,
+			webhookname:      "tests.com",
+			servicenamespace: serviceNamespace,
+			servicename:      serviceName,
+			namespace:        namespace,
+			apigroups:        "",
+			apiversions:      "v1",
+			operations:       "CREATE",
+			resources:        "pods",
+			template:         badCrdWebhook,
+		}
+
+		g.By("1) Create a custom namespace for admission hook references.")
+		err := oc.WithoutNamespace().Run("new-project").Args(namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("2) Create a bad ValidatingWebhookConfiguration with invalid service and namespace references.")
+		validatingWebHook.createAdmissionWebhookFromTemplate(oc)
+		CheckIfResourceAvailable(oc, "ValidatingWebhookConfiguration", []string{badValidatingWebhookName}, "")
+
+		g.By("3) Create a bad MutatingWebhookConfiguration with invalid service and namespace references.")
+		mutatingWebHook.createAdmissionWebhookFromTemplate(oc)
+		CheckIfResourceAvailable(oc, "MutatingWebhookConfiguration", []string{badMutatingWebhookName}, "")
+
+		g.By("4) Create a bad CRDWebhookConfiguration with invalid service and namespace references.")
+		crdWebHook.createAdmissionWebhookFromTemplate(oc)
+		CheckIfResourceAvailable(oc, "crd", []string{badCrdWebhookName}, "")
+
+		g.By("5) Check for information error message on kube-apiserver cluster w.r.t bad resource reference for admission webhooks")
+		for _, webHookErrorConditionType := range webHookErrorConditionTypes {
+			webhookError, err := oc.Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath='{.status.conditions[?(@.type=="`+webHookErrorConditionType+`")]}'`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("kube-apiserver reports the admission webhook errors as \n %s ", string(webhookError))
+			if strings.Contains(webhookError, "VirtualResourceAdmissionError") {
+				reason = "AdmissionWebhookMatchesVirtualResource"
+			}
+			o.Expect(webhookError).Should(o.And(
+				o.MatchRegexp(`"reason":"%s"`, reason),
+				o.MatchRegexp(`"status":"%s"`, status),
+				o.MatchRegexp(`"type":"%s"`, webHookErrorConditionType)), "Mismatch in admission errors reported")
+		}
+
+		e2e.Logf("Step 5 has passed")
+		g.By("6) Check for kube-apiserver operator status after bad validating webhook added.")
+		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		e2e.Logf("Step 6 has passed. Test case has passed.")
+
+	})
+
+	// author: jmekkatt@redhat.com
+	g.It("PstChkUpgrade-NonPreRelease-Author:jmekkatt-High-50362-Post Upgrade checks when cluster has bad admission webhooks [Serial]", func() {
+
+		var (
+			namespace                  = "ocp-50362"
+			badValidatingWebhookName   = "test-validating-cfg"
+			badMutatingWebhookName     = "test-mutating-cfg"
+			badCrdWebhookName          = "testcrdwebhooks.tests.com"
+			kubeApiserverCoStatus      = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			webHookErrorConditionTypes = []string{`ValidatingAdmissionWebhookConfigurationError`, `MutatingAdmissionWebhookConfigurationError`, `CRDConversionWebhookConfigurationError`, `VirtualResourceAdmissionError`}
+			reason                     = "WebhookServiceNotFound"
+			status                     = "True"
+		)
+
+		defer func() {
+			oc.Run("delete").Args("ValidatingWebhookConfiguration", badValidatingWebhookName, "--ignore-not-found").Execute()
+			oc.Run("delete").Args("MutatingWebhookConfiguration", badMutatingWebhookName, "--ignore-not-found").Execute()
+			oc.Run("delete").Args("crd", badCrdWebhookName, "--ignore-not-found").Execute()
+			oc.WithoutNamespace().Run("delete").Args("project", namespace, "--ignore-not-found").Execute()
+		}()
+
+		g.By("1) Check presence of admission webhooks created in pre-upgrade steps.")
+		e2e.Logf("Check availability of ValidatingWebhookConfiguration")
+		CheckIfResourceAvailable(oc, "ValidatingWebhookConfiguration", []string{badValidatingWebhookName}, "")
+		e2e.Logf("Check availability of MutatingWebhookConfiguration.")
+		CheckIfResourceAvailable(oc, "MutatingWebhookConfiguration", []string{badMutatingWebhookName}, "")
+		e2e.Logf("Check availability of CRDWebhookConfiguration.")
+		CheckIfResourceAvailable(oc, "crd", []string{badCrdWebhookName}, "")
+
+		g.By("2) Check for information message after upgrade on kube-apiserver cluster when bad admission webhooks are present.")
+		for _, webHookErrorConditionType := range webHookErrorConditionTypes {
+			webhookError, err := oc.Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath='{.status.conditions[?(@.type=="`+webHookErrorConditionType+`")]}'`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("kube-apiserver reports the admission webhook errors as \n %s ", string(webhookError))
+			if strings.Contains(webhookError, "VirtualResourceAdmissionError") {
+				reason = "AdmissionWebhookMatchesVirtualResource"
+			}
+			o.Expect(webhookError).Should(o.And(
+				o.MatchRegexp(`"reason":"%s"`, reason),
+				o.MatchRegexp(`"status":"%s"`, status),
+				o.MatchRegexp(`"type":"%s"`, webHookErrorConditionType)), "Mismatch in admission errors reported")
+		}
+
+		g.By("3) Check for kube-apiserver operator status after upgrade when cluster has bad webhooks present.")
+		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		e2e.Logf("Step 3 has passed , as kubeapiserver is in expected status.")
+
+		g.By("4) Delete all bad webhooks from upgraded cluster.")
+		oc.Run("delete").Args("ValidatingWebhookConfiguration", badValidatingWebhookName, "--ignore-not-found").Execute()
+		oc.Run("delete").Args("MutatingWebhookConfiguration", badMutatingWebhookName, "--ignore-not-found").Execute()
+		oc.Run("delete").Args("crd", badCrdWebhookName, "--ignore-not-found").Execute()
+
+		g.By("5) Check for informational error message presence after deletion of bad webhooks in upgraded cluster.")
+		status = "False"
+		for _, webHookErrorConditionType := range webHookErrorConditionTypes {
+			webhookError, err := oc.Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath='{.status.conditions[?(@.type=="`+webHookErrorConditionType+`")]}'`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("kube-apiserver reports the admission webhook errors as \n %s ", string(webhookError))
+			o.Expect(webhookError).Should(o.And(
+				o.MatchRegexp(`"type":"%s"`, webHookErrorConditionType),
+				o.MatchRegexp(`"status":"%s"`, status)), "Mismatch in admission errors reported")
+		}
+		e2e.Logf("Step 5 has passed , as no error related to webhooks are in cluster.")
+		g.By("6) Check for kube-apiserver operator status after deletion of bad webhooks in upgraded cluster.")
+		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		e2e.Logf("Step 6 has passed. Test case has passed.")
+
+	})
 })
