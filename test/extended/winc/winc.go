@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -291,35 +290,16 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	// author rrasouli@redhat.com
 	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-42496-byoh-Configure Windows instance with DNS [Slow] [Disruptive]", func() {
 		bastionHost := getSSHBastionHost(oc, iaasPlatform)
-		// use config map to fetch the actual Windows version
-		clusterVersions, _, err := exutil.GetClusterVersion(oc)
-		clusterVersion, err := strconv.ParseFloat(clusterVersions, 64)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		winVersion := "2019"
-		if clusterVersion > 4.9 {
-			winVersion = "2022"
-		} else if iaasPlatform == "vsphere" {
-			winVersion = "2004"
-		}
 		machinesetName := "byoh"
-		addressType := "InternalDNS"
-		user := getAdministratorNameByPlatform(iaasPlatform)
-		machinesetFileName := "aws_byoh_machineset.yaml"
-		if iaasPlatform == "azure" {
-			machinesetFileName = "azure_byoh_machineset.yaml"
-		} else if iaasPlatform == "vsphere" {
-			machinesetFileName = "vsphere_byoh_machineset.yaml"
+		if iaasPlatform == "aws" {
+			infrastructureID, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+			zone, err := oc.WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			machinesetName = infrastructureID + "-" + machinesetName + "-worker-" + zone
 		}
-		// creating byoh machineset
-		machineset, err := getMachineset(oc, iaasPlatform, winVersion, machinesetName, machinesetFileName)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.WithoutNamespace().Run("delete").Args("machineset", machineset, "-n", "openshift-machine-api").Output()
-		defer os.Remove("availWindowsMachineSetbyoh")
-		createMachineset(oc, "availWindowsMachineSetbyoh")
-		address := fetchAddress(oc, addressType, machineset)
-		setConfigmap(oc, address[0], user, "config-map.yaml")
+		address := setBYOH(oc, iaasPlatform, "InternalDNS", machinesetName)
+		defer oc.WithoutNamespace().Run("delete").Args("machinesets.machine.openshift.io", machinesetName, "-n", "openshift-machine-api").Output()
 		defer oc.WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", "openshift-windows-machine-config-operator").Output()
-		waitForMachinesetReady(oc, machineset, 10, 1)
 		// removing the config map
 		g.By("Delete the BYOH congigmap for node deconfiguration")
 		oc.WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", "openshift-windows-machine-config-operator").Output()
@@ -331,7 +311,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		time.Sleep(12 * time.Minute)
 		// check services are not running
 		g.By("Check services are not running after deleting the Windows Node")
-		runningServices, err := getWinSVCs(bastionHost, address[0], privateKey, iaasPlatform)
+		runningServices, err := getWinSVCs(bastionHost, address, privateKey, iaasPlatform)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		svcBool, svc := checkRunningServicesOnWindowsNode(*&svcs, runningServices)
 		if svcBool {
@@ -339,7 +319,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		}
 		g.By("Check folder do not exist after deleting the Windows Node")
 		for _, folder := range *&folders {
-			if checkFoldersDoNotExist(bastionHost, address[0], fmt.Sprintf("%v", folder), privateKey, iaasPlatform) {
+			if checkFoldersDoNotExist(bastionHost, address, fmt.Sprintf("%v", folder), privateKey, iaasPlatform) {
 				e2e.Failf("Folders still exists on a deleted node %v", fmt.Sprintf("%v", folder))
 			}
 		}
@@ -350,32 +330,16 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	// author rrasouli@redhat.com
 	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-42516-byoh-Configure Windows instance with IP [Slow][Disruptive]", func() {
 		namespace := "winc-42516"
-		user := getAdministratorNameByPlatform(iaasPlatform)
-		clusterVersions, _, err := exutil.GetClusterVersion(oc)
-		clusterVersion, err := strconv.ParseFloat(clusterVersions, 64)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		winVersion := "2019"
-		if clusterVersion > 4.9 {
-			winVersion = "2022"
-		} else if iaasPlatform == "vsphere" {
-			winVersion = "2004"
-		}
 		machinesetName := "byoh"
-		machinesetFileName := "aws_byoh_machineset.yaml"
-		if iaasPlatform == "azure" {
-			machinesetFileName = "azure_byoh_machineset.yaml"
-		} else if iaasPlatform == "vsphere" {
-			machinesetFileName = "vsphere_byoh_machineset.yaml"
+		if iaasPlatform == "aws" {
+			infrastructureID, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+			zone, err := oc.WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			machinesetName = infrastructureID + "-" + machinesetName + "-worker-" + zone
 		}
-		addressType := "InternalIP"
-		machineset, err := getMachineset(oc, iaasPlatform, winVersion, machinesetName, machinesetFileName)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.WithoutNamespace().Run("delete").Args("machinesets.machine.openshift.io", machineset, "-n", "openshift-machine-api").Output()
-		createMachineset(oc, "availWindowsMachineSetbyoh")
-		address := fetchAddress(oc, addressType, machineset)
+		defer oc.WithoutNamespace().Run("delete").Args("machinesets.machine.openshift.io", machinesetName, "-n", "openshift-machine-api").Output()
 		defer oc.WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", "openshift-windows-machine-config-operator").Output()
-		setConfigmap(oc, address[0], user, "config-map.yaml")
-		waitForMachinesetReady(oc, machineset, 15, 1)
+		setBYOH(oc, iaasPlatform, "InternalIP", machinesetName)
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
 		createWindowsWorkload(oc, namespace, "windows_web_server_byoh.yaml", getConfigMapData(oc, "windows_container_image"))

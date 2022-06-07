@@ -13,9 +13,14 @@ import (
 	"time"
 
 	o "github.com/onsi/gomega"
+	v "github.com/openshift/openshift-tests-private/test/extended/mco"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+)
+
+var (
+	winVersion = "2019"
 )
 
 func createProject(oc *exutil.CLI, namespace string) {
@@ -445,7 +450,7 @@ func checkLBConnectivity(attempts int, externalIP string) bool {
 
 func fetchAddress(oc *exutil.CLI, addressType string, machinesetName string) []string {
 	machineAddresses := ""
-	pollErr := wait.Poll(5*time.Second, 100*time.Second, func() (bool, error) {
+	pollErr := wait.Poll(5*time.Second, 200*time.Second, func() (bool, error) {
 		var err error
 		machineAddresses, err = oc.WithoutNamespace().Run("get").Args("machine", "-ojsonpath={.items[?(@.metadata.labels.machine\\.openshift\\.io\\/cluster-api-machineset==\""+machinesetName+"\")].status.addresses[?(@.type==\""+addressType+"\")].address}", "-n", "openshift-machine-api").Output()
 		if err != nil || machineAddresses == "" {
@@ -454,7 +459,7 @@ func fetchAddress(oc *exutil.CLI, addressType string, machinesetName string) []s
 		}
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Windows machine is not provisioned after waiting up to 100 seconds ..."))
+	exutil.AssertWaitPollNoErr(pollErr, "Windows machine is not provisioned after waiting up to 200 seconds ...")
 
 	// Filter out any IPv6 address which could have been configured in the machine
 	machinesAddressesArray := []string{}
@@ -593,4 +598,30 @@ func getEndpointsIPs(oc *exutil.CLI, namespace string) string {
 	endpoints, err := oc.WithoutNamespace().Run("get").Args("endpoints", "-n", namespace, "-o=jsonpath={.items[].subsets[].addresses[*].ip}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return endpoints
+}
+
+func setBYOH(oc *exutil.CLI, iaasPlatform string, addressType string, machinesetName string) string {
+	user := getAdministratorNameByPlatform(iaasPlatform)
+	clusterVersions, _, err := exutil.GetClusterVersion(oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	if v.CompareVersions(clusterVersions, ">", "4.9") {
+		winVersion = "2022"
+	} else if v.CompareVersions(clusterVersions, "<=", "4.9") && iaasPlatform == "vsphere" {
+		winVersion = "2004"
+	}
+	machinesetFileName := "aws_byoh_machineset.yaml"
+	if iaasPlatform == "azure" {
+		machinesetFileName = "azure_byoh_machineset.yaml"
+	} else if iaasPlatform == "vsphere" {
+		machinesetFileName = "vsphere_byoh_machineset.yaml"
+	}
+	machineset, err := getMachineset(oc, iaasPlatform, winVersion, machinesetName, machinesetFileName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	createMachineset(oc, "availWindowsMachineSetbyoh")
+	addressesArray := fetchAddress(oc, addressType, machineset)
+	setConfigmap(oc, addressesArray[0], user, "config-map.yaml")
+	waitForMachinesetReady(oc, machineset, 15, 1)
+
+	return addressesArray[0]
 }
