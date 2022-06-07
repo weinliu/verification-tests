@@ -751,7 +751,7 @@ func getLeaderInfo(oc *exutil.CLI, namespace string, cmName string, networkType 
 func checkSDNMetrics(oc *exutil.CLI, url string, metrics string) {
 	var metricsOutput []byte
 	var metricsLog []byte
-	olmToken, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
+	olmToken, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	metricsErr := wait.Poll(5*time.Second, 10*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), fmt.Sprintf("%s", url)).OutputToFile("metrics.txt")

@@ -30,7 +30,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	sub := subscription{
 		name:        "cluster-kube-descheduler-operator",
 		namespace:   kubeNamespace,
-		channelName: "4.10",
+		channelName: "4.11",
 		opsrcName:   "qe-app-registry",
 		sourceName:  "openshift-marketplace",
 		template:    subscriptionT,
@@ -45,7 +45,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	deschu := kubedescheduler{
 		namespace:        kubeNamespace,
 		interSeconds:     60,
-		imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.10.0",
+		imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.11.0",
 		logLevel:         "Normal",
 		operatorLogLevel: "Normal",
 		profile1:         "AffinityAndTaints",
@@ -89,30 +89,30 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("KubeDescheduler", "--all", "-n", kubeNamespace).Execute()
 
-        err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-            output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "cluster", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
-            if err != nil {
-                e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
-                return false, nil
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "descheduler", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
+			if err != nil {
+				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
+				return false, nil
 			}
-            if matched, _ := regexp.MatchString("2", output); matched {
-                e2e.Logf("deploy is up:\n%s", output)
-                return true, nil
-            }
-            return false, nil
-        })
-        exutil.AssertWaitPollNoErr(err, fmt.Sprintf("observed Generation is not expected"))
+			if matched, _ := regexp.MatchString("2", output); matched {
+				e2e.Logf("deploy is up:\n%s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("observed Generation is not expected"))
 
 		g.By("Check the kubedescheduler run well")
-		checkAvailable(oc, "deploy", "cluster", kubeNamespace, "1")
+		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Get descheduler cluster pod name")
 		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Validate all profiles have been enabled checking descheduler cluster logs")
-		profile_details := []string{"duplicates.go", "lownodeutilization.go", "pod_antiaffinity.go", "node_affinity.go", "node_taint.go", "toomanyrestarts.go", "pod_lifetime.go", "topologyspreadconstraint.go"}
-		for _, pd := range profile_details {
+		profileDetails := []string{"duplicates.go", "lownodeutilization.go", "pod_antiaffinity.go", "node_affinity.go", "node_taint.go", "toomanyrestarts.go", "pod_lifetime.go", "topologyspreadconstraint.go"}
+		for _, pd := range profileDetails {
 			checkLogsFromRs(oc, kubeNamespace, "pod", podName, regexp.QuoteMeta(pd))
 		}
 
@@ -151,6 +151,29 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		err = oc.AsAdmin().Run("create").Args("poddisruptionbudget", testdp.dName, "--selector=app=d36584", "--min-available=11").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().Run("delete").Args("pdb", testdp.dName).Execute()
+
+		g.By("Set descheduler mode to Automatic")
+		patchYamlTraceAll := `[{"op": "replace", "path": "/spec/mode", "value":"Automatic"}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlTraceAll).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		patchYamlToRestore := `[{"op": "replace", "path": "/spec/mode", "value":"Predictive"}]`
+
+		defer func() {
+			e2e.Logf("Restoring descheduler mode back to Predictive")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Check the kubedescheduler run well")
+			checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
+		}()
+
+		g.By("Check the kubedescheduler run well")
+		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
+
+		g.By("Get descheduler cluster pod name after mode is set")
+		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Uncordon node1")
 		err = oc.AsAdmin().Run("adm").Args("uncordon", nodeList.Items[0].Name).Execute()
@@ -331,26 +354,48 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("KubeDescheduler", "--all", "-n", kubeNamespace).Execute()
 
-        err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-            output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "cluster", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
-            if err != nil {
-                e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
-                return false, nil
-            }
-            if matched, _ := regexp.MatchString("2", output); matched {
-                e2e.Logf("deploy is up:\n%s", output)
-                return true, nil
-            }
-            return false, nil
-        })
-        exutil.AssertWaitPollNoErr(err, fmt.Sprintf("observed Generation is not expected"))
-
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "descheduler", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
+			if err != nil {
+				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("2", output); matched {
+				e2e.Logf("deploy is up:\n%s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("observed Generation is not expected"))
 
 		g.By("Check the kubedescheduler run well")
-		checkAvailable(oc, "deploy", "cluster", kubeNamespace, "1")
+		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Get descheduler cluster pod name")
 		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Set descheduler mode to Automatic")
+		patchYamlTraceAll := `[{"op": "replace", "path": "/spec/mode", "value":"Automatic"}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlTraceAll).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		patchYamlToRestore := `[{"op": "replace", "path": "/spec/mode", "value":"Predictive"}]`
+
+		defer func() {
+			e2e.Logf("Restoring descheduler mode back to Predictive")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Check the kubedescheduler run well")
+			checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
+		}()
+
+		g.By("Check the kubedescheduler run well")
+		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
+
+		g.By("Get descheduler cluster pod name after mode is set")
+		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Test for RemovePodsViolatingNodeAffinity
@@ -561,7 +606,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschu = kubedescheduler{
 			namespace:        kubeNamespace,
 			interSeconds:     60,
-			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.10.0",
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.11.0",
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "EvictPodsWithPVC",
@@ -599,24 +644,43 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("KubeDescheduler", "--all", "-n", kubeNamespace).Execute()
 
-        err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-            output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "cluster", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
-            if err != nil {
-                e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
-                return false, nil
-            }
-            if matched, _ := regexp.MatchString("2", output); matched {
-                e2e.Logf("deploy is up:\n%s", output)
-                return true, nil
-            }
-            return false, nil
-        })
-        exutil.AssertWaitPollNoErr(err, fmt.Sprintf("observed Generation is not expected"))
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "descheduler", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
+			if err != nil {
+				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("2", output); matched {
+				e2e.Logf("deploy is up:\n%s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("observed Generation is not expected"))
 
 		g.By("Check the kubedescheduler run well")
-		checkAvailable(oc, "deploy", "cluster", kubeNamespace, "1")
+		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
-		g.By("Get descheduler cluster pod name")
+		g.By("Set descheduler mode to Automatic")
+		patchYamlTraceAll := `[{"op": "replace", "path": "/spec/mode", "value":"Automatic"}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlTraceAll).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		patchYamlToRestore := `[{"op": "replace", "path": "/spec/mode", "value":"Predictive"}]`
+
+		defer func() {
+			e2e.Logf("Restoring descheduler mode back to Predictive")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Check the kubedescheduler run well")
+			checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
+		}()
+
+		g.By("Check the kubedescheduler run well")
+		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
+
+		g.By("Get descheduler cluster pod name after mode is set")
 		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -779,23 +843,11 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Get descheduler operator pod name")
-		operator_podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "name=descheduler-operator", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+		operatorPodName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "name=descheduler-operator", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the descheduler deploy logs, should see config error logs")
-		checkLogsFromRs(oc, kubeNamespace, "pod", operator_podName, regexp.QuoteMeta(`"enabling Descheduler LowNodeUtilization with Scheduler HighNodeUtilization may cause an eviction/scheduling hot loop"`))
-
-		g.By("Verify descheduler cluster pod does not run well")
-		err = wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if matched, _ := regexp.MatchString("No resources found", output); !matched {
-				e2e.Logf("Descheduler pod no more present, which is expected :\n%s, try again ", output)
-				return false, nil
-			}
-			return true, nil
-		})
-		o.Expect(err).NotTo(o.HaveOccurred())
+		checkLogsFromRs(oc, kubeNamespace, "pod", operatorPodName, regexp.QuoteMeta(`"enabling Descheduler LowNodeUtilization with Scheduler HighNodeUtilization may cause an eviction/scheduling hot loop"`))
 
 	})
 
@@ -808,7 +860,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschu = kubedescheduler{
 			namespace:        kubeNamespace,
 			interSeconds:     60,
-			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.10.0",
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.11.0",
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "EvictPodsWithPVC",
@@ -846,25 +898,48 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("KubeDescheduler", "--all", "-n", kubeNamespace).Execute()
 
-        err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-            output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "cluster", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
-            if err != nil {
-                e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
-                return false, nil
-            }
-            if matched, _ := regexp.MatchString("2", output); matched {
-                e2e.Logf("deploy is up:\n%s", output)
-                return true, nil
-            }
-            return false, nil
-        })
-        exutil.AssertWaitPollNoErr(err, fmt.Sprintf("observed Generation is not expected"))
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "descheduler", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
+			if err != nil {
+				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("2", output); matched {
+				e2e.Logf("deploy is up:\n%s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("observed Generation is not expected"))
 
 		g.By("Check the kubedescheduler run well")
-		checkAvailable(oc, "deploy", "cluster", kubeNamespace, "1")
+		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Get descheduler cluster pod name")
 		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Set descheduler mode to Automatic")
+		patchYamlTraceAll := `[{"op": "replace", "path": "/spec/mode", "value":"Automatic"}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlTraceAll).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		patchYamlToRestore := `[{"op": "replace", "path": "/spec/mode", "value":"Predictive"}]`
+
+		defer func() {
+			e2e.Logf("Restoring descheduler mode back to Predictive")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Check the kubedescheduler run well")
+			checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
+		}()
+
+		g.By("Check the kubedescheduler run well")
+		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
+
+		g.By("Get descheduler cluster pod name after mode is set")
+		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Test for podLifetime
