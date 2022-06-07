@@ -266,6 +266,7 @@ type ebsVolume struct {
 	State            string // Valid Values: creating | available | in-use | deleting | deleted | error
 	DeviceByID       string
 	ExpandSize       int64
+	clusterIDTagKey  string
 }
 
 // function option mode to change the default values of ebs volume attribute
@@ -306,6 +307,13 @@ func setVolDevice(device string) volOption {
 	}
 }
 
+// Replace the default value of ebs volume clusterID tag key
+func setVolClusterIDTagKey(clusterIDTagKey string) volOption {
+	return func(vol *ebsVolume) {
+		vol.clusterIDTagKey = clusterIDTagKey
+	}
+}
+
 //  Create a new customized pod object
 func newEbsVolume(opts ...volOption) ebsVolume {
 	defaultVol := ebsVolume{
@@ -330,6 +338,21 @@ func (vol *ebsVolume) create(ac *ec2.EC2) string {
 		Encrypted:        aws.Bool(vol.Encrypted),
 		Size:             aws.Int64(vol.Size),
 		VolumeType:       aws.String(vol.VolumeType),
+		TagSpecifications: []*ec2.TagSpecification{
+			{
+				ResourceType: aws.String("volume"),
+				Tags: []*ec2.Tag{
+					{
+						Key:   aws.String("Name"),
+						Value: aws.String("storage-lso-test-" + getRandomString()),
+					},
+					{
+						Key:   aws.String(vol.clusterIDTagKey),
+						Value: aws.String("owned"),
+					},
+				},
+			},
+		},
 	}
 	volInfo, err := ac.CreateVolume(volumeInput)
 	debugLogf("EBS Volume info:\n%+v", volInfo)

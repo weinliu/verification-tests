@@ -115,6 +115,17 @@ func getCloudProvider(oc *exutil.CLI) string {
 	return strings.ToLower(output)
 }
 
+//  Get the cluster infrastructureName(ClusterID)
+func getClusterID(oc *exutil.CLI) (string, error) {
+	clusterID, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+	if err != nil || clusterID == "" {
+		e2e.Logf("Get infrastructureName(ClusterID) failed with \"%v\", Or infrastructureName(ClusterID) is null:\"%s\"", err, clusterID)
+	} else {
+		debugLogf("The infrastructureName(ClusterID) is:\"%s\"", clusterID)
+	}
+	return clusterID, err
+}
+
 //  Get the cluster version channel x.x (e.g. 4.11)
 func getClusterVersionChannel(oc *exutil.CLI) string {
 	// clusterbot env don't have ".spec.channel", So change to use desire version

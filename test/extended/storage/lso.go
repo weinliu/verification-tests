@@ -17,13 +17,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc          = exutil.NewCLI("storage-lso", exutil.KubeConfigPath())
-		ac          *ec2.EC2
-		allNodes    []node
-		testChannel string
-		lsoBaseDir  string
-		lsoTemplate string
-		myLso       localStorageOperator
+		oc              = exutil.NewCLI("storage-lso", exutil.KubeConfigPath())
+		ac              *ec2.EC2
+		allNodes        []node
+		testChannel     string
+		lsoBaseDir      string
+		lsoTemplate     string
+		clusterIDTagKey string
+		myLso           localStorageOperator
 	)
 
 	// LSO test suite cloud provider support check
@@ -46,6 +47,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Get the backend credential and init aws ec2 session
 		getCredentialFromCluster(oc)
 		ac = newAwsClient()
+		clusterIDTagKey, _ = getClusterID(oc)
+		clusterIDTagKey = "kubernetes.io/cluster/" + clusterIDTagKey
 	})
 
 	g.AfterEach(func() {
@@ -71,7 +74,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
 		myWorker := getOneSchedulableWorker(allNodes)
-		myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone))
+		myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone), setVolClusterIDTagKey(clusterIDTagKey))
 		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
 		myVolume.createAndReadyToUse(ac)
 		// Attach the volume to a schedulable linux worker node
@@ -146,7 +149,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
 		myWorker := getOneSchedulableWorker(allNodes)
-		myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone))
+		myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone), setVolClusterIDTagKey(clusterIDTagKey))
 		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
 		myVolume.createAndReadyToUse(ac)
 		// Attach the volume to a schedulable linux worker node
@@ -211,7 +214,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
 		myWorker := getOneSchedulableWorker(allNodes)
-		myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone))
+		myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone), setVolClusterIDTagKey(clusterIDTagKey))
 		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
 		myVolume.createAndReadyToUse(ac)
 		// Attach the volume to a schedulable linux worker node
@@ -276,7 +279,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
 		myMaster := getOneSchedulableMaster(allNodes)
-		myVolume := newEbsVolume(setVolAz(myMaster.avaiableZone))
+		myVolume := newEbsVolume(setVolAz(myMaster.avaiableZone), setVolClusterIDTagKey(clusterIDTagKey))
 		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
 		myVolume.createAndReadyToUse(ac)
 		// Attach the volume to a schedulable linux worker node
@@ -326,7 +329,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
 		myWorker := getOneSchedulableWorker(allNodes)
-		myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone))
+		myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone), setVolClusterIDTagKey(clusterIDTagKey))
 		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
 		myVolume.createAndReadyToUse(ac)
 		// Attach the volume to a schedulable linux worker node
@@ -407,7 +410,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
 			myWorker := getOneSchedulableWorker(allNodes)
-			myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone))
+			myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone), setVolClusterIDTagKey(clusterIDTagKey))
 			defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
 			myVolume.createAndReadyToUse(ac)
 			// Attach the volume to a schedulable linux worker node
@@ -499,8 +502,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("# Create 2 aws ebs volumes and attach the volume to a schedulable worker node")
 		myWorker := getOneSchedulableWorker(allNodes)
-		myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone))
-		myVolume1 := newEbsVolume(setVolAz(myWorker.avaiableZone))
+		myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone), setVolClusterIDTagKey(clusterIDTagKey))
+		myVolume1 := newEbsVolume(setVolAz(myWorker.avaiableZone), setVolClusterIDTagKey(clusterIDTagKey))
 		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
 		myVolume.create(ac)
 		defer myVolume1.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
@@ -588,9 +591,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Create 1 aws ebs volume of random size [5-15Gi] and attach to the schedulable worker node
 		// Create 2 aws ebs volumes of random size [1-4Gi] and [16-20Gi] attach to the schedulable worker node
 		myWorker := getOneSchedulableWorker(allNodes)
-		myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone), setVolSize(getRandomNum(5, 15)))
-		minVolume := newEbsVolume(setVolAz(myWorker.avaiableZone), setVolSize(getRandomNum(1, 4)))
-		maxVolume := newEbsVolume(setVolAz(myWorker.avaiableZone), setVolSize(getRandomNum(16, 20)))
+		myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone), setVolClusterIDTagKey(clusterIDTagKey), setVolSize(getRandomNum(5, 15)))
+		minVolume := newEbsVolume(setVolAz(myWorker.avaiableZone), setVolClusterIDTagKey(clusterIDTagKey), setVolSize(getRandomNum(1, 4)))
+		maxVolume := newEbsVolume(setVolAz(myWorker.avaiableZone), setVolClusterIDTagKey(clusterIDTagKey), setVolSize(getRandomNum(16, 20)))
 		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
 		myVolume.create(ac)
 		defer minVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
@@ -677,7 +680,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
 		myWorker := getOneSchedulableWorker(allNodes)
-		myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone))
+		myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone), setVolClusterIDTagKey(clusterIDTagKey))
 		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
 		myVolume.createAndReadyToUse(ac)
 		// Attach the volume to a schedulable linux worker node
@@ -745,7 +748,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
 		myWorker := getOneSchedulableWorker(allNodes)
-		myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone))
+		myVolume := newEbsVolume(setVolAz(myWorker.avaiableZone), setVolClusterIDTagKey(clusterIDTagKey))
 		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
 		myVolume.createAndReadyToUse(ac)
 		// Attach the volume to a schedulable linux worker node
