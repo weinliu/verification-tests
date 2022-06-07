@@ -6416,7 +6416,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(strings.Contains(msg, "InstallModeType not supported") || strings.Contains(msg, "csv in namespace with no operatorgroup")).To(o.BeTrue())
 
 		g.By("Get prometheus token")
-		olmToken, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
+		olmToken, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(olmToken).NotTo(o.BeEmpty())
 
@@ -6902,7 +6902,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		g.By("2, Get token & pods so that access the Prometheus")
 		og.create(oc, itName, dr)
-		olmToken, err = oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
+		olmToken, err = exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(olmToken).NotTo(o.BeEmpty())
 
@@ -9216,7 +9216,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 
 		g.By("check alert has been raised")
 		alerts := []string{"CommunityOperatorsCatalogError", "CertifiedOperatorsCatalogError", "RedhatOperatorsCatalogError", "RedhatMarketplaceCatalogError"}
-		token, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
+		token, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "prometheus-k8s", "-n", "openshift-monitoring", "-o=jsonpath={.spec.host}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
