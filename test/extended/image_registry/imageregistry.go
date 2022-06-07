@@ -665,6 +665,21 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	// author: jitli@redhat.com
 	g.It("NonPreRelease-Longduration-Author:jitli-ConnectedOnly-VMonly-Medium-33051-Images can be imported from an insecure registry without 'insecure: true' if it is in insecureRegistries in image.config/cluster [Disruptive]", func() {
 
+		workNode, _ := exutil.GetFirstWorkerNode(oc)
+		e2e.Logf(workNode)
+		defer func() {
+			err := wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
+				regStatus, _ := exutil.DebugNodeWithChroot(oc, workNode, "bash", "-c", "cat /etc/containers/registries.conf | grep \"docker.io\"")
+				if !strings.Contains(regStatus, "location = \"docker.io\"") {
+					e2e.Logf("registries.conf updated")
+					return true, nil
+				}
+				e2e.Logf("registries.conf not update")
+				return false, nil
+
+			})
+			exutil.AssertWaitPollNoErr(err, "registries.conf not contains docker.io")
+		}()
 		g.By("import image from an insecure registry directly without --insecure=true")
 		output, err := oc.WithoutNamespace().AsAdmin().Run("import-image").Args("image-33051", "--from=registry.access.redhat.com/rhel7").Output()
 		o.Expect(err).To(o.HaveOccurred())
@@ -697,8 +712,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring("patched"))
 
 		g.By("registries.conf gets updated")
-		workNode, _ := exutil.GetFirstWorkerNode(oc)
-		e2e.Logf(workNode)
 		err = wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
 			registriesstatus, _ := exutil.DebugNodeWithChroot(oc, workNode, "bash", "-c", "cat /etc/containers/registries.conf | grep default-route-openshift-image-registry.apps")
 			if strings.Contains(registriesstatus, "default-route-openshift-image-registry.apps") {
