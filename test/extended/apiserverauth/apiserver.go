@@ -1631,4 +1631,103 @@ spec:
 			step++
 		}
 	})
+
+	// author: dpunia@redhat.com
+	g.It("Longduration-NonPreRelease-Author:dpunia-High-44596-SNO kube-apiserver can fall back to last good revision well when failing to roll out in SNO env [Disruptive]", func() {
+		var (
+			keyWords = "Stopped container|Removed container"
+		)
+
+		nodes, nodeGetError := exutil.GetAllNodes(oc)
+		o.Expect(nodeGetError).NotTo(o.HaveOccurred())
+
+		if len(nodes) > 1 {
+			g.Skip("This is not a SNO cluster, skip.")
+		}
+
+		e2e.Logf("Check openshift-kube-apiserver pods current revision before changes")
+		out, revisionChkError := oc.WithoutNamespace().Run("get").Args("po", "-n", "openshift-kube-apiserver", "-l=apiserver", "-o", "jsonpath={.items[*].metadata.labels.revision}").Output()
+		o.Expect(revisionChkError).NotTo(o.HaveOccurred())
+		PreRevision, _ := strconv.Atoi(out)
+		e2e.Logf("Current revision Count: %v", PreRevision)
+
+		defer func() {
+			g.By("Roll Out Step 1 Changes")
+			patch := `[{"op": "replace", "path": "/spec/unsupportedConfigOverrides", "value": null}]`
+			rollOutError := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubeapiserver/cluster", "--type=json", "-p", patch).Execute()
+			o.Expect(rollOutError).NotTo(o.HaveOccurred())
+
+			g.By("7) Check Kube-apiserver operator Roll Out with new revision count")
+			rollOutError = wait.Poll(100*time.Second, 900*time.Second, func() (bool, error) {
+				Output, operatorChkError := oc.WithoutNamespace().Run("get").Args("co/kube-apiserver").Output()
+				if operatorChkError == nil {
+					matched, _ := regexp.MatchString("True.*False.*False", Output)
+					if matched {
+						out, revisionChkErr := oc.WithoutNamespace().Run("get").Args("po", "-n", "openshift-kube-apiserver", "-l=apiserver", "-o", "jsonpath={.items[*].metadata.labels.revision}").Output()
+						PostRevision, _ := strconv.Atoi(out)
+						o.Expect(revisionChkErr).NotTo(o.HaveOccurred())
+						o.Expect(PostRevision).Should(o.BeNumerically(">", PreRevision), "Validation failed as PostRevision value not greater than PreRevision")
+						e2e.Logf("Kube-apiserver operator Roll Out Successfully with new revision count")
+						e2e.Logf("Step 7, Test Passed")
+						return true, nil
+					}
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(rollOutError, "Step 7, Test Failed: Kube-apiserver operator failed to Roll Out with new revision count")
+		}()
+
+		g.By("1) Add invalid configuration to kube-apiserver to make it failed")
+		patch := `[{"op": "replace", "path": "/spec/unsupportedConfigOverrides", "value": {"apiServerArguments":{"foo":["bar"]}}}]`
+		configError := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubeapiserver/cluster", "--type=json", "-p", patch).Execute()
+		o.Expect(configError).NotTo(o.HaveOccurred())
+
+		g.By("2) Check new startup-monitor pod created & running under openshift-kube-apiserver project")
+		podChkError := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
+			out, runError := oc.WithoutNamespace().Run("get").Args("po", "-n", "openshift-kube-apiserver", "-l=app=installer", "-o", `jsonpath='{.items[?(@.status.phase=="Running")].status.phase}'`).Output()
+			if runError == nil {
+				if matched, _ := regexp.MatchString("Running", out); matched {
+					e2e.Logf("Step 2, Test Passed: Startup-monitor pod created & running under openshift-kube-apiserver project")
+					return true, nil
+				}
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(podChkError, "Step 2, Test Failed: Failed to Create startup-monitor pod")
+
+		g.By("3) Check kube-apiserver to fall back to previous good revision")
+		fallbackError := wait.Poll(100*time.Second, 900*time.Second, func() (bool, error) {
+			annotations, fallbackErr := oc.WithoutNamespace().Run("get").Args("po", "-n", "openshift-kube-apiserver", "-l=apiserver", "-o", `jsonpath={.items[*].metadata.annotations.startup-monitor\.static-pods\.openshift\.io/fallback-for-revision}`).Output()
+			if fallbackErr == nil {
+				failedRevision, _ := strconv.Atoi(annotations)
+				o.Expect(failedRevision - 1).Should(o.BeNumerically("==", PreRevision))
+				g.By("Check created soft-link kube-apiserver-last-known-good to the last good revision")
+				out, fileChkError := exutil.DebugNodeWithOptionsAndChroot(oc, nodes[0], []string{"-n", "default"}, "bash", "-c", "ls -l /etc/kubernetes/static-pod-resources/kube-apiserver-last-known-good")
+				o.Expect(fileChkError).NotTo(o.HaveOccurred())
+				o.Expect(out).To(o.ContainSubstring("kube-apiserver-pod.yaml"))
+				e2e.Logf("Step 3, Test Passed: Cluster is fall back to last good revision")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(fallbackError, "Step 3, Test Failed: Failed to start kube-apiserver with previous good revision")
+
+		g.By("4: Check startup-monitor pod was created during fallback and currently in Stopped/Removed state")
+		cmd := fmt.Sprintf("journalctl -u crio --since '10min ago'| grep 'startup-monitor' | egrep %v", keyWords)
+		out, journalctlErr := exutil.DebugNodeWithOptionsAndChroot(oc, nodes[0], []string{"-n", "default"}, cmd)
+		o.Expect(journalctlErr).NotTo(o.HaveOccurred())
+		o.Expect(out).ShouldNot(o.BeEmpty())
+		e2e.Logf("Step 4, Test Passed : Startup-monitor pod was created and Stopped/Removed state")
+
+		g.By("5) Check kube-apiserver operator status changed to degraded")
+		expectedStatus := map[string]string{"Degraded": "True"}
+		operatorChkErr := waitCoBecomes(oc, "kube-apiserver", 900, expectedStatus)
+		exutil.AssertWaitPollNoErr(operatorChkErr, "Step 5, Test Failed: kube-apiserver operator failed to Degraded")
+
+		g.By("6) Check kubeapiserver operator nodeStatuses show lastFallbackCount info correctly")
+		out, revisionChkErr := oc.WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", "jsonpath='{.status.nodeStatuses[*].lastFailedRevisionErrors}'").Output()
+		o.Expect(revisionChkErr).NotTo(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring(fmt.Sprintf("fallback to last-known-good revision %v took place", PreRevision)))
+		e2e.Logf("Step 6, Test Passed")
+	})
 })
