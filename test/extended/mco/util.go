@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
@@ -862,4 +863,20 @@ func getAlertsByName(oc *exutil.CLI, alertName string) ([]JSONData, error) {
 	}
 
 	return filteredAlerts, nil
+}
+
+// WrapWithBracketsIfIpv6 wraps the ip with brackets if it is an IPV6 address.
+// In order to use IPV6 addresses with curl commands we need to wrap them between brackets.
+func WrapWithBracketsIfIpv6(ip string) (string, error) {
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return "", fmt.Errorf("The string %s is not a valid IP", ip)
+	}
+
+	// If it is an IPV6 address, wrap it
+	if parsedIP.To4() == nil {
+		return "[" + ip + "]", nil
+	}
+
+	return ip, nil
 }

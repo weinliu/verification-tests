@@ -690,7 +690,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		waitErr := wait.Poll(1*time.Minute, 15*time.Minute, func() (bool, error) {
 			logs, _ := mcc.GetFilteredLogsAsList(workerNode.GetName() + ".*Drain failed")
 			if len(logs) > 5 {
-				podLogs = strings.Join(logs, "\n")
+				// Get only 6 lines to avoid flooding the test logs, ignore the rest if any.
+				podLogs = strings.Join(logs[0:6], "\n")
 				return true, nil
 			}
 
@@ -744,7 +745,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		g.By("Get current mcd_ metrics from machine-config-daemon service")
 
 		svcMCD := NewNamespacedResource(oc.AsAdmin(), "service", "openshift-machine-config-operator", "machine-config-daemon")
-		clusterIP := svcMCD.GetOrFail("{.spec.clusterIP}")
+		clusterIP, ipErr := WrapWithBracketsIfIpv6(svcMCD.GetOrFail("{.spec.clusterIP}"))
+		o.Expect(ipErr).ShouldNot(o.HaveOccurred(), "No valid IP")
 		port := svcMCD.GetOrFail("{.spec.ports[?(@.name==\"metrics\")].port}")
 
 		token := getSATokenFromContainer(oc, "prometheus-k8s-0", "openshift-monitoring", "prometheus")
@@ -1496,6 +1498,14 @@ nulla pariatur.`
 			defer func() { o.Expect(AddToAllMachineSets(oc, -1)).NotTo(o.HaveOccurred()) }()
 		} else {
 			e2e.Logf("Platform is %s, skipping the MachineSets replica configuration", platform)
+		}
+
+		// If the number of nodes is 2, since we are using maxUnavailable=2, all nodes will be cordoned at
+		//  the same time and the eviction process will be stuck. In this case we need to skip the test case.
+		numWorkers := len(NewNodeList(oc).GetAllWorkerNodesOrFail())
+		if numWorkers <= 2 {
+			g.Skip(fmt.Sprintf("The test case needs at least 3 worker nodes, because eviction will be stuck if not. Current num worker is %d, we skip the case",
+				numWorkers))
 		}
 
 		g.By("Get the nodes in the worker pool sorted by update order")
