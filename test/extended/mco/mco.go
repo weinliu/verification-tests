@@ -651,7 +651,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	g.It("Author:mhanss-Longduration-NonPreRelease-Medium-43245-bump initial drain sleeps down to 1min [Disruptive]", func() {
 		g.By("Start machine-config-controller logs capture")
 		mcc := NewController(oc.AsAdmin())
-		mcc.IgnoreLogsBeforeNow()
+		ignoreMccLogErr := mcc.IgnoreLogsBeforeNow()
+		o.Expect(ignoreMccLogErr).NotTo(o.HaveOccurred(), "Ignore mcc log failed")
 
 		g.By("Create a pod disruption budget to set minAvailable to 1")
 		oc.SetupProject()

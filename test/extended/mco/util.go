@@ -466,23 +466,6 @@ func (mcp *MachineConfigPool) waitForComplete() {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("mc operation is not completed on mcp %s", mcp.name))
 }
 
-func waitForNodeDoesNotContain(oc *exutil.CLI, node string, value string) {
-	err := wait.Poll(1*time.Minute, 10*time.Minute, func() (bool, error) {
-		stdout, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("node/" + node).Output()
-		if err != nil {
-			e2e.Logf("the err:%v, and try next round", err)
-			return false, nil
-		}
-		if !strings.Contains(stdout, value) {
-			e2e.Logf("node does not contain %s", value)
-			return true, nil
-		}
-		return false, nil
-	})
-
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("node contains %s", value))
-}
-
 func getTimeDifferenceInMinute(oldTimestamp string, newTimestamp string) float64 {
 	oldTimeValues := strings.Split(oldTimestamp, ":")
 	oldTimeHour, _ := strconv.Atoi(oldTimeValues[0])
@@ -502,26 +485,6 @@ func getTimeDifferenceInMinute(oldTimestamp string, newTimestamp string) float64
 
 func filterTimestampFromLogs(logs string, numberOfTimestamp int) []string {
 	return regexp.MustCompile("(?m)[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}.[0-9]{1,6}").FindAllString(logs, numberOfTimestamp)
-}
-
-// WaitForNumberOfLinesInPodLogs wait and return the pod logs by the specific filter and number of lines
-func waitForNumberOfLinesInPodLogs(oc *exutil.CLI, namespace string, container string, podName string, filter string, numberOfLines int) string {
-	var logs string
-	var err error
-	waitErr := wait.Poll(30*time.Second, 20*time.Minute, func() (bool, error) {
-		logs, err = exutil.WaitAndGetSpecificPodLogs(oc, namespace, container, podName, filter)
-		if err != nil {
-			e2e.Logf("the err:%v, and try next round", err)
-			return false, nil
-		}
-		if strings.Count(logs, strings.Trim(filter, "'")) >= numberOfLines {
-			e2e.Logf("Filtered pod logs: %v", logs)
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("Number of lines in the logs is less than %v", numberOfLines))
-	return logs
 }
 
 func getMachineConfigDetails(oc *exutil.CLI, mcName string) (string, error) {
