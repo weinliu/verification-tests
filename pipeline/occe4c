@@ -104,7 +104,7 @@ cp -fr /root/gce.key ${config_name}
 eval export GOOGLE_APPLICATION_CREDENTIALS="${config_name}"
 eval export SSH_CLOUD_PRIV_KEY="${WORKDIRBASE}/internal/config/keys/openshift-qe.pem"
 export SSH_CLOUD_PRIV_GCP_USER="cloud-user"
-export SSH_CLOUD_PRIV_AWS_USER="ec2-user"
+export SSH_CLOUD_PRIV_AWS_USER="core"
 export GITHUB_TOKEN=`cat /root/github.key || true `
 env | grep proxy || true
 
