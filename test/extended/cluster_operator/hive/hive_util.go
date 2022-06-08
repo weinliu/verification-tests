@@ -196,6 +196,50 @@ type azureClusterPool struct {
 	template       string
 }
 
+//GCP
+type gcpInstallConfig struct {
+	name1      string
+	namespace  string
+	baseDomain string
+	name2      string
+	region     string
+	projectid  string
+	template   string
+}
+
+type gcpClusterDeployment struct {
+	fake                string
+	name                string
+	namespace           string
+	baseDomain          string
+	clusterName         string
+	platformType        string
+	credRef             string
+	region              string
+	imageSetRef         string
+	installConfigSecret string
+	pullSecretRef       string
+	template            string
+}
+
+type gcpClusterPool struct {
+	name           string
+	namespace      string
+	fake           string
+	baseDomain     string
+	imageSetRef    string
+	platformType   string
+	credRef        string
+	region         string
+	pullSecretRef  string
+	size           int
+	maxSize        int
+	runningCount   int
+	maxConcurrent  int
+	hibernateAfter string
+	template       string
+}
+
 //Hive Configurations
 const (
 	HiveNamespace           = "hive" //Hive Namespace
@@ -222,6 +266,13 @@ const (
 	AzureCreds      = "azure-credentials"
 	AzureRESGroup   = "os4-common"
 	AzurePublic     = "AzurePublicCloud"
+)
+
+//GCP Configurations
+const (
+	GCPBaseDomain = "qe.gcp.devcluster.openshift.com" //GCP BaseDomain
+	GCPRegion     = "us-central1"
+	GCPCreds      = "gcp-credentials"
 )
 
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
@@ -396,6 +447,22 @@ func (cluster *azureClusterDeployment) create(oc *exutil.CLI) {
 
 func (pool *azureClusterPool) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pool.template, "-p", "NAME="+pool.name, "NAMESPACE="+pool.namespace, "FAKE="+pool.fake, "BASEDOMAIN="+pool.baseDomain, "IMAGESETREF="+pool.imageSetRef, "PLATFORMTYPE="+pool.platformType, "CREDREF="+pool.credRef, "REGION="+pool.region, "RESGROUP="+pool.resGroup, "PULLSECRETREF="+pool.pullSecretRef, "SIZE="+strconv.Itoa(pool.size), "MAXSIZE="+strconv.Itoa(pool.maxSize), "RUNNINGCOUNT="+strconv.Itoa(pool.runningCount), "MAXCONCURRENT="+strconv.Itoa(pool.maxConcurrent), "HIBERNATEAFTER="+pool.hibernateAfter)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+//GCP
+func (config *gcpInstallConfig) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", config.template, "-p", "NAME1="+config.name1, "NAMESPACE="+config.namespace, "BASEDOMAIN="+config.baseDomain, "NAME2="+config.name2, "REGION="+config.region, "PROJECTID="+config.projectid)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (cluster *gcpClusterDeployment) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cluster.template, "-p", "FAKE="+cluster.fake, "NAME="+cluster.name, "NAMESPACE="+cluster.namespace, "BASEDOMAIN="+cluster.baseDomain, "CLUSTERNAME="+cluster.clusterName, "PLATFORMTYPE="+cluster.platformType, "CREDREF="+cluster.credRef, "REGION="+cluster.region, "IMAGESETREF="+cluster.imageSetRef, "INSTALLCONFIGSECRET="+cluster.installConfigSecret, "PULLSECRETREF="+cluster.pullSecretRef)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (pool *gcpClusterPool) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pool.template, "-p", "NAME="+pool.name, "NAMESPACE="+pool.namespace, "FAKE="+pool.fake, "BASEDOMAIN="+pool.baseDomain, "IMAGESETREF="+pool.imageSetRef, "PLATFORMTYPE="+pool.platformType, "CREDREF="+pool.credRef, "REGION="+pool.region, "PULLSECRETREF="+pool.pullSecretRef, "SIZE="+strconv.Itoa(pool.size), "MAXSIZE="+strconv.Itoa(pool.maxSize), "RUNNINGCOUNT="+strconv.Itoa(pool.runningCount), "MAXCONCURRENT="+strconv.Itoa(pool.maxConcurrent), "HIBERNATEAFTER="+pool.hibernateAfter)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -648,6 +715,20 @@ func createAzureCreds(oc *exutil.CLI, namespace string) {
 	o.Expect(writeError).NotTo(o.HaveOccurred())
 	e2e.Logf("%d byte written to osServicePrincipal.json", writeByte)
 	err = oc.Run("create").Args("secret", "generic", AzureCreds, "--from-file="+dirname+"/osServicePrincipal.json", "-n", namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+//Create GCP credentials in current project namespace
+func createGCPCreds(oc *exutil.CLI, namespace string) {
+	dirname := "/tmp/" + oc.Namespace() + "-creds"
+	err := os.MkdirAll(dirname, 0777)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	defer os.RemoveAll(dirname)
+
+	err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/gcp-credentials", "-n", "kube-system", "--to="+dirname, "--confirm").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	err = oc.Run("create").Args("secret", "generic", GCPCreds, "--from-file=osServiceAccount.json="+dirname+"/service_account.json", "-n", namespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
