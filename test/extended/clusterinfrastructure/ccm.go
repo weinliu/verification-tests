@@ -4,7 +4,6 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	ci "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 )
 
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
@@ -15,7 +14,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	)
 
 	g.BeforeEach(func() {
-		iaasPlatform = ci.CheckPlatform(oc)
+		iaasPlatform = exutil.CheckPlatform(oc)
 	})
 
 	// author: zhsun@redhat.com

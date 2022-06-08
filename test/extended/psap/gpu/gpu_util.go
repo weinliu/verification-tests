@@ -231,7 +231,7 @@ func createClusterPolicyJSONFromCSV(oc *exutil.CLI, namespace string, csvName st
 
 func createMachinesetbyInstanceType(oc *exutil.CLI, machinesetName string, instanceType string) {
 	// Get existing machinesets in cluster
-	ocGetMachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io", "-n", "openshift-machine-api", "-oname").Output()
+	ocGetMachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachineset, "-n", "openshift-machine-api", "-oname").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("Existing machinesets:\n%v", ocGetMachineset)
 
@@ -239,7 +239,7 @@ func createMachinesetbyInstanceType(oc *exutil.CLI, machinesetName string, insta
 	firstMachinesetName := exutil.GetFirstLinuxMachineSets(oc)
 	e2e.Logf("Got %v from machineset list", firstMachinesetName)
 
-	machinesetYamlOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io", firstMachinesetName, "-n", "openshift-machine-api", "-oyaml").Output()
+	machinesetYamlOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachineset, firstMachinesetName, "-n", "openshift-machine-api", "-oyaml").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	//Create machinset by specifying a machineset name

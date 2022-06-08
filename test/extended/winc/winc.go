@@ -259,7 +259,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		}
 		mutliOSMachineset, err := getMachineset(oc, iaasPlatform, winVersion, machinesetName, machinesetMultiOSFileName)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.WithoutNamespace().Run("delete").Args("machinesets.machine.openshift.io", mutliOSMachineset, "-n", "openshift-machine-api").Output()
+		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, mutliOSMachineset, "-n", "openshift-machine-api").Output()
 		createMachineset(oc, "availWindowsMachineSet"+machinesetName)
 		waitForMachinesetReady(oc, mutliOSMachineset, 10, 1)
 		// Here we fetch machine IP from machineset
@@ -293,12 +293,12 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		machinesetName := "byoh"
 		if iaasPlatform == "aws" {
 			infrastructureID, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
-			zone, err := oc.WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+			zone, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			machinesetName = infrastructureID + "-" + machinesetName + "-worker-" + zone
 		}
 		address := setBYOH(oc, iaasPlatform, "InternalDNS", machinesetName)
-		defer oc.WithoutNamespace().Run("delete").Args("machinesets.machine.openshift.io", machinesetName, "-n", "openshift-machine-api").Output()
+		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", "openshift-machine-api").Output()
 		defer oc.WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", "openshift-windows-machine-config-operator").Output()
 		// removing the config map
 		g.By("Delete the BYOH congigmap for node deconfiguration")
@@ -333,11 +333,11 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		machinesetName := "byoh"
 		if iaasPlatform == "aws" {
 			infrastructureID, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
-			zone, err := oc.WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+			zone, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			machinesetName = infrastructureID + "-" + machinesetName + "-worker-" + zone
 		}
-		defer oc.WithoutNamespace().Run("delete").Args("machinesets.machine.openshift.io", machinesetName, "-n", "openshift-machine-api").Output()
+		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", "openshift-machine-api").Output()
 		defer oc.WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", "openshift-windows-machine-config-operator").Output()
 		setBYOH(oc, iaasPlatform, "InternalIP", machinesetName)
 		defer deleteProject(oc, namespace)

@@ -9,7 +9,6 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -674,7 +673,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:anli-Critical-43443-Fluentd Forward logs to Cloudwatch by logtype [Serial][Slow]", func() {
-			platform := clusterinfra.CheckPlatform(oc)
+			platform := exutil.CheckPlatform(oc)
 			if platform != "aws" {
 				g.Skip("Skip for non-supported platform, the support platform is AWS!!!")
 			}
@@ -708,7 +707,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:anli-High-43839-Fluentd logs to Cloudwatch group by namespaceName and groupPrefix [Serial][Slow]", func() {
-			platform := clusterinfra.CheckPlatform(oc)
+			platform := exutil.CheckPlatform(oc)
 			if platform != "aws" {
 				g.Skip("Skip for non-supported platform, the support platform is AWS!!!")
 			}
@@ -746,7 +745,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:anli-High-43840-Forward logs to Cloudwatch group by namespaceUUID and groupPrefix [Serial][Slow]", func() {
-			platform := clusterinfra.CheckPlatform(oc)
+			platform := exutil.CheckPlatform(oc)
 			if platform != "aws" {
 				g.Skip("Skip for non-supported platform, the support platform is AWS!!!")
 			}

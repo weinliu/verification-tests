@@ -185,11 +185,11 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		}
 
 		g.By("Export the machine config file for 1st master node")
-		output, err := oc.AsAdmin().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath={.items[*].metadata.name}").Output()
+		output, err := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		masterMachineNameList := strings.Fields(output)
 		machineYmlFile := ""
-		machineYmlFile, err = oc.AsAdmin().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", masterMachineNameList[0], "-o", "yaml").OutputToFile("machine.yaml")
+		machineYmlFile, err = oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", masterMachineNameList[0], "-o", "yaml").OutputToFile("machine.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newMachineConfigFile := strings.Replace(machineYmlFile, "machine.yaml", "machineUpd.yaml", -1)
 		defer exec.Command("bash", "-c", "rm -f "+machineYmlFile).Output()
@@ -228,11 +228,11 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		}
 
 		g.By("Export the machine config file for first master node")
-		output, errMachineConfig := oc.AsAdmin().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath={.items[*].metadata.name}").Output()
+		output, errMachineConfig := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(errMachineConfig).NotTo(o.HaveOccurred())
 		masterMachineNameList := strings.Fields(output)
 		machineYmlFile := ""
-		machineYmlFile, errMachineYaml := oc.AsAdmin().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", masterMachineNameList[0], "-o", "yaml").OutputToFile("machine.yaml")
+		machineYmlFile, errMachineYaml := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", masterMachineNameList[0], "-o", "yaml").OutputToFile("machine.yaml")
 		o.Expect(errMachineYaml).NotTo(o.HaveOccurred())
 		newMachineConfigFile := strings.Replace(machineYmlFile, "machine.yaml", "machineUpd.yaml", -1)
 		defer func() { o.Expect(os.Remove(machineYmlFile)).NotTo(o.HaveOccurred()) }()
@@ -249,7 +249,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		o.Expect(len(getNodeListByLabel(oc, "node-role.kubernetes.io/master="))).To(o.Equal(masterNodeCount))
 
 		g.By("Verify that the machine is getting deleted...")
-		machineStatusOutput, errVerifyDelete := oc.AsAdmin().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o", "jsonpath={.items[*].status.phase}").Output()
+		machineStatusOutput, errVerifyDelete := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o", "jsonpath={.items[*].status.phase}").Output()
 		o.Expect(errVerifyDelete).NotTo(o.HaveOccurred())
 		masterMachineStatus := strings.Fields(machineStatusOutput)
 		o.Expect(string(masterMachineStatus[0])).To(o.Equal("Deleting"))

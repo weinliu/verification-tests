@@ -9,7 +9,6 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	ci "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
@@ -27,7 +26,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	)
 
 	g.BeforeEach(func() {
-		platform := ci.CheckPlatform(oc)
+		platform := exutil.CheckPlatform(oc)
 		networkType := checkNetworkType(oc)
 		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
 		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp")
@@ -843,7 +842,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("9. Stop one egress node.\n")
 		var instance []string
 		var zone string
-		switch ci.CheckPlatform(oc) {
+		switch exutil.CheckPlatform(oc) {
 		case "aws":
 			e2e.Logf("\n AWS is detected \n")
 			defer checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
@@ -889,7 +888,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("The source Ip is not same as the egressIP expected!"))
 
 		g.By("11. Start the stopped egress node \n")
-		switch ci.CheckPlatform(oc) {
+		switch exutil.CheckPlatform(oc) {
 		case "aws":
 			defer checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
 			startInstanceOnAWS(a, nodeList.Items[1].Name)
@@ -926,7 +925,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 	)
 
 	g.BeforeEach(func() {
-		platform := ci.CheckPlatform(oc)
+		platform := exutil.CheckPlatform(oc)
 		networkType := checkNetworkType(oc)
 		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
 		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp")

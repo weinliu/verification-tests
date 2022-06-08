@@ -30,7 +30,7 @@ func isPodInstalled(oc *exutil.CLI, namespace string) bool {
 
 // createYAMLFromMachineSet creates a YAML file with a given filename from a given machineset name in a given namespace, throws an error if creation fails
 func createYAMLFromMachineSet(oc *exutil.CLI, namespace string, machineSetName string, filename string) (string, error) {
-	return oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io", "-n", namespace, machineSetName, "-o", "yaml").OutputToFile(filename)
+	return oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachineset, "-n", namespace, machineSetName, "-o", "yaml").OutputToFile(filename)
 }
 
 // createMachineSetFromYAML creates a new machineset from the YAML configuration in a given filename, throws an error if creation fails
@@ -40,5 +40,5 @@ func createMachineSetFromYAML(oc *exutil.CLI, filename string) error {
 
 // deleteMachineSet will delete a given machineset name from a given namespace
 func deleteMachineSet(oc *exutil.CLI, namespace string, machineSetName string) error {
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("machinesets.machine.openshift.io", machineSetName, "-n", namespace).Execute()
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machineSetName, "-n", namespace).Execute()
 }

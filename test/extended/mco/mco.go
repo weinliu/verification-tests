@@ -10,8 +10,6 @@ import (
 	"strings"
 	"time"
 
-	ci "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
-
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -166,7 +164,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42365-add real time kernel argument [Disruptive]", func() {
-		platform := ci.CheckPlatform(oc)
+		platform := exutil.CheckPlatform(oc)
 		if platform == "gcp" || platform == "aws" {
 			workerNode := skipTestIfOsIsNotCoreOs(oc)
 			textToVerify := TextToVerify{
@@ -785,7 +783,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		mccPlatformStatus := NewResource(oc.AsAdmin(), "controllerconfig", "machine-config-controller").GetOrFail("{.spec.infra.status.platformStatus}")
 		e2e.Logf("test mccPlatformStatus:\n %s", mccPlatformStatus)
 
-		if ci.CheckPlatform(oc) == "azure" {
+		if exutil.CheckPlatform(oc) == "azure" {
 			g.By("check cloudName field.")
 
 			var jsonMccPlatformStatus map[string]interface{}
@@ -1437,7 +1435,7 @@ nulla pariatur.`
 
 	g.It("Author:sregidor-Longduration-NonPreRelease-High-49568-Check nodes updating order maxUnavailable=1 [Serial]", func() {
 		g.By("Scale machinesets and 1 more replica to make sure we have at least 2 nodes per machineset")
-		platform := ci.CheckPlatform(oc)
+		platform := exutil.CheckPlatform(oc)
 		e2e.Logf("Platform is %s", platform)
 		if platform != "none" && platform != "" {
 			err := AddToAllMachineSets(oc, 1)
@@ -1491,7 +1489,7 @@ nulla pariatur.`
 
 	g.It("Author:sregidor-Longduration-NonPreRelease-High-49672-Check nodes updating order maxUnavailable>1 [Serial]", func() {
 		g.By("Scale machinesets and 1 more replica to make sure we have at least 2 nodes per machineset")
-		platform := ci.CheckPlatform(oc)
+		platform := exutil.CheckPlatform(oc)
 		e2e.Logf("Platform is %s", platform)
 		if platform != "none" && platform != "" {
 			err := AddToAllMachineSets(oc, 1)

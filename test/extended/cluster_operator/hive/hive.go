@@ -10,7 +10,6 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	ci "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -77,7 +76,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		}
 
 		// get IaaS platform
-		iaasPlatform = ci.CheckPlatform(oc)
+		iaasPlatform = exutil.CheckPlatform(oc)
 
 		//Create Hive Resources if not exist
 		g.By("Create Hive NameSpace...")

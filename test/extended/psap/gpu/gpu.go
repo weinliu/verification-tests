@@ -8,7 +8,6 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	ci "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -25,7 +24,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 	g.BeforeEach(func() {
 		// get IaaS platform
-		iaasPlatform = ci.CheckPlatform(oc)
+		iaasPlatform = exutil.CheckPlatform(oc)
 
 		// Ensure NFD operator is installed
 		// Test requires NFD to be installed and an NodeFeatureDiscovery operand instance to be runnning
@@ -58,13 +57,13 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// For clean up GPU machineset in case of error during test case execution or after testcase completes execution
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("machinesets.machine.openshift.io", gpuMachinesetName, "-n", "openshift-machine-api", "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, gpuMachinesetName, "-n", "openshift-machine-api", "--ignore-not-found").Execute()
 
 		if !checkGPU {
 			e2e.Logf("No worker node detected with GPU instance, creating a g4dn.xlarge machineset ...")
 			createMachinesetbyInstanceType(oc, gpuMachinesetName, "g4dn.xlarge")
 			// Verify new node was created and is running
-			ci.WaitForMachinesRunning(oc, 1, gpuMachinesetName)
+			exutil.WaitForMachinesRunning(oc, 1, gpuMachinesetName)
 
 			e2e.Logf("Newly created GPU machineset name: %v", gpuMachinesetName)
 			// Check that the NFD labels are created

@@ -1,4 +1,4 @@
-package clusterinfrastructure
+package util
 
 import (
 	"fmt"
@@ -7,13 +7,12 @@ import (
 	"time"
 
 	o "github.com/onsi/gomega"
-	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/sjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-// To create machineset with labels to put pods on specific machines
+// MachineSetwithLabelDescription to create machineset with labels to put pods on specific machines
 type MachineSetwithLabelDescription struct {
 	Name           string
 	Replicas       int
@@ -22,13 +21,13 @@ type MachineSetwithLabelDescription struct {
 }
 
 // CreateMachineSet create a new machineset
-func (ms *MachineSetwithLabelDescription) CreateMachineSet(oc *exutil.CLI) {
+func (ms *MachineSetwithLabelDescription) CreateMachineSet(oc *CLI) {
 	e2e.Logf("Creating a new MachineSets with labels ...")
 	machinesetName := GetRandomMachineSetName(oc)
-	machineSetJson, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io", machinesetName, "-n", machineAPINamespace, "-o=json").OutputToFile("machineset.json")
+	machineSetJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machinesetName, "-n", machineAPINamespace, "-o=json").OutputToFile("machineset.json")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	bytes, _ := ioutil.ReadFile(machineSetJson)
+	bytes, _ := ioutil.ReadFile(machineSetJSON)
 	machinesetjsonWithName, _ := sjson.Set(string(bytes), "metadata.name", ms.Name)
 	machinesetjsonWithSelector, _ := sjson.Set(machinesetjsonWithName, "spec.selector.matchLabels.machine\\.openshift\\.io/cluster-api-machineset", ms.Name)
 	machinesetjsonWithTemplateLabel, _ := sjson.Set(machinesetjsonWithSelector, "spec.template.metadata.labels.machine\\.openshift\\.io/cluster-api-machineset", ms.Name)
@@ -36,9 +35,9 @@ func (ms *MachineSetwithLabelDescription) CreateMachineSet(oc *exutil.CLI) {
 	// Adding labels to machineset so that pods can be scheduled to specific machines
 	machinesetjsonWithMetadataLabels, _ := sjson.Set(machinesetjsonWithReplicas, "spec.template.spec.metadata.labels.nodeName", ms.Metadatalabels)
 	machinesetjsonWithDiskParams, _ := sjson.Set(machinesetjsonWithMetadataLabels, "spec.template.spec.providerSpec.value.ultraSSDCapability", ms.Diskparams)
-	err = ioutil.WriteFile(machineSetJson, []byte(machinesetjsonWithDiskParams), 0644)
+	err = ioutil.WriteFile(machineSetJSON, []byte(machinesetjsonWithDiskParams), 0644)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", machineSetJson).Execute(); err != nil {
+	if err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", machineSetJSON).Execute(); err != nil {
 		ms.DeleteMachineSet(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else {
@@ -47,15 +46,16 @@ func (ms *MachineSetwithLabelDescription) CreateMachineSet(oc *exutil.CLI) {
 }
 
 // DeleteMachineSet delete a machineset
-func (ms *MachineSetwithLabelDescription) DeleteMachineSet(oc *exutil.CLI) error {
+func (ms *MachineSetwithLabelDescription) DeleteMachineSet(oc *CLI) error {
 	e2e.Logf("Deleting a MachineSets ...")
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("machinesets.machine.openshift.io", ms.Name, "-n", machineAPINamespace).Execute()
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(MapiMachineset, ms.Name, "-n", machineAPINamespace).Execute()
 }
 
-func (ms *MachineSetwithLabelDescription) AssertLabelledMachinesRunningDeleteIfNot(oc *exutil.CLI, machineNumber int, machineSetName string) {
+// AssertLabelledMachinesRunningDeleteIfNot check labeled machines are running if not delete machineset
+func (ms *MachineSetwithLabelDescription) AssertLabelledMachinesRunningDeleteIfNot(oc *CLI, machineNumber int, machineSetName string) {
 	e2e.Logf("Waiting for the machines Running ...")
 	pollErr := wait.Poll(60*time.Second, 720*time.Second, func() (bool, error) {
-		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io", machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
+		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
 		machinesRunning, _ := strconv.Atoi(msg)
 		if machinesRunning != machineNumber {
 			e2e.Logf("Expected %v  machine are not Running yet and waiting up to 1 minutes ...", machineNumber)
@@ -67,7 +67,7 @@ func (ms *MachineSetwithLabelDescription) AssertLabelledMachinesRunningDeleteIfN
 	if pollErr != nil {
 		e2e.Logf("Deleting a MachineSets ...")
 		ms.DeleteMachineSet(oc)
-		exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Expected %v  machines are not Running after waiting up to 12 minutes ...", machineNumber))
+		AssertWaitPollNoErr(pollErr, fmt.Sprintf("Expected %v  machines are not Running after waiting up to 12 minutes ...", machineNumber))
 	}
 	e2e.Logf("All machines are Running ...")
 }

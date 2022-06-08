@@ -1,4 +1,4 @@
-package clusterinfrastructure
+package util
 
 import (
 	"encoding/base64"
@@ -16,7 +16,6 @@ import (
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
-	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -25,31 +24,38 @@ import (
 
 const (
 	machineAPINamespace = "openshift-machine-api"
+	//MapiMachineset means the fullname of mapi machineset
+	MapiMachineset = "machinesets.machine.openshift.io"
+	//MapiMachine means the fullname of mapi machine
+	MapiMachine = "machines.machine.openshift.io"
+	//MapiMHC means the fullname of mapi machinehealthcheck
+	MapiMHC = "machinehealthchecks.machine.openshift.io"
 )
 
+// MachineSetDescription define fields to create machineset
 type MachineSetDescription struct {
 	Name     string
 	Replicas int
 }
 
 // CreateMachineSet create a new machineset
-func (ms *MachineSetDescription) CreateMachineSet(oc *exutil.CLI) {
+func (ms *MachineSetDescription) CreateMachineSet(oc *CLI) {
 	e2e.Logf("Creating a new MachineSets ...")
 	machinesetName := GetRandomMachineSetName(oc)
-	machineSetJson, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io", machinesetName, "-n", machineAPINamespace, "-o=json").OutputToFile("machineset.json")
+	machineSetJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machinesetName, "-n", machineAPINamespace, "-o=json").OutputToFile("machineset.json")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	bytes, _ := ioutil.ReadFile(machineSetJson)
+	bytes, _ := ioutil.ReadFile(machineSetJSON)
 	value1, _ := sjson.Set(string(bytes), "metadata.name", ms.Name)
 	value2, _ := sjson.Set(value1, "spec.selector.matchLabels.machine\\.openshift\\.io/cluster-api-machineset", ms.Name)
 	value3, _ := sjson.Set(value2, "spec.template.metadata.labels.machine\\.openshift\\.io/cluster-api-machineset", ms.Name)
 	value4, _ := sjson.Set(value3, "spec.replicas", ms.Replicas)
 	// Adding taints to machineset so that pods without toleration can not schedule to the nodes we provision
 	value5, _ := sjson.Set(value4, "spec.template.spec.taints.0", map[string]interface{}{"effect": "NoSchedule", "key": "mapi", "value": "mapi_test"})
-	err = ioutil.WriteFile(machineSetJson, []byte(value5), 0644)
+	err = ioutil.WriteFile(machineSetJSON, []byte(value5), 0644)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	if err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", machineSetJson).Execute(); err != nil {
+	if err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", machineSetJSON).Execute(); err != nil {
 		ms.DeleteMachineSet(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else {
@@ -58,68 +64,68 @@ func (ms *MachineSetDescription) CreateMachineSet(oc *exutil.CLI) {
 }
 
 // DeleteMachineSet delete a machineset
-func (ms *MachineSetDescription) DeleteMachineSet(oc *exutil.CLI) error {
+func (ms *MachineSetDescription) DeleteMachineSet(oc *CLI) error {
 	e2e.Logf("Deleting a MachineSets ...")
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("machinesets.machine.openshift.io", ms.Name, "-n", machineAPINamespace).Execute()
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(MapiMachineset, ms.Name, "-n", machineAPINamespace).Execute()
 }
 
 // ListAllMachineNames list all machines
-func ListAllMachineNames(oc *exutil.CLI) []string {
+func ListAllMachineNames(oc *CLI) []string {
 	e2e.Logf("Listing all Machines ...")
-	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strings.Split(machineNames, " ")
 }
 
 // ListWorkerMachineSetNames list all worker machineSets
-func ListWorkerMachineSetNames(oc *exutil.CLI) []string {
+func ListWorkerMachineSetNames(oc *CLI) []string {
 	e2e.Logf("Listing all MachineSets ...")
-	machineSetNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io", "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+	machineSetNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strings.Split(machineSetNames, " ")
 }
 
 // ListWorkerMachineNames list all worker machines
-func ListWorkerMachineNames(oc *exutil.CLI) []string {
+func ListWorkerMachineNames(oc *CLI) []string {
 	e2e.Logf("Listing all Machines ...")
-	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-o=jsonpath={.items[*].metadata.name}", "-l", "machine.openshift.io/cluster-api-machine-type=worker", "-n", machineAPINamespace).Output()
+	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-o=jsonpath={.items[*].metadata.name}", "-l", "machine.openshift.io/cluster-api-machine-type=worker", "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strings.Split(machineNames, " ")
 }
 
 // GetMachineNamesFromMachineSet get all Machines in a Machineset
-func GetMachineNamesFromMachineSet(oc *exutil.CLI, machineSetName string) []string {
+func GetMachineNamesFromMachineSet(oc *CLI, machineSetName string) []string {
 	e2e.Logf("Getting all Machines in a Machineset ...")
-	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-o=jsonpath={.items[*].metadata.name}", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-n", machineAPINamespace).Output()
+	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-o=jsonpath={.items[*].metadata.name}", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strings.Split(machineNames, " ")
 }
 
 // GetNodeNameFromMachine get node name for a machine
-func GetNodeNameFromMachine(oc *exutil.CLI, machineName string) string {
-	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", machineName, "-o=jsonpath={.status.nodeRef.name}", "-n", machineAPINamespace).Output()
+func GetNodeNameFromMachine(oc *CLI, machineName string) string {
+	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, "-o=jsonpath={.status.nodeRef.name}", "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return nodeName
 }
 
 // GetRandomMachineSetName get a random MachineSet name
-func GetRandomMachineSetName(oc *exutil.CLI) string {
+func GetRandomMachineSetName(oc *CLI) string {
 	e2e.Logf("Getting a random MachineSet ...")
 	return ListWorkerMachineSetNames(oc)[0]
 }
 
 // ScaleMachineSet scale a MachineSet by replicas
-func ScaleMachineSet(oc *exutil.CLI, machineSetName string, replicas int) {
+func ScaleMachineSet(oc *CLI, machineSetName string, replicas int) {
 	e2e.Logf("Scaling MachineSets ...")
-	_, err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), "machinesets.machine.openshift.io", machineSetName, "-n", machineAPINamespace).Output()
+	_, err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), MapiMachineset, machineSetName, "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // WaitForMachinesRunning check if all the machines are Running in a MachineSet
-func WaitForMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetName string) {
+func WaitForMachinesRunning(oc *CLI, machineNumber int, machineSetName string) {
 	e2e.Logf("Waiting for the machines Running ...")
 	pollErr := wait.Poll(60*time.Second, 720*time.Second, func() (bool, error) {
-		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io", machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
+		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, machineSetName, "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
 		machinesRunning, _ := strconv.Atoi(msg)
 		if machinesRunning != machineNumber {
 			e2e.Logf("Expected %v  machine are not Running yet and waiting up to 1 minutes ...", machineNumber)
@@ -134,10 +140,11 @@ func WaitForMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetName st
 	e2e.Logf("All machines are Running ...")
 }
 
-func WaitForMachineFailed(oc *exutil.CLI, machineSetName string) {
+// WaitForMachineFailed check if all the machines are Failed in a MachineSet
+func WaitForMachineFailed(oc *CLI, machineSetName string) {
 	e2e.Logf("Wait for machine to go into Failed phase")
 	err := wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=jsonpath={.items[0].status.phase}").Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=jsonpath={.items[0].status.phase}").Output()
 		if output != "Failed" {
 			e2e.Logf("machine is not in Failed phase and waiting up to 3 seconds ...")
 			return false, nil
@@ -145,13 +152,14 @@ func WaitForMachineFailed(oc *exutil.CLI, machineSetName string) {
 		e2e.Logf("machine is in Failed phase")
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(err, "Check machine phase failed")
+	AssertWaitPollNoErr(err, "Check machine phase failed")
 }
 
-func WaitForMachineProvisioned(oc *exutil.CLI, machineSetName string) {
+// WaitForMachineProvisioned check if all the machines are Provisioned in a MachineSet
+func WaitForMachineProvisioned(oc *CLI, machineSetName string) {
 	e2e.Logf("Wait for machine to go into Provisioned phase")
 	err := wait.Poll(60*time.Second, 300*time.Second, func() (bool, error) {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=jsonpath={.items[0].status.phase}").Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=jsonpath={.items[0].status.phase}").Output()
 		if output != "Provisioned" {
 			e2e.Logf("machine is not in Provisioned phase and waiting up to 60 seconds ...")
 			return false, nil
@@ -159,17 +167,18 @@ func WaitForMachineProvisioned(oc *exutil.CLI, machineSetName string) {
 		e2e.Logf("machine is in Provisioned phase")
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(err, "Check machine phase failed")
+	AssertWaitPollNoErr(err, "Check machine phase failed")
 }
 
-func CheckPlatform(oc *exutil.CLI) string {
+//CheckPlatform check the cluster's platform
+func CheckPlatform(oc *CLI) string {
 	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 	return strings.ToLower(output)
 }
 
 // SkipConditionally check the total number of Running machines, if greater than zero, we think machines are managed by machine api operator.
-func SkipConditionally(oc *exutil.CLI) {
-	msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "--no-headers", "-n", machineAPINamespace).Output()
+func SkipConditionally(oc *CLI) {
+	msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "--no-headers", "-n", machineAPINamespace).Output()
 	machinesRunning := strings.Count(msg, "Running")
 	if machinesRunning == 0 {
 		g.Skip("Expect at least one Running machine. Found none!!!")
@@ -186,8 +195,8 @@ func getRandomString() string {
 	return string(buffer)
 }
 
-// Get detail info of the volume attached to the instance id
-func GetAwsVolumeInfoAttachedToInstanceId(instanceId string) (string, error) {
+// GetAwsVolumeInfoAttachedToInstanceID get detail info of the volume attached to the instance id
+func GetAwsVolumeInfoAttachedToInstanceID(instanceID string) (string, error) {
 	mySession := session.Must(session.NewSession())
 	svc := ec2.New(mySession, aws.NewConfig())
 	input := &ec2.DescribeVolumesInput{
@@ -195,7 +204,7 @@ func GetAwsVolumeInfoAttachedToInstanceId(instanceId string) (string, error) {
 			{
 				Name: aws.String("attachment.instance-id"),
 				Values: []*string{
-					aws.String(instanceId),
+					aws.String(instanceID),
 				},
 			},
 		},
@@ -205,8 +214,8 @@ func GetAwsVolumeInfoAttachedToInstanceId(instanceId string) (string, error) {
 	return string(newValue), err
 }
 
-// Get aws credential from cluster
-func GetAwsCredentialFromCluster(oc *exutil.CLI) (string, string) {
+// GetAwsCredentialFromCluster get aws credential from cluster
+func GetAwsCredentialFromCluster(oc *CLI) (string, string) {
 	credential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system", "-o", "json").Output()
 	// Disconnected and STS type test clusters
 	newValue, _ := json.Marshal(err)
@@ -254,17 +263,18 @@ func GetAwsCredentialFromCluster(oc *exutil.CLI) (string, string) {
 		os.Setenv("AWS_CONFIG_FILE", stsConfigPrefix+"config")
 		os.Setenv("AWS_PROFILE", "storageAutotest"+getRandomString())
 	} else {
-		accessKeyIdBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).String(), gjson.Get(credential, `data.aws_secret_access_key`).String()
-		accessKeyId, err := base64.StdEncoding.DecodeString(accessKeyIdBase64)
+		accessKeyIDBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).String(), gjson.Get(credential, `data.aws_secret_access_key`).String()
+		accessKeyID, err := base64.StdEncoding.DecodeString(accessKeyIDBase64)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		secureKey, err := base64.StdEncoding.DecodeString(secureKeyBase64)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		os.Setenv("AWS_ACCESS_KEY_ID", string(accessKeyId))
+		os.Setenv("AWS_ACCESS_KEY_ID", string(accessKeyID))
 		os.Setenv("AWS_SECRET_ACCESS_KEY", string(secureKey))
 	}
 	return c2sConfigPrefix, stsConfigPrefix
 }
 
+// DeleteAwsCredentialTmpFile delete aws credential tmp file
 func DeleteAwsCredentialTmpFile(c2sConfigPrefix string, stsConfigPrefix string) {
 	if c2sConfigPrefix != "" {
 		e2e.Logf("remove C2S config tmp file")

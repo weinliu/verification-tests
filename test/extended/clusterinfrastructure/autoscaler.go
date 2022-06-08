@@ -11,7 +11,6 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -73,14 +72,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 
 		g.By("Create machineset with instance type other than default in cluster")
-		clusterinfra.SkipConditionally(oc)
-		platform := clusterinfra.CheckPlatform(oc)
+		exutil.SkipConditionally(oc)
+		platform := exutil.CheckPlatform(oc)
 		if platform == "aws" {
-			ms := clusterinfra.MachineSetDescription{"machineset-45430", 0}
+			ms := exutil.MachineSetDescription{"machineset-45430", 0}
 			defer ms.DeleteMachineSet(oc)
 			ms.CreateMachineSet(oc)
 			g.By("Update machineset with instanceType")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/machineset-45430", "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"instanceType": "m5.4xlarge"}}}}}}`, "--type=merge").Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, "machineset-45430", "-n", "openshift-machine-api", "-p", `{"spec":{"template":{"spec":{"providerSpec":{"value":{"instanceType": "m5.4xlarge"}}}}}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create MachineAutoscaler")
@@ -97,7 +96,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 			g.By("Check machine could be created successful")
 			// Creat a new machine taking roughly 5 minutes , set timeout as 7 minutes
-			clusterinfra.WaitForMachinesRunning(oc, 1, "machineset-45430")
+			exutil.WaitForMachinesRunning(oc, 1, "machineset-45430")
 		}
 	})
 
@@ -128,7 +127,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	//author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-47656-[CAO] Cluster autoscaler could scale down based on scale down utilization threshold [Slow][Disruptive]", func() {
-		clusterinfra.SkipConditionally(oc)
+		exutil.SkipConditionally(oc)
 		machinesetName := "machineset-47656"
 		utilThreshold := "0.08"
 		utilThresholdNum := 8
@@ -152,7 +151,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 
 		g.By("Create a new machineset")
-		ms := clusterinfra.MachineSetDescription{machinesetName, 1}
+		ms := exutil.MachineSetDescription{machinesetName, 1}
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -169,7 +168,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		workLoad.createWorkLoad(oc)
 
 		g.By("Check machine could be created successful")
-		clusterinfra.WaitForMachinesRunning(oc, 3, "machineset-47656")
+		exutil.WaitForMachinesRunning(oc, 3, "machineset-47656")
 		workLoad.deleteWorkLoad(oc)
 		/*
 			Refer to autoscaler use case OCP-28108.
@@ -178,10 +177,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		*/
 		time.Sleep(300 * time.Second)
 		g.By("Check machineset could scale down based on utilizationThreshold")
-		out, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io", machinesetName, "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
 		machinesRunning, _ := strconv.Atoi(out)
 
-		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-o=jsonpath={.items[0].status.nodeRef.name}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-o=jsonpath={.items[0].status.nodeRef.name}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodeInfoFile, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("node", nodeName, "-n", machineAPINamespace).OutputToFile("OCP-47656-nodeinfo.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())

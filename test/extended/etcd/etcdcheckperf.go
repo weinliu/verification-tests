@@ -8,7 +8,6 @@ import (
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	ci "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -18,7 +17,7 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 	var oc = exutil.NewCLIWithoutNamespace("openshift-etcd")
 	// author: jgeorge@redhat.com
 	g.It("Author:jgeorge-High-44199-run etcd benchmark [Exclusive]", func() {
-		var platform = ci.CheckPlatform(oc)
+		var platform = exutil.CheckPlatform(oc)
 		rtt_th := map[string]string{
 			"aws": "0.03",
 			"gcp": "0.06",

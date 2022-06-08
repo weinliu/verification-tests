@@ -4,7 +4,6 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 )
 
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
@@ -15,7 +14,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	)
 
 	g.BeforeEach(func() {
-		iaasPlatform = clusterinfra.CheckPlatform(oc)
+		iaasPlatform = exutil.CheckPlatform(oc)
 	})
 
 	// author: zhsun@redhat.com
@@ -57,23 +56,23 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		if iaasPlatform != "azure" {
 			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
 		}
-		randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
-		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io/"+randomMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
+		randomMachinesetName := exutil.GetRandomMachineSetName(oc)
+		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if region == "northcentralus" || region == "westus" || region == "usgovvirginia" {
 			g.Skip("Skip this test scenario because it is not supported on the " + region + " region, because this region doesn't have zones")
 		}
 
 		g.By("Create a spot instance on azure")
-		clusterinfra.SkipConditionally(oc)
-		ms := clusterinfra.MachineSetDescription{"machineset-41804", 0}
+		exutil.SkipConditionally(oc)
+		ms := exutil.MachineSetDescription{"machineset-41804", 0}
 		ms.CreateMachineSet(oc)
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/machineset-41804", "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"spotVMOptions":{}}}}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, "machineset-41804", "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"spotVMOptions":{}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clusterinfra.WaitForMachinesRunning(oc, 1, "machineset-41804")
+		exutil.WaitForMachinesRunning(oc, 1, "machineset-41804")
 
 		g.By("Check machine and node were labelled `interruptible-instance`")
-		machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
+		machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
 		o.Expect(machine).NotTo(o.BeEmpty())
 		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "machine.openshift.io/interruptible-instance=").Output()
 		o.Expect(node).NotTo(o.BeEmpty())
@@ -84,17 +83,17 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		if iaasPlatform != "azure" {
 			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
 		}
-		randomMachinesetName := clusterinfra.GetRandomMachineSetName(oc)
-		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io/"+randomMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
+		randomMachinesetName := exutil.GetRandomMachineSetName(oc)
+		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if region == "northcentralus" || region == "westus" || region == "usgovvirginia" {
 			g.Skip("Skip this test scenario because it is not supported on the " + region + " region, because this region doesn't have zones")
 		}
-		ms := clusterinfra.MachineSetDescription{"machineset-41804", 0}
+		ms := exutil.MachineSetDescription{"machineset-41804", 0}
 		defer ms.DeleteMachineSet(oc)
 
 		g.By("Check machine and node were still be labelled `interruptible-instance`")
-		machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
+		machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
 		o.Expect(machine).NotTo(o.BeEmpty())
 		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "machine.openshift.io/interruptible-instance=").Output()
 		o.Expect(node).NotTo(o.BeEmpty())

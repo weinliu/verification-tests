@@ -7,7 +7,6 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,7 +43,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Critical-49168-Deploy lokistack on s3[Serial]", func() {
-			platform := clusterinfra.CheckPlatform(oc)
+			platform := exutil.CheckPlatform(oc)
 			if platform != "aws" {
 				g.Skip("Skip for non-supported platform, the supported platform is AWS!!!")
 			}
@@ -78,7 +77,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Critical-49169-Deploy lokistack on GCS[Serial]", func() {
-			platform := clusterinfra.CheckPlatform(oc)
+			platform := exutil.CheckPlatform(oc)
 			if platform != "gcp" {
 				g.Skip("Skip for non-supported platform, the supported platform is GCP!!!")
 			}
@@ -107,7 +106,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Critical-49171-Deploy lokistack on azure[Serial]", func() {
-			platform := clusterinfra.CheckPlatform(oc)
+			platform := exutil.CheckPlatform(oc)
 			if platform != "azure" {
 				g.Skip("Skip for non-supported platform, the supported platform is AZURE!!!")
 			}
@@ -136,7 +135,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Critical-49364-Forward logs to LokiStack with gateway using fluentd as the collector[Serial]", func() {
-			platform := clusterinfra.CheckPlatform(oc)
+			platform := exutil.CheckPlatform(oc)
 			if platform != "aws" && platform != "gcp" && platform != "azure" {
 				g.Skip("Skip for non-supported platform, the supported platforms are AWS, GCP and Azure!!!")
 			}

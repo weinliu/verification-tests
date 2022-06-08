@@ -6,7 +6,6 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	ci "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -55,7 +54,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		// ensure NTO operator is installed
 		isNTO = isPodInstalled(oc, ntoNamespace)
 		// get IaaS platform
-		iaasPlatform = ci.CheckPlatform(oc)
+		iaasPlatform = exutil.CheckPlatform(oc)
 	})
 
 	// author: nweinber@redhat.com

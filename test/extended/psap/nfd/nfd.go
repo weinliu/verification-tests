@@ -9,7 +9,6 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	ci "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -24,7 +23,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 	g.BeforeEach(func() {
 		// get IaaS platform
-		iaasPlatform = ci.CheckPlatform(oc)
+		iaasPlatform = exutil.CheckPlatform(oc)
 	})
 
 	// author: nweinber@redhat.com
@@ -47,7 +46,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		}
 
 		g.By("Get existing machinesets in cluster")
-		oc_get_machineset := ci.ListWorkerMachineSetNames(oc)
+		oc_get_machineset := exutil.ListWorkerMachineSetNames(oc)
 		e2e.Logf("Existing machinesets:\n%v", oc_get_machineset)
 
 		g.By("Get name of first machineset in existing machineset list")
@@ -96,7 +95,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Verify new node was created")
-		ci.WaitForMachinesRunning(oc, 1, new_machineset_name)
+		exutil.WaitForMachinesRunning(oc, 1, new_machineset_name)
 
 		g.By("Check that the NFD labels are created")
 		oc_describe_nodes, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("node").Output()

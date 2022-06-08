@@ -23,7 +23,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	"google.golang.org/api/iterator"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -413,7 +412,7 @@ func createSecretForAzureContainer(oc *exutil.CLI, bucketName, secretName, ns st
 
 // return the storage type per different platform
 func getStorageType(oc *exutil.CLI) string {
-	platform := clusterinfra.CheckPlatform(oc)
+	platform := exutil.CheckPlatform(oc)
 	switch platform {
 	case "aws":
 		{

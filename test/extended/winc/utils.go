@@ -99,7 +99,7 @@ func checkVersionAnnotationReady(oc *exutil.CLI, windowsNodeName string) (bool, 
 func getWindowsMachineSetName(oc *exutil.CLI) string {
 	// fetch the Windows MachineSet from all machinesets list
 	myJSON := "-o=jsonpath={.items[?(@.spec.template.metadata.labels.machine\\.openshift\\.io\\/os-id==\"Windows\")].metadata.name}"
-	windowsMachineSetName, err := oc.WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io", "-n", "openshift-machine-api", myJSON).Output()
+	windowsMachineSetName, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachineset, "-n", "openshift-machine-api", myJSON).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return windowsMachineSetName
 }
@@ -337,7 +337,7 @@ func getMachineset(oc *exutil.CLI, iaasPlatform, winVersion string, machineSetNa
 			e2e.Logf("Using default AWS region: us-east-2")
 			region = "us-east-2"
 		}
-		zone, err := oc.WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+		zone, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
 		if err != nil {
 			e2e.Logf("Using default AWS zone: us-east-2a")
 			zone = "us-east-2a"
@@ -394,7 +394,7 @@ func createMachineset(oc *exutil.CLI, file string) error {
 
 func waitForMachinesetReady(oc *exutil.CLI, machinesetName string, deadTime int, expectedReplicas int) {
 	pollErr := wait.Poll(30*time.Second, time.Duration(deadTime)*time.Minute, func() (bool, error) {
-		msg, err := oc.WithoutNamespace().Run("get").Args("machinesets.machine.openshift.io", machinesetName, "-o=jsonpath={.status.readyReplicas}", "-n", "openshift-machine-api").Output()
+		msg, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachineset, machinesetName, "-o=jsonpath={.status.readyReplicas}", "-n", "openshift-machine-api").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		numberOfMachines := 0
 		if msg != "" {
@@ -452,7 +452,7 @@ func fetchAddress(oc *exutil.CLI, addressType string, machinesetName string) []s
 	machineAddresses := ""
 	pollErr := wait.Poll(5*time.Second, 200*time.Second, func() (bool, error) {
 		var err error
-		machineAddresses, err = oc.WithoutNamespace().Run("get").Args("machine", "-ojsonpath={.items[?(@.metadata.labels.machine\\.openshift\\.io\\/cluster-api-machineset==\""+machinesetName+"\")].status.addresses[?(@.type==\""+addressType+"\")].address}", "-n", "openshift-machine-api").Output()
+		machineAddresses, err = oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-ojsonpath={.items[?(@.metadata.labels.machine\\.openshift\\.io\\/cluster-api-machineset==\""+machinesetName+"\")].status.addresses[?(@.type==\""+addressType+"\")].address}", "-n", "openshift-machine-api").Output()
 		if err != nil || machineAddresses == "" {
 			e2e.Logf("Did not get address, trying next round")
 			return false, nil

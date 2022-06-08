@@ -9,7 +9,6 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -46,8 +45,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonPreRelease-Author:zhsun-Medium-43764-MachineHealthCheckUnterminatedShortCircuit alert should be fired when a MHC has been in a short circuit state [Serial][Slow][Disruptive]", func() {
 		g.By("Create a new machineset")
-		clusterinfra.SkipConditionally(oc)
-		ms := clusterinfra.MachineSetDescription{"machineset-43764", 1}
+		exutil.SkipConditionally(oc)
+		ms := exutil.MachineSetDescription{"machineset-43764", 1}
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
@@ -57,18 +56,18 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		mhcBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "mhc")
 		mhcTemplate := filepath.Join(mhcBaseDir, "mhc.yaml")
 		mhc := mhcDescription{
-			clusterid:       clusterID,
-			maxunhealthy:    "0%",
-			machineset_name: "machineset-43764",
-			name:            "mhc-43764",
-			template:        mhcTemplate,
+			clusterid:      clusterID,
+			maxunhealthy:   "0%",
+			machinesetName: "machineset-43764",
+			name:           "mhc-43764",
+			template:       mhcTemplate,
 		}
 		defer mhc.deleteMhc(oc)
 		mhc.createMhc(oc)
 
 		g.By("Delete the node attached to the machine")
-		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, "machineset-43764")[0]
-		nodeName := clusterinfra.GetNodeNameFromMachine(oc, machineName)
+		machineName := exutil.GetMachineNamesFromMachineSet(oc, "machineset-43764")[0]
+		nodeName := exutil.GetNodeNameFromMachine(oc, machineName)
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("node", nodeName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -89,9 +88,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("NonPreRelease-Author:huliu-High-36989-mapi_instance_create_failed metrics should work [Disruptive]", func() {
-		clusterinfra.SkipConditionally(oc)
+		exutil.SkipConditionally(oc)
 		var patchstr string
-		platform := clusterinfra.CheckPlatform(oc)
+		platform := exutil.CheckPlatform(oc)
 		switch platform {
 		case "aws", "alibabacloud":
 			patchstr = `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"instanceType":"invalid"}}}}}}`
@@ -113,17 +112,17 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Create a new machineset")
 		machinesetName := "machineset-36989"
-		ms := clusterinfra.MachineSetDescription{machinesetName, 0}
+		ms := exutil.MachineSetDescription{machinesetName, 0}
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 
 		g.By("Update machineset with invalid instanceType(or other similar field)")
-		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io/"+machinesetName, "-n", "openshift-machine-api", "-p", patchstr, "--type=merge").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", patchstr, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		clusterinfra.WaitForMachineFailed(oc, machinesetName)
+		exutil.WaitForMachineFailed(oc, machinesetName)
 
-		machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
+		machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check metrics mapi_instance_create_failed is shown")

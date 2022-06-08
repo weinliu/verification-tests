@@ -15,7 +15,6 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	ci "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -1005,7 +1004,7 @@ func getTwoNodesSameSubnet(oc *exutil.CLI, nodeList *v1.NodeList) (bool, []strin
 		e2e.Logf("Not enough nodes available for the test, skip the case!!")
 		return false, nil
 	}
-	switch ci.CheckPlatform(oc) {
+	switch exutil.CheckPlatform(oc) {
 	case "aws":
 		e2e.Logf("find the two nodes that have same subnet")
 		check, nodes := findTwoNodesWithSameSubnet(oc, nodeList)

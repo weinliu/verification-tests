@@ -16,14 +16,13 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	ci "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfrastructure"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 // Get AWS credential from cluster
 func getAwsCredentialFromCluster(oc *exutil.CLI) {
-	if ci.CheckPlatform(oc) != "aws" {
+	if exutil.CheckPlatform(oc) != "aws" {
 		g.Skip("it is not aws platform and can not get credential, and then skip it.")
 	}
 	credential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system", "-o", "json").Output()
@@ -176,7 +175,7 @@ func execCommandInSDNPodOnNode(oc *exutil.CLI, nodeName, command string) (string
 }
 
 func getgcloudClient(oc *exutil.CLI) *exutil.Gcloud {
-	if ci.CheckPlatform(oc) != "gcp" {
+	if exutil.CheckPlatform(oc) != "gcp" {
 		g.Skip("it is not gcp platform!")
 	}
 	projectID, err := exutil.GetGcpProjectId(oc)
