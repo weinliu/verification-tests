@@ -2017,4 +2017,158 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(chrtStalldPIDOutput).To(o.ContainSubstring("SCHED_FIFO"))
 		e2e.Logf("chrtStalldPIDOutput is :\n %v", chrtStalldPIDOutput)
 	})
+	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-51495-NTO PAO Shipped into NTO with basic function verification.[Disruptive][Slow].", func() {
+
+		var (
+			paoBaseProfileMCP = exutil.FixturePath("testdata", "psap", "pao", "pao-baseprofile-mcp.yaml")
+			paoBaseProfile    = exutil.FixturePath("testdata", "psap", "pao", "pao-baseprofile.yaml")
+			paoBaseQoSPod     = exutil.FixturePath("testdata", "psap", "pao", "pao-baseqos-pod.yaml")
+		)
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		isPAOInOperatorHub := exutil.IsPAOInOperatorHub(oc)
+		if !isPAOInOperatorHub {
+			g.Skip("PAO is not in OperatorHub - skipping test ...")
+		}
+
+		skipPAODeploy := skipDeployPAO(oc)
+		isPAOInstalled = exutil.IsPAOInstalled(oc)
+		if skipPAODeploy || isPAOInstalled {
+			e2e.Logf("PAO has been installed and continue to execute test case")
+		} else {
+			exutil.InstallPAO(oc, paoNamespace)
+		}
+
+		//Use the first worker node as labeled node
+		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+		o.Expect(tunedPodName).NotTo(o.BeEmpty())
+
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-pao-").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("performanceprofile", "pao-baseprofile", "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("mcp", "worker-pao", "--ignore-not-found").Execute()
+
+		g.By("Label the node with node-role.kubernetes.io/worker-pao=")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-pao=", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// currently test is only supported on AWS, GCP, and Azure
+		if iaasPlatform == "aws" || iaasPlatform == "gcp" {
+			//Only GCP and AWS support realtime-kenel
+			g.By("Apply pao-baseprofile performance profile")
+			exutil.ApplyClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", paoBaseProfile, "-p", "ISENABLED=true")
+		} else {
+			g.By("Apply pao-baseprofile performance profile")
+			exutil.ApplyClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", paoBaseProfile, "-p", "ISENABLED=false")
+		}
+
+		g.By("Check Performance Profile pao-baseprofile was created automatically")
+		paoBasePerformanceProfile, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("performanceprofile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(paoBasePerformanceProfile).NotTo(o.BeEmpty())
+		o.Expect(paoBasePerformanceProfile).To(o.ContainSubstring("pao-baseprofile"))
+
+		g.By("Create machine config pool worker-pao")
+		exutil.ApplyOperatorResourceByYaml(oc, "", paoBaseProfileMCP)
+
+		g.By("Assert if machine config pool applied for worker nodes")
+		assertIfMCPChangesAppliedByName(oc, "worker-pao", 10)
+
+		g.By("Check if new profile openshift-node-performance-pao-baseprofile in rendered tuned")
+		renderCheck, err := getTunedRender(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).To(o.ContainSubstring("openshift-node-performance-pao-baseprofile"))
+
+		g.By("Check openshift-node-performance-pao-baseprofile tuned profile should be automatically created")
+		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNames).To(o.ContainSubstring("openshift-node-performance-pao-baseprofile"))
+
+		g.By("Check current profile openshift-node-performance-pao-baseprofile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		g.By("Check if new NTO profile openshift-node-performance-pao-baseprofile was applied")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-node-performance-pao-baseprofile")
+
+		g.By("Check if profile openshift-node-performance-pao-baseprofile applied on nodes")
+		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeProfileName).To(o.ContainSubstring("openshift-node-performance-pao-baseprofile"))
+
+		g.By("Check value of allocatable.hugepages-1Gi in labled node ")
+		nodeHugePagesOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.status.allocatable.hugepages-1Gi}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeHugePagesOutput).To(o.ContainSubstring("1Gi"))
+
+		g.By("Check Settings of CPU Manager policy created by PAO in labled node ")
+		cpuManagerConfOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot", "/host", "/bin/bash", "-c", "cat /etc/kubernetes/kubelet.conf  |grep cpuManager").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(cpuManagerConfOutput).NotTo(o.BeEmpty())
+		o.Expect(cpuManagerConfOutput).To(o.ContainSubstring("cpuManagerPolicy"))
+		o.Expect(cpuManagerConfOutput).To(o.ContainSubstring("cpuManagerReconcilePeriod"))
+		e2e.Logf("The settings of CPU Manager Policy on labeled nodes: \n%v", cpuManagerConfOutput)
+
+		g.By("Check Settings of CPU Manager for reservedSystemCPUs created by PAO in labled node ")
+		cpuManagerConfOutput, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot", "/host", "/bin/bash", "-c", "cat /etc/kubernetes/kubelet.conf  |grep reservedSystemCPUs").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(cpuManagerConfOutput).NotTo(o.BeEmpty())
+		o.Expect(cpuManagerConfOutput).To(o.ContainSubstring("reservedSystemCPUs"))
+		e2e.Logf("The settings of CPU Manager reservedSystemCPUs on labeled nodes: \n%v", cpuManagerConfOutput)
+
+		g.By("Check Settings of Topology Manager for topologyManagerPolicy created by PAO in labled node ")
+		topologyManagerConfOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot", "/host", "/bin/bash", "-c", "cat /etc/kubernetes/kubelet.conf  |grep topologyManagerPolicy").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(topologyManagerConfOutput).NotTo(o.BeEmpty())
+		o.Expect(topologyManagerConfOutput).To(o.ContainSubstring("topologyManagerPolicy"))
+		e2e.Logf("The settings of CPU Manager topologyManagerPolicy on labeled nodes: \n%v", topologyManagerConfOutput)
+
+		// currently test is only supported on AWS, GCP, and Azure
+		if iaasPlatform == "aws" || iaasPlatform == "gcp" {
+			g.By("Check realTime kernel setting that created by PAO in labled node ")
+			realTimekernalOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-owide").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(realTimekernalOutput).NotTo(o.BeEmpty())
+			o.Expect(realTimekernalOutput).To(o.ContainSubstring("rt7"))
+		} else {
+			g.By("Check realTime kernel setting that created by PAO in labled node ")
+			realTimekernalOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-owide").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(realTimekernalOutput).NotTo(o.BeEmpty())
+			o.Expect(realTimekernalOutput).NotTo(o.ContainSubstring("rt7"))
+		}
+
+		g.By("Check runtimeClass setting that created by PAO ... ")
+		runtimeClassOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("performanceprofile", "pao-baseprofile", "-ojsonpath={.status.runtimeClass}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(runtimeClassOutput).NotTo(o.BeEmpty())
+		o.Expect(runtimeClassOutput).To(o.ContainSubstring("performance-pao-baseprofile"))
+		e2e.Logf("The settings of runtimeClass on labeled nodes: \n%v", runtimeClassOutput)
+
+		oc.SetupProject()
+		ntoTestNS := oc.Namespace()
+
+		//Create a guaranteed-pod application pod
+		g.By("Create a guaranteed-pod pod into temp namespace")
+		exutil.ApplyOperatorResourceByYaml(oc, ntoTestNS, paoBaseQoSPod)
+
+		//Check if guaranteed-pod is ready
+		g.By("Check if a guaranteed-pod pod is ready ...")
+		exutil.AssertPodToBeReady(oc, "guaranteed-pod", ntoTestNS)
+
+		g.By("Check the cpu bind to isolation CPU zone for a guaranteed-pod")
+		cpuManagerStateOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot", "/host", "/bin/bash", "-c", "cat /var/lib/kubelet/cpu_manager_state").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(cpuManagerStateOutput).NotTo(o.BeEmpty())
+		o.Expect(cpuManagerStateOutput).To(o.ContainSubstring("guaranteed-pod"))
+		e2e.Logf("The settings of CPU Manager cpuManagerState on labeled nodes: \n%v", cpuManagerStateOutput)
+	})
 })

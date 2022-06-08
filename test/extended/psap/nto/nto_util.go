@@ -587,8 +587,7 @@ func compareCertificateBetweenOpenSSLandTLSSecret(oc *exutil.CLI, ntoNamespace s
 
 func assertIFChannel(oc *exutil.CLI, namespace string, tunedNodeName string) bool {
 
-	ifName, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "--quiet=true", "node/"+tunedNodeName, "--", "find", "/sys/class/net", "-type", "l", "-not", "-lname", "*virtual*", "-printf", "%f").Output()
-	//ifName, err := oc.AsAdmin().Run("debug").Args("--quiet=true", "node/"+tunedNodeName, "--", "find", "/sys/class/net", "-type", "l", "-not", "-lname", "*virtual*", "-printf", "%f").Output()
+	ifName, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "--quiet=true", "node/"+tunedNodeName, "--", "find", "/sys/class/net", "-type", "l", "-not", "-lname", "*virtual*", "-a", "-not", "-name", "enP*", "-printf", "%f").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	ethToolsOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "--quiet=true", "node/"+tunedNodeName, "--", "ethtool", "-l", ifName).Output()
