@@ -36,6 +36,14 @@ type pingPodResourceNode struct {
 	template  string
 }
 
+type pingPodResourceWinNode struct {
+	name      string
+	namespace string
+	image     string
+	nodename  string
+	template  string
+}
+
 type egressIPResource1 struct {
 	name          string
 	template      string
@@ -88,6 +96,18 @@ type genericServiceResource struct {
 	template              string
 }
 
+type windowGenericServiceResource struct {
+	servicename           string
+	namespace             string
+	protocol              string
+	selector              string
+	serviceType           string
+	ipFamilyPolicy        string
+	externalTrafficPolicy string
+	internalTrafficPolicy string
+	template              string
+}
+
 type testPodMultinetwork struct {
 	name      string
 	namespace string
@@ -112,6 +132,18 @@ func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
 func (pod *pingPodResourceNode) createPingPodNode(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "NODENAME="+pod.nodename)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create pod %v", pod.name))
+}
+
+func (pod *pingPodResourceWinNode) createPingPodWinNode(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "IMAGE="+pod.image, "NODENAME="+pod.nodename)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
@@ -231,6 +263,18 @@ func (ipBlock_ingress_policy *ipBlockIngressSingle) createipBlockIngressObjectSi
 }
 
 func (service *genericServiceResource) createServiceFromParams(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", service.template, "-p", "SERVICENAME="+service.servicename, "NAMESPACE="+service.namespace, "PROTOCOL="+service.protocol, "SELECTOR="+service.selector, "serviceType="+service.serviceType, "ipFamilyPolicy="+service.ipFamilyPolicy, "internalTrafficPolicy="+service.internalTrafficPolicy, "externalTrafficPolicy="+service.externalTrafficPolicy)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create svc %v", service.servicename))
+}
+
+func (service *windowGenericServiceResource) createWinServiceFromParams(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", service.template, "-p", "SERVICENAME="+service.servicename, "NAMESPACE="+service.namespace, "PROTOCOL="+service.protocol, "SELECTOR="+service.selector, "serviceType="+service.serviceType, "ipFamilyPolicy="+service.ipFamilyPolicy, "internalTrafficPolicy="+service.internalTrafficPolicy, "externalTrafficPolicy="+service.externalTrafficPolicy)
 		if err1 != nil {
@@ -695,7 +739,7 @@ func checkNetworkOperatorDEGRADEDState(oc *exutil.CLI) {
 }
 
 func getNodeIPv4(oc *exutil.CLI, namespace string, nodeName string) string {
-	nodeipv4, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", oc.Namespace(), "node", nodeName, "-o=jsonpath={.status.addresses[0].address}").Output()
+	nodeipv4, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", oc.Namespace(), "node", nodeName, "-o=jsonpath={.status.addresses[?(@.type==\"InternalIP\")].address}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if err != nil {
 		e2e.Logf("Cannot get node default interface ipv4 address, errors: %v", err)
@@ -709,16 +753,16 @@ func getNodeIP(oc *exutil.CLI, nodeName string) (string, string) {
 	ipStack := checkIPStackType(oc)
 	if (ipStack == "ipv6single") || (ipStack == "ipv4single") {
 		e2e.Logf("Its a Single Stack Cluster, either IPv4 or IPv6")
-		InternalIP, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[0].address}").Output()
+		InternalIP, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[?(@.type==\"InternalIP\")].address}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("The node's Internal IP is %q", InternalIP)
 		return "", InternalIP
 	}
 	e2e.Logf("Its a Dual Stack Cluster")
-	InternalIP1, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[0].address}").Output()
+	InternalIP1, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[?(@.type==\"InternalIP\")].address}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The node's 1st Internal IP is %q", InternalIP1)
-	InternalIP2, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[1].address}").Output()
+	InternalIP2, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[?(@.type==\"InternalIP\")].address}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The node's 2nd Internal IP is %q", InternalIP2)
 	if netutils.IsIPv6String(InternalIP1) {
