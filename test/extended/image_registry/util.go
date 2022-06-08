@@ -1010,3 +1010,101 @@ func getSAToken(oc *exutil.CLI, sa, ns string) (string, error) {
 
 	return token, err
 }
+
+type machineConfig struct {
+	name       string
+	pool       string
+	source     string
+	path       string
+	template   string
+	parameters []string
+}
+
+func (mc *machineConfig) waitForMCPComplete(oc *exutil.CLI) {
+	machineCount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mc.pool, "-ojsonpath={.status.machineCount}").Output()
+	e2e.Logf("machineCount: %v", machineCount)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	mcCount, _ := strconv.Atoi(machineCount)
+	timeToWait := time.Duration(10*mcCount) * time.Minute
+	e2e.Logf("Waiting %s for MCP %s to be completed.", timeToWait, mc.pool)
+	err = wait.Poll(1*time.Minute, timeToWait, func() (bool, error) {
+		mcpStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mc.pool, `-ojsonpath={.status.conditions[?(@.type=="Updated")].status}`).Output()
+		e2e.Logf("mcpStatus: %v", mcpStatus)
+		if err != nil {
+			e2e.Logf("the err:%v, and try next round", err)
+			return false, nil
+		}
+		if strings.Contains(mcpStatus, "True") {
+			// i.e. mcp updated=true, mc is applied successfully
+			e2e.Logf("mc operation is completed on mcp %s", mc.pool)
+			return true, nil
+		}
+		return false, nil
+	})
+
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("mc operation is not completed on mcp %s", mc.pool))
+
+}
+
+func (mc *machineConfig) createWithCheck(oc *exutil.CLI) {
+	mc.name = mc.name + "-" + exutil.GetRandomString()
+	params := []string{"--ignore-unknown-parameters=true", "-f", mc.template, "-p", "NAME=" + mc.name, "POOL=" + mc.pool, "SOURCE=" + mc.source, "PATH=" + mc.path}
+	params = append(params, mc.parameters...)
+	exutil.CreateClusterResourceFromTemplate(oc, params...)
+
+	pollerr := wait.Poll(5*time.Second, 1*time.Minute, func() (bool, error) {
+		stdout, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mc/"+mc.name, "-o", "jsonpath='{.metadata.name}'").Output()
+		if err != nil {
+			e2e.Logf("the err:%v, and try next round", err)
+			return false, nil
+		}
+		if strings.Contains(stdout, mc.name) {
+			e2e.Logf("mc %s is created successfully", mc.name)
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(pollerr, fmt.Sprintf("create machine config %v failed", mc.name))
+
+	mc.waitForMCPComplete(oc)
+
+}
+
+func (mc *machineConfig) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", mc.name, "--ignore-not-found=true").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	mc.waitForMCPComplete(oc)
+}
+
+type runtimeClass struct {
+	name     string
+	handler  string
+	template string
+}
+
+func (rtc *runtimeClass) createWithCheck(oc *exutil.CLI) {
+	rtc.name = rtc.name + "-" + exutil.GetRandomString()
+	params := []string{"--ignore-unknown-parameters=true", "-f", rtc.template, "-p", "NAME=" + rtc.name, "HANDLER=" + rtc.handler}
+	exutil.CreateClusterResourceFromTemplate(oc, params...)
+
+	rtcerr := wait.Poll(5*time.Second, 1*time.Minute, func() (bool, error) {
+		stdout, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("runtimeclass/"+rtc.name, "-o", "jsonpath='{.metadata.name}'").Output()
+		if err != nil {
+			e2e.Logf("the err:%v, and try next round", err)
+			return false, nil
+		}
+		if strings.Contains(stdout, rtc.name) {
+			e2e.Logf("runtimeClass %s is created successfully", rtc.name)
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(rtcerr, fmt.Sprintf("create runtimeClass %v failed", rtc.name))
+
+}
+
+func (rtc *runtimeClass) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("runtimeclass", rtc.name, "--ignore-not-found=true").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}

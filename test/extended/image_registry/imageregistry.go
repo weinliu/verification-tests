@@ -1821,6 +1821,84 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("unable to pullthrough manifest"))
 		o.Expect(output).To(o.ContainSubstring("err.code=toomanyrequests"))
+	})
+
+	// author: jitli@redhat.com
+	g.It("NonPreRelease-Longduration-Author:jitli-Medium-49747-Configure image registry to skip volume SELinuxLabel [Disruptive]", func() {
+
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "image_registry")
+			machineConfigSource = filepath.Join(buildPruningBaseDir, "machineconfig.yaml")
+			runtimeClassSource  = filepath.Join(buildPruningBaseDir, "runtimeClass.yaml")
+			mc                  = machineConfig{
+				name:     "49747-worker-selinux-configuration",
+				pool:     "worker",
+				source:   "data:text/plain;charset=utf-8;base64,W2NyaW8ucnVudGltZS5ydW50aW1lcy5zZWxpbnV4XQpydW50aW1lX3BhdGggPSAiL3Vzci9iaW4vcnVuYyIKcnVudGltZV9yb290ID0gIi9ydW4vcnVuYyIKcnVudGltZV90eXBlID0gIm9jaSIKYWxsb3dlZF9hbm5vdGF0aW9ucyA9IFsiaW8ua3ViZXJuZXRlcy5jcmktby5UcnlTa2lwVm9sdW1lU0VMaW51eExhYmVsIl0K",
+				path:     "/etc/crio/crio.conf.d/01-runtime-selinux.conf",
+				template: machineConfigSource,
+			}
+
+			rtc = runtimeClass{
+				name:     "selinux-49747",
+				handler:  "selinux",
+				template: runtimeClassSource,
+			}
+		)
+
+		g.By("Register defer block to delete mc and wait for mcp/worker rollback to complete")
+		defer mc.delete(oc)
+
+		g.By("Create machineconfig to add selinux cri-o config and wait for mcp update to complete")
+		mc.createWithCheck(oc)
+
+		g.By("verify new crio drop-in file exists and content is correct")
+		workerNode, workerNodeErr := exutil.GetFirstWorkerNode(oc)
+		o.Expect(workerNodeErr).NotTo(o.HaveOccurred())
+		o.Expect(workerNode).NotTo(o.BeEmpty())
+		err := wait.Poll(10*time.Second, 3*time.Minute, func() (bool, error) {
+			selinuxStatus, statusErr := exutil.DebugNodeWithChroot(oc, workerNode, "cat", "/etc/crio/crio.conf.d/01-runtime-selinux.conf")
+			if statusErr == nil {
+				if strings.Contains(selinuxStatus, "io.kubernetes.cri-o.TrySkipVolumeSELinuxLabel") {
+					e2e.Logf("runtime-selinux.conf updated")
+					return true, nil
+				}
+			}
+			e2e.Logf("runtime-selinux.conf not update, err: %v", statusErr)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "runtime-selinux.conf not update")
+
+		g.By("Register defer block to delete new runtime class")
+		defer rtc.delete(oc)
+
+		g.By("Create new runtimeClass from template and verify it's done")
+		rtc.createWithCheck(oc)
+
+		g.By("Override the image registry annonation and runtimeclass")
+		defer oc.AsAdmin().Run("patch").Args("config.imageregistry.operator.openshift.io/cluster", "-p", `{"spec":{"unsupportedConfigOverrides":null}}`, "--type=merge").Execute()
+		configPatchStatus, configPatchErr := oc.AsAdmin().Run("patch").Args("config.imageregistry.operator.openshift.io/cluster", "-p", `{"spec":{"unsupportedConfigOverrides":{"deployment":{"annotations":{"io.kubernetes.cri-o.TrySkipVolumeSELinuxLabel":"true"},"runtimeClassName":"`+rtc.name+`"}}}}`, "--type=merge").Output()
+		o.Expect(configPatchErr).NotTo(o.HaveOccurred())
+		o.Expect(configPatchStatus).To(o.ContainSubstring("patched"))
+		podNum := getImageRegistryPodNumber(oc)
+		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
+
+		g.By("Check the registry files label")
+		err = wait.Poll(10*time.Second, 3*time.Minute, func() (bool, error) {
+			selinuxLabel, selinuxLabelErr := oc.AsAdmin().Run("get").Args("pod", "-n", "openshift-image-registry", "-l", "docker-registry=default", `-ojsonpath={.items..metadata.annotations.io\.kubernetes\.cri-o\.TrySkipVolumeSELinuxLabel}`).Output()
+			getRuntimeClassName, runtimeClassNameErr := oc.AsAdmin().Run("get").Args("pod", "-n", "openshift-image-registry", "-l", "docker-registry=default", `-ojsonpath={.items..spec.runtimeClassName}`).Output()
+
+			if strings.Contains(selinuxLabel, "true") && strings.Contains(getRuntimeClassName, rtc.name) {
+				e2e.Logf("pod metadata updated")
+				return true, nil
+			}
+			e2e.Logf("pod metadata not update, selinuxLabel:%v %v, runtimeClassName:%v %v", selinuxLabel, selinuxLabelErr, getRuntimeClassName, runtimeClassNameErr)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "pod metadata not update ")
+
+		g.By("check registry working well")
+		oc.SetupProject()
+		checkRegistryFunctionFine(oc, "test-49747", oc.Namespace())
 
 	})
 
