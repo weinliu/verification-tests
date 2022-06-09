@@ -1362,3 +1362,17 @@ func SkipARM64(oc *exutil.CLI) {
 		g.Skip("Skip for arm64")
 	}
 }
+
+func getSAToken(oc *exutil.CLI, sa, ns string) (string, error) {
+	e2e.Logf("Getting a token assgined to specific serviceaccount from %s namespace...", ns)
+	token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", sa, "-n", ns).Output()
+	if err != nil {
+		if strings.Contains(token, "unknown command") { // oc client is old version, create token is not supported
+			e2e.Logf("oc create token is not supported by current client, use oc sa get-token instead")
+			token, err = oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", sa, "-n", ns).Output()
+		} else {
+			return "", err
+		}
+	}
+	return token, err
+}

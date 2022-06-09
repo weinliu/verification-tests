@@ -6138,7 +6138,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(strings.Contains(msg, expectedSA)).To(o.BeFalse())
 
 		g.By("4) get the token of this operator's SA")
-		token, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", "etcd-operator", "-n", oc.Namespace()).Output()
+		token, err := getSAToken(oc, "etcd-operator", oc.Namespace())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("5) get the cluster server")
