@@ -3302,7 +3302,6 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		var ogFile = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		var operatorWait = 150 * time.Second
 
-		oc.SetupProject()
 		namespace := oc.Namespace()
 
 		dr := make(describerResrouce)
@@ -3357,8 +3356,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: scolange@redhat.com
-	g.It("ConnectedOnly-Author:scolange-Medium-24587-Add InstallPlan conditions to Subscription status [Flaky]", func() {
-		SkipARM64(oc)
+	g.It("Author:scolange-Medium-24587-Add InstallPlan conditions to Subscription status [Flaky]", func() {
 		var buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 		var Sub = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		var og1 = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
@@ -3370,20 +3368,20 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		dr.addIr(itName)
 
 		og := operatorGroupDescription{
-			name:      "test-operators-og",
+			name:      "og-24587",
 			namespace: namespace,
 			template:  og1,
 		}
 		og.createwithCheck(oc, itName, dr)
 
 		sub := subscriptionDescription{
-			subName:                "couchbase",
-			namespace:              namespace,
-			catalogSourceName:      "certified-operators",
+			subName:                "sub-24587",
+			namespace:              oc.Namespace(),
+			catalogSourceName:      "qe-app-registry",
 			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "stable",
 			ipApproval:             "Manual",
-			operatorPackage:        "couchbase-enterprise-certified",
+			channel:                "beta",
+			operatorPackage:        "learn",
 			singleNamespace:        true,
 			template:               Sub,
 		}
