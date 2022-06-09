@@ -1318,23 +1318,23 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pingPodTemplate := filepath.Join(buildPruningBaseDir, "MultiNetworkPolicy-pod-template.yaml")
 	patchSResource := "networks.operator.openshift.io/cluster"
 
-	g.By("1. Enable MacvlanNetworkpolicy in the cluster")
+	g.By("Enable MacvlanNetworkpolicy in the cluster")
 	patchResourceAsAdmin(oc, patchSResource, patchInfo)
 
-	g.By("2. Create first namespace")
+	g.By("Create first namespace")
 	nserr1 := oc.Run("new-project").Args(ns1).Execute()
 	o.Expect(nserr1).NotTo(o.HaveOccurred())
 	_, proerr1 := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "user="+ns1).Output()
 	o.Expect(proerr1).NotTo(o.HaveOccurred())
 
-	g.By("3. Create MultiNetworkPolicy-NAD1 in ns1")
+	g.By("Create MultiNetworkPolicy-NAD1 in ns1")
 	err1 := oc.AsAdmin().Run("create").Args("-f", netAttachDefFile1, "-n", ns1).Execute()
 	o.Expect(err1).NotTo(o.HaveOccurred())
 	output, err2 := oc.Run("get").Args("net-attach-def", "-n", ns1).Output()
 	o.Expect(err2).NotTo(o.HaveOccurred())
 	o.Expect(output).To(o.ContainSubstring("macvlan-nad1"))
 
-	g.By("4. Create 1st pod in ns1")
+	g.By("Create 1st pod in ns1")
 	pod1ns1 := testPodMultinetwork{
 		name:      "blue-pod-1",
 		namespace: ns1,
@@ -1346,7 +1346,7 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pod1ns1.createTestPodMultinetwork(oc)
 	waitPodReady(oc, pod1ns1.namespace, pod1ns1.name)
 
-	g.By("5. Create second pod in ns1")
+	g.By("Create second pod in ns1")
 	pod2ns1 := testPodMultinetwork{
 		name:      "blue-pod-2",
 		namespace: ns1,
@@ -1358,7 +1358,7 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pod2ns1.createTestPodMultinetwork(oc)
 	waitPodReady(oc, pod2ns1.namespace, pod2ns1.name)
 
-	g.By("6. Create third pod in ns1")
+	g.By("Create third pod in ns1")
 	pod3ns1 := testPodMultinetwork{
 		name:      "red-pod-1",
 		namespace: ns1,
@@ -1370,20 +1370,20 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pod3ns1.createTestPodMultinetwork(oc)
 	waitPodReady(oc, pod3ns1.namespace, pod3ns1.name)
 
-	g.By("7. Create second namespace")
+	g.By("Create second namespace")
 	nserr2 := oc.Run("new-project").Args(ns2).Execute()
 	o.Expect(nserr2).NotTo(o.HaveOccurred())
 	_, proerr2 := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "user="+ns2).Output()
 	o.Expect(proerr2).NotTo(o.HaveOccurred())
 
-	g.By("8. Create MultiNetworkPolicy-NAD2 in ns2")
+	g.By("Create MultiNetworkPolicy-NAD2 in ns2")
 	err4 := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", netAttachDefFile2, "-n", ns2).Execute()
 	o.Expect(err4).NotTo(o.HaveOccurred())
 	output, err5 := oc.Run("get").Args("net-attach-def", "-n", ns2).Output()
 	o.Expect(err5).NotTo(o.HaveOccurred())
 	o.Expect(output).To(o.ContainSubstring("macvlan-nad2"))
 
-	g.By("9. Create 1st pod in ns2")
+	g.By("Create 1st pod in ns2")
 	pod1ns2 := testPodMultinetwork{
 		name:      "blue-pod-3",
 		namespace: ns2,
@@ -1395,7 +1395,7 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pod1ns2.createTestPodMultinetwork(oc)
 	waitPodReady(oc, pod1ns2.namespace, pod1ns2.name)
 
-	g.By("10. Create second pod in ns2")
+	g.By("Create second pod in ns2")
 	pod2ns2 := testPodMultinetwork{
 		name:      "red-pod-2",
 		namespace: ns2,
