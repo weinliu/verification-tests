@@ -32,6 +32,69 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: jiazha@redhat.com
+	g.It("Author:jiazha-Medium-49687-Make the marketplace operator optional", func() {
+		g.By("1, check if the marketplace disabled")
+		cap, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.enabledCapabilities}").Output()
+		if err != nil {
+			e2e.Failf("Fail to get the cluster capabilities: %s, error:%v", cap, err)
+		}
+		if strings.Contains(cap, "marketplace") {
+			e2e.Logf("marketplace is enabled, skip...")
+		} else {
+			e2e.Logf("marketplace is disabled")
+			g.By("2, check marketplace namespace")
+			_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "openshift-marketplace").Output()
+			if err == nil {
+				e2e.Failf("error! openshift-marketplace project still exist")
+			}
+			g.By("3, check operatorhub namespace")
+			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhub").Output()
+			if err == nil {
+				e2e.Failf("error! operatorhub resource still exist")
+			}
+
+			buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+			dr := make(describerResrouce)
+			itName := g.CurrentGinkgoTestDescription().TestText
+			dr.addIr(itName)
+
+			g.By("4, Create a CatalogSource that in a random project")
+			oc.SetupProject()
+			csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-image-template.yaml")
+			cs := catalogSourceDescription{
+				name:        "cs-49687",
+				namespace:   oc.Namespace(),
+				displayName: "QE Operators",
+				publisher:   "QE",
+				sourceType:  "grpc",
+				address:     "quay.io/openshift-qe-optional-operators/ocp4-index:latest",
+				template:    csImageTemplate,
+			}
+			defer cs.delete(itName, dr)
+			cs.createWithCheck(oc, itName, dr)
+
+			g.By("5, Subscribe to learn perator v0.0.3 in this random project")
+			subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+			sub := subscriptionDescription{
+				subName:                "sub-49687",
+				namespace:              oc.Namespace(),
+				catalogSourceName:      "cs-49687",
+				catalogSourceNamespace: oc.Namespace(),
+				channel:                "beta",
+				ipApproval:             "Automatic",
+				operatorPackage:        "learn",
+				startingCSV:            "learn-operator.v0.0.3",
+				singleNamespace:        true,
+				template:               subTemplate,
+			}
+			defer sub.delete(itName, dr)
+			sub.create(oc, itName, dr)
+			defer sub.deleteCSV(itName, dr)
+			newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
+		}
+	})
+
+	// author: jiazha@redhat.com
 	g.It("Author:jiazha-Medium-49352-SNO Leader election conventions for cluster topology", func() {
 		g.By("1) get the cluster topology")
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
