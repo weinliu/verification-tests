@@ -4264,7 +4264,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 				e2e.Logf("the get error is %v, and try next", err)
 				return false, nil
 			}
-			if !updatedCertsRotateAt.After(certsRotateAt) {
+			if !updatedCertsRotateAt.Equal(certsRotateAt) {
 				e2e.Logf("wait update, and try next")
 				return false, nil
 			}
