@@ -60,6 +60,14 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 			g.By("4, Create a CatalogSource that in a random project")
 			oc.SetupProject()
+			ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+			og := operatorGroupDescription{
+				name:      "og-49687",
+				namespace: oc.Namespace(),
+				template:  ogSingleTemplate,
+			}
+			defer og.delete(itName, dr)
+			og.createwithCheck(oc, itName, dr)
 			csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-image-template.yaml")
 			cs := catalogSourceDescription{
 				name:        "cs-49687",
