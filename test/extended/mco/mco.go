@@ -22,6 +22,17 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	var oc = exutil.NewCLI("mco", exutil.KubeConfigPath())
 
+	g.JustBeforeEach(func() {
+		g.By("MCO Preconditions Checks")
+		nodes, err := NewNodeList(oc).GetAll()
+		o.Expect(err).NotTo(o.HaveOccurred(), "It is not possible to get the list of nodes in the cluster")
+
+		for _, node := range nodes {
+			o.Expect(node.IsReady()).To(o.BeTrue(), "Node %s is not Ready. We can't continue testing.", node.GetName())
+		}
+		e2e.Logf("End Of MCO Preconditions")
+	})
+
 	g.It("Author:rioliu-Critical-42347-health check for machine-config-operator [Serial]", func() {
 		g.By("checking mco status")
 		co := NewResource(oc.AsAdmin(), "co", "machine-config")
@@ -358,7 +369,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		e2e.Logf("Journald config values are verified in the worker node!")
 	})
 
-	g.It("Author:mhanss-Longduration-NonPreRelease-High-43405-node drain is not needed for mirror config change in container registry [Disruptive]", func() {
+	g.It("Author:mhanss-Longduration-NonPreRelease-High-43405-High-50508-node drain is not needed for mirror config change in container registry. Nodes not tainted. [Disruptive]", func() {
 		g.By("Create image content source policy for mirror changes")
 		icspName := "repository-mirror"
 		icspTemplate := generateTemplateAbsolutePath(icspName + ".yaml")
@@ -384,9 +395,31 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			o.And(
 				o.ContainSubstring("/etc/containers/registries.conf: changes made are safe to skip drain"),
 				o.ContainSubstring("Changes do not require drain, skipping")))
+
+		g.By("Check that worker nodes are not tained after applying the MC")
+		workerMcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		workerNodes, err := workerMcp.GetNodes()
+		o.Expect(err).ShouldNot(o.HaveOccurred(), "Error getting nodes linked to the worker pool")
+		for _, node := range workerNodes {
+			o.Expect(node.IsTainted()).To(o.BeFalse(), "% is tainted. There should be no tainted worker node after applying the configuration.",
+				node.GetName())
+		}
+
+		g.By("Check that master nodes have only the NoSchedule taint after applying the the MC")
+		masterMcp := NewMachineConfigPool(oc.AsAdmin(), "master")
+		masterNodes, err := masterMcp.GetNodes()
+		o.Expect(err).ShouldNot(o.HaveOccurred(), "Error getting nodes linked to the master pool")
+		expectedTaint := `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master"}]`
+		for _, node := range masterNodes {
+			taint, err := node.Get("{.spec.taints}")
+			o.Expect(err).ShouldNot(o.HaveOccurred(), "Error getting taints in node %s", node.GetName())
+			o.Expect(taint).Should(o.MatchJSON(expectedTaint), "%s is tainted. The only taint allowed in master nodes is NoSchedule.",
+				node.GetName())
+		}
+
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-42218-add machine config without ignition version [Serial]", func() {
+	g.It("Author:rioliu-NonPreRelease-High-42390-add machine config without ignition version [Serial]", func() {
 		createMcAndVerifyIgnitionVersion(oc, "empty ign version", "change-worker-ign-version-to-empty", "")
 	})
 

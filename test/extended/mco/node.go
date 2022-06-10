@@ -161,6 +161,12 @@ func (n *Node) IsUpdating() bool {
 	return n.GetMachineConfigState() == "Working"
 }
 
+// IsReady returns boolean 'true' if the node is ready. Else it retruns 'false'.
+func (n Node) IsReady() bool {
+	readyCondition := JSON(n.GetOrFail(`{.status.conditions[?(@.type=="Ready")]}`))
+	return "True" == readyCondition.Get("status").ToString()
+}
+
 //GetAll returns a []Node list with all existing nodes
 func (nl *NodeList) GetAll() ([]Node, error) {
 	allNodeResources, err := nl.ResourceList.GetAll()
