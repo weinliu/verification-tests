@@ -1670,6 +1670,145 @@ nulla pariatur.`
 		workerPool.waitForComplete()
 
 	})
+	g.It("Author:sregidor-NonPreRelease-High-51219-Check ClusterRole rules", func() {
+		expectedServiceAcc := "machine-config-daemon"
+		eventsRoleBinding := "machine-config-daemon-events"
+		eventsClusterRole := "machine-config-daemon-events"
+		daemonClusterRoleBinding := "machine-config-daemon"
+		daemonClusterRole := "machine-config-daemon"
+
+		g.By(fmt.Sprintf("Check %s service account", expectedServiceAcc))
+		serviceAccount := NewNamespacedResource(oc.AsAdmin(), "ServiceAccount", MCONamespace, expectedServiceAcc)
+		o.Expect(serviceAccount.Exists()).To(o.BeTrue(), "Service account %s should exist in namespace %s", expectedServiceAcc, MCONamespace)
+
+		g.By("Check service accounts in daemon pods")
+		checkNodePermissions := func(node Node) {
+			daemonPodName := node.GetMachineConfigDaemon()
+			e2e.Logf("Checking permissions in daemon pod %s", daemonPodName)
+			daemonPod := NewNamespacedResource(node.oc, "pod", MCONamespace, daemonPodName)
+			o.Expect(daemonPod.GetOrFail(`{.spec.containers[?(@.name == "oauth-proxy")].args}`)).
+				Should(o.ContainSubstring(fmt.Sprintf("--openshift-service-account=%s", expectedServiceAcc)),
+					"oauth-proxy in daemon pod %s should use service account %s", daemonPodName, expectedServiceAcc)
+
+			o.Expect(daemonPod.GetOrFail(`{.spec.serviceAccount}`)).Should(o.Equal(expectedServiceAcc),
+				"Pod %s should use service account: %s", daemonPodName, expectedServiceAcc)
+
+			o.Expect(daemonPod.GetOrFail(`{.spec.serviceAccountName}`)).Should(o.Equal(expectedServiceAcc),
+				"Pod %s should use service account name: %s", daemonPodName, expectedServiceAcc)
+
+		}
+		nodes, err := NewNodeList(oc.AsAdmin()).GetAll()
+		o.Expect(err).ShouldNot(o.HaveOccurred(), "Error getting the list of nodes")
+		for _, node := range nodes {
+			g.By(fmt.Sprintf("Checking node %s", node.GetName()))
+			checkNodePermissions(node)
+		}
+
+		g.By("Check events rolebindings in default namespace")
+		defaultEventsRoleBindings := NewNamespacedResource(oc.AsAdmin(), "RoleBinding", "default", "machine-config-daemon-events")
+		o.Expect(defaultEventsRoleBindings.Exists()).Should(o.BeTrue(), "'%s' Rolebinding not found in 'default' namespace", eventsRoleBinding)
+		// Check the bound SA
+		machineConfigSubject := JSON(defaultEventsRoleBindings.GetOrFail(fmt.Sprintf(`{.subjects[?(@.name=="%s")]}`, expectedServiceAcc)))
+		o.Expect(machineConfigSubject.ToMap()).Should(o.HaveKeyWithValue("name", expectedServiceAcc),
+			"'%s' in 'default' namespace should bind %s SA in namespace %s", eventsRoleBinding, expectedServiceAcc, MCONamespace)
+		o.Expect(machineConfigSubject.ToMap()).Should(o.HaveKeyWithValue("namespace", MCONamespace),
+			"'%s' in 'default' namespace should bind %s SA in namespace %s", eventsRoleBinding, expectedServiceAcc, MCONamespace)
+
+		// Check the ClusterRole
+		machineConfigClusterRole := JSON(defaultEventsRoleBindings.GetOrFail(`{.roleRef}`))
+		o.Expect(machineConfigClusterRole.ToMap()).Should(o.HaveKeyWithValue("kind", "ClusterRole"),
+			"'%s' in 'default' namespace should bind a ClusterRole", eventsRoleBinding)
+		o.Expect(machineConfigClusterRole.ToMap()).Should(o.HaveKeyWithValue("name", eventsClusterRole),
+			"'%s' in 'default' namespace should bind %s ClusterRole", eventsRoleBinding, eventsClusterRole)
+
+		g.By(fmt.Sprintf("Check events rolebindings in %s namespace", MCONamespace))
+		mcoEventsRoleBindings := NewNamespacedResource(oc.AsAdmin(), "RoleBinding", MCONamespace, "machine-config-daemon-events")
+		o.Expect(defaultEventsRoleBindings.Exists()).Should(o.BeTrue(), "'%s' Rolebinding not found in '%s' namespace", eventsRoleBinding, MCONamespace)
+		// Check the bound SA
+		machineConfigSubject = JSON(mcoEventsRoleBindings.GetOrFail(fmt.Sprintf(`{.subjects[?(@.name=="%s")]}`, expectedServiceAcc)))
+		o.Expect(machineConfigSubject.ToMap()).Should(o.HaveKeyWithValue("name", expectedServiceAcc),
+			"'%s' in '%s' namespace should bind %s SA in namespace %s", eventsRoleBinding, MCONamespace, expectedServiceAcc, MCONamespace)
+		o.Expect(machineConfigSubject.ToMap()).Should(o.HaveKeyWithValue("namespace", MCONamespace),
+			"'%s' in '%s' namespace should bind %s SA in namespace %s", eventsRoleBinding, MCONamespace, expectedServiceAcc, MCONamespace)
+
+		// Check the ClusterRole
+		machineConfigClusterRole = JSON(mcoEventsRoleBindings.GetOrFail(`{.roleRef}`))
+		o.Expect(machineConfigClusterRole.ToMap()).Should(o.HaveKeyWithValue("kind", "ClusterRole"),
+			"'%s' in '%s' namespace should bind a ClusterRole", eventsRoleBinding, MCONamespace)
+		o.Expect(machineConfigClusterRole.ToMap()).Should(o.HaveKeyWithValue("name", eventsClusterRole),
+			"'%s' in '%s' namespace should bind %s CLusterRole", eventsRoleBinding, MCONamespace, eventsClusterRole)
+
+		g.By(fmt.Sprintf("Check MCO cluseterrolebindings in %s namespace", MCONamespace))
+		mcoCRB := NewResource(oc.AsAdmin(), "ClusterRoleBinding", daemonClusterRoleBinding)
+		o.Expect(mcoCRB.Exists()).Should(o.BeTrue(), "'%s' ClusterRolebinding not found.", daemonClusterRoleBinding)
+		// Check the bound SA
+		machineConfigSubject = JSON(mcoCRB.GetOrFail(fmt.Sprintf(`{.subjects[?(@.name=="%s")]}`, expectedServiceAcc)))
+		o.Expect(machineConfigSubject.ToMap()).Should(o.HaveKeyWithValue("name", expectedServiceAcc),
+			"'%s' ClusterRoleBinding should bind %s SA in namespace %s", daemonClusterRoleBinding, expectedServiceAcc, MCONamespace)
+		o.Expect(machineConfigSubject.ToMap()).Should(o.HaveKeyWithValue("namespace", MCONamespace),
+			"'%s' ClusterRoleBinding should bind %s SA in namespace %s", daemonClusterRoleBinding, expectedServiceAcc, MCONamespace)
+
+		// Check the ClusterRole
+		machineConfigClusterRole = JSON(mcoCRB.GetOrFail(`{.roleRef}`))
+		o.Expect(machineConfigClusterRole.ToMap()).Should(o.HaveKeyWithValue("kind", "ClusterRole"),
+			"'%s' ClusterRoleBinding should bind a ClusterRole", daemonClusterRoleBinding)
+		o.Expect(machineConfigClusterRole.ToMap()).Should(o.HaveKeyWithValue("name", daemonClusterRole),
+			"'%s' ClusterRoleBinding should bind %s CLusterRole", daemonClusterRoleBinding, daemonClusterRole)
+
+		g.By("Check events clusterrole")
+		eventsCR := NewResource(oc.AsAdmin(), "ClusterRole", eventsClusterRole)
+		o.Expect(eventsCR.Exists()).To(o.BeTrue(), "ClusterRole %s should exist", eventsClusterRole)
+
+		stringRules := eventsCR.GetOrFail(`{.rules}`)
+		o.Expect(stringRules).ShouldNot(o.ContainSubstring("pod"),
+			"ClusterRole %s should grant no pod permissions at all", eventsClusterRole)
+
+		rules := JSON(stringRules)
+		for _, rule := range rules.Items() {
+			describesEvents := false
+			resources := rule.Get("resources")
+			for _, resource := range resources.Items() {
+				if resource.ToString() == "events" {
+					describesEvents = true
+				}
+			}
+
+			if describesEvents {
+				verbs := rule.Get("verbs").ToList()
+				o.Expect(verbs).Should(o.ContainElement("create"), "In ClusterRole %s 'events' rule should have 'create' permissions", eventsClusterRole)
+				o.Expect(verbs).Should(o.ContainElement("patch"), "In ClusterRole %s 'events' rule should have 'patch' permissions", eventsClusterRole)
+				o.Expect(verbs).Should(o.HaveLen(2), "In ClusterRole %s 'events' rule should ONLY Have 'create' and 'patch' permissions", eventsClusterRole)
+			}
+		}
+
+		g.By("Check daemon clusterrole")
+		daemonCR := NewResource(oc.AsAdmin(), "ClusterRole", daemonClusterRole)
+		stringRules = daemonCR.GetOrFail(`{.rules}`)
+		o.Expect(stringRules).ShouldNot(o.ContainSubstring("pod"),
+			"ClusterRole %s should grant no pod permissions at all", daemonClusterRole)
+		o.Expect(stringRules).ShouldNot(o.ContainSubstring("daemonsets"),
+			"ClusterRole %s should grant no daemonsets permissions at all", daemonClusterRole)
+
+		rules = JSON(stringRules)
+		for _, rule := range rules.Items() {
+			describesNodes := false
+			resources := rule.Get("resources")
+			for _, resource := range resources.Items() {
+				if resource.ToString() == "nodes" {
+					describesNodes = true
+				}
+			}
+
+			if describesNodes {
+				verbs := rule.Get("verbs").ToList()
+				o.Expect(verbs).Should(o.ContainElement("get"), "In ClusterRole %s 'nodes' rule should have 'get' permissions", daemonClusterRole)
+				o.Expect(verbs).Should(o.ContainElement("list"), "In ClusterRole %s 'nodes' rule should have 'list' permissions", daemonClusterRole)
+				o.Expect(verbs).Should(o.ContainElement("watch"), "In ClusterRole %s 'nodes' rule should have 'watch' permissions", daemonClusterRole)
+				o.Expect(verbs).Should(o.HaveLen(3), "In ClusterRole %s 'events' rule should ONLY Have 'get', 'list' and 'watch' permissions", daemonClusterRole)
+			}
+		}
+
+	})
 
 })
 
