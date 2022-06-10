@@ -7,9 +7,6 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	k8sresource "k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -43,22 +40,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Critical-49168-Deploy lokistack on s3[Serial]", func() {
-			platform := exutil.CheckPlatform(oc)
-			if platform != "aws" {
-				g.Skip("Skip for non-supported platform, the supported platform is AWS!!!")
-			}
-			// skip the case on aws sts clusters
-			_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get("aws-creds", metav1.GetOptions{})
-			if apierrors.IsNotFound(err) {
-				g.Skip("Skip for non-supported matrix")
-			}
-			// check the remaning resources in the cluster
-			requestedMemory, err := k8sresource.ParseQuantity("10Gi")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			requestedCPU, err := k8sresource.ParseQuantity("6")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if !compareClusterResources(oc, requestedCPU.MilliValue(), requestedMemory.MilliValue()) {
-				g.Skip("Skip for the cluster doesn't have enough resources for loki stack to deploy")
+			if !validateInfraAndResourcesForLoki(oc, []string{"aws"}, "10Gi", "6") {
+				g.Skip("Current platform not supported/resources not available for this test!")
 			}
 
 			sc, err := getStorageClassName(oc)
@@ -77,17 +60,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Critical-49169-Deploy lokistack on GCS[Serial]", func() {
-			platform := exutil.CheckPlatform(oc)
-			if platform != "gcp" {
-				g.Skip("Skip for non-supported platform, the supported platform is GCP!!!")
-			}
-			// check the remaning resources in the cluster
-			requestedMemory, err := k8sresource.ParseQuantity("10Gi")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			requestedCPU, err := k8sresource.ParseQuantity("6")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if !compareClusterResources(oc, requestedCPU.MilliValue(), requestedMemory.MilliValue()) {
-				g.Skip("Skip for the cluster doesn't have enough resources for loki stack to deploy")
+			if !validateInfraAndResourcesForLoki(oc, []string{"gcp"}, "10Gi", "6") {
+				g.Skip("Current platform not supported/resources not available for this test!")
 			}
 
 			sc, err := getStorageClassName(oc)
@@ -106,17 +80,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Critical-49171-Deploy lokistack on azure[Serial]", func() {
-			platform := exutil.CheckPlatform(oc)
-			if platform != "azure" {
-				g.Skip("Skip for non-supported platform, the supported platform is AZURE!!!")
-			}
-			// check the remaning resources in the cluster
-			requestedMemory, err := k8sresource.ParseQuantity("10Gi")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			requestedCPU, err := k8sresource.ParseQuantity("6")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if !compareClusterResources(oc, requestedCPU.MilliValue(), requestedMemory.MilliValue()) {
-				g.Skip("Skip for the cluster doesn't have enough resources for loki stack to deploy")
+			if !validateInfraAndResourcesForLoki(oc, []string{"azure"}, "10Gi", "6") {
+				g.Skip("Current platform not supported/resources not available for this test!")
 			}
 
 			sc, err := getStorageClassName(oc)
@@ -135,28 +100,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Critical-49364-Forward logs to LokiStack with gateway using fluentd as the collector[Serial]", func() {
-			platform := exutil.CheckPlatform(oc)
-			if platform != "aws" && platform != "gcp" && platform != "azure" {
-				g.Skip("Skip for non-supported platform, the supported platforms are AWS, GCP and Azure!!!")
-			}
-			if platform == "aws" {
-				// skip the case on aws sts clusters
-				_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get("aws-creds", metav1.GetOptions{})
-				if apierrors.IsNotFound(err) {
-					g.Skip("Skip for non-supported matrix")
-				}
-			}
-			// check the remaning resources in the cluster
-			requestedMemory, err := k8sresource.ParseQuantity("10Gi")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			requestedCPU, err := k8sresource.ParseQuantity("6")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if !compareClusterResources(oc, requestedCPU.MilliValue(), requestedMemory.MilliValue()) {
-				g.Skip("Skip for the cluster doesn't have enough resources for loki stack to deploy")
+			if !validateInfraAndResourcesForLoki(oc, []string{"aws", "gcp", "azure"}, "10Gi", "6") {
+				g.Skip("Current platform not supported/resources not available for this test!")
 			}
 
 			appProj := oc.Namespace()
-			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			sc, err := getStorageClassName(oc)

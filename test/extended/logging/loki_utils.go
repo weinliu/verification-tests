@@ -25,6 +25,8 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"google.golang.org/api/iterator"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -832,21 +834,13 @@ func getPodsNodesMap(oc *exutil.CLI, nodes []v1.Node) map[string][]v1.Pod {
 		}
 	}
 
-	exist := func(a string, b []string) bool {
-		for _, c := range b {
-			if c == a {
-				return true
-			}
-		}
-		return false
-	}
 	var nodeNames []string
 	for _, node := range nodes {
 		nodeNames = append(nodeNames, node.Name)
 	}
 	// if the key is not in nodes list, remove the element from the map
 	for podmap := range podsMap {
-		if !exist(podmap, nodeNames) {
+		if !contain(nodeNames, podmap) {
 			delete(podsMap, podmap)
 		}
 	}
@@ -897,7 +891,7 @@ func getRemainingResourcesNodesMap(oc *exutil.CLI, nodes []v1.Node) map[string]r
 }
 
 // compareClusterResources compares the remaning resource with the requested resource provide by user
-func compareClusterResources(oc *exutil.CLI, cpu, memory int64) bool {
+func compareClusterResources(oc *exutil.CLI, cpu, memory string) bool {
 	nodes, err := getSchedulableLinuxWorkerNodes(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	var remainingCPU, remainingMemory int64
@@ -907,8 +901,23 @@ func compareClusterResources(oc *exutil.CLI, cpu, memory int64) bool {
 		remainingMemory += re[node.Name].memory
 	}
 
-	if remainingCPU > cpu && remainingMemory > memory {
-		return true
+	requiredCPU, _ := k8sresource.ParseQuantity(cpu)
+	requiredMemory, _ := k8sresource.ParseQuantity(memory)
+	e2e.Logf("the required cpu is: %d, and the required memory is: %d", requiredCPU.MilliValue(), requiredMemory.MilliValue())
+	e2e.Logf("the remaining cpu is: %d, and the remaning memory is: %d", remainingCPU, remainingMemory)
+	return remainingCPU > requiredCPU.MilliValue() && remainingMemory > requiredMemory.MilliValue()
+}
+
+// validateInfraAndResourcesForLoki checks cluster remaning resources and platform type
+// supportedPlatforms the platform types which the case can be executed on
+func validateInfraAndResourcesForLoki(oc *exutil.CLI, supportedPlatforms []string, reqMemory, reqCPU string) bool {
+	currentPlatform := exutil.CheckPlatform(oc)
+	if currentPlatform == "aws" {
+		// skip the case on aws sts clusters
+		_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get("aws-creds", metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return false
+		}
 	}
-	return false
+	return contain(supportedPlatforms, currentPlatform) && compareClusterResources(oc, reqCPU, reqMemory)
 }

@@ -126,7 +126,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("No Event Router logs found."))
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("No Event Router logs found when using %s as log collector.", "vector"))
 		})
 
 	})

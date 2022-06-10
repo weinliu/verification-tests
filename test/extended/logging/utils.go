@@ -69,6 +69,16 @@ func getRandomString() string {
 	return string(buffer)
 }
 
+// contain checks if the array a contains string b
+func contain(a []string, b string) bool {
+	for _, c := range a {
+		if c == b {
+			return true
+		}
+	}
+	return false
+}
+
 func processTemplate(oc *exutil.CLI, parameters ...string) (string, error) {
 	var configFile string
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
@@ -561,14 +571,15 @@ func getRouteAddress(oc *exutil.CLI, ns, routeName string) string {
 }
 
 func getSAToken(oc *exutil.CLI, name, ns string) string {
-	sa, err := oc.AdminKubeClient().CoreV1().ServiceAccounts(ns).Get(name, metav1.GetOptions{})
+	secrets, err := oc.AdminKubeClient().CoreV1().Secrets(ns).List(metav1.ListOptions{})
 	if err != nil {
 		return ""
 	}
 	var secret string
-	for _, t := range sa.Secrets {
-		if strings.Contains(t.Name, name+"-token") {
-			secret = t.Name
+	for _, s := range secrets.Items {
+		if strings.Contains(s.Name, name+"-token") {
+			secret = s.Name
+			break
 		}
 	}
 	dirname := "/tmp/" + oc.Namespace() + "-sa"
