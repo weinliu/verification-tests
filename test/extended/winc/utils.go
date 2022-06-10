@@ -324,8 +324,7 @@ func truncatedVersion(s string) string {
 	str = str[:2]
 	return strings.Join(str[:], ".")
 }
-func getMachineset(oc *exutil.CLI, iaasPlatform, winVersion string, machineSetName string, fileName string) (windowsMachineSetName string, err error) {
-
+func getMachinesetFileName(oc *exutil.CLI, iaasPlatform, winVersion string, machineSetName string, fileName string) (machinesetFileName string, err error) {
 	windowsMachineSet := ""
 	infrastructureID := ""
 	if iaasPlatform == "aws" {
@@ -351,7 +350,6 @@ func getMachineset(oc *exutil.CLI, iaasPlatform, winVersion string, machineSetNa
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<region>", region)
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<zone>", zone)
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<windows_image_with_container_runtime_installed>", windowsAMI)
-		windowsMachineSetName = infrastructureID + "-" + machineSetName + "-worker-" + zone
 	} else if iaasPlatform == "azure" {
 		windowsMachineSet = getFileContent("winc", fileName)
 		infrastructureID, err = oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
@@ -368,7 +366,6 @@ func getMachineset(oc *exutil.CLI, iaasPlatform, winVersion string, machineSetNa
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<location>", location)
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<SKU>", sku)
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<name>", machineSetName)
-		windowsMachineSetName = machineSetName
 	} else if iaasPlatform == "vsphere" {
 		windowsMachineSet = getFileContent("winc", "vsphere_byoh_machineset.yaml")
 		template := "openshift-qe-winserver-ver-2004"
@@ -379,12 +376,12 @@ func getMachineset(oc *exutil.CLI, iaasPlatform, winVersion string, machineSetNa
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<infrastructureID>", infrastructureID)
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<template>", template)
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<name>", machineSetName)
-		windowsMachineSetName = machineSetName
 	} else {
 		e2e.Failf("IAAS platform: %s is not automated yet", iaasPlatform)
 	}
-	ioutil.WriteFile("availWindowsMachineSet"+machineSetName, []byte(windowsMachineSet), 0644)
-	return windowsMachineSetName, err
+	machinesetFileName = "availWindowsMachineSet" + machineSetName
+	ioutil.WriteFile(machinesetFileName, []byte(windowsMachineSet), 0644)
+	return machinesetFileName, err
 }
 
 func createMachineset(oc *exutil.CLI, file string) error {
@@ -616,12 +613,13 @@ func setBYOH(oc *exutil.CLI, iaasPlatform string, addressType string, machineset
 	} else if iaasPlatform == "vsphere" {
 		machinesetFileName = "vsphere_byoh_machineset.yaml"
 	}
-	machineset, err := getMachineset(oc, iaasPlatform, winVersion, machinesetName, machinesetFileName)
+	// here we need to use a hardcoded machineset 'byoh' since AWS machineset name is too long.
+	MSFileName, err := getMachinesetFileName(oc, iaasPlatform, winVersion, "byoh", machinesetFileName)
+	defer os.Remove(MSFileName)
+	createMachineset(oc, MSFileName)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	createMachineset(oc, "availWindowsMachineSetbyoh")
-	addressesArray := fetchAddress(oc, addressType, machineset)
+	addressesArray := fetchAddress(oc, addressType, machinesetName)
 	setConfigmap(oc, addressesArray[0], user, "config-map.yaml")
-	waitForMachinesetReady(oc, machineset, 15, 1)
-
+	waitForMachinesetReady(oc, machinesetName, 15, 1)
 	return addressesArray[0]
 }

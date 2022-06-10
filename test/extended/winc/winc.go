@@ -257,13 +257,14 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		if iaasPlatform == "azure" {
 			machinesetMultiOSFileName = "azure_windows_machineset.yaml"
 		}
-		mutliOSMachineset, err := getMachineset(oc, iaasPlatform, winVersion, machinesetName, machinesetMultiOSFileName)
+		machinesetFileName, err := getMachinesetFileName(oc, iaasPlatform, winVersion, machinesetName, machinesetMultiOSFileName)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, mutliOSMachineset, "-n", "openshift-machine-api").Output()
-		createMachineset(oc, "availWindowsMachineSet"+machinesetName)
-		waitForMachinesetReady(oc, mutliOSMachineset, 10, 1)
+		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", "openshift-machine-api").Output()
+		defer os.Remove(machinesetFileName)
+		createMachineset(oc, machinesetFileName)
+		waitForMachinesetReady(oc, machinesetName, 10, 1)
 		// Here we fetch machine IP from machineset
-		machineIP := fetchAddress(oc, "IP", mutliOSMachineset)
+		machineIP := fetchAddress(oc, "IP", machinesetName)
 		nodeName, err := getNodeNameFromIP(oc, machineIP[0], iaasPlatform)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// here we update the runtime class file with the Kernel ID of multiple OS
