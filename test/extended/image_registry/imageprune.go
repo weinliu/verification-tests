@@ -8,7 +8,6 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -31,52 +30,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		traceAllInfo       = "Content-Type: application/json"
 		tolerationsInfo    = `[{"effect":"NoSchedule","key":"key","operator":"Equal","value":"value"}]`
 	)
-	// author: wewang@redhat.com
-	g.It("Author:wewang-Medium-35906-Only API objects will be removed in image pruner pod when image registry is set to Removed [Disruptive]", func() {
-		g.By("Check platforms")
-		//When registry configured using pvc, the following removed registry operation will remove pvc too.
-		//This is not suitable for the defer recoverage. Only run this case on cloud storage.
-		if checkRegistryUsingFSVolume(oc) {
-			g.Skip("Skip for fs volume")
-		}
-
-		g.By("Set image registry cluster Removed")
-		err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Removed"}}`, "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		defer func() {
-			g.By("Set image registry cluster Managed")
-			oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Managed"}}`, "--type=merge").Execute()
-			recoverRegistryDefaultPods(oc)
-		}()
-		checkRegistrypodsRemoved(oc)
-
-		g.By("Set imagepruner cronjob started every 2 minutes")
-		err = oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"schedule":"*/2 * * * *"}}`, "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"schedule":""}}`, "--type=merge").Execute()
-		podsOfImagePrune := []corev1.Pod{}
-		foundImagePruneLog := false
-		err = wait.Poll(25*time.Second, 3*time.Minute, func() (bool, error) {
-			podsOfImagePrune = listPodStartingWith("image-pruner", oc, "openshift-image-registry")
-			if len(podsOfImagePrune) == 0 {
-				e2e.Logf("Go to next round")
-				return false, nil
-			}
-			foundImagePruneLog = dePodLogs(podsOfImagePrune, oc, logInfo)
-			if foundImagePruneLog != true {
-				e2e.Logf("Go to next round")
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Error retrieving logs")
-
-		g.By("Check the log of image pruner and expected info about:Only API objects will be removed")
-		foundWarnPruneLog := true
-		foundWarnPruneLog = dePodLogs(podsOfImagePrune, oc, warnInfo)
-		o.Expect(!foundWarnPruneLog).To(o.BeTrue())
-	})
-
 	// author: wewang@redhat.com
 	g.It("ConnectedOnly-Author:wewang-High-27613-registry operator can publish metrics reporting the status of image-pruner [Disruptive]", func() {
 		g.By("granting the cluster-admin role to user")
@@ -124,70 +77,34 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("Author:wewang-Medium-35292-LogLevel setting for the pruner", func() {
+	g.It("Author:wewang-Medium-35292-LogLevel setting for the pruner [Serial]", func() {
 		g.By("Set imagepruner cronjob started every 1 minutes")
 		err := oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"schedule":"*/1 * * * *"}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"schedule":""}}`, "--type=merge").Execute()
 
 		g.By("Check log when imagerpruner loglevel is Normal")
-		foundPruneLog := false
-		err = wait.PollImmediate(30*time.Second, 90*time.Second, func() (bool, error) {
-			foundPruneLog = imagePruneLog(oc, normalInfo)
-			if foundPruneLog != true {
-				e2e.Logf("Go to next round")
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Don't find the normalInfo value")
+		imagePruneLog(oc, normalInfo, "DEBUGTEST")
 
 		g.By("Check log when imagerpruner loglevel is Debug")
 		err = oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"logLevel":"Debug"}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"logLevel":"Normal"}}`, "--type=merge").Execute()
-		foundPruneLog = false
-		err = wait.PollImmediate(30*time.Second, 90*time.Second, func() (bool, error) {
-			foundPruneLog = imagePruneLog(oc, debugInfo)
-			if foundPruneLog != true {
-				e2e.Logf("Go to next round")
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Don't find the debugInfo value")
+		imagePruneLog(oc, debugInfo, "DEBUGTEST")
 
 		g.By("Check log when imagerpruner loglevel is Trace")
 		err = oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"logLevel":"Trace"}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		foundPruneLog = false
-		err = wait.PollImmediate(30*time.Second, 90*time.Second, func() (bool, error) {
-			foundPruneLog = imagePruneLog(oc, traceInfo)
-			if foundPruneLog != true {
-				e2e.Logf("Go to next round")
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Don't find the traceInfo value")
+		imagePruneLog(oc, traceInfo, "DEBUGTEST")
 
 		g.By("Check log when imagerpruner loglevel is TraceAll")
 		err = oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"logLevel":"TraceAll"}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		imagePruneLog(oc, traceAllInfo, "DEBUGTEST")
 
-		foundPruneLog = false
-		err = wait.PollImmediate(30*time.Second, 90*time.Second, func() (bool, error) {
-			foundPruneLog = imagePruneLog(oc, traceAllInfo)
-			if foundPruneLog != true {
-				e2e.Logf("Go to next round")
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Don't find the traceAllInfo value")
 	})
 	// author: wewang@redhat.com
-	g.It("Author:wewang-Medium-44113-Image pruner should use custom tolerations", func() {
+	g.It("Author:wewang-Medium-44113-Image pruner should use custom tolerations [Serial]", func() {
 		g.By("Set tolerations for imagepruner cluster")
 		err := oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"tolerations":[{"effect":"NoSchedule","key":"key","operator":"Equal","value":"value"}]}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -198,7 +115,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("Author:wewang-High-27588-ManagementState setting in Image registry operator config can influence image prune [Disruptive]", func() {
+	g.It("Author:wewang-35906-High-27588-ManagementState setting in Image registry operator config can influence image prune [Disruptive]", func() {
 		//When registry configured using pvc, the following removed registry operation will remove pvc too.
 		//This is not suitable for the defer recoverage. Only run this case on cloud storage.
 		if checkRegistryUsingFSVolume(oc) {
@@ -235,22 +152,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		defer oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"schedule":""}}`, "--type=merge").Execute()
 		err = oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"schedule":"*/1 * * * *"}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		podsOfImagePrune := []corev1.Pod{}
-		foundImagePruneLog := false
-		err = wait.PollImmediate(30*time.Second, 2*time.Minute, func() (bool, error) {
-			podsOfImagePrune = listPodStartingWith("image-pruner", oc, "openshift-image-registry")
-			if len(podsOfImagePrune) == 0 {
-				e2e.Logf("Go to next round")
-				return false, nil
-			}
-			foundImagePruneLog = dePodLogs(podsOfImagePrune, oc, logInfo)
-			if foundImagePruneLog != true {
-				e2e.Logf("Go to next round")
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Don't find the expect infor")
+		imagePruneLog(oc, logInfo, warnInfo)
 	})
 
 	//Author: xiuwang@redhat.com
@@ -275,10 +177,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			g.By("Delete imagestreamtag when the pruner is processing")
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("istag", fmt.Sprintf("%s:latest", bcName), "-n", oc.Namespace()).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-
-			foundPruneLog := true
-			foundPruneLog = imagePruneLog(oc, fmt.Sprintf("%s", bcName))
-			o.Expect(foundPruneLog).To(o.BeFalse())
+			imagePruneLog(oc, "", fmt.Sprintf("%s", bcName))
 		}
 
 		g.By("Check if imagepruner degraded image registry")
@@ -308,33 +207,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		oc.SetupProject()
 		podsrc.namespace = oc.Namespace()
 		podsrc.create(oc)
-		foundPruneLog := false
-		err = wait.PollImmediate(10*time.Second, 2*time.Minute, func() (bool, error) {
-			foundPruneLog = imagePruneLog(oc, `"quay.io/openshifttest/hello-openshift:multiarch@": invalid reference format - skipping`)
-			if foundPruneLog != true {
-				e2e.Logf("wait for next round")
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Don't find the value")
+		imagePruneLog(oc, `"quay.io/openshifttest/hello-openshift:multiarch@": invalid reference format - skipping`, "DEBUGTEST")
 
 		// Add retry check when imagepruner job failed https://bugzilla.redhat.com/show_bug.cgi?id=1990125
 		g.By("Check if imagepruner retry after failed")
 		defer oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"ignoreInvalidImageReferences":true}}`, "--type=merge").Execute()
 		err = oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"ignoreInvalidImageReferences":false}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-
-		foundPruneLog = false
-		err = wait.PollImmediate(10*time.Second, 2*time.Minute, func() (bool, error) {
-			foundPruneLog = imagePruneLog(oc, `attempt #1 has failed (exit code 1), going to make another attempt`)
-			if foundPruneLog != true {
-				e2e.Logf("wait for next round")
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Imagepruner doesn't retry")
+		imagePruneLog(oc, `attempt #1 has failed (exit code 1), going to make another attempt`, "DEBUGTEST")
 	})
 
 	//Author: xiuwang@redhat.com

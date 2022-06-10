@@ -76,7 +76,7 @@ func listPodStartingWith(prefix string, oc *exutil.CLI, namespace string) (pod [
 		return nil
 	}
 	for _, pod := range podList.Items {
-		if strings.HasPrefix(pod.Name, prefix) && pod.Status.Phase != "ContainerCreating" {
+		if strings.HasPrefix(pod.Name, prefix) {
 			podsToAll = append(podsToAll, pod)
 		}
 	}
@@ -231,18 +231,27 @@ func comparePodHostIP(oc *exutil.CLI) (int, int) {
 	return numi, numj
 }
 
-func imagePruneLog(oc *exutil.CLI, matchlogs string) bool {
+//Check the latest image pruner pod logs
+func imagePruneLog(oc *exutil.CLI, matchLogs, notMatchLogs string) {
 	podsOfImagePrune := []corev1.Pod{}
-	podsOfImagePrune = listPodStartingWith("image-pruner", oc, "openshift-image-registry")
-	for _, pod := range podsOfImagePrune {
-		depOutput, err := oc.AsAdmin().Run("logs").WithoutNamespace().Args("pod/"+pod.Name, "-n", pod.Namespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(depOutput, matchlogs) {
-			return true
-			break
+	err := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
+		podsOfImagePrune = listPodStartingWith("image-pruner", oc, "openshift-image-registry")
+		if podsOfImagePrune == nil || len(podsOfImagePrune) == 0 {
+			e2e.Logf("Can't get pruner pods, go to next round")
+			return false, nil
 		}
-	}
-	return false
+		pod := podsOfImagePrune[len(podsOfImagePrune)-1]
+		e2e.Logf("the pod status is %s", pod.Status.Phase)
+		if pod.Status.Phase != "ContainerCreating" && pod.Status.Phase != "Pending" {
+			depOutput, _ := oc.AsAdmin().Run("logs").WithoutNamespace().Args("pod/"+pod.Name, "-n", pod.Namespace).Output()
+			if strings.Contains(depOutput, matchLogs) && !strings.Contains(depOutput, notMatchLogs) {
+				return true, nil
+			}
+		}
+		e2e.Logf("The image pruner log doesn't contain %v or contain %v", matchLogs, notMatchLogs)
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can't get the image pruner log or image pruner log doesn't contain %v or contain %v", matchLogs, notMatchLogs))
 }
 
 func configureRegistryStorageToEmptyDir(oc *exutil.CLI) {
