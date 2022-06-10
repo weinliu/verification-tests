@@ -1899,7 +1899,89 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("check registry working well")
 		oc.SetupProject()
 		checkRegistryFunctionFine(oc, "test-49747", oc.Namespace())
+	})
 
+	//author: yyou@redhat.com
+	g.It("Author:yyou-Medium-50925-Add prometheusrules for image_registry_image_stream_tags_total and registry operations metrics", func() {
+		var (
+			operationData   prometheusImageregistryOperations
+			storageTypeData prometheusImageregistryStorageType
+		)
+		g.By("Push 1 images to non-openshift project to image registry")
+		oc.SetupProject()
+		checkRegistryFunctionFine(oc, "test-50925", oc.Namespace())
+
+		g.By("Collect metrics of tag")
+		mo, err := exutil.NewPrometheusMonitor(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		tagQueryParams := exutil.MonitorInstantQueryParams{Query: "imageregistry:imagestreamtags_count:sum"}
+		tagMsg, err := mo.InstantQuery(tagQueryParams)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tagMsg).NotTo(o.BeEmpty())
+
+		g.By("Collect metrics of operations")
+		opQueryParams := exutil.MonitorInstantQueryParams{Query: "imageregistry:operations_count:sum"}
+		operationMsg, err := mo.InstantQuery(opQueryParams)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(operationMsg).NotTo(o.BeEmpty())
+		jsonerr := json.Unmarshal([]byte(operationMsg), &storageTypeData)
+		if jsonerr != nil {
+			e2e.Failf("operation data is not in json format")
+		}
+		operationLen := len(operationData.Data.Result)
+		beforeOperationData := make([]int, operationLen)
+		for i := 0; i < operationLen; i++ {
+			beforeOperationData[i], err = strconv.Atoi(operationData.Data.Result[i].Value[1].(string))
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("the operation array %v is %v", i, beforeOperationData[i])
+		}
+
+		g.By("Tag 2 imagestream to non-openshift project")
+		err = oc.AsAdmin().Run("tag").Args("quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "is50925-1:latest", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "is50925-1", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("import-image").Args("is50925-2:latest", "--from", "registry.access.redhat.com/rhel7", "--confirm", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "is50925-2", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Collect metrics of storagetype")
+		fullStorageType := "S3 EmptyDir PVC Azure GCS Swift OSS IBMCOS"
+		storageQuertParams := exutil.MonitorInstantQueryParams{Query: "image_registry_storage_type"}
+		storageTypeMsg, err := mo.InstantQuery(storageQuertParams)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(storageTypeMsg).NotTo(o.BeEmpty())
+		jsonerr = json.Unmarshal([]byte(storageTypeMsg), &storageTypeData)
+		if jsonerr != nil {
+			e2e.Failf("storage type data is not in json format")
+		}
+		storageType := storageTypeData.Data.Result[0].Metric.Storage
+		o.Expect(fullStorageType).To(o.ContainSubstring(storageType))
+
+		g.By("Collect metrics of operation again")
+		err = wait.Poll(20*time.Second, 3*time.Minute, func() (bool, error) {
+			opQueryParams = exutil.MonitorInstantQueryParams{Query: "imageregistry:operations_count:sum"}
+			operationMsg, err = mo.InstantQuery(opQueryParams)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			jsonerr = json.Unmarshal([]byte(operationMsg), &storageTypeData)
+			if jsonerr != nil {
+				e2e.Failf("operation data is not in json format")
+			}
+			afterOperationData := make([]int, operationLen)
+			for i := 0; i < operationLen; i++ {
+				afterOperationData[i], err = strconv.Atoi(operationData.Data.Result[i].Value[1].(string))
+				o.Expect(err).NotTo(o.HaveOccurred())
+				e2e.Logf("the operation array %v is %v", i, beforeOperationData[i])
+				if afterOperationData[i] >= beforeOperationData[i] {
+					e2e.Logf("%v -> %v", beforeOperationData[i], afterOperationData[i])
+				} else {
+					return false, nil
+				}
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "The operation metric don't get expect value")
 	})
 
 })

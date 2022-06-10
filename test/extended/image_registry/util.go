@@ -1108,3 +1108,39 @@ func (rtc *runtimeClass) delete(oc *exutil.CLI) {
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("runtimeclass", rtc.name, "--ignore-not-found=true").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
+
+type prometheusImageregistryOperations struct {
+	Data struct {
+		Result []struct {
+			Metric []struct {
+				Name      string `json:"__name__"`
+				Operation string `json:"operation"`
+				Resource  string `json:"resource_type"`
+			} `json:"metric"`
+			Value []interface{} `json:"value"`
+		} `json:"result"`
+		ResultType string `json:"resultType"`
+	} `json:"data"`
+	Status string `json:"status"`
+}
+
+type prometheusImageregistryStorageType struct {
+	Data struct {
+		Result []struct {
+			Metric struct {
+				Name      string `json:"__name__"`
+				Container string `json:"container"`
+				Endpoint  string `json:"endpoint"`
+				Instance  string `json:"instance"`
+				Job       string `json:"job"`
+				Namespace string `json:"namespace"`
+				Pod       string `json:"pod"`
+				Service   string `json:"service"`
+				Storage   string `json:"storage"`
+			} `json:"metric"`
+			Value []interface{} `json:"value"`
+		} `json:"result"`
+		ResultType string `json:"resultType"`
+	} `json:"data"`
+	Status string `json:"status"`
+}
