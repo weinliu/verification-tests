@@ -166,6 +166,9 @@ func (pmo *PrometheusMonitor) GetAlerts() (string, error) {
 }
 
 // GetSAToken get a token assigned to prometheus-k8s from openshift-monitoring namespace
+// According to 2093780, the secret prometheus-k8s-token is removed from sa prometheus-k8s.
+// So from 4.11, command <oc sa get-token prometheus-k8s -n openshift-monitoring> won't work
+// Please install oc client and cluster with same major version.
 func GetSAToken(oc *CLI) (string, error) {
 	e2e.Logf("Getting a token assgined to prometheus-k8s from %s namespace...", monitorNamespace)
 	token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", prometheusK8s, "-n", monitorNamespace).Output()
