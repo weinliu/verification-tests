@@ -110,14 +110,15 @@ type machinepool struct {
 }
 
 type syncSetResource struct {
-	name        string
-	namespace   string
-	namespace2  string
-	cdrefname   string
-	ramode      string
-	cmname      string
-	cmnamespace string
-	template    string
+	name          string
+	namespace     string
+	namespace2    string
+	cdrefname     string
+	ramode        string
+	applybehavior string
+	cmname        string
+	cmnamespace   string
+	template      string
 }
 
 type syncSetPatch struct {
@@ -278,7 +279,7 @@ const (
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 	var cfgFileJSON string
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
-		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + "hive-resource-cfg.json")
+		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + "-hive-resource-cfg.json")
 		if err != nil {
 			e2e.Logf("the err:%v, and try next round", err)
 			return false, nil
@@ -420,7 +421,7 @@ func (machine *machinepool) create(oc *exutil.CLI) {
 }
 
 func (syncresource *syncSetResource) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", syncresource.template, "-p", "NAME="+syncresource.name, "NAMESPACE="+syncresource.namespace, "CDREFNAME="+syncresource.cdrefname, "NAMESPACE2="+syncresource.namespace2, "RAMODE="+syncresource.ramode, "CMNAME="+syncresource.cmname, "CMNAMESPACE="+syncresource.cmnamespace)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", syncresource.template, "-p", "NAME="+syncresource.name, "NAMESPACE="+syncresource.namespace, "CDREFNAME="+syncresource.cdrefname, "NAMESPACE2="+syncresource.namespace2, "RAMODE="+syncresource.ramode, "APPLYBEHAVIOR="+syncresource.applybehavior, "CMNAME="+syncresource.cmname, "CMNAMESPACE="+syncresource.cmnamespace)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

@@ -2,6 +2,7 @@ package hive
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1126,5 +1127,275 @@ spec:
 		for i := range cdArray {
 			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "test", ok, DefaultTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i], "-o=jsonpath={.metadata.labels}"}).check(oc)
 		}
+	})
+
+	//author: lwan@redhat.com
+	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "41499"|./bin/extended-platform-tests run --timeout 60m -f -
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:lwan-High-41499-High-34404-High-25333-Hive syncset test for paused and multi-modes[Serial]", func() {
+		if iaasPlatform != "gcp" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 41499, 34404 or 25333 is for GCP - skipping test ...")
+		}
+		testCaseID := "41499"
+		cdName := "cluster-" + testCaseID
+		imageSetName := cdName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: OCP410ReleaseImage,
+			template:     imageSetTemp,
+		}
+
+		g.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		oc.SetupProject()
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and gcp-credentials to target namespace for the clusterdeployment
+		g.By("Copy GCP platform credentials...")
+		createGCPCreds(oc, oc.Namespace())
+
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Create GCP Install-Config Secret...")
+		installConfigTemp := filepath.Join(testDataDir, "gcp-install-config.yaml")
+		installConfigSecretName := cdName + "-install-config"
+		projectID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.platformStatus.gcp.projectID}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(projectID).NotTo(o.BeEmpty())
+		installConfigSecret := gcpInstallConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: GCPBaseDomain,
+			name2:      cdName,
+			region:     GCPRegion,
+			projectid:  projectID,
+			template:   installConfigTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
+		installConfigSecret.create(oc)
+
+		g.By("Create GCP ClusterDeployment...")
+		clusterTemp := filepath.Join(testDataDir, "clusterdeployment-gcp.yaml")
+		cluster := gcpClusterDeployment{
+			fake:                "false",
+			name:                cdName,
+			namespace:           oc.Namespace(),
+			baseDomain:          GCPBaseDomain,
+			clusterName:         cdName,
+			platformType:        "gcp",
+			credRef:             GCPCreds,
+			region:              GCPRegion,
+			imageSetRef:         imageSetName,
+			installConfigSecret: installConfigSecretName,
+			pullSecretRef:       PullSecret,
+			template:            clusterTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
+		cluster.create(oc)
+		g.By("Check GCP ClusterDeployment installed flag is true")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
+		err = os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpDir)
+		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
+		kubeconfig := tmpDir + "/kubeconfig"
+
+		g.By("OCP-41499: Add condition in ClusterDeployment status for paused syncset")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace()}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"SyncSetFailed\")].status}"}).check(oc)
+		e2e.Logf("Add \"hive.openshift.io/syncset-pause\" annotation in ClusterDeployment, and delete ClusterSync CR")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"metadata": {"annotations": {"hive.openshift.io/syncset-pause": "true"}}}`}).check(oc)
+		newCheck("expect", "delete", asAdmin, withoutNamespace, contain, "delete", ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace()}).check(oc)
+		e2e.Logf("Check ClusterDeployment condition=SyncSetFailed")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"SyncSetFailed\")].status}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "SyncSetPaused", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"SyncSetFailed\")].reason}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "SyncSet is paused. ClusterSync will not be created", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"SyncSetFailed\")].message}"}).check(oc)
+		e2e.Logf("Check ClusterSync won't be created.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, nok, DefaultTimeout, []string{"ClusterSync", "-n", oc.Namespace()}).check(oc)
+		e2e.Logf("Remove annotation, check ClusterSync will be created again.")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"metadata": {"annotations": {"hive.openshift.io/syncset-pause": "false"}}}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"SyncSetFailed\")].status}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"ClusterSync", cdName, "-n", oc.Namespace()}).check(oc)
+
+		g.By("OCP-34404: Hive adds muti-modes for syncset to handle applying resources too large")
+		e2e.Logf("Create SyncSet with default applyBehavior.")
+		syncSetName := testCaseID + "-syncset-1"
+		configMapName := testCaseID + "-configmap-1"
+		configMapNamespace := testCaseID + "-" + getRandomString() + "-hive-1"
+		resourceMode := "Sync"
+		syncTemp := filepath.Join(testDataDir, "syncset-resource.yaml")
+		syncResource := syncSetResource{
+			name:        syncSetName,
+			namespace:   oc.Namespace(),
+			namespace2:  configMapNamespace,
+			cdrefname:   cdName,
+			cmname:      configMapName,
+			cmnamespace: configMapNamespace,
+			ramode:      resourceMode,
+			template:    syncTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"SyncSet", oc.Namespace(), syncSetName})
+		syncResource.create(oc)
+		e2e.Logf("Check ConfigMap is created on target cluster and have a last-applied-config annotation.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, `{"foo":"bar"}`, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapName, "-n", configMapNamespace, "-o=jsonpath={.data}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "kubectl.kubernetes.io/last-applied-configuration", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapName, "-n", configMapNamespace, "-o=jsonpath={.metadata.annotations}"}).check(oc)
+		e2e.Logf("Patch syncset resource.")
+		patchYaml := `
+spec:
+  resources:
+  - apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: ` + configMapNamespace + `
+  - apiVersion: v1
+    data:
+      foo1: bar1
+    kind: ConfigMap
+    metadata:
+      name: ` + configMapName + `
+      namespace: ` + configMapNamespace
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"SyncSet", syncSetName, "-n", oc.Namespace(), "--type", "merge", "-p", patchYaml}).check(oc)
+		e2e.Logf("Check data field in ConfigMap on target cluster should update.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, `{"foo1":"bar1"}`, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapName, "-n", configMapNamespace, "-o=jsonpath={.data}"}).check(oc)
+
+		e2e.Logf("Create SyncSet with applyBehavior=CreateOnly.")
+		syncSetName2 := testCaseID + "-syncset-2"
+		configMapName2 := testCaseID + "-configmap-2"
+		configMapNamespace2 := testCaseID + "-" + getRandomString() + "-hive-2"
+		applyBehavior := "CreateOnly"
+		syncTemp2 := filepath.Join(testDataDir, "syncset-resource.yaml")
+		syncResource2 := syncSetResource{
+			name:          syncSetName2,
+			namespace:     oc.Namespace(),
+			namespace2:    configMapNamespace2,
+			cdrefname:     cdName,
+			cmname:        configMapName2,
+			cmnamespace:   configMapNamespace2,
+			ramode:        resourceMode,
+			applybehavior: applyBehavior,
+			template:      syncTemp2,
+		}
+		defer cleanupObjects(oc, objectTableRef{"SyncSet", oc.Namespace(), syncSetName2})
+		syncResource2.create(oc)
+		e2e.Logf("Check ConfigMap is created on target cluster and should not have the last-applied-config annotation.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, `{"foo":"bar"}`, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapName2, "-n", configMapNamespace2, "-o=jsonpath={.data}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "kubectl.kubernetes.io/last-applied-configuration", nok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapName2, "-n", configMapNamespace2, "-o=jsonpath={.metadata.annotations}"}).check(oc)
+		e2e.Logf("Patch syncset resource.")
+		patchYaml = `
+spec:
+  resources:
+  - apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: ` + configMapNamespace2 + `
+  - apiVersion: v1
+    data:
+      foo1: bar1
+    kind: ConfigMap
+    metadata:
+      name: ` + configMapName2 + `
+      namespace: ` + configMapNamespace2
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"SyncSet", syncSetName2, "-n", oc.Namespace(), "--type", "merge", "-p", patchYaml}).check(oc)
+		e2e.Logf("Check data field in ConfigMap on target cluster should not update.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, `{"foo":"bar"}`, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapName2, "-n", configMapNamespace2, "-o=jsonpath={.data}"}).check(oc)
+
+		e2e.Logf("Create SyncSet with applyBehavior=CreateOrUpdate.")
+		syncSetName3 := testCaseID + "-syncset-3"
+		configMapName3 := testCaseID + "-configmap-3"
+		configMapNamespace3 := testCaseID + "-" + getRandomString() + "-hive-3"
+		applyBehavior = "CreateOrUpdate"
+		syncTemp3 := filepath.Join(testDataDir, "syncset-resource.yaml")
+		syncResource3 := syncSetResource{
+			name:          syncSetName3,
+			namespace:     oc.Namespace(),
+			namespace2:    configMapNamespace3,
+			cdrefname:     cdName,
+			cmname:        configMapName3,
+			cmnamespace:   configMapNamespace3,
+			ramode:        resourceMode,
+			applybehavior: applyBehavior,
+			template:      syncTemp3,
+		}
+		defer cleanupObjects(oc, objectTableRef{"SyncSet", oc.Namespace(), syncSetName3})
+		syncResource3.create(oc)
+		e2e.Logf("Check ConfigMap is created on target cluster and should not have the last-applied-config annotation.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, `{"foo":"bar"}`, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapName3, "-n", configMapNamespace3, "-o=jsonpath={.data}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "kubectl.kubernetes.io/last-applied-configuration", nok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapName3, "-n", configMapNamespace3, "-o=jsonpath={.metadata.annotations}"}).check(oc)
+		e2e.Logf("Patch syncset resource.")
+		patchYaml = `
+spec:
+  resources:
+  - apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: ` + configMapNamespace3 + `
+  - apiVersion: v1
+    data:
+      foo2: bar2
+    kind: ConfigMap
+    metadata:
+      name: ` + configMapName3 + `
+      namespace: ` + configMapNamespace3
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"SyncSet", syncSetName3, "-n", oc.Namespace(), "--type", "merge", "-p", patchYaml}).check(oc)
+		e2e.Logf("Check data field in ConfigMap on target cluster should update and contain both foo and foo2.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, `{"foo":"bar","foo2":"bar2"}`, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapName3, "-n", configMapNamespace3, "-o=jsonpath={.data}"}).check(oc)
+		e2e.Logf("Patch syncset resource.")
+		patchYaml = `
+spec:
+  resources:
+  - apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: ` + configMapNamespace3 + `
+  - apiVersion: v1
+    data:
+      foo: bar-test
+      foo3: bar3
+    kind: ConfigMap
+    metadata:
+      name: ` + configMapName3 + `
+      namespace: ` + configMapNamespace3
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"SyncSet", syncSetName3, "-n", oc.Namespace(), "--type", "merge", "-p", patchYaml}).check(oc)
+		e2e.Logf("Check data field in ConfigMap on target cluster should update, patch foo and add foo3.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, `{"foo":"bar-test","foo2":"bar2","foo3":"bar3"}`, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ConfigMap", configMapName3, "-n", configMapNamespace3, "-o=jsonpath={.data}"}).check(oc)
+
+		g.By("OCP-25333: Changing apiGroup for ClusterRoleBinding in SyncSet doesn't delete the CRB")
+		e2e.Logf("Create SyncSet with invalid apiGroup in resource CR.")
+		syncSetName4 := testCaseID + "-syncset-4"
+		syncsetYaml := `
+apiVersion: hive.openshift.io/v1
+kind: SyncSet
+metadata:
+  name: ` + syncSetName4 + `
+spec:
+  clusterDeploymentRefs:
+  - name: ` + cdName + `
+  - namespace: ` + oc.Namespace() + `
+  resourceApplyMode: Sync
+  resources:
+  - apiVersion: authorization.openshift.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: dedicated-admins-cluster
+    subjects:
+    - kind: Group
+      name: dedicated-admins
+    - kind: Group
+      name: system:serviceaccounts:dedicated-admin
+    roleRef:
+      name: dedicated-admins-cluster`
+		var filename = testCaseID + "-syncset-crb.yaml"
+		err = ioutil.WriteFile(filename, []byte(syncsetYaml), 0644)
+		defer os.Remove(filename)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", filename).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`Invalid value: "authorization.openshift.io/v1": must use kubernetes group for this resource kind`))
+		e2e.Logf("oc create syncset failed, this is expected.")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, syncSetName4, nok, DefaultTimeout, []string{"SyncSet", "-n", oc.Namespace()}).check(oc)
 	})
 })
