@@ -198,5 +198,80 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("# Check the pod volume have the exec right")
 			pod.checkMountedVolumeHaveExecRight(oc)
 		})
+
+		// author: chaoyang@redhat.com
+
+		g.It("Author:chaoyang-Critical-51995-[GCE-PD-CSI][snapshot]Provision image disk snapshot and restore successfully", func() {
+			var (
+				volumeSnapshotClassTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshotclass-template.yaml")
+				volumesnapshotTemplate      = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
+
+				storageClass                  = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("pd.csi.storage.gke.io"))
+				oripvc                        = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+				oripod                        = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(oripvc.name))
+				volumesnapshotClass           = newVolumeSnapshotClass(setVolumeSnapshotClassTemplate(volumeSnapshotClassTemplate))
+				volumeSnapshotClassParameters = map[string]string{
+					"image-family":  "openshiftqe-test",
+					"snapshot-type": "images",
+				}
+				vscExtraParameters = map[string]interface{}{
+					"parameters":     volumeSnapshotClassParameters,
+					"driver":         "pd.csi.storage.gke.io",
+					"deletionPolicy": "Delete",
+				}
+			)
+			g.By("# Create new project for the scenario")
+			oc.SetupProject()
+			storageClass.create(oc)
+			defer storageClass.deleteAsAdmin(oc)
+
+			g.By("# Create a pvc with the storageclass")
+			oripvc.create(oc)
+			defer oripvc.deleteAsAdmin(oc)
+
+			g.By("# Create pod with the created pvc and wait for the pod ready")
+			oripod.create(oc)
+			defer oripod.deleteAsAdmin(oc)
+			waitPodReady(oc, oripod.namespace, oripod.name)
+
+			g.By("# Write file to volume")
+			oripod.checkMountedVolumeCouldRW(oc)
+			oripod.execCommand(oc, "sync")
+
+			g.By("# Create new volumesnapshotclass with parameter snapshot-type as image")
+			volumesnapshotClass.createWithExtraParameters(oc, vscExtraParameters)
+			defer volumesnapshotClass.deleteAsAdmin(oc)
+
+			g.By("# Create volumesnapshot with new volumesnapshotclass")
+			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(oripvc.name), setVolumeSnapshotVscname(volumesnapshotClass.name))
+			volumesnapshot.create(oc)
+			defer volumesnapshot.delete(oc) //in case of delete volumesnapshot in the steps is failed
+
+			g.By("# Check volumesnapshotcontent type is disk image")
+			volumesnapshot.waitReadyToUse(oc)
+			vscontent := getVSContentByVSname(oc, volumesnapshot.namespace, volumesnapshot.name)
+			//  for example, one snapshotHandle is projects/openshift-qe/global/images/snapshot-2e7b8095-198d-48f2-acdc-96b050a9a07a
+			vsContentSnapShotHandle, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("volumesnapshotcontent", vscontent, "-o=jsonpath={.status.snapshotHandle}").Output()
+			o.Expect(vsContentSnapShotHandle).To(o.ContainSubstring("images"))
+
+			g.By("# Restore disk image ")
+			restorepvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			restorepvc.capacity = oripvc.capacity
+			restorepvc.createWithSnapshotDataSource(oc)
+			defer restorepvc.deleteAsAdmin(oc)
+
+			restorepod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(restorepvc.name))
+			restorepod.create(oc)
+			defer restorepod.deleteAsAdmin(oc)
+			restorepod.waitReady(oc)
+
+			g.By("Check the file exist in restored volume")
+			restorepod.checkMountedVolumeDataExist(oc, true)
+			restorepod.checkMountedVolumeCouldWriteData(oc, true)
+			restorepod.checkMountedVolumeHaveExecRight(oc)
+
+		})
+
 	}
+
 })

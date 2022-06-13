@@ -227,6 +227,12 @@ func (vsc *volumeSnapshotClass) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+//  Create a new customized VolumeSnapshotClass with extra parameters
+func (vsc *volumeSnapshotClass) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", vsc.template, "-p", "VSCNAME="+vsc.name, "DRIVER="+vsc.driver, "DELETIONPOLICY="+vsc.deletionPolicy)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 //  Delete the VolumeSnapshotClass
 func (vsc *volumeSnapshotClass) deleteAsAdmin(oc *exutil.CLI) {
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("volumesnapshotclass", vsc.name).Execute()

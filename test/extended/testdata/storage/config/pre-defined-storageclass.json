@@ -48,7 +48,8 @@
         "default_sc": "standard",
         "pre_defined_sc": [
           "standard",
-          "standard-csi"
+          "standard-csi",
+	  "ssd-csi"
         ]
       }
     },
