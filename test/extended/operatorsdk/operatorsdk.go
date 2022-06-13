@@ -904,10 +904,10 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(result).To(o.ContainSubstring("--metrics-bind-address"))
 	})
 	// author: chuo@redhat.com
-	g.It("Author:chuo-High-47923-Sync 1.22 to downstream", func() {
+	g.It("Author:xzha-High-52126-Sync 1.24 to downstream", func() {
 		operatorsdkCLI.showInfo = true
 		output, _ := operatorsdkCLI.Run("version").Args().Output()
-		o.Expect(output).To(o.ContainSubstring("v1.22"))
+		o.Expect(output).To(o.ContainSubstring("v1.24"))
 	})
 	// author: chuo@redhat.com
 	g.It("ConnectedOnly-VMonly-Author:chuo-High-34427-Ensure that Ansible Based Operators creation is working", func() {
