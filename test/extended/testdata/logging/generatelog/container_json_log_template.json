@@ -28,15 +28,24 @@
                 "template": {
                     "metadata": {
                         "generateName": "centos-logtest-",
+                        "annotations": {
+                            "containerType.logging.openshift.io/${CONTAINER}": "${CONTAINER}"
+                        },
                         "labels": "${{LABELS}}"
                     },
                     "spec": {
+                        "securityContext": {
+                            "runAsNonRoot": true,
+                            "seccompProfile": {
+                                "type": "RuntimeDefault"
+                            }
+                        },
                         "containers": [
                             {
                                 "env": [],
                                 "image": "quay.io/openshifttest/ocp-logtest@sha256:16232868ba1143721b786dbabb3f7384645acb663fadb4af48e9ea1228a67635",
-                                "imagePullPolicy": "Always",
-                                "name": "logging-centos-logtest",
+                                "imagePullPolicy": "IfNotPresent",
+                                "name": "${CONTAINER}",
                                 "resources": {},
                                 "volumeMounts": [
                                     {
@@ -44,7 +53,15 @@
                                         "mountPath": "/var/lib/svt"
                                     }
                                 ],
-                                "terminationMessagePath": "/dev/termination-log"
+                                "terminationMessagePath": "/dev/termination-log",
+                                "securityContext": {
+                                    "allowPrivilegeEscalation": false,
+                                    "capabilities": {
+                                        "drop": [
+                                            "ALL"
+                                        ]
+                                    }
+                                }
                             }
                         ],
                         "volumes": [
@@ -61,11 +78,6 @@
         }
     ],
     "parameters": [
-        {
-            "name": "IDENTIFIER",
-            "displayName": "identifier",
-            "value": "1"
-        },
         {
             "name": "REPLICAS",
             "displayName": "Replicas",
@@ -85,6 +97,10 @@
             "name":"CONFIGMAP",
             "displayName":"ConfigMap",
             "value":"logtest-config"
+        },
+        {
+            "name": "CONTAINER",
+            "value": "logging-centos-logtest"
         }
     ]
 }

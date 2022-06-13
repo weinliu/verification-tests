@@ -8,8 +8,6 @@ objects:
   metadata:
     name: ${NAME}
     namespace: ${NAMESPACE}
-    annotations:
-      logging.openshift.io/preview-vector-collector: enabled
   spec:
     managementState: "Managed"
     logStore:
