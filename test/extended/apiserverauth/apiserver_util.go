@@ -280,5 +280,17 @@ func checkCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]str
 	// Check ,compare and assert the current cluster operator status against the expected status given.
 	currentCoStatus := getCoStatus(oc, coName, statusToCompare)
 	o.Expect(reflect.DeepEqual(currentCoStatus, statusToCompare)).To(o.Equal(true), "Wrong %s CO status reported, actual status : %s", coName, currentCoStatus)
+}
 
+// GetAlertsByName get all the alerts
+func GetAlertsByName(oc *exutil.CLI, alertName string) (string, error) {
+	mon, monErr := exutil.NewPrometheusMonitor(oc.AsAdmin())
+	if monErr != nil {
+		return "", monErr
+	}
+	allAlerts, allAlertErr := mon.GetAlerts()
+	if allAlertErr != nil {
+		return "", allAlertErr
+	}
+	return allAlerts, nil
 }

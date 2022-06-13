@@ -1891,6 +1891,88 @@ spec:
 		g.By("6) Check for kube-apiserver operator status after deletion of bad webhooks in upgraded cluster.")
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 		e2e.Logf("Step 6 has passed. Test case has passed.")
+	})
 
+	// author: rgangwar@redhat.com
+	g.It("NonPreRelease-Author:rgangwar-High-47633-[API-1361] [Apiserver] Update existing alert ExtremelyHighIndividualControlPlaneCPU [Slow] [Disruptive]", func() {
+		var (
+			alert             = "ExtremelyHighIndividualControlPlaneCPU"
+			alertBudget       = "KubeAPIErrorBudgetBurn"
+			runbookURL        = "https://github.com/openshift/runbooks/blob/master/alerts/cluster-kube-apiserver-operator/ExtremelyHighIndividualControlPlaneCPU.md"
+			runbookBudgetURL  = "https://github.com/openshift/runbooks/blob/master/alerts/cluster-kube-apiserver-operator/KubeAPIErrorBudgetBurn.md"
+			alertTimeWarning  = "5m"
+			alertTimeCritical = "1h"
+			severity          = []string{"warning", "critical"}
+		)
+		g.By("1.Check with cluster installed OCP 4.10 and later release, the following changes for existing alerts " + alert + " have been applied.")
+		output, alertSevErr := oc.Run("get").Args("prometheusrule/cpu-utilization", "-n", "openshift-kube-apiserver", "-o", `jsonpath='{.spec.groups[?(@.name=="control-plane-cpu-utilization")].rules[?(@.alert=="`+alert+`")].labels.severity}'`).Output()
+		o.Expect(alertSevErr).NotTo(o.HaveOccurred())
+		chkStr := fmt.Sprintf("%s %s", severity[0], severity[1])
+		o.Expect(output).Should(o.ContainSubstring(chkStr), fmt.Sprintf("Not have new alert %s with severity :: %s : %s", alert, severity[0], severity[1]))
+		e2e.Logf("Have new alert %s with severity :: %s : %s", alert, severity[0], severity[1])
+
+		e2e.Logf("Check reduce severity to %s and %s for :: %s : %s", severity[0], severity[1], alertTimeWarning, alertTimeCritical)
+		output, alertTimeErr := oc.Run("get").Args("prometheusrule/cpu-utilization", "-n", "openshift-kube-apiserver", "-o", `jsonpath='{.spec.groups[?(@.name=="control-plane-cpu-utilization")].rules[?(@.alert=="`+alert+`")].for}'`).Output()
+		o.Expect(alertTimeErr).NotTo(o.HaveOccurred())
+		chkStr = fmt.Sprintf("%s %s", alertTimeWarning, alertTimeCritical)
+		o.Expect(output).Should(o.ContainSubstring(chkStr), fmt.Sprintf("Not Have reduce severity to %s and %s for :: %s : %s", severity[0], severity[1], alertTimeWarning, alertTimeCritical))
+		e2e.Logf("Have reduce severity to %s and %s for :: %s : %s", severity[0], severity[1], alertTimeWarning, alertTimeCritical)
+
+		e2e.Logf("Check a run book url for %s", alert)
+		output, alertRunbookErr := oc.Run("get").Args("prometheusrule/cpu-utilization", "-n", "openshift-kube-apiserver", "-o", `jsonpath='{.spec.groups[?(@.name=="control-plane-cpu-utilization")].rules[?(@.alert=="`+alert+`")].annotations.runbook_url}'`).Output()
+		o.Expect(alertRunbookErr).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring(runbookURL), fmt.Sprintf("%s Runbook url not found :: %s", alert, runbookURL))
+		e2e.Logf("Have a run book url for %s :: %s", alert, runbookURL)
+
+		g.By("2. Provide run book url for " + alertBudget)
+		output, alertKubeBudgetErr := oc.Run("get").Args("PrometheusRule", "-n", "openshift-kube-apiserver", "kube-apiserver-slos-basic", "-o", `jsonpath='{.spec.groups[?(@.name=="kube-apiserver-slos-basic")].rules[?(@.alert=="`+alertBudget+`")].annotations.runbook_url}`).Output()
+		o.Expect(alertKubeBudgetErr).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring(runbookBudgetURL), fmt.Sprintf("%s runbookUrl not found :: %s", alertBudget, runbookBudgetURL))
+		e2e.Logf("Run book url for %s :: %s", alertBudget, runbookBudgetURL)
+
+		g.By("3. Test the ExtremelyHighIndividualControlPlaneCPU alerts firing")
+		e2e.Logf("Check how many cpus are there in the master node")
+		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
+		o.Expect(masterErr).NotTo(o.HaveOccurred())
+		e2e.Logf("Master node is %v : ", masterNode)
+		cmd := `lscpu | grep '^CPU(s):'`
+		cpuCores, cpuErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default"}, "bash", "-c", cmd)
+		o.Expect(cpuErr).NotTo(o.HaveOccurred())
+		regexStr := regexp.MustCompile(`CPU\S+\s+\S+`)
+		cpuCore := strings.Split(regexStr.FindString(cpuCores), ":")
+		noofCPUCore := strings.TrimSpace(cpuCore[1])
+		e2e.Logf("Number of cpu :: %v", noofCPUCore)
+
+		e2e.Logf("Run script to add cpu workload to one kube-apiserver pod on the master.")
+		labelString := "apiserver"
+		masterPods, err := exutil.GetAllPodsWithLabel(oc, "openshift-kube-apiserver", labelString)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(masterPods).ShouldNot(o.BeEmpty(), "Not able to get pod")
+		defer func() {
+			err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-kube-apiserver", masterPods[0], "--", "/bin/sh", "-c", `ps -ef | grep md5sum | grep -v grep | awk '{print $2}' | xargs kill -HUP`).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		_, _, _, execPodErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-kube-apiserver", masterPods[0], "--", "/bin/sh", "-c", `seq `+noofCPUCore+` | xargs -P0 -n1 md5sum /dev/zero`).Background()
+		o.Expect(execPodErr).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Check alert ExtremelyHighIndividualControlPlaneCPU firing")
+		errWatcher := wait.Poll(60*time.Second, 500*time.Second, func() (bool, error) {
+			alertOutput, alertErr := GetAlertsByName(oc, "ExtremelyHighIndividualControlPlaneCPU")
+			o.Expect(alertErr).NotTo(o.HaveOccurred())
+			jqCmd := fmt.Sprintf(`echo '%s' | jq -r '.data.alerts[] | select( .labels.alertname | contains("%s"))' | jq -r 'select( .labels.severity| contains("%s")) | .state'`, alertOutput, alert, severity[0])
+			jqOutput, jqErr := exec.Command("bash", "-c", jqCmd).Output()
+			o.Expect(jqErr).NotTo(o.HaveOccurred())
+			if strings.Contains(string(jqOutput), "firing") {
+				e2e.Logf("%s with %s is firing", alert, severity[0])
+				jqCmd = fmt.Sprintf(`echo '%s' | jq -r '.data.alerts[] | select( .labels.alertname | contains("%s"))' | jq -r 'select( .labels.severity| contains("%s")) | .state'`, alertOutput, alert, severity[1])
+				jqOutput, jqErr = exec.Command("bash", "-c", jqCmd).Output()
+				o.Expect(jqErr).NotTo(o.HaveOccurred())
+				o.Expect(jqOutput).Should(o.ContainSubstring("pending"), fmt.Sprintf("%s with %s is not pending", alert, severity[1]))
+				e2e.Logf("%s with %s is pending", alert, severity[1])
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWatcher, fmt.Sprintf("%s with %s is not firing", alert, severity[0]))
 	})
 })
