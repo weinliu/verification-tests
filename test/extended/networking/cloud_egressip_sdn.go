@@ -936,4 +936,100 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Not support cloud provider for auto egressip cases for now.")
 		}
 	})
+
+	// author: jechen@redhat.com
+	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-47455-The egressIP could be assigned to project automatically once it is defined in hostsubnet egressCIDR. [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+
+		g.By("1. Get list of nodes, use the first node as egressNode, get subnet and an unused ip address from the node, apply egressCIDRs to the nod")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		sub := getIfaddrFromNode(nodeList.Items[0].Name, oc)
+
+		// Find 3 unused IPs from the egress node
+		freeIPs := findUnUsedIPsOnNode(oc, nodeList.Items[0].Name, sub, 3)
+		o.Expect(len(freeIPs) == 3).Should(o.BeTrue())
+
+		patchResourceAsAdmin(oc, "hostsubnet/"+nodeList.Items[0].Name, "{\"egressCIDRs\":[\""+sub+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+nodeList.Items[0].Name, "{\"egressCIDRs\":[]}")
+
+		g.By("2. Create a namespaces, patch the first egressIP to the namespace, create a test pod in the namespace")
+		oc.SetupProject()
+		ns := oc.Namespace()
+
+		pod := pingPodResource{
+			name:      "hello-pod1",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+
+		g.By("3.Check the first egressIP is added to node's primary NIC, verify source IP from this namespace is the first EgressIP")
+		checkPrimaryNIC(oc, nodeList.Items[0].Name, freeIPs[0], true)
+
+		pod.createPingPod(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod.name, "-n", pod.namespace).Execute()
+		waitPodReady(oc, pod.namespace, pod.name)
+
+		var expectedEgressIP = []string{freeIPs[0]}
+		checkEgressIPonSDNHost(oc, nodeList.Items[0].Name, expectedEgressIP)
+
+		sourceIP, err := e2e.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		e2e.Logf("\n Get sourceIP as %v \n", sourceIP)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).Should(o.Equal(freeIPs[0]))
+
+		g.By("4.Unpatch egressIP to the namespace, Check egressIP is removed from node's primary NIC, verify source IP from this namespace is node's IP address")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+
+		checkPrimaryNIC(oc, nodeList.Items[0].Name, freeIPs[0], false)
+
+		PodNodeName, err := exutil.GetPodNodeName(oc, pod.namespace, pod.name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeIP := getNodeIPv4(oc, ns, PodNodeName)
+		sourceIP, err = e2e.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		e2e.Logf("\n Get sourceIP as %v \n", sourceIP)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).Should(o.Equal(nodeIP))
+
+		g.By("5.Patch the second egressIP to the namespace, verify it is added to node's primary NIC, verify source IP from this namespace is the second EgressIP now")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIPs[1]+"\"]}")
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+
+		expectedEgressIP = []string{freeIPs[1]}
+		checkEgressIPonSDNHost(oc, nodeList.Items[0].Name, expectedEgressIP)
+
+		checkPrimaryNIC(oc, nodeList.Items[0].Name, freeIPs[1], true)
+
+		sourceIP, err = e2e.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		e2e.Logf("\n Get sourceIP as %v \n", sourceIP)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).Should(o.Equal(freeIPs[1]))
+
+		g.By("6.Patch the third egressIP to the namespace, verify it is added to node's primary NIC, verify source IP from this namespace is the third EgressIP now")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIPs[2]+"\"]}")
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+
+		expectedEgressIP = []string{freeIPs[2]}
+		checkEgressIPonSDNHost(oc, nodeList.Items[0].Name, expectedEgressIP)
+
+		checkPrimaryNIC(oc, nodeList.Items[0].Name, freeIPs[2], true)
+
+		sourceIP, err = e2e.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		e2e.Logf("\n Get sourceIP as %v \n", sourceIP)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).Should(o.Equal(freeIPs[2]))
+
+		g.By("7.Patch the namespace with a private IP that is definitely not within the CIDR, verify it is not added to node's primary NIC, curl command should not succeed, error is expected ")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\"192.168.1.100\"]}")
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+
+		checkPrimaryNIC(oc, nodeList.Items[0].Name, "192.168.1.100", false)
+
+		_, err = e2e.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		o.Expect(err).To(o.HaveOccurred())
+	})
 })

@@ -478,6 +478,7 @@ func getDefaultSubnet(oc *exutil.CLI) (string, error) {
 //Hosts function return the host network CIDR
 func Hosts(cidr string) ([]string, error) {
 	ip, ipnet, err := net.ParseCIDR(cidr)
+	e2e.Logf("in Hosts function, ip: %v, ipnet: %v", ip, ipnet)
 	if err != nil {
 		return nil, err
 	}
@@ -1406,4 +1407,53 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	}
 	pod2ns2.createTestPodMultinetwork(oc)
 	waitPodReady(oc, pod2ns2.namespace, pod2ns2.name)
+}
+
+// check if an ip address is added to node's NIC, or removed from node's NIC
+func checkPrimaryNIC(oc *exutil.CLI, nodeName string, ip string, flag bool) {
+	checkErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		output, err := exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", "/usr/sbin/ip -4 -brief address show")
+		if err != nil {
+			e2e.Logf("Cannot get primary NIC interface, errors: %v, try again", err)
+			return false, nil
+		}
+		if flag && !strings.Contains(output, ip) {
+			e2e.Logf("egressIP has not been added to node's NIC correctly, try again")
+			return false, nil
+		}
+		if !flag && strings.Contains(output, ip) {
+			e2e.Logf("egressIP has not been removed from node's NIC correctly, try again")
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("Failed to get NIC on the host:%s", checkErr))
+}
+
+func checkEgressIPonSDNHost(oc *exutil.CLI, node string, expectedEgressIP []string) {
+	checkErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		ip, err := getEgressIPonSDNHost(oc, node, len(expectedEgressIP))
+		if err != nil {
+			e2e.Logf("\n got the error: %v\n, try again", err)
+			return false, nil
+		}
+		if !unorderedEqual(ip, expectedEgressIP) {
+			e2e.Logf("\n got egressIP as %v while expected egressIP is %v, try again", ip, expectedEgressIP)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("Failed to get egressIP on the host:%s", checkErr))
+}
+
+func unorderedEqual(first, second []string) bool {
+	if len(first) != len(second) {
+		return false
+	}
+	for _, value := range first {
+		if !contains(second, value) {
+			return false
+		}
+	}
+	return true
 }
