@@ -42,7 +42,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		queryCredentialMode  = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=cco_credentials_mode"
 		imageRegistryBaseDir = exutil.FixturePath("testdata", "image_registry")
 		requireRules         = "requiredDuringSchedulingIgnoredDuringExecution"
-		preRules             = "preferredDuringSchedulingIgnoredDuringExecution"
 	)
 	// author: wewang@redhat.com
 	g.It("Author:wewang-High-39027-Check AWS secret and access key with an OpenShift installed in a regular way", func() {
@@ -51,7 +50,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			g.Skip("Skip for non-supported platform")
 		}
 		g.By("Skip test when the cluster is with STS credential")
-		token, err := getSAToken(oc, "prometheusK8s", "openshift-monitoring")
+		token, err := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(token).NotTo(o.BeEmpty())
 		result, err := getBearerTokenURLViaPod(monitoringns, promPod, queryCredentialMode, token)
@@ -515,7 +514,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			g.Skip("Skip for non-supported platform")
 		}
 		g.By("Check if the cluster is with STS credential")
-		token, err := getSAToken(oc, "prometheusK8s", "openshift-monitoring")
+		token, err := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(token).NotTo(o.BeEmpty())
 		result, err := getBearerTokenURLViaPod(monitoringns, promPod, queryCredentialMode, token)
@@ -1020,7 +1019,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		)
 
 		g.By("Get Prometheus token")
-		token, err = getSAToken(oc, "prometheusK8s", "openshift-monitoring")
+		token, err = getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(token).NotTo(o.BeEmpty())
 		authHeader = fmt.Sprintf("Authorization: Bearer %v", token)
@@ -1210,7 +1209,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("NonPreRelease-ConnectedOnly-Author:wewang-Medium-43731-Image registry pods should have anti-affinity rules [Disruptive]", func() {
+	g.It("Author:wewang-Medium-43731-Image registry pods should have anti-affinity rules", func() {
 		g.By("Check platforms")
 		//We set registry use pv on openstack&disconnect cluster, the case will fail on this scenario.
 		//Skip all the fs volume test, only run on object storage backend.
@@ -1224,28 +1223,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		foundrequiredRules = foundAffinityRules(oc, requireRules)
 		o.Expect(foundrequiredRules).To(o.BeTrue())
 
-		g.By("Set image registry replica to 3")
-		defer recoverRegistryDefaultReplicas(oc)
-		err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"replicas":3}}`, "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Confirm 3 pods scaled up")
-		err = wait.Poll(30*time.Second, 2*time.Minute, func() (bool, error) {
-			podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(metav1.ListOptions{LabelSelector: "docker-registry=default"})
-			if len(podList.Items) != 3 {
-				e2e.Logf("Continue to next round")
-				return false, nil
-			}
-			for _, pod := range podList.Items {
-				if pod.Status.Phase != corev1.PodRunning {
-					e2e.Logf("Continue to next round")
-					return false, nil
-				}
-			}
-			return true, nil
-		})
-		o.Expect(err).NotTo(o.HaveOccurred())
-		foundrequiredRules = foundAffinityRules(oc, preRules)
-		o.Expect(foundrequiredRules).To(o.BeTrue())
 		/*
 		   when https://bugzilla.redhat.com/show_bug.cgi?id=2000940 is fixed, will open this part
 		   		g.By("Set deployment.apps replica to 0")
@@ -1788,7 +1765,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Create a registry could limit quota")
 		oc.SetupProject()
-		regRoute := setSecureRegistryWithoutAuth(oc, oc.Namespace(), "myregistry", "quay.io/openshifttest/registry-toomany-request@sha256:ca50d2c9b289b0bf5a22f7aa73f68586cf38de2878c63465eacf74c032a6211d")
+		regRoute := setSecureRegistryWithoutAuth(oc, oc.Namespace(), "myregistry", "quay.io/openshifttest/registry-toomany-request@sha256:ca50d2c9b289b0bf5a22f7aa73f68586cf38de2878c63465eacf74c032a6211d", "8080")
 		o.Expect(regRoute).NotTo(o.BeEmpty())
 		err := oc.Run("set").Args("resources", "deploy/myregistry", "--requests=cpu=100m,memory=128Mi").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())

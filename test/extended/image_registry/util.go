@@ -415,7 +415,7 @@ func loginRegistryDefaultRoute(oc *exutil.CLI, defroute string, ns string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Login to route")
-	token, err := oc.WithoutNamespace().AsAdmin().Run("sa").Args("get-token", "registry", "-n", ns).Output()
+	token, err := getSAToken(oc, "registry", ns)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if output, err := containerCLI.Run("login").Args(defroute, "-u", "registry", "-p", token).Output(); err != nil {
 		e2e.Logf(output)
@@ -825,18 +825,18 @@ func listRepositories(oc *exutil.CLI, regRoute, expect string) {
 	o.Expect(string(result)).To(o.ContainSubstring(expect))
 }
 
-func setSecureRegistryWithoutAuth(oc *exutil.CLI, ns, regName, image string) string {
+func setSecureRegistryWithoutAuth(oc *exutil.CLI, ns, regName, image, port string) string {
 	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("deploy", regName, "--image="+image, "--port=5000", "-n", ns).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"pods", "-n", ns, "-l", "app=" + regName}).check(oc)
-	exposeService(oc, ns, "deploy/"+regName, regName, "8080")
+	checkPodsRunningWithLabel(oc, ns, "app="+regName, 1)
+	exposeService(oc, ns, "deploy/"+regName, regName, port)
 	regRoute := exposeEdgeRoute(oc, ns, regName, regName)
 	listRepositories(oc, regRoute, "repositories")
 	return regRoute
 }
 
 func setSecureRegistryEnableAuth(oc *exutil.CLI, ns, regName, htpasswdFile, image string) string {
-	regRoute := setSecureRegistryWithoutAuth(oc, ns, regName, image)
+	regRoute := setSecureRegistryWithoutAuth(oc, ns, regName, image, "5000")
 	ge1 := saveGeneration(oc, ns, "deployment/"+regName)
 	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "htpasswd", "--from-file="+htpasswdFile, "-n", ns).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -853,7 +853,7 @@ func setSecureRegistryEnableAuth(oc *exutil.CLI, ns, regName, htpasswdFile, imag
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "Custom registry does not update")
-	newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"pods", "-n", ns, "-l", "deployment=" + regName}).check(oc)
+	newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"pods", "-n", ns, "-l", "app=" + regName}).check(oc)
 	return regRoute
 }
 
@@ -935,7 +935,7 @@ func createSimpleRunPod(oc *exutil.CLI, image, expectInfo string) {
 		e2e.Logf("Continue to next round")
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, "Pod doesn't pull expected image")
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Pod doesn't show expected log %v", expectInfo))
 }
 
 func newAppUseImageStream(oc *exutil.CLI, ns, imagestream, expectInfo string) {

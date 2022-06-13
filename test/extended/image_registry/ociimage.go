@@ -33,7 +33,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "admin", "-z", "registry", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Get internal registry token")
-		token, err := oc.WithoutNamespace().Run("sa").Args("get-token", "registry", "-n", oc.Namespace()).Output()
+		token, err := getSAToken(oc, "registry", oc.Namespace())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Get worker nodes")

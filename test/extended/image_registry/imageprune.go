@@ -41,7 +41,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-monitoring-view", oc.Username()).Execute()
 		g.By("Get prometheus token")
-		token, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("-n", "openshift-monitoring", "get-token", "prometheus-k8s").Output()
+		token, err := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Prometheus query results report image pruner installed")
 		foundValue := metricReportStatus(queryImagePruner, monitoringns, promPod, token, 2)
