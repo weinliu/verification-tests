@@ -769,8 +769,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.checkFileintegrityStatus(oc, "running")
 		nodeName := getOneRhcosWorkerNodeName(oc)
 
-		fips_out := checkFipsStatus(oc)
-		if strings.Contains(fips_out, "FIPS mode is enabled.") {
+		fipsOut := checkFipsStatus(oc)
+		if strings.Contains(fipsOut, "FIPS mode is enabled.") {
 			fi1.checkFileintegritynodestatus(oc, nodeName, "Errored")
 			var podName = fi1.getOneFioPodName(oc)
 			fi1.checkKeywordExistInLog(oc, podName, "Use of FIPS disallowed algorithm under FIPS mode exit status 255")

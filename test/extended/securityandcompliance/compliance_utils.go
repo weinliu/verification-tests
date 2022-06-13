@@ -510,15 +510,14 @@ func getStorageClassProvisioner(oc *exutil.CLI) string {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("the result of StorageClassProvisioner:%v", scpro)
 		return scpro
-	} else {
-		scs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass").OutputToFile(getRandomString() + "isc-config.json")
-		e2e.Logf("the result of scs:%v", scs)
-		result, err := exec.Command("bash", "-c", "cat "+scs+" | grep \"default\" | awk '{print $3}'; rm -rf "+scs).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		res := strings.TrimSpace(string(result))
-		e2e.Logf("the result of StorageClassProvisioner:%v", res)
-		return res
 	}
+	scs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass").OutputToFile(getRandomString() + "isc-config.json")
+	e2e.Logf("the result of scs:%v", scs)
+	result, err := exec.Command("bash", "-c", "cat "+scs+" | grep \"default\" | awk '{print $3}'; rm -rf "+scs).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	res := strings.TrimSpace(string(result))
+	e2e.Logf("the result of StorageClassProvisioner:%v", res)
+	return res
 }
 
 func getStorageClassVolumeBindingMode(oc *exutil.CLI) string {
@@ -529,13 +528,11 @@ func getStorageClassVolumeBindingMode(oc *exutil.CLI) string {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("the result of StorageClassVolumeBindingMode:%v", scvbm)
 		return scvbm
-	} else {
-		sclassvbm, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass", "-o=jsonpath={.items[0].volumeBindingMode}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("the result of StorageClassVolumeBindingMode:%v", sclassvbm)
-		return sclassvbm
-
 	}
+	sclassvbm, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass", "-o=jsonpath={.items[0].volumeBindingMode}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("the result of StorageClassVolumeBindingMode:%v", sclassvbm)
+	return sclassvbm
 }
 
 func getResourceNameWithKeyword(oc *exutil.CLI, rs string, keyword string) string {
@@ -580,7 +577,7 @@ func getResourceNameWithKeywordFromResourceList(oc *exutil.CLI, rs string, keywo
 }
 
 func checkKeyWordsForRspod(oc *exutil.CLI, podname string, keyword [3]string) {
-	var flag bool = true
+	var flag = true
 	var kw string
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podname, "-n", oc.Namespace(), "-o=json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -715,9 +712,8 @@ func checkOperatorPodStatus(oc *exutil.CLI, namespace string) string {
 		podStat, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-o=jsonpath={.items[0].status.phase}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		return podStat
-	} else {
-		return podname
 	}
+	return podname
 }
 
 func assertCheckAuditLogsForword(oc *exutil.CLI, namespace string, csvname string) {

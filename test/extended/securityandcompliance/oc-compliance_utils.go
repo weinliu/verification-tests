@@ -31,7 +31,7 @@ type CLI struct {
 	skipTLS         bool
 }
 
-//  initialize the OC-Compliance framework
+// OcComplianceCLI is to initialize the OC-Compliance framework
 func OcComplianceCLI() *CLI {
 	ocPlug := &CLI{}
 	ocPlug.execPath = "oc-compliance"
@@ -114,7 +114,7 @@ func (c *CLI) Output() (string, error) {
 
 func assertCheckProfileControls(oc *exutil.CLI, profl string, keyword [2]string) {
 	var kw string
-	var flag bool = true
+	var flag = true
 	proControl, err := OcComplianceCLI().Run("controls").Args("profile", profl, "-n", oc.Namespace()).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	for _, v := range keyword {
@@ -134,7 +134,7 @@ func assertCheckProfileControls(oc *exutil.CLI, profl string, keyword [2]string)
 
 func assertRuleResult(oc *exutil.CLI, rule string, namespace string, keyword [2]string) {
 	var kw string
-	var flag bool = true
+	var flag = true
 	viewResult, err := OcComplianceCLI().Run("view-result").Args(rule, "-n", namespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	for _, v := range keyword {

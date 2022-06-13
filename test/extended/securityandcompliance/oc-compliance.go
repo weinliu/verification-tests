@@ -83,7 +83,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 		g.BeforeEach(func() {
 			oc.SetupProject()
 			catSrc.namespace = oc.Namespace()
-			catSrc.address = getIndexFromUrl("compliance")
+			catSrc.address = getIndexFromURL("compliance")
 			ogD.namespace = oc.Namespace()
 			subD.namespace = oc.Namespace()
 			subD.catalogSourceName = catSrc.name

@@ -164,7 +164,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
 		catSrc.namespace = oc.Namespace()
-		catSrc.address = getIndexFromUrl("compliance")
+		catSrc.address = getIndexFromURL("compliance")
 		ogD.namespace = oc.Namespace()
 		subD.namespace = oc.Namespace()
 		subD.catalogSourceName = catSrc.name
@@ -224,7 +224,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.BeforeEach(func() {
 			oc.SetupProject()
 			catSrc.namespace = oc.Namespace()
-			catSrc.address = getIndexFromUrl("compliance")
+			catSrc.address = getIndexFromURL("compliance")
 			ogD.namespace = oc.Namespace()
 			subD.namespace = oc.Namespace()
 			subD.catalogSourceName = catSrc.name
@@ -2523,8 +2523,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteMD.name, "-n", csuiteMD.namespace,
 				"-o=jsonpath={.status.phase}"}).check(oc)
 
-			fips_out := checkFipsStatus(oc)
-			if strings.Contains(fips_out, "FIPS mode is enabled.") {
+			fipsOut := checkFipsStatus(oc)
+			if strings.Contains(fipsOut, "FIPS mode is enabled.") {
 				g.By("Check complianceSuite result.. !!!\n")
 				subD.complianceSuiteResult(oc, csuiteD.name, "COMPLIANT")
 				subD.complianceSuiteResult(oc, csuiteMD.name, "COMPLIANT")
@@ -3047,8 +3047,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 					"-o=jsonpath={.items[0].status.phase}"}).check(oc)
 			} else {
 				g.By("The openshift-logging namespace is already available.. !!!\n")
-				pod_stat := checkOperatorPodStatus(oc, "openshift-logging")
-				if !strings.Contains(pod_stat, "Running") {
+				podStat := checkOperatorPodStatus(oc, "openshift-logging")
+				if !strings.Contains(podStat, "Running") {
 					ogL.namespace = "openshift-logging"
 					subL.namespace = ogL.namespace
 					ogL.create(oc, itName, dr)
