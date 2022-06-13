@@ -1975,4 +1975,200 @@ spec:
 		})
 		exutil.AssertWaitPollNoErr(errWatcher, fmt.Sprintf("%s with %s is not firing", alert, severity[0]))
 	})
+	// author: jmekkatt@redhat.com
+	g.It("Author:jmekkatt-high-50223-Checks on different bad admission webhook errors, status of kube-apiserver [Serial]", func() {
+		var (
+			validatingWebhookNameNotFound     = "test-validating-notfound-cfg"
+			mutatingWebhookNameNotFound       = "test-mutating-notfound-cfg"
+			crdWebhookNameNotFound            = "testcrdwebhooks.tests.com"
+			validatingWebhookNameNotReachable = "test-validating-notreachable-cfg2"
+			mutatingWebhookNameNotReachable   = "test-mutating-notreachable-cfg2"
+			crdWebhookNameNotReachable        = "testcrdwebhoks.tsts.com"
+			validatingWebhookTemplate         = getTestDataFilePath("ValidatingWebhookConfigurationTemplate.yaml")
+			mutatingWebhookTemplate           = getTestDataFilePath("MutatingWebhookConfigurationTemplate.yaml")
+			crdWebhookTemplate                = getTestDataFilePath("CRDWebhookConfigurationCustomTemplate.yaml")
+			serviceTemplate                   = getTestDataFilePath("ServiceTemplate.yaml")
+			serviceName                       = "example-service"
+			ServiceNameNotFound               = "service-unknown"
+			kubeApiserverCoStatus             = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			webHookConditionErrors            = []string{`ValidatingAdmissionWebhookConfigurationError`, `MutatingAdmissionWebhookConfigurationError`, `CRDConversionWebhookConfigurationError`}
+		)
+
+		g.By("1) Create new namespace for the tests.")
+		oc.SetupProject()
+
+		validatingWebHook := admissionWebhook{
+			name:             validatingWebhookNameNotFound,
+			webhookname:      "test.validating.com",
+			servicenamespace: oc.Namespace(),
+			servicename:      serviceName,
+			namespace:        oc.Namespace(),
+			apigroups:        "",
+			apiversions:      "v1",
+			operations:       "CREATE",
+			resources:        "pods",
+			template:         validatingWebhookTemplate,
+		}
+
+		mutatingWebHook := admissionWebhook{
+			name:             mutatingWebhookNameNotFound,
+			webhookname:      "test.mutating.com",
+			servicenamespace: oc.Namespace(),
+			servicename:      serviceName,
+			namespace:        oc.Namespace(),
+			apigroups:        "",
+			apiversions:      "v1",
+			operations:       "CREATE",
+			resources:        "pods",
+			template:         mutatingWebhookTemplate,
+		}
+
+		crdWebHook := admissionWebhook{
+			name:             crdWebhookNameNotFound,
+			webhookname:      "tests.com",
+			servicenamespace: oc.Namespace(),
+			servicename:      serviceName,
+			namespace:        oc.Namespace(),
+			apigroups:        "",
+			apiversions:      "v1",
+			operations:       "CREATE",
+			resources:        "pods",
+			singularname:     "testcrdwebhooks",
+			pluralname:       "testcrdwebhooks",
+			kind:             "TestCrdWebhook",
+			shortname:        "tcw",
+			version:          "v1beta1",
+			template:         crdWebhookTemplate,
+		}
+
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", validatingWebhookNameNotFound, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("MutatingWebhookConfiguration", mutatingWebhookNameNotFound, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", crdWebhookNameNotFound, "--ignore-not-found").Execute()
+
+		}()
+		g.By("2) Create a bad ValidatingWebhookConfiguration with invalid service and namespace references.")
+		validatingWebHook.createAdmissionWebhookFromTemplate(oc)
+
+		g.By("3) Create a bad MutatingWebhookConfiguration with invalid service and namespace references.")
+		mutatingWebHook.createAdmissionWebhookFromTemplate(oc)
+
+		g.By("4) Create a bad CRDWebhookConfiguration with invalid service and namespace references.")
+		crdWebHook.createAdmissionWebhookFromTemplate(oc)
+
+		e2e.Logf("Check availability of ValidatingWebhookConfiguration")
+		CheckIfResourceAvailable(oc, "ValidatingWebhookConfiguration", []string{validatingWebhookNameNotFound}, "")
+		e2e.Logf("Check availability of MutatingWebhookConfiguration.")
+		CheckIfResourceAvailable(oc, "MutatingWebhookConfiguration", []string{mutatingWebhookNameNotFound}, "")
+		e2e.Logf("Check availability of CRDWebhookConfiguration.")
+		CheckIfResourceAvailable(oc, "crd", []string{crdWebhookNameNotFound}, "")
+
+		g.By("5) Check for information error message 'WebhookServiceNotFound' on kube-apiserver cluster w.r.t bad admissionwebhook points to invalid service.")
+		compareAPIServerWebhookConditions(oc, "WebhookServiceNotFound", "True", webHookConditionErrors)
+		g.By("6) Check for kubeapiserver operator status when bad admissionwebhooks configured.")
+		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+
+		g.By("7) Create services and check service presence for test steps")
+		service := service{
+			name:      serviceName,
+			clusterip: "172.30.1.1",
+			namespace: oc.Namespace(),
+			template:  serviceTemplate,
+		}
+		defer oc.AsAdmin().Run("delete").Args("service", serviceName, "-n", oc.Namespace(), "--ignore-not-found").Execute()
+		service.createServiceFromTemplate(oc)
+		out, err := oc.AsAdmin().Run("get").Args("services", serviceName, "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).Should(o.ContainSubstring(serviceName), "Service object is not listed as expected")
+
+		g.By("8) Check for error 'WebhookServiceConnectionError' on kube-apiserver cluster w.r.t bad admissionwebhook points to unreachable service.")
+		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		compareAPIServerWebhookConditions(oc, "WebhookServiceConnectionError", "True", webHookConditionErrors)
+
+		g.By("9) Creation of additional webhooks that holds unknown service defintions.")
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", validatingWebhookNameNotReachable, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("MutatingWebhookConfiguration", mutatingWebhookNameNotReachable, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", crdWebhookNameNotReachable, "--ignore-not-found").Execute()
+
+		}()
+
+		validatingWebHookUnknown := admissionWebhook{
+			name:             validatingWebhookNameNotReachable,
+			webhookname:      "test.validating2.com",
+			servicenamespace: oc.Namespace(),
+			servicename:      ServiceNameNotFound,
+			namespace:        oc.Namespace(),
+			apigroups:        "",
+			apiversions:      "v1",
+			operations:       "CREATE",
+			resources:        "pods",
+			template:         validatingWebhookTemplate,
+		}
+
+		mutatingWebHookUnknown := admissionWebhook{
+			name:             mutatingWebhookNameNotReachable,
+			webhookname:      "test.mutating2.com",
+			servicenamespace: oc.Namespace(),
+			servicename:      ServiceNameNotFound,
+			namespace:        oc.Namespace(),
+			apigroups:        "",
+			apiversions:      "v1",
+			operations:       "CREATE",
+			resources:        "pods",
+			template:         mutatingWebhookTemplate,
+		}
+
+		crdWebHookUnknown := admissionWebhook{
+			name:             crdWebhookNameNotReachable,
+			webhookname:      "tsts.com",
+			servicenamespace: oc.Namespace(),
+			servicename:      ServiceNameNotFound,
+			namespace:        oc.Namespace(),
+			apigroups:        "",
+			apiversions:      "v1",
+			operations:       "CREATE",
+			resources:        "pods",
+			singularname:     "testcrdwebhoks",
+			pluralname:       "testcrdwebhoks",
+			kind:             "TestCrdwebhok",
+			shortname:        "tcwk",
+			version:          "v1beta1",
+			template:         crdWebhookTemplate,
+		}
+
+		g.By("9.1) Create a bad ValidatingWebhookConfiguration with unknown service references.")
+		validatingWebHookUnknown.createAdmissionWebhookFromTemplate(oc)
+
+		g.By("9.2) Create a bad MutatingWebhookConfiguration with unknown service references.")
+		mutatingWebHookUnknown.createAdmissionWebhookFromTemplate(oc)
+
+		g.By("9.3) Create a bad CRDWebhookConfiguration with unknown service and namespace references.")
+		crdWebHookUnknown.createAdmissionWebhookFromTemplate(oc)
+
+		g.By("10) Check for kube-apiserver operator status.")
+		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+
+		g.By("11) Check for error 'WebhookServiceNotReady' on kube-apiserver cluster w.r.t bad admissionwebhook points both unknown and unreachable services.")
+		compareAPIServerWebhookConditions(oc, "WebhookServiceNotReady", "True", webHookConditionErrors)
+
+		g.By("12) Delete all bad webhooks and check kubeapiserver operators and errors")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", validatingWebhookNameNotReachable).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("MutatingWebhookConfiguration", mutatingWebhookNameNotReachable).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", crdWebhookNameNotReachable).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", validatingWebhookNameNotFound).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("MutatingWebhookConfiguration", mutatingWebhookNameNotFound).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", crdWebhookNameNotFound).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		compareAPIServerWebhookConditions(oc, "", "False", webHookConditionErrors)
+		g.By("Test case steps are passed")
+
+	})
 })

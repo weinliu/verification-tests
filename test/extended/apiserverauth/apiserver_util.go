@@ -29,14 +29,55 @@ type admissionWebhook struct {
 	apiversions      string
 	operations       string
 	resources        string
+	version          string
+	pluralname       string
+	singularname     string
+	kind             string
+	shortname        string
 	template         string
+}
+
+type service struct {
+	name      string
+	clusterip string
+	namespace string
+	template  string
 }
 
 // createAdmissionWebhookFromTemplate : Used for creating different admission hooks from pre-existing template.
 func (admissionHook *admissionWebhook) createAdmissionWebhookFromTemplate(oc *exutil.CLI) {
 	exutil.CreateClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", admissionHook.template, "-p", "NAME="+admissionHook.name, "WEBHOOKNAME="+admissionHook.webhookname,
 		"SERVICENAMESPACE="+admissionHook.servicenamespace, "SERVICENAME="+admissionHook.servicename, "NAMESPACE="+admissionHook.namespace, "APIGROUPS="+admissionHook.apigroups, "APIVERSIONS="+admissionHook.apiversions,
-		"OPERATIONS="+admissionHook.operations, "RESOURCES="+admissionHook.resources)
+		"OPERATIONS="+admissionHook.operations, "RESOURCES="+admissionHook.resources, "KIND="+admissionHook.kind, "SHORTNAME="+admissionHook.shortname,
+		"SINGULARNAME="+admissionHook.singularname, "PLURALNAME="+admissionHook.pluralname, "VERSION="+admissionHook.version)
+}
+
+func (service *service) createServiceFromTemplate(oc *exutil.CLI) {
+	exutil.CreateClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", service.template, "-p", "NAME="+service.name, "CLUSTERIP="+service.clusterip, "NAMESPACE="+service.namespace)
+}
+
+func compareAPIServerWebhookConditions(oc *exutil.CLI, conditionReason string, conditionStatus string, conditionTypes []string) {
+	for _, webHookErrorConditionType := range conditionTypes {
+		err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+			webhookError, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath='{.status.conditions[?(@.type=="`+webHookErrorConditionType+`")]}'`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(webhookError).Should(o.MatchRegexp(`"type":"%s"`, webHookErrorConditionType), "Mismatch in 'type' of admission errors reported")
+			//Inline conditional statement for evaluating 1) reason and status together,2) only status.
+			if conditionReason != "" && strings.Contains(webhookError, conditionReason) {
+				e2e.Logf("kube-apiserver admission webhook errors as \n %s ", string(webhookError))
+				o.Expect(webhookError).Should(o.MatchRegexp(`"status":"%s"`, conditionStatus), "Mismatch in 'status' of admission errors reported")
+				o.Expect(webhookError).Should(o.MatchRegexp(`"reason":"%s"`, conditionReason), "Mismatch in 'reason' of admission errors reported")
+				return true, nil
+			} else if conditionReason == "" {
+				o.Expect(webhookError).Should(o.MatchRegexp(`"status":"%s"`, conditionStatus), "Mismatch in 'status' of admission errors reported")
+				e2e.Logf("kube-apiserver admission webhook errors as \n %s ", string(webhookError))
+				return true, nil
+			}
+			e2e.Logf("Retrying for expected kube-apiserver admission webhook error")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Test Fail: Expected Kube-apiserver admissionwebhook errors not present.")
+	}
 }
 
 // GetEncryptionPrefix :
