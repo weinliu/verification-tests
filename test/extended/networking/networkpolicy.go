@@ -507,10 +507,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		for i := 0; i < 5; i++ {
 
 			g.By("curl from hello-pod1 to service:port")
-			CurlPod2SvcPass(oc, ns, "hello-pod1", "test-service")
+			CurlPod2SvcPass(oc, ns, ns, "hello-pod1", "test-service")
 
 			g.By("curl from hello-pod2 to service:port")
-			CurlPod2SvcPass(oc, ns, "hello-pod2", "test-service")
+			CurlPod2SvcPass(oc, ns, ns, "hello-pod2", "test-service")
 		}
 
 		g.By("Make sure pods are curl'able from respective nodes")
@@ -528,10 +528,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			svc.createServiceFromParams(oc)
 			for i := 0; i < 5; i++ {
 				g.By("curl from hello-pod1 to service:port")
-				CurlPod2SvcPass(oc, ns, "hello-pod1", "test-service")
+				CurlPod2SvcPass(oc, ns, ns, "hello-pod1", "test-service")
 
 				g.By("curl from hello-pod2 to service:port")
-				CurlPod2SvcPass(oc, ns, "hello-pod2", "test-service")
+				CurlPod2SvcPass(oc, ns, ns, "hello-pod2", "test-service")
 			}
 		}
 	})

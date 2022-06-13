@@ -1193,30 +1193,47 @@ func CurlNode2SvcPass(oc *exutil.CLI, nodeName string, namespace string, svcName
 	}
 }
 
-//CurlPod2SvcPass checks pod to svc connectivity regardless of network addressing type on cluster
-func CurlPod2SvcPass(oc *exutil.CLI, namespace string, podNameSrc string, svcName string) {
+//CurlNode2SvcFail checks node to svc connectivity regardless of network addressing type on cluster
+func CurlNode2SvcFail(oc *exutil.CLI, nodeName string, namespace string, svcName string) {
 	svcIP1, svcIP2 := getSvcIP(oc, namespace, svcName)
 	if svcIP2 != "" {
-		_, err := e2e.RunHostCmd(namespace, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
+		svc6URL := net.JoinHostPort(svcIP1, "27017")
+		svc4URL := net.JoinHostPort(svcIP2, "27017")
+		output, _ := exutil.DebugNode(oc, nodeName, "curl", svc4URL, "--connect-timeout", "5")
+		o.Expect(output).To(o.Or(o.ContainSubstring("28"), o.ContainSubstring("Failed")))
+		output, _ = exutil.DebugNode(oc, nodeName, "curl", svc6URL, "--connect-timeout", "5")
+		o.Expect(output).To(o.Or(o.ContainSubstring("28"), o.ContainSubstring("Failed")))
+	} else {
+		svcURL := net.JoinHostPort(svcIP1, "27017")
+		output, _ := exutil.DebugNode(oc, nodeName, "curl", svcURL, "--connect-timeout", "5")
+		o.Expect(output).To(o.Or(o.ContainSubstring("28"), o.ContainSubstring("Failed")))
+	}
+}
+
+//CurlPod2SvcPass checks pod to svc connectivity regardless of network addressing type on cluster
+func CurlPod2SvcPass(oc *exutil.CLI, namespaceSrc string, namespaceSvc string, podNameSrc string, svcName string) {
+	svcIP1, svcIP2 := getSvcIP(oc, namespaceSvc, svcName)
+	if svcIP2 != "" {
+		_, err := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = e2e.RunHostCmd(namespace, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP2, "27017"))
+		_, err = e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP2, "27017"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else {
-		_, err := e2e.RunHostCmd(namespace, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
+		_, err := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 }
 
 //CurlPod2SvcFail ensures no connectivity from a pod to svc regardless of network addressing type on cluster
-func CurlPod2SvcFail(oc *exutil.CLI, namespace string, podNameSrc string, svcName string) {
-	svcIP1, svcIP2 := getSvcIP(oc, namespace, svcName)
+func CurlPod2SvcFail(oc *exutil.CLI, namespaceSrc string, namespaceSvc string, podNameSrc string, svcName string) {
+	svcIP1, svcIP2 := getSvcIP(oc, namespaceSvc, svcName)
 	if svcIP2 != "" {
-		_, err := e2e.RunHostCmd(namespace, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
+		_, err := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
 		o.Expect(err).To(o.HaveOccurred())
-		_, err = e2e.RunHostCmd(namespace, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP2, "27017"))
+		_, err = e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP2, "27017"))
 		o.Expect(err).To(o.HaveOccurred())
 	} else {
-		_, err := e2e.RunHostCmd(namespace, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
+		_, err := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
 		o.Expect(err).To(o.HaveOccurred())
 	}
 }
