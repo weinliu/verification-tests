@@ -1634,16 +1634,16 @@ spec:
 
 	// author: dpunia@redhat.com
 	g.It("Longduration-NonPreRelease-Author:dpunia-High-44596-SNO kube-apiserver can fall back to last good revision well when failing to roll out in SNO env [Disruptive]", func() {
+		if !isSNOCluster(oc) {
+			g.Skip("This is not a SNO cluster, skip.")
+		}
+
 		var (
 			keyWords = "Stopped container|Removed container"
 		)
 
 		nodes, nodeGetError := exutil.GetAllNodes(oc)
 		o.Expect(nodeGetError).NotTo(o.HaveOccurred())
-
-		if len(nodes) > 1 {
-			g.Skip("This is not a SNO cluster, skip.")
-		}
 
 		e2e.Logf("Check openshift-kube-apiserver pods current revision before changes")
 		out, revisionChkError := oc.WithoutNamespace().Run("get").Args("po", "-n", "openshift-kube-apiserver", "-l=apiserver", "-o", "jsonpath={.items[*].metadata.labels.revision}").Output()
@@ -2170,5 +2170,40 @@ spec:
 		compareAPIServerWebhookConditions(oc, "", "False", webHookConditionErrors)
 		g.By("Test case steps are passed")
 
+	})
+
+	// author: zxiao@redhat.com
+	g.It("PstChkUpgrade-Author:zxiao-High-44597-Upgrade SNO clusters given kube-apiserver implements startup-monitor mechanism", func() {
+		g.By("1) Check if cluster is SNO.")
+		if !isSNOCluster(oc) {
+			g.Skip("This is not a SNO cluster, skip.")
+		}
+
+		g.By("2) Get a master node.")
+		masterNode, getFirstMasterNodeErr := exutil.GetFirstMasterNode(oc)
+		o.Expect(getFirstMasterNodeErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNode).NotTo(o.Equal(""))
+
+		g.By("3) Check the kube-apiserver-last-known-good link file exists and is linked to a good version.")
+		cmd := "ls -l /etc/kubernetes/static-pod-resources/kube-apiserver-last-known-good"
+		output, debugNodeWithChrootErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default"}, "bash", "-c", cmd)
+		o.Expect(debugNodeWithChrootErr).NotTo(o.HaveOccurred())
+
+		g.By("3.1) Check kube-apiserver-last-known-good file exists.")
+		o.Expect(output).Should(o.ContainSubstring("kube-apiserver-last-known-good"))
+		g.By("3.2) Check file is linked to another file.")
+		o.Expect(output).Should(o.ContainSubstring("->"))
+		g.By("3.3) Check linked file exists.")
+		o.Expect(output).Should(o.ContainSubstring("kube-apiserver-pod.yaml"))
+
+		g.By("4) Check cluster operator kube-apiserver is normal, not degraded, and does not contain abnormal statuses.")
+		state, checkClusterOperatorConditionErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "kube-apiserver", "-o", "jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
+		o.Expect(checkClusterOperatorConditionErr).NotTo(o.HaveOccurred())
+		o.Expect(state).To(o.ContainSubstring("TrueFalseFalse"))
+
+		g.By("5) Check kubeapiserver operator is normal, not degraded, and does not contain abnormal statuses.")
+		state, checkKubeapiserverOperatorConditionErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiserver.operator", "cluster", "-o", "jsonpath={.status.nodeStatuses[?(@.lastFailedRevisionErrors)]}").Output()
+		o.Expect(checkKubeapiserverOperatorConditionErr).NotTo(o.HaveOccurred())
+		o.Expect(state).Should(o.BeEmpty())
 	})
 })
