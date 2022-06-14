@@ -1878,6 +1878,43 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		checkRegistryFunctionFine(oc, "test-49747", oc.Namespace())
 	})
 
+	// author: jitli@redhat.com
+	g.It("NonPreRelease-Author:jitli-Medium-22032-Config NodeSelector for internal registry [Disruptive]", func() {
+
+		g.By("Set up internal registry NodeSelector")
+		initialConfig, err := oc.AsAdmin().Run("get").Args("config.image/cluster", "-ojsonpath={.spec.nodeSelector}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if initialConfig == "" {
+			initialConfig = `null`
+		}
+
+		defer func() {
+			g.By("Remove nodeSelector for imageregistry")
+			output, err := oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"nodeSelector":`+initialConfig+`}}`, "--type=merge").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("patched"))
+			g.By("Check registry pod well")
+			podNum := getImageRegistryPodNumber(oc)
+			checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
+		}()
+		output, err := oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"nodeSelector":{"node-role.kubernetes.io/master": "test22032"}}}`, "--type=merge").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("patched"))
+
+		g.By("Check the image-registry default topology")
+		err = wait.Poll(5*time.Second, 1*time.Minute, func() (bool, error) {
+			nodeSelector, nodeSelectorErr := oc.AsAdmin().Run("get").Args("pod", "-n", "openshift-image-registry", "-l", "docker-registry=default", `-ojsonpath={.items..spec.nodeSelector}`).Output()
+
+			if strings.Contains(nodeSelector, "test22032") {
+				e2e.Logf("pod metadata updated")
+				return true, nil
+			}
+			e2e.Logf("pod metadata not update, nodeSelector:%v %v", nodeSelector, nodeSelectorErr)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "pod metadata not update")
+	})
+
 	//author: yyou@redhat.com
 	g.It("Author:yyou-Medium-50925-Add prometheusrules for image_registry_image_stream_tags_total and registry operations metrics", func() {
 		var (
