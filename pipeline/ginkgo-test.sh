@@ -38,6 +38,7 @@ function config_env {
   fi
   go version
   go env
+  oc version -o yaml || echo "can not get oc version"
 }
 
 function config_env_for_vm {
