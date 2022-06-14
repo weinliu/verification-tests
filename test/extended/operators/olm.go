@@ -2287,7 +2287,25 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		sub.create(oc, itName, dr)
 
 		g.By("3) Checking the state of CSV")
-		newCheck("expect", asUser, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "prometheusoperator.0.47.0", "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+			csvList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", sub.namespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lines := strings.Split(csvList, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "prometheusoperator") {
+					e2e.Logf("found csv prometheusoperator")
+					if strings.Contains(line, "Succeeded") {
+						e2e.Logf("the status csv prometheusoperator is Succeeded")
+						return true, nil
+					}
+					e2e.Logf("the status csv prometheusoperator is not Succeeded")
+					return false, nil
+				}
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "csv prometheusoperator is not Succeeded")
+		newCheck("expect", asUser, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.4", "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 	})
 
 	// author: bandrade@redhat.com
