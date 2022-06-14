@@ -25,17 +25,8 @@ objects:
           containerType.logging.openshift.io/${CONTAINER}-1: ${CONTAINER}-1
         labels: ${{LABELS}}
       spec:
-        securityContext:
-          runAsNonRoot: true
-          seccompProfile:
-            type: RuntimeDefault
         containers:
         - env: []
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-              - ALL
           image: quay.io/openshifttest/ocp-logtest@sha256:16232868ba1143721b786dbabb3f7384645acb663fadb4af48e9ea1228a67635
           imagePullPolicy: IfNotPresent
           name: ${CONTAINER}-0
@@ -45,11 +36,6 @@ objects:
             mountPath: /var/lib/svt
           terminationMessagePath: /dev/termination-log
         - env: []
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-              - ALL
           image: quay.io/openshifttest/ocp-logtest@sha256:16232868ba1143721b786dbabb3f7384645acb663fadb4af48e9ea1228a67635
           imagePullPolicy: IfNotPresent
           name: ${CONTAINER}-1
@@ -59,11 +45,6 @@ objects:
             mountPath: /var/lib/svt
           terminationMessagePath: /dev/termination-log
         - env: []
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-              - ALL
           image: quay.io/openshifttest/ocp-logtest@sha256:16232868ba1143721b786dbabb3f7384645acb663fadb4af48e9ea1228a67635
           imagePullPolicy: IfNotPresent
           name: ${CONTAINER}-2

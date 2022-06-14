@@ -34,12 +34,6 @@
                         "labels": "${{LABELS}}"
                     },
                     "spec": {
-                        "securityContext": {
-                            "runAsNonRoot": true,
-                            "seccompProfile": {
-                                "type": "RuntimeDefault"
-                            }
-                        },
                         "containers": [
                             {
                                 "env": [],
@@ -53,15 +47,7 @@
                                         "mountPath": "/var/lib/svt"
                                     }
                                 ],
-                                "terminationMessagePath": "/dev/termination-log",
-                                "securityContext": {
-                                    "allowPrivilegeEscalation": false,
-                                    "capabilities": {
-                                        "drop": [
-                                            "ALL"
-                                        ]
-                                    }
-                                }
+                                "terminationMessagePath": "/dev/termination-log"
                             }
                         ],
                         "volumes": [
