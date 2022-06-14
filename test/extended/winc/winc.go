@@ -409,8 +409,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		g.By("Scale up the MachineSet")
 		e2e.Logf("Scalling up the Windows node to 3")
 		windowsMachineSetName := getWindowsMachineSetName(oc)
-		scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 3)
-		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2)
+		scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 3, false)
+		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2, false)
 		waitWindowsNodesReady(oc, 3, 60*time.Second, 1200*time.Second)
 		// Testing the Windows server is reachable via Linux pod
 		command = []string{"exec", "-n", namespace, linuxPodArray[0], "--", "curl", windowsClusterIP}
@@ -607,13 +607,15 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	// author: sgao@redhat.com
 	g.It("Smokerun-Author:sgao-NonPreRelease-High-33794-Watch cloud private key secret [Slow][Disruptive]", func() {
 		g.By("Check watch cloud-private-key secret")
-		oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", "openshift-windows-machine-config-operator").Output()
 		defer oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", "openshift-windows-machine-config-operator").Output()
-		oc.WithoutNamespace().Run("delete").Args("secret", "windows-user-data", "-n", "openshift-machine-api").Output()
+		_, err := oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", "openshift-windows-machine-config-operator").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.WithoutNamespace().Run("delete").Args("secret", "windows-user-data", "-n", "openshift-machine-api").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		windowsMachineSetName := getWindowsMachineSetName(oc)
-		scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 3)
-		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2)
+		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2, false)
+		scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 3, true)
 
 		g.By("Check Windows machine should be in Provisioning phase and not reconciled")
 		pollErr := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
@@ -627,7 +629,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 			e2e.Failf("Failed to check Windows machine should be in Provisioning phase and not reconciled after waiting up to 5 minutes ...")
 		}
 
-		oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", "openshift-windows-machine-config-operator").Output()
+		_, err = oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", "openshift-windows-machine-config-operator").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		waitWindowsNodesReady(oc, 3, 60*time.Second, 1200*time.Second)
 	})
 
@@ -668,16 +671,16 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 	g.It("Author:sgao-NonPreRelease-Medium-39030-Re queue on Windows machine's edge cases [Slow][Disruptive]", func() {
 		g.By("Scale down WMCO")
 		namespace := "openshift-windows-machine-config-operator"
-		scaleDownWMCO(oc)
 		defer scaleDeployment(oc, "wmco", 1, namespace)
+		scaleDownWMCO(oc)
 
 		g.By("Scale up the MachineSet")
 		windowsMachineSetName := getWindowsMachineSetName(oc)
-		scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 3)
-		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2)
-
+		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2, false)
+		scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 3, true)
 		g.By("Scale up WMCO")
 		scaleDeployment(oc, "wmco", 1, namespace)
+		waitForMachinesetReady(oc, windowsMachineSetName, 10, 3)
 
 		g.By("Check Windows machines created before WMCO starts are successfully reconciling and Windows nodes added")
 		waitWindowsNodesReady(oc, 3, 60*time.Second, 1200*time.Second)
@@ -869,8 +872,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 			e2e.Failf("Service monitor %v did not restart, bigger than %v new service monitor age", serviceMonitorAge1, serviceMonitorAge2)
 		}
 		g.By("Scale down nodes")
-		defer scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc), 20, 2)
-		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc), 5, 0)
+		defer scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc), 20, 2, false)
+		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc), 5, 0, false)
 		g.By("Test endpoints IP are deleted after scalling down")
 		waitForEndpointsReady(oc, namespace, 5, 0)
 		endpointsIPsLast := getEndpointsIPs(oc, namespace)

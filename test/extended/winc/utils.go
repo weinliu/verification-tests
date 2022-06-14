@@ -267,10 +267,12 @@ func scaleDeployment(oc *exutil.CLI, os string, replicas int, namespace string) 
 	return err
 }
 
-func scaleWindowsMachineSet(oc *exutil.CLI, windowsMachineSetName string, deadTime int, replicas int) {
+func scaleWindowsMachineSet(oc *exutil.CLI, windowsMachineSetName string, deadTime int, replicas int, skipWait bool) {
 	err := oc.WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), "machineset", windowsMachineSetName, "-n", "openshift-machine-api").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	waitForMachinesetReady(oc, windowsMachineSetName, deadTime, replicas)
+	if !skipWait {
+		waitForMachinesetReady(oc, windowsMachineSetName, deadTime, replicas)
+	}
 }
 
 // this function returns an array of workloads names by their OS type
