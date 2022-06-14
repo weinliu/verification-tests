@@ -798,7 +798,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-Author:qitang-Mediam-41726-Forward logs to different kafka brokers[Serial][Slow]", func() {
+		g.It("CPaasrunOnly-Author:qitang-Medium-41726-Forward logs to different kafka brokers[Serial][Slow]", func() {
 			g.By("create log producer")
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
@@ -874,7 +874,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 		// author gkarager@redhat.com
-		g.It("CPaasrunOnly-Author:gkarager-Mediam-45368-Forward logs to kafka using sals_plaintext[Serial][Slow]", func() {
+		g.It("CPaasrunOnly-Author:gkarager-Medium-45368-Forward logs to kafka using sals_plaintext[Serial][Slow]", func() {
 			g.By("create log producer")
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
