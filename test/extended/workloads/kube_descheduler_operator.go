@@ -852,7 +852,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("Author:knarra-Medium-43277-Descheduler-Descheduler operator should allow configuration of PodLifeTime Seconds [Flaky]", func() {
+	g.It("Author:knarra-Medium-43277-High-50941-Descheduler-Validate Predictive and Automatic mode for descheduler [Flaky][Slow]", func() {
 		deschedulerpT := filepath.Join(buildPruningBaseDir, "kubedescheduler_podlifetime.yaml")
 
 		_, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -919,6 +919,27 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		// Test for podLifetime
+		// Create test project
+		g.By("Create test project")
+		oc.SetupProject()
+
+		err = oc.Run("create").Args("deployment", "ocp43277", "--image", "quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check all the pods should running")
+		if ok := waitForAvailableRsRunning(oc, "deployment", "ocp43277", oc.Namespace(), "1"); ok {
+			e2e.Logf("All pods are runnnig now\n")
+		}
+
+		g.By("Check the descheduler deploy logs, should see config error logs")
+		checkLogsFromRs(oc, kubeNamespace, "pod", podName, regexp.QuoteMeta(`"Evicted pod in dry run mode" `)+".*"+regexp.QuoteMeta(oc.Namespace())+".*"+regexp.QuoteMeta(`reason="PodLifeTime"`))
+
+		// Collect PodLifetime metrics from prometheus
+		g.By("Checking PodLifetime metrics from prometheus")
+		checkDeschedulerMetrics(oc, "PodLifeTime", "descheduler_pods_evicted")
+
+		// Test descheduler automatic mode
 		g.By("Set descheduler mode to Automatic")
 		patchYamlTraceAll := `[{"op": "replace", "path": "/spec/mode", "value":"Automatic"}]`
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlTraceAll).Execute()
@@ -935,25 +956,26 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 			checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 		}()
 
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "descheduler", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
+			if err != nil {
+				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("3", output); matched {
+				e2e.Logf("deploy is up:\n%s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "observed Generation is not expected")
+
 		g.By("Check the kubedescheduler run well")
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Get descheduler cluster pod name after mode is set")
 		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-
-		// Test for podLifetime
-		// Create test project
-		g.By("Create test project")
-		oc.SetupProject()
-
-		err = oc.Run("create").Args("deployment", "ocp43277", "--image", "quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("Check all the pods should running")
-		if ok := waitForAvailableRsRunning(oc, "deployment", "ocp43277", oc.Namespace(), "1"); ok {
-			e2e.Logf("All pods are runnnig now\n")
-		}
 
 		g.By("Check the descheduler deploy logs, should see config error logs")
 		checkLogsFromRs(oc, kubeNamespace, "pod", podName, regexp.QuoteMeta(`"Evicted pod"`)+".*"+regexp.QuoteMeta(oc.Namespace())+".*"+regexp.QuoteMeta(`reason="PodLifeTime"`))
