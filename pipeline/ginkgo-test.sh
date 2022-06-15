@@ -42,10 +42,14 @@ function config_env {
 }
 
 function config_env_for_vm {
+  echo 'unset http_proxy https_proxy no_proxy'
+  unset http_proxy https_proxy
   echo "home path is "${HOME}
-  GOINSTALLPATH="/usr/lib/golang"
-  if [ -d "/usr/local/go/bin" ]; then
-    GOINSTALLPATH="/usr/local/go"
+  GOINSTALLPATH="/usr/local/go1.18/go"
+  if [ ! -d "/usr/local/go1.18/go/bin" ]; then
+    sudo mkdir /usr/local/go1.18
+    sudo wget https://go.dev/dl/go1.18.3.linux-amd64.tar.gz
+    sudo tar -C /usr/local/go1.18/ -xzf go1.18.3.linux-amd64.tar.gz
   fi
   mkdir -p ${HOME}/kubeconf && mkdir -p ${HOME}/azureauth && \
   echo "export KUBECONFIG=${HOME}/kubeconf/kubeconfig" > ${WORKSPACE}/.bash_profile && \
@@ -54,6 +58,7 @@ function config_env_for_vm {
   echo 'export GOPATH=${WORKSPACE}/goproject' >> ${WORKSPACE}/.bash_profile && \
   echo 'export GOCACHE=${WORKSPACE}/gocache' >> ${WORKSPACE}/.bash_profile && \
   echo 'export PATH=$PATH:${GOINSTALLPATH}/bin:${WORKSPACE}/tool_tmp:/opt/OpenShift4-tools' >> ${WORKSPACE}/.bash_profile && \
+  echo 'export PATH=${GOINSTALLPATH}/bin:$PATH:${WORKSPACE}/tool_tmp' >> ${WORKSPACE}/.bash_profile && \
   source ${WORKSPACE}/.bash_profile
   echo 'unset http_proxy https_proxy no_proxy'
   unset http_proxy https_proxy

@@ -63,7 +63,7 @@ if echo $INSTALL_TOOLS | grep -i 'operatorSDK' > /dev/null; then
     unset http_proxy https_proxy
     echo "------------------get operatorSDK------------------------"
     mkdir ${WORKSPACE}/osdk
-    BUILD_CMD="sudo make build"
+    BUILD_CMD="sudo -s source ${WORKSPACE}/.bash_profile; make build"
     PR=""
     array=(${INSTALL_TOOLS//;/ })  
     for tool_name_index in ${array[@]}
@@ -84,13 +84,13 @@ if echo $INSTALL_TOOLS | grep -i 'operatorSDK' > /dev/null; then
         sudo git fetch upstream pull/${PR}/head:downstreamPR
         sudo git checkout downstreamPR
         sudo git status
-        BUILD_CMD="sudo make -f ci/prow.Makefile patch build"
+        BUILD_CMD="sudo -s source ${WORKSPACE}/.bash_profile; make -f ci/prow.Makefile patch build"
     else
         if [ "${JENKINS_AGENT}" == 'goc411' ]; then
             sudo git clone --depth=1 git@github.com:operator-framework/operator-sdk.git ${WORKSPACE}/osdk --branch master
         else
             BRANCH="release-${NIGHTLYFLAG:0:1}.${NIGHTLYFLAG:1}"
-            BUILD_CMD="sudo make -f ci/prow.Makefile patch build"
+            BUILD_CMD="sudo -s source ${WORKSPACE}/.bash_profile; make -f ci/prow.Makefile patch build"
             sudo git clone --depth=1 git@github.com:openshift/ocp-release-operator-sdk.git ${WORKSPACE}/osdk --branch ${BRANCH}
         fi
     fi

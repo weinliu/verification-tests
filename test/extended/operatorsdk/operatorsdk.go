@@ -1537,7 +1537,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	// author: xzha@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:xzha-Critical-38101-implement IndexImageCatalogCreator", func() {
 		operatorsdkCLI.showInfo = true
-		g.By(fmt.Sprintf("0) check the cluster proxy configuration"))
+		g.By("0) check the cluster proxy configuration")
 		httpProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if httpProxy != "" {
@@ -1587,7 +1587,6 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "kubeturbo", "-n", oc.Namespace(), "-o=jsonpath={.status.channels[*].name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("8.4.0"))
 		o.Expect(output).To(o.ContainSubstring("stable"))
 
 		g.By("step: upgrade bundle")
@@ -1636,16 +1635,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "kubeturbo", "-n", oc.Namespace(), "-o=jsonpath={.status.channels[*].currentCSV}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("kubeturbo-operator.v8.5.0"))
-		o.Expect(output).To(o.ContainSubstring("kubeturbo-operator.v8.4.0"))
-
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "kubeturbo", "-n", oc.Namespace(), "-o=jsonpath={.status.channels[*].name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("8.5.0"))
-		o.Expect(output).To(o.ContainSubstring("8.4.0"))
 		o.Expect(output).To(o.ContainSubstring("stable"))
 
 		g.By("SUCCESS")
-
 	})
 
 	// author: xzha@redhat.com
@@ -1720,7 +1714,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			_, err = makeCLI.Run("undeploy").Args().Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
-		output, err := operatorsdkCLI.Run("init").Args("--domain=example.com", "--plugins=go.kubebuilder.io/v3", "--repo=github.com/example-inc/memcached-operator-44295").Output()
+		output, err := operatorsdkCLI.Run("init").Args("--domain=example.com", "--repo=github.com/example-inc/memcached-operator-44295").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Writing scaffold for you to edit"))
 		o.Expect(output).To(o.ContainSubstring("Next: define a resource with"))
