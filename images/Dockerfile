@@ -1,4 +1,4 @@
-FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.17-openshift-4.11 AS builder
+FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.18-openshift-4.11 AS builder
 RUN mkdir -p /go/src/github.com/openshift/openshift-tests-private
 WORKDIR /go/src/github.com/openshift/openshift-tests-private
 COPY . .
@@ -31,6 +31,6 @@ RUN oc image extract quay.io/openshifttest/hypershift-client:latest --file=/hype
     curl -s -k https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/operator-sdk/pre-release/operator-sdk-linux-x86_64.tar.gz -o opt-sdk.tar.gz && \
     tar -C /usr/bin -xzvf opt-sdk.tar.gz && rm -fr opt-sdk.tar.gz
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
-    unzip awscliv2.zip && \
+    unzip -q awscliv2.zip && \
     ./aws/install -b /bin && \
     rm -rf ./aws awscliv2.zip
