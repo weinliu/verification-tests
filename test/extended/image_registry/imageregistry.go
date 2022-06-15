@@ -707,7 +707,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		output, err = oc.AsAdmin().Run("patch").Args("images.config.openshift.io/cluster", "-p", `{"spec": {"registrySources": {"insecureRegistries": ["`+host+`"]}}}`, "--type=merge").Output()
 		e2e.Logf(output)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("patched"))
 
 		g.By("registries.conf gets updated")
 		err = wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
@@ -731,7 +730,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		output, err = oc.AsAdmin().Run("patch").Args("images.config.openshift.io/cluster", "-p", `{"spec": {"additionalTrustedCA": {"name": ""},"registrySources": {"blockedRegistries": ["docker.io"]}}}`, "--type=merge").Output()
 		e2e.Logf(output)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("patched"))
 
 		g.By("registries.conf gets updated")
 		err = wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
@@ -946,16 +944,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if status != "Managed" {
 				e2e.Logf("recover config.image cluster is Managed")
-				output, err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"managementState": "Managed"}}`, "--type=merge").Output()
+				err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"managementState": "Managed"}}`, "--type=merge").Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
-				o.Expect(string(output)).To(o.ContainSubstring("patched"))
 			} else {
 				e2e.Logf("config.image cluster is Managed")
 			}
 		}()
-		output, err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"managementState": "Removed"}}`, "--type=merge").Output()
+		err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"managementState": "Removed"}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("patched"))
 
 		g.By("Check bucket has been deleted")
 		err = wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
@@ -969,9 +965,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		exutil.AssertWaitPollNoErr(err, "the bucket isn't been deleted")
 
 		g.By("Managed managementState")
-		output, err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"managementState": "Managed"}}`, "--type=merge").Output()
+		err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"managementState": "Managed"}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("patched"))
 
 		g.By("Get new bucket name and check")
 		err = wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
@@ -1261,13 +1256,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(regionEndpoint, "https://s3.us-gov-west-1.amazonaws.com") {
 			defer func() {
-				output, err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"storage":{"s3":{"regionEndpoint": null ,"virtualHostedStyle": null}}}}`, "--type=merge").Output()
+				err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"storage":{"s3":{"regionEndpoint": null ,"virtualHostedStyle": null}}}}`, "--type=merge").Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
-				o.Expect(string(output)).To(o.ContainSubstring("patched"))
 			}()
-			output, err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"storage":{"s3":{"regionEndpoint": "https://s3.us-gov-west-1.amazonaws.com" ,"virtualHostedStyle": true}}}}`, "--type=merge").Output()
+			err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"storage":{"s3":{"regionEndpoint": "https://s3.us-gov-west-1.amazonaws.com" ,"virtualHostedStyle": true}}}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("patched"))
 		}
 
 		err = wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
@@ -1474,12 +1467,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 			g.By("Configure topology")
 			defer oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"topologySpreadConstraints":null}}`, "--type=merge").Execute()
-			output, err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"topologySpreadConstraints":[{"labelSelector":{"matchLabels":{"docker-registry":"bar"}},"maxSkew":2,"topologyKey":"zone","whenUnsatisfiable":"ScheduleAnyway"}]}}`, "--type=merge").Output()
-			if err != nil {
-				e2e.Logf(output)
-			}
+			err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"topologySpreadConstraints":[{"labelSelector":{"matchLabels":{"docker-registry":"bar"}},"maxSkew":2,"topologyKey":"zone","whenUnsatisfiable":"ScheduleAnyway"}]}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("patched"))
 
 			g.By("Check if the topology has been override in image registry deploy")
 			err = wait.Poll(3*time.Second, 9*time.Second, func() (bool, error) {
@@ -1559,20 +1548,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 				https://bugzilla.redhat.com/show_bug.cgi?id=2024888#c11
 			*/
 			defer oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"replicas":2}}`, "--type=merge").Execute()
-			output, err := oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"replicas":3}}`, "--type=merge").Output()
-			if err != nil {
-				e2e.Logf(output)
-			}
+			err := oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"replicas":3}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("patched"))
 			checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", 3)
 
-			output, err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"replicas":4}}`, "--type=merge").Output()
-			if err != nil {
-				e2e.Logf(output)
-			}
+			err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"replicas":4}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("patched"))
 			checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", 4)
 
 			g.By("Check if image registry pods run in each zone")
@@ -1629,12 +1610,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Scale registry pod to 2")
 		defer oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"replicas":1}}`, "--type=merge").Execute()
-		output, err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"replicas":2}}`, "--type=merge").Output()
-		if err != nil {
-			e2e.Logf(output)
-		}
+		err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"replicas":2}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("patched"))
 
 		g.By("Check registry new pods")
 		err = wait.Poll(20*time.Second, 1*time.Minute, func() (bool, error) {
@@ -1648,12 +1625,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		exutil.AssertWaitPollNoErr(err, "Pods list are not one Running two Pending")
 
 		g.By("Scale registry pod to 3")
-		output, err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"replicas":3}}`, "--type=merge").Output()
-		if err != nil {
-			e2e.Logf(output)
-		}
+		err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"replicas":3}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("patched"))
 
 		g.By("Check if all pods are running well")
 		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", 3)
@@ -1670,10 +1643,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring(`{"labelSelector":{"matchLabels":{"docker-registry":"default"}},"maxSkew":1,"topologyKey":"node-role.kubernetes.io/worker","whenUnsatisfiable":"DoNotSchedule"}`))
 
 		g.By("Setting both nodeSelector and tolerations on nodes with taints")
-		defer oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"nodeSelector":null,"tolerations":null}}`, "--type=merge").Output()
-		output, err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"nodeSelector":{"node-role.kubernetes.io/master": ""},"tolerations":[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]}}`, "--type=merge").Output()
+		defer oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"nodeSelector":null,"tolerations":null}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"nodeSelector":{"node-role.kubernetes.io/master": ""},"tolerations":[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("patched"))
 
 		g.By("Check registry pod well")
 		podNum := getImageRegistryPodNumber(oc)
@@ -1691,12 +1663,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		checkRegistryFunctionFine(oc, "test1-50219", oc.Namespace())
 
 		g.By("Setting nodeSelector on node without taints")
-		output, err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"nodeSelector":null,"tolerations":null}}`, "--type=merge").Output()
+		err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"nodeSelector":null,"tolerations":null}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("patched"))
-		output, err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"nodeSelector":{"node-role.kubernetes.io/worker": ""}}}`, "--type=merge").Output()
+		err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"nodeSelector":{"node-role.kubernetes.io/worker": ""}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("patched"))
 
 		g.By("Check registry pod well")
 		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
@@ -1853,9 +1823,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Override the image registry annonation and runtimeclass")
 		defer oc.AsAdmin().Run("patch").Args("config.imageregistry.operator.openshift.io/cluster", "-p", `{"spec":{"unsupportedConfigOverrides":null}}`, "--type=merge").Execute()
-		configPatchStatus, configPatchErr := oc.AsAdmin().Run("patch").Args("config.imageregistry.operator.openshift.io/cluster", "-p", `{"spec":{"unsupportedConfigOverrides":{"deployment":{"annotations":{"io.kubernetes.cri-o.TrySkipVolumeSELinuxLabel":"true"},"runtimeClassName":"`+rtc.name+`"}}}}`, "--type=merge").Output()
+		configPatchErr := oc.AsAdmin().Run("patch").Args("config.imageregistry.operator.openshift.io/cluster", "-p", `{"spec":{"unsupportedConfigOverrides":{"deployment":{"annotations":{"io.kubernetes.cri-o.TrySkipVolumeSELinuxLabel":"true"},"runtimeClassName":"`+rtc.name+`"}}}}`, "--type=merge").Execute()
 		o.Expect(configPatchErr).NotTo(o.HaveOccurred())
-		o.Expect(configPatchStatus).To(o.ContainSubstring("patched"))
 		podNum := getImageRegistryPodNumber(oc)
 		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
 
@@ -1879,6 +1848,42 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
+	g.It("NonPreRelease-Author:jitli-Medium-22031-Config CPU and memory for internal regsistry [Disruptive]", func() {
+
+		g.By("Set up registry resources")
+		podNum := getImageRegistryPodNumber(oc)
+		initialConfig, err := oc.AsAdmin().Run("get").Args("config.image/cluster", "-ojsonpath={.spec.resources}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if initialConfig == "" {
+			initialConfig = `null`
+		}
+
+		defer func() {
+			g.By("Recover resources for imageregistry")
+			err := oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"resources":`+initialConfig+`}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			g.By("Check registry pod well")
+			checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
+		}()
+
+		err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"resources":{"limits":{"cpu":"100m","memory":"512Mi"}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the image-registry pod resources")
+		err = wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+			resources, resourcesErr := oc.AsAdmin().Run("get").Args("pod", "-n", "openshift-image-registry", "-l", "docker-registry=default", `-ojsonpath={.items..spec..resources.limits}`).Output()
+			if strings.Contains(resources, "100m") && strings.Contains(resources, "512Mi") {
+				e2e.Logf("pod metadata updated")
+				return true, nil
+			}
+			e2e.Logf("pod metadata not update, nodeSelector:%v %v", resources, resourcesErr)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "pod metadata not update")
+		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
+	})
+
+	// author: jitli@redhat.com
 	g.It("NonPreRelease-Author:jitli-Medium-22032-Config NodeSelector for internal registry [Disruptive]", func() {
 
 		g.By("Set up internal registry NodeSelector")
@@ -1890,18 +1895,16 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		defer func() {
 			g.By("Remove nodeSelector for imageregistry")
-			output, err := oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"nodeSelector":`+initialConfig+`}}`, "--type=merge").Output()
+			err := oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"nodeSelector":`+initialConfig+`}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("patched"))
 			g.By("Check registry pod well")
 			podNum := getImageRegistryPodNumber(oc)
 			checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
 		}()
-		output, err := oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"nodeSelector":{"node-role.kubernetes.io/master": "test22032"}}}`, "--type=merge").Output()
+		err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"nodeSelector":{"node-role.kubernetes.io/master": "test22032"}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("patched"))
 
-		g.By("Check the image-registry default topology")
+		g.By("Check the image-registry pod nodeSelector")
 		err = wait.Poll(5*time.Second, 1*time.Minute, func() (bool, error) {
 			nodeSelector, nodeSelectorErr := oc.AsAdmin().Run("get").Args("pod", "-n", "openshift-image-registry", "-l", "docker-registry=default", `-ojsonpath={.items..spec.nodeSelector}`).Output()
 
