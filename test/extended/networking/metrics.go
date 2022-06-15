@@ -411,4 +411,21 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		})
 		exutil.AssertWaitPollNoErr(metricsErr, fmt.Sprintf("Fail to get metric and the error is:%s", metricsErr))
 	})
+
+	g.It("Author:weliang-Medium-52072- Add mechanism to record duration for k8 kinds.", func() {
+		var (
+			namespace = "openshift-ovn-kubernetes"
+			cmName    = "ovn-kubernetes-master"
+		)
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+		leaderNodeIP := getLeaderInfo(oc, namespace, cmName, networkType)
+		prometheusURL := "https://" + leaderNodeIP + ":9102/metrics"
+		metricName1 := "ovnkube_master_network_programming_ovn_duration_seconds_bucket"
+		metricName2 := "ovnkube_master_network_programming_duration_seconds_bucket"
+		checkovnkubeMasterNetworkProgrammingetrics(oc, prometheusURL, metricName1)
+		checkovnkubeMasterNetworkProgrammingetrics(oc, prometheusURL, metricName2)
+	})
 })

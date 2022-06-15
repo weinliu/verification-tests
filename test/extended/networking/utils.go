@@ -798,11 +798,6 @@ func checkSDNMetrics(oc *exutil.CLI, url string, metrics string) {
 	olmToken, err := exutil.GetSAToken(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(olmToken).NotTo(o.BeEmpty())
-	//olmToken, err := exutil.GetSAToken(oc)
-	//olmToken, err :=oc.AsAdmin().WithoutNamespace().Run("create").Args("token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
-	//olmToken, err := getSAToken(oc, "prometheusk8s", "openshift-monitoring")
-	//olmToken, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
-	//o.Expect(err).NotTo(o.HaveOccurred())
 	metricsErr := wait.Poll(5*time.Second, 10*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), fmt.Sprintf("%s", url)).OutputToFile("metrics.txt")
 		if err != nil {
@@ -915,9 +910,6 @@ func getOVNMetrics(oc *exutil.CLI, url string) string {
 	olmToken, err := exutil.GetSAToken(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(olmToken).NotTo(o.BeEmpty())
-	//olmToken, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
-	//olmToken, err := getSAToken(oc, "prometheusk8s", "openshift-monitoring")
-	//o.Expect(err).NotTo(o.HaveOccurred())
 	metricsErr := wait.Poll(5*time.Second, 10*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), fmt.Sprintf("%s", url)).OutputToFile("metrics.txt")
 		if err != nil {
@@ -1493,4 +1485,28 @@ func unorderedEqual(first, second []string) bool {
 		}
 	}
 	return true
+}
+
+func checkovnkubeMasterNetworkProgrammingetrics(oc *exutil.CLI, url string, metrics string) {
+	var metricsOutput []byte
+	olmToken, err := exutil.GetSAToken(oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(olmToken).NotTo(o.BeEmpty())
+	metricsErr := wait.Poll(5*time.Second, 10*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), fmt.Sprintf("%s", url)).OutputToFile("metrics.txt")
+		if err != nil {
+			e2e.Logf("Can't get metrics and try again, the error is:%s", err)
+			return false, nil
+		}
+		metricsOutput, _ = exec.Command("bash", "-c", "cat "+output+" | grep "+metrics+" | awk 'NR==2{print $2}'").Output()
+		metricsValue := strings.TrimSpace(string(metricsOutput))
+		if metricsValue != "" {
+			e2e.Logf("The output of the metrics for %s is : %v", metrics, metricsValue)
+		} else {
+			e2e.Logf("Can't get metrics for %s:", metrics)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(metricsErr, fmt.Sprintf("Fail to get metric and the error is:%s", metricsErr))
 }
