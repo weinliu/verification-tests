@@ -40,19 +40,23 @@ func getConfigMapData(oc *exutil.CLI, dataKey string) string {
 	return dataValue
 }
 
-func waitWindowsNodesReady(oc *exutil.CLI, nodesNumber int, interval time.Duration, timeout time.Duration) {
-	pollErr := wait.Poll(interval, timeout, func() (bool, error) {
-		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "kubernetes.io/os=windows", "--no-headers").Output()
-		nodesReady := strings.Count(msg, "Ready")
-		if nodesReady != nodesNumber {
-			e2e.Logf("Expected %v Windows nodes are not ready yet. Waiting %v seconds more ...", nodesNumber, interval)
-			return false, nil
+func waitWindowsNodesReady(oc *exutil.CLI, nodes []string, interval time.Duration, timeout time.Duration) {
+	for _, node := range nodes {
+
+		pollErr := wait.Poll(interval, timeout, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", node, "--no-headers").Output()
+			nodesArray := strings.Fields(msg)
+			nodesReady := strings.EqualFold(nodesArray[1], "Ready")
+			if !nodesReady {
+				e2e.Logf("Expected %v Windows node is not ready yet. Waiting %v seconds more ...", node, interval)
+				return false, nil
+			}
+			e2e.Logf("Expected %v Windows node is ready", node)
+			return true, nil
+		})
+		if pollErr != nil {
+			e2e.Failf("Expected %v Windows node is not ready after waiting up to %v seconds ...", node, timeout)
 		}
-		e2e.Logf("Expected %v Windows nodes are ready", nodesNumber)
-		return true, nil
-	})
-	if pollErr != nil {
-		e2e.Failf("Expected %v Windows nodes are not ready after waiting up to %v seconds ...", nodesNumber, timeout)
 	}
 }
 
@@ -411,14 +415,16 @@ func waitForMachinesetReady(oc *exutil.CLI, machinesetName string, deadTime int,
 
 }
 
-func getNodeNameFromIP(oc *exutil.CLI, nodeIP string, iaasPlatform string) (string, error) {
+func getNodeNameFromIP(oc *exutil.CLI, nodeIP string, iaasPlatform string) string {
 	// Azure and AWS indexes for IP addresses are different
 	index := "0"
 	if iaasPlatform == "azure" {
 		index = "1"
 	}
 	nodeName, err := oc.WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[?(@.status.addresses["+index+"].address==\""+nodeIP+"\")].metadata.name}").Output()
-	return nodeName, err
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	return nodeName
 }
 
 func createRuntimeClass(oc *exutil.CLI, runtimeClassFile, node string) error {
@@ -599,7 +605,7 @@ func getEndpointsIPs(oc *exutil.CLI, namespace string) string {
 	return endpoints
 }
 
-func setBYOH(oc *exutil.CLI, iaasPlatform string, addressType string, machinesetName string) string {
+func setBYOH(oc *exutil.CLI, iaasPlatform string, addressType string, machinesetName string) []string {
 	user := getAdministratorNameByPlatform(iaasPlatform)
 	clusterVersions, _, err := exutil.GetClusterVersion(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -623,5 +629,5 @@ func setBYOH(oc *exutil.CLI, iaasPlatform string, addressType string, machineset
 	addressesArray := fetchAddress(oc, addressType, machinesetName)
 	setConfigmap(oc, addressesArray[0], user, "config-map.yaml")
 	waitForMachinesetReady(oc, machinesetName, 15, 1)
-	return addressesArray[0]
+	return addressesArray
 }

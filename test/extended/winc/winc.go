@@ -265,7 +265,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		waitForMachinesetReady(oc, machinesetName, 10, 1)
 		// Here we fetch machine IP from machineset
 		machineIP := fetchAddress(oc, "IP", machinesetName)
-		nodeName, err := getNodeNameFromIP(oc, machineIP[0], iaasPlatform)
+		nodeName := getNodeNameFromIP(oc, machineIP[0], iaasPlatform)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// here we update the runtime class file with the Kernel ID of multiple OS
 		defer oc.WithoutNamespace().Run("delete").Args("runtimeclass", "multiple-windows-os")
@@ -312,7 +312,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		time.Sleep(12 * time.Minute)
 		// check services are not running
 		g.By("Check services are not running after deleting the Windows Node")
-		runningServices, err := getWinSVCs(bastionHost, address, privateKey, iaasPlatform)
+		runningServices, err := getWinSVCs(bastionHost, address[0], privateKey, iaasPlatform)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		svcBool, svc := checkRunningServicesOnWindowsNode(*&svcs, runningServices)
 		if svcBool {
@@ -320,7 +320,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		}
 		g.By("Check folder do not exist after deleting the Windows Node")
 		for _, folder := range *&folders {
-			if checkFoldersDoNotExist(bastionHost, address, fmt.Sprintf("%v", folder), privateKey, iaasPlatform) {
+			if checkFoldersDoNotExist(bastionHost, address[0], fmt.Sprintf("%v", folder), privateKey, iaasPlatform) {
 				e2e.Failf("Folders still exists on a deleted node %v", fmt.Sprintf("%v", folder))
 			}
 		}
@@ -411,7 +411,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		windowsMachineSetName := getWindowsMachineSetName(oc)
 		scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 3, false)
 		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2, false)
-		waitWindowsNodesReady(oc, 3, 60*time.Second, 1200*time.Second)
+		waitWindowsNodesReady(oc, getWindowsHostNames(oc), 10*time.Second, 1200*time.Second)
 		// Testing the Windows server is reachable via Linux pod
 		command = []string{"exec", "-n", namespace, linuxPodArray[0], "--", "curl", windowsClusterIP}
 		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
@@ -631,7 +631,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 
 		_, err = oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", "openshift-windows-machine-config-operator").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitWindowsNodesReady(oc, 3, 60*time.Second, 1200*time.Second)
+		waitWindowsNodesReady(oc, getWindowsHostNames(oc), 10*time.Second, 1200*time.Second)
 	})
 
 	// author: sgao@redhat.com
@@ -683,7 +683,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		waitForMachinesetReady(oc, windowsMachineSetName, 10, 3)
 
 		g.By("Check Windows machines created before WMCO starts are successfully reconciling and Windows nodes added")
-		waitWindowsNodesReady(oc, 3, 60*time.Second, 1200*time.Second)
+		waitWindowsNodesReady(oc, getWindowsHostNames(oc), 10*time.Second, 1200*time.Second)
 	})
 
 	// author: rrasouli@redhat.com
