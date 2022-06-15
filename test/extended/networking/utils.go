@@ -1314,22 +1314,32 @@ func getPodMultiNetwork(oc *exutil.CLI, namespace string, podName string) (strin
 
 //Pinging pod's secondary interfaces should pass
 func curlPod2PodMultiNetworkPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPv4 string, podIPv6 string) {
-	msg, err := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(strings.Contains(msg, "Hello OpenShift!")).To(o.BeTrue())
+	err := wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
+		msg, _ := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
+		if !strings.Contains(msg, "Hello OpenShift!") {
+			e2e.Logf("The curl should pass but fail, and try next round")
+			return false, nil
+		}
+		return true, nil
+	})
 	//MultiNetworkPolicy not support ipv6 yet, disabel ipv6 curl right now
-	//msg1, err1 := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl -g -6 [" +podIPv6+ "]:8080  --connect-timeout 5")
-	//o.Expect(err1).NotTo(o.HaveOccurred())
-	//o.Expect(strings.Contains(msg1, "Hello OpenShift!")).To(o.BeTrue())
+	//msg1, _ := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl -g -6 [" +podIPv6+ "]:8080  --connect-timeout 5")
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test fail with err:%s", err))
 }
 
 //Pinging pod's secondary interfaces should fail
 func curlPod2PodMultiNetworkFail(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPv4 string, podIPv6 string) {
-	_, err := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
-	o.Expect(err).To(o.HaveOccurred())
+	err := wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
+		msg, _ := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
+		if strings.Contains(msg, "Hello OpenShift!") {
+			e2e.Logf("The curl should fail but pass, and try next round")
+			return false, nil
+		}
+		return true, nil
+	})
 	//MultiNetworkPolicy not support ipv6 yet, disabel ipv6 curl right now
-	//_, err1 := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl -g -6 [" +podIPv6+ "]:8080  --connect-timeout 5")
-	//o.Expect(err1).To(o.HaveOccurred())
+	//msg1, _ := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl -g -6 [" +podIPv6+ "]:8080  --connect-timeout 5")
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test fail with err:%s", err))
 }
 
 //This function will bring 2 namespaces, 5 pods and 2 NADs for all multus multinetworkpolicy cases
