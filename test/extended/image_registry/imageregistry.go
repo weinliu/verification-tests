@@ -14,6 +14,7 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	container "github.com/openshift/openshift-tests-private/test/extended/util/container"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -2001,4 +2002,45 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		exutil.AssertWaitPollNoErr(err, "The operation metric don't get expect value")
 	})
 
+	//author: xiuwang@redhat.com
+	g.It("ConnectedOnly-VMonly-Author:xiuwang-Critial-10904-Support unauthenticated with registry-admin role [Serial]", func() {
+		g.By("Add registry-admin role to a project")
+		oc.SetupProject()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("sa", "test-registry-admin", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("policy").Args("add-role-to-user", "registry-admin", "-z", "test-registry-admin", "--role-namespace", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Get external registry host")
+		defer restoreRouteExposeRegistry(oc)
+		createRouteExposeRegistry(oc)
+		defroute := getRegistryDefaultRoute(oc)
+
+		g.By("Push a image to the project")
+		checkRegistryFunctionFine(oc, "test-10904", oc.Namespace())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "test-10904", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		publicImageName := defroute + "/" + oc.Namespace() + "/test-10904:latest"
+
+		g.By("Save the external registry auth with the specific token")
+		authFile, err := saveImageRegistryAuth(oc, defroute, oc.Namespace())
+		defer os.RemoveAll(authFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Pull the image with registry-admin role")
+		containerCLI := container.NewPodmanCLI()
+		_, err = containerCLI.Run("pull").Args(publicImageName, "--authfile="+authFile, "--tls-verify=false").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer containerCLI.RemoveImage(publicImageName)
+
+		g.By("Pag the image with another name")
+		newImage := defroute + "/" + oc.Namespace() + "/myimage:latest"
+		_, err = containerCLI.Run("tag").Args(publicImageName, newImage).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Push image with registry-admin role")
+		_, err = containerCLI.Run("push").Args(newImage, "--authfile="+authFile, "--tls-verify=false").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 })
