@@ -1206,12 +1206,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("Author:wewang-Medium-43731-Image registry pods should have anti-affinity rules", func() {
-		g.By("Check platforms")
-		//We set registry use pv on openstack&disconnect cluster, the case will fail on this scenario.
-		//Skip all the fs volume test, only run on object storage backend.
-		//pods anti-affinity sets when registry's replicas is 2
-		if checkRegistryUsingFSVolume(oc) {
-			g.Skip("Skip for fs volume")
+		//When replicas=2 the image registry pods follow requiredDuringSchedulingIgnoredDuringExecution
+		//anti-affinity rule on 4.11 and above version, other replicas will follow topologySpreadContraints
+		g.By("Check replicas")
+		podNum := getImageRegistryPodNumber(oc)
+		if podNum != 2 {
+			g.Skip("Skip when replicas is not 2")
 		}
 
 		g.By("Check pods anti-affinity match requiredDuringSchedulingIgnoredDuringExecution rule when replicas is 2")
@@ -1765,7 +1765,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		expectInfo := "429 Too Many Requests"
 		createSimpleRunPod(oc, "test-51055:latest", expectInfo)
-		output, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args("deploy/image-registry", "--since=10s", "-n", "openshift-image-registry").Output()
+		output, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args("deploy/image-registry", "--since=30s", "-n", "openshift-image-registry").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("unable to pullthrough manifest"))
 		o.Expect(output).To(o.ContainSubstring("err.code=toomanyrequests"))
