@@ -11,6 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +24,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+//JSONp defins a json struct
 type JSONp struct {
 	Oper string      `json:"op"`
 	Path string      `json:"path"`
@@ -29,9 +32,9 @@ type JSONp struct {
 }
 
 // GetDeploymentsYaml dumps out deployment in yaml format in specific namespace
-func GetDeploymentsYaml(oc *exutil.CLI, deployment_name string, namespace string) (string, error) {
-	e2e.Logf("Dumping deployments %s from namespace %s", deployment_name, namespace)
-	out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", deployment_name, "-n", namespace, "-o", "yaml").Output()
+func GetDeploymentsYaml(oc *exutil.CLI, deploymentName string, namespace string) (string, error) {
+	e2e.Logf("Dumping deployments %s from namespace %s", deploymentName, namespace)
+	out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", deploymentName, "-n", namespace, "-o", "yaml").Output()
 	if err != nil {
 		e2e.Logf("Error dumping deployments: %v", err)
 		return "", err
@@ -87,7 +90,7 @@ func waitForAlert(oc *exutil.CLI, alertString string, interval time.Duration, ti
 	// Poll returns timed out waiting for the condition when timeout is reached
 	count := 0
 	if pollErr := wait.Poll(interval*time.Second, timeout*time.Second, func() (bool, error) {
-		count += 1
+		count++
 		metrics, err := exec.Command("bash", "-c", alertCMD).Output()
 		if err != nil {
 			e2e.Logf("Error retrieving prometheus alert metrics: %v, retry %d...", err, count)
@@ -111,9 +114,8 @@ func waitForAlert(oc *exutil.CLI, alertString string, interval time.Duration, ti
 					if string(alertState) == "pending" {
 						e2e.Logf("Prometheus alert state is pending, waiting for firing, retry %d...", count)
 						return false, nil
-					} else {
-						return false, fmt.Errorf("alert state is not expected, expected pending in the waiting time window but actual is %s", string(alertState))
 					}
+					return false, fmt.Errorf("alert state is not expected, expected pending in the waiting time window but actual is %s", string(alertState))
 				} else if string(alertState) == "firing" {
 					return true, nil
 				} else {
@@ -189,7 +191,7 @@ func getAlertByName(alertName string) map[string]interface{} {
 	return getAlert(selector)
 }
 
-// createBucket creates a new bucket in the gcs
+// CreateBucket creates a new bucket in the gcs
 // projectID := "my-project-id"
 // bucketName := "bucket-name"
 // return value: error: any error
@@ -204,7 +206,7 @@ func CreateBucket(client *storage.Client, projectID, bucketName string) error {
 	return nil
 }
 
-// uploadFile uploads a gcs object
+// UploadFile uploads a gcs object
 // bucket := "bucket-name"
 // object := "object-name"
 // return value: error: any error
@@ -231,7 +233,7 @@ func UploadFile(client *storage.Client, bucket, object, file string) error {
 	return nil
 }
 
-// makePublic makes a gcs object public
+// MakePublic makes a gcs object public
 // bucket := "bucket-name"
 // object := "object-name"
 // return value: error: any error
@@ -247,7 +249,7 @@ func MakePublic(client *storage.Client, bucket, object string) error {
 	return nil
 }
 
-// Delete deletes the gcs object
+// DeleteObject deletes the gcs object
 // return value: error: any error
 func DeleteObject(client *storage.Client, bucket, object string) error {
 	if object == "" {
@@ -361,10 +363,9 @@ func updateGraph(oc *exutil.CLI, graphName string) (string, string, string, erro
 	//fmt.Println(sedCmd)
 	if err := exec.Command("bash", "-c", sedCmd).Run(); err == nil {
 		return graphTemplate, targetVersion, targetPayload, nil
-	} else {
-		e2e.Logf("Error on sed command: %v", err.Error())
-		return "", "", "", err
 	}
+	e2e.Logf("Error on sed command: %v", err.Error())
+	return "", "", "", err
 }
 
 // buildGraph creates a gcs bucket, upload the graph file and make it public for CVO to use
@@ -504,10 +505,10 @@ func getCVOcontArg(oc *exutil.CLI, argQuery string) (string, int, error) {
 
 // patch resource (namespace - use "" if none, resource_name, patch).
 // Returns: result(string), error
-func ocJsonPatch(oc *exutil.CLI, namespace string, resource string, patch []JSONp) (patchOutput string, err error) {
+func ocJSONPatch(oc *exutil.CLI, namespace string, resource string, patch []JSONp) (patchOutput string, err error) {
 	p, err := json.Marshal(patch)
 	if err != nil {
-		e2e.Logf("ocJsonPatch Error - json.Marshal: '%v'", err)
+		e2e.Logf("ocJSONPatch Error - json.Marshal: '%v'", err)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 	if namespace != "" {
@@ -529,7 +530,7 @@ func patchCVOcontArg(oc *exutil.CLI, index int, value string) (string, error) {
 			fmt.Sprintf("/spec/template/spec/containers/0/args/%d", index),
 			value},
 	}
-	return ocJsonPatch(oc,
+	return ocJSONPatch(oc,
 		"openshift-cluster-version",
 		"deployment/cluster-version-operator",
 		patch)
@@ -573,8 +574,36 @@ func changeCap(oc *exutil.CLI, base bool, cap interface{}) (string, error) {
 		spec = "/spec/capabilities/additionalEnabledCapabilities"
 	}
 	if cap == nil {
-		return ocJsonPatch(oc, "", "clusterversion/version", []JSONp{{"remove", spec, nil}})
-	} else {
-		return ocJsonPatch(oc, "", "clusterversion/version", []JSONp{{"add", spec, cap}})
+		return ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"remove", spec, nil}})
 	}
+	return ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", spec, cap}})
+}
+
+func getCapsManifest(oc *exutil.CLI) ([]string, error) {
+	tempDataDir, err := extractManifest(oc)
+	defer os.RemoveAll(tempDataDir)
+	if err != nil {
+		return []string{}, err
+	}
+	manifestDir := filepath.Join(tempDataDir, "manifest")
+	cmd := fmt.Sprintf("grep 'capability.openshift.io/name' -hr %s | cut -d ':' -f2  | tr -d '\"' | sort | uniq", manifestDir)
+	out, err := exec.Command("bash", "-c", cmd).Output()
+	if err != nil {
+		return []string{}, err
+	}
+	capStr := strings.ReplaceAll(string(out), " ", "")
+	knownCaps := regexp.MustCompile("[\n+]").Split(capStr, -1)
+	inResult := make(map[string]bool)
+	var result []string
+	for _, str := range knownCaps {
+		if str == "" {
+			continue
+		}
+		if _, ok := inResult[str]; !ok {
+			inResult[str] = true
+			result = append(result, str)
+		}
+	}
+	sort.Strings(result)
+	return result, nil
 }

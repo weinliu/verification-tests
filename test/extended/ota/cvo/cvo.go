@@ -23,9 +23,51 @@ import (
 var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	defer g.GinkgoRecover()
 
-	project_name := "openshift-cluster-version"
+	projectName := "openshift-cluster-version"
 
-	oc := exutil.NewCLIWithoutNamespace(project_name)
+	oc := exutil.NewCLIWithoutNamespace(projectName)
+
+	//author: yanyang@redhat.com
+	g.It("Author:yanyang-High-49196-Install cluster without capabilities setting", func() {
+		vCurrent := []string{"baremetal", "marketplace", "openshift-samples"}
+		orgCap, err := getCVObyJP(oc, ".spec.capabilities")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if orgCap != "" {
+			g.Skip("The test requires no capabilities in spec")
+		}
+
+		g.By("Check caps in vCurrent are installed")
+		for _, op := range vCurrent {
+			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", op).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		g.By("Check cv status: enabled caps")
+		enabledCap, err := getCVObyJP(oc, ".status.capabilities.enabledCapabilities[*]")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		enabledCapSlice := strings.Split(enabledCap, " ")
+
+		o.Expect(len(vCurrent)).To(o.Equal(len(enabledCapSlice)))
+		for i, v := range enabledCapSlice {
+			o.Expect(v).To(o.Equal(vCurrent[i]))
+		}
+
+		g.By("Check cv status: known caps")
+		expKnown, err := getCapsManifest(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		knownCap, err := getCVObyJP(oc, ".status.capabilities.knownCapabilities[*]")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		knownCapSlice := strings.Split(knownCap, " ")
+
+		o.Expect(len(knownCapSlice)).To(o.Equal(len(expKnown)))
+		for i, v := range knownCapSlice {
+			o.Expect(v).To(o.Equal(expKnown[i]))
+		}
+	})
 
 	//author: yanyang@redhat.com
 	g.It("Author:yanyang-Medium-49508-disable capabilities by modifying the cv.spec.capabilities.baselineCapabilitySet [Serial]", func() {
@@ -130,7 +172,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		defer DeleteObject(client, bucket, object)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		_, err = ocJsonPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
+		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check oc adm upgrade when there are not-recommended updates")
@@ -203,7 +245,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		defer DeleteObject(client, bucket, object)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		_, err = ocJsonPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
+		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check CVO prompts correct reason and message")
@@ -226,7 +268,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		defer DeleteObject(client, bucket, object)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		_, err = ocJsonPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
+		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check no updates")
@@ -260,7 +302,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		defer DeleteObject(client, bucket, object)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		_, err = ocJsonPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
+		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check no updates but RetrievedUpdates=True")
@@ -319,25 +361,25 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	//author: jialiu@redhat.com
 	g.It("Author:jialiu-Medium-41391-cvo serves metrics over only https not http", func() {
 		g.By("Check cvo delopyment config file...")
-		cvo_deployment_yaml, err := GetDeploymentsYaml(oc, "cluster-version-operator", project_name)
+		cvoDeploymentYaml, err := GetDeploymentsYaml(oc, "cluster-version-operator", projectName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		var keywords = []string{"--listen=0.0.0.0:9099",
 			"--serving-cert-file=/etc/tls/serving-cert/tls.crt",
 			"--serving-key-file=/etc/tls/serving-cert/tls.key"}
 		for _, v := range keywords {
-			o.Expect(cvo_deployment_yaml).Should(o.ContainSubstring(v))
+			o.Expect(cvoDeploymentYaml).Should(o.ContainSubstring(v))
 		}
 
 		g.By("Check cluster-version-operator binary help")
-		cvo_pods_list, err := exutil.WaitForPods(
-			oc.AdminKubeClient().CoreV1().Pods(project_name),
+		cvoPodsList, err := exutil.WaitForPods(
+			oc.AdminKubeClient().CoreV1().Pods(projectName),
 			exutil.ParseLabelsOrDie("k8s-app=cluster-version-operator"),
 			exutil.CheckPodIsReady, 1, 3*time.Minute)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Get cvo pods: %v", cvo_pods_list)
-		output, err := PodExec(oc, "/usr/bin/cluster-version-operator start --help", project_name, cvo_pods_list[0])
+		e2e.Logf("Get cvo pods: %v", cvoPodsList)
+		output, err := PodExec(oc, "/usr/bin/cluster-version-operator start --help", projectName, cvoPodsList[0])
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf(
-			"/usr/bin/cluster-version-operator start --help executs error on %v", cvo_pods_list[0]))
+			"/usr/bin/cluster-version-operator start --help executs error on %v", cvoPodsList[0]))
 		e2e.Logf(output)
 		keywords = []string{"You must set both --serving-cert-file and --serving-key-file unless you set --listen empty"}
 		for _, v := range keywords {
@@ -347,7 +389,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		g.By("Verify cvo metrics is only exported via https")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").
 			Args("servicemonitor", "cluster-version-operator",
-				"-n", project_name, "-o=json").Output()
+				"-n", projectName, "-o=json").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		var result map[string]interface{}
 		json.Unmarshal([]byte(output), &result)
@@ -357,29 +399,29 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").
 			Args("servicemonitor", "cluster-version-operator",
-				"-n", project_name, "-o=jsonpath={.spec.endpoints[].scheme}").Output()
+				"-n", projectName, "-o=jsonpath={.spec.endpoints[].scheme}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Get cvo's spec.endpoints scheme: %v", output)
 		o.Expect(output).Should(o.Equal("https"))
 
 		g.By("Get cvo endpoint URI")
-		//output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("endpoints", "cluster-version-operator", "-n", project_name, "-o=jsonpath='{.subsets[0].addresses[0].ip}:{.subsets[0].ports[0].port}'").Output()
+		//output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("endpoints", "cluster-version-operator", "-n", projectName, "-o=jsonpath='{.subsets[0].addresses[0].ip}:{.subsets[0].ports[0].port}'").Output()
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").
 			Args("endpoints", "cluster-version-operator",
-				"-n", project_name, "--no-headers").Output()
+				"-n", projectName, "--no-headers").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		re := regexp.MustCompile(`cluster-version-operator\s+([^\s]*)`)
-		matched_result := re.FindStringSubmatch(output)
-		e2e.Logf("Regex mached result: %v", matched_result)
-		o.Expect(matched_result).Should(o.HaveLen(2))
-		endpoint_uri := matched_result[1]
-		e2e.Logf("Get cvo endpoint URI: %v", endpoint_uri)
-		o.Expect(endpoint_uri).ShouldNot(o.BeEmpty())
+		matchedResult := re.FindStringSubmatch(output)
+		e2e.Logf("Regex mached result: %v", matchedResult)
+		o.Expect(matchedResult).Should(o.HaveLen(2))
+		endpointURI := matchedResult[1]
+		e2e.Logf("Get cvo endpoint URI: %v", endpointURI)
+		o.Expect(endpointURI).ShouldNot(o.BeEmpty())
 
 		g.By("Check metric server is providing service https, but not http")
-		cmd := fmt.Sprintf("curl http://%s/metrics", endpoint_uri)
-		output, err = PodExec(oc, cmd, project_name, cvo_pods_list[0])
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cmd %s executs error on %v", cmd, cvo_pods_list[0]))
+		cmd := fmt.Sprintf("curl http://%s/metrics", endpointURI)
+		output, err = PodExec(oc, cmd, projectName, cvoPodsList[0])
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cmd %s executs error on %v", cmd, cvoPodsList[0]))
 		e2e.Logf(output)
 		keywords = []string{"Client sent an HTTP request to an HTTPS server"}
 		for _, v := range keywords {
@@ -387,9 +429,9 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		}
 
 		g.By("Check metric server is providing service via https correctly.")
-		cmd = fmt.Sprintf("curl -k -I https://%s/metrics", endpoint_uri)
-		output, err = PodExec(oc, cmd, project_name, cvo_pods_list[0])
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cmd %s executs error on %v", cmd, cvo_pods_list[0]))
+		cmd = fmt.Sprintf("curl -k -I https://%s/metrics", endpointURI)
+		output, err = PodExec(oc, cmd, projectName, cvoPodsList[0])
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cmd %s executs error on %v", cmd, cvoPodsList[0]))
 		e2e.Logf(output)
 		keywords = []string{"HTTP/1.1 200 OK"}
 		for _, v := range keywords {
@@ -469,7 +511,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		// Prerequisite: a dummy update server is ready and the available channels is present
 		g.By("Change to a dummy update server")
-		_, err = ocJsonPatch(oc, "", "clusterversion/version", []JSONp{
+		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
 			{"add", "/spec/upstream", graphURL},
 			{"add", "/spec/channel", "channel-a"},
 		})
@@ -604,7 +646,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		g.By("Check when upstream is unset")
 		if orgUpstream != "" {
-			_, err := ocJsonPatch(oc, "", "clusterversion/version", []JSONp{{"remove", "/spec/upstream", nil}})
+			_, err := ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"remove", "/spec/upstream", nil}})
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
@@ -643,7 +685,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		defer DeleteObject(client, bucket, object)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		_, err = ocJsonPatch(oc, "", "clusterversion/version", []JSONp{
+		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
 			{"add", "/spec/upstream", graphURL},
 			{"add", "/spec/channel", "channel-a"},
 		})
@@ -651,14 +693,14 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		exec.Command("bash", "-c", "sleep 5").Output()
 		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exp_str := []string{
+		expStr := []string{
 			fmt.Sprintf("Upstream: %s", graphURL),
 			"Channel: channel-a (available channels: channel-a, channel-b)",
 			"Recommended updates:",
 			targetVersion,
 			targetPayload}
 
-		for _, v := range exp_str {
+		for _, v := range expStr {
 			o.Expect(cmdOut).To(o.ContainSubstring(v))
 		}
 
@@ -674,17 +716,17 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exp_str = []string{
+		expStr = []string{
 			"Upstream:",
 			"Channel:",
 			"Reason: NoChannel",
 			"Message: The update channel has not been configured"}
 
-		for _, v := range exp_str[:2] {
+		for _, v := range expStr[:2] {
 			o.Expect(cmdOut).NotTo(o.ContainSubstring(v))
 		}
 
-		for _, v := range exp_str[2:] {
+		for _, v := range expStr[2:] {
 			o.Expect(cmdOut).To(o.ContainSubstring(v))
 		}
 	})
@@ -826,9 +868,9 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Enable ClusterOperatorDown alert")
-		_, err = ocJsonPatch(oc, "", "proxy/cluster", []JSONp{{"replace", "/spec/trustedCA/name", "osus-ca"}})
+		_, err = ocJSONPatch(oc, "", "proxy/cluster", []JSONp{{"replace", "/spec/trustedCA/name", "osus-ca"}})
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer ocJsonPatch(oc, "", "proxy/cluster", []JSONp{{"replace", "/spec/trustedCA/name", valueProxyTrustCA}})
+		defer ocJSONPatch(oc, "", "proxy/cluster", []JSONp{{"replace", "/spec/trustedCA/name", valueProxyTrustCA}})
 
 		g.By("Check ClusterOperatorDown condition...")
 		err = waitForCondition(60, 300, "False", "oc get co machine-config -ojson|jq -r '.status.conditions[]|select(.type==\"Available\").status'")
@@ -851,7 +893,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		exutil.AssertWaitPollNoErr(err, "ClusterOperatorDown alert is not fired in 10m")
 
 		g.By("Disable ClusterOperatorDown alert")
-		_, err = ocJsonPatch(oc, "", "proxy/cluster", []JSONp{{"replace", "/spec/trustedCA/name", valueProxyTrustCA}})
+		_, err = ocJSONPatch(oc, "", "proxy/cluster", []JSONp{{"replace", "/spec/trustedCA/name", valueProxyTrustCA}})
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check alert is disabled")
@@ -1013,7 +1055,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 				{"replace", "/spec/strategy/type", "Recreate"},
 			}
 		}
-		_, err = ocJsonPatch(oc, namespace, fmt.Sprintf("deployment/%s", name), patch)
+		_, err = ocJSONPatch(oc, namespace, fmt.Sprintf("deployment/%s", name), patch)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the strategy reverted after 5 minutes")
@@ -1034,7 +1076,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			} else {
 				patch = []JSONp{{"replace", "/spec/strategy/type", "RollingUpdate"}}
 			}
-			_, err = ocJsonPatch(oc, namespace, fmt.Sprintf("deployment/%s", name), patch)
+			_, err = ocJSONPatch(oc, namespace, fmt.Sprintf("deployment/%s", name), patch)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			exutil.AssertWaitPollNoErr(pollErr, "Strategy is not reverted back after 5 minutes")
 		}
@@ -1144,7 +1186,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			defer DeleteObject(client, bucket, object)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			_, err = ocJsonPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
+			_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Check RetrievedUpdates!=True after patching upstream")
@@ -1242,11 +1284,11 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 				Un bool   `json:"unmanaged"`
 				Gr string `json:"group"`
 			}
-			_, err := ocJsonPatch(oc, "", "clusterversion/version", []JSONp{
+			_, err := ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
 				{"add", "/spec/overrides", []ovrd{{"Deployment", "network-operator", "openshift-network-operator", true, "apps"}}},
 			})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			defer ocJsonPatch(oc, "", "clusterversion/version", []JSONp{{"remove", "/spec/overrides", nil}})
+			defer ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"remove", "/spec/overrides", nil}})
 
 			e2e.Logf("Wait for Upgradeable=false...")
 			err = waitForCondition(30, 300, "False",
@@ -1273,11 +1315,11 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 3m")
 
 		g.By("Change strategy.rollingUpdate.maxUnavailable to be 50%.")
-		_, err = ocJsonPatch(oc, resourceNamespace, resourceName, []JSONp{
+		_, err = ocJSONPatch(oc, resourceNamespace, resourceName, []JSONp{
 			{"replace", "/spec/strategy/rollingUpdate/maxUnavailable", "50%"},
 		})
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer ocJsonPatch(oc, resourceNamespace, resourceName, []JSONp{
+		defer ocJSONPatch(oc, resourceNamespace, resourceName, []JSONp{
 			{"replace", "/spec/strategy/rollingUpdate/maxUnavailable", "25%"},
 		})
 
