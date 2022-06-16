@@ -131,4 +131,182 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 	})
 
+	g.Context("Vector Elasticsearch tests", func() {
+		var (
+			subTemplate       = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
+			SingleNamespaceOG = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
+			AllNamespaceOG    = exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml")
+			loglabeltemplate  = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+		)
+		cloNS := "openshift-logging"
+		eoNS := "openshift-operators-redhat"
+		CLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, CatalogSourceObjects{}}
+		EO := SubscriptionObjects{eo, eoNS, AllNamespaceOG, subTemplate, eoPackageName, CatalogSourceObjects{}}
+		g.BeforeEach(func() {
+			g.By("deploy CLO and EO")
+			CLO.SubscribeOperator(oc)
+			EO.SubscribeOperator(oc)
+			oc.SetupProject()
+		})
+
+		g.It("CPaasrunOnly-Author:ikanse-Medium-48591-Vector ClusterLogForwarder Label all messages with same tag[Serial][Slow]", func() {
+
+			g.By("Create external Elasticsearch instance")
+			esProj := oc.Namespace()
+			ees := externalES{esProj, "6.8", "elasticsearch-server", false, false, false, "", "", "", cloNS}
+			defer ees.remove(oc)
+			ees.deploy(oc)
+
+			g.By("Create project for app logs and deploy the log generator app")
+			oc.SetupProject()
+			appProj := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogForwarder instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "48591.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			g.By("Waiting for the Logging pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By("Check logs in external ES")
+			ees.waitForIndexAppear(oc, "app")
+			ees.waitForIndexAppear(oc, "infra")
+			ees.waitForIndexAppear(oc, "audit")
+
+			g.By("Check logs in default ES")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-000")
+			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "infra-000")
+			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "audit-000")
+
+			g.By("Add pipeline labels to the ClusterLogForwarder instance")
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogforwarders/instance", "-n", cloNS, "-p", "{\"spec\":{\"pipelines\":[{\"inputRefs\":[\"infrastructure\",\"application\",\"audit\"],\"labels\":{\"logging-labels\":\"test-labels\"},\"name\":\"forward-to-external-es\",\"outputRefs\":[\"es-created-by-user\",\"default\"]}]}}", "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Wait for collector pods to pick new ClusterLogForwarder config changes")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By("Check logs with pipeline label in external ES")
+			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"openshift.labels.logging-labels\": \"test-labels\"}}}"
+			indexName := []string{"app", "infra", "audit"}
+			for i := 0; i < len(indexName); i++ {
+				err = wait.Poll(10*time.Second, 60*time.Second, func() (done bool, err error) {
+					logs := ees.searchDocByQuery(oc, indexName[i], checkLog)
+					if logs.Hits.Total > 0 {
+						return true, nil
+					}
+					return false, nil
+				})
+				exutil.AssertWaitPollNoErr(err, "No logs found with pipeline label in extranl ES")
+			}
+
+			g.By("Check logs with pipeline label in default ES")
+			podList, err = oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkLog = "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"openshift.labels.logging-labels\": \"test-labels\"}}}"
+			for i := 0; i < len(indexName); i++ {
+				err = wait.Poll(10*time.Second, 60*time.Second, func() (done bool, err error) {
+					logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, indexName[i], checkLog)
+					if logs.Hits.Total > 0 {
+						return true, nil
+					}
+					return false, nil
+				})
+				exutil.AssertWaitPollNoErr(err, "No logs found with pipeline label in default ES instance")
+			}
+
+		})
+
+		g.It("CPaasrunOnly-Author:ikanse-Medium-48593-Vector ClusterLogForwarder Label each message type differently and send all to the same output[Serial][Slow]", func() {
+
+			g.By("Create external Elasticsearch instance")
+			esProj := oc.Namespace()
+			ees := externalES{esProj, "6.8", "elasticsearch-server", false, false, false, "", "", "", cloNS}
+			defer ees.remove(oc)
+			ees.deploy(oc)
+
+			g.By("Create project for app logs and deploy the log generator app")
+			oc.SetupProject()
+			appProj := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogForwarder instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "48593.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			g.By("Waiting for the Logging pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By("Check logs in external ES")
+			ees.waitForIndexAppear(oc, "app")
+			ees.waitForIndexAppear(oc, "infra")
+			ees.waitForIndexAppear(oc, "audit")
+
+			g.By("Check logs in default ES")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-000")
+			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "infra-000")
+			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "audit-000")
+
+			g.By("Add pipeline labels to the ClusterLogForwarder instance")
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogforwarders/instance", "-n", cloNS, "-p", "{\"spec\":{\"pipelines\":[{\"inputRefs\":[\"application\"],\"labels\":{\"logging\":\"app-logs\"},\"name\":\"forward-app-logs\",\"outputRefs\":[\"es-created-by-user\",\"default\"]},{\"inputRefs\":[\"infrastructure\"],\"labels\":{\"logging\":\"infra-logs\"},\"name\":\"forward-infra-logs\",\"outputRefs\":[\"es-created-by-user\",\"default\"]},{\"inputRefs\":[\"audit\"],\"labels\":{\"logging\":\"audit-logs\"},\"name\":\"forward-audit-logs\",\"outputRefs\":[\"es-created-by-user\",\"default\"]}]}}", "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Wait for collector pods to pick new ClusterLogForwarder config changes")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By("Check logs with pipeline label in external ES")
+			indexName := []string{"app", "infra", "audit"}
+			for i := 0; i < len(indexName); i++ {
+				checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"openshift.labels.logging\": \"" + indexName[i] + "-logs\"}}}"
+				err = wait.Poll(10*time.Second, 60*time.Second, func() (done bool, err error) {
+					logs := ees.searchDocByQuery(oc, indexName[i], checkLog)
+					if logs.Hits.Total > 0 {
+						return true, nil
+					}
+					return false, nil
+				})
+				exutil.AssertWaitPollNoErr(err, "No logs found with pipeline label in extranl ES")
+			}
+
+			g.By("Check logs with pipeline label in default ES")
+			podList, err = oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for i := 0; i < len(indexName); i++ {
+				checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"openshift.labels.logging\": \"" + indexName[i] + "-logs\"}}}"
+				err = wait.Poll(10*time.Second, 60*time.Second, func() (done bool, err error) {
+					logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, indexName[i], checkLog)
+					if logs.Hits.Total > 0 {
+						return true, nil
+					}
+					return false, nil
+				})
+				exutil.AssertWaitPollNoErr(err, "No logs found with pipeline label in default ES instance")
+			}
+
+		})
+
+	})
+
 })
