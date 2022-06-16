@@ -607,3 +607,63 @@ func getCapsManifest(oc *exutil.CLI) ([]string, error) {
 	sort.Strings(result)
 	return result, nil
 }
+
+func setCVOverrides(oc *exutil.CLI, resourceKind string, resourceName string, resourceNamespace string) error {
+	type ovrd struct {
+		Ki string `json:"kind"`
+		Na string `json:"name"`
+		Ns string `json:"namespace"`
+		Un bool   `json:"unmanaged"`
+		Gr string `json:"group"`
+	}
+	_, err := ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
+		{"add", "/spec/overrides", []ovrd{{resourceKind, resourceName, resourceNamespace, true, "apps"}}},
+	})
+	if err != nil {
+		e2e.Logf("Patch spec/overrides failed: %v.", err)
+		return err
+	}
+
+	e2e.Logf("Wait for Upgradeable=false...")
+	err = waitForCondition(30, 360, "False",
+		"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"Upgradeable\").status'")
+	if err != nil {
+		e2e.Logf("Upgradeable condition is not false in 6m: %v", err)
+		return err
+	}
+
+	upgStatusOutput, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(upgStatusOutput, "ClusterVersionOverridesSet") {
+		e2e.Logf("No expected msg ClusterVersionOverridesSet!")
+		return fmt.Errorf("no expected msg ClusterVersionOverridesSet")
+	}
+
+	e2e.Logf("Wait for Progressing=false...")
+	//to workaround the fake upgrade by cv.overrrides, refer to https://issues.redhat.com/browse/OTA-586
+	err = waitForCondition(30, 180, "False",
+		"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"Progressing\").status'")
+	if err != nil {
+		e2e.Logf("Progressing condition is not false in 3m: %v", err)
+		return err
+	}
+	return nil
+}
+
+func unsetCVOverrides(oc *exutil.CLI) {
+	e2e.Logf("Unset /spec/overrides...")
+	_, err := ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"remove", "/spec/overrides", nil}})
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	e2e.Logf("Wait for Upgradeable=false disappear...")
+	err = waitForCondition(30, 360, "",
+		"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"Upgradeable\").status'")
+	exutil.AssertWaitPollNoErr(err, "upgradeable=false condition does not disappear in 6m")
+
+	e2e.Logf("Check no ClusterVersionOverridesSet in `oc adm upgrade` msg...")
+	upgStatusOutput, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(upgStatusOutput).NotTo(o.ContainSubstring("ClusterVersionOverridesSet"))
+}

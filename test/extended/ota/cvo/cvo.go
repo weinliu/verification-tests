@@ -1262,11 +1262,11 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	//author: jiajliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:jiajliu-High-46017-CVO should keep reconcile manifests when update failed on precondition check [Disruptive]", func() {
 		//Take openshift-marketplace/deployment as an example, it can be any resource which included in manifest files
-		resourceName := "deployment/marketplace-operator"
+		resourceKindName := "deployment/marketplace-operator"
 		resourceNamespace := "openshift-marketplace"
 		g.By("Check default rollingUpdate strategy in a fresh installed cluster.")
 		defaultValueMaxUnavailable, err := oc.AsAdmin().WithoutNamespace().Run("get").
-			Args(resourceName, "-o=jsonpath={.spec.strategy.rollingUpdate.maxUnavailable}",
+			Args(resourceKindName, "-o=jsonpath={.spec.strategy.rollingUpdate.maxUnavailable}",
 				"-n", resourceNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(defaultValueMaxUnavailable).To(o.Equal("25%"))
@@ -1277,29 +1277,9 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		if !strings.Contains(upgStatusOutput, "Upgradeable=False") {
 			e2e.Logf("Enable upgradeable=false explicitly...")
 			//set overrides in cv to trigger upgradeable=false condition if it is not enabled by default
-			type ovrd struct {
-				Ki string `json:"kind"`
-				Na string `json:"name"`
-				Ns string `json:"namespace"`
-				Un bool   `json:"unmanaged"`
-				Gr string `json:"group"`
-			}
-			_, err := ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
-				{"add", "/spec/overrides", []ovrd{{"Deployment", "network-operator", "openshift-network-operator", true, "apps"}}},
-			})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			defer ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"remove", "/spec/overrides", nil}})
-
-			e2e.Logf("Wait for Upgradeable=false...")
-			err = waitForCondition(30, 300, "False",
-				"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"Upgradeable\").status'")
-			exutil.AssertWaitPollNoErr(err, "Upgradeable condition is not false in 5m")
-
-			e2e.Logf("Wait for Progressing=false...")
-			//to workaround the fake upgrade by cv.overrrides, refer to https://issues.redhat.com/browse/OTA-586
-			err = waitForCondition(30, 180, "False",
-				"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"Progressing\").status'")
-			exutil.AssertWaitPollNoErr(err, "Progressing condition is not false in 3m")
+			err = setCVOverrides(oc, "deployment", "network-operator", "openshift-network-operator")
+			defer unsetCVOverrides(oc)
+			exutil.AssertWaitPollNoErr(err, "timeout to set overrides!")
 		}
 
 		g.By("Trigger update when upgradeable=false and precondition check fail.")
@@ -1315,18 +1295,18 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 3m")
 
 		g.By("Change strategy.rollingUpdate.maxUnavailable to be 50%.")
-		_, err = ocJSONPatch(oc, resourceNamespace, resourceName, []JSONp{
+		_, err = ocJSONPatch(oc, resourceNamespace, resourceKindName, []JSONp{
 			{"replace", "/spec/strategy/rollingUpdate/maxUnavailable", "50%"},
 		})
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer ocJSONPatch(oc, resourceNamespace, resourceName, []JSONp{
+		defer ocJSONPatch(oc, resourceNamespace, resourceKindName, []JSONp{
 			{"replace", "/spec/strategy/rollingUpdate/maxUnavailable", "25%"},
 		})
 
 		g.By("Check the deployment was reconciled back.")
 		err = wait.Poll(30*time.Second, 5*time.Minute, func() (bool, error) {
 			valueMaxUnavailable, _ := oc.AsAdmin().WithoutNamespace().Run("get").
-				Args(resourceName, "-o=jsonpath={.spec.strategy.rollingUpdate.maxUnavailable}", "-n", resourceNamespace).Output()
+				Args(resourceKindName, "-o=jsonpath={.spec.strategy.rollingUpdate.maxUnavailable}", "-n", resourceNamespace).Output()
 			if strings.Compare(valueMaxUnavailable, defaultValueMaxUnavailable) != 0 {
 				e2e.Logf("valueMaxUnavailable is %v. Waiting for deployment being reconciled...", valueMaxUnavailable)
 				return false, nil
@@ -1407,6 +1387,59 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 					}
 				}
 			}
+		}
+	})
+
+	//author: jiajliu@redhat.com
+	g.It("Longduration-NonPreRelease-Author:jiajliu-Medium-51973-setting cv.overrides should work while ReleaseAccepted=False [Disruptive]", func() {
+		resourceKind := "deployment"
+		resourceName := "network-operator"
+		resourceNamespace := "openshift-network-operator"
+
+		g.By("Trigger ReleaseAccepted=False condition.")
+		fakeReleasePayload := "quay.io/openshift-release-dev-test/ocp-release@sha256:39efe13ef67cb4449f5e6cdd8a26c83c07c6a2ce5d235dfbc3ba58c64418fcf3"
+		err := oc.AsAdmin().WithoutNamespace().Run("adm").
+			Args("upgrade", "--allow-explicit-upgrade", "--to-image", fakeReleasePayload).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "--clear").Execute()
+
+		err = waitForCondition(30, 300, "False",
+			"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"ReleaseAccepted\").status'")
+		exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 5m")
+
+		g.By("Disable deployment/network-operator's management through setting cv.overrides.")
+		err = setCVOverrides(oc, resourceKind, resourceName, resourceNamespace)
+		defer unsetCVOverrides(oc)
+		exutil.AssertWaitPollNoErr(err, "timeout to set overrides!")
+
+		g.By("Check default rollingUpdate strategy.")
+		defaultValueMaxUnavailable, err := oc.AsAdmin().WithoutNamespace().Run("get").
+			Args(resourceKind, resourceName, "-o=jsonpath={.spec.strategy.rollingUpdate.maxUnavailable}",
+				"-n", resourceNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(defaultValueMaxUnavailable).To(o.Equal("1"))
+
+		g.By("Change strategy.rollingUpdate.maxUnavailable to be 50%.")
+		_, err = ocJSONPatch(oc, resourceNamespace, fmt.Sprintf("%s/%s", resourceKind, resourceName), []JSONp{
+			{"replace", "/spec/strategy/rollingUpdate/maxUnavailable", "50%"},
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ocJSONPatch(oc, resourceNamespace, fmt.Sprintf("%s/%s", resourceKind, resourceName), []JSONp{
+			{"replace", "/spec/strategy/rollingUpdate/maxUnavailable", "1"},
+		})
+
+		g.By("Check the deployment will not be reconciled back.")
+		err = wait.Poll(30*time.Second, 8*time.Minute, func() (bool, error) {
+			valueMaxUnavailable, _ := oc.AsAdmin().WithoutNamespace().Run("get").
+				Args(resourceKind, resourceName, "-o=jsonpath={.spec.strategy.rollingUpdate.maxUnavailable}", "-n", resourceNamespace).Output()
+			if strings.Compare(valueMaxUnavailable, defaultValueMaxUnavailable) == 0 {
+				e2e.Logf("valueMaxUnavailable is %v. Waiting for deployment being reconciled...", valueMaxUnavailable)
+				return false, nil
+			}
+			return true, nil
+		})
+		if err != nil {
+			o.Expect(err.Error()).To(o.ContainSubstring("timed out waiting for the condition"))
 		}
 	})
 })
