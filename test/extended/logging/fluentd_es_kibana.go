@@ -232,49 +232,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author ikanse@redhat.com
-		g.It("CPaasrunOnly-Author:ikanse-Medium-39859-Mark operator/cluster as degraded when no Elasticsearch secret[Serial]", func() {
-
-			g.By("Deploy EFK pods")
-			sc, err := getStorageClassName(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "ES_NODE_COUNT=1", "-p", "REDUNDANCY_POLICY=ZeroRedundancy")
-
-			g.By("Waiting for the EFK pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
-
-			g.By("Make sure the Elasticsearch cluster is healthy")
-			cl.assertResourceStatus(oc, "jsonpath={.status.logStore.elasticsearchStatus[0].cluster.status}", "green")
-			prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForIndexAppear(oc, cloNS, prePodList.Items[0].Name, "infra-00")
-
-			g.By("Set the Cluster Logging operator instance managementState to Unmanaged.")
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterloggings.logging.openshift.io/instance", "-n", cloNS, "-p", "{\"spec\": {\"managementState\": \"Unmanaged\"}}", "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("Delete the elasticsearch secret")
-			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "elasticsearch", "-n", cloNS).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("Check the elasticsearch cluster status")
-			es := resource{"elasticsearch", "elasticsearch", cloNS}
-			es.assertResourceStatus(oc, "jsonpath={.status.conditions[0].type}", "Degraded")
-			es.assertResourceStatus(oc, "jsonpath={.status.conditions[0].reason}", "Missing Required Secrets")
-
-			g.By("Set the Cluster Logging operator instance managementState to Managed.")
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterloggings.logging.openshift.io/instance", "-n", cloNS, "-p", "{\"spec\": {\"managementState\": \"Managed\"}}", "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("Make sure the Elasticsearch cluster is healthy")
-			WaitForECKPodsToBeReady(oc, cloNS)
-			cl.assertResourceStatus(oc, "jsonpath={.status.logStore.elasticsearchStatus[0].cluster.status}", "green")
-			es.assertResourceStatus(oc, "jsonpath={.status.cluster.status}", "green")
-		})
-
-		// author ikanse@redhat.com
 		g.It("CPaasrunOnly-Author:ikanse-Medium-46423-fluentd total_limit_size is not set beyond available space[Serial]", func() {
 
 			g.By("Create Cluster Logging instance with totalLimitSize which is more than the available space")

@@ -76,34 +76,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 	})
 
 	// author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-Medium-41069-gather cert generation status in openshift event[Serial]", func() {
-		g.By("deploy EFK pods")
-		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
-		cl := resource{"clusterlogging", "instance", cloNS}
-		defer cl.deleteClusterLogging(oc)
-		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-		WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
-
-		g.By("Make CLO regenrate certs")
-		masterCerts := resource{"secret", "master-certs", cloNS}
-		defer oc.AsAdmin().WithoutNamespace().Run("scale").Args("deploy/cluster-logging-operator", "--replicas=1", "-n", cloNS).Execute()
-		err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("deploy/cluster-logging-operator", "--replicas=0", "-n", cloNS).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret/master-certs", "-n", cloNS).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		masterCerts.WaitUntilResourceIsGone(oc)
-		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("deploy/cluster-logging-operator", "--replicas=1", "-n", cloNS).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		masterCerts.WaitForResourceToAppear(oc)
-
-		g.By("check events")
-		events, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", cloNS, "--field-selector", "involvedObject.kind=ClusterLogging").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(events).Should(o.ContainSubstring("reason FileMissing type Regenerate"))
-		o.Expect(events).Should(o.ContainSubstring("reason ExpiredOrMissing type Regenerate"))
-	})
-
-	// author qitang@redhat.com
 	g.It("CPaasrunOnly-Author:qitang-Medium-49440-[LOG-1415] Allow users to set fluentd read_lines_limit.[Serial]", func() {
 		clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
 		clf := resource{"clusterlogforwarder", "instance", cloNS}
