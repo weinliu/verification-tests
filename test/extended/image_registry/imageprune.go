@@ -135,7 +135,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			g.By("Set image registry cluster Managed")
 			err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Managed"}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			recoverRegistryDefaultPods(oc)
+			waitRegistryDefaultPodsReady(oc)
 		}()
 		err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Removed"}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())

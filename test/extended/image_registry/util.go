@@ -318,7 +318,7 @@ func recoverRegistryDefaultReplicas(oc *exutil.CLI) {
 	if !platforms[platformtype] {
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("config.imageregistry/cluster", "-p", `{"spec":{"replicas":2}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(30*time.Second, 2*time.Minute, func() (bool, error) {
+		err = wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
 			podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(metav1.ListOptions{LabelSelector: "docker-registry=default"})
 			if len(podList.Items) != 2 {
 				e2e.Logf("Continue to next round")
@@ -337,7 +337,7 @@ func recoverRegistryDefaultReplicas(oc *exutil.CLI) {
 	}
 }
 
-func restoreRegistryStorageConfig(oc *exutil.CLI) (string, string) {
+func getRegistryStorageConfig(oc *exutil.CLI) (string, string) {
 	var storagetype, storageinfo string
 	g.By("Get image registry storage info")
 	platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
@@ -422,48 +422,17 @@ func loginRegistryDefaultRoute(oc *exutil.CLI, defroute string, ns string) {
 	}
 }
 
-func recoverRegistryDefaultPods(oc *exutil.CLI) {
-	platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	switch platformtype {
-	case "AWS", "Azure", "GCP", "OpenStack":
-		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.replicas}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(out).Should(o.Equal("2"))
-		err = wait.Poll(25*time.Second, 3*time.Minute, func() (bool, error) {
-			podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(metav1.ListOptions{LabelSelector: "docker-registry=default"})
-			if len(podList.Items) != 2 {
-				e2e.Logf("Continue to next round")
-				return false, nil
-			}
-			for _, pod := range podList.Items {
-				if pod.Status.Phase != corev1.PodRunning {
-					e2e.Logf("Continue to next round")
-					return false, nil
-				}
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Image registry pod list is not 2")
-	case "None", "VSphere":
-		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.replicas}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(out).Should(o.Equal("1"))
-		err = wait.Poll(25*time.Second, 3*time.Minute, func() (bool, error) {
-			podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(metav1.ListOptions{LabelSelector: "docker-registry=default"})
-			if len(podList.Items) != 1 {
-				e2e.Logf("Continue to next round")
-				return false, nil
-			} else if podList.Items[0].Status.Phase != corev1.PodRunning {
-				e2e.Logf("Continue to next round")
-				return false, nil
-			} else {
-				return true, nil
-			}
-		})
-		exutil.AssertWaitPollNoErr(err, "Image registry pod list is not 1")
-	default:
-		e2e.Failf("Failed to recover registry pods")
+func waitRegistryDefaultPodsReady(oc *exutil.CLI) {
+	storagetype, _ := getRegistryStorageConfig(oc)
+	if storagetype == "pvc" || storagetype == "emptyDir" {
+		podNum := getImageRegistryPodNumber(oc)
+		o.Expect(podNum).Should(o.Equal(1))
+		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
+	} else {
+		podNum := getImageRegistryPodNumber(oc)
+		o.Expect(podNum).Should(o.Equal(2))
+		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
+
 	}
 }
 
