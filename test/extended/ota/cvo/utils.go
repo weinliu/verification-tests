@@ -56,13 +56,6 @@ func PodExec(oc *exutil.CLI, script string, namespace string, podName string) (s
 	return out, waitErr
 }
 
-// GetSAToken get a token assigned to prometheus-k8s from openshift-monitoring namespace
-func getSAToken(oc *exutil.CLI) (string, error) {
-	e2e.Logf("Getting a token assgined to prometheus-k8s from openshift-monitoring namespace...")
-	token, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
-	return token, err
-}
-
 // WaitForAlert check if an alert appears
 // Return value: bool: indicate if the alert is found
 // Return value: map: annotation map which contains reason and message information
@@ -74,11 +67,14 @@ func waitForAlert(oc *exutil.CLI, alertString string, interval time.Duration, ti
 		}
 	}
 	e2e.Logf("Waiting for alert %s pending or firing...", alertString)
-	url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "prometheus-k8s", "-n", "openshift-monitoring", "-o=jsonpath={.spec.host}").Output()
+	url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+		"-n", "openshift-monitoring",
+		"route", "prometheus-k8s",
+		"-o=jsonpath={.spec.host}").Output()
 	if err != nil || len(url) == 0 {
 		return false, nil, fmt.Errorf("error getting the hostname of route prometheus-k8s %v", err)
 	}
-	token, err := getSAToken(oc)
+	token, err := exutil.GetSAToken(oc)
 	if err != nil || len(token) == 0 {
 		return false, nil, fmt.Errorf("error getting SA token %v", err)
 	}
@@ -164,9 +160,23 @@ func waitForCondition(interval time.Duration, timeout time.Duration, expectedCon
 }
 
 //Get detail alert info by selector
-func getAlert(alertSelector string) map[string]interface{} {
+func getAlert(oc *exutil.CLI, alertSelector string) map[string]interface{} {
 	var alertInfo map[string]interface{}
-	command := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer $(oc -n openshift-monitoring sa get-token prometheus-k8s)\"  https://$(oc get route prometheus-k8s -n openshift-monitoring --no-headers|awk '{print $2}')/api/v1/alerts | jq -r '.data.alerts[]|select(%s)'", alertSelector)
+	url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+		"-n", "openshift-monitoring",
+		"route", "prometheus-k8s",
+		"-o=jsonpath={.spec.host}").Output()
+	if err != nil || len(url) == 0 {
+		e2e.Logf("error getting the hostname of route prometheus-k8s %v", err)
+		return nil
+	}
+	token, err := exutil.GetSAToken(oc)
+	if err != nil || len(token) == 0 {
+		e2e.Logf("error getting SA token %v", err)
+		return nil
+	}
+	command := fmt.Sprintf("curl -skH \"Authorization: Bearer %s\" https://%s/api/v1/alerts"+
+		" | jq -r '.data.alerts[]|select(%s)'", token, url, alertSelector)
 	output, err := exec.Command("bash", "-c", command).Output()
 	if err != nil {
 		e2e.Logf("Getting alert error:%v", err)
@@ -186,9 +196,8 @@ func getAlert(alertSelector string) map[string]interface{} {
 }
 
 //Get detail alert info by alertname
-func getAlertByName(alertName string) map[string]interface{} {
-	selector := fmt.Sprintf(".labels.alertname == \"%s\"", alertName)
-	return getAlert(selector)
+func getAlertByName(oc *exutil.CLI, alertName string) map[string]interface{} {
+	return getAlert(oc, fmt.Sprintf(".labels.alertname == \"%s\"", alertName))
 }
 
 // CreateBucket creates a new bucket in the gcs

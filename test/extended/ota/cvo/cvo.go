@@ -761,8 +761,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		g.By("Check ClusterOperatorDown alert is not firing and ClusterOperatorDegraded alert is fired correctly.")
 		err = wait.Poll(5*time.Minute, 30*time.Minute, func() (bool, error) {
-			alertDown := getAlertByName("ClusterOperatorDown")
-			alertDegraded := getAlertByName("ClusterOperatorDegraded")
+			alertDown := getAlertByName(oc, "ClusterOperatorDown")
+			alertDegraded := getAlertByName(oc, "ClusterOperatorDegraded")
 			o.Expect(alertDown).To(o.BeNil())
 			if alertDegraded == nil || alertDegraded["state"] != "firing" {
 				e2e.Logf("Waiting for alert ClusterOperatorDegraded to be triggered and fired...")
@@ -783,7 +783,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		g.By("Check alert is disabled")
 		err = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
-			alertDegraded := getAlertByName("ClusterOperatorDegraded")
+			alertDegraded := getAlertByName(oc, "ClusterOperatorDegraded")
 			if alertDegraded != nil {
 				e2e.Logf("Waiting for alert being disabled...")
 				return false, nil
@@ -811,8 +811,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		g.By("Waiting for alerts triggered...")
 		err = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
-			alertDown := getAlertByName("ClusterOperatorDown")
-			alertDegraded := getAlertByName("ClusterOperatorDegraded")
+			alertDown := getAlertByName(oc, "ClusterOperatorDown")
+			alertDegraded := getAlertByName(oc, "ClusterOperatorDegraded")
 			if alertDown == nil || alertDegraded == nil {
 				e2e.Logf("Waiting for alerts to be triggered...")
 				return false, nil
@@ -823,7 +823,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		g.By("Check alert ClusterOperatorDown fired.")
 		err = wait.Poll(5*time.Minute, 10*time.Minute, func() (bool, error) {
-			alertDown := getAlertByName("ClusterOperatorDown")
+			alertDown := getAlertByName(oc, "ClusterOperatorDown")
 			if alertDown["state"] != "firing" {
 				e2e.Logf("Waiting for alert ClusterOperatorDown to be triggered and fired...")
 				return false, nil
@@ -834,7 +834,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		g.By("Check alert ClusterOperatorDegraded fired.")
 		err = wait.Poll(5*time.Minute, 20*time.Minute, func() (bool, error) {
-			alertDegraded := getAlertByName("ClusterOperatorDegraded")
+			alertDegraded := getAlertByName(oc, "ClusterOperatorDegraded")
 			if alertDegraded["state"] != "firing" {
 				e2e.Logf("Waiting for alert ClusterOperatorDegraded to be triggered and fired...")
 				return false, nil
@@ -849,8 +849,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		g.By("Check alerts are disabled...")
 		err = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
-			alertDown := getAlertByName("ClusterOperatorDown")
-			alertDegraded := getAlertByName("ClusterOperatorDegraded")
+			alertDown := getAlertByName(oc, "ClusterOperatorDown")
+			alertDegraded := getAlertByName(oc, "ClusterOperatorDegraded")
 			if alertDown != nil || alertDegraded != nil {
 				e2e.Logf("Waiting for alerts being disabled...")
 				return false, nil
@@ -878,7 +878,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		g.By("Check ClusterOperatorDown alert is fired correctly")
 		err = wait.Poll(100*time.Second, 600*time.Second, func() (bool, error) {
-			alertDown := getAlertByName("ClusterOperatorDown")
+			alertDown := getAlertByName(oc, "ClusterOperatorDown")
 			if alertDown == nil || alertDown["state"] != "firing" {
 				e2e.Logf("Waiting for alert ClusterOperatorDown to be triggered and fired...")
 				return false, nil
@@ -898,7 +898,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		g.By("Check alert is disabled")
 		err = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
-			alertDown := getAlertByName("ClusterOperatorDown")
+			alertDown := getAlertByName(oc, "ClusterOperatorDown")
 			if alertDown != nil {
 				e2e.Logf("Waiting for alert being disabled...")
 				return false, nil
@@ -1086,8 +1086,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	g.It("Longduration-NonPreRelease-Author:evakhoni-Medium-48247-Prometheus is able to scrape metrics from the CVO after rotation of the signer ca in openshift-service-ca [Disruptive]", func() {
 
 		g.By("Check for alerts Before signer ca rotation.")
-		alertCVODown := getAlertByName("ClusterVersionOperatorDown")
-		alertTargetDown := getAlert(".labels.alertname == \"TargetDown\" and .labels.service == \"cluster-version-operator\"")
+		alertCVODown := getAlertByName(oc, "ClusterVersionOperatorDown")
+		alertTargetDown := getAlert(oc, ".labels.alertname == \"TargetDown\" and .labels.service == \"cluster-version-operator\"")
 		o.Expect(alertCVODown).To(o.BeNil())
 		o.Expect(alertTargetDown).To(o.BeNil())
 
@@ -1130,8 +1130,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		seenAlertCVOd, seenAlertTD := false, false
 		// alerts may appear within first 5 minutes, and fire after 10 more mins
 		err = wait.Poll(1*time.Minute, 15*time.Minute, func() (bool, error) {
-			alertCVODown = getAlertByName("ClusterVersionOperatorDown")
-			alertTargetDown = getAlert(".labels.alertname == \"TargetDown\" and .labels.service == \"cluster-version-operator\"")
+			alertCVODown = getAlertByName(oc, "ClusterVersionOperatorDown")
+			alertTargetDown = getAlert(oc, ".labels.alertname == \"TargetDown\" and .labels.service == \"cluster-version-operator\"")
 			if alertCVODown != nil {
 				e2e.Logf("alert ClusterVersionOperatorDown found - checking state..")
 				o.Expect(alertCVODown["state"]).NotTo(o.Equal("firing"))
