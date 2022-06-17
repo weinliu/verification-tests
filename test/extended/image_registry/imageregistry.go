@@ -1882,6 +1882,30 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
+	g.It("Author:jitli-Critial-23817-Check registry operator storage setup on GCP", func() {
+
+		if exutil.CheckPlatform(oc) != "gcp" {
+			g.Skip("Skip for non-supported platform, only GCP")
+		}
+
+		g.By("Get the GCS key")
+		gcsKey, gcsKeyErr := oc.WithoutNamespace().AsAdmin().Run("get").Args("secret", "-n", "openshift-image-registry", "image-registry-private-configuration", `-ojsonpath={.data.REGISTRY_STORAGE_GCS_KEYFILE}`).Output()
+		o.Expect(gcsKeyErr).NotTo(o.HaveOccurred())
+		o.Expect(gcsKey).NotTo(o.BeEmpty())
+
+		g.By("Check environment variables")
+		envList, envListErr := oc.AsAdmin().WithoutNamespace().Run("set").Args("env", "deployment/image-registry", "--list=true", "-n", "openshift-image-registry").Output()
+		o.Expect(envListErr).NotTo(o.HaveOccurred())
+		o.Expect(envList).To(o.ContainSubstring("REGISTRY_STORAGE=gcs"))
+		o.Expect(envList).To(o.ContainSubstring("REGISTRY_STORAGE_GCS_BUCKET="))
+		o.Expect(envList).To(o.ContainSubstring("REGISTRY_STORAGE_GCS_KEYFILE=/gcs/keyfile"))
+
+		g.By("Check registry pod well")
+		waitRegistryDefaultPodsReady(oc)
+
+	})
+
+	// author: jitli@redhat.com
 	g.It("NonPreRelease-Author:jitli-Medium-22031-Config CPU and memory for internal regsistry [Disruptive]", func() {
 
 		g.By("Set up registry resources")
