@@ -17,7 +17,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		dr                  = make(describerResrouce)
 		buildPruningBaseDir string
 		ogSingleTemplate    string
-		catsrcImageTemplate string
 		subTemplate         string
 		fioTemplate         string
 		podModifyTemplate   string
@@ -25,7 +24,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		configErrFile       string
 		configFile1         string
 		md5configFile       string
-		catsrc              catalogSourceDescription
 		og                  operatorGroupDescription
 		sub                 subscriptionDescription
 		fi1                 fileintegrity
@@ -35,7 +33,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.BeforeEach(func() {
 		buildPruningBaseDir = exutil.FixturePath("testdata", "securityandcompliance")
 		ogSingleTemplate = filepath.Join(buildPruningBaseDir, "operator-group.yaml")
-		catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 		subTemplate = filepath.Join(buildPruningBaseDir, "subscription.yaml")
 		fioTemplate = filepath.Join(buildPruningBaseDir, "fileintegrity.yaml")
 		podModifyTemplate = filepath.Join(buildPruningBaseDir, "pod_modify.yaml")
@@ -44,15 +41,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		configFile1 = filepath.Join(buildPruningBaseDir, "aide.conf.rhel8.1")
 		md5configFile = filepath.Join(buildPruningBaseDir, "md5aide.conf.rhel8")
 
-		catsrc = catalogSourceDescription{
-			name:        "file-integrity-operator",
-			namespace:   "",
-			displayName: "file-integrity-operator",
-			publisher:   "Red Hat",
-			sourceType:  "grpc",
-			address:     "quay.io/openshift-qe-optional-operators/file-integrity-operator-index-0.1:latest",
-			template:    catsrcImageTemplate,
-		}
 		og = operatorGroupDescription{
 			name:      "openshift-file-integrity-qbcd",
 			namespace: "",
@@ -64,8 +52,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 			channel:                "release-0.1",
 			ipApproval:             "Automatic",
 			operatorPackage:        "file-integrity-operator",
-			catalogSourceName:      "file-integrity-operator",
-			catalogSourceNamespace: "",
+			catalogSourceName:      "qe-app-registry",
+			catalogSourceNamespace: "openshift-marketplace",
 			startingCSV:            "",
 			currentCSV:             "",
 			installedCSV:           "",
@@ -105,16 +93,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.It("Author:xiyuan-Critical-34388-High-27760-check file-integrity-operator could report failure and persist the failure logs on to a ConfigMap [Serial]", func() {
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
-		catsrc.namespace = oc.Namespace()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
-		sub.catalogSourceName = catsrc.name
-		sub.catalogSourceNamespace = catsrc.namespace
 		fi1.namespace = oc.Namespace()
 
-		g.By("Create catsrc")
-		catsrc.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, catsrc.displayName, ok, []string{"packagemanifest", catsrc.displayName, "-n", catsrc.namespace}).check(oc)
 		g.By("Create og")
 		og.create(oc, itName, dr)
 		og.checkOperatorgroup(oc, og.name)
@@ -150,17 +132,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.It("Author:xiyuan-Medium-31979-the enabling debug flag of the logcollector should work [Serial]", func() {
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
-		catsrc.namespace = oc.Namespace()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
-		sub.catalogSourceName = catsrc.name
-		sub.catalogSourceNamespace = catsrc.namespace
 		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 
-		g.By("Create catsrc")
-		catsrc.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, catsrc.displayName, ok, []string{"packagemanifest", catsrc.displayName, "-n", catsrc.namespace}).check(oc)
 		g.By("Create og")
 		og.create(oc, itName, dr)
 		og.checkOperatorgroup(oc, og.name)
@@ -191,17 +167,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.It("Author:xiyuan-Medium-31933-the disabling debug flag of the logcollector should work [Serial]", func() {
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
-		catsrc.namespace = oc.Namespace()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
-		sub.catalogSourceName = catsrc.name
-		sub.catalogSourceNamespace = catsrc.namespace
 		fi1.namespace = oc.Namespace()
 		fi1.debug = true
 
-		g.By("Create catsrc")
-		catsrc.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, catsrc.displayName, ok, []string{"packagemanifest", catsrc.displayName, "-n", catsrc.namespace}).check(oc)
 		g.By("Create og")
 		og.create(oc, itName, dr)
 		og.checkOperatorgroup(oc, og.name)
@@ -232,17 +202,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.It("Author:xiyuan-Medium-31873-check the gracePeriod is configurable [Serial]", func() {
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
-		catsrc.namespace = oc.Namespace()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
-		sub.catalogSourceName = catsrc.name
-		sub.catalogSourceNamespace = catsrc.namespace
 		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 
-		g.By("Create catsrc")
-		catsrc.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, catsrc.displayName, ok, []string{"packagemanifest", catsrc.displayName, "-n", catsrc.namespace}).check(oc)
 		g.By("Create og")
 		og.create(oc, itName, dr)
 		og.checkOperatorgroup(oc, og.name)
@@ -287,17 +251,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.It("Author:xiyuan-Medium-28524-adding invalid configuration should report failure [Serial]", func() {
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
-		catsrc.namespace = oc.Namespace()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
-		sub.catalogSourceName = catsrc.name
-		sub.catalogSourceNamespace = catsrc.namespace
 		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 
-		g.By("Create catsrc")
-		catsrc.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, catsrc.displayName, ok, []string{"packagemanifest", catsrc.displayName, "-n", catsrc.namespace}).check(oc)
 		g.By("Create og")
 		og.create(oc, itName, dr)
 		og.checkOperatorgroup(oc, og.name)
@@ -334,17 +292,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.It("Author:xiyuan-Medium-33177-only one long-running daemonset should be created by FIO [Serial]", func() {
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
-		catsrc.namespace = oc.Namespace()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
-		sub.catalogSourceName = catsrc.name
-		sub.catalogSourceNamespace = catsrc.namespace
 		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 
-		g.By("Create catsrc")
-		catsrc.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, catsrc.displayName, ok, []string{"packagemanifest", catsrc.displayName, "-n", catsrc.namespace}).check(oc)
 		g.By("Create og")
 		og.create(oc, itName, dr)
 		og.checkOperatorgroup(oc, og.name)
@@ -373,17 +325,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.It("Author:xiyuan-Medium-33853-check whether aide will not reinit when a fileintegrity recreated after deleted [Serial]", func() {
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
-		catsrc.namespace = oc.Namespace()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
-		sub.catalogSourceName = catsrc.name
-		sub.catalogSourceNamespace = catsrc.namespace
 		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 
-		g.By("Create catsrc")
-		catsrc.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, catsrc.displayName, ok, []string{"packagemanifest", catsrc.displayName, "-n", catsrc.namespace}).check(oc)
 		g.By("Create og")
 		og.create(oc, itName, dr)
 		og.checkOperatorgroup(oc, og.name)
@@ -430,17 +376,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.It("Author:xiyuan-Medium-33332-The fileintegritynodestatuses should show status summary for FIO [Serial]", func() {
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
-		catsrc.namespace = oc.Namespace()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
-		sub.catalogSourceName = catsrc.name
-		sub.catalogSourceNamespace = catsrc.namespace
 		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 
-		g.By("Create catsrc")
-		catsrc.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, catsrc.displayName, ok, []string{"packagemanifest", catsrc.displayName, "-n", catsrc.namespace}).check(oc)
 		g.By("Create og")
 		og.create(oc, itName, dr)
 		og.checkOperatorgroup(oc, og.name)
@@ -471,19 +411,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.It("Author:xiyuan-High-33226-enable configuring tolerations in FileIntegrities [Exclusive]", func() {
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
-		catsrc.namespace = oc.Namespace()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
-		sub.catalogSourceName = catsrc.name
-		sub.catalogSourceNamespace = catsrc.namespace
 		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 		fi1.nodeselectorkey = "node-role.kubernetes.io/worker"
 		fi1.nodeselectorvalue = ""
 
-		g.By("Create catsrc")
-		catsrc.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, catsrc.displayName, ok, []string{"packagemanifest", catsrc.displayName, "-n", catsrc.namespace}).check(oc)
 		g.By("Create og")
 		og.create(oc, itName, dr)
 		og.checkOperatorgroup(oc, og.name)
@@ -539,19 +473,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.It("Author:xiyuan-Medium-33254-enable configuring tolerations in FileIntegrities when there is more than one taint on one node [Exclusive]", func() {
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
-		catsrc.namespace = oc.Namespace()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
-		sub.catalogSourceName = catsrc.name
-		sub.catalogSourceNamespace = catsrc.namespace
 		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 		fi1.nodeselectorkey = "node-role.kubernetes.io/worker"
 		fi1.nodeselectorvalue = ""
 
-		g.By("Create catsrc")
-		catsrc.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, catsrc.displayName, ok, []string{"packagemanifest", catsrc.displayName, "-n", catsrc.namespace}).check(oc)
 		g.By("Create og")
 		og.create(oc, itName, dr)
 		og.checkOperatorgroup(oc, og.name)
@@ -586,17 +514,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.It("Author:xiyuan-Medium-27755-check nodeSelector works for operator file-integrity-operator [Serial]", func() {
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
-		catsrc.namespace = oc.Namespace()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
-		sub.catalogSourceName = catsrc.name
-		sub.catalogSourceNamespace = catsrc.namespace
 		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 
-		g.By("Create catsrc")
-		catsrc.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, catsrc.displayName, ok, []string{"packagemanifest", catsrc.displayName, "-n", catsrc.namespace}).check(oc)
 		g.By("Create og")
 		og.create(oc, itName, dr)
 		og.checkOperatorgroup(oc, og.name)
@@ -636,17 +558,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.It("Author:xiyuan-Medium-31862-check whether aide config change from non-empty to empty will trigger a re-initialization of the aide database or not [Serial]", func() {
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
-		catsrc.namespace = oc.Namespace()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
-		sub.catalogSourceName = catsrc.name
-		sub.catalogSourceNamespace = catsrc.namespace
 		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 
-		g.By("Create catsrc")
-		catsrc.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, catsrc.displayName, ok, []string{"packagemanifest", catsrc.displayName, "-n", catsrc.namespace}).check(oc)
 		g.By("Create og")
 		og.create(oc, itName, dr)
 		og.checkOperatorgroup(oc, og.name)
@@ -676,17 +592,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.It("Author:xiyuan-High-42026-aide config change will trigger a re-initialization of the aide database [Serial]", func() {
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
-		catsrc.namespace = oc.Namespace()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
-		sub.catalogSourceName = catsrc.name
-		sub.catalogSourceNamespace = catsrc.namespace
 		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 
-		g.By("Create catsrc")
-		catsrc.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, catsrc.displayName, ok, []string{"packagemanifest", catsrc.displayName, "-n", catsrc.namespace}).check(oc)
 		g.By("Create og")
 		og.create(oc, itName, dr)
 		og.checkOperatorgroup(oc, og.name)
@@ -741,17 +651,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.It("Author:pdhamdhe-NonPreRelease-CPaasrunOnly-High-29782-check md5 algorithm could not work for a fips enabled cluster while working well for a fips disabled cluster [Serial][Slow]", func() {
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
-		catsrc.namespace = oc.Namespace()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
-		sub.catalogSourceName = catsrc.name
-		sub.catalogSourceNamespace = catsrc.namespace
 		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 
-		g.By("Create catsrc")
-		catsrc.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, catsrc.displayName, ok, []string{"packagemanifest", catsrc.displayName, "-n", catsrc.namespace}).check(oc)
 		g.By("Create og")
 		og.create(oc, itName, dr)
 		og.checkOperatorgroup(oc, og.name)
@@ -800,19 +704,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.It("Author:pdhamdhe-NonPreRelease-CPaasrunOnly-High-43136-Check FIO metrics and alerting [Serial][Slow]", func() {
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
-		catsrc.namespace = oc.Namespace()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
-		sub.catalogSourceName = catsrc.name
-		sub.catalogSourceNamespace = catsrc.namespace
 		g.By("Label the namespace  !!!\n")
 		labelNameSpace(oc, sub.namespace, "openshift.io/cluster-monitoring=true")
 		fi1.namespace = oc.Namespace()
 		fi1.debug = false
 
-		g.By("Create catsrc")
-		catsrc.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, catsrc.displayName, ok, []string{"packagemanifest", catsrc.displayName, "-n", catsrc.namespace}).check(oc)
 		g.By("Create og")
 		og.create(oc, itName, dr)
 		og.checkOperatorgroup(oc, og.name)
