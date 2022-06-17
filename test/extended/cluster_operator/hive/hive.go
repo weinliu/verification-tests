@@ -203,7 +203,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	//author: jshu@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "25310"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-25310-[aws]Hive ClusterDeployment Check installed and version [Serial]", func() {
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-25310-High-33374-High-39747-Medium-23165-[aws]Hive ClusterDeployment Check installed and version [Serial]", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 25310 is for AWS - skipping test ...")
 		}
@@ -246,18 +246,19 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		g.By("Create ClusterDeployment...")
 		clusterTemp := filepath.Join(testDataDir, "clusterdeployment.yaml")
 		cluster := clusterDeployment{
-			fake:                "false",
-			name:                cdName,
-			namespace:           oc.Namespace(),
-			baseDomain:          AWSBaseDomain,
-			clusterName:         cdName,
-			platformType:        "aws",
-			credRef:             AWSCreds,
-			region:              AWSRegion,
-			imageSetRef:         imageSetName,
-			installConfigSecret: installConfigSecretName,
-			pullSecretRef:       PullSecret,
-			template:            clusterTemp,
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          imageSetName,
+			installConfigSecret:  installConfigSecretName,
+			pullSecretRef:        PullSecret,
+			template:             clusterTemp,
+			installAttemptsLimit: 3,
 		}
 		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
 		cluster.create(oc)
@@ -1127,6 +1128,83 @@ spec:
 		for i := range cdArray {
 			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "test", ok, DefaultTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i], "-o=jsonpath={.metadata.labels}"}).check(oc)
 		}
+	})
+
+	//author: liangli@redhat.com
+	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "32223"|./bin/extended-platform-tests run --timeout 60m -f -
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:liangli-Medium-32223-[aws]Hive ClusterDeployment Check installed and uninstalled [Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 32223 is for AWS - skipping test ...")
+		}
+		testCaseID := "32223"
+		cdName := "cluster-" + testCaseID
+		imageSetName := cdName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: OCP49ReleaseImage,
+			template:     imageSetTemp,
+		}
+
+		g.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		oc.SetupProject()
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
+		g.By("Copy AWS platform credentials...")
+		createAWSCreds(oc, oc.Namespace())
+
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Create Install-Config Secret...")
+		installConfigTemp := filepath.Join(testDataDir, "aws-install-config.yaml")
+		installConfigSecretName := cdName + "-install-config"
+		installConfigSecret := installConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   installConfigTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
+		installConfigSecret.create(oc)
+
+		g.By("Create ClusterDeployment...")
+		clusterTemp := filepath.Join(testDataDir, "clusterdeployment.yaml")
+		cluster := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          imageSetName,
+			installConfigSecret:  installConfigSecretName,
+			pullSecretRef:        PullSecret,
+			template:             clusterTemp,
+			installAttemptsLimit: 3,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
+		cluster.create(oc)
+		g.By("Check if ClusterDeployment created successfully")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		g.By("test OCP-32223 check install")
+		provisionName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.provisionRef.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(provisionName).NotTo(o.BeEmpty())
+		e2e.Logf("test OCP-32223 install")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "true", ok, DefaultTimeout, []string{"job", provisionName + "-provision", "-n", oc.Namespace(), "-o=jsonpath={.metadata.labels.hive\\.openshift\\.io/install}"}).check(oc)
+		g.By("test OCP-32223 check uninstall")
+		_, _, _, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterDeployment", cdName, "-n", oc.Namespace()).Background()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "true", ok, DefaultTimeout, []string{"job", cdName + "-uninstall", "-n", oc.Namespace(), "-o=jsonpath={.metadata.labels.hive\\.openshift\\.io/uninstall}"}).check(oc)
 	})
 
 	//author: lwan@redhat.com

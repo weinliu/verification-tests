@@ -632,11 +632,10 @@ func cleanupObjects(oc *exutil.CLI, objs ...objectTableRef) {
 	for _, v := range objs {
 		e2e.Logf("Start to remove: %v", v)
 		if v.namespace != "" {
-			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(v.kind, "-n", v.namespace, v.name).Output()
+			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(v.kind, "-n", v.namespace, v.name, "--ignore-not-found").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-
 		} else {
-			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(v.kind, v.name).Output()
+			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(v.kind, v.name, "--ignore-not-found").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		//For ClusterPool or ClusterDeployment, need to wait ClusterDeployment delete done
