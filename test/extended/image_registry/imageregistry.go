@@ -1975,6 +1975,49 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		exutil.AssertWaitPollNoErr(err, "pod metadata not update")
 	})
 
+	// author: jitli@redhat.com
+	g.It("VMonly-Author:jitli-Critial-24133-TLS can be added to user-defined registry route [Disruptive]", func() {
+
+		registryCrt := filepath.Join("/root", "auto", "24133", "myregistry.crt")
+		registryKey := filepath.Join("/root", "auto", "24133", "myregistry.key")
+
+		initialConfig, err := oc.AsAdmin().Run("get").Args("config.image/cluster", "-ojsonpath={.spec.routes}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if initialConfig == "" {
+			initialConfig = `null`
+		}
+		g.By("Create secret tls")
+		tls := "test24133-tls-" + exutil.GetRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-image-registry", "secret", tls).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-image-registry", "secret", "tls", "--cert="+registryCrt, "--key="+registryKey, tls).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Set up the routes")
+		defer func() {
+			g.By("Recover resources for imageregistry")
+			err := oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"routes":`+initialConfig+`}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			g.By("Check registry pod well")
+			waitRegistryDefaultPodsReady(oc)
+		}()
+
+		err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"routes":[{"hostname":"test24133route-image-registry.openshift.com","name":"test24133route","secretName":"`+tls+`"}]}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+			certificate, certificateErr := oc.AsAdmin().Run("get").Args("routes", "test24133route", "-n", "openshift-image-registry", "-ojsonpath={.spec.tls.certificate}").Output()
+			key, keyErr := oc.AsAdmin().Run("get").Args("routes", "test24133route", "-n", "openshift-image-registry", "-ojsonpath={.spec.tls.key}").Output()
+			if certificate != "" && key != "" {
+				e2e.Logf("get certificate and key successfully")
+				return true, nil
+			}
+			e2e.Logf("Failed to get certificate and key err:%v %v", certificateErr, keyErr)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Failed to get certificate and key")
+
+	})
+
 	//author: yyou@redhat.com
 	g.It("Author:yyou-Medium-50925-Add prometheusrules for image_registry_image_stream_tags_total and registry operations metrics", func() {
 		var (
