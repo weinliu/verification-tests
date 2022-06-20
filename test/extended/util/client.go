@@ -70,6 +70,7 @@ type CLI struct {
 	execPath           string
 	verb               string
 	configPath         string
+	guestConfigPath    string
 	adminConfigPath    string
 	username           string
 	globalArgs         []string
@@ -83,6 +84,7 @@ type CLI struct {
 	showInfo           bool
 	withoutNamespace   bool
 	withoutKubeconf    bool
+	asGuestKubeconf    bool
 	kubeFramework      *e2e.Framework
 
 	resourcesToDelete []resourceRef
@@ -191,6 +193,12 @@ func (c *CLI) NotShowInfo() *CLI {
 	return c
 }
 
+// SetGuestKubeconf instructs the guest cluster kubeconf file is set
+func (c *CLI) SetGuestKubeconf(guestKubeconf string) *CLI {
+	c.guestConfigPath = guestKubeconf
+	return c
+}
+
 // WithoutNamespace instructs the command should be invoked without adding --namespace parameter
 func (c CLI) WithoutNamespace() *CLI {
 	c.withoutNamespace = true
@@ -200,6 +208,15 @@ func (c CLI) WithoutNamespace() *CLI {
 // WithoutKubeconf instructs the command should be invoked without adding --kubeconfig parameter
 func (c CLI) WithoutKubeconf() *CLI {
 	c.withoutKubeconf = true
+	return &c
+}
+
+// AsGuestKubeconf instructs the command should take kubeconfig of guest cluster
+func (c CLI) AsGuestKubeconf() *CLI {
+	c.asGuestKubeconf = true
+	c.withoutNamespace = true // if you want to use guest cluster config to opeate guest cluster, you have to set
+	//withoutNamespace as true (like calling WithoutNamespace), so you can not get ns of
+	// management cluster, and you have to set ns of guest cluster in Args.
 	return &c
 }
 
@@ -282,7 +299,7 @@ func (c *CLI) SetupProject() {
 	e2e.Logf("Project %q has been fully provisioned.", newNamespace)
 }
 
-// SetupProject creates a new project and assign a random user to the project.
+// CreateProject creates a new project and assign a random user to the project.
 // All resources will be then created within this project.
 // TODO this should be removed.  It's only used by image tests.
 func (c *CLI) CreateProject() string {
@@ -334,96 +351,119 @@ func (c *CLI) Verbose() *CLI {
 	return c
 }
 
+// RESTMapper method
 func (c *CLI) RESTMapper() meta.RESTMapper {
 	ret := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(c.KubeClient().Discovery()))
 	ret.Reset()
 	return ret
 }
 
+// AppsClient method
 func (c *CLI) AppsClient() appsv1client.Interface {
 	return appsv1client.NewForConfigOrDie(c.UserConfig())
 }
 
+// AuthorizationClient method
 func (c *CLI) AuthorizationClient() authorizationv1client.Interface {
 	return authorizationv1client.NewForConfigOrDie(c.UserConfig())
 }
 
+// BuildClient method
 func (c *CLI) BuildClient() buildv1client.Interface {
 	return buildv1client.NewForConfigOrDie(c.UserConfig())
 }
 
+// ImageClient method
 func (c *CLI) ImageClient() imagev1client.Interface {
 	return imagev1client.NewForConfigOrDie(c.UserConfig())
 }
 
+// ProjectClient method
 func (c *CLI) ProjectClient() projectv1client.Interface {
 	return projectv1client.NewForConfigOrDie(c.UserConfig())
 }
 
+// QuotaClient method
 func (c *CLI) QuotaClient() quotav1client.Interface {
 	return quotav1client.NewForConfigOrDie(c.UserConfig())
 }
 
+// RouteClient method
 func (c *CLI) RouteClient() routev1client.Interface {
 	return routev1client.NewForConfigOrDie(c.UserConfig())
 }
 
+// TemplateClient method
 func (c *CLI) TemplateClient() templatev1client.Interface {
 	return templatev1client.NewForConfigOrDie(c.UserConfig())
 }
 
+// AdminAppsClient method
 func (c *CLI) AdminAppsClient() appsv1client.Interface {
 	return appsv1client.NewForConfigOrDie(c.AdminConfig())
 }
 
+// AdminAuthorizationClient method
 func (c *CLI) AdminAuthorizationClient() authorizationv1client.Interface {
 	return authorizationv1client.NewForConfigOrDie(c.AdminConfig())
 }
 
+// AdminBuildClient method
 func (c *CLI) AdminBuildClient() buildv1client.Interface {
 	return buildv1client.NewForConfigOrDie(c.AdminConfig())
 }
 
+// AdminConfigClient method
 func (c *CLI) AdminConfigClient() configv1client.Interface {
 	return configv1client.NewForConfigOrDie(c.AdminConfig())
 }
 
+// AdminImageClient method
 func (c *CLI) AdminImageClient() imagev1client.Interface {
 	return imagev1client.NewForConfigOrDie(c.AdminConfig())
 }
 
+// AdminOauthClient method
 func (c *CLI) AdminOauthClient() oauthv1client.Interface {
 	return oauthv1client.NewForConfigOrDie(c.AdminConfig())
 }
 
+// AdminOperatorClient method
 func (c *CLI) AdminOperatorClient() operatorv1client.Interface {
 	return operatorv1client.NewForConfigOrDie(c.AdminConfig())
 }
 
+// AdminProjectClient method
 func (c *CLI) AdminProjectClient() projectv1client.Interface {
 	return projectv1client.NewForConfigOrDie(c.AdminConfig())
 }
 
+// AdminQuotaClient method
 func (c *CLI) AdminQuotaClient() quotav1client.Interface {
 	return quotav1client.NewForConfigOrDie(c.AdminConfig())
 }
 
+// AdminOAuthClient method
 func (c *CLI) AdminOAuthClient() oauthv1client.Interface {
 	return oauthv1client.NewForConfigOrDie(c.AdminConfig())
 }
 
+// AdminRouteClient method
 func (c *CLI) AdminRouteClient() routev1client.Interface {
 	return routev1client.NewForConfigOrDie(c.AdminConfig())
 }
 
+// AdminUserClient method
 func (c *CLI) AdminUserClient() userv1client.Interface {
 	return userv1client.NewForConfigOrDie(c.AdminConfig())
 }
 
+// AdminSecurityClient method
 func (c *CLI) AdminSecurityClient() securityv1client.Interface {
 	return securityv1client.NewForConfigOrDie(c.AdminConfig())
 }
 
+// AdminTemplateClient method
 func (c *CLI) AdminTemplateClient() templatev1client.Interface {
 	return templatev1client.NewForConfigOrDie(c.AdminConfig())
 }
@@ -433,6 +473,7 @@ func (c *CLI) KubeClient() kubernetes.Interface {
 	return kubernetes.NewForConfigOrDie(c.UserConfig())
 }
 
+// DynamicClient method
 func (c *CLI) DynamicClient() dynamic.Interface {
 	return dynamic.NewForConfigOrDie(c.UserConfig())
 }
@@ -442,10 +483,12 @@ func (c *CLI) AdminKubeClient() kubernetes.Interface {
 	return kubernetes.NewForConfigOrDie(c.AdminConfig())
 }
 
+// AdminDynamicClient method
 func (c *CLI) AdminDynamicClient() dynamic.Interface {
 	return dynamic.NewForConfigOrDie(c.AdminConfig())
 }
 
+// UserConfig method
 func (c *CLI) UserConfig() *rest.Config {
 	clientConfig, err := getClientConfig(c.configPath)
 	if err != nil {
@@ -454,6 +497,7 @@ func (c *CLI) UserConfig() *rest.Config {
 	return clientConfig
 }
 
+// AdminConfig method
 func (c *CLI) AdminConfig() *rest.Config {
 	clientConfig, err := getClientConfig(c.adminConfigPath)
 	if err != nil {
@@ -488,11 +532,23 @@ func (c *CLI) Run(commands ...string) *CLI {
 		kubeFramework:   c.KubeFramework(),
 		adminConfigPath: c.adminConfigPath,
 		configPath:      c.configPath,
+		guestConfigPath: c.guestConfigPath,
 		username:        c.username,
 		globalArgs:      commands,
 	}
 	if !c.withoutKubeconf {
-		nc.globalArgs = append([]string{fmt.Sprintf("--kubeconfig=%s", c.configPath)}, nc.globalArgs...)
+		if c.asGuestKubeconf {
+			if c.guestConfigPath != "" {
+				nc.globalArgs = append([]string{fmt.Sprintf("--kubeconfig=%s", c.guestConfigPath)}, nc.globalArgs...)
+			} else {
+				FatalErr("want to use guest cluster kubeconfig, but it is not set")
+			}
+		} else {
+			nc.globalArgs = append([]string{fmt.Sprintf("--kubeconfig=%s", c.configPath)}, nc.globalArgs...)
+		}
+	}
+	if c.asGuestKubeconf && !c.withoutNamespace {
+		FatalErr("you are doing somethin in ns of guest cluster, please use WithoutNamespace and set ns in Args, for example, oc.AsGuestKubeconf().WithoutNamespace().Run(\"get\").Args(\"pods\", \"-n\", \"guestclusterns\").Output()")
 	}
 	if !c.withoutNamespace {
 		nc.globalArgs = append([]string{fmt.Sprintf("--namespace=%s", c.Namespace())}, nc.globalArgs...)
@@ -530,6 +586,7 @@ func (c *CLI) printCmd() string {
 	return strings.Join(c.finalArgs, " ")
 }
 
+// ExitError struct
 type ExitError struct {
 	Cmd    string
 	StdErr string
@@ -689,14 +746,17 @@ func FatalErr(msg interface{}) {
 	e2e.Failf("%v", msg)
 }
 
+// AddExplicitResourceToDelete method
 func (c *CLI) AddExplicitResourceToDelete(resource schema.GroupVersionResource, namespace, name string) {
 	c.resourcesToDelete = append(c.resourcesToDelete, resourceRef{Resource: resource, Namespace: namespace, Name: name})
 }
 
+// AddResourceToDelete method
 func (c *CLI) AddResourceToDelete(resource schema.GroupVersionResource, metadata metav1.Object) {
 	c.resourcesToDelete = append(c.resourcesToDelete, resourceRef{Resource: resource, Namespace: metadata.GetNamespace(), Name: metadata.GetName()})
 }
 
+// CreateUser method
 func (c *CLI) CreateUser(prefix string) *userv1.User {
 	user, err := c.AdminUserClient().UserV1().Users().Create(&userv1.User{
 		ObjectMeta: metav1.ObjectMeta{GenerateName: prefix + c.Namespace()},
@@ -709,6 +769,7 @@ func (c *CLI) CreateUser(prefix string) *userv1.User {
 	return user
 }
 
+// GetClientConfigForUser method
 func (c *CLI) GetClientConfigForUser(username string) *rest.Config {
 	userClient := c.AdminUserClient()
 
@@ -783,6 +844,7 @@ func turnOffRateLimiting(config *rest.Config) *rest.Config {
 	return &configCopy
 }
 
+// WaitForAccessAllowed method
 func (c *CLI) WaitForAccessAllowed(review *kubeauthorizationv1.SelfSubjectAccessReview, user string) error {
 	if user == "system:anonymous" {
 		return waitForAccess(kubernetes.NewForConfigOrDie(rest.AnonymousClientConfig(c.AdminConfig())), true, review)
@@ -795,6 +857,7 @@ func (c *CLI) WaitForAccessAllowed(review *kubeauthorizationv1.SelfSubjectAccess
 	return waitForAccess(kubeClient, true, review)
 }
 
+// WaitForAccessDenied method
 func (c *CLI) WaitForAccessDenied(review *kubeauthorizationv1.SelfSubjectAccessReview, user string) error {
 	if user == "system:anonymous" {
 		return waitForAccess(kubernetes.NewForConfigOrDie(rest.AnonymousClientConfig(c.AdminConfig())), false, review)
