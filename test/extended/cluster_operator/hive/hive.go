@@ -1390,6 +1390,87 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "true", ok, DefaultTimeout, []string{"job", cdName + "-uninstall", "-n", oc.Namespace(), "-o=jsonpath={.metadata.labels.hive\\.openshift\\.io/uninstall}"}).check(oc)
 	})
 
+	//author: liangli@redhat.com
+	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "44475"|./bin/extended-platform-tests run --timeout 90m -f -
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:liangli-Medium-44475-[gcp]Hive Change BaseDomain field right after creating pool and all clusters finish install firstly then recreated [Serial]", func() {
+		if iaasPlatform != "gcp" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 44475 is for GCP - skipping test ...")
+		}
+		testCaseID := "44475"
+		poolName := "pool-" + testCaseID
+		imageSetName := poolName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: OCP410ReleaseImage,
+			template:     imageSetTemp,
+		}
+
+		g.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		g.By("Check if ClusterImageSet was created successfully")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
+
+		oc.SetupProject()
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and gcp-credentials to target namespace for the clusterdeployment
+		g.By("Copy GCP platform credentials...")
+		createGCPCreds(oc, oc.Namespace())
+
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Create ClusterPool...")
+		poolTemp := filepath.Join(testDataDir, "clusterpool-gcp.yaml")
+		pool := gcpClusterPool{
+			name:           poolName,
+			namespace:      oc.Namespace(),
+			fake:           "false",
+			baseDomain:     GCPBaseDomain,
+			imageSetRef:    imageSetName,
+			platformType:   "gcp",
+			credRef:        GCPCreds,
+			region:         GCPRegion,
+			pullSecretRef:  PullSecret,
+			size:           1,
+			maxSize:        1,
+			runningCount:   0,
+			maxConcurrent:  1,
+			hibernateAfter: "360m",
+			template:       poolTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
+		pool.create(oc)
+		g.By("Check if GCP ClusterPool created successfully and become ready")
+		//runningCount is 0 so pool status should be standby: 1, ready: 0
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
+
+		g.By("test OCP-44475")
+		e2e.Logf("get old ClusterDeployment Name")
+		cdListStr := getCDlistfromPool(oc, poolName)
+		oldClusterDeploymentName := strings.Split(strings.TrimSpace(cdListStr), "\n")
+		o.Expect(len(oldClusterDeploymentName) > 0).Should(o.BeTrue())
+		e2e.Logf("old cd name:" + oldClusterDeploymentName[0])
+
+		e2e.Logf("oc patch ClusterPool 'spec.baseDomain'")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterPool", poolName, "-n", oc.Namespace(), "-p", `{"spec":{"baseDomain":"`+GCPBaseDomain2+`"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Check if ClusterPool finished to re-create the CD")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
+
+		e2e.Logf("get new ClusterDeployment name")
+		cdListStr = getCDlistfromPool(oc, poolName)
+		newClusterDeploymentName := strings.Split(strings.TrimSpace(cdListStr), "\n")
+		o.Expect(len(newClusterDeploymentName) > 0).Should(o.BeTrue())
+		e2e.Logf("new cd name:" + newClusterDeploymentName[0])
+
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterInstallTimeout, []string{"ClusterDeployment", newClusterDeploymentName[0], "-n", newClusterDeploymentName[0], "-o=jsonpath={.status.powerState}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, GCPBaseDomain2, ok, DefaultTimeout, []string{"ClusterDeployment", newClusterDeploymentName[0], "-n", newClusterDeploymentName[0], "-o=jsonpath={.spec.baseDomain}"}).check(oc)
+		o.Expect(strings.Compare(oldClusterDeploymentName[0], newClusterDeploymentName[0]) != 0).Should(o.BeTrue())
+	})
+
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "41499"|./bin/extended-platform-tests run --timeout 60m -f -

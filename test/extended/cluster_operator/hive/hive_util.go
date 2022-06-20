@@ -271,9 +271,10 @@ const (
 
 //GCP Configurations
 const (
-	GCPBaseDomain = "qe.gcp.devcluster.openshift.com" //GCP BaseDomain
-	GCPRegion     = "us-central1"
-	GCPCreds      = "gcp-credentials"
+	GCPBaseDomain  = "qe.gcp.devcluster.openshift.com" //GCP BaseDomain
+	GCPBaseDomain2 = "qe1.gcp.devcluster.openshift.com"
+	GCPRegion      = "us-central1"
+	GCPCreds       = "gcp-credentials"
 )
 
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
