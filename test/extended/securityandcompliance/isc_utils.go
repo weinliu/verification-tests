@@ -47,17 +47,6 @@ type subscriptionDescription struct {
 	ipCsv                  string
 }
 
-type catalogSourceDescription struct {
-	name        string
-	namespace   string
-	displayName string
-	publisher   string
-	sourceType  string
-	address     string
-	template    string
-	priority    int
-}
-
 const (
 	asAdmin          = true
 	withoutNamespace = true
@@ -293,17 +282,6 @@ func (dr describerResrouce) getIr(itName string) itResource {
 }
 func (dr describerResrouce) rmIr(itName string) {
 	delete(dr, itName)
-}
-
-func (catsrc *catalogSourceDescription) create(oc *exutil.CLI, itName string, dr describerResrouce) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", catsrc.template,
-		"-p", "NAME="+catsrc.name, "NAMESPACE="+catsrc.namespace, "ADDRESS="+catsrc.address,
-		"DISPLAYNAME="+"\""+catsrc.displayName+"\"", "PUBLISHER="+"\""+catsrc.publisher+"\"", "SOURCETYPE="+catsrc.sourceType)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	dr.getIr(itName).add(newResource(oc, "catsrc", catsrc.name, requireNS, catsrc.namespace))
-}
-func (catsrc *catalogSourceDescription) delete(itName string, dr describerResrouce) {
-	dr.getIr(itName).remove(catsrc.name, "catsrc", catsrc.namespace)
 }
 
 func newResource(oc *exutil.CLI, kind string, name string, nsflag bool, namespace string) resourceDescription {

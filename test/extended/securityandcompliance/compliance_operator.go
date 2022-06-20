@@ -21,7 +21,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		dr                               = make(describerResrouce)
 		buildPruningBaseDir              string
 		ogCoTemplate                     string
-		catsrcCoTemplate                 string
 		subCoTemplate                    string
 		csuiteTemplate                   string
 		csuiteRemTemplate                string
@@ -58,7 +57,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		resourceQuotaYAML                string
 		tprofileWithoutDescriptionYAML   string
 		tprofileWithoutTitleYAML         string
-		catSrc                           catalogSourceDescription
 		ogD                              operatorGroupDescription
 		subD                             subscriptionDescription
 		podModifyD                       podModify
@@ -68,7 +66,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	g.BeforeEach(func() {
 		buildPruningBaseDir = exutil.FixturePath("testdata", "securityandcompliance")
 		ogCoTemplate = filepath.Join(buildPruningBaseDir, "operator-group.yaml")
-		catsrcCoTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 		subCoTemplate = filepath.Join(buildPruningBaseDir, "subscription.yaml")
 		csuiteTemplate = filepath.Join(buildPruningBaseDir, "compliancesuite.yaml")
 		csuiteRemTemplate = filepath.Join(buildPruningBaseDir, "compliancesuiterem.yaml")
@@ -105,15 +102,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		resourceQuotaYAML = filepath.Join(buildPruningBaseDir, "resource-quota.yaml")
 		tprofileWithoutDescriptionYAML = filepath.Join(buildPruningBaseDir, "tailoredprofile-withoutdescription.yaml")
 		tprofileWithoutTitleYAML = filepath.Join(buildPruningBaseDir, "tailoredprofile-withouttitle.yaml")
-		catSrc = catalogSourceDescription{
-			name:        "compliance-operator",
-			namespace:   "",
-			displayName: "openshift-compliance-operator",
-			publisher:   "Red Hat",
-			sourceType:  "grpc",
-			address:     "",
-			template:    catsrcCoTemplate,
-		}
+
 		ogD = operatorGroupDescription{
 			name:      "openshift-compliance",
 			namespace: "",
@@ -125,8 +114,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			channel:                "release-0.1",
 			ipApproval:             "Automatic",
 			operatorPackage:        "compliance-operator",
-			catalogSourceName:      "compliance-operator",
-			catalogSourceNamespace: "",
+			catalogSourceName:      "qe-app-registry",
+			catalogSourceNamespace: "openshift-marketplace",
 			startingCSV:            "",
 			currentCSV:             "",
 			installedCSV:           "",
@@ -163,25 +152,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
-		catSrc.namespace = oc.Namespace()
-		catSrc.address = getIndexFromURL("compliance")
 		ogD.namespace = oc.Namespace()
 		subD.namespace = oc.Namespace()
-		subD.catalogSourceName = catSrc.name
-		subD.catalogSourceNamespace = catSrc.namespace
-
-		g.By("Create catalogSource !!!")
-		e2e.Logf("Here catsrc namespace : %v\n", catSrc.namespace)
-		catSrc.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", catSrc.name, "-n", catSrc.namespace,
-			"-o=jsonpath={.status..lastObservedState}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", "-n", catSrc.namespace,
-			"-o=jsonpath={.items[0].status.phase}"}).check(oc)
 
 		g.By("Create operatorGroup !!!")
 		ogD.create(oc, itName, dr)
 
-		g.By("Create subscription for above catalogsource !!!")
+		g.By("Create subscription!!!")
 		subD.create(oc, itName, dr)
 		e2e.Logf("Here subscp namespace : %v\n", subD.namespace)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "AllCatalogSourcesHealthy", ok, []string{"sub", subD.subName, "-n",
@@ -223,27 +200,16 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 		g.BeforeEach(func() {
 			oc.SetupProject()
-			catSrc.namespace = oc.Namespace()
-			catSrc.address = getIndexFromURL("compliance")
 			ogD.namespace = oc.Namespace()
 			subD.namespace = oc.Namespace()
-			subD.catalogSourceName = catSrc.name
-			subD.catalogSourceNamespace = catSrc.namespace
 			g.By("Label the namespace  !!!\n")
 			labelNameSpace(oc, subD.namespace, "openshift.io/cluster-monitoring=true")
 			itName = g.CurrentGinkgoTestDescription().TestText
-			g.By("Create catalogSource !!!")
-			e2e.Logf("Here catsrc namespace : %v\n", catSrc.namespace)
-			catSrc.create(oc, itName, dr)
-			newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", catSrc.name, "-n", catSrc.namespace,
-				"-o=jsonpath={.status..lastObservedState}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", "-n", catSrc.namespace,
-				"-o=jsonpath={.items[0].status.phase}"}).check(oc)
 
 			g.By("Create operatorGroup !!!")
 			ogD.create(oc, itName, dr)
 
-			g.By("Create subscription for above catalogsource !!!")
+			g.By("Create subscription!!!")
 			subD.create(oc, itName, dr)
 			e2e.Logf("Here subscp namespace : %v\n", subD.namespace)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "AllCatalogSourcesHealthy", ok, []string{"sub", subD.subName, "-n",
@@ -321,11 +287,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 			csuiteD.namespace = subD.namespace
 			g.By("Create worker-compliancesuite !!!\n")
-			e2e.Logf("Here namespace : %v\n", catSrc.namespace)
 			csuiteD.create(oc, itName, dr)
 			csuiteMD.namespace = subD.namespace
 			g.By("Create master-compliancesuite !!!\n")
-			e2e.Logf("Here namespace : %v\n", catSrc.namespace)
 			csuiteMD.create(oc, itName, dr)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
 				subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
@@ -417,7 +381,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 			tprofileD.namespace = subD.namespace
 			g.By("Create tailoredprofile !!!\n")
-			e2e.Logf("Here namespace : %v\n", catSrc.namespace)
 			tprofileD.create(oc, itName, dr)
 			g.By("Check tailoredprofile name and status !!!\n")
 			subD.getTailoredProfileNameandStatus(oc, tprofileD.name)
@@ -701,7 +664,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 			csuiteD.namespace = subD.namespace
 			g.By("Create compliancesuite !!!\n")
-			e2e.Logf("Here namespace : %v\n", catSrc.namespace)
 			csuiteD.create(oc, itName, dr)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
 				subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
@@ -811,7 +773,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 			cscanD.namespace = subD.namespace
 			g.By("Create compliancescan !!!\n")
-			e2e.Logf("Here namespace : %v\n", catSrc.namespace)
 			cscanD.create(oc, itName, dr)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancescan", cscanD.name, "-n",
 				subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
@@ -901,7 +862,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 			csuiteD.namespace = subD.namespace
 			g.By("Create worker-compliancesuite.. !!!\n")
-			e2e.Logf("Here namespace : %v\n", catSrc.namespace)
 			csuiteD.create(oc, itName, dr)
 
 			cscanMD.namespace = subD.namespace
@@ -1186,7 +1146,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 			csuiteD.namespace = subD.namespace
 			g.By("Create platform-compliancesuite.. !!!\n")
-			e2e.Logf("Here namespace : %v\n", catSrc.namespace)
 			csuiteD.create(oc, itName, dr)
 
 			cscanMD.namespace = subD.namespace
@@ -1286,7 +1245,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 			csuiteD.namespace = subD.namespace
 			g.By("Create platform-compliancesuite.. !!!\n")
-			e2e.Logf("Here namespace : %v\n", catSrc.namespace)
 			csuiteD.create(oc, itName, dr)
 
 			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
@@ -1442,7 +1400,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 			csuiteD.namespace = subD.namespace
 			g.By("Create platform-compliancesuite.. !!!\n")
-			e2e.Logf("Here namespace : %v\n", catSrc.namespace)
 			csuiteD.create(oc, itName, dr)
 
 			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
@@ -1506,7 +1463,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 			csuiteD.namespace = subD.namespace
 			g.By("Create worker-compliancesuite.. !!!\n")
-			e2e.Logf("Here namespace : %v\n", catSrc.namespace)
 			csuiteD.create(oc, itName, dr)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
 				subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
@@ -1576,7 +1532,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 			csuiteD.namespace = subD.namespace
 			g.By("Create worker-compliancesuite.. !!!\n")
-			e2e.Logf("Here namespace : %v\n", catSrc.namespace)
 			csuiteD.create(oc, itName, dr)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
 				subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
@@ -1641,7 +1596,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 			csuiteD.namespace = subD.namespace
 			g.By("Create worker-compliancesuite.. !!!\n")
-			e2e.Logf("Here namespace : %v\n", catSrc.namespace)
 			csuiteD.create(oc, itName, dr)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
 				subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
@@ -2095,7 +2049,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 			csuiteD.namespace = subD.namespace
 			g.By("Create worker-compliancesuite.. !!!\n")
-			e2e.Logf("Here namespace : %v\n", catSrc.namespace)
 			csuiteD.create(oc, itName, dr)
 
 			cscanMD.namespace = subD.namespace

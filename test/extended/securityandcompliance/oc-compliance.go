@@ -18,12 +18,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 		dr                         = make(describerResrouce)
 		buildPruningBaseDir        string
 		ogCoTemplate               string
-		catsrcCoTemplate           string
 		subCoTemplate              string
 		scansettingTemplate        string
 		scansettingbindingTemplate string
 		tprofileWithoutVarTemplate string
-		catSrc                     catalogSourceDescription
 		ogD                        operatorGroupDescription
 		subD                       subscriptionDescription
 	)
@@ -31,21 +29,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 	g.BeforeEach(func() {
 		buildPruningBaseDir = exutil.FixturePath("testdata", "securityandcompliance")
 		ogCoTemplate = filepath.Join(buildPruningBaseDir, "operator-group.yaml")
-		catsrcCoTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 		subCoTemplate = filepath.Join(buildPruningBaseDir, "subscription.yaml")
 		scansettingTemplate = filepath.Join(buildPruningBaseDir, "oc-compliance-scansetting.yaml")
 		scansettingbindingTemplate = filepath.Join(buildPruningBaseDir, "oc-compliance-scansettingbinding.yaml")
 		tprofileWithoutVarTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-withoutvariable.yaml")
 
-		catSrc = catalogSourceDescription{
-			name:        "compliance-operator",
-			namespace:   "",
-			displayName: "openshift-compliance-operator",
-			publisher:   "Red Hat",
-			sourceType:  "grpc",
-			address:     "",
-			template:    catsrcCoTemplate,
-		}
 		ogD = operatorGroupDescription{
 			name:      "openshift-compliance",
 			namespace: "",
@@ -57,8 +45,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 			channel:                "release-0.1",
 			ipApproval:             "Automatic",
 			operatorPackage:        "compliance-operator",
-			catalogSourceName:      "compliance-operator",
-			catalogSourceNamespace: "",
+			catalogSourceName:      "qe-app-registry",
+			catalogSourceNamespace: "openshift-marketplace",
 			startingCSV:            "",
 			currentCSV:             "",
 			installedCSV:           "",
@@ -82,25 +70,14 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 
 		g.BeforeEach(func() {
 			oc.SetupProject()
-			catSrc.namespace = oc.Namespace()
-			catSrc.address = getIndexFromURL("compliance")
 			ogD.namespace = oc.Namespace()
 			subD.namespace = oc.Namespace()
-			subD.catalogSourceName = catSrc.name
-			subD.catalogSourceNamespace = catSrc.namespace
 			itName = g.CurrentGinkgoTestDescription().TestText
-			g.By("Create catalogSource !!!")
-			e2e.Logf("Here catsrc namespace : %v\n", catSrc.namespace)
-			catSrc.create(oc, itName, dr)
-			newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", catSrc.name, "-n", catSrc.namespace,
-				"-o=jsonpath={.status..lastObservedState}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", "-n", catSrc.namespace,
-				"-o=jsonpath={.items[0].status.phase}"}).check(oc)
 
 			g.By("Create operatorGroup !!!")
 			ogD.create(oc, itName, dr)
 
-			g.By("Create subscription for above catalogsource !!!")
+			g.By("Create subscription !!!")
 			subD.create(oc, itName, dr)
 			e2e.Logf("Here subscp namespace : %v\n", subD.namespace)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "AllCatalogSourcesHealthy", ok, []string{"sub", subD.subName, "-n",
