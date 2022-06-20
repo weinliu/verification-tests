@@ -349,7 +349,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	//author: jshu@redhat.com
 	//OCP-44945, OCP-37528, OCP-37527
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "44945"|./bin/extended-platform-tests run --timeout 90m -f -
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-44945-[aws]Hive supports ClusterPool runningCount and hibernateAfter[Serial]", func() {
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-44945-Low-37528-Low-37527-[aws]Hive supports ClusterPool runningCount and hibernateAfter[Serial]", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 44945 is for AWS - skipping test ...")
 		}
@@ -478,10 +478,10 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	})
 
 	//author: jshu@redhat.com lwan@redhat.com
-	//OCP-23040, OCP-42113, OCP-34719, OCP-41250, OCP-24000, OCP-25334, OCP-23876
+	//OCP-23040, OCP-42113, OCP-34719, OCP-41250, OCP-25334, OCP-23876
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "23040"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-High-23040-Hive to create SyncSet resource[Serial]", func() {
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-High-23040-Medium-42113-High-34719-Low-41250-High-25334-High-23876-Hive to create SyncSet resource[Serial]", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 23040 is for AWS - skipping test ...")
 		}
@@ -746,7 +746,7 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, sourceName, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Secret", sourceName, "-n", configMapNamespace}).check(oc)
 	})
 
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-High-25447-Hive API support for Azure[Serial]", func() {
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-High-25447-High-28657-Hive API support for Azure[Serial]", func() {
 		if iaasPlatform != "azure" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 25447 is for Azure - skipping test ...")
 		}
@@ -808,8 +808,89 @@ spec:
 		}
 		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
 		cluster.create(oc)
+
+		g.By("Create worker and infra MachinePool ...")
+		workermachinepoolAzureTemp := filepath.Join(testDataDir, "machinepool-worker-azure.yaml")
+		inframachinepoolAzureTemp := filepath.Join(testDataDir, "machinepool-infra-azure.yaml")
+		workermp := machinepool{
+			namespace:   oc.Namespace(),
+			clusterName: cdName,
+			template:    workermachinepoolAzureTemp,
+		}
+		inframp := machinepool{
+			namespace:   oc.Namespace(),
+			clusterName: cdName,
+			template:    inframachinepoolAzureTemp,
+		}
+
+		defer cleanupObjects(oc,
+			objectTableRef{"MachinePool", oc.Namespace(), cdName + "-worker"},
+			objectTableRef{"MachinePool", oc.Namespace(), cdName + "-infra"},
+		)
+		workermp.create(oc)
+		inframp.create(oc)
+
 		g.By("Check Azure ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		g.By("OCP-28657: Hive supports remote Machine Set Management for Azure")
+		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
+		err := os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpDir)
+		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
+		kubeconfig := tmpDir + "/kubeconfig"
+		e2e.Logf("Check worker machinepool .status.replicas = 3")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "3", ok, DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+		e2e.Logf("Check infra machinepool .status.replicas = 1 ")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+		machinesetsname := getResource(oc, asAdmin, withoutNamespace, "MachinePool", cdName+"-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.machineSets[?(@.replicas==1)].name}")
+		o.Expect(machinesetsname).NotTo(o.BeEmpty())
+		e2e.Logf("Remote cluster machineset list: %s", machinesetsname)
+		e2e.Logf("Check machineset %s created on remote cluster", machinesetsname)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, machinesetsname, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].metadata.name}"}).check(oc)
+		e2e.Logf("Check only 1 machineset up")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1", ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].status.availableReplicas}"}).check(oc)
+		e2e.Logf("Check only one machines in Running status")
+		// Can't filter by infra label because of bug https://issues.redhat.com/browse/HIVE-1922
+		//newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=infra", "-o=jsonpath={.items[*].status.phase}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-o=jsonpath={.items[?(@.spec.metadata.labels.node-role\\.kubernetes\\.io==\"infra\")].status.phase}"}).check(oc)
+		e2e.Logf("Patch infra machinepool .spec.replicas to 3")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"replicas": 3}}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "3", ok, 5*DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+		machinesetsname = getResource(oc, asAdmin, withoutNamespace, "MachinePool", cdName+"-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.machineSets[?(@.replicas==1)].name}")
+		o.Expect(machinesetsname).NotTo(o.BeEmpty())
+		e2e.Logf("Remote cluster machineset list: %s", machinesetsname)
+		e2e.Logf("Check machineset %s created on remote cluster", machinesetsname)
+		machinesetsArray := strings.Fields(machinesetsname)
+		o.Expect(len(machinesetsArray) == 3).Should(o.BeTrue())
+		for _, machinesetName := range machinesetsArray {
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, machinesetName, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].metadata.name}"}).check(oc)
+		}
+		e2e.Logf("Check machinesets scale up to 3")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1 1 1", ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].status.availableReplicas}"}).check(oc)
+		e2e.Logf("Check 3 machines in Running status")
+		// Can't filter by infra label because of bug https://issues.redhat.com/browse/HIVE-1922
+		//newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=infra", "-o=jsonpath={.items[*].status.phase}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-o=jsonpath={.items[?(@.spec.metadata.labels.node-role\\.kubernetes\\.io==\"infra\")].status.phase}"}).check(oc)
+		e2e.Logf("Patch infra machinepool .spec.replicas to 2")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"replicas": 2}}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, 5*DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+		machinesetsname = getResource(oc, asAdmin, withoutNamespace, "MachinePool", cdName+"-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.machineSets[?(@.replicas==1)].name}")
+		o.Expect(machinesetsname).NotTo(o.BeEmpty())
+		e2e.Logf("Remote cluster machineset list: %s", machinesetsname)
+		e2e.Logf("Check machineset %s created on remote cluster", machinesetsname)
+		machinesetsArray = strings.Fields(machinesetsname)
+		o.Expect(len(machinesetsArray) == 2).Should(o.BeTrue())
+		for _, machinesetName := range machinesetsArray {
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, machinesetName, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].metadata.name}"}).check(oc)
+		}
+		e2e.Logf("Check machinesets scale down to 2")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1 1", ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].status.availableReplicas}"}).check(oc)
+		e2e.Logf("Check 2 machines in Running status")
+		// Can't filter by infra label because of bug https://issues.redhat.com/browse/HIVE-1922
+		//newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=infra", "-o=jsonpath={.items[*].status.phase}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-o=jsonpath={.items[?(@.spec.metadata.labels.node-role\\.kubernetes\\.io==\"infra\")].status.phase}"}).check(oc)
 	})
 
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-33854-Hive supports Azure ClusterPool [Serial]", func() {
@@ -980,7 +1061,7 @@ spec:
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "41777"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:lwan-High-41777-Hive API support for GCP[Serial]", func() {
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:lwan-High-41777-High-28636-Hive API support for GCP[Serial]", func() {
 		if iaasPlatform != "gcp" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 41777 is for GCP - skipping test ...")
 		}
@@ -1042,8 +1123,89 @@ spec:
 		}
 		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
 		cluster.create(oc)
+
+		g.By("Create worker and infra MachinePool ...")
+		workermachinepoolGCPTemp := filepath.Join(testDataDir, "machinepool-worker-gcp.yaml")
+		inframachinepoolGCPTemp := filepath.Join(testDataDir, "machinepool-infra-gcp.yaml")
+		workermp := machinepool{
+			namespace:   oc.Namespace(),
+			clusterName: cdName,
+			template:    workermachinepoolGCPTemp,
+		}
+		inframp := machinepool{
+			namespace:   oc.Namespace(),
+			clusterName: cdName,
+			template:    inframachinepoolGCPTemp,
+		}
+
+		defer cleanupObjects(oc,
+			objectTableRef{"MachinePool", oc.Namespace(), cdName + "-worker"},
+			objectTableRef{"MachinePool", oc.Namespace(), cdName + "-infra"},
+		)
+		workermp.create(oc)
+		inframp.create(oc)
+
 		g.By("Check GCP ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		g.By("OCP-28636: Hive supports remote Machine Set Management for GCP")
+		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
+		err = os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpDir)
+		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
+		kubeconfig := tmpDir + "/kubeconfig"
+		e2e.Logf("Check worker machinepool .status.replicas = 3")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "3", ok, DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+		e2e.Logf("Check infra machinepool .status.replicas = 1 ")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+		machinesetsname := getResource(oc, asAdmin, withoutNamespace, "MachinePool", cdName+"-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.machineSets[?(@.replicas==1)].name}")
+		o.Expect(machinesetsname).NotTo(o.BeEmpty())
+		e2e.Logf("Remote cluster machineset list: %s", machinesetsname)
+		e2e.Logf("Check machineset %s created on remote cluster", machinesetsname)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, machinesetsname, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].metadata.name}"}).check(oc)
+		e2e.Logf("Check only 1 machineset up")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1", ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].status.availableReplicas}"}).check(oc)
+		e2e.Logf("Check only one machines in Running status")
+		// Can't filter by infra label because of bug https://issues.redhat.com/browse/HIVE-1922
+		//newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=infra", "-o=jsonpath={.items[*].status.phase}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-o=jsonpath={.items[?(@.spec.metadata.labels.node-role\\.kubernetes\\.io==\"infra\")].status.phase}"}).check(oc)
+		e2e.Logf("Patch infra machinepool .spec.replicas to 3")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"replicas": 3}}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "3", ok, 5*DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+		machinesetsname = getResource(oc, asAdmin, withoutNamespace, "MachinePool", cdName+"-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.machineSets[?(@.replicas==1)].name}")
+		o.Expect(machinesetsname).NotTo(o.BeEmpty())
+		e2e.Logf("Remote cluster machineset list: %s", machinesetsname)
+		e2e.Logf("Check machineset %s created on remote cluster", machinesetsname)
+		machinesetsArray := strings.Fields(machinesetsname)
+		o.Expect(len(machinesetsArray) == 3).Should(o.BeTrue())
+		for _, machinesetName := range machinesetsArray {
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, machinesetName, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].metadata.name}"}).check(oc)
+		}
+		e2e.Logf("Check machinesets scale up to 3")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1 1 1", ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].status.availableReplicas}"}).check(oc)
+		e2e.Logf("Check 3 machines in Running status")
+		// Can't filter by infra label because of bug https://issues.redhat.com/browse/HIVE-1922
+		//newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=infra", "-o=jsonpath={.items[*].status.phase}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-o=jsonpath={.items[?(@.spec.metadata.labels.node-role\\.kubernetes\\.io==\"infra\")].status.phase}"}).check(oc)
+		e2e.Logf("Patch infra machinepool .spec.replicas to 2")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"replicas": 2}}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, 5*DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+		machinesetsname = getResource(oc, asAdmin, withoutNamespace, "MachinePool", cdName+"-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.machineSets[?(@.replicas==1)].name}")
+		o.Expect(machinesetsname).NotTo(o.BeEmpty())
+		e2e.Logf("Remote cluster machineset list: %s", machinesetsname)
+		e2e.Logf("Check machineset %s created on remote cluster", machinesetsname)
+		machinesetsArray = strings.Fields(machinesetsname)
+		o.Expect(len(machinesetsArray) == 2).Should(o.BeTrue())
+		for _, machinesetName := range machinesetsArray {
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, machinesetName, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].metadata.name}"}).check(oc)
+		}
+		e2e.Logf("Check machinesets scale down to 2")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1 1", ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].status.availableReplicas}"}).check(oc)
+		e2e.Logf("Check 2 machines in Running status")
+		// Can't filter by infra label because of bug https://issues.redhat.com/browse/HIVE-1922
+		//newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=infra", "-o=jsonpath={.items[*].status.phase}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-o=jsonpath={.items[?(@.spec.metadata.labels.node-role\\.kubernetes\\.io==\"infra\")].status.phase}"}).check(oc)
 	})
 
 	//author: lwan@redhat.com
