@@ -26,6 +26,9 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+// fixturePathCache to store fixture path mapping, key: dir name under testdata, value: fixture path
+var fixturePathCache = make(map[string]string)
+
 // MachineConfig struct is used to handle MachineConfig resources in OCP
 type MachineConfig struct {
 	name           string
@@ -589,8 +592,22 @@ func containsMultipleStrings(sourceString string, expectedStrings []string) bool
 	return len(expectedStrings) == count
 }
 
+// generateTemplateAbsolutePath manipulates absolute path of test file by
+// cached fixture test data dir and file name
+// because exutil.FixturePath will copy all test files to fixture path (tmp dir with prefix fixture-testdata-dir)
+// this operation is very expensive, we don't want to call it for every case
 func generateTemplateAbsolutePath(fileName string) string {
-	mcoBaseDir := exutil.FixturePath("testdata", "mco")
+	mcoDirName := "mco"
+	mcoBaseDir := ""
+	if mcoBaseDir = fixturePathCache[mcoDirName]; len(mcoBaseDir) == 0 {
+		e2e.Logf("mco fixture dir is not initialized, start to create")
+		mcoBaseDir = exutil.FixturePath("testdata", mcoDirName)
+		fixturePathCache[mcoDirName] = mcoBaseDir
+		e2e.Logf("mco fixture dir is initialized: %s", mcoBaseDir)
+	} else {
+		mcoBaseDir = fixturePathCache[mcoDirName]
+		e2e.Logf("mco fixture dir found in cache: %s", mcoBaseDir)
+	}
 	return filepath.Join(mcoBaseDir, fileName)
 }
 
