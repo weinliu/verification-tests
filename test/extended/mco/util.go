@@ -307,6 +307,11 @@ func (mcp *MachineConfigPool) pollDegradedStatus() func() string {
 	return mcp.Poll(`{.status.conditions[?(@.type=="Degraded")].status}`)
 }
 
+// GetUpdatedStatus returns the value of the 'Updated' condition in the MCP
+func (mcp *MachineConfigPool) GetUpdatedStatus() (string, error) {
+	return mcp.Get(`{.status.conditions[?(@.type=="Updated")].status}`)
+}
+
 func (mcp *MachineConfigPool) pollUpdatedStatus() func() string {
 	return mcp.Poll(`{.status.conditions[?(@.type=="Updated")].status}`)
 }
@@ -425,11 +430,40 @@ func (mcp MachineConfigPool) WaitForNotDegradedStatus() error {
 			return false, nil
 		}
 		if strings.Contains(stdout, "False") {
+			e2e.Logf("MCP degraded status is False %s", mcp.name)
+			return true, nil
+		}
+		return false, nil
+	})
+
+	if err != nil {
+		e2e.Logf("MCP: %s .Error waiting for not degraded status: %s", mcp.GetName(), err)
+	}
+
+	return err
+}
+
+// WaitForUpdatedStatus waits until MCP is rerpoting updated status, if the condition times out the returned error is != nil
+func (mcp MachineConfigPool) WaitForUpdatedStatus() error {
+	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
+	e2e.Logf("Waiting %s for MCP %s status to be updated.", timeToWait, mcp.name)
+
+	err := wait.Poll(1*time.Minute, timeToWait, func() (bool, error) {
+		stdout, err := mcp.GetUpdatedStatus()
+		if err != nil {
+			e2e.Logf("the err:%v, and try next round", err)
+			return false, nil
+		}
+		if strings.Contains(stdout, "True") {
 			e2e.Logf("MCP Updated status is True %s", mcp.name)
 			return true, nil
 		}
 		return false, nil
 	})
+
+	if err != nil {
+		e2e.Logf("MCP: %s .Error waiting for updated status: %s", mcp.GetName(), err)
+	}
 
 	return err
 }

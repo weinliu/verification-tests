@@ -1842,6 +1842,95 @@ nulla pariatur.`
 		}
 
 	})
+	g.It("Author:sregidor-NonPreRelease-Medium-52373-Modify proxy configuration in paused pools [Disruptive]", func() {
+
+		proxyValue := "http://user:pass@proxy-fake:1111"
+		noProxyValue := "test.no-proxy.com"
+
+		g.By("Get current proxy configuration")
+		proxy := NewResource(oc.AsAdmin(), "proxy", "cluster")
+		proxyInitialConfig := proxy.GetOrFail(`{.spec}`)
+		e2e.Logf("Initial proxy configuration: %s", proxyInitialConfig)
+
+		wmcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mmcp := NewMachineConfigPool(oc.AsAdmin(), "master")
+
+		defer func() {
+			e2e.Logf("Start TC defer block")
+
+			e2e.Logf("Restore original proxy config %s", proxyInitialConfig)
+			_ = proxy.Patch("json", `[{ "op": "add", "path": "/spec", "value": `+proxyInitialConfig+`}]`)
+
+			e2e.Logf("Wait for new machine configs to be rendered and paused pools to report updated status")
+			// We need to make sure that the config will NOT be applied, since the proxy is a fake one and if
+			// we dont make sure that the config proxy is reverted, the nodes will be broken and go into
+			// NotReady status
+			_ = wmcp.WaitForUpdatedStatus()
+			_ = mmcp.WaitForUpdatedStatus()
+
+			e2e.Logf("Unpause worker pool")
+			wmcp.pause(false)
+
+			e2e.Logf("Unpause master pool")
+			mmcp.pause(false)
+
+			e2e.Logf("End TC defer block")
+		}()
+
+		g.By("Pause MCPs")
+		wmcp.pause(true)
+		mmcp.pause(true)
+
+		g.By("Configure new proxy")
+		err := proxy.Patch("json",
+			`[{ "op": "add", "path": "/spec/httpProxy", "value": "`+proxyValue+`" }]`)
+		o.Expect(err).ShouldNot(o.HaveOccurred(), "Error patching http proxy")
+
+		err = proxy.Patch("json",
+			`[{ "op": "add", "path": "/spec/httpsProxy", "value": "`+proxyValue+`" }]`)
+		o.Expect(err).ShouldNot(o.HaveOccurred(), "Error patching https proxy")
+
+		err = proxy.Patch("json",
+			`[{ "op": "add", "path": "/spec/noProxy", "value":  "`+noProxyValue+`" }]`)
+		o.Expect(err).ShouldNot(o.HaveOccurred(), "Error patching noproxy")
+
+		g.By("Verify that the proxy configuration was applied to daemonsets")
+		mcoDs := NewNamespacedResource(oc.AsAdmin(), "DaemonSet", MCONamespace, "machine-config-daemon")
+		// it should never take longer than 5 minutes to apply the proxy config under any circumstance,
+		// it should be considered a bug.
+		o.Eventually(mcoDs.Poll(`{.spec}`), "5m", "30s").Should(o.ContainSubstring(proxyValue),
+			"machine-config-daemon is not using the new proxy configuration: %s", proxyValue)
+		o.Eventually(mcoDs.Poll(`{.spec}`), "5m", "30s").Should(o.ContainSubstring(noProxyValue),
+			"machine-config-daemon is not using the new no-proxy value: %s", noProxyValue)
+
+		g.By("Check that the operator has been marked as degraded")
+		mco := NewResource(oc.AsAdmin(), "co", "machine-config")
+		o.Eventually(mco.Poll(`{.status.conditions[?(@.type=="Degraded")].status}`),
+			"5m", "30s").Should(o.Equal("True"),
+			"machine-config Operator should report degraded status")
+
+		o.Eventually(mco.Poll(`{.status.conditions[?(@.type=="Degraded")].message}`),
+			"5m", "30s").Should(o.ContainSubstring(`Required MachineConfigPool 'master' is paused and can not sync until it is unpaused`),
+			"machine-config Operator is not reporting the right reason for degraded status")
+
+		g.By("Restore original proxy configuration")
+		err = proxy.Patch("json", `[{ "op": "add", "path": "/spec", "value": `+proxyInitialConfig+`}]`)
+		o.Expect(err).ShouldNot(o.HaveOccurred(), "Error patching and restoring original proxy config")
+
+		g.By("Verify that the new configuration is applied to the daemonset")
+		// it should never take longer than 5 minutes to apply the proxy config under any circumstance,
+		// it should be considered a bug.
+		o.Eventually(mcoDs.Poll(`{.spec}`), "5m", "30s").ShouldNot(o.ContainSubstring(proxyValue),
+			"machine-config-daemon has not restored the original proxy configuration")
+		o.Eventually(mcoDs.Poll(`{.spec}`), "5m", "30s").ShouldNot(o.ContainSubstring(noProxyValue),
+			"machine-config-daemon has not restored the original proxy configuration for 'no-proxy'")
+
+		g.By("Check that the operator is not marked as degraded anymore")
+		o.Eventually(mco.Poll(`{.status.conditions[?(@.type=="Degraded")].status}`),
+			"5m", "30s").Should(o.Equal("False"),
+			"machine-config Operator should not report degraded status anymore")
+
+	})
 
 })
 
