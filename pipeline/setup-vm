@@ -78,20 +78,20 @@ if echo $INSTALL_TOOLS | grep -i 'operatorSDK' > /dev/null; then
 
     if [[ "x${PR}x" != "xx" ]]; then
         echo "get code from PR ${PR} "
-        sudo git clone https://github.com/openshift/ocp-release-operator-sdk.git ${WORKSPACE}/osdk
+        git clone https://github.com/openshift/ocp-release-operator-sdk.git ${WORKSPACE}/osdk
         cd ${WORKSPACE}/osdk
-        sudo git remote add upstream https://github.com/openshift/ocp-release-operator-sdk.git
-        sudo git fetch upstream pull/${PR}/head:downstreamPR
-        sudo git checkout downstreamPR
-        sudo git status
-        BUILD_CMD="sudo -s source ${WORKSPACE}/.bash_profile; make -f ci/prow.Makefile patch build"
+        git remote add upstream https://github.com/openshift/ocp-release-operator-sdk.git
+        git fetch upstream pull/${PR}/head:downstreamPR
+        git checkout downstreamPR
+        git status
+        BUILD_CMD="make -f ci/prow.Makefile patch build"
     else
         if [ "${JENKINS_AGENT}" == 'goc411' ]; then
             sudo git clone --depth=1 git@github.com:operator-framework/operator-sdk.git ${WORKSPACE}/osdk --branch master
         else
             BRANCH="release-${NIGHTLYFLAG:0:1}.${NIGHTLYFLAG:1}"
-            BUILD_CMD="sudo -s source ${WORKSPACE}/.bash_profile; make -f ci/prow.Makefile patch build"
-            sudo git clone --depth=1 git@github.com:openshift/ocp-release-operator-sdk.git ${WORKSPACE}/osdk --branch ${BRANCH}
+            BUILD_CMD="make -f ci/prow.Makefile patch build"
+            git clone --depth=1 git@github.com:openshift/ocp-release-operator-sdk.git ${WORKSPACE}/osdk --branch ${BRANCH}
         fi
     fi
     cd ${WORKSPACE}/osdk
