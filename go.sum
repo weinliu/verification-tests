@@ -663,10 +663,6 @@ github.com/openshift/onsi-ginkgo v1.4.1-0.20190902091932-d0603c19fe78 h1:2+/NEJO
 github.com/openshift/onsi-ginkgo v1.4.1-0.20190902091932-d0603c19fe78/go.mod h1:azqkkH4Vpp9A579CC26hicol/wViXag9rOwElif6v9E=
 github.com/openshift/opencontainers-runc v1.0.0-rc4.0.20190926164333-b942ff4cc6f8 h1:jTJxPtkl1HmKHC0jmAE1tM66ns7VucuFZiaACncbAh4=
 github.com/openshift/opencontainers-runc v1.0.0-rc4.0.20190926164333-b942ff4cc6f8/go.mod h1:HPgCLT2yw6clkrh3z6KnZbLeBIfmP+y73vSnU4SuzZ8=
-github.com/openshift/openshift-tests v0.0.0-20210916082130-4fca21c38ee6 h1:rGS/saDhr1UOV5HLUqRasX5FlKKcUVl1hU27ZjN9AcE=
-github.com/openshift/openshift-tests v0.0.0-20210916082130-4fca21c38ee6/go.mod h1:aVIbnkWbEcnHw4KVA6wjlyF4dcmPBcOqUiGlRmQzH0w=
-github.com/openshift/openshift-tests v0.0.0-20220601033601-549bac00f683 h1:3uV+OcZnd78kaKov5zCngDxPuTZ35a4jlNRWjUWX0z0=
-github.com/openshift/openshift-tests v0.0.0-20220601033601-549bac00f683/go.mod h1:Yz2/ltJjy4UV41ZxElCoX8P5058Gp/nACUMCesE60sg=
 github.com/openshift/openshift-tests v0.0.0-20220615161834-b10b15889908 h1:6qhIP9zyjs/N5jjSZuaCam5tgYUrmve2hBjtE4tL61M=
 github.com/openshift/openshift-tests v0.0.0-20220615161834-b10b15889908/go.mod h1:Yz2/ltJjy4UV41ZxElCoX8P5058Gp/nACUMCesE60sg=
 github.com/pborman/uuid v1.2.0 h1:J7Q5mO4ysT1dv8hyrUGHb9+ooztCXu1D8MY8DZYsu3g=
@@ -874,7 +870,6 @@ golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550/go.mod h1:yigFU9vqHzYiE8U
 golang.org/x/crypto v0.0.0-20201002170205-7f63de1d35b0/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
 golang.org/x/crypto v0.0.0-20201016220609-9e8e0b390897/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
 golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2/go.mod h1:T9bdIzuCu7OtxOm1hfPfRQxPLYneinmdGuTeoZ9dtd4=
-golang.org/x/crypto v0.0.0-20210421170649-83a5a9bb288b h1:7mWr3k41Qtv8XlltBkDkl8LoP3mpSgBW8BUoxtEdbXg=
 golang.org/x/crypto v0.0.0-20210421170649-83a5a9bb288b/go.mod h1:T9bdIzuCu7OtxOm1hfPfRQxPLYneinmdGuTeoZ9dtd4=
 golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e h1:T8NU3HyQ8ClP4SEE+KbFlg6n0NhuTsN4MyznaarGsZM=
 golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e/go.mod h1:IxCIyHEi3zRg3s0A5j5BB6A9Jmi73HwBIUl50j+osU4=
