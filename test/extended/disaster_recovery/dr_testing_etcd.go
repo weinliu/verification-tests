@@ -83,13 +83,14 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
 		masterNodeInternalIPList := getNodeInternalIPListByLabel(oc, "node-role.kubernetes.io/master=")
 
-		userForBastion, privateKeyForClusterNode := getUserNameAndKeyonBationByPlatform(iaasPlatform, privateKeyForBastion)
+		userForBastion := getUserNameAndKeyonBationByPlatform(iaasPlatform)
+		e2e.Logf("bastion host is  : %v", bastionHost)
+		e2e.Logf("platform is  : %v", iaasPlatform)
 		e2e.Logf("user on bastion is  : %v", userForBastion)
-		e2e.Logf("key on bastion is  : %v", privateKeyForClusterNode)
 
 		g.By("Run the backup on the first master")
-		defer runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo rm -rf /home/core/assets/backup", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
-		msg, err := runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo /usr/local/bin/cluster-backup.sh /home/core/assets/backup", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+		defer runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo rm -rf /home/core/assets/backup", privateKeyForBastion, userForBastion)
+		msg, err := runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo /usr/local/bin/cluster-backup.sh /home/core/assets/backup", privateKeyForBastion, userForBastion)
 		if err != nil {
 			e2e.Logf("backup is failed , the msg is : %v", msg)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -99,26 +100,26 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		g.By("Stop the static pods on any other control plane nodes")
 		//if assert err the cluster will be unavailable
 		for i := 1; i < len(masterNodeInternalIPList); i++ {
-			_, err := runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo mv /etc/kubernetes/manifests/etcd-pod.yaml /tmp", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+			_, err := runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo mv /etc/kubernetes/manifests/etcd-pod.yaml /tmp", privateKeyForBastion, userForBastion)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForContainerDisappear(bastionHost, masterNodeInternalIPList[i], "sudo crictl ps | grep etcd | grep -v operator", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+			waitForContainerDisappear(bastionHost, masterNodeInternalIPList[i], "sudo crictl ps | grep etcd | grep -v operator", privateKeyForBastion, userForBastion)
 
-			_, err = runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo mv /etc/kubernetes/manifests/kube-apiserver-pod.yaml /tmp", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+			_, err = runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo mv /etc/kubernetes/manifests/kube-apiserver-pod.yaml /tmp", privateKeyForBastion, userForBastion)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForContainerDisappear(bastionHost, masterNodeInternalIPList[i], "sudo crictl ps | grep kube-apiserver | grep -v operator", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+			waitForContainerDisappear(bastionHost, masterNodeInternalIPList[i], "sudo crictl ps | grep kube-apiserver | grep -v operator", privateKeyForBastion, userForBastion)
 
-			_, err = runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo cp -r /var/lib/etcd/ /tmp; sudo  rm -rf /var/lib/etcd", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+			_, err = runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo rm -rf /var/lib/etcd", privateKeyForBastion, userForBastion)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
 		g.By("Run the restore script on the recovery control plane host")
-		msg, err = runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo -E /usr/local/bin/cluster-restore.sh /home/core/assets/backup", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+		msg, err = runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo -E /usr/local/bin/cluster-restore.sh /home/core/assets/backup", privateKeyForBastion, userForBastion)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("static-pod-resources"))
 
 		g.By("Restart the kubelet service on all control plane hosts")
 		for i := 0; i < len(masterNodeList); i++ {
-			_, _ = runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo systemctl restart kubelet.service", privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+			_, _ = runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo systemctl restart kubelet.service", privateKeyForBastion, userForBastion)
 
 		}
 

@@ -10,7 +10,6 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -67,30 +66,17 @@ func runDRBackup(oc *exutil.CLI, nodeNameList []string) (nodeName string, etcddb
 	return nodeN, etcdDb
 }
 
-func getUserNameAndKeyonBationByPlatform(iaasPlatform string, privateKey string) (string, string) {
+func getUserNameAndKeyonBationByPlatform(iaasPlatform string) string {
 	user := ""
-	keyOnBastion := ""
 	switch iaasPlatform {
 	case "aws":
 		user = os.Getenv("SSH_CLOUD_PRIV_AWS_USER")
-		if user == "" {
-			user = "ec2-user"
-		}
-		keyOnBastion = "/home/ec2-user/" + filepath.Base(privateKey)
 	case "gcp":
 		user = os.Getenv("SSH_CLOUD_PRIV_GCP_USER")
-		if user == "" {
-			user = "cloud-user"
-		}
-		keyOnBastion = "/home/cloud-user/" + filepath.Base(privateKey)
 	case "azure":
 		user = os.Getenv("SSH_CLOUD_PRIV_AZURE_USER")
-		if user == "" {
-			user = "cloud-user"
-		}
-		keyOnBastion = "/home/cloud-user/" + filepath.Base(privateKey)
 	}
-	return user, keyOnBastion
+	return user
 }
 
 func getNodeInternalIPListByLabel(oc *exutil.CLI, labelKey string) []string {
@@ -101,9 +87,9 @@ func getNodeInternalIPListByLabel(oc *exutil.CLI, labelKey string) []string {
 }
 
 // Run the etcdrestroe shell script command on master or node
-func runPSCommand(bastionHost string, nodeInternalIP string, command string, privateKeyForClusterNode string, privateKeyForBastion string, userForBastion string) (result string, err error) {
+func runPSCommand(bastionHost string, nodeInternalIP string, command string, privateKeyForBastion string, userForBastion string) (result string, err error) {
 	var msg []byte
-	msg, err = exec.Command("bash", "-c", "chmod 600 "+privateKeyForBastion+"; ssh -i "+privateKeyForBastion+" -t -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "+userForBastion+"@"+bastionHost+" sudo -i ssh  -o StrictHostKeyChecking=no  -o UserKnownHostsFile=/dev/null -i "+privateKeyForClusterNode+" core@"+nodeInternalIP+" "+command).CombinedOutput()
+	msg, err = exec.Command("bash", "-c", "chmod 600 "+privateKeyForBastion+";ssh -i "+privateKeyForBastion+" -o StrictHostKeyChecking=no  -o ProxyCommand=\"ssh -o IdentityFile="+privateKeyForBastion+" -o StrictHostKeyChecking=no -W %h:%p "+userForBastion+"@"+bastionHost+"\""+" core@"+nodeInternalIP+" "+command).CombinedOutput()
 	return string(msg), err
 }
 
@@ -139,10 +125,10 @@ func waitForOperatorRestart(oc *exutil.CLI, operatorName string) {
 	exutil.AssertWaitPollNoErr(err, "clusteroperator is not recovered to normal")
 }
 
-func waitForContainerDisappear(bastionHost string, nodeInternalIP string, command string, privateKeyForClusterNode string, privateKeyForBastion string, userForBastion string) {
+func waitForContainerDisappear(bastionHost string, nodeInternalIP string, command string, privateKeyForBastion string, userForBastion string) {
 	g.By("Wait for the container to disappear")
 	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
-		msg, err := runPSCommand(bastionHost, nodeInternalIP, command, privateKeyForClusterNode, privateKeyForBastion, userForBastion)
+		msg, err := runPSCommand(bastionHost, nodeInternalIP, command, privateKeyForBastion, userForBastion)
 		if err != nil {
 			e2e.Logf("Fail to get container, error: %s. Trying again", err)
 			return false, nil
