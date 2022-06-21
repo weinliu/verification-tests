@@ -37,8 +37,8 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		e2e.Logf("get the Kubernetes version")
 		version, err := exec.Command("bash", "-c", "oc version | grep Kubernetes |awk '{print $3}'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		s_version := string(version)
-		kube_ver := strings.Split(s_version, "+")[0]
+		sVersion := string(version)
+		kubeVer := strings.Split(sVersion, "+")[0]
 
 		e2e.Logf("retrieve all the master node")
 		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
@@ -46,7 +46,20 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		e2e.Logf("verify the kubelet version in node details")
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("node", masterNodeList[0], "-o", "custom-columns=VERSION:.status.nodeInfo.kubeletVersion").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(msg).To(o.ContainSubstring(kube_ver))
+		o.Expect(msg).To(o.ContainSubstring(kubeVer))
 
+	})
+	// author: geliu@redhat.com
+	g.It("Author:geliu-Medium-52418-Add new parameter to avoid Potential etcd inconsistent revision and data occurs", func() {
+		g.By("Test for case OCP-52418-Add new parameter to avoid Potential etcd inconsistent revision and data occurs")
+		oc.SetupProject()
+
+		e2e.Logf("Discover all the etcd pods")
+		etcdPodList := getPodListByLabel(oc, "etcd=true")
+
+		e2e.Logf("get the expected parameter from etcd member pod")
+		output, err := oc.AsAdmin().Run("get").Args("-n", "openshift-etcd", "pod", etcdPodList[0], "-o=jsonpath={.spec.containers[*].command[*]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("experimental-initial-corrupt-check=true"))
 	})
 })
