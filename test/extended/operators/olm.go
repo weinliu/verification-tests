@@ -11096,4 +11096,72 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 		defer sub.deleteCSV(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", ns, "-o=jsonpath={.status.phase}"}).check(oc.AsGuestKubeconf())
 	})
+
+	// It will cover test case: OCP-45381, author: kuiwang@redhat.com
+	g.It("ConnectedOnly-Author:kuiwang-Medium-45381-Support custom catalogs in hypershift", func() {
+		var (
+			itName              = g.CurrentGinkgoTestDescription().TestText
+			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
+			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			og                  = operatorGroupDescription{
+				name:      "og-singlenamespace",
+				namespace: "",
+				template:  ogSingleTemplate,
+			}
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-2378-operator",
+				namespace:   "",
+				displayName: "Test Catsrc 2378 Operators",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				template:    catsrcImageTemplate,
+			}
+			subOadp = subscriptionDescription{
+				subName:                "oadp-operator",
+				namespace:              "",
+				channel:                "alpha",
+				ipApproval:             "Automatic",
+				operatorPackage:        "oadp-operator",
+				catalogSourceName:      catsrc.name,
+				catalogSourceNamespace: "",
+				startingCSV:            "oadp-operator.v0.5.3",
+				currentCSV:             "",
+				installedCSV:           "",
+				template:               subTemplate,
+				singleNamespace:        true,
+			}
+			dr = make(describerResrouce)
+		)
+
+		g.By("init resource")
+		dr.addIr(itName)
+		ns := "guest-cluster-45381"
+		err := oc.AsGuestKubeconf().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsGuestKubeconf().Run("delete").Args("ns", ns).Execute()
+		og.namespace = ns
+		catsrc.namespace = ns
+		subOadp.namespace = ns
+		subOadp.catalogSourceNamespace = catsrc.namespace
+
+		g.By("create catalog source")
+		defer catsrc.delete(itName, dr)
+		catsrc.createWithCheck(oc.AsGuestKubeconf(), itName, dr)
+
+		g.By("Create og")
+		defer og.delete(itName, dr)
+		og.create(oc.AsGuestKubeconf(), itName, dr)
+
+		g.By("install OADP")
+		defer subOadp.delete(itName, dr)
+		subOadp.create(oc.AsGuestKubeconf(), itName, dr)
+		defer subOadp.deleteCSV(itName, dr)
+
+		g.By("Check the oadp-operator.v0.5.3 is installed successfully")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subOadp.installedCSV, "-n", subOadp.namespace, "-o=jsonpath={.status.phase}"}).check(oc.AsGuestKubeconf())
+
+	})
 })
