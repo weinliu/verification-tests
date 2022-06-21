@@ -37,6 +37,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		hc           hiveconfig
 		testDataDir  string
 		iaasPlatform string
+		testOCPImage string
 	)
 	g.BeforeEach(func() {
 		testDataDir = exutil.FixturePath("testdata", "cluster_operator/hive")
@@ -78,6 +79,12 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
+		//get the latest 4-stable image for Hive testing
+		testOCPImage = get4StableLatestImage()
+		if testOCPImage == "" {
+			e2e.Logf("Can't get the latest 4-stable image, use 4.10 for testing")
+			testOCPImage = OCP410ReleaseImage
+		}
 
 		//Create Hive Resources if not exist
 		g.By("Create Hive NameSpace...")
@@ -139,7 +146,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP49ReleaseImage,
+			releaseImage: testOCPImage,
 			template:     imageSetTemp,
 		}
 
@@ -213,7 +220,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP49ReleaseImage,
+			releaseImage: testOCPImage,
 			template:     imageSetTemp,
 		}
 
@@ -289,7 +296,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		//newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 		e2e.Logf("test OCP-33374")
-		ocpVersion := extractRelfromImg(OCP49ReleaseImage)
+		ocpVersion := extractRelfromImg(testOCPImage)
 		if ocpVersion == "" {
 			g.Fail("Case failed because no OCP version extracted from Image")
 		}
@@ -359,7 +366,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP49ReleaseImage,
+			releaseImage: testOCPImage,
 			template:     imageSetTemp,
 		}
 
@@ -491,7 +498,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP410ReleaseImage,
+			releaseImage: testOCPImage,
 			template:     imageSetTemp,
 		}
 
@@ -524,18 +531,19 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		g.By("Create ClusterDeployment...")
 		clusterTemp := filepath.Join(testDataDir, "clusterdeployment.yaml")
 		cluster := clusterDeployment{
-			fake:                "false",
-			name:                cdName,
-			namespace:           oc.Namespace(),
-			baseDomain:          AWSBaseDomain,
-			clusterName:         cdName,
-			platformType:        "aws",
-			credRef:             AWSCreds,
-			region:              AWSRegion,
-			imageSetRef:         imageSetName,
-			installConfigSecret: installConfigSecretName,
-			pullSecretRef:       PullSecret,
-			template:            clusterTemp,
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          imageSetName,
+			installConfigSecret:  installConfigSecretName,
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 3,
+			template:             clusterTemp,
 		}
 		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
 		cluster.create(oc)
@@ -756,7 +764,7 @@ spec:
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP410ReleaseImage,
+			releaseImage: testOCPImage,
 			template:     imageSetTemp,
 		}
 
@@ -903,7 +911,7 @@ spec:
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP410ReleaseImage,
+			releaseImage: testOCPImage,
 			template:     imageSetTemp,
 		}
 
@@ -986,7 +994,7 @@ spec:
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP410ReleaseImage,
+			releaseImage: testOCPImage,
 			template:     imageSetTemp,
 		}
 
@@ -1071,7 +1079,7 @@ spec:
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP410ReleaseImage,
+			releaseImage: testOCPImage,
 			template:     imageSetTemp,
 		}
 
@@ -1221,7 +1229,7 @@ spec:
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP410ReleaseImage,
+			releaseImage: testOCPImage,
 			template:     imageSetTemp,
 		}
 
@@ -1305,7 +1313,7 @@ spec:
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP49ReleaseImage,
+			releaseImage: testOCPImage,
 			template:     imageSetTemp,
 		}
 
@@ -1403,7 +1411,7 @@ spec:
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP410ReleaseImage,
+			releaseImage: testOCPImage,
 			template:     imageSetTemp,
 		}
 
@@ -1484,7 +1492,7 @@ spec:
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP410ReleaseImage,
+			releaseImage: testOCPImage,
 			template:     imageSetTemp,
 		}
 
@@ -1754,7 +1762,7 @@ spec:
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP410ReleaseImage,
+			releaseImage: testOCPImage,
 			template:     imageSetTemp,
 		}
 
@@ -1844,7 +1852,7 @@ spec:
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP49ReleaseImage,
+			releaseImage: testOCPImage,
 			template:     imageSetTemp,
 		}
 
@@ -1931,7 +1939,7 @@ spec:
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP410ReleaseImage,
+			releaseImage: testOCPImage,
 			template:     imageSetTemp,
 		}
 
@@ -2021,7 +2029,7 @@ spec:
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
 			name:         imageSetName,
-			releaseImage: OCP49ReleaseImage,
+			releaseImage: testOCPImage,
 			template:     imageSetTemp,
 		}
 
