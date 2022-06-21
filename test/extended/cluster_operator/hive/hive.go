@@ -1741,6 +1741,273 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, syncSetName4, nok, DefaultTimeout, []string{"SyncSet", "-n", oc.Namespace()}).check(oc)
 	})
 
+	//author: mihuang@redhat.com
+	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "35069"|./bin/extended-platform-tests run --timeout 70m -f -
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-35069-Hive supports cluster hibernation for gcp[Serial]", func() {
+		if iaasPlatform != "gcp" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 35069 is for GCP - skipping test ...")
+		}
+		testCaseID := "35069"
+		cdName := "cluster-" + testCaseID
+		imageSetName := cdName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: OCP410ReleaseImage,
+			template:     imageSetTemp,
+		}
+
+		g.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		oc.SetupProject()
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and gcp-credentials to target namespace for the clusterdeployment
+		g.By("Copy GCP platform credentials...")
+		createGCPCreds(oc, oc.Namespace())
+
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Create GCP Install-Config Secret...")
+		installConfigTemp := filepath.Join(testDataDir, "gcp-install-config.yaml")
+		installConfigSecretName := cdName + "-install-config"
+		projectID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.platformStatus.gcp.projectID}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(projectID).NotTo(o.BeEmpty())
+		installConfigSecret := gcpInstallConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: GCPBaseDomain,
+			name2:      cdName,
+			region:     GCPRegion,
+			projectid:  projectID,
+			template:   installConfigTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
+		installConfigSecret.create(oc)
+
+		g.By("Create GCP ClusterDeployment...")
+		clusterTemp := filepath.Join(testDataDir, "clusterdeployment-gcp.yaml")
+		cluster := gcpClusterDeployment{
+			fake:                "false",
+			name:                cdName,
+			namespace:           oc.Namespace(),
+			baseDomain:          GCPBaseDomain,
+			clusterName:         cdName,
+			platformType:        "gcp",
+			credRef:             GCPCreds,
+			region:              GCPRegion,
+			imageSetRef:         imageSetName,
+			installConfigSecret: installConfigSecretName,
+			pullSecretRef:       PullSecret,
+			template:            clusterTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
+		cluster.create(oc)
+		g.By("Check GCP ClusterDeployment installed flag is true")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		g.By("Check CD has Hibernating condition")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
+
+		g.By("patch the CD to Hibernating...")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"powerState": "Hibernating"}}`}).check(oc)
+		e2e.Logf("Wait for CD to be Hibernating")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.powerState}"}).check(oc)
+		e2e.Logf("Check cd's condition")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Unreachable")].status}`}).check(oc)
+
+		g.By("patch the CD to Running...")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"powerState": "Running"}}`}).check(oc)
+		e2e.Logf("Wait for CD to be Running")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.powerState}"}).check(oc)
+		e2e.Logf("Check cd's condition")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Unreachable")].status}`}).check(oc)
+	})
+
+	//author: mihuang@redhat.com
+	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "33642"|./bin/extended-platform-tests run --timeout 70m -f -
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-33642-[aws]Hive supports cluster hibernation [Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 33642 is for AWS - skipping test ...")
+		}
+		testCaseID := "33642"
+		cdName := "cluster-" + testCaseID
+		imageSetName := cdName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: OCP49ReleaseImage,
+			template:     imageSetTemp,
+		}
+
+		g.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		oc.SetupProject()
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
+		g.By("Copy AWS platform credentials...")
+		createAWSCreds(oc, oc.Namespace())
+
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Create Install-Config Secret...")
+		installConfigTemp := filepath.Join(testDataDir, "aws-install-config.yaml")
+		installConfigSecretName := cdName + "-install-config"
+		installConfigSecret := installConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   installConfigTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
+		installConfigSecret.create(oc)
+
+		g.By("Create ClusterDeployment...")
+		clusterTemp := filepath.Join(testDataDir, "clusterdeployment.yaml")
+		cluster := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          imageSetName,
+			installConfigSecret:  installConfigSecretName,
+			pullSecretRef:        PullSecret,
+			template:             clusterTemp,
+			installAttemptsLimit: 3,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
+		cluster.create(oc)
+		g.By("Check AWS ClusterDeployment installed flag is true")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		g.By("Check CD has Hibernating condition")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
+
+		g.By("patch the CD to Hibernating...")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"powerState": "Hibernating"}}`}).check(oc)
+		e2e.Logf("Wait for CD to be Hibernating")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.powerState}"}).check(oc)
+		e2e.Logf("Check cd's condition")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Unreachable")].status}`}).check(oc)
+
+		g.By("patch the CD to Running...")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"powerState": "Running"}}`}).check(oc)
+		e2e.Logf("Wait for CD to be Running")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.powerState}"}).check(oc)
+		e2e.Logf("Check cd's condition")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Unreachable")].status}`}).check(oc)
+	})
+
+	//author: mihuang@redhat.com
+	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "35297"|./bin/extended-platform-tests run --timeout 90m -f -
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-35297-Hive supports cluster hibernation[Serial]", func() {
+		if iaasPlatform != "azure" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 35297 is for Azure - skipping test ...")
+		}
+		testCaseID := "35297"
+		cdName := "cluster-" + testCaseID
+		imageSetName := cdName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: OCP410ReleaseImage,
+			template:     imageSetTemp,
+		}
+
+		g.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		oc.SetupProject()
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and azure-credentials to target namespace for the cluster
+		g.By("Copy Azure platform credentials...")
+		createAzureCreds(oc, oc.Namespace())
+
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Create Azure Install-Config Secret...")
+		installConfigTemp := filepath.Join(testDataDir, "azure-install-config.yaml")
+		installConfigSecretName := cdName + "-install-config"
+		installConfigSecret := azureInstallConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: AzureBaseDomain,
+			name2:      cdName,
+			region:     AzureRegion,
+			resGroup:   AzureRESGroup,
+			azureType:  AzurePublic,
+			template:   installConfigTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
+		installConfigSecret.create(oc)
+
+		g.By("Create Azure ClusterDeployment...")
+		clusterTemp := filepath.Join(testDataDir, "clusterdeployment-azure.yaml")
+		cluster := azureClusterDeployment{
+			fake:                "false",
+			name:                cdName,
+			namespace:           oc.Namespace(),
+			baseDomain:          AzureBaseDomain,
+			clusterName:         cdName,
+			platformType:        "azure",
+			credRef:             AzureCreds,
+			region:              AzureRegion,
+			resGroup:            AzureRESGroup,
+			azureType:           AzurePublic,
+			imageSetRef:         imageSetName,
+			installConfigSecret: installConfigSecretName,
+			pullSecretRef:       PullSecret,
+			template:            clusterTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
+		cluster.create(oc)
+		g.By("Check Azure ClusterDeployment installed flag is true")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		g.By("Check CD has Hibernating condition")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
+
+		g.By("patch the CD to Hibernating...")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"powerState": "Hibernating"}}`}).check(oc)
+		e2e.Logf("Wait for CD to be Hibernating")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.powerState}"}).check(oc)
+		e2e.Logf("Check cd's condition")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Unreachable")].status}`}).check(oc)
+
+		g.By("patch the CD to Running...")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"powerState": "Running"}}`}).check(oc)
+		e2e.Logf("Wait for CD to be Running")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.powerState}"}).check(oc)
+		e2e.Logf("Check cd's condition")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Unreachable")].status}`}).check(oc)
+	})
+
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "22381"|./bin/extended-platform-tests run --timeout 60m -f -
