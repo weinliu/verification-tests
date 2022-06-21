@@ -192,6 +192,12 @@ type debugPodUsingDefinition struct {
 	template   string
 }
 
+type priorityClassDefinition struct {
+	name          string
+	priorityValue int
+	template      string
+}
+
 func (pod *podNodeSelector) createPodNodeSelector(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace,
@@ -886,4 +892,28 @@ func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]strin
 		newStatusToCompare[key] = status
 	}
 	return newStatusToCompare
+}
+
+func (pc *priorityClassDefinition) createPriorityClass(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pc.template, "-p", "NAME="+pc.name, "PRIORITYVALUE="+strconv.Itoa(pc.priorityValue))
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("priorityClass %s has not been created successfully", pc.name))
+}
+
+func (pc *priorityClassDefinition) deletePriorityClass(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := oc.AsAdmin().WithoutNamespace().Run("delete").Args("priorityclass", pc.name).Execute()
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("priorityclass %s is not deleted successfully", pc.name))
 }

@@ -984,4 +984,178 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		g.By("Checking PodLifetime metrics from prometheus")
 		checkDeschedulerMetrics(oc, "PodLifeTime", "descheduler_pods_evicted")
 	})
+
+	// author: knarra@redhat.com
+	g.It("Author:knarra-High-50193-High-50191-Descheduler-Validate priorityFiltering with thresholdPriorityClassName & thresholdPriority param [Disruptive][Slow] [Flaky]", func() {
+		deschedulerpcN := filepath.Join(buildPruningBaseDir, "kubedescheduler_priorityclassname.yaml")
+		deploypT := filepath.Join(buildPruningBaseDir, "deploy_interpodantiaffinity.yaml")
+		deploypmT := filepath.Join(buildPruningBaseDir, "deploy_interpodantiaffinitytpm.yaml")
+		deploypcT := filepath.Join(buildPruningBaseDir, "priorityclassm.yaml")
+		deschedulerpthT := filepath.Join(buildPruningBaseDir, "kubedescheduler_prioritythp.yaml")
+
+		deschu = kubedescheduler{
+			namespace:        kubeNamespace,
+			interSeconds:     60,
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.11.0",
+			logLevel:         "Normal",
+			operatorLogLevel: "Normal",
+			profile1:         "AffinityAndTaints",
+			profile2:         "TopologyAndDuplicates",
+			profile3:         "LifecycleAndUtilization",
+			template:         deschedulerpthT,
+		}
+
+		// Create test project
+		g.By("Create test project")
+		oc.SetupProject()
+
+		testd3 := deployinterpodantiaffinity{
+			dName:            "d50193",
+			namespace:        oc.Namespace(),
+			replicaNum:       1,
+			podAffinityKey:   "key50193",
+			operatorPolicy:   "In",
+			podAffinityValue: "value50193",
+			template:         deploypT,
+		}
+
+		testd4 := deployinterpodantiaffinity{
+			dName:            "d501931",
+			namespace:        oc.Namespace(),
+			replicaNum:       6,
+			podAffinityKey:   "key501931",
+			operatorPolicy:   "In",
+			podAffinityValue: "value501931",
+			template:         deploypmT,
+		}
+
+		priorityclassm := priorityClassDefinition{
+			name:          "prioritym",
+			priorityValue: 99,
+			template:      deploypcT,
+		}
+
+		priorityclassh := priorityClassDefinition{
+			name:          "priorityh",
+			priorityValue: 100,
+			template:      deploypcT,
+		}
+
+		g.By("Create priority classes")
+		defer priorityclassm.deletePriorityClass(oc)
+		priorityclassm.createPriorityClass(oc)
+
+		defer priorityclassh.deletePriorityClass(oc)
+		priorityclassh.createPriorityClass(oc)
+
+		g.By("Create the descheduler namespace")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		patch := `[{"op":"add", "path":"/metadata/labels/openshift.io~1cluster-monitoring", "value":"true"}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("ns", kubeNamespace, "--type=json", "-p", patch).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create the operatorgroup")
+		defer og.deleteOperatorGroup(oc)
+		og.createOperatorGroup(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create the subscription")
+		defer sub.deleteSubscription(oc)
+		sub.createSubscription(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for the descheduler operator pod running")
+		if ok := waitForAvailableRsRunning(oc, "deploy", "descheduler-operator", kubeNamespace, "1"); ok {
+			e2e.Logf("Kubedescheduler operator runnnig now\n")
+		} else {
+			e2e.Failf("Kubedescheduler operator is not running even afer waiting for about 3 minutes")
+		}
+
+		g.By("Create descheduler cluster")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("KubeDescheduler", "--all", "-n", kubeNamespace).Execute()
+		deschu.createKubeDescheduler(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Test enabling both thresholdPriorityClassName and thresholdPriority params
+
+		g.By("Get descheduler operator pod name")
+		operatorPodName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "name=descheduler-operator", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+		o.Expect(operatorPodName).NotTo(o.BeEmpty())
+
+		g.By("Check the descheduler deploy logs, should see config error")
+		checkLogsFromRs(oc, kubeNamespace, "pod", operatorPodName, regexp.QuoteMeta(`key failed with : It is invalid to set both .spec.profileCustomizations.thresholdPriority and .spec.profileCustomizations.ThresholdPriorityClassName fields`))
+
+		deschuP := kubedescheduler{
+			namespace:        kubeNamespace,
+			interSeconds:     60,
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.11.0",
+			logLevel:         "Normal",
+			operatorLogLevel: "Normal",
+			profile1:         "AffinityAndTaints",
+			profile2:         "TopologyAndDuplicates",
+			profile3:         "LifecycleAndUtilization",
+			template:         deschedulerpcN,
+		}
+
+		g.By("Create descheduler cluster")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("KubeDescheduler", "--all", "-n", kubeNamespace).Execute()
+		deschuP.createKubeDescheduler(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the kubedescheduler run well")
+		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
+
+		g.By("Get descheduler cluster pod name")
+		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+		o.Expect(podName).NotTo(o.BeEmpty())
+
+		g.By("Set descheduler mode to Automatic")
+		defer func() {
+			patchYamlToRestore := `[{"op": "replace", "path": "/spec/mode", "value":"Predictive"}]`
+			e2e.Logf("Restoring descheduler mode back to Predictive")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Check the kubedescheduler run well")
+			checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
+		}()
+
+		patchYamlTraceAll := `[{"op": "replace", "path": "/spec/mode", "value":"Automatic"}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlTraceAll).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the kubedescheduler run well")
+		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
+
+		g.By("Get descheduler cluster pod name after mode is set")
+		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+		o.Expect(podName).NotTo(o.BeEmpty())
+
+		// Test for RemovePodsViolatingInterPodAntiAffinity when thresholdPriorityName set in descheduler is less than the one set in the pod spec
+
+		g.By("Create the test3 deploy")
+		testd3.createDeployInterPodAntiAffinity(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Get pod name")
+		podNameIpa, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=d50193", "-n", testd3.namespace, "-o=jsonpath={.items..metadata.name}").Output()
+		o.Expect(podNameIpa).NotTo(o.BeEmpty())
+
+		g.By("Create the test4 deploy")
+		testd4.createDeployInterPodAntiAffinity(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Add label to the pod")
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("pod", podNameIpa, "key501931-", "-n", testd3.namespace).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("pod", podNameIpa, "key501931=value501931", "-n", testd3.namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the descheduler deploy logs, should see evict logs")
+		checkLogsFromRs(oc, kubeNamespace, "pod", podName, regexp.QuoteMeta(`"Evicted pod"`)+".*"+regexp.QuoteMeta(`reason="InterPodAntiAffinity"`))
+
+	})
+
 })
