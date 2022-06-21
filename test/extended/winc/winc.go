@@ -32,6 +32,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 			1: "kubelet",
 			2: "hybrid-overlay-node",
 			3: "kube-proxy",
+			4: "containerd",
 		}
 		folders = map[int]string{
 			1: "c:\\k",
@@ -87,7 +88,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 			},
 			{
 				folder:   "/payload/containerd",
-				expected: "containerd-shim-runhcs-v1.exe containerd.exe",
+				expected: "containerd-shim-runhcs-v1.exe containerd.exe containerd_conf.toml",
 			},
 			{
 				folder:   "/payload/cni",
@@ -264,7 +265,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		createMachineset(oc, machinesetFileName)
 		waitForMachinesetReady(oc, machinesetName, 10, 1)
 		// Here we fetch machine IP from machineset
-		machineIP := fetchAddress(oc, "IP", machinesetName)
+		machineIP := fetchAddress(oc, "InternalIP", machinesetName)
 		nodeName := getNodeNameFromIP(oc, machineIP[0], iaasPlatform)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// here we update the runtime class file with the Kernel ID of multiple OS
@@ -566,10 +567,10 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		}
 
 		g.By("Check a cluster-admin can retrieve container runtime logs")
-		msg, err = oc.WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=journal", "-u=docker").Output()
+		msg, err = oc.WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=containerd/containerd.log").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Retrieve container runtime logs")
-		if !strings.Contains(string(msg), "Starting up") {
+		if !strings.Contains(string(msg), "starting containerd") {
 			e2e.Failf("Failed to retrieve container runtime logs")
 		}
 	})
@@ -594,6 +595,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 			"host_service_logs/windows/log_files/kube-proxy/kube-proxy.exe.WARNING",
 			"host_service_logs/windows/log_files/kubelet/",
 			"host_service_logs/windows/log_files/kubelet/kubelet.log",
+			"host_service_logs/windows/log_files/containerd/containerd.log",
 			"host_service_logs/windows/log_winevent/",
 			"host_service_logs/windows/log_winevent/docker_winevent.log",
 		}
@@ -814,7 +816,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		bastionHost := getSSHBastionHost(oc, iaasPlatform)
 		// use config map to fetch the actual Windows version
 		machineset := getWindowsMachineSetName(oc)
-		address := fetchAddress(oc, "IP", machineset)
+		address := fetchAddress(oc, "InternalIP", machineset)
 		for _, machineIP := range address {
 			svcDescription, err := getSVCsDescription(bastionHost, machineIP, privateKey, iaasPlatform)
 			o.Expect(err).NotTo(o.HaveOccurred())
