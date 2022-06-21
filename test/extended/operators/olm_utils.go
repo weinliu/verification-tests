@@ -519,10 +519,10 @@ func (og *operatorGroupDescription) createwithCheck(oc *exutil.CLI, itName strin
 	output, err := doAction(oc, "get", asAdmin, false, "operatorgroup")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if strings.Contains(output, "No resources found") {
-		e2e.Logf(fmt.Sprintf("No operatorgroup in project: %s, create one: %s", oc.Namespace(), og.name))
+		e2e.Logf(fmt.Sprintf("No operatorgroup in project: %s, create one: %s", og.namespace, og.name))
 		og.create(oc, itName, dr)
 	} else {
-		e2e.Logf(fmt.Sprintf("Already exist operatorgroup in project: %s", oc.Namespace()))
+		e2e.Logf(fmt.Sprintf("Already exist operatorgroup in project: %s", og.namespace))
 	}
 
 }

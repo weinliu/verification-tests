@@ -11015,3 +11015,85 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 	})
 
 })
+
+var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc                                 = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
+		guestClusterName, guestClusterKube string
+	)
+
+	g.BeforeEach(func() {
+		guestClusterName, guestClusterKube = exutil.ValidHypershiftAndGetGuestKubeConf(oc)
+		e2e.Logf("%s, %s", guestClusterName, guestClusterKube)
+		oc.SetGuestKubeconf(guestClusterKube)
+	})
+
+	// author: jiazha@redhat.com
+	g.It("Author:jiazha-High-45348-High-45543-Enable hypershift to deploy OLM resources", func() {
+
+		g.By("1, check if any resource running in the guest cluster")
+		projects := []string{"openshift-operator-lifecycle-manager", "openshift-marketplace"}
+		for _, project := range projects {
+			resource, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("pods", "-n", project).Output()
+			if err != nil {
+				e2e.Failf("Fail to get resource in project: %s, error:%v", project, err)
+			}
+			if !strings.Contains(resource, "No resources found") {
+				e2e.Failf("Found OLM related resources running on the guest cluster")
+			}
+		}
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		dr := make(describerResrouce)
+		itName := g.CurrentGinkgoTestDescription().TestText
+		dr.addIr(itName)
+
+		g.By("2, create a CatalogSource that in a random project")
+		ns := "guest-cluster-45543"
+		err := oc.AsGuestKubeconf().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsGuestKubeconf().Run("delete").Args("ns", ns).Execute()
+		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+		og := operatorGroupDescription{
+			name:      "og-45348",
+			namespace: ns,
+			template:  ogSingleTemplate,
+		}
+		defer og.delete(itName, dr)
+		og.createwithCheck(oc.AsGuestKubeconf(), itName, dr)
+
+		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-image-template.yaml")
+		cs := catalogSourceDescription{
+			name:        "cs-45348",
+			namespace:   ns,
+			displayName: "QE Operators",
+			publisher:   "QE",
+			sourceType:  "grpc",
+			address:     "quay.io/openshift-qe-optional-operators/ocp4-index:latest",
+			template:    csImageTemplate,
+		}
+		defer cs.delete(itName, dr)
+		cs.createWithCheck(oc.AsGuestKubeconf(), itName, dr)
+
+		g.By("3, subscribe to learn-operator.v0.0.3")
+		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+		sub := subscriptionDescription{
+			subName:                "sub-45348",
+			namespace:              ns,
+			catalogSourceName:      "cs-45348",
+			catalogSourceNamespace: ns,
+			channel:                "beta",
+			ipApproval:             "Automatic",
+			operatorPackage:        "learn",
+			startingCSV:            "learn-operator.v0.0.3",
+			singleNamespace:        true,
+			template:               subTemplate,
+		}
+		defer sub.delete(itName, dr)
+		sub.create(oc.AsGuestKubeconf(), itName, dr)
+		defer sub.deleteCSV(itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", ns, "-o=jsonpath={.status.phase}"}).check(oc.AsGuestKubeconf())
+	})
+})
