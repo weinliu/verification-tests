@@ -870,8 +870,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get metrics samples in %s", namespace))
-		promeToken, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
+		promeToken, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(promeToken).NotTo(o.BeEmpty())
 		promeEp, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ep", "ansiblemetrics-controller-manager-metrics-service", "-o=jsonpath={.subsets[0].addresses[0].ip}", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		metricsMsg, err := exec.Command("bash", "-c", "oc exec deployment/ansiblemetrics-controller-manager -n "+namespace+" -- curl -k -H \"Authorization: Bearer "+promeToken+"\" 'https://"+promeEp+":8443/metrics' | grep -E \"Observe|gague|my_counter\"").Output()
