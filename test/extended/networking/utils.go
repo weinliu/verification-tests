@@ -413,7 +413,7 @@ func describePod(oc *exutil.CLI, namespace string, podName string) string {
 func execCommandInSpecificPod(oc *exutil.CLI, namespace string, podName string, command string) (string, error) {
 	e2e.Logf("The command is: %v", command)
 	command1 := []string{"-n", namespace, podName, "--", "bash", "-c", command}
-	msg, err := oc.WithoutNamespace().Run("exec").Args(command1...).Output()
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(command1...).Output()
 	if err != nil {
 		e2e.Logf("Execute command failed with  err:%v  and output is %v.", err, msg)
 		return msg, err

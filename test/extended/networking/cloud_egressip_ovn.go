@@ -265,7 +265,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("ConnectedOnly-Author:huirwang-Medium-47164-Be able to update egressip object. [Serial]", func() {
+	g.It("ConnectedOnly-Author:huirwang-Medium-47164-Medium-47025-Be able to update egressip object. [Serial]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
@@ -327,6 +327,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		sourceIP, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(sourceIP).Should(o.Equal(freeIps[1]))
+
+		g.By("6. Remove labels from test pod.")
+		err = exutil.LabelPod(oc, ns1, pod1.name, "color-")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("7. Check source IP is not EgressIP")
+		sourceIP, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).ShouldNot(o.Equal(freeIps[1]))
 
 	})
 
@@ -517,7 +526,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("ConnectedOnly-Author:huirwang-Critical-47032-Traffic is load balanced between egress nodes. [Serial]", func() {
+	g.It("ConnectedOnly-Author:huirwang-Longduration-NonPreRelease-Critical-47032-High-47034-Traffic is load balanced between egress nodes. [Serial]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
@@ -525,6 +534,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("create new namespace\n")
 		oc.SetupProject()
+		ns1 := oc.Namespace()
 
 		g.By("Label EgressIP node\n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -541,41 +551,76 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel)
 
 		g.By("Apply label to namespace\n")
-		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", oc.Namespace(), "name=test").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", oc.Namespace(), "name-").Execute()
 
 		g.By("Create an egressip object\n")
 		sub1 := getIfaddrFromNode(egressNodes[0], oc)
-		freeIps := findUnUsedIPsOnNode(oc, egressNodes[0], sub1, 2)
-		o.Expect(len(freeIps) == 2).Should(o.BeTrue())
+		freeIPs := findUnUsedIPsOnNode(oc, egressNodes[0], sub1, 4)
+		o.Expect(len(freeIPs) == 4).Should(o.BeTrue())
 		egressip1 := egressIPResource1{
 			name:      "egressip-47032",
 			template:  egressIPTemplate,
-			egressIP1: freeIps[0],
-			egressIP2: freeIps[1],
+			egressIP1: freeIPs[0],
+			egressIP2: freeIPs[1],
 		}
 		egressip1.createEgressIPObject1(oc)
 		defer egressip1.deleteEgressIPObject1(oc)
 
+		g.By("Create another egressip object\n")
+
+		egressip2 := egressIPResource1{
+			name:      "egressip-47034",
+			template:  egressIPTemplate,
+			egressIP1: freeIPs[2],
+			egressIP2: freeIPs[3],
+		}
+		egressip2.createEgressIPObject1(oc)
+		defer egressip2.deleteEgressIPObject1(oc)
+		//Update label in egressip2 object to a different one from egressip1
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressip/egressip-47034", "-p", "{\"spec\":{\"namespaceSelector\":{\"matchLabels\":{\"name\":\"qe\"}}}}", "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		g.By("Create a pod ")
 		pod1 := pingPodResource{
 			name:      "hello-pod",
-			namespace: oc.Namespace(),
+			namespace: ns1,
 			template:  pingPodTemplate,
 		}
 		pod1.createPingPod(oc)
-		defer pod1.deletePingPod(oc)
 		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		g.By("Create sencond namespace.")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		g.By("Apply label to second namespace\n")
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "name-").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "name=qe").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create a pod in second namespace")
+		pod2 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns2,
+			template:  pingPodTemplate,
+		}
+		pod2.createPingPod(oc)
+		waitPodReady(oc, pod2.namespace, pod2.name)
 
 		g.By("Check source IP is randomly one of egress ips.\n")
 		e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
-		sourceIP, err := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
+		sourceIP, err := execCommandInSpecificPod(oc, pod2.namespace, pod2.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(sourceIP)
-		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps[0]))
-		o.Expect(sourceIP).Should(o.ContainSubstring(freeIps[1]))
-
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs[2]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs[3]))
+		sourceIP, err = execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..10}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf(sourceIP)
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs[0]))
+		o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs[1]))
 	})
 
 	// author: huirwang@redhat.com
