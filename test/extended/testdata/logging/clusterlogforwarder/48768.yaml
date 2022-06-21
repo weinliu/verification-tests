@@ -1,0 +1,29 @@
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: clusterlogforwarder-template
+objects:
+- apiVersion: "logging.openshift.io/v1"
+  kind: ClusterLogForwarder
+  metadata:
+    name: ${NAME}
+    namespace: ${NAMESPACE}
+  spec:
+    inputs:
+    - application:
+        namespaces:
+        - ${APP_PROJECT}
+      name: app-input-namespace
+    pipelines:
+    - inputRefs:
+      - app-input-namespace
+      name: output-to-default-es
+      outputRefs:
+      - default
+parameters:
+- name: NAME
+  value: "instance"
+- name: NAMESPACE
+  value: "openshift-logging"
+- name: APP_PROJECT
+  required: true

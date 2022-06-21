@@ -307,6 +307,124 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
+		g.It("CPaasrunOnly-Author:ikanse-High-46882-Vector ClusterLogForwarder forward logs to non ClusterLogging managed Elasticsearch insecure forward[Serial][Slow]", func() {
+
+			g.By("Create external Elasticsearch instance")
+			esProj := oc.Namespace()
+			ees := externalES{esProj, "6.8", "elasticsearch-server", false, false, false, "", "", "", cloNS}
+			defer ees.remove(oc)
+			ees.deploy(oc)
+
+			g.By("Create project for app logs and deploy the log generator app")
+			oc.SetupProject()
+			appProj := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogForwarder instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "46882.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			g.By("Waiting for the Logging pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+
+			g.By("Check logs in external ES")
+			ees.waitForIndexAppear(oc, "app")
+			ees.waitForIndexAppear(oc, "infra")
+			ees.waitForIndexAppear(oc, "audit")
+
+		})
+
+		g.It("CPaasrunOnly-Author:ikanse-High-46920-Vector ClusterLogForwarder forward logs to non ClusterLogging managed Elasticsearch secure forward[Serial][Slow]", func() {
+
+			g.By("Create external Elasticsearch instance")
+			esProj := oc.Namespace()
+			ees := externalES{esProj, "6.8", "elasticsearch-server", true, false, false, "", "", "ees-https", cloNS}
+			defer ees.remove(oc)
+			ees.deploy(oc)
+
+			g.By("Create project for app logs and deploy the log generator app")
+			oc.SetupProject()
+			appProj := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogForwarder instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "46920.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_SECRET="+ees.secretName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			g.By("Waiting for the Logging pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+
+			g.By("Check logs in external ES")
+			ees.waitForIndexAppear(oc, "app")
+			ees.waitForIndexAppear(oc, "infra")
+			ees.waitForIndexAppear(oc, "audit")
+
+		})
+
+		g.It("CPaasrunOnly-Author:ikanse-High-48768-Vector ClusterLogForwarder Collect app logs from a predefined namespace[Serial][Slow]", func() {
+
+			g.By("Create project1 for app logs and deploy the log generator app")
+			oc.SetupProject()
+			appProj1 := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create project2 for app logs and deploy the log generator app")
+			oc.SetupProject()
+			appProj2 := oc.Namespace()
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj2, "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogForwarder instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "48768.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "APP_PROJECT="+appProj1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			g.By("Waiting for the Logging pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By("Check the app index in default ES")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-000")
+
+			g.By("Check for project1 logs in default ES")
+			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + appProj1 + "\"}}}"
+			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app", checkLog)
+			o.Expect(logs.Hits.Total).ShouldNot(o.Equal(0), "Project1 %s logs not found in default ES", appProj1)
+
+			g.By("Check for project2 logs in default ES")
+			checkLog = "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + appProj2 + "\"}}}"
+			logs = searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app", checkLog)
+			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Projec2 %s logs should not be collected", appProj2)
+
+		})
+
 	})
 
 })
