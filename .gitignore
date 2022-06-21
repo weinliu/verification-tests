@@ -8,3 +8,5 @@ kubeadmin-password
 /frontend/upstream
 /frontend/yarn.lock
 /.vscode
+/.idea
+.DS_Store

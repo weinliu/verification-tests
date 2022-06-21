@@ -1,8 +1,12 @@
 package hypershift
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,8 +16,12 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+// OcpClientVerb is the oc verb operation of OCP
 type OcpClientVerb string
 
+/*
+oc <OcpClientVerb> resources
+*/
 const (
 	OcpGet      OcpClientVerb = "get"
 	OcpPatch    OcpClientVerb = "patch"
@@ -22,6 +30,9 @@ const (
 	OcpAnnotate OcpClientVerb = "annotate"
 	OcpDebug    OcpClientVerb = "debug"
 	OcpExec     OcpClientVerb = "exec"
+
+	//NodepoolNameSpace is the namespace where the nodepool CR is always created
+	NodepoolNameSpace = "clusters"
 )
 
 func doOcpReq(oc *exutil.CLI, verb OcpClientVerb, notEmpty bool, args []string) string {
@@ -69,6 +80,70 @@ func (wl *workload) delete(oc *exutil.CLI, kubeconfig, parsedTemplate string) {
 }
 
 func (wl *workload) applyResourceFromTemplate(oc *exutil.CLI, kubeconfig, parsedTemplate string, parameters ...string) error {
+	return applyResourceFromTemplate(oc, kubeconfig, parsedTemplate, parameters...)
+}
+
+// parse a struct for a Template variables to generate params like "NAME=myname", "NAMESPACE=clusters" ...
+// currently only support int, string, bool, *int, *string, *bool. A pointer is used to check whether it is set explicitly.
+// use json tag as the true variable Name in the struct e.g. < Name string `json:"NAME"`>
+func parseTemplateVarParams(obj interface{}) ([]string, error) {
+	v := reflect.ValueOf(obj)
+	if v.Kind() != reflect.Ptr || v.Elem().Kind() != reflect.Struct {
+		return []string{}, errors.New("params must be a pointer pointed to a struct")
+	}
+
+	var params []string
+	t := v.Elem().Type()
+	for i := 0; i < t.NumField(); i++ {
+		varName := t.Field(i).Name
+		varType := t.Field(i).Type
+		varValue := v.Elem().Field(i).Interface()
+		tagName := t.Field(i).Tag.Get("json")
+
+		if tagName == "" {
+			continue
+		}
+
+		//handle non nil pointer that set the params explicitly
+		if varType.Kind() == reflect.Ptr {
+			if reflect.ValueOf(varValue).IsNil() {
+				continue
+			}
+
+			switch reflect.ValueOf(varValue).Elem().Type().Kind() {
+			case reflect.Int:
+				p := fmt.Sprintf("%s=%d", tagName, reflect.ValueOf(varValue).Elem().Interface().(int))
+				params = append(params, p)
+			case reflect.String:
+				params = append(params, tagName+"="+reflect.ValueOf(varValue).Elem().Interface().(string))
+			case reflect.Bool:
+				v, _ := reflect.ValueOf(varValue).Elem().Interface().(bool)
+				params = append(params, tagName+"="+strconv.FormatBool(v))
+			default:
+				e2e.Logf("parseTemplateVarParams params %v invalid, ignore it", varName)
+			}
+			continue
+		}
+
+		//non-pointer
+		switch varType.Kind() {
+		case reflect.String:
+			if varValue.(string) != "" {
+				params = append(params, tagName+"="+varValue.(string))
+			}
+		case reflect.Int:
+			params = append(params, tagName+"="+strconv.Itoa(varValue.(int)))
+		case reflect.Bool:
+			params = append(params, tagName+"="+strconv.FormatBool(varValue.(bool)))
+		default:
+			e2e.Logf("parseTemplateVarParams params %v not support, ignore it", varValue)
+		}
+	}
+
+	return params, nil
+}
+
+func applyResourceFromTemplate(oc *exutil.CLI, kubeconfig, parsedTemplate string, parameters ...string) error {
 	var configFile string
 
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {

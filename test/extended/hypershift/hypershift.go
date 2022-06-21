@@ -144,8 +144,8 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	g.It("Longduration-NonPreRelease-Author:heli-Critical-43272-Test cluster autoscaler via hostedCluster autoScaling settings[Serial][Slow]", func() {
 		g.By("Author:jiezhao-Critical-43272-Test cluster autoscaler via hostedCluster autoScaling settings")
 
-		nodeCountJsonPath := fmt.Sprintf("-ojsonpath={.items[?(@.spec.clusterName==\"%s\")].spec.nodeCount}", guestClusterName)
-		nodeCount := doOcpReq(oc, OcpGet, true, []string{"-n", "clusters", "nodepools", nodeCountJsonPath})
+		nodeCountJSONPath := fmt.Sprintf("-ojsonpath={.items[?(@.spec.clusterName==\"%s\")].spec.nodeCount}", guestClusterName)
+		nodeCount := doOcpReq(oc, OcpGet, true, []string{"-n", "clusters", "nodepools", nodeCountJSONPath})
 		e2e.Logf("The nodepool size is : %s\n", nodeCount)
 
 		var bashClient = NewCmdClient().WithShowInfo(true)
@@ -235,8 +235,8 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		g.By("hypershift OCP-43829-Test autoscaling status in nodePool conditions")
 
 		//check nodepool autoscale status
-		npNameJsonPath := fmt.Sprintf("-ojsonpath={.items[?(@.spec.clusterName==\"%s\")].metadata.name}", guestClusterName)
-		existingNodePools := doOcpReq(oc, OcpGet, false, []string{"nodepool", "-n", "clusters", npNameJsonPath})
+		npNameJSONPath := fmt.Sprintf("-ojsonpath={.items[?(@.spec.clusterName==\"%s\")].metadata.name}", guestClusterName)
+		existingNodePools := doOcpReq(oc, OcpGet, false, []string{"nodepool", "-n", "clusters", npNameJSONPath})
 		existNp := strings.Split(existingNodePools, " ")[0]
 		res := doOcpReq(oc, OcpGet, true, []string{"nodepool", existNp, "-n", "clusters",
 			"-ojsonpath={range .status.conditions[*]}{@.type}{\" \"}{@.status}{\" \"}{end}}"})
@@ -392,13 +392,13 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		}
 
 		//check etcd
-		antiAffinityJsonPath := ".spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution"
-		topologyKeyJsonPath := antiAffinityJsonPath + "[*].topologyKey"
+		antiAffinityJSONPath := ".spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution"
+		topologyKeyJSONPath := antiAffinityJSONPath + "[*].topologyKey"
 		desiredTopogyKey := "topology.kubernetes.io/zone"
 
 		etcdSts := "etcd"
-		doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "statefulset", etcdSts, "-ojsonpath={" + antiAffinityJsonPath + "}"})
-		res := doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "statefulset", etcdSts, "-ojsonpath={" + topologyKeyJsonPath + "}"})
+		doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "statefulset", etcdSts, "-ojsonpath={" + antiAffinityJSONPath + "}"})
+		res := doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "statefulset", etcdSts, "-ojsonpath={" + topologyKeyJSONPath + "}"})
 		o.Expect(res).To(o.ContainSubstring(desiredTopogyKey))
 
 		//check etcd healthy
@@ -499,17 +499,17 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		}()
 
 		//change cpu, memory resources
-		desiredCpuRequest := "200m"
+		desiredCPURequest := "200m"
 		desiredMemoryReqeust := "1700Mi"
-		patchOptions := fmt.Sprintf("{\"spec\":{\"template\":{\"spec\": {\"containers\":"+
-			"[{\"name\":\"kube-apiserver\",\"resources\":{\"requests\":{\"cpu\":\"%s\", \"memory\": \"%s\"}}}]}}}}", desiredCpuRequest, desiredMemoryReqeust)
+		patchOptions := fmt.Sprintf(`{"spec":{"template":{"spec": {"containers":`+
+			`[{"name":"kube-apiserver","resources":{"requests":{"cpu":"%s", "memory": "%s"}}}]}}}}`, desiredCPURequest, desiredMemoryReqeust)
 		doOcpReq(oc, OcpPatch, true, []string{"deploy", "kube-apiserver", "-n", guestClusterNamespace, "-p", patchOptions})
 
 		//check new value of cpu, memory resource
 		err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			cpuRes := doOcpReq(oc, OcpGet, false, []string{"deployment", "kube-apiserver", "-n",
 				guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.cpu}"})
-			if cpuRes != desiredCpuRequest {
+			if cpuRes != desiredCPURequest {
 				return false, nil
 			}
 
@@ -529,14 +529,14 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		//deployment
 		priorityClasses := map[string][]string{
-			"hypershift-api-critical": []string{
+			"hypershift-api-critical": {
 				"kube-apiserver",
 				"oauth-openshift",
 				"openshift-oauth-apiserver",
 				"openshift-apiserver",
 				"packageserver",
 			},
-			"hypershift-control-plane": []string{
+			"hypershift-control-plane": {
 				"capi-provider",
 				"catalog-operator",
 				"cluster-api",
@@ -716,20 +716,124 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			//"hosted-cluster-config-operator",
 		}
 
-		antiAffinityJsonPath := ".spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution"
-		topologyKeyJsonPath := antiAffinityJsonPath + "[*].topologyKey"
+		antiAffinityJSONPath := ".spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution"
+		topologyKeyJSONPath := antiAffinityJSONPath + "[*].topologyKey"
 		desiredTopogyKey := "topology.kubernetes.io/zone"
 
 		for _, c := range controlplaneComponents {
-			doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "deploy", c, "-ojsonpath={" + antiAffinityJsonPath + "}"})
-			res := doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "deploy", c, "-ojsonpath={" + topologyKeyJsonPath + "}"})
+			doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "deploy", c, "-ojsonpath={" + antiAffinityJSONPath + "}"})
+			res := doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "deploy", c, "-ojsonpath={" + topologyKeyJSONPath + "}"})
 			o.Expect(res).To(o.ContainSubstring(desiredTopogyKey))
 		}
 
 		//check etcd
 		etcdSts := "etcd"
-		doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "statefulset", etcdSts, "-ojsonpath={" + antiAffinityJsonPath + "}"})
-		res := doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "statefulset", etcdSts, "-ojsonpath={" + topologyKeyJsonPath + "}"})
+		doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "statefulset", etcdSts, "-ojsonpath={" + antiAffinityJSONPath + "}"})
+		res := doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "statefulset", etcdSts, "-ojsonpath={" + topologyKeyJSONPath + "}"})
 		o.Expect(res).To(o.ContainSubstring(desiredTopogyKey))
+	})
+
+	// author: heli@redhat.com
+	g.It("Author:heli-Critical-48025-Test EBS allocation for nodepool[Disruptive]", func() {
+		g.By("hypershift OCP-48025-Test EBS allocation for nodepool")
+
+		nodepoolName := doOcpReq(oc, OcpGet, true, []string{"nodepool", "-n", "clusters", "-ojsonpath={.items[].metadata.name}"})
+		e2e.Logf("get nodepool name: %s ", nodepoolName)
+
+		npVolumeSize := doOcpReq(oc, OcpGet, true, []string{"nodepool", nodepoolName, "-n", "clusters", "-ojsonpath={.spec.platform.aws.rootVolume.size}"})
+		e2e.Logf("the RootVolumeSize of %s is %s ", nodepoolName, npVolumeSize)
+
+		machineVolumeSize := doOcpReq(oc, OcpGet, true, []string{"awsmachines", "-n", guestClusterNamespace, "-ojsonpath={.items[].spec.rootVolume.size}"})
+		e2e.Logf("the RootVolumeSize of %s is %s ", nodepoolName, machineVolumeSize)
+
+		o.Expect(machineVolumeSize).To(o.Equal(npVolumeSize))
+
+		hypershiftTeamBaseDir := exutil.FixturePath("testdata", "hypershift")
+		nodepoolTemplate := filepath.Join(hypershiftTeamBaseDir, "nodepool.yaml")
+
+		//create new nodepools with specified root-volume-type, root-volume size and root-volume-iops
+		nodepoolConfig := []struct {
+			nodepoolName       string
+			rootVolumeSize     int
+			rootVolumeType     string
+			rootVolumeIops     string
+			parsedNodepoolFile string
+		}{
+			{
+				nodepoolName:       "jz-48025-01",
+				rootVolumeSize:     64,
+				rootVolumeType:     "gp2",
+				parsedNodepoolFile: "ocp-48025-jz-01.config",
+			},
+			{
+				nodepoolName:       "jz-48025-02",
+				rootVolumeSize:     250,
+				rootVolumeType:     "io1",
+				rootVolumeIops:     "4000",
+				parsedNodepoolFile: "ocp-48025-jz-02.config",
+			},
+			{
+				nodepoolName:       "jz-48025-03",
+				rootVolumeSize:     512,
+				rootVolumeType:     "io2",
+				rootVolumeIops:     "6000",
+				parsedNodepoolFile: "ocp-48025-jz-03.config",
+			},
+		}
+
+		releaseImage := doOcpReq(oc, OcpGet, true, []string{"hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.spec.release.image}"})
+		for i := 0; i < len(nodepoolConfig); i++ {
+			np := &Nodepool{
+				Name:           nodepoolConfig[i].nodepoolName,
+				Namespace:      NodepoolNameSpace,
+				Clustername:    guestClusterName,
+				RootVolumeType: nodepoolConfig[i].rootVolumeType,
+				RootVolumeSize: &nodepoolConfig[i].rootVolumeSize,
+				ReleaseImage:   releaseImage,
+				AutoRepair:     false,
+				Template:       nodepoolTemplate,
+			}
+
+			if nodepoolConfig[i].rootVolumeIops != "" {
+				np.RootVolumeIops = nodepoolConfig[i].rootVolumeIops
+			}
+
+			defer np.Delete(oc, nodepoolConfig[i].parsedNodepoolFile)
+			np.Create(oc, nodepoolConfig[i].parsedNodepoolFile)
+
+			templateClonedFromNameAnnotation := `cluster\.x-k8s\.io/cloned-from-name`
+			awsmachineVolumeJSONPathPtn := `-ojsonpath={.items[?(@.metadata.annotations.%s=="%s")].spec.rootVolume.%s}`
+			awsmachineVolumeSizeFilter := fmt.Sprintf(awsmachineVolumeJSONPathPtn, templateClonedFromNameAnnotation, np.Name, "size")
+			awsmachineVolumeTypeFilter := fmt.Sprintf(awsmachineVolumeJSONPathPtn, templateClonedFromNameAnnotation, np.Name, "type")
+			awsmachineVolumeIopsFilter := fmt.Sprintf(awsmachineVolumeJSONPathPtn, templateClonedFromNameAnnotation, np.Name, "iops")
+
+			//check rootVolume size
+			err := wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
+				res := doOcpReq(oc, OcpGet, true, []string{"nodepool", np.Name, "-n", NodepoolNameSpace, "-ojsonpath={.spec.platform.aws.rootVolume.size}"})
+				if !strings.Contains(res, strconv.Itoa(nodepoolConfig[i].rootVolumeSize)) {
+					return false, nil
+				}
+
+				res = doOcpReq(oc, OcpGet, true, []string{"awsmachines", "-n", guestClusterNamespace, awsmachineVolumeSizeFilter})
+				if strings.Contains(res, strconv.Itoa(nodepoolConfig[i].rootVolumeSize)) {
+					return true, nil
+				}
+
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "ocp-48025 nodepool rootVolume size not match error")
+
+			// check rootVolume type and rootVolume iops
+			res := doOcpReq(oc, OcpGet, true, []string{"nodepool", np.Name, "-n", NodepoolNameSpace, "-ojsonpath={.spec.platform.aws.rootVolume.type}"})
+			o.Expect(res).To(o.Equal(nodepoolConfig[i].rootVolumeType))
+			res = doOcpReq(oc, OcpGet, true, []string{"awsmachines", "-n", guestClusterNamespace, awsmachineVolumeTypeFilter})
+			o.Expect(res).To(o.Equal(nodepoolConfig[i].rootVolumeType))
+			if nodepoolConfig[i].rootVolumeIops != "" {
+				res := doOcpReq(oc, OcpGet, true, []string{"nodepool", np.Name, "-n", NodepoolNameSpace, "-ojsonpath={.spec.platform.aws.rootVolume.iops}"})
+				o.Expect(res).To(o.Equal(nodepoolConfig[i].rootVolumeIops))
+				res = doOcpReq(oc, OcpGet, true, []string{"awsmachines", "-n", guestClusterNamespace, awsmachineVolumeIopsFilter})
+				o.Expect(res).To(o.Equal(nodepoolConfig[i].rootVolumeIops))
+			}
+		}
 	})
 })
