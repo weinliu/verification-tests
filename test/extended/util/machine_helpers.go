@@ -72,7 +72,7 @@ func (ms *MachineSetDescription) DeleteMachineSet(oc *CLI) error {
 // ListAllMachineNames list all machines
 func ListAllMachineNames(oc *CLI) []string {
 	e2e.Logf("Listing all Machines ...")
-	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strings.Split(machineNames, " ")
 }
