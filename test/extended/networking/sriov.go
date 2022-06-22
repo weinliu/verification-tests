@@ -148,13 +148,13 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			sriovOpNs                      = "openshift-sriov-network-operator"
 		)
 		sriovPolicy := sriovNetworkNodePolicy{
-			policyName:   "intel710",
+			policyName:   "e810",
 			deviceType:   "vfio-pci",
-			deviceID:     "158b",
-			pfName:       "ens1f0",
+			deviceID:     "1593",
+			pfName:       "ens2f0",
 			vondor:       "8086",
 			numVfs:       2,
-			resourceName: "intel710dpdk",
+			resourceName: "e810dpdk",
 			template:     sriovNetworkNodePolicyTemplate,
 			namespace:    sriovOpNs,
 		}
@@ -215,13 +215,13 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			sriovNodeLabel                 = "feature.node.kubernetes.io/sriov-capable=true"
 		)
 		sriovPolicy := sriovNetworkNodePolicy{
-			policyName:   "intel710",
+			policyName:   "e810",
 			deviceType:   "netdevice",
-			deviceID:     "158b",
-			pfName:       "ens1f0",
+			deviceID:     "1593",
+			pfName:       "ens2f0",
 			vondor:       "8086",
 			numVfs:       40,
-			resourceName: "intel710net",
+			resourceName: "e810net",
 			template:     sriovNetworkNodePolicyTemplate,
 			namespace:    sriovOpNs,
 		}
@@ -241,7 +241,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 		g.By("check the link show the correct VF")
 		sriovNode := getSriovNode(oc, sriovOpNs, sriovNodeLabel)
-		output, err := exutil.DebugNodeWithChroot(oc, sriovNode, "bash", "-c", "ip l | grep ens1f0v | wc -l")
+		output, err := exutil.DebugNodeWithChroot(oc, sriovNode, "bash", "-c", "ip l | grep "+sriovPolicy.pfName+"v | wc -l")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("40"))
 	})

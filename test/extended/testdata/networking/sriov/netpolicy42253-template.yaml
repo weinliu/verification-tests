@@ -13,7 +13,6 @@ objects:
       deviceID: ${DEVICEID}
       pfNames: 
         - ${PFNAME}
-      vendor: '15b3'
     nodeSelector:
       feature.node.kubernetes.io/sriov-capable: 'true'
     numVfs: 3

@@ -10,8 +10,8 @@ objects:
     name: ${SRIOVNETPOLICY}
   spec:
     deviceType: ${DEVICETYPE}
-    deviceID: ${DEVICEID}
     nicSelector:
+      deviceID: ${DEVICEID}
       pfNames: 
         - ${PFNAME}
       vendor: ${VENDOR}
