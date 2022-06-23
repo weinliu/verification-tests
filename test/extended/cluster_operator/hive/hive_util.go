@@ -12,7 +12,6 @@ import (
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -776,15 +775,4 @@ func checkResourceNumber(oc *exutil.CLI, filterName string, resource []string) i
 	resourceOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource...).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strings.Count(resourceOutput, filterName)
-}
-
-//Get the latest 4-stable image
-//Return image for sample quay.io/openshift-release-dev/ocp-release:4.11.0-fc.0-x86_64
-func get4StableLatestImage() string {
-	outputCmd, err := exec.Command("bash", "-c", "curl -s -k https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable/latest").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("The latest image file content: %s", outputCmd)
-	testImage := gjson.Get(string(outputCmd), `pullSpec`).String()
-	e2e.Logf("The latest image for hive test is: %s", testImage)
-	return testImage
 }

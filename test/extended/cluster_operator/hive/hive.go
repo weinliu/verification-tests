@@ -81,7 +81,9 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
 		//get the latest 4-stable image for Hive testing
-		testOCPImage = get4StableLatestImage()
+		var err error
+		testOCPImage, err = exutil.GetLatest4StableImage()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		if testOCPImage == "" {
 			e2e.Logf("Can't get the latest 4-stable image, use 4.10 for testing")
 			testOCPImage = OCP410ReleaseImage
