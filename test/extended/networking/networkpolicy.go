@@ -535,4 +535,93 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			}
 		}
 	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-High-41879-ipBlock should not ignore all other cidr's apart from the last one specified	", func() {
+		var (
+			buildPruningBaseDir          = exutil.FixturePath("testdata", "networking")
+			ipBlockIngressTemplateDual   = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-ingress-dual-multiple-CIDRs-template.yaml")
+			ipBlockIngressTemplateSingle = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-ingress-single-multiple-CIDRs-template.yaml")
+			testPodFile                  = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+		)
+
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "ipv4single" {
+			g.Skip("This case requires dualstack or Single Stack IPv6 cluster")
+		}
+
+		g.By("Create a namespace")
+		oc.SetupProject()
+		ns1 := oc.Namespace()
+
+		g.By("create test pods in ns1")
+		createResourceFromFile(oc, ns1, testPodFile)
+		err := waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+
+		g.By("Scale test pods to 5")
+		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas=5", "-n", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+
+		g.By("Get 3 test pods's podname and IPs")
+		testPodName := getPodName(oc, ns1, "name=test-pods")
+		testPod1IPv6, testPod1IPv4 := getPodIP(oc, ns1, testPodName[0])
+		testPod1IPv4WithCidr := testPod1IPv4 + "/32"
+		testPod1IPv6WithCidr := testPod1IPv6 + "/128"
+		testPod2IPv6, testPod2IPv4 := getPodIP(oc, ns1, testPodName[1])
+		testPod2IPv4WithCidr := testPod2IPv4 + "/32"
+		testPod2IPv6WithCidr := testPod2IPv6 + "/128"
+		testPod3IPv6, testPod3IPv4 := getPodIP(oc, ns1, testPodName[2])
+		testPod3IPv4WithCidr := testPod3IPv4 + "/32"
+		testPod3IPv6WithCidr := testPod3IPv6 + "/128"
+
+		if ipStackType == "dualstack" {
+			g.By("create ipBlock Ingress Dual CIDRs Policy in ns1")
+			npIPBlockNS1 := ipBlockIngressDual{
+				name:      "ipblock-dual-cidrs-ingress-41879",
+				template:  ipBlockIngressTemplateDual,
+				cidrIpv4:  testPod1IPv4WithCidr,
+				cidrIpv6:  testPod1IPv6WithCidr,
+				cidr2Ipv4: testPod2IPv4WithCidr,
+				cidr2Ipv6: testPod2IPv6WithCidr,
+				cidr3Ipv4: testPod3IPv4WithCidr,
+				cidr3Ipv6: testPod3IPv6WithCidr,
+				namespace: ns1,
+			}
+			npIPBlockNS1.createipBlockMultipleCidrIngressObjectDual(oc)
+
+			output, err := oc.Run("get").Args("networkpolicy").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("ipblock-dual-cidrs-ingress-41879"))
+		} else {
+			npIPBlockNS1 := ipBlockIngressSingle{
+				name:      "ipblock-single-cidr-ingress-41879",
+				template:  ipBlockIngressTemplateSingle,
+				cidr:      testPod1IPv6WithCidr,
+				cidr2:     testPod2IPv6WithCidr,
+				cidr3:     testPod3IPv6WithCidr,
+				namespace: ns1,
+			}
+			npIPBlockNS1.createipBlockMultipleCidrIngressObjectSingle(oc)
+
+			output, err := oc.Run("get").Args("networkpolicy").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("ipblock-single-cidr-ingress-41879"))
+		}
+
+		g.By("Checking connectivity from pod1 to pod5")
+		CurlPod2PodPass(oc, ns1, testPodName[0], ns1, testPodName[4])
+
+		g.By("Checking connectivity from pod2 to pod5")
+		CurlPod2PodPass(oc, ns1, testPodName[1], ns1, testPodName[4])
+
+		g.By("Checking connectivity from pod3 to pod5")
+		CurlPod2PodPass(oc, ns1, testPodName[2], ns1, testPodName[4])
+
+		g.By("Checking connectivity from pod4 to pod5")
+		CurlPod2PodFail(oc, ns1, testPodName[3], ns1, testPodName[4])
+
+	})
 })

@@ -73,6 +73,10 @@ type ipBlockIngressDual struct {
 	namespace string
 	cidrIpv4  string
 	cidrIpv6  string
+	cidr2Ipv4 string
+	cidr2Ipv6 string
+	cidr3Ipv4 string
+	cidr3Ipv6 string
 	template  string
 }
 
@@ -80,6 +84,8 @@ type ipBlockIngressSingle struct {
 	name      string
 	namespace string
 	cidr      string
+	cidr2     string
+	cidr3     string
 	template  string
 }
 
@@ -252,6 +258,30 @@ func (ipBlock_ingress_policy *ipBlockIngressDual) createipBlockIngressObjectDual
 func (ipBlock_ingress_policy *ipBlockIngressSingle) createipBlockIngressObjectSingle(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipBlock_ingress_policy.template, "-p", "NAME="+ipBlock_ingress_policy.name, "NAMESPACE="+ipBlock_ingress_policy.namespace, "CIDR="+ipBlock_ingress_policy.cidr)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create network policy %v", ipBlock_ingress_policy.name))
+}
+
+func (ipBlock_ingress_policy *ipBlockIngressDual) createipBlockMultipleCidrIngressObjectDual(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipBlock_ingress_policy.template, "-p", "NAME="+ipBlock_ingress_policy.name, "NAMESPACE="+ipBlock_ingress_policy.namespace, "cidrIpv6="+ipBlock_ingress_policy.cidrIpv6, "cidrIpv4="+ipBlock_ingress_policy.cidrIpv4, "cidr2Ipv4="+ipBlock_ingress_policy.cidr2Ipv4, "cidr2Ipv6="+ipBlock_ingress_policy.cidr2Ipv6, "cidr3Ipv4="+ipBlock_ingress_policy.cidr3Ipv4, "cidr3Ipv6="+ipBlock_ingress_policy.cidr3Ipv6)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create network policy %v", ipBlock_ingress_policy.name))
+}
+
+func (ipBlock_ingress_policy *ipBlockIngressSingle) createipBlockMultipleCidrIngressObjectSingle(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipBlock_ingress_policy.template, "-p", "NAME="+ipBlock_ingress_policy.name, "NAMESPACE="+ipBlock_ingress_policy.namespace, "CIDR="+ipBlock_ingress_policy.cidr, "CIDR2="+ipBlock_ingress_policy.cidr2, "CIDR3="+ipBlock_ingress_policy.cidr3)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
