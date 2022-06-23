@@ -229,7 +229,7 @@ type node struct {
 	osType       string
 	osImage      string
 	osID         string
-	role         string
+	role         []string
 	scheduleable bool
 	readyStatus  string // "True", "Unknown"(Node is poweroff or disconnect), "False"
 	architecture string
@@ -241,21 +241,21 @@ func getAllNodesInfo(oc *exutil.CLI) []node {
 		// nodes []node
 		nodes    = make([]node, 0, 10)
 		zonePath = `metadata.labels.topology\.kubernetes\.io\/zone`
-		nodeRole string
 	)
 	nodesInfoJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-o", "json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	nodesList := strings.Split(strings.Trim(strings.Trim(gjson.Get(nodesInfoJSON, "items.#.metadata.name").String(), "["), "]"), ",")
 	for _, nodeName := range nodesList {
 		nodeName = strings.Trim(nodeName, "\"")
+		nodeRole := make([]string, 0, 3)
 		if gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").metadata.labels.node-role\\.kubernetes\\.io\\/master").Exists() {
-			if gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").metadata.labels.node-role\\.kubernetes\\.io\\/worker").Exists() {
-				nodeRole = "masterAndworker"
-			} else {
-				nodeRole = "master"
-			}
-		} else {
-			nodeRole = "worker"
+			nodeRole = append(nodeRole, "master")
+		}
+		if gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").metadata.labels.node-role\\.kubernetes\\.io\\/worker").Exists() {
+			nodeRole = append(nodeRole, "worker")
+		}
+		if gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").metadata.labels.node-role\\.kubernetes\\.io\\/infra").Exists() {
+			nodeRole = append(nodeRole, "infra")
 		}
 		nodeAvaiableZone := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+")."+zonePath).String()
 		// Enchancemant: It seems sometimes aws worker node miss kubernetes az label, maybe caused by other parallel cases
@@ -293,7 +293,7 @@ func getAllNodesInfo(oc *exutil.CLI) []node {
 func getSchedulableLinuxWorkers(allNodes []node) (linuxWorkers []node) {
 	linuxWorkers = make([]node, 0, 6)
 	for _, myNode := range allNodes {
-		if myNode.scheduleable && myNode.osType == "linux" && strings.Contains(myNode.role, "worker") && myNode.readyStatus == "True" {
+		if myNode.scheduleable && myNode.osType == "linux" && len(myNode.role) == 1 && strings.EqualFold(myNode.role[0], "worker") && myNode.readyStatus == "True" {
 			linuxWorkers = append(linuxWorkers, myNode)
 		}
 	}
@@ -305,7 +305,7 @@ func getSchedulableLinuxWorkers(allNodes []node) (linuxWorkers []node) {
 func getSchedulableRhelWorkers(allNodes []node) []node {
 	schedulableRhelWorkers := make([]node, 0, 6)
 	for _, myNode := range allNodes {
-		if myNode.scheduleable && myNode.osID == "rhel" && strings.Contains(myNode.role, "worker") && myNode.readyStatus == "True" {
+		if myNode.scheduleable && myNode.osID == "rhel" && len(myNode.role) == 1 && strings.EqualFold(myNode.role[0], "worker") && myNode.readyStatus == "True" {
 			schedulableRhelWorkers = append(schedulableRhelWorkers, myNode)
 		}
 	}
@@ -320,7 +320,7 @@ func getOneSchedulableWorker(allNodes []node) (expectedWorker node) {
 		expectedWorker = schedulableRhelWorkers[0]
 	} else {
 		for _, myNode := range allNodes {
-			if myNode.scheduleable && myNode.osType == "linux" && strings.Contains(myNode.role, "worker") && myNode.readyStatus == "True" {
+			if myNode.scheduleable && myNode.osType == "linux" && len(myNode.role) == 1 && strings.EqualFold(myNode.role[0], "worker") && myNode.readyStatus == "True" {
 				expectedWorker = myNode
 				break
 			}
@@ -334,7 +334,7 @@ func getOneSchedulableWorker(allNodes []node) (expectedWorker node) {
 // Get one cluster schedulable master woker
 func getOneSchedulableMaster(allNodes []node) (expectedMater node) {
 	for _, myNode := range allNodes {
-		if myNode.scheduleable && myNode.osType == "linux" && strings.Contains(myNode.role, "master") && myNode.readyStatus == "True" {
+		if myNode.scheduleable && myNode.osType == "linux" && len(myNode.role) == 1 && strings.EqualFold(myNode.role[0], "master") && myNode.readyStatus == "True" {
 			expectedMater = myNode
 			break
 		}
