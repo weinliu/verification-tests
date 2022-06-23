@@ -772,8 +772,8 @@ func getClusterKubeconfig(oc *exutil.CLI, clustername, namespace, dir string) {
 }
 
 //Check resource number after filtering
-func checkResourceNumber(oc *exutil.CLI, resourceType string, filterName string) int {
-	resourceOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resourceType, "-A").Output()
+func checkResourceNumber(oc *exutil.CLI, filterName string, resource []string) int {
+	resourceOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource...).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strings.Count(resourceOutput, filterName)
 }
