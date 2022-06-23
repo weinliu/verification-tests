@@ -182,6 +182,13 @@ func (nl *NodeList) GetAll() ([]Node, error) {
 	return allNodes, nil
 }
 
+// GetAllLinux resturns a list with all linux nodes in the cluster
+func (nl NodeList) GetAllLinux() ([]Node, error) {
+	nl.ByLabel("kubernetes.io/os=linux")
+
+	return nl.GetAll()
+}
+
 // GetAllMasterNodes returns a list of master Nodes
 func (nl NodeList) GetAllMasterNodes() ([]Node, error) {
 	nl.ByLabel("node-role.kubernetes.io/master=")
@@ -206,6 +213,20 @@ func (nl NodeList) GetAllMasterNodesOrFail() []Node {
 // GetAllWorkerNodesOrFail returns a list of worker Nodes. Fail the test case if an error happens.
 func (nl NodeList) GetAllWorkerNodesOrFail() []Node {
 	workers, err := nl.GetAllWorkerNodes()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return workers
+}
+
+// GetAllLinuxWorkerNodes returns a list of linux worker Nodes
+func (nl NodeList) GetAllLinuxWorkerNodes() ([]Node, error) {
+	nl.ByLabel("node-role.kubernetes.io/worker=,kubernetes.io/os=linux")
+
+	return nl.GetAll()
+}
+
+// GetAllLinuxWorkerNodesOrFail returns a list of linux worker Nodes. Fail the test case if an error happens.
+func (nl NodeList) GetAllLinuxWorkerNodesOrFail() []Node {
+	workers, err := nl.GetAllLinuxWorkerNodes()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return workers
 }

@@ -24,7 +24,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	g.JustBeforeEach(func() {
 		g.By("MCO Preconditions Checks")
-		nodes, err := NewNodeList(oc).GetAll()
+		nodes, err := NewNodeList(oc).GetAllLinux()
 		o.Expect(err).NotTo(o.HaveOccurred(), "It is not possible to get the list of nodes in the cluster")
 
 		for _, node := range nodes {
@@ -69,7 +69,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		mc.create(oc)
 
 		g.By("get one worker node to verify the config changes")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		stdout, err := workerNode.DebugNodeWithChroot("cat", "/etc/chrony.conf")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(stdout)
@@ -109,7 +109,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	g.It("Author:mhanss-NonPreRelease-Critical-43048-Critical-43064-create/delete custom machine config pool [Disruptive]", func() {
 		g.By("get worker node to change the label")
 		nodeList := NewNodeList(oc)
-		workerNode := nodeList.GetAllWorkerNodesOrFail()[0]
+		workerNode := nodeList.GetAllLinuxWorkerNodesOrFail()[0]
 
 		g.By("Add label as infra to the existing node")
 		infraLabel := "node-role.kubernetes.io/infra"
@@ -289,7 +289,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		e2e.Logf("Max pods are verified in the created kubelet config!")
 
 		g.By("Check kubelet config in the worker node")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		maxPods, err := workerNode.DebugNodeWithChroot("cat", "/etc/kubernetes/kubelet.conf")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(maxPods).Should(o.ContainSubstring("\"maxPods\": 500"))
@@ -322,7 +322,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		e2e.Logf("Container runtime config values are verified in the created config!")
 
 		g.By("Check container runtime config values in the worker node")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		crStorageOut, err := workerNode.DebugNodeWithChroot("head", "-n", "7", "/etc/containers/storage.conf")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(crStorageOut).Should(o.ContainSubstring("size = \"8G\""))
@@ -355,7 +355,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		e2e.Logf("Journald config is verified in the created machine config!")
 
 		g.By("Check journald config values in the worker node")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		o.Expect(err).NotTo(o.HaveOccurred())
 		journaldConfOut, err := workerNode.DebugNodeWithChroot("cat", "/etc/systemd/journald.conf")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -378,7 +378,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		icsp.create(oc)
 
 		g.By("Check registry changes in the worker node")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		registryOut, err := workerNode.DebugNodeWithChroot("cat", "/etc/containers/registries.conf")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(registryOut).Should(
@@ -495,7 +495,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		mc.create(oc)
 
 		g.By("Check MCD logs to make sure shutdown machine config daemon with SIGTERM")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		podLogs, err := exutil.WaitAndGetSpecificPodLogs(oc, "openshift-machine-config-operator", "machine-config-daemon", workerNode.GetMachineConfigDaemon(), "SIGTERM")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(podLogs).Should(
@@ -531,7 +531,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		mc.create(oc)
 
 		g.By("Check content of registries file to verify quay.io added to unqualified-search-registries list")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		regOut, err := workerNode.DebugNodeWithChroot("cat", "/etc/containers/registries.conf")
 		e2e.Logf("File content of registries conf: %v", regOut)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -640,7 +640,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		e2e.Logf("new rendered config generated for worker: %s", renderedWorkerConf)
 
 		g.By("check logs of machine-config-daemon on master-n-worker nodes, make sure CA change is detected, drain and reboot are skipped")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		masterNode := NewNodeList(oc).GetAllMasterNodesOrFail()[0]
 
 		commonExpectedStrings := []string{"File diff: detected change to /etc/kubernetes/kubelet-ca.crt", "Changes do not require drain, skipping"}
@@ -660,7 +660,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	g.It("Author:rioliu-NonPreRelease-High-43085-check mcd crash-loop-back-off error in log [Serial]", func() {
 		g.By("get master and worker nodes")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		masterNode := NewNodeList(oc).GetAllMasterNodesOrFail()[0]
 		e2e.Logf("master node %s", masterNode)
 		e2e.Logf("worker node %s", workerNode)
@@ -695,7 +695,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		pdb.create(oc)
 
 		g.By("Create new pod for pod disruption budget")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		hostname, err := workerNode.GetNodeHostname()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		podName := "dont-evict-43245"
@@ -806,7 +806,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		stateQuery := getPrometheusQueryResults(oc, "mcd_state")
 		e2e.Logf("metrics:\n %s", stateQuery)
 		firstMasterNode := NewNodeList(oc).GetAllMasterNodesOrFail()[0]
-		firstWorkerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		firstWorkerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		o.Expect(stateQuery).Should(o.ContainSubstring(`"node":"` + firstMasterNode.name + `"`))
 		o.Expect(stateQuery).Should(o.ContainSubstring(`"node":"` + firstWorkerNode.name + `"`))
 	})
@@ -878,7 +878,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		g.By("Check logs of machine-config-daemon on master-n-worker nodes, make sure pull secret changes are detected, drain and reboot are skipped")
 		masterNode := NewNodeList(oc).GetAllMasterNodesOrFail()[0]
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		commonExpectedStrings := []string{"File diff: detected change to /var/lib/kubelet/config.json", "Changes do not require drain, skipping"}
 		expectedStringsForMaster := append(commonExpectedStrings, "Node has Desired Config "+renderedMasterConf+", skipping reboot")
 		expectedStringsForWorker := append(commonExpectedStrings, "Node has Desired Config "+renderedWorkerConf+", skipping reboot")
@@ -1036,7 +1036,7 @@ nulla pariatur.`
 		mcp.waitForComplete()
 
 		g.By("Verfiy that the file has been properly provisioned")
-		node := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		node := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		rf := NewRemoteFile(node, destPath)
 		err = rf.Fetch()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1079,7 +1079,7 @@ nulla pariatur.`
 		inactiveString := "Active: inactive (dead)"
 
 		g.By("Validate that the chronyd service is active")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		svcOuput, err := workerNode.DebugNodeWithChroot("systemctl", "status", "chronyd")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(svcOuput).Should(o.ContainSubstring(activeString))
@@ -1098,7 +1098,7 @@ nulla pariatur.`
 		// then clean up logic will delete this mc, node will be rebooted, when the system is back online, chronyd service
 		// can be started automatically, unmask command can be executed w/o error with loaded & active service
 		defer func() {
-			workersNodes := NewNodeList(oc).GetAllWorkerNodesOrFail()
+			workersNodes := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()
 			for _, worker := range workersNodes {
 				svcName := "chronyd"
 				_, err := worker.UnmaskService(svcName)
@@ -1158,7 +1158,7 @@ nulla pariatur.`
 		mcp.waitForComplete()
 
 		g.By("Verfiy file content and permissions")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 
 		defaultMode := "0644"
 		rf := NewRemoteFile(workerNode, filePath)
@@ -1190,7 +1190,7 @@ nulla pariatur.`
 		mc.create(oc)
 
 		g.By("checkout machine config daemon logs to verify ")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		log, err := exutil.GetSpecificPodLogs(oc, "openshift-machine-config-operator", "machine-config-daemon", workerNode.GetMachineConfigDaemon(), "")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(log).Should(o.ContainSubstring("/etc/machine-config-daemon/no-reboot/containers-gpg.pub"))
@@ -1215,7 +1215,7 @@ nulla pariatur.`
 		mc.create(oc)
 
 		g.By("verify file content changes")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		fileContent, fileErr := workerNode.DebugNodeWithChroot("cat", "/etc/containers/policy.json")
 		o.Expect(fileErr).NotTo(o.HaveOccurred())
 		e2e.Logf(fileContent)
@@ -1257,7 +1257,7 @@ nulla pariatur.`
 		mcp.waitForComplete()
 
 		g.By("Verfiy file content and permissions")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 
 		rf := NewRemoteFile(workerNode, filePath)
 		rferr := rf.Fetch()
@@ -1297,7 +1297,7 @@ nulla pariatur.`
 		mcp.waitForComplete()
 
 		g.By("Verfiy file content and permissions")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 
 		rf := NewRemoteFile(workerNode, filePath)
 		rferr := rf.Fetch()
@@ -1340,7 +1340,7 @@ nulla pariatur.`
 		mcp.waitForComplete()
 
 		g.By("Verfiy file content and permissions")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 
 		rf := NewRemoteFile(workerNode, filePath)
 		rferr := rf.Fetch()
@@ -1383,7 +1383,7 @@ nulla pariatur.`
 		mcp.waitForComplete()
 
 		g.By("Verfiy file content and permissions")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 
 		rf := NewRemoteFile(workerNode, filePath)
 		rferr := rf.Fetch()
@@ -1442,7 +1442,7 @@ nulla pariatur.`
 
 		g.By("Check MCD logs to make sure that the node is cordoned before being drained")
 		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
-		workerNode := NewNodeList(oc).GetAllWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 
 		o.Eventually(workerNode.PollIsCordoned(), fmt.Sprintf("%dm", mcp.estimateWaitTimeInMinutes()), "20s").Should(o.BeTrue(), "Worker node must be cordoned")
 
@@ -1534,7 +1534,7 @@ nulla pariatur.`
 
 		// If the number of nodes is 2, since we are using maxUnavailable=2, all nodes will be cordoned at
 		//  the same time and the eviction process will be stuck. In this case we need to skip the test case.
-		numWorkers := len(NewNodeList(oc).GetAllWorkerNodesOrFail())
+		numWorkers := len(NewNodeList(oc).GetAllLinuxWorkerNodesOrFail())
 		if numWorkers <= 2 {
 			g.Skip(fmt.Sprintf("The test case needs at least 3 worker nodes, because eviction will be stuck if not. Current num worker is %d, we skip the case",
 				numWorkers))
@@ -1730,7 +1730,7 @@ nulla pariatur.`
 				"Pod %s should use service account name: %s", daemonPodName, expectedServiceAcc)
 
 		}
-		nodes, err := NewNodeList(oc.AsAdmin()).GetAll()
+		nodes, err := NewNodeList(oc.AsAdmin()).GetAllLinux()
 		o.Expect(err).ShouldNot(o.HaveOccurred(), "Error getting the list of nodes")
 		for _, node := range nodes {
 			g.By(fmt.Sprintf("Checking node %s", node.GetName()))

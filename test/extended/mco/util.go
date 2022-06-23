@@ -340,11 +340,15 @@ func (mcp *MachineConfigPool) estimateWaitTimeInMinutes() int {
 func (mcp *MachineConfigPool) GetNodes() ([]Node, error) {
 	labels := JSON(mcp.GetOrFail(`{.spec.nodeSelector.matchLabels}`))
 	o.Expect(labels.Exists()).Should(o.BeTrue(), fmt.Sprintf("The pool %s has no machLabels value defined", mcp.GetName()))
+
 	nodeList := NewNodeList(mcp.oc)
+	// Never select windows nodes
+	requiredLabel := "kubernetes.io/os!=windows"
 	for k, v := range labels.ToMap() {
-		requiredLabel := fmt.Sprintf("%s=%s", k, v.(string))
-		nodeList.ByLabel(requiredLabel)
+		requiredLabel = requiredLabel + fmt.Sprintf(",%s=%s", k, v.(string))
 	}
+	nodeList.ByLabel(requiredLabel)
+
 	return nodeList.GetAll()
 }
 
