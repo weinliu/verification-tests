@@ -900,7 +900,7 @@ func labelNameSpace(oc *exutil.CLI, namespace string, label string) {
 }
 
 func getSAToken(oc *exutil.CLI, account string, namespace string) string {
-	token, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", account, "-n", namespace).Output()
+	token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", account, "-n", namespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(token).NotTo(o.BeEmpty())
 	return token
