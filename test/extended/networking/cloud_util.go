@@ -204,7 +204,7 @@ func installIPEchoServiceOnGCP(oc *exutil.CLI, infraID string, host string) (str
 	runIPEcho := fmt.Sprintf("sudo netstat -ntlp | grep %s || sudo podman run --name %s -d -p %s:80 quay.io/openshifttest/ip-echo:multiarch", port, serviceName, port)
 	user := os.Getenv("SSH_CLOUD_PRIV_GCP_USER")
 	if user == "" {
-		user = "cloud-user"
+		user = "core"
 	}
 	//o.Expect(sshRunCmd(host, user, runIPEcho)).NotTo(o.HaveOccurred())
 	err = sshRunCmd(host, user, runIPEcho)

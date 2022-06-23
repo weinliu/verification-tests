@@ -1129,4 +1129,84 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(sourceIP).Should(o.Equal(nodeIP))
 	})
+
+	// author: jechen@redhat.com
+	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-47458-EgressIP should work well when reusing the egressIP that was held by a deleted project. [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+
+		g.By("1. Get list of nodes, use the first node as egressIP node, get subnet and 1 unused ip addresses from the node")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		sub := getIfaddrFromNode(nodeList.Items[0].Name, oc)
+
+		// Find 1 unused IP from the egress node
+		freeIPs := findUnUsedIPsOnNode(oc, nodeList.Items[0].Name, sub, 1)
+		o.Expect(len(freeIPs) == 1).Should(o.BeTrue())
+
+		g.By("2. Patch the egressIP to the egressIP node")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+nodeList.Items[0].Name, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+nodeList.Items[0].Name, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
+
+		g.By("3. Create first namespace, patch the egressIP to the namespace, create a test pod in the namespace")
+		oc.SetupProject()
+		ns1 := oc.Namespace()
+
+		pod1 := pingPodResource{
+			name:      "hello-pod1",
+			namespace: ns1,
+			template:  pingPodTemplate,
+		}
+
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns1, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns1, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
+
+		g.By("4. Verify source IP from this namespace is the EgressIP")
+		pod1.createPingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		var expectedEgressIP = []string{freeIPs[0]}
+		checkEgressIPonSDNHost(oc, nodeList.Items[0].Name, expectedEgressIP)
+
+		sourceIP, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		e2e.Logf("\n Get sourceIP as %v \n", sourceIP)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).Should(o.Equal(freeIPs[0]))
+
+		g.By("5.Unpatch egressIP from the first namespace, verify source IP from this namespace is node's IP address where the test pod resides on")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns1, "{\"egressIPs\":[]}")
+
+		PodNodeName, err := exutil.GetPodNodeName(oc, pod1.namespace, pod1.name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeIP := getNodeIPv4(oc, ns1, PodNodeName)
+		sourceIP, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		e2e.Logf("\n Get sourceIP as %v \n", sourceIP)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).Should(o.Equal(nodeIP))
+
+		g.By("6. Create a second namespace, patch the egressIP to the namespace, create a test pod in the namespace")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		pod2 := pingPodResource{
+			name:      "hello-pod2",
+			namespace: ns2,
+			template:  pingPodTemplate,
+		}
+
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns2, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns2, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
+
+		g.By("7. Verify source IP from the second namespace is the EgressIP that is being reused")
+		pod2.createPingPod(oc)
+		waitPodReady(oc, pod2.namespace, pod2.name)
+
+		checkEgressIPonSDNHost(oc, nodeList.Items[0].Name, expectedEgressIP)
+
+		sourceIP, err = e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		e2e.Logf("\n Get sourceIP as %v \n", sourceIP)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).Should(o.Equal(freeIPs[0]))
+	})
 })
