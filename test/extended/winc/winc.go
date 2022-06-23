@@ -597,7 +597,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 			"host_service_logs/windows/log_files/kubelet/kubelet.log",
 			"host_service_logs/windows/log_files/containerd/containerd.log",
 			"host_service_logs/windows/log_winevent/",
-			"host_service_logs/windows/log_winevent/docker_winevent.log",
 		}
 		for _, v := range checkMessage {
 			if !strings.Contains(mustGather, v) {
