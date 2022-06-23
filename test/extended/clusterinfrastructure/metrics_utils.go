@@ -15,7 +15,7 @@ import (
 // get a token assigned to prometheus-k8s from openshift-monitoring namespace
 func getPrometheusSAToken(oc *exutil.CLI) string {
 	e2e.Logf("Getting a token assgined to prometheus-k8s from openshift-monitoring namespace...")
-	token, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
+	token, err := exutil.GetSAToken(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(token).NotTo(o.BeEmpty())
 	return token
