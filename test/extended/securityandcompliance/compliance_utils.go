@@ -792,7 +792,7 @@ func checkMachineConfigPoolStatus(oc *exutil.CLI, nodeSelector string) {
 
 func checkNodeContents(oc *exutil.CLI, nodeName string, contentList []string, cmd string, opt string, filePath string, pattern string) {
 	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
-		nContent, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("nodes/"+nodeName, "--", "chroot", "/host", cmd, opt, filePath).OutputToFile(getRandomString() + "content.json")
+		nContent, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("nodes/"+nodeName, "-n", oc.Namespace(), "--", "chroot", "/host", cmd, opt, filePath).OutputToFile(getRandomString() + "content.json")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		results, _ := exec.Command("bash", "-c", "cat "+nContent+" | grep "+pattern+"; rm -rf "+nContent).Output()
 		result := string(results)
