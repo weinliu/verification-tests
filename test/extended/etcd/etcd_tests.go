@@ -62,4 +62,31 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("experimental-initial-corrupt-check=true"))
 	})
+	// author: skundu@redhat.com
+	g.It("Author:skundu-NonPreRelease-Critical-52312-cluster-backup.sh script has a conflict to use /etc/kubernetes/static-pod-certs folder [Serial]", func() {
+		g.By("Test for case OCP-52312 cluster-backup.sh script has a conflict to use /etc/kubernetes/static-pod-certs folder.")
+		e2e.Logf("select all the master nodes")
+		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
+
+		defer func() {
+			e2e.Logf("Remove the certs directory")
+			_, errCert := oc.AsAdmin().Run("debug").Args("node/"+masterNodeList[0], "--", "chroot", "/host", "rm", "-rf", "/etc/kubernetes/static-pod-certs").Output()
+			o.Expect(errCert).NotTo(o.HaveOccurred())
+		}()
+		e2e.Logf("Create the certs directory")
+		_, err := oc.AsAdmin().Run("debug").Args("node/"+masterNodeList[0], "--", "chroot", "/host", "mkdir", "/etc/kubernetes/static-pod-certs").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer func() {
+			e2e.Logf("Remove the backup directory")
+			_, err := oc.AsAdmin().Run("debug").Args("node/"+masterNodeList[0], "--", "chroot", "/host", "rm", "-rf", "/home/core/assets/backup").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		firstMNode := []string{masterNodeList[0]}
+		e2e.Logf("Run the backup")
+		masterN, _ := runDRBackup(oc, firstMNode)
+		e2e.Logf("Etcd db successfully backed up on node %v", masterN)
+
+	})
+
 })
