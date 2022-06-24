@@ -13,6 +13,9 @@ import (
 	"time"
 
 	g "github.com/onsi/ginkgo"
+	o "github.com/onsi/gomega"
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -48,6 +51,15 @@ func NewMakeCLI() *CLI {
 	client := &CLI{}
 	client.username = "admin"
 	client.execPath = "make"
+	client.showInfo = true
+	return client
+}
+
+// NewMVNCLI intialize the make framework
+func NewMVNCLI() *CLI {
+	client := &CLI{}
+	client.username = "admin"
+	client.execPath = "mvn"
 	client.showInfo = true
 	return client
 }
@@ -159,6 +171,26 @@ func replaceContent(filePath string, src string, target string) {
 	}
 }
 
+func insertContent(filePath string, src string, insertStr string) {
+	input, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		FatalErr(fmt.Errorf("read file %s failed: %v", filePath, err))
+	}
+	contents := string(input)
+	lines := strings.Split(contents, "\n")
+	var newLines []string
+	for _, line := range lines {
+		newLines = append(newLines, line)
+		if strings.Contains(line, src) {
+			newLines = append(newLines, insertStr)
+		}
+	}
+	output := []byte(strings.Join(newLines, "\n"))
+	if err = ioutil.WriteFile(filePath, output, 0755); err != nil {
+		FatalErr(fmt.Errorf("write file %s failed: %v", filePath, err))
+	}
+}
+
 func copy(src string, target string) error {
 	bytesRead, err := ioutil.ReadFile(src)
 	if err != nil {
@@ -170,4 +202,36 @@ func copy(src string, target string) error {
 		return err
 	}
 	return nil
+}
+
+//the method is to create one resource with template
+func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
+	var configFile string
+	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + "olm-config.json")
+		if err != nil {
+			e2e.Logf("the err:%v, and try next round", err)
+			return false, nil
+		}
+		configFile = output
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("can not process %v", parameters))
+
+	e2e.Logf("the file of resource is %s", configFile)
+	return oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
+}
+
+type clusterrolebindingDescription struct {
+	name      string
+	namespace string
+	saname    string
+	template  string
+}
+
+//the method is to create role with template
+func (clusterrolebinding *clusterrolebindingDescription) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", clusterrolebinding.template,
+		"-p", "NAME="+clusterrolebinding.name, "NAMESPACE="+clusterrolebinding.namespace, "SA_NAME="+clusterrolebinding.saname)
+	o.Expect(err).NotTo(o.HaveOccurred())
 }

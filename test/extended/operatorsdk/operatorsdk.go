@@ -23,6 +23,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	var operatorsdkCLI = NewOperatorSDKCLI()
 	var makeCLI = NewMakeCLI()
+	var mvnCLI = NewMVNCLI()
 	var oc = exutil.NewCLIWithoutNamespace("default")
 	var ocpversion = "4.10"
 
@@ -1834,6 +1835,166 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "the status of deployment/memcached44295-sample is wrong")
 
 		g.By("OCP 44295 SUCCESS")
+	})
+
+	// author: xzha@redhat.com
+	g.It("ConnectedOnly-VMonly-Author:xzha-High-52371-Enable Micrometer Metrics from java-operator-plugins", func() {
+		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
+			g.Skip("HTTP_PROXY is not empty - skipping test ...")
+		}
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture != "amd64" {
+			g.Skip("Do not support " + architecture)
+		}
+		var (
+			buildPruningBaseDir        = exutil.FixturePath("testdata", "operatorsdk")
+			dataPath                   = filepath.Join(buildPruningBaseDir, "ocp-52371-data")
+			clusterrolebindingtemplate = filepath.Join(buildPruningBaseDir, "cluster-role-binding.yaml")
+			quayCLI                    = container.NewQuayCLI()
+			imageTag                   = "quay.io/olmqe/memcached-quarkus-operator:52371-" + getRandomString()
+			tmpBasePath                = "/tmp/ocp-52371-" + getRandomString()
+			tmpOperatorPath            = filepath.Join(tmpBasePath, "memcached-quarkus-operator-52371")
+			kubernetesYamlFilePath     = filepath.Join(tmpOperatorPath, "target", "kubernetes", "kubernetes.yml")
+		)
+		operatorsdkCLI.ExecCommandPath = tmpOperatorPath
+		makeCLI.ExecCommandPath = tmpOperatorPath
+		mvnCLI.ExecCommandPath = tmpOperatorPath
+		err := os.MkdirAll(tmpOperatorPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+
+		g.By("step: generate java type operator")
+		output, err := operatorsdkCLI.Run("init").Args("--plugins=quarkus", "--domain=example.com").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("operator-sdk create api"))
+
+		g.By("step: Create API.")
+		_, err = operatorsdkCLI.Run("create").Args("api", "--plugins=quarkus", "--group=cache", "--version=v1", "--kind=Memcached52371").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step: update API and Controller")
+		examplePath := filepath.Join(tmpOperatorPath, "src", "main", "java", "com", "example")
+		err = copy(filepath.Join(dataPath, "Memcached52371Reconciler.java"), filepath.Join(examplePath, "Memcached52371Reconciler.java"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = copy(filepath.Join(dataPath, "Memcached52371Spec.java"), filepath.Join(examplePath, "Memcached52371Spec.java"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = copy(filepath.Join(dataPath, "Memcached52371Status.java"), filepath.Join(examplePath, "Memcached52371Status.java"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = copy(filepath.Join(dataPath, "pom.xml"), filepath.Join(tmpOperatorPath, "pom.xml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step:mvn clean install")
+		output, err = mvnCLI.Run("clean").Args("install").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("BUILD SUCCESS"))
+
+		g.By("step: Build and push the operator image")
+		defer quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
+		output, err = makeCLI.Run("docker-build").Args("docker-push", "IMG="+imageTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("BUILD SUCCESS"))
+
+		g.By("step: Deploy the operator")
+		oc.SetupProject()
+		ns := oc.Namespace()
+
+		g.By("step: Install the CRD")
+		defer func() {
+			g.By("step: delete crd.")
+			_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", filepath.Join(tmpOperatorPath, "target", "kubernetes", "memcached52371s.cache.example.com-v1.yml")).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", filepath.Join(tmpOperatorPath, "target", "kubernetes", "memcached52371s.cache.example.com-v1.yml")).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step: Create rcbc file")
+		insertContent(kubernetesYamlFilePath, "- kind: ServiceAccount", "    namespace: "+ns)
+
+		g.By("step: Deploy the operator")
+		defer func() {
+			g.By("step: delete operator.")
+			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", kubernetesYamlFilePath, "-n", ns).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", kubernetesYamlFilePath, "-n", ns).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterrolebinding := clusterrolebindingDescription{
+			name:      "memcached52371-operator-admin",
+			namespace: ns,
+			saname:    "memcached-quarkus-operator-52371-operator",
+			template:  clusterrolebindingtemplate,
+		}
+		clusterrolebinding.create(oc)
+		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lines := strings.Split(podList, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "memcached-quarkus-operator-52371-operator") {
+					e2e.Logf("found pod memcached-quarkus-operator-52371-operator")
+					if strings.Contains(line, "Running") {
+						e2e.Logf("the status of pod memcached-quarkus-operator-52371-operator is Running")
+						return true, nil
+					}
+					e2e.Logf("the status of pod memcached-quarkus-operator-52371-operator is not Running")
+					return false, nil
+				}
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached-quarkus-operator-52371-operator in project %s", ns))
+		label := `app.kubernetes.io/name=memcached-quarkus-operator-52371-operator`
+		podName, err := oc.AsAdmin().Run("get").Args("-n", ns, "pod", "-l", label, "-ojsonpath={..metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podName).NotTo(o.BeEmpty())
+
+		g.By("step: Create CR")
+		crFilePath := filepath.Join(dataPath, "memcached-sample.yaml")
+		defer func() {
+			g.By("step: delete cr.")
+			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", crFilePath, "-n", ns).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", ns).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lines := strings.Split(podList, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "memcached52371-sample") {
+					e2e.Logf("found pod memcached52371-sample")
+					if strings.Contains(line, "Running") {
+						e2e.Logf("the status of pod memcached52371-sample is Running")
+						return true, nil
+					}
+					e2e.Logf("the status of pod memcached52371-sample is not Running")
+					return false, nil
+				}
+			}
+			return false, nil
+		})
+		if waitErr != nil {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("Memcached52371", "-n", ns).Output()
+			e2e.Logf(output)
+			output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns).Output()
+			e2e.Logf(output)
+			output, _ = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ns, podName).Output()
+			e2e.Logf(output)
+		}
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached52371-sample in project %s or the pod is not running", ns))
+
+		g.By("check Micrometer Metrics is enable")
+		clusterIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "service", "memcached-quarkus-operator-52371-operator", "-o=jsonpath={.spec.clusterIP}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterIP).NotTo(o.BeEmpty())
+		url := fmt.Sprintf("http://%s/q/metrics", clusterIP)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", ns, podName, "curl", url).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).NotTo(o.BeEmpty())
+		o.Expect(output).To(o.ContainSubstring("system_cpu_count"))
+
+		g.By("OCP 52371 SUCCESS")
 	})
 
 	// author: chuo@redhat.com
