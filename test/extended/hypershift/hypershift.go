@@ -144,23 +144,18 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	g.It("Longduration-NonPreRelease-Author:heli-Critical-43272-Test cluster autoscaler via hostedCluster autoScaling settings[Serial][Slow]", func() {
 		g.By("Author:jiezhao-Critical-43272-Test cluster autoscaler via hostedCluster autoScaling settings")
 
-		nodeCountJSONPath := fmt.Sprintf("-ojsonpath={.items[?(@.spec.clusterName==\"%s\")].spec.nodeCount}", guestClusterName)
-		nodeCount := doOcpReq(oc, OcpGet, true, []string{"-n", "clusters", "nodepools", nodeCountJSONPath})
-		e2e.Logf("The nodepool size is : %s\n", nodeCount)
+		nodeReplicasJSONPath := fmt.Sprintf(`-ojsonpath={.items[?(@.spec.clusterName=="%s")].spec.replicas}`, guestClusterName)
+		nodeReplicas := doOcpReq(oc, OcpGet, true, []string{"-n", "clusters", "nodepools", nodeReplicasJSONPath})
+		e2e.Logf("The nodepool replicas is : %s\n", nodeReplicas)
 
 		var bashClient = NewCmdClient().WithShowInfo(true)
-		npCount := 2
+		npCount := 1
 		npName := "jz-43272-test-01"
-		npName2 := "jz-43272-test-02"
 
 		defer func() {
 			res := doOcpReq(oc, OcpGet, false, []string{"-n", "clusters", "nodepools", npName, "--ignore-not-found"})
 			if res != "" {
 				doOcpReq(oc, OcpDelete, false, []string{"-n", "clusters", "nodepools", npName})
-			}
-			res = doOcpReq(oc, OcpGet, false, []string{"-n", "clusters", "nodepools", npName2, "--ignore-not-found"})
-			if res != "" {
-				doOcpReq(oc, OcpDelete, false, []string{"-n", "clusters", "nodepools", npName2})
 			}
 		}()
 
@@ -168,28 +163,18 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		_, err := bashClient.Run(cmd).Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 
-		_, err = bashClient.Run(fmt.Sprintf(
-			"hypershift create nodepool aws --name %s --cluster-name %s --node-count %d", npName2, guestClusterName, npCount)).Output()
-		o.Expect(err).ShouldNot(o.HaveOccurred())
-
-		//remove nodeCount and set autoscaling max:4, min:1
-		autoScalingMax := "4"
+		//remove replicas and set autoscaling max:4, min:1
+		autoScalingMax := "2"
 		autoScalingMin := "1"
-		removeNpConfig := "[{\"op\": \"remove\", \"path\": \"/spec/nodeCount\"}]"
-		autoscalConfig := fmt.Sprintf("--patch={\"spec\": {\"autoScaling\":   {\"max\": %s, \"min\":%s}}}", autoScalingMax, autoScalingMin)
+		removeNpConfig := `[{"op": "remove", "path": "/spec/replicas"}]`
+		autoscalConfig := fmt.Sprintf(`--patch={"spec": {"autoScaling": {"max": %s, "min":%s}}}`, autoScalingMax, autoScalingMin)
 
 		doOcpReq(oc, OcpPatch, true, []string{"-n", "clusters", "nodepools", npName, "--type=json", "-p", removeNpConfig})
 		doOcpReq(oc, OcpPatch, true, []string{"-n", "clusters", "nodepools", npName, autoscalConfig, "--type=merge"})
-		doOcpReq(oc, OcpPatch, true, []string{"-n", "clusters", "nodepools", npName2, "--type=json", "-p", removeNpConfig})
-		doOcpReq(oc, OcpPatch, true, []string{"-n", "clusters", "nodepools", npName2, autoscalConfig, "--type=merge"})
 
 		res := doOcpReq(oc, OcpGet, true, []string{"-n", "clusters", "nodepools", npName, "-ojsonpath={.spec.autoScaling.max}"})
 		o.Expect(res).To(o.ContainSubstring(autoScalingMax))
 		res = doOcpReq(oc, OcpGet, true, []string{"-n", "clusters", "nodepools", npName, "-ojsonpath={.spec.autoScaling.min}"})
-		o.Expect(res).To(o.ContainSubstring(autoScalingMin))
-		res = doOcpReq(oc, OcpGet, true, []string{"-n", "clusters", "nodepools", npName2, "-ojsonpath={.spec.autoScaling.max}"})
-		o.Expect(res).To(o.ContainSubstring(autoScalingMax))
-		res = doOcpReq(oc, OcpGet, true, []string{"-n", "clusters", "nodepools", npName2, "-ojsonpath={.spec.autoScaling.min}"})
 		o.Expect(res).To(o.ContainSubstring(autoScalingMin))
 
 		guestClusterKubeconfigFile := "/tmp/guestcluster-kubeconfig-43272"
@@ -216,9 +201,8 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		//wait a bit for nodepool scale up, max=20mins
 		err = wait.Poll(30*time.Second, 20*time.Minute, func() (bool, error) {
-			resNp := doOcpReq(oc, OcpGet, false, []string{"nodepool", npName, "-n", "clusters", "-ojsonpath={.status.nodeCount}"})
-			resNp2 := doOcpReq(oc, OcpGet, false, []string{"nodepool", npName2, "-n", "clusters", "-ojsonpath={.status.nodeCount}"})
-			if resNp == autoScalingMax && resNp2 == autoScalingMax {
+			resNp := doOcpReq(oc, OcpGet, false, []string{"nodepool", npName, "-n", "clusters", "-ojsonpath={.status.replicas}"})
+			if resNp == autoScalingMax {
 				return true, nil
 			}
 			return false, nil
@@ -227,7 +211,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		//clear
 		doOcpReq(oc, OcpDelete, true, []string{"-n", "clusters", "nodepools", npName})
-		doOcpReq(oc, OcpDelete, true, []string{"-n", "clusters", "nodepools", npName2})
 	})
 
 	// author: heli@redhat.com
@@ -235,16 +218,16 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		g.By("hypershift OCP-43829-Test autoscaling status in nodePool conditions")
 
 		//check nodepool autoscale status
-		npNameJSONPath := fmt.Sprintf("-ojsonpath={.items[?(@.spec.clusterName==\"%s\")].metadata.name}", guestClusterName)
+		npNameJSONPath := fmt.Sprintf(`-ojsonpath={.items[?(@.spec.clusterName=="%s")].metadata.name}`, guestClusterName)
 		existingNodePools := doOcpReq(oc, OcpGet, false, []string{"nodepool", "-n", "clusters", npNameJSONPath})
 		existNp := strings.Split(existingNodePools, " ")[0]
 		res := doOcpReq(oc, OcpGet, true, []string{"nodepool", existNp, "-n", "clusters",
-			"-ojsonpath={range .status.conditions[*]}{@.type}{\" \"}{@.status}{\" \"}{end}}"})
+			`-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}}`})
 		o.Expect(res).To(o.ContainSubstring("AutoscalingEnabled False"))
 
-		nodeCount := doOcpReq(oc, OcpGet, true,
-			[]string{"-n", "clusters", "nodepools", existNp, "-ojsonpath={.spec.nodeCount}"})
-		e2e.Logf("The nodepool size is : %s\n", nodeCount)
+		nodeReplicas := doOcpReq(oc, OcpGet, true,
+			[]string{"-n", "clusters", "nodepools", existNp, "-ojsonpath={.spec.replicas}"})
+		e2e.Logf("The nodepool size is : %s\n", nodeReplicas)
 
 		//create nodepool
 		var bashClient = NewCmdClient().WithShowInfo(true)
@@ -264,27 +247,27 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		//check nodepool autoscale status
 		res = doOcpReq(oc, OcpGet, true, []string{"nodepool", npName, "-n", "clusters",
-			"-ojsonpath={range .status.conditions[*]}{@.type}{\" \"}{@.status}{\" \"}{end}}"})
+			`-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}}`})
 		o.Expect(res).To(o.ContainSubstring("AutoscalingEnabled False"))
 
-		//Set autoscaling and keep nodeCount in the nodepool:
+		//Set autoscaling and keep nodeReplicas in the nodepool:
 		autoScalingMax := "4"
 		autoScalingMin := "1"
-		autoscalConfig := fmt.Sprintf("--patch={\"spec\": {\"autoScaling\":   {\"max\": %s, \"min\":%s}}}", autoScalingMax, autoScalingMin)
+		autoscalConfig := fmt.Sprintf(`--patch={"spec": {"autoScaling": {"max": %s, "min":%s}}}`, autoScalingMax, autoScalingMin)
 		doOcpReq(oc, OcpPatch, true, []string{"-n", "clusters", "nodepools", npName, autoscalConfig, "--type=merge"})
 
 		//Check autoscaling status
 		res = doOcpReq(oc, OcpGet, true, []string{"nodepool", npName, "-n", "clusters",
-			"-ojsonpath={range .status.conditions[*]}{@.type}{\" \"}{@.status}{\" \"}{end}}"})
+			`-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}}`})
 		o.Expect(res).To(o.ContainSubstring("AutoscalingEnabled False"))
 
-		//Remove nodeCount, keep autoscaling in the nodepool:
-		removeNpConfig := "[{\"op\": \"remove\", \"path\": \"/spec/nodeCount\"}]"
+		//Remove nodeReplicas, keep autoscaling in the nodepool:
+		removeNpConfig := `[{"op": "remove", "path": "/spec/replicas"}]`
 		doOcpReq(oc, OcpPatch, true, []string{"-n", "clusters", "nodepools", npName, "--type=json", "-p", removeNpConfig})
 
 		//Check autoscaling status
 		res = doOcpReq(oc, OcpGet, true, []string{"nodepool", npName, "-n", "clusters",
-			"-ojsonpath={range .status.conditions[*]}{@.type}{\" \"}{@.status}{\" \"}{end}}"})
+			`-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}}`})
 		o.Expect(res).To(o.ContainSubstring("AutoscalingEnabled True"))
 	})
 
@@ -328,10 +311,10 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "enable rolling update image error")
 
-		//remove nodeCount, add autoscaling, change spec.release.image back
+		//remove nodeReplicas, add autoscaling, change spec.release.image back
 		autoScalingMax := "4"
 		autoScalingMin := "1"
-		removeNpConfig := "[{\"op\": \"remove\", \"path\": \"/spec/nodeCount\"}]"
+		removeNpConfig := "[{\"op\": \"remove\", \"path\": \"/spec/replicas\"}]"
 		doOcpReq(oc, OcpPatch, true, []string{"-n", "clusters", "nodepools", npName, "--type=json", "-p", removeNpConfig})
 		autoscalConfig := fmt.Sprintf("--patch={\"spec\": {\"autoScaling\":   {\"max\": %s, \"min\":%s}}}", autoScalingMax, autoScalingMin)
 		doOcpReq(oc, OcpPatch, true, []string{"-n", "clusters", "nodepools", npName, autoscalConfig, "--type=merge"})

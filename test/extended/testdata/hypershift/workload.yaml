@@ -1,7 +1,7 @@
 kind: Template
 apiVersion: template.openshift.io/v1
 metadata:
-  name: nodepool-template
+  name: workload-job-template
 objects:
   - apiVersion: batch/v1
     kind: Job
