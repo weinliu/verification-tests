@@ -1336,7 +1336,7 @@ func getPodMultiNetwork(oc *exutil.CLI, namespace string, podName string) (strin
 
 //Pinging pod's secondary interfaces should pass
 func curlPod2PodMultiNetworkPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPv4 string, podIPv6 string) {
-	err := wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
+	err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
 		msg, _ := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
 		if !strings.Contains(msg, "Hello OpenShift!") {
 			e2e.Logf("The curl should pass but fail, and try next round")
@@ -1351,7 +1351,7 @@ func curlPod2PodMultiNetworkPass(oc *exutil.CLI, namespaceSrc string, podNameSrc
 
 //Pinging pod's secondary interfaces should fail
 func curlPod2PodMultiNetworkFail(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPv4 string, podIPv6 string) {
-	err := wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
+	err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
 		msg, _ := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
 		if strings.Contains(msg, "Hello OpenShift!") {
 			e2e.Logf("The curl should fail but pass, and try next round")
