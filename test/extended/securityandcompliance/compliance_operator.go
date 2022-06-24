@@ -2902,6 +2902,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				g.By("Create File Integrity object.. !!!\n")
 				fi1.namespace = sub.namespace
 				fi1.createFIOWithoutConfig(oc, itName, dr)
+				fi1.checkFileintegrityStatus(oc, "running")
+				newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 				g.By("Rerun scan and check ComplianceSuite status & result.. !!!\n")
 				_, err := OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssb.name, "-n", subD.namespace).Output()

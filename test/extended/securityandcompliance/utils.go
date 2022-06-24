@@ -34,7 +34,7 @@ type podModify struct {
 
 func (fi1 *fileintegrity) checkFileintegrityStatus(oc *exutil.CLI, expected string) {
 	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", fi1.namespace, "-l app=aide-example-fileintegrity",
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", fi1.namespace, "-l app=aide-"+fi1.name,
 			"-o=jsonpath={.items[*].status.containerStatuses[*].state}").Output()
 		e2e.Logf("the result of checkFileintegrityStatus:%v", output)
 		if strings.Contains(output, expected) && (!(strings.Contains(strings.ToLower(output), "error"))) && (!(strings.Contains(strings.ToLower(output), "crashLoopbackOff"))) {
