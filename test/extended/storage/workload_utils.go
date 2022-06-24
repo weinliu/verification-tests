@@ -657,6 +657,21 @@ func (dep *deployment) createWithNodeSelector(oc *exutil.CLI, labelName string, 
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// Create new deployment with extra parameters for nodeAffinity, key, operator and values should be provided in matchExpressions
+func (dep *deployment) createWithNodeAffinity(oc *exutil.CLI, key string, operator string, values []string) {
+	if dep.namespace == "" {
+		dep.namespace = oc.Namespace()
+	}
+	extraParameters := map[string]interface{}{
+		"jsonPath": `items.0.spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms.0.matchExpressions.0.`,
+		"key":      key,
+		"operator": operator,
+		"values":   values,
+	}
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", dep.template, "-p", "DNAME="+dep.name, "DNAMESPACE="+dep.namespace, "PVCNAME="+dep.pvcname, "REPLICASNUM="+dep.replicasno, "DLABEL="+dep.applabel, "MPATH="+dep.mpath, "VOLUMETYPE="+dep.volumetype, "TYPEPATH="+dep.typepath)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 // Delete Deployment from the namespace
 func (dep *deployment) delete(oc *exutil.CLI) {
 	err := oc.WithoutNamespace().Run("delete").Args("deployment", dep.name, "-n", dep.namespace).Execute()

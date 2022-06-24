@@ -20,6 +20,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvcTemplate        string
 		dsTemplate         string
 		stsTemplate        string
+		deploymentTemplate string
 	)
 	// setup NFS server before each test case
 	g.BeforeEach(func() {
@@ -30,6 +31,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		dsTemplate = filepath.Join(storageTeamBaseDir, "ds-template.yaml")
 		stsTemplate = filepath.Join(storageTeamBaseDir, "sts-template.yaml")
 		svcNfsServer = setupNfsServer(oc, storageTeamBaseDir)
+		deploymentTemplate = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
 	})
 
 	g.AfterEach(func() {
@@ -151,6 +153,72 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for nodeName := range uniqueNodeNames {
 			checkVolumeNotMountOnNode(oc, volName, nodeName)
 		}
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-14353 [NFS] volume mounts should be cleaned up in previous node after Pod is reschedule
+	g.It("Author:rdeore-High-14353-[NFS] volume mounts should be cleaned up in previous node after Pod is reschedule [Disruptive]", func() {
+		// Set the resource objects definition for the scenario
+		var (
+			scName = "nfs-sc-" + getRandomString()
+			pvc    = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("2Gi"),
+				setPersistentVolumeClaimAccessmode("ReadWriteOnce"), setPersistentVolumeClaimStorageClassName(scName))
+			dep = newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+			pv  = newPersistentVolume(setPersistentVolumeTemplate(pvTemplate), setPersistentVolumeAccessMode("ReadWriteOnce"), setPersistentVolumeKind("nfs"),
+				setPersistentVolumeStorageClassName(scName), setPersistentVolumeReclaimPolicy("Delete"), setPersistentVolumeCapacity("2Gi"))
+		)
+
+		nfsPodName := svcNfsServer.deploy.getPodList(oc)[0]
+		nfsNodeName := getNodeNameByPod(oc, svcNfsServer.deploy.namespace, nfsPodName)
+		nfsNodeList := []string{nfsNodeName}
+		schedulableLinuxWorkers := getSchedulableLinuxWorkers(getAllNodesInfo(oc))
+		if len(schedulableLinuxWorkers) < 3 {
+			g.Skip("Skip: This test needs at least 3 worker nodes, test cluster has less than 3 schedulable workers!")
+		}
+
+		g.By("#. Create new project for the scenario")
+		oc.SetupProject()
+
+		g.By("#. Create a pv with the storageclass")
+		pv.nfsServerIP = svcNfsServer.svc.clusterIP
+		pv.create(oc)
+		defer pv.deleteAsAdmin(oc)
+
+		g.By("#. Create a pvc with the storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("#. Create deployment consume the created pvc with nodeAffinity Not In nfs-server node and wait for the deployment ready")
+		dep.createWithNodeAffinity(oc, "kubernetes.io/hostname", "NotIn", nfsNodeList)
+		defer dep.deleteAsAdmin(oc)
+		dep.waitReady(oc)
+
+		g.By("#. Check the pods can read/write data inside volume")
+		dep.checkPodMountedVolumeCouldRW(oc)
+
+		g.By("# Run drain cmd to drain the node on which the deployment's pod is located")
+		volName := pvc.getVolumeName(oc)
+		originNodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
+		drainSpecificNode(oc, originNodeName)
+		defer uncordonSpecificNode(oc, originNodeName)
+
+		g.By("# Wait for the deployment become ready again")
+		dep.waitReady(oc)
+
+		g.By("# Check testdata still in the volume")
+		output, err := execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat "+dep.mpath+"/testfile*")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("storage test"))
+
+		g.By("# Check the deployment's pod schedule to another ready node")
+		newNodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
+		o.Expect(originNodeName).NotTo(o.Equal(newNodeName))
+
+		g.By("# Bring back the drained node")
+		uncordonSpecificNode(oc, originNodeName)
+
+		g.By("#. Check the volume umount from the origin node")
+		checkVolumeNotMountOnNode(oc, volName, originNodeName)
 	})
 })
 
