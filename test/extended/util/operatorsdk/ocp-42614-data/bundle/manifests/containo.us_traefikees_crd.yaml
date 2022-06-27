@@ -10,6 +10,7 @@ spec:
     listKind: TraefikeeList
     plural: traefikees
     singular: traefikee
+  preserveUnknownFields: false
   scope: Namespaced
   subresources:
     status: {}
