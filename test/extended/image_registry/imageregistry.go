@@ -329,8 +329,15 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	g.It("Author:wewang-Medium-27985-Image with invalid resource name can be pruned", func() {
 		//When registry configured pvc or emptryDir, the replicas is 1 and with recreate pod policy.
 		//This is not suitable for the defer recoverage. Only run this case on cloud storage.
-		if checkRegistryUsingFSVolume(oc) {
-			g.Skip("Skip for fs volume")
+		platforms := map[string]bool{
+			"aws":          true,
+			"azure":        true,
+			"gcp":          true,
+			"alibabacloud": true,
+			"ibmcloud":     true,
+		}
+		if !platforms[exutil.CheckPlatform(oc)] {
+			g.Skip("Skip for non-supported platform")
 		}
 
 		g.By("Config image registry to emptydir")
@@ -345,9 +352,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		checkRegistryFunctionFine(oc, "test-27985", oc.Namespace())
 
 		g.By("Add system:image-pruner role to system:serviceaccount:openshift-image-registry:registry")
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "system:image-pruner", "system:serviceaccount:openshift-image-registry:registry").Execute()
 		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "system:image-pruner", "system:serviceaccount:openshift-image-registry:registry").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "system:image-pruner", "system:serviceaccount:openshift-image-registry:registry").Execute()
 
 		g.By("Check invaild image source can be pruned")
 		err = oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-image-registry", "deployment.apps/image-registry", "mkdir", "-p", "/registry/docker/registry/v2/repositories/foo/bar").Execute()

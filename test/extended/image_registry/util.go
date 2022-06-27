@@ -255,28 +255,14 @@ func imagePruneLog(oc *exutil.CLI, matchLogs, notMatchLogs string) {
 }
 
 func configureRegistryStorageToEmptyDir(oc *exutil.CLI) {
-	var hasstorage string
 	emptydirstorage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.status.storage.emptyDir}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if emptydirstorage == "{}" {
 		g.By("Image registry is using EmptyDir now")
 	} else {
 		g.By("Set registry to use EmptyDir storage")
-		platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		switch platformtype {
-		case "AWS":
-			hasstorage = "s3"
-		case "OpenStack":
-			hasstorage = "swift"
-		case "GCP":
-			hasstorage = "gcs"
-		case "Azure":
-			hasstorage = "azure"
-		default:
-			e2e.Logf("Image Registry is using unknown storage type")
-		}
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"`+hasstorage+`":null,"emptyDir":{}}, "replicas":1}}`, "--type=merge").Execute()
+		storagetype, _ := getRegistryStorageConfig(oc)
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"`+storagetype+`":null,"emptyDir":{}}, "replicas":1}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = wait.Poll(30*time.Second, 2*time.Minute, func() (bool, error) {
 			podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(metav1.ListOptions{LabelSelector: "docker-registry=default"})
@@ -373,7 +359,7 @@ func getRegistryStorageConfig(oc *exutil.CLI) (string, string) {
 		storagetype = "ibmocs"
 		storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.ibmocs.bucket}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-	case "None", "VSphere":
+	case "None", "VSphere", "Nutanix":
 		storagetype = "pvc"
 		storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.pvc.claim}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
