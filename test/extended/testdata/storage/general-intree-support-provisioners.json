@@ -27,6 +27,24 @@
             "preset_scname": "standard"
           }
         ]
+      },
+      {
+        "name": "openstack",
+        "provisioners": [
+          {
+            "name": "kubernetes.io/cinder",
+            "preset_scname": "standard"
+          }
+        ]
+      },
+      {
+        "name": "vsphere",
+        "provisioners": [
+          {
+            "name": "kubernetes.io/vsphere-volume",
+            "preset_scname": "thin"
+          }
+        ]
       }
     ]
   }

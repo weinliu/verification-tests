@@ -662,3 +662,12 @@ func getClientVersion(oc *exutil.CLI) string {
 	e2e.Logf("The oc client version is : \"%s\"", clientVersion)
 	return clientVersion
 }
+
+// Get the cluster history versions
+func getClusterHistoryVersions(oc *exutil.CLI) []string {
+	historyVersionOp, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-o=jsonpath={.items[*].status.history[*].version}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	historyVersions := strings.Split(historyVersionOp, " ")
+	e2e.Logf("Cluster history versions are %s", historyVersions)
+	return historyVersions
+}
