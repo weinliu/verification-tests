@@ -523,23 +523,49 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		skipTestIfClusterVersion(oc, "<", "4.6")
 
+		registriesConfPath := "/etc/containers/registries.conf"
+		newSearchRegistry := "quay.io"
+
+		g.By("Generate new registries.conf information")
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
+		registriesConf := NewRemoteFile(workerNode, registriesConfPath)
+		o.Expect(registriesConf.Fetch()).Should(o.Succeed(), "Error getting %s file content", registriesConfPath)
+
+		currentSearch, sErr := registriesConf.GetFilteredTextContent("unqualified-search-registries")
+		o.Expect(sErr).ShouldNot(o.HaveOccurred())
+		e2e.Logf("Initial search configuration: %s", strings.Join(currentSearch, "\n"))
+
+		e2e.Logf("Adding %s registry to the initial search configuration", newSearchRegistry)
+		currentConfig := registriesConf.GetTextContent()
+		// add the "quay.io" registry to the unqualified-search-registries list defined in the registries.conf file
+		// this regexp inserts `, "quay.io"` before  `]` in the unqualified-search-registries line.
+		regx := regexp.MustCompile(`(unqualified-search-registries.*=.*\[.*)](.*)`)
+		newConfig := regx.ReplaceAllString(currentConfig, fmt.Sprintf(`$1, "%s"] $2`, newSearchRegistry))
+
 		g.By("Create new machine config to add quay.io to unqualified-search-registries list")
 		mcName := "change-workers-container-reg"
-		mcTemplate := generateTemplateAbsolutePath(mcName + ".yaml")
-		mc := MachineConfig{name: mcName, template: mcTemplate, pool: "worker"}
+		mc := MachineConfig{name: mcName, pool: "worker"}
 		defer mc.delete(oc)
-		mc.create(oc)
+
+		fileConfig := getURLEncodedFileConfig(registriesConfPath, newConfig, "420")
+		template := NewMCOTemplate(oc, "generic-machine-config-template.yml")
+		errCreate := template.Create("-p", "NAME="+mcName, "-p", "POOL=worker", "-p", fmt.Sprintf("FILES=[%s]", fileConfig))
+		o.Expect(errCreate).NotTo(o.HaveOccurred(), "Error creating MachineConfig %s", mcName)
+
+		g.By("Wait for MCP to be updated")
+		mcpWorker := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mcpWorker.waitForComplete()
 
 		g.By("Check content of registries file to verify quay.io added to unqualified-search-registries list")
-		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
-		regOut, err := workerNode.DebugNodeWithChroot("cat", "/etc/containers/registries.conf")
+		regOut, errDebug := workerNode.DebugNodeWithChroot("cat", registriesConfPath)
 		e2e.Logf("File content of registries conf: %v", regOut)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(regOut).Should(o.ContainSubstring("quay.io"))
+		o.Expect(errDebug).NotTo(o.HaveOccurred(), "Error executing debug command on node %s", workerNode.GetName())
+		o.Expect(regOut).Should(o.ContainSubstring(newSearchRegistry),
+			"registry %s has not been added to the %s file", newSearchRegistry, registriesConfPath)
 
 		g.By("Check MCD logs to make sure drain is successful and pods are evicted")
-		podLogs, err := exutil.GetSpecificPodLogs(oc, "openshift-machine-config-operator", "machine-config-daemon", workerNode.GetMachineConfigDaemon(), "\"evicted\\|drain\\|crio\"")
-		o.Expect(err).NotTo(o.HaveOccurred())
+		podLogs, errLogs := exutil.GetSpecificPodLogs(oc, "openshift-machine-config-operator", "machine-config-daemon", workerNode.GetMachineConfigDaemon(), "\"evicted\\|drain\\|crio\"")
+		o.Expect(errLogs).NotTo(o.HaveOccurred(), "Error getting logs from node %s", workerNode.GetName())
 		e2e.Logf("Pod logs for node drain, pods evicted and crio service reload :\n %v", podLogs)
 		// get clusterversion
 		cv, _, cvErr := exutil.GetClusterVersion(oc)

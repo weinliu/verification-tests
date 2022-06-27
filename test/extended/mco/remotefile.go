@@ -175,3 +175,28 @@ func (rf *RemoteFile) GetLinks() string {
 func (rf *RemoteFile) IsDirectory() bool {
 	return rf.GetRWXPermissions()[0] == 'd' && strings.Contains(rf.GetKind(), "directory")
 }
+
+// GetTextContentAsList returns the content of the text file as a list of strings, one string per line
+func (rf RemoteFile) GetTextContentAsList() []string {
+	return strings.Split(rf.content, "\n")
+}
+
+// GetFilteredTextContent returns the filetered remote file's text content as a list of strings, one string per line matching the regexp.
+func (rf RemoteFile) GetFilteredTextContent(regex string) ([]string, error) {
+	content := rf.GetTextContentAsList()
+
+	filteredContent := []string{}
+	for _, line := range content {
+		match, err := regexp.MatchString(regex, line)
+		if err != nil {
+			e2e.Logf("Error filtering content lines. Error: %s", err)
+			return nil, err
+		}
+
+		if match {
+			filteredContent = append(filteredContent, line)
+		}
+	}
+
+	return filteredContent, nil
+}
