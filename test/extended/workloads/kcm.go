@@ -1,6 +1,7 @@
 package workloads
 
 import (
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -314,6 +315,40 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Failed to get running pods for cronjob")
+	})
+	// author: yinzhou@redhat.com
+	g.It("Longduration-NonPreRelease-Author:yinzhou-High-51843-PodDisruptionBudgetAtLimit should not Warning alert when CR replica count is zero", func() {
+		g.By("create new namespace")
+		oc.SetupProject()
+		g.By("create app")
+		ns := oc.Namespace()
+		err := oc.WithoutNamespace().Run("new-app").Args("httpd", "-n", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("create pdb")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("poddisruptionbudget", "pdb51843", "--selector=deployment=httpd", "--max-unavailable=1", "-n", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("scale down the app")
+		err = oc.Run("scale").Args("deploy", "httpd", "--replicas=0").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		token, err := exutil.GetSAToken(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(token).NotTo(o.BeEmpty())
+		g.By("check should no PodDisruptionBudgetAtLimit warning")
+		err = wait.Poll(60*time.Second, 900*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-k", "-H", "\""+fmt.Sprintf("Authorization: Bearer %v", token)+"\"", "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query? --data-urlencode 'query=ALERTS{alertname=\"PodDisruptionBudgetAtLimit\"}'").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if matched, _ := regexp.MatchString(ns, output); matched {
+				e2e.Logf("PodDisruptionBudgetAtLimit warning found for project %v", ns)
+				return true, nil
+			}
+			e2e.Logf("Do not get alert , try next time")
+			return false, nil
+
+		})
+		exutil.AssertWaitPollWithErr(err, "Could not get alert from prometheus")
 	})
 
 })
