@@ -1902,15 +1902,7 @@ spec:
 		oc.Run("delete").Args("crd", badCrdWebhookName, "--ignore-not-found").Execute()
 
 		g.By("5) Check for informational error message presence after deletion of bad webhooks in upgraded cluster.")
-		status = "False"
-		for _, webHookErrorConditionType := range webHookErrorConditionTypes {
-			webhookError, err := oc.Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath='{.status.conditions[?(@.type=="`+webHookErrorConditionType+`")]}'`).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("kube-apiserver reports the admission webhook errors as \n %s ", string(webhookError))
-			o.Expect(webhookError).Should(o.And(
-				o.MatchRegexp(`"type":"%s"`, webHookErrorConditionType),
-				o.MatchRegexp(`"status":"%s"`, status)), "Mismatch in admission errors reported")
-		}
+		compareAPIServerWebhookConditions(oc, "", "False", webHookErrorConditionTypes)
 		e2e.Logf("Step 5 has passed , as no error related to webhooks are in cluster.")
 		g.By("6) Check for kube-apiserver operator status after deletion of bad webhooks in upgraded cluster.")
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)

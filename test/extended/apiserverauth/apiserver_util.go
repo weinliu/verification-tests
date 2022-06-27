@@ -68,7 +68,7 @@ func compareAPIServerWebhookConditions(oc *exutil.CLI, conditionReason string, c
 				o.Expect(webhookError).Should(o.MatchRegexp(`"status":"%s"`, conditionStatus), "Mismatch in 'status' of admission errors reported")
 				o.Expect(webhookError).Should(o.MatchRegexp(`"reason":"%s"`, conditionReason), "Mismatch in 'reason' of admission errors reported")
 				return true, nil
-			} else if conditionReason == "" {
+			} else if conditionReason == "" && strings.Contains(webhookError, conditionStatus) {
 				o.Expect(webhookError).Should(o.MatchRegexp(`"status":"%s"`, conditionStatus), "Mismatch in 'status' of admission errors reported")
 				e2e.Logf("kube-apiserver admission webhook errors as \n %s ", string(webhookError))
 				return true, nil
