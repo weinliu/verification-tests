@@ -35,7 +35,7 @@ objects:
           env:
           - name: KAFKA_LOG4J_OPTS
             value: -Dlog4j.configuration=file:/etc/kafka/log4j.properties
-          image: quay.io/openshifttest/kafka:multiarch
+          image: quay.io/openshifttest/kafka@sha256:c29a635d38f3996dde5f50d77c4a50f3da3d3754dbaa18212796f4d2039bf30c
           imagePullPolicy: IfNotPresent
           lifecycle:
             preStop:
@@ -77,7 +77,7 @@ objects:
         - command:
           - /bin/bash
           - /etc/kafka-configmap/init.sh
-          image: quay.io/openshifttest/kafka-initutils:multiarch
+          image: quay.io/openshifttest/kafka-initutils@sha256:8568a3c6300bbcd8cffd32a10e68f45c217176a311dc5ff3b75efec2d00bf217
           imagePullPolicy: IfNotPresent
           name: init-config
           resources: {}
