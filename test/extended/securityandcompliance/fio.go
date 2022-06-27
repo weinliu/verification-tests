@@ -545,10 +545,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		patch = fmt.Sprintf("[{\"op\":\"remove\",\"path\":\"/spec/nodeSelector/node-role.kubernetes.io~1master\"},{\"op\":\"add\",\"path\":\"/spec/nodeSelector/node-role.kubernetes.io~1worker\",\"value\":\"\"}]")
 		patchResource(oc, asAdmin, withoutNamespace, "fileintegrity", fi1.name, "-n", fi1.namespace, "--type", "json", "-p", patch)
 		fi1.checkFileintegrityStatus(oc, "running")
-		fi1.checkPodNumerEqualNodeNumber(oc, "node.openshift.io/os_id=rhcos,node-role.kubernetes.io/worker=")
+		fi1.checkPodNumerEqualNodeNumber(oc, "node-role.kubernetes.io/worker=")
 
 		g.By("Remove nodeselector and compare Aide-scan pod number and Node number")
-		patch = fmt.Sprintf("[{\"op\":\"remove\",\"path\":\"/spec/nodeSelector/node-role.kubernetes.io~1worker\"}]")
+		patch = fmt.Sprintf("[{\"op\":\"remove\",\"path\":\"/spec/nodeSelector/node-role.kubernetes.io~1worker\"},{\"op\":\"add\",\"path\":\"/spec/nodeSelector/node.openshift.io~1os_id\",\"value\":\"rhcos\"}]")
 		patchResource(oc, asAdmin, withoutNamespace, "fileintegrity", fi1.name, "-n", fi1.namespace, "--type", "json", "-p", patch)
 		fi1.checkFileintegrityStatus(oc, "running")
 		fi1.checkPodNumerEqualNodeNumber(oc, "node.openshift.io/os_id=rhcos")
