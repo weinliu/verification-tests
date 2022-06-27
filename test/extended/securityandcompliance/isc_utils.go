@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -428,27 +427,4 @@ func taintNode(oc *exutil.CLI, parameters ...string) {
 func labelTaintNode(oc *exutil.CLI, parameters ...string) {
 	_, err := doAction(oc, "label", asAdmin, withoutNamespace, parameters...)
 	o.Expect(err).NotTo(o.HaveOccurred())
-}
-
-func getIndexFromURL(operatorName string) string {
-	var filename = operatorName + "_index_name.json"
-	var url = "http://virt-openshift-05.lab.eng.nay.redhat.com/isc/" + filename
-	var imageIndex = "quay.io/openshift-qe-optional-operators/" + operatorName + "-operator-index-0.1:latest"
-	_, err := exec.Command("bash", "-c", "curl  -k -s -o "+filename+" "+url).Output()
-	if err != nil {
-		e2e.Logf("curl failed, use default imageIndex")
-		return imageIndex
-	}
-	output, err := exec.Command("bash", "-c", "cat "+filename+" | jq .indexname").Output()
-	if err != nil {
-		e2e.Logf("failing to get indexname from file, use default imageIndex")
-		return imageIndex
-	}
-	res := strings.Trim(strings.TrimSpace(string(output)), "\"")
-	if len(res) > 0 && res[len(res)-1] == '"' {
-		res = res[:len(res)-1]
-	}
-	e2e.Logf("the output after trim:%v", res)
-	imageIndex = res
-	return imageIndex
 }
