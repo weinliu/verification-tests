@@ -773,11 +773,11 @@ func (dep *deployment) waitReady(oc *exutil.CLI) {
 // Check the deployment mounted volume could read and write
 func (dep *deployment) checkPodMountedVolumeCouldRW(oc *exutil.CLI) {
 	for _, podinstance := range dep.getPodList(oc) {
-		content := "storage test " + getRandomString()
+		content := fmt.Sprintf(`"storage test %v"`, getRandomString())
 		randomFileName := "/testfile_" + getRandomString()
 		_, err := execCommandInSpecificPod(oc, dep.namespace, podinstance, "echo "+content+">"+dep.mpath+randomFileName)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(execCommandInSpecificPod(oc, dep.namespace, podinstance, "cat "+dep.mpath+randomFileName)).To(o.ContainSubstring(content))
+		o.Expect(execCommandInSpecificPod(oc, dep.namespace, podinstance, "cat "+dep.mpath+randomFileName)).To(o.Equal(strings.Replace(content, "\"", "", 2)))
 	}
 }
 
@@ -1099,11 +1099,11 @@ func (sts *statefulset) checkMountedVolumeCouldRW(oc *exutil.CLI) {
 	podList, err := getPodsListByLabel(oc, sts.namespace, "app="+sts.applabel)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	for _, podName := range podList {
-		content := "storage test " + getRandomString()
+		content := fmt.Sprintf(`"storage test %v"`, getRandomString())
 		randomFileName := "/testfile_" + getRandomString()
 		_, err := execCommandInSpecificPod(oc, sts.namespace, podName, "echo "+content+">"+sts.mpath+randomFileName)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(execCommandInSpecificPod(oc, sts.namespace, podName, "cat "+sts.mpath+randomFileName)).To(o.ContainSubstring(content))
+		o.Expect(execCommandInSpecificPod(oc, sts.namespace, podName, "cat "+sts.mpath+randomFileName)).To(o.Equal(strings.Replace(content, "\"", "", 2)))
 	}
 }
 
