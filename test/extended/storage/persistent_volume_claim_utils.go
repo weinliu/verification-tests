@@ -85,23 +85,11 @@ func setPersistentVolumeClaimDataSourceName(name string) persistentVolumeClaimOp
 
 //  Create a new customized PersistentVolumeClaim object
 func newPersistentVolumeClaim(opts ...persistentVolumeClaimOption) persistentVolumeClaim {
-	var defaultVolSize string
-	switch cloudProvider {
-	// AlibabaCloud minimum volume size is 20Gi
-	case "alibabacloud":
-		defaultVolSize = strconv.FormatInt(getRandomNum(20, 30), 10) + "Gi"
-	// IBMCloud minimum volume size is 10Gi
-	case "ibmcloud":
-		defaultVolSize = strconv.FormatInt(getRandomNum(10, 20), 10) + "Gi"
-	// Other Clouds(AWS GCE Azure OSP vSphere) minimum volume size is 1Gi
-	default:
-		defaultVolSize = strconv.FormatInt(getRandomNum(1, 10), 10) + "Gi"
-	}
 	defaultPersistentVolumeClaim := persistentVolumeClaim{
 		name:       "my-pvc-" + getRandomString(),
 		template:   "pvc-template.yaml",
 		namespace:  "",
-		capacity:   defaultVolSize,
+		capacity:   getValidVolumeSize(),
 		volumemode: "Filesystem",
 		scname:     "gp2-csi",
 		accessmode: "ReadWriteOnce",

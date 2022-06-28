@@ -671,3 +671,19 @@ func getClusterHistoryVersions(oc *exutil.CLI) []string {
 	e2e.Logf("Cluster history versions are %s", historyVersions)
 	return historyVersions
 }
+
+// Get valid volume size by cloudProvider
+func getValidVolumeSize() (validVolSize string) {
+	switch cloudProvider {
+	// AlibabaCloud minimum volume size is 20Gi
+	case "alibabacloud":
+		validVolSize = strconv.FormatInt(getRandomNum(20, 30), 10) + "Gi"
+	// IBMCloud minimum volume size is 10Gi
+	case "ibmcloud":
+		validVolSize = strconv.FormatInt(getRandomNum(10, 20), 10) + "Gi"
+	// Other Clouds(AWS GCE Azure OSP vSphere) minimum volume size is 1Gi
+	default:
+		validVolSize = strconv.FormatInt(getRandomNum(1, 10), 10) + "Gi"
+	}
+	return validVolSize
+}

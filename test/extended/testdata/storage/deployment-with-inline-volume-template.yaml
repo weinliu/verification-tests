@@ -1,0 +1,40 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: deployment-with-inline-volume-template
+objects:
+- kind: Deployment
+  apiVersion: apps/v1
+  metadata:
+    name: ${DNAME}
+    namespace: ${DNAMESPACE}
+  spec:
+    replicas: ${{REPLICASNUM}}
+    selector:
+      matchLabels:
+        app: ${DLABEL}
+    template:
+      metadata:
+        labels:
+          app: ${DLABEL}
+      spec:
+        terminationGracePeriodSeconds: 30
+        containers:
+        - name: ${DNAME}
+          image: quay.io/openshifttest/hello-openshift@sha256:b1aabe8c8272f750ce757b6c4263a2712796297511e0c6df79144ee188933623
+          ports:
+            - containerPort: 80
+          ${VOLUMETYPE}:
+          - name: inline-volume
+            ${TYPEPATH}: ${MPATH}
+        volumes:
+        - name: inline-volume  
+parameters:
+- name: DNAME
+- name: DNAMESPACE
+- name: REPLICASNUM
+- name: DLABEL
+- name: MPATH
+- name: PVCNAME
+- name: VOLUMETYPE
+- name: TYPEPATH

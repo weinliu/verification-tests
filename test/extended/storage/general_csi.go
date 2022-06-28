@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
@@ -2704,6 +2705,298 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			o.Expect(output).To(o.ContainSubstring("storage test"))
 			podRestore.checkMountedVolumeCouldRW(oc)
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
+	// author: pewang@redhat.com
+	// OCP-52239-Critical [CSI Driver] [Generic ephemeral volumes] lifecycle should be the same with pod level
+	g.It("Author:pewang-Critical-52239-[CSI Driver] [Generic ephemeral volumes] lifecycle should be the same with pod level", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com",
+			"cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
+
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
+			deploymentTemplate  = filepath.Join(storageTeamBaseDir, "deployment-with-inline-volume-template.yaml")
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		// Set up a specified project share for all the phases
+		g.By("# Create new project for the scenario")
+		oc.SetupProject() //create new project
+		// Known issue of api-auth default scc restricted don't allow ephemeral type volumes
+		// https://bugzilla.redhat.com/show_bug.cgi?id=2100429
+		// Temp change the default sa scc to "privileged" to avoid the known issue
+		o.Expect(oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "default").Output()).Should(o.ContainSubstring("added"))
+
+		for _, provisioner := range supportProvisioners {
+			func() {
+				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+				// Set the resource definition for the scenario
+				presetStorageClassName := getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+				dep := newDeployment(setDeploymentTemplate(deploymentTemplate))
+				inlineVolume := InlineVolume{
+					Kind:             "genericEphemeralVolume",
+					VolumeDefination: newGenericEphemeralVolume(setGenericEphemeralVolumeWorkloadLabel(dep.name), setGenericEphemeralVolumeStorageClassName(presetStorageClassName)),
+				}
+
+				g.By("# Create deployment with Generic ephemeral volume service account default")
+				dep.createWithInlineVolume(oc, inlineVolume)
+				defer dep.deleteAsAdmin(oc)
+
+				g.By("# Waiting for the deployment become ready and check the generic ephemeral volume could be read,write,have exec right")
+				dep.waitReady(oc)
+				// Get the deployment's pod name and generic ephemeral volume pvc,pv name
+				podName := dep.getPodList(oc)[0]
+				pvcName, err := oc.WithoutNamespace().Run("get").Args("-n", dep.namespace, "pvc", "-l", "workloadName="+dep.name, "-o=jsonpath={.items[0].metadata.name}").Output()
+				o.Expect(err).ShouldNot(o.HaveOccurred())
+				// Check the generic ephemeral volume naming rule
+				// https://kubernetes.io/docs/concepts/storage/ephemeral-volumes/#persistentvolumeclaim-naming
+				o.Expect(pvcName).Should(o.Equal(podName + "-inline-volume"))
+				pvName := getPersistentVolumeNameByPersistentVolumeClaim(oc, dep.namespace, pvcName)
+				dep.checkPodMountedVolumeCouldRW(oc)
+				dep.checkPodMountedVolumeHaveExecRight(oc)
+
+				g.By("# Check the generic ephemeral volume pvc's ownerReferences")
+				podOwnerReferences, err := oc.WithoutNamespace().Run("get").Args("-n", dep.namespace, "pvc", pvcName, "-o=jsonpath={.metadata.ownerReferences[?(@.kind==\"Pod\")].name}").Output()
+				o.Expect(err).ShouldNot(o.HaveOccurred())
+				o.Expect(podOwnerReferences).Should(o.Equal(podName))
+
+				g.By("# Scale down the deployment's replicas to 0")
+				dep.scaleReplicas(oc, "0")
+				dep.waitReady(oc)
+
+				g.By("# Check the pvc also deleted by Kubernetes garbage collector")
+				checkResourcesNotExist(oc, "pvc", podName+"-inline-volume", dep.namespace)
+				// PV is also deleted as preset storageCalss reclainPolicy is Delete
+				checkResourcesNotExist(oc.AsAdmin(), "pv", podName+"-inline-volume", pvName)
+
+				g.By("# Scale up the deployment's replicas to 1 should recreate new generic ephemeral volume")
+				dep.scaleReplicas(oc, "1")
+				dep.waitReady(oc)
+				newPvcName, err := oc.WithoutNamespace().Run("get").Args("-n", dep.namespace, "pvc", "-l", "workloadName="+dep.name, "-o=jsonpath={.items[0].metadata.name}").Output()
+				o.Expect(err).ShouldNot(o.HaveOccurred())
+				o.Expect(newPvcName).ShouldNot(o.Equal(pvcName))
+				output, _ := oc.WithoutNamespace().Run("exec").Args("-n", dep.namespace, dep.getPodList(oc)[0], "--", "/bin/sh", "-c", "cat /mnt/storage/testfile*").Output()
+				o.Expect(output).Should(o.ContainSubstring("No such file or directory"))
+
+				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+			}()
+		}
+	})
+
+	// author: pewang@redhat.com
+	// OCP-52301-High [CSI Driver][Generic ephemeral volumes] [reclaimPolicy Retain] pvc's lifecycle should the same with pod but pv should be reused by pod
+	g.It("Author:pewang-High-52301-[CSI Driver][Generic ephemeral volumes] [reclaimPolicy Retain] pvc's lifecycle should the same with pod but pv should be reused by pod", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com",
+			"cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate          = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			deploymentTemplate   = filepath.Join(storageTeamBaseDir, "deployment-with-inline-volume-template.yaml")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			supportProvisioners  = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		// Use the framework created project as default, if use your own, exec the follow code setupProject
+		g.By("# Create new project for the scenario")
+		oc.SetupProject() //create new project
+		// Known issue of api-auth default scc restricted don't allow ephemeral type volumes
+		// https://bugzilla.redhat.com/show_bug.cgi?id=2100429
+		// Temp change the default sa scc to "privileged" to avoid the known issue
+		o.Expect(oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "default").Output()).Should(o.ContainSubstring("added"))
+
+		for _, provisioner := range supportProvisioners {
+			func() {
+				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+				// Set the resource definition for the scenario
+				storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassReclaimPolicy("Retain"))
+				dep := newDeployment(setDeploymentTemplate(deploymentTemplate))
+				inlineVolume := InlineVolume{
+					Kind:             "genericEphemeralVolume",
+					VolumeDefination: newGenericEphemeralVolume(setGenericEphemeralVolumeWorkloadLabel(dep.name), setGenericEphemeralVolumeStorageClassName(storageClass.name)),
+				}
+				newpvc := newPersistentVolumeClaim(setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimTemplate(pvcTemplate))
+				newpod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(newpvc.name))
+
+				g.By("# Create csi storageclass with 'reclaimPolicy: retain'")
+				if provisioner == "efs.csi.aws.com" {
+					// Get the efs present scName and fsid
+					fsid := getFsIDFromStorageClass(oc, getPresetStorageClassNameByProvisioner(cloudProvider, provisioner))
+					efsExtra := map[string]string{
+						"provisioningMode": "efs-ap",
+						"fileSystemId":     fsid,
+						"directoryPerms":   "700",
+					}
+					extraParameters := map[string]interface{}{
+						"parameters": efsExtra,
+					}
+					storageClass.createWithExtraParameters(oc, extraParameters)
+				} else {
+					storageClass.create(oc)
+				}
+				defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+				g.By("# Create deployment with Generic ephemeral volume specified the csi storageClass and wait for deployment become ready")
+				dep.createWithInlineVolume(oc, inlineVolume)
+				defer dep.deleteAsAdmin(oc)
+				dep.waitReady(oc)
+
+				g.By("# Check the generic ephemeral volume could be read,write and have exec right")
+				dep.checkPodMountedVolumeCouldRW(oc)
+				dep.checkPodMountedVolumeHaveExecRight(oc)
+
+				g.By("# Get the deployment's pod name, generic ephemeral volume pvc,pv name, volumeID and pod located node name")
+				podName := dep.getPodList(oc)[0]
+				pvcName, err := oc.WithoutNamespace().Run("get").Args("-n", dep.namespace, "pvc", "-l", "workloadName="+dep.name, "-o=jsonpath={.items[0].metadata.name}").Output()
+				o.Expect(err).ShouldNot(o.HaveOccurred())
+				pvName := getPersistentVolumeNameByPersistentVolumeClaim(oc, dep.namespace, pvcName)
+				pvSize, err := getPvCapacityByPvcName(oc, pvcName, dep.namespace)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				volumeID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.csi.volumeHandle}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				originNodeName := getNodeNameByPod(oc, dep.namespace, podName)
+
+				g.By("# Delete the deployment and check the pvc also deleted")
+				deleteSpecifiedResource(oc, "deployment", dep.name, dep.namespace)
+				checkVolumeDetachedFromNode(oc, pvName, originNodeName)
+				getCredentialFromCluster(oc)
+				// Temp enchancement for the retain volume clean up
+				defer deleteBackendVolumeByVolumeID(oc, volumeID)
+				// The reclaimPolicy:Retain is used for pv object(accually is real backend volume)
+				// PVC should be also deleted by Kubernetes garbage collector
+				checkResourcesNotExist(oc, "pvc", pvcName, dep.namespace)
+
+				g.By("# Check the PV status become to 'Released' ")
+				waitForPersistentVolumeStatusAsExpected(oc, pvName, "Released")
+
+				g.By("# Delete the PV and check the volume already umount from node")
+				originpv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o", "json").Output()
+				debugLogf(originpv)
+				o.Expect(err).ShouldNot(o.HaveOccurred())
+				deleteSpecifiedResource(oc.AsAdmin(), "pv", pvName, "")
+				checkVolumeNotMountOnNode(oc, pvName, originNodeName)
+
+				g.By("# Check the volume still exists in backend by volumeID")
+				waitVolumeAvaiableOnBackend(oc, volumeID)
+
+				g.By("# Use the retained volume create new pv,pvc,pod and wait for the pod running")
+				newPvName := "newpv-" + getRandomString()
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv", newPvName).Execute()
+				createNewPersistVolumeWithRetainVolume(oc, originpv, storageClass.name, newPvName)
+				newpvc.capacity = pvSize
+				newpvc.createWithSpecifiedPV(oc, newPvName)
+				defer newpvc.deleteAsAdmin(oc)
+				newpod.create(oc)
+				defer newpod.deleteAsAdmin(oc)
+				newpod.waitReady(oc)
+
+				g.By("# Check the retained pv's data still exist and have exec right")
+				o.Expect(oc.WithoutNamespace().Run("exec").Args("-n", newpod.namespace, newpod.name, "--", "/bin/sh", "-c", "cat /mnt/storage/testfile*").Output()).Should(o.ContainSubstring("storage test"))
+				newpod.checkMountedVolumeHaveExecRight(oc)
+
+				g.By("# Delete the pv and clean up the retained volume in backend")
+				newpod.delete(oc)
+				newpvc.delete(oc)
+				deleteSpecifiedResource(oc.AsAdmin(), "pv", newPvName, "")
+				deleteBackendVolumeByVolumeID(oc, volumeID)
+				waitVolumeDeletedOnBackend(oc, volumeID)
+
+				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+			}()
+		}
+	})
+
+	// author: pewang@redhat.com
+	// OCP-52330-Medium [CSI Driver][Generic ephemeral volumes] remove pvc's ownerReferences should decouple lifecycle with its pod
+	g.It("Author:pewang-Medium-52330-[CSI Driver][Generic ephemeral volumes] remove pvc's ownerReferences should decouple lifecycle with its pod", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com",
+			"cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
+			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			deploymentTemplate  = filepath.Join(storageTeamBaseDir, "deployment-with-inline-volume-template.yaml")
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		// Use the framework created project as default, if use your own, exec the follow code setupProject
+		g.By("# Create new project for the scenario")
+		oc.SetupProject() //create new project
+		// Known issue of api-auth default scc restricted don't allow ephemeral type volumes
+		// https://bugzilla.redhat.com/show_bug.cgi?id=2100429
+		// Temp change the default sa scc to "privileged" to avoid the known issue
+		o.Expect(oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "default").Output()).Should(o.ContainSubstring("added"))
+
+		for _, provisioner := range supportProvisioners {
+			func() {
+				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+				// Set the resource definition for the scenario
+				dep := newDeployment(setDeploymentTemplate(deploymentTemplate))
+				presetStorageClassName := getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+				inlineVolume := InlineVolume{
+					Kind:             "genericEphemeralVolume",
+					VolumeDefination: newGenericEphemeralVolume(setGenericEphemeralVolumeWorkloadLabel(dep.name), setGenericEphemeralVolumeStorageClassName(presetStorageClassName)),
+				}
+
+				g.By("# Create deployment with Generic ephemeral volume specified the csi storageClass and wait for deployment become ready")
+				dep.createWithInlineVolume(oc, inlineVolume)
+				defer dep.deleteAsAdmin(oc)
+				dep.waitReady(oc)
+
+				g.By("# Check the generic ephemeral volume could be read,write and have exec right")
+				dep.checkPodMountedVolumeCouldRW(oc)
+				dep.checkPodMountedVolumeHaveExecRight(oc)
+
+				g.By("# Get the deployment's pod name, generic ephemeral volume pvc,pv name and pod located node name")
+				podName := dep.getPodList(oc)[0]
+				pvcName, err := oc.WithoutNamespace().Run("get").Args("-n", dep.namespace, "pvc", "-l", "workloadName="+dep.name, "-o=jsonpath={.items[0].metadata.name}").Output()
+				o.Expect(err).ShouldNot(o.HaveOccurred())
+				pvName := getPersistentVolumeNameByPersistentVolumeClaim(oc, dep.namespace, pvcName)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				originNodeName := getNodeNameByPod(oc, dep.namespace, podName)
+
+				g.By("# Remove Generic ephemeral volume pvc's ownerReferences")
+				patchResourceAsAdmin(oc, dep.namespace, "pvc/"+pvcName, "[{\"op\": \"remove\", \"path\": \"/metadata/ownerReferences\"}]", "json")
+				defer deleteSpecifiedResource(oc, "pvc", pvcName, dep.namespace)
+
+				g.By("# Delete the deployment and check the pvc still exist")
+				deleteSpecifiedResource(oc, "deployment", dep.name, dep.namespace)
+				// Check the pvc still exist for 30s
+				o.Consistently(func() string {
+					pvcStatus, _ := getPersistentVolumeClaimStatus(oc, dep.namespace, pvcName)
+					return pvcStatus
+				}, 30*time.Second, 5*time.Second).Should(o.Equal("Bound"))
+
+				g.By("# Check the volume umount from node")
+				checkVolumeNotMountOnNode(oc, pvName, originNodeName)
+
+				g.By("# Check the pvc could be reused by create new pod")
+				newpod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcName))
+				newpod.create(oc)
+				defer newpod.deleteAsAdmin(oc)
+				newpod.waitReady(oc)
+
+				g.By("# Check the volume's data still exist and have exec right")
+				o.Expect(oc.WithoutNamespace().Run("exec").Args("-n", newpod.namespace, newpod.name, "--", "/bin/sh", "-c", "cat /mnt/storage/testfile*").Output()).Should(o.ContainSubstring("storage test"))
+				newpod.checkMountedVolumeHaveExecRight(oc)
+
+				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+			}()
 		}
 	})
 

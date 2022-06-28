@@ -623,6 +623,36 @@ func (dep *deployment) createWithExtraParameters(oc *exutil.CLI, extraParameters
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// Create new Deployment with InlineVolume
+func (dep *deployment) createWithInlineVolume(oc *exutil.CLI, inVol InlineVolume) {
+	if dep.namespace == "" {
+		dep.namespace = oc.Namespace()
+	}
+	var (
+		extraParameters = make(map[string]interface{}, 10)
+		jsonPath        = `items.0.spec.template.spec.volumes.0.`
+	)
+	switch inVol.Kind {
+	case "genericEphemeralVolume", "csiEphemeralVolume":
+		extraParameters = map[string]interface{}{
+			"jsonPath":  jsonPath,
+			"ephemeral": inVol.VolumeDefination,
+		}
+	case "emptyDir":
+		extraParameters = map[string]interface{}{
+			"jsonPath": jsonPath,
+			"emptyDir": map[string]string{},
+		}
+	default:
+		extraParameters = map[string]interface{}{
+			"jsonPath": jsonPath,
+			inVol.Kind: map[string]string{},
+		}
+	}
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", dep.template, "-p", "DNAME="+dep.name, "DNAMESPACE="+dep.namespace, "PVCNAME="+dep.pvcname, "REPLICASNUM="+dep.replicasno, "DLABEL="+dep.applabel, "MPATH="+dep.mpath, "VOLUMETYPE="+dep.volumetype, "TYPEPATH="+dep.typepath)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 // Create new deployment with extra parameters for topologySpreadConstraints
 func (dep *deployment) createWithTopologySpreadConstraints(oc *exutil.CLI) {
 	if dep.namespace == "" {
