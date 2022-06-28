@@ -765,8 +765,8 @@ func exposeService(oc *exutil.CLI, ns, resource, name, port string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func exposeEdgeRoute(oc *exutil.CLI, ns, route, service string) string {
-	err := oc.WithoutNamespace().Run("create").Args("route", "edge", route, "--service="+service, "-n", ns).Execute()
+func exposeRouteFromSVC(oc *exutil.CLI, rType, ns, route, service string) string {
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("route", rType, route, "--service="+service, "-n", ns).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	regRoute, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", route, "-n", ns, "-o=jsonpath={.spec.host}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -785,7 +785,7 @@ func setSecureRegistryWithoutAuth(oc *exutil.CLI, ns, regName, image, port strin
 	o.Expect(err).NotTo(o.HaveOccurred())
 	checkPodsRunningWithLabel(oc, ns, "app="+regName, 1)
 	exposeService(oc, ns, "deploy/"+regName, regName, port)
-	regRoute := exposeEdgeRoute(oc, ns, regName, regName)
+	regRoute := exposeRouteFromSVC(oc, "edge", ns, regName, regName)
 	listRepositories(oc, regRoute, "repositories")
 	return regRoute
 }
@@ -950,9 +950,9 @@ func getImageRegistryPodNumber(oc *exutil.CLI) int {
 	return intPodNum
 }
 
-func saveImageRegistryAuth(oc *exutil.CLI, regRoute, ns string) (string, error) {
+func saveImageRegistryAuth(oc *exutil.CLI, sa, regRoute, ns string) (string, error) {
 	tempDataFile := filepath.Join("/tmp/", fmt.Sprintf("ir-auth-%s", getRandomString()))
-	token, err := getSAToken(oc, "builder", ns)
+	token, err := getSAToken(oc, sa, ns)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	err = oc.AsAdmin().WithoutNamespace().Run("registry").Args("login", "--registry="+regRoute, "--auth-basic=anyuser:"+token, "--to="+tempDataFile, "--insecure", "-n", ns).Execute()
 	if err != nil {

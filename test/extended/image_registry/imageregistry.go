@@ -286,15 +286,13 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		err = oc.AsAdmin().Run("policy").Args("add-role-to-user", "view", "-z", "tag-bug-sa", "--role-namespace", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().Run("policy").Args("remove-role-from-user", "view", "tag-bug-sa", "--role-namespace", oc.Namespace()).Execute()
-		out, _ := oc.Run("get").Args("sa", "tag-bug-sa", "-o=jsonpath={.secrets[0].name}", "-n", oc.Namespace()).Output()
-		token, _ := oc.Run("get").Args("secret/"+out, "-o", `jsonpath={.data.\.dockercfg}`).Output()
-		sDec, err := base64.StdEncoding.DecodeString(token)
+		token, err := getSAToken(oc, "tag-bug-sa", oc.Namespace())
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.Run("config").Args("set-credentials", "tag-bug-sa", fmt.Sprintf("--token=%s", sDec)).Execute()
+		err = oc.Run("config").Args("set-credentials", "tag-bug-sa", fmt.Sprintf("--token=%s", token)).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defuser, err := oc.Run("config").Args("get-users").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		out, err = oc.Run("config").Args("current-context").Output()
+		out, err := oc.Run("config").Args("current-context").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("config").Args("set-context", out, "--user=tag-bug-sa").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1418,14 +1416,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-Critical-48959-Should be able to get public images connect to the server and have basic auth credentials [Serial]", func() {
+	g.It("Author:jitli-Critical-48959-Should be able to get public images connect to the server and have basic auth credentials", func() {
 
 		g.By("Create route to expose the registry")
-		defer restoreRouteExposeRegistry(oc)
-		createRouteExposeRegistry(oc)
-
-		g.By("Get server host")
-		host := getRegistryDefaultRoute(oc)
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		host := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
 
 		g.By("Grant public access to the openshift namespace")
 		defer oc.AsAdmin().WithoutNamespace().Run("policy").Args("remove-role-from-group", "system:image-puller", "system:unauthenticated", "--namespace", "openshift").Execute()
@@ -1717,7 +1713,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("Author:xiuwang-Critical-NonPreRelease-49455-disableRedirect should work when image registry configured object storage [Serial]", func() {
+	g.It("Author:xiuwang-Critical-NonPreRelease-49455-disableRedirect should work when image registry configured object storage", func() {
 		g.By("Get registry storage info")
 		storagetype, _ := getRegistryStorageConfig(oc)
 		if storagetype == "pvc" || storagetype == "emptyDir" {
@@ -1744,14 +1740,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		}
 
 		g.By("Create route to expose the registry")
-		defer restoreRouteExposeRegistry(oc)
-		createRouteExposeRegistry(oc)
-		regRoute := getRegistryDefaultRoute(oc)
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
 
 		g.By("push image to registry")
 		oc.SetupProject()
 		checkRegistryFunctionFine(oc, "test-49455", oc.Namespace())
-		authFile, err := saveImageRegistryAuth(oc, regRoute, oc.Namespace())
+		authFile, err := saveImageRegistryAuth(oc, "builder", regRoute, oc.Namespace())
 		defer os.RemoveAll(authFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -2109,27 +2105,29 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("ConnectedOnly-VMonly-Author:xiuwang-Critial-10904-Support unauthenticated with registry-admin role [Serial]", func() {
+	g.It("ConnectedOnly-VMonly-Author:xiuwang-Critial-10904-Support unauthenticated with registry-admin role", func() {
 		g.By("Add registry-admin role to a project")
 		oc.SetupProject()
-		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("sa", "test-registry-admin", "-n", oc.Namespace()).Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("policy").Args("remove-role-from-user", "registry-admin", "-z", "test-registry-admin", "-n", oc.Namespace()).Execute()
+		err := oc.AsAdmin().Run("create").Args("sa", "test-registry-admin", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("policy").Args("add-role-to-user", "registry-admin", "-z", "test-registry-admin", "--role-namespace", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("policy").Args("add-role-to-user", "registry-admin", "-z", "test-registry-admin", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Get external registry host")
-		defer restoreRouteExposeRegistry(oc)
-		createRouteExposeRegistry(oc)
-		defroute := getRegistryDefaultRoute(oc)
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
 
 		g.By("Push a image to the project")
 		checkRegistryFunctionFine(oc, "test-10904", oc.Namespace())
+		e2e.Logf("The namespace is", oc.Namespace())
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "test-10904", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		publicImageName := defroute + "/" + oc.Namespace() + "/test-10904:latest"
+		publicImageName := regRoute + "/" + oc.Namespace() + "/test-10904:latest"
 
 		g.By("Save the external registry auth with the specific token")
-		authFile, err := saveImageRegistryAuth(oc, defroute, oc.Namespace())
+		authFile, err := saveImageRegistryAuth(oc, "test-registry-admin", regRoute, oc.Namespace())
 		defer os.RemoveAll(authFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -2140,7 +2138,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		defer containerCLI.RemoveImage(publicImageName)
 
 		g.By("Pag the image with another name")
-		newImage := defroute + "/" + oc.Namespace() + "/myimage:latest"
+		newImage := regRoute + "/" + oc.Namespace() + "/myimage:latest"
 		_, err = containerCLI.Run("tag").Args(publicImageName, newImage).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Push image with registry-admin role")
@@ -2148,5 +2146,50 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	//author: xiuwang@redhat.com
+	g.It("ConnectedOnly-VMonly-Author:xiuwang-Low-11314-Support unauthenticated with registry-viewer role", func() {
+		g.By("Add registry-viewer role to a project")
+		oc.SetupProject()
+		defer oc.AsAdmin().WithoutNamespace().Run("policy").Args("remove-role-from-user", "registry-viewer", "-z", "test-registry-viewer", "-n", oc.Namespace()).Execute()
+		err := oc.AsAdmin().Run("create").Args("sa", "test-registry-viewer", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("policy").Args("add-role-to-user", "registry-viewer", "-z", "test-registry-viewer", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Get external registry host")
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+
+		g.By("Push a image to the project")
+		checkRegistryFunctionFine(oc, "test-11314", oc.Namespace())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "test-11314", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		publicImageName := regRoute + "/" + oc.Namespace() + "/test-11314:latest"
+
+		g.By("Save the external registry auth with the specific token")
+		authFile, err := saveImageRegistryAuth(oc, "test-registry-viewer", regRoute, oc.Namespace())
+		defer os.RemoveAll(authFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Pull the image with registry-viewer role")
+		containerCLI := container.NewPodmanCLI()
+		_, err = containerCLI.Run("pull").Args(publicImageName, "--authfile="+authFile, "--tls-verify=false").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer containerCLI.RemoveImage(publicImageName)
+
+		g.By("Pag the image with another name")
+		newImage := regRoute + "/" + oc.Namespace() + "/myimage:latest"
+		_, err = containerCLI.Run("tag").Args(publicImageName, newImage).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Can't push image with registry-view role")
+		output, err := containerCLI.Run("push").Args(newImage, "--authfile="+authFile, "--tls-verify=false").Output()
+		if err == nil {
+			e2e.Failf("Shouldn't push image with registry-viewer role")
+		}
+		o.Expect(output).To(o.ContainSubstring("unauthorized: authentication required"))
+
 	})
 })

@@ -2,7 +2,7 @@ package imageregistry
 
 import (
 	"fmt"
-	"time"
+	"os"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
@@ -66,40 +66,34 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 		// ociImage := "quay.io/openshifttest/ociimage"
 		ociImage := "docker.io/wzheng/ociimage"
 
-		g.By("Expose default route of internal registry")
-		err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"defaultRoute":true}}`, "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"defaultRoute":false}}`, "--type=merge").Execute()
+		g.By("Expose route of internal registry")
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
 		oc.SetupProject()
-		g.By("Log into the default route")
-		time.Sleep(time.Second * 5)
-		defroute, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("route/default-route", "-n", "openshift-image-registry", "-o=jsonpath={.spec.host}").Output()
+
+		g.By("Save the external registry auth with the specific token")
+		authFile, err := saveImageRegistryAuth(oc, "builder", regRoute, oc.Namespace())
+		defer os.RemoveAll(authFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		loginRegistryDefaultRoute(oc, defroute, oc.Namespace())
-		defer func() {
-			g.By("Logout registry route")
-			if output, err := containerCLI.Run("logout").Args(defroute).Output(); err != nil {
-				e2e.Logf(output)
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}
-		}()
 
 		g.By("podman tag an image")
-		output, err := containerCLI.Run("pull").Args(ociImage).Output()
+		output, err := containerCLI.Run("pull").Args(ociImage, "--authfile="+authFile, "--tls-verify=false").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if err != nil {
 			e2e.Logf(output)
 		}
+
 		defer containerCLI.RemoveImage(ociImage)
-		output, err = containerCLI.Run("tag").Args(ociImage, defroute+"/"+oc.Namespace()+"/myimage:latest").Output()
+		output, err = containerCLI.Run("tag").Args(ociImage, regRoute+"/"+oc.Namespace()+"/myimage:latest").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if err != nil {
 			e2e.Logf(output)
 		}
 
 		g.By(" Push it with oci format")
-		out := defroute + "/" + oc.Namespace() + "/myimage:latest"
-		output, err = containerCLI.Run("push").Args("--format=oci", out).Output()
+		out := regRoute + "/" + oc.Namespace() + "/myimage:latest"
+		output, err = containerCLI.Run("push").Args("--format=oci", out, "--authfile="+authFile, "--tls-verify=false").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if err != nil {
 			e2e.Logf(output)
@@ -116,7 +110,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("Author:wewang-ConnectedOnly-VMonly-Critical-35998-OCI images layers configs can be pruned completely [Exclusive]", func() {
+	g.It("Author:wewang-ConnectedOnly-VMonly-Critical-35998-OCI images layers configs can be pruned completely", func() {
 		var podmanCLI = container.NewPodmanCLI()
 		containerCLI := podmanCLI
 		ociImage := "docker.io/wzheng/ociimage"
@@ -130,24 +124,19 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 		o.Expect(out).To(o.ContainSubstring("35998-image:latest"))
 
 		g.By("Log into the default route")
-		err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"defaultRoute":true}}`, "--type=merge").Execute()
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+
+		g.By("Save the external registry auth with the specific token")
+		authFile, err := saveImageRegistryAuth(oc, "builder", regRoute, oc.Namespace())
+		defer os.RemoveAll(authFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"defaultRoute":false}}`, "--type=merge").Execute()
-		time.Sleep(time.Second * 5)
-		defroute, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("route/default-route", "-n", "openshift-image-registry", "-o=jsonpath={.spec.host}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		loginRegistryDefaultRoute(oc, defroute, oc.Namespace())
-		defer func() {
-			g.By("Logout registry route")
-			if output, err := containerCLI.Run("logout").Args(defroute).Output(); err != nil {
-				e2e.Logf(output)
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}
-		}()
+		e2e.Logf("the file is %s", authFile)
 
 		g.By("Pull internal image locally")
-		imageInfo := defroute + "/" + oc.Namespace() + "/35998-image:latest"
-		output, err := containerCLI.Run("pull").Args(imageInfo).Output()
+		imageInfo := regRoute + "/" + oc.Namespace() + "/35998-image:latest"
+		output, err := containerCLI.Run("pull").Args(imageInfo, "--authfile="+authFile, "--tls-verify=false").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if err != nil {
 			e2e.Logf(output)
@@ -156,6 +145,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 
 		g.By("Mark down the config/layer info of oci image")
 		output, err = containerCLI.Run("run").Args("--rm", "quay.io/rh-obulatov/boater", "boater", "get-manifest", "-a", ociImage).Output()
+
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if err != nil {
 			e2e.Logf(output)
