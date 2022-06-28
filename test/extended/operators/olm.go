@@ -10397,6 +10397,87 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		g.By("SUCCESS")
 	})
 
+	g.It("VMonly-Author:xzha-ConnectedOnly-Medium-43246-Convert an existing db based index to declarative config", func() {
+		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
+			g.Skip("HTTP_PROXY is not empty - skipping test ...")
+		}
+		imagetag := "quay.io/olmqe/community-operator-index:v4.8"
+		imagetagdc := "quay.io/olmqe/community-operator-index:43246" + getRandomString()
+		catalogFileName := "catalog"
+		opmCLI := opm.NewOpmCLI()
+		quayCLI := container.NewQuayCLI()
+
+		g.By("Create index directory")
+		TmpDataPath := filepath.Join("tmp", "tmp"+getRandomString())
+		err := os.MkdirAll(TmpDataPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		opmCLI.ExecCommandPath = TmpDataPath
+
+		g.By("Migrate a sqlite-based index image or database file to a file-based catalog")
+		output, err := opmCLI.Run("migrate").Args(imagetag, catalogFileName).Output()
+		e2e.Logf(output)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Generate the index docker file")
+		output, err = opmCLI.Run("generate").Args("dockerfile", catalogFileName).Output()
+		e2e.Logf(output)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Build and push the image")
+		podmanCLI := container.NewPodmanCLI()
+		podmanCLI.ExecCommandPath = TmpDataPath
+		output, err = podmanCLI.Run("build").Args(".", "-f", catalogFileName+".Dockerfile", "-t", imagetagdc).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Successfully"))
+
+		defer quayCLI.DeleteTag(strings.Replace(imagetagdc, "quay.io/", "", 1))
+		output, err = podmanCLI.Run("push").Args(imagetagdc).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+
+		g.By("create namespace and catsrc")
+		itName := g.CurrentGinkgoTestDescription().TestText
+		buildIndexBaseDir := exutil.FixturePath("testdata", "olm")
+		catsrcTemplate := filepath.Join(buildIndexBaseDir, "catalogsource-image.yaml")
+		oc.SetupProject()
+		ns := oc.Namespace()
+		catsrc := catalogSourceDescription{
+			name:        "catsrc-43246",
+			namespace:   ns,
+			displayName: "Test Catsrc 43246 Operators",
+			publisher:   "Red Hat",
+			sourceType:  "grpc",
+			address:     imagetagdc,
+			template:    catsrcTemplate,
+		}
+		oc.SetupProject()
+		defer catsrc.delete(itName, dr)
+		catsrc.createWithCheck(oc, itName, dr)
+
+		g.By("check packagemanifest")
+		err = wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "--all-namespaces").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(output, "Test Catsrc 43246 Operators") {
+				return true, nil
+			}
+			e2e.Logf("packagemanifest of Test Catsrc 43246 Operators doesn't exist, go next round")
+			return false, nil
+		})
+		if err != nil {
+			output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", catsrc.name, "-n", ns, "-o=jsonpath={.status}").Output()
+			e2e.Logf(output)
+			output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", ns).Output()
+			e2e.Logf(output)
+			output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns).Output()
+			e2e.Logf(output)
+		}
+		exutil.AssertWaitPollNoErr(err, "packagemanifest of Test Catsrc 43246 Operators doesn't exist")
+
+		g.By("43246 SUCCESS")
+
+	})
+
 	// Test case: OCP-30835, author:kuiwang@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:kuiwang-Medium-30835-complete operator upgrades automatically based on SemVer setting default channel in opm alpha bundle build", func() {
 		SkipARM64(oc)
