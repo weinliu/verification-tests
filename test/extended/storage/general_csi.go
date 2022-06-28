@@ -2861,6 +2861,126 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
 	})
+
+	// author: ropatil@redhat.com
+	// https://bugzilla.redhat.com/show_bug.cgi?id=2076671
+	// OCP-52335 - [CSI Driver][Dynamic PV][Filesystem] Should auto provision for smaller PVCs
+	g.It("Author:ropatil-High-52335-[CSI Driver][Dynamic PV][Filesystem] Should auto provision for smaller PVCs", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"diskplugin.csi.alibabacloud.com"}
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
+
+		// Set the resource template for the scenario
+		var (
+			lesserVolSize, minVolSize string
+			storageTeamBaseDir        = exutil.FixturePath("testdata", "storage")
+			pvcTemplate               = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			depTemplate               = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		// Set up a specified project share for all the phases
+		g.By("0. Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			// Get the present scName and check it is installed or no
+			scName := getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			e2e.Logf("The preset storage class name is: %s", scName)
+
+			if provisioner == "diskplugin.csi.alibabacloud.com" {
+				lesserVolSize = strconv.FormatInt(getRandomNum(1, 19), 10) + "Gi"
+				minVolSize = "20Gi"
+			} else {
+				// Need to add min Vol Size for ibm cloud
+				lesserVolSize = strconv.FormatInt(getRandomNum(1, 9), 10) + "Gi"
+			}
+
+			// Set the resource definition for the scenario
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity(lesserVolSize))
+			dep := newDeployment(setDeploymentTemplate(depTemplate), setDeploymentPVCName(pvc.name))
+
+			g.By("Create a pvc with the csi storageclass")
+			pvc.scname = scName
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+
+			g.By("# Create deployment with the created pvc and wait ready")
+			dep.create(oc)
+			defer dep.deleteAsAdmin(oc)
+			dep.waitReady(oc)
+
+			g.By("Check pv minimum valid volume size: " + minVolSize)
+			volSize, err := getPvCapacityByPvcName(oc, pvc.name, pvc.namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(volSize).To(o.Equal(minVolSize))
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
+	// author: ropatil@redhat.com
+	// https://bugzilla.redhat.com/show_bug.cgi?id=2076671
+	// OCP-52338 - [CSI Driver][Dynamic PV][Filesystem] should not auto provision for smaller PVCs
+	g.It("Author:ropatil-High-52338-[CSI Driver][Dynamic PV][Filesystem] should not auto provision for smaller PVCs", func() {
+		// Define the test scenario support provisioners, Need to add values for ibm cloud
+		scenarioSupportProvisioners := []string{"diskplugin.csi.alibabacloud.com"}
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
+
+		// Set the resource template for the scenario
+		var (
+			lesserVolSize, expectedOutput string
+			storageTeamBaseDir            = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate          = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate                   = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			storageClassParameters        = make(map[string]string)
+			extraParameters               = map[string]interface{}{
+				"parameters": storageClassParameters,
+			}
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		// Set up a specified project share for all the phases
+		g.By("0. Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			if provisioner == "diskplugin.csi.alibabacloud.com" {
+				storageClassParameters["volumeSizeAutoAvailable"] = "false"
+				lesserVolSize = strconv.FormatInt(getRandomNum(1, 19), 10) + "Gi"
+				expectedOutput = "ErrorCode: Invalid"
+			} else {
+				//Need to add value for ibm
+				lesserVolSize = strconv.FormatInt(getRandomNum(1, 9), 10) + "Gi"
+			}
+
+			// Set the resource definition for the scenario
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity(lesserVolSize))
+
+			g.By("Create csi storageclass")
+			storageClass.createWithExtraParameters(oc, extraParameters)
+			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+			g.By("Create a pvc with the csi storageclass")
+			pvc.scname = storageClass.name
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+
+			g.By("# Wait for the pvc reach to Pending and check for the expected output")
+			pvc.waitPvcStatusToTimer(oc, "Pending")
+			output, _ := describePersistentVolumeClaim(oc, pvc.namespace, pvc.name)
+			o.Expect(output).To(o.ContainSubstring(expectedOutput))
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
 })
 
 // Performing test steps for Online Volume Resizing
