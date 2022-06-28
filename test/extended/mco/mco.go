@@ -1871,7 +1871,7 @@ nulla pariatur.`
 	g.It("Author:sregidor-NonPreRelease-Medium-52373-Modify proxy configuration in paused pools [Disruptive]", func() {
 
 		proxyValue := "http://user:pass@proxy-fake:1111"
-		noProxyValue := "test.no-proxy.com"
+		noProxyValue := "test.52373.no-proxy.com"
 
 		g.By("Get current proxy configuration")
 		proxy := NewResource(oc.AsAdmin(), "proxy", "cluster")
