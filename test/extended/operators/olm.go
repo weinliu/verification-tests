@@ -109,18 +109,18 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster infra: %s, error:%v", infra, err)
 		}
-		g.By("2) get the annotation of the packageserver-controller-lock")
-		annotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "packageserver-controller-lock", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.metadata.annotations}").Output()
+		g.By("2) get the leaseDurationSeconds of the packageserver-controller-lock")
+		leaseDurationSeconds, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "packageserver-controller-lock", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.spec.leaseDurationSeconds}").Output()
 		if err != nil {
-			e2e.Failf("Fail to get the annotation: %s, error:%v", annotation, err)
+			e2e.Failf("Fail to get the leaseDurationSeconds: %s, error:%v", leaseDurationSeconds, err)
 		}
 		if infra == "SingleReplica" {
 			e2e.Logf("This is a SNO cluster")
-			if !strings.Contains(annotation, "270") {
-				e2e.Failf("The lease duration is not as expected: %s", annotation)
+			if !strings.Contains(leaseDurationSeconds, "270") {
+				e2e.Failf("The lease duration is not as expected: %s", leaseDurationSeconds)
 			}
 		} else {
-			e2e.Logf("This is a HA cluster, skip.")
+			g.Skip("This is a HA cluster, skip.")
 		}
 	})
 
