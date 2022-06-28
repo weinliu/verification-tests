@@ -5,7 +5,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 import urllib3
 from urllib3.exceptions import InsecureRequestWarning
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import yaml
 import re
@@ -227,6 +227,13 @@ class BugzillaClient:
     def getUtctimestamp(self):
         return datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')
 
+    def isWeekend(self, offset):
+        timezone_offset = offset
+        tz = timezone(timedelta(hours=timezone_offset))
+        weekend = datetime.now(tz).weekday() > 4
+        print("weekend: {0}".format(str(weekend)))
+        return weekend
+
     def getIntervalInHalfHour(self, notifytime):
         notifyTime = datetime.strptime(notifytime, "%Y-%m-%dT%H:%M:%S.%f")
         currentTime = datetime.strptime(self.getUtctimestamp(), "%Y-%m-%dT%H:%M:%S.%f")
@@ -307,7 +314,7 @@ class BugzillaClient:
                 return {"id": str(id), "qa":bug_info[str(id)]["qa_contact_detail"]["email"],
                         "notify":"escalatetrack", "assignee":bug_info[str(id)]["assigned_to_detail"]["email"]}
 
-            if self.isSendTrackEmail(str(id), bug_info[str(id)]["cf_qa_whiteboard"], 20, 0):
+            if self.isSendTrackEmail(str(id), bug_info[str(id)]["cf_qa_whiteboard"], 24, 0) and not self.isWeekend(8):
                 print("notify qa to pre-verify bug {0} with email becuse it is not first time notification".format(str(id)))
                 return {"id": str(id), "qa":bug_info[str(id)]["qa_contact_detail"]["email"],
                         "notify":"continoustrack", "assignee":bug_info[str(id)]["assigned_to_detail"]["email"]}
