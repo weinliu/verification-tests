@@ -1131,7 +1131,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-47458-EgressIP should work well when reusing the egressIP that was held by a deleted project. [Disruptive]", func() {
+	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-47458-High-47459-EgressIP works when reusing the egressIP that was held by a deleted project, EgressIP works well after removed egressIP is added back. [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 
@@ -1169,9 +1169,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		var expectedEgressIP = []string{freeIPs[0]}
 		checkEgressIPonSDNHost(oc, nodeList.Items[0].Name, expectedEgressIP)
 
-		sourceIP, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		sourceIP, CurlErr := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 		e2e.Logf("\n Get sourceIP as %v \n", sourceIP)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(CurlErr).NotTo(o.HaveOccurred())
 		o.Expect(sourceIP).Should(o.Equal(freeIPs[0]))
 
 		g.By("5.Unpatch egressIP from the first namespace, verify source IP from this namespace is node's IP address where the test pod resides on")
@@ -1180,9 +1180,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		PodNodeName, err := exutil.GetPodNodeName(oc, pod1.namespace, pod1.name)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodeIP := getNodeIPv4(oc, ns1, PodNodeName)
-		sourceIP, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		sourceIP, CurlErr = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 		e2e.Logf("\n Get sourceIP as %v \n", sourceIP)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(CurlErr).NotTo(o.HaveOccurred())
 		o.Expect(sourceIP).Should(o.Equal(nodeIP))
 
 		g.By("6. Create a second namespace, patch the egressIP to the namespace, create a test pod in the namespace")
@@ -1204,9 +1204,106 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		checkEgressIPonSDNHost(oc, nodeList.Items[0].Name, expectedEgressIP)
 
-		sourceIP, err = e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		sourceIP, CurlErr = e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 		e2e.Logf("\n Get sourceIP as %v \n", sourceIP)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(CurlErr).NotTo(o.HaveOccurred())
 		o.Expect(sourceIP).Should(o.Equal(freeIPs[0]))
+
+		g.By("8.Unpatch egressIP from the second namespace, verify source IP from this namespace is node's IP address where the test pod resides on")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns2, "{\"egressIPs\":[]}")
+
+		PodNodeName, err = exutil.GetPodNodeName(oc, pod2.namespace, pod2.name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeIP = getNodeIPv4(oc, ns2, PodNodeName)
+		sourceIP, CurlErr = e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		e2e.Logf("\n Get sourceIP as %v \n", sourceIP)
+		o.Expect(CurlErr).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).Should(o.Equal(nodeIP))
+
+		g.By("9.Patch the removed egressIP back to the second namespace, verify source IP from this namespace is the egressIP that is added back")
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns2, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns2, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
+
+		sourceIP, CurlErr = e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		e2e.Logf("\n Get sourceIP as %v \n", sourceIP)
+		o.Expect(CurlErr).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).Should(o.Equal(freeIPs[0]))
+	})
+})
+
+var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
+	defer g.GinkgoRecover()
+	var (
+		oc = exutil.NewCLI("networking-"+getRandomString(), exutil.KubeConfigPath())
+	)
+
+	g.BeforeEach(func() {
+		platform := exutil.CheckPlatform(oc)
+		networkType := checkNetworkType(oc)
+		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp")
+		if !acceptedPlatform || !strings.Contains(networkType, "sdn") {
+			g.Skip("Test cases should be run on AWS or GCP cluster with Openshift-SDN network plugin, skip for other platforms or other network plugin!!")
+		}
+	})
+
+	// author: jechen@redhat.com
+	g.It("Author:jechen-Low-47460-Invalid egressIP should not be acceptable", func() {
+
+		g.By("1. Get list of nodes, use the first node as egressIP node")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("2. Patch invalid egressIP or invalid egressCIDRs to the egressIP node")
+		output, patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostsubnet/"+nodeList.Items[0].Name, "-p", "{\"egressIPs\":[\"a.b.c.d\"]}", "--type=merge").Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("invalid: egressIPs"))
+
+		output, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostsubnet/"+nodeList.Items[0].Name, "-p", "{\"egressIPs\":[\"fe80::5054:ff:fedd:3698\"]}", "--type=merge").Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("invalid: egressIPs"))
+
+		output, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostsubnet/"+nodeList.Items[0].Name, "-p", "{\"egressIPs\":[\"256.256.256.256\"]}", "--type=merge").Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("invalid: egressIPs"))
+
+		output, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostsubnet/"+nodeList.Items[0].Name, "-p", "{\"egressIPs\":[\"test-value\"]}", "--type=merge").Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("invalid: egressIPs"))
+
+		output, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostsubnet/"+nodeList.Items[0].Name, "-p", "{\"egressIPs\":[\"10.10.10.-1\"]}", "--type=merge").Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("invalid: egressIPs"))
+
+		output, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostsubnet/"+nodeList.Items[0].Name, "-p", "{\"egressCIDRs\":[\"10.0.0.1/64\"]}", "--type=merge").Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("invalid: egressCIDRs"))
+
+		output, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostsubnet/"+nodeList.Items[0].Name, "-p", "{\"egressCIDRs\":[\"10.1.1/24\"]}", "--type=merge").Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("invalid: egressCIDRs"))
+
+		g.By("3. Create a namespace, patch invalid egressIP to the namespace, they should not be accepted")
+		ns := oc.Namespace()
+
+		output, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("netnamespace/"+ns, "-p", "{\"egressIPs\":[\"a.b.c.d\"]}", "--type=merge").Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("invalid: egressIPs"))
+
+		output, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("netnamespace/"+ns, "-p", "{\"egressIPs\":[\"fe80::5054:ff:fedd:3698\"]}", "--type=merge").Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("invalid: egressIPs"))
+
+		output, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("netnamespace/"+ns, "-p", "{\"egressIPs\":[\"256.256.256.256\"]}", "--type=merge").Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("invalid: egressIPs"))
+
+		output, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("netnamespace/"+ns, "-p", "{\"egressIPs\":[\"test-value\"]}", "--type=merge").Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("invalid: egressIPs"))
+
+		output, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("netnamespace/"+ns, "-p", "{\"egressIPs\":[\"10.10.10.-1\"]}", "--type=merge").Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("invalid: egressIPs"))
 	})
 })
