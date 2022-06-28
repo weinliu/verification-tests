@@ -435,7 +435,7 @@ func ensureClusterOperatorNormal(oc *exutil.CLI, coName string) {
 
 	e2e.Logf("waiting for CO %v back to normal status......", coName)
 	var count = 0
-	waitErr := wait.Poll(3*time.Second, 300*time.Second, func() (bool, error) {
+	waitErr := wait.Poll(6*time.Second, 300*time.Second, func() (bool, error) {
 		status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/"+coName, jsonPath).Output()
 		primary := false
 		if strings.Compare(status, "TrueFalseFalse") == 0 {
@@ -502,6 +502,72 @@ func getRandomDNSPodName(podList []string) string {
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
 	index := seed.Intn(len(podList))
 	return podList[index]
+}
+
+//this function is to delete all dns pods
+func delAllDNSPods(oc *exutil.CLI) {
+	podList := getAllDNSPodsNames(oc)
+	o.Expect(podList).NotTo(o.BeEmpty())
+	oc.AsAdmin().Run("delete").Args("pods", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-n", "openshift-dns").Execute()
+	for _, podName := range podList {
+		err := waitForResourceToDisappear(oc, "openshift-dns", "pod/"+podName)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("dns pod %s is NOT deleted", podName))
+	}
+}
+
+//this function is to wait for the expStr appearing in the corefile of the coredns under all dns pods
+func keepSearchInAllDNSPods(oc *exutil.CLI, podList []string, expStr string) {
+	cmd := "grep " + expStr + " /etc/coredns/Corefile"
+	o.Expect(podList).NotTo(o.BeEmpty())
+	for _, podName := range podList {
+		count := 0
+		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+			output, _ := oc.AsAdmin().Run("exec").Args("-n", "openshift-dns", podName, "-c", "dns", "--", "bash", "-c", cmd).Output()
+			count++
+			primary := false
+			if strings.Contains(output, expStr) {
+				e2e.Logf("find " + expStr + " in the Corefile of pod " + podName)
+				primary = true
+			} else {
+				//reduce the logs
+				if count%2 == 1 {
+					e2e.Logf("can't find " + expStr + " in the Corefile of pod " + podName + ", wait and try again...")
+				}
+			}
+			return primary, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "can't find "+expStr+" in the Corefile of pod "+podName)
+	}
+}
+
+//this function is to get desired logs from all dns pods
+func searchLogFromDNSPods(oc *exutil.CLI, podList []string, searchStr string) string {
+	o.Expect(podList).NotTo(o.BeEmpty())
+	for _, podName := range podList {
+		output, _ := oc.AsAdmin().Run("logs").Args(podName, "-c", "dns", "-n", "openshift-dns").Output()
+		outputList := strings.Split(output, "\n")
+		for _, line := range outputList {
+			if strings.Contains(line, searchStr) {
+				return line
+			}
+		}
+	}
+	return "none"
+}
+
+//this function is to wait the dns logs appearing by using searchLogFromDNSPods function repeatly
+func waitDNSLogsAppear(oc *exutil.CLI, podList []string, searchStr string) string {
+	result := "none"
+	err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		result = searchLogFromDNSPods(oc, podList, searchStr)
+		primary := false
+		if result != "none" {
+			primary = true
+		}
+		return primary, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("expected string \"%s\" is not found in the dns logs", searchStr))
+	return result
 }
 
 //this function to get one dns pod's Corefile info related to the modified time, it looks like {{"dns-default-0001", "2021-12-30 18.011111 Modified"}}
