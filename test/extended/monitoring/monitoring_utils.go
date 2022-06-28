@@ -2,32 +2,64 @@ package monitoring
 
 import (
 	"fmt"
-	"math/rand"
-	"strings"
-	"time"
-
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	"math/rand"
+	"os/exec"
+	"strings"
+	"time"
 )
 
-const (
-	asAdmin          = true
-	withoutNamespace = true
-	requireNS        = true
-)
+const platformLoadTime = 120
+const uwmLoadTime = 180
 
 type monitoringConfig struct {
 	name               string
 	namespace          string
-	enableUserWorkload string
+	enableUserWorkload bool
 	template           string
 }
 
 func (cm *monitoringConfig) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cm.template, "-p", "NAME="+cm.name, "NAMESPACE="+cm.namespace, "ENABLEUSERWORKLOAD="+cm.enableUserWorkload)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if !checkConfigMap(oc, "openshift-monitoring", "cluster-monitoring-config") {
+		e2e.Logf("Create configmap: cluster-monitoring-config")
+		output, err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cm.template, "-p", "NAME="+cm.name, "NAMESPACE="+cm.namespace, "ENABLEUSERWORKLOAD="+fmt.Sprintf("%v", cm.enableUserWorkload))
+		if err != nil {
+			if strings.Contains(output, "AlreadyExists") {
+				err = nil
+			}
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+
+func createUWMConfig(oc *exutil.CLI, uwmMonitoringConfig string) {
+	if !checkConfigMap(oc, "openshift-user-workload-monitoring", "user-workload-monitoring-config") {
+		e2e.Logf("Create configmap: user-workload-monitoring-config")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", uwmMonitoringConfig).Output()
+		if err != nil {
+			if strings.Contains(output, "AlreadyExists") {
+				err = nil
+			}
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+
+// check if a configmap is created in specific namespace [usage: checkConfigMap(oc, namesapce, configmapName)]
+func checkConfigMap(oc *exutil.CLI, ns, configmapName string) bool {
+	searchOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", configmapName, "-n", ns, "-o=jsonpath={.data.config\\.yaml}").Output()
+	if err != nil {
+		return false
+	}
+	if strings.Contains(searchOutput, "retention") {
+		return true
+	}
+	return false
 }
 
 func getRandomString() string {
@@ -41,21 +73,18 @@ func getRandomString() string {
 }
 
 //the method is to create one resource with template
-func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
+func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) (string, error) {
 	var configFile string
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + "cluster-monitoring.json")
 		if err != nil {
-			e2e.Logf("the err:%v, and try next round", err)
 			return false, nil
 		}
 		configFile = output
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to process %v", parameters))
-
-	e2e.Logf("the file of resource is %s", configFile)
-	return oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
+	return oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Output()
 }
 
 func labelNameSpace(oc *exutil.CLI, namespace string, label string) {
@@ -65,26 +94,103 @@ func labelNameSpace(oc *exutil.CLI, namespace string, label string) {
 
 }
 
-func getSAToken(oc *exutil.CLI, account string, namespace string) string {
-	token, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", account, "-n", namespace).Output()
+func getSAToken(oc *exutil.CLI, account, ns string) string {
+	e2e.Logf("Getting a token assgined to specific serviceaccount from %s namespace...", ns)
+	token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", account, "-n", ns).Output()
+	if err != nil {
+		if strings.Contains(token, "unknown command") {
+			token, err = oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", account, "-n", ns).Output()
+		}
+	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(token).NotTo(o.BeEmpty())
 	return token
 }
 
 //check data by running curl on a pod
-func checkMetric(oc *exutil.CLI, url string, metricString string, timeout time.Duration) error {
+func checkMetric(oc *exutil.CLI, url, token, metricString string, timeout time.Duration) {
 	var metrics string
 	var err error
-	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+	getCmd := "curl -G -k -s -H \"Authorization:Bearer " + token + "\" " + url
 	err = wait.Poll(3*time.Second, timeout*time.Second, func() (bool, error) {
-		metrics, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("prometheus-k8s-0", "-c", "prometheus", "-n", "openshift-monitoring", "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", token), url).Output()
+		metrics, err = exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", getCmd)
 		if err != nil || !strings.Contains(metrics, metricString) {
-			e2e.Logf("the err:%v, the metrics: %s and try next round", err, metrics)
 			return false, nil
 		}
 		return true, err
 	})
-	e2e.Logf("The metrics is %s. expect to contain %s", metrics, metricString)
-	return err
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The metrics %s failed to contain %s", metrics, metricString))
+}
+
+func createResourceFromYaml(oc *exutil.CLI, ns, yamlFile string) {
+	var err error
+	err = oc.AsAdmin().Run("apply").Args("-n", ns, "-f", yamlFile).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func deleteBindMonitoringViewRoleToDefaultSA(oc *exutil.CLI, uwmFederateRBACViewName string) {
+	err := oc.AdminKubeClient().RbacV1().ClusterRoleBindings().Delete(uwmFederateRBACViewName, &metav1.DeleteOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func bindMonitoringViewRoleToDefaultSA(oc *exutil.CLI, ns, uwmFederateRBACViewName string) (*rbacv1.ClusterRoleBinding, error) {
+	return oc.AdminKubeClient().RbacV1().ClusterRoleBindings().Create(&rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: uwmFederateRBACViewName,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name:     "cluster-monitoring-view",
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      "default",
+				Namespace: ns,
+			},
+		},
+	})
+}
+
+func checkRoute(oc *exutil.CLI, ns, name, token, queryString, metricString string, timeout time.Duration) {
+	var metrics string
+	var err error
+	path, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", name, "-n", ns, "-o=jsonpath={.spec.path}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	host, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", name, "-n", ns, "-o=jsonpath={.spec.host}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	metricCMD := fmt.Sprintf("curl -G -s -k -H \"Authorization: Bearer %s\" https://%s%s --data-urlencode '%s'", token, host, path, queryString)
+	err = wait.Poll(5*time.Second, timeout*time.Second, func() (bool, error) {
+		curlOutput, err := exec.Command("bash", "-c", metricCMD).Output()
+		metrics = string(curlOutput)
+		if err != nil || !strings.Contains(metrics, metricString) {
+			return false, nil
+		}
+		return true, err
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The metrics %s failed to contain %s", metrics, metricString))
+}
+
+//check thanos_ruler retention
+func checkRetention(oc *exutil.CLI, ns string, sts string, expectedRetention string, timeout time.Duration) {
+	err := wait.Poll(5*time.Second, timeout*time.Second, func() (bool, error) {
+		stsObject, err := oc.AdminKubeClient().AppsV1().StatefulSets(ns).Get(sts, metav1.GetOptions{})
+		if err != nil {
+			return false, nil
+		}
+		args := stsObject.Spec.Template.Spec.Containers[0].Args
+		for _, v := range args {
+			if strings.Contains(v, expectedRetention) {
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the retention of %s is not expected %s", sts, expectedRetention))
+}
+
+func deleteConfig(oc *exutil.CLI, configName, ns string) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ConfigMap", configName, "-n", ns, "--ignore-not-found").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }

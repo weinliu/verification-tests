@@ -11,6 +11,9 @@ objects:
   data:
     config.yaml: |
       enableUserWorkload: ${ENABLEUSERWORKLOAD}
+      prometheusK8s:
+        retentionSize: 10GiB
+        retention: 45d
 parameters:
 - name: NAME
 - name: NAMESPACE
