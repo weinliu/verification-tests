@@ -41,7 +41,7 @@ sudo rm -f /etc/yum.repos.d/redhat_offcial.repo /etc/yum.repos.d/localdev-rhel-8
 sudo cp ${WORKBUILDDIR}/pipeline/repo-file/aos-devel-$NIGHTLYFLAG.repo /etc/yum.repos.d/puddle.repo
 sudo ls -lrt /etc/yum.repos.d/
 sudo yum remove 'origin*.x86_64' 'atomic-openshift*.x86_64' 'openshift-clients*.x86_64' -y
-sudo yum -y --enablerepo=aos-devel-4.11-el8 install openshift-clients
+sudo yum -y --enablerepo=aos-devel-4.12-el8 install openshift-clients
 sudo yum -y install jq patch docker
 sudo yum clean all -y
 sudo pip3 install requests
@@ -63,7 +63,7 @@ if echo $INSTALL_TOOLS | grep -i 'operatorSDK' > /dev/null; then
     unset http_proxy https_proxy
     echo "------------------get operatorSDK------------------------"
     mkdir ${WORKSPACE}/osdk
-    BUILD_CMD="sudo -s source ${WORKSPACE}/.bash_profile; make build"
+    BUILD_CMD="make build"
     PR=""
     array=(${INSTALL_TOOLS//;/ })  
     for tool_name_index in ${array[@]}
@@ -86,8 +86,8 @@ if echo $INSTALL_TOOLS | grep -i 'operatorSDK' > /dev/null; then
         git status
         BUILD_CMD="make -f ci/prow.Makefile patch build"
     else
-        if [ "${JENKINS_AGENT}" == 'goc411' ]; then
-            sudo git clone --depth=1 git@github.com:operator-framework/operator-sdk.git ${WORKSPACE}/osdk --branch master
+        if [ "${JENKINS_AGENT}" == 'goc412' ]; then
+            git clone --depth=1 git@github.com:operator-framework/operator-sdk.git ${WORKSPACE}/osdk --branch master
         else
             BRANCH="release-${NIGHTLYFLAG:0:1}.${NIGHTLYFLAG:1}"
             BUILD_CMD="make -f ci/prow.Makefile patch build"
@@ -98,9 +98,9 @@ if echo $INSTALL_TOOLS | grep -i 'operatorSDK' > /dev/null; then
     echo "buid command is [${BUILD_CMD}]"
     eval "${BUILD_CMD}"
     ls -lrt build/
-    sudo mv -f build/* $WORKDIR
-    sudo rm -fr ../osdk
-    sudo chown -R cloud-user:cloud-user $WORKDIR
+    mv -f build/* $WORKDIR
+    rm -fr ../osdk
+    chown -R cloud-user:cloud-user $WORKDIR
     operator-sdk version
     cd $WORKDIR
 else
