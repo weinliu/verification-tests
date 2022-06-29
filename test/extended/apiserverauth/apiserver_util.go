@@ -19,6 +19,9 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+// fixturePathCache to store fixture path mapping, key: dir name under testdata, value: fixture path
+var fixturePathCache = make(map[string]string)
+
 type admissionWebhook struct {
 	name             string
 	webhookname      string
@@ -312,9 +315,18 @@ func checkResources(oc *exutil.CLI, dirname string) map[string]string {
 
 func getTestDataFilePath(filename string) string {
 	// returns the file path of the testdata files with respect to apiserverauth subteam.
-	baseDir := exutil.FixturePath("testdata", "apiserverauth")
-	filePath := filepath.Join(baseDir, filename)
-	return filePath
+	apiDirName := "apiserverauth"
+	apiBaseDir := ""
+	if apiBaseDir = fixturePathCache[apiDirName]; len(apiBaseDir) == 0 {
+		e2e.Logf("apiserver fixture dir is not initialized, start to create")
+		apiBaseDir = exutil.FixturePath("testdata", apiDirName)
+		fixturePathCache[apiDirName] = apiBaseDir
+		e2e.Logf("apiserver fixture dir is initialized: %s", apiBaseDir)
+	} else {
+		apiBaseDir = fixturePathCache[apiDirName]
+		e2e.Logf("apiserver fixture dir found in cache: %s", apiBaseDir)
+	}
+	return filepath.Join(apiBaseDir, filename)
 }
 
 func checkCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]string) {

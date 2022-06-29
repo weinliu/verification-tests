@@ -1812,6 +1812,14 @@ spec:
 			template:         badCrdWebhook,
 		}
 
+		g.By("Pre-requisities, capturing current-context from cluster.")
+		origContxt, contxtErr := oc.Run("config").Args("current-context").Output()
+		o.Expect(contxtErr).NotTo(o.HaveOccurred())
+		defer func() {
+			useContxtErr := oc.Run("config").Args("use-context", origContxt).Execute()
+			o.Expect(useContxtErr).NotTo(o.HaveOccurred())
+		}()
+
 		g.By("1) Create a custom namespace for admission hook references.")
 		err := oc.WithoutNamespace().Run("new-project").Args(namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
