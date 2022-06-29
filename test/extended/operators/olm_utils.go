@@ -208,6 +208,8 @@ func (sub *subscriptionDescription) findInstalledCSV(oc *exutil.CLI, itName stri
 	if err != nil {
 		output := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o", "yaml")
 		e2e.Logf(output)
+		output = getResource(oc, asAdmin, withoutNamespace, "pod", "-n", sub.catalogSourceNamespace)
+		e2e.Logf(output)
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("sub %s stat is not AtLatestKnown", sub.subName))
 
@@ -472,7 +474,21 @@ func (catsrc *catalogSourceDescription) create(oc *exutil.CLI, itName string, dr
 
 func (catsrc *catalogSourceDescription) createWithCheck(oc *exutil.CLI, itName string, dr describerResrouce) {
 	catsrc.create(oc, itName, dr)
-	newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", catsrc.name, "-n", catsrc.namespace, "-o=jsonpath={.status..lastObservedState}"}).check(oc)
+	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "-o=jsonpath={.status..lastObservedState}").Output()
+		if strings.Compare(status, "READY") != 0 {
+			e2e.Logf("catsrc %s lastObservedState is %s, not READY", catsrc.name, status)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "-o=jsonpath={.status}").Output()
+		e2e.Logf(output)
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", catsrc.namespace).Output()
+		e2e.Logf(output)
+	}
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("catsrc %s lastObservedState is not READY", catsrc.name))
 	e2e.Logf("catsrc %s lastObservedState is READY", catsrc.name)
 }
 
