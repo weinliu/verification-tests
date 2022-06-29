@@ -17,8 +17,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	var (
 		oc                 = exutil.NewCLI("default-image-prune", exutil.KubeConfigPath())
-		logInfo            = "Only API objects will be removed.  No modifications to the image registry will be made"
-		warnInfo           = "batch/v1beta1 CronJob is deprecated in v1.21+, unavailable in v1.25+; use batch/v1 CronJob"
 		monitoringns       = "openshift-monitoring"
 		promPod            = "prometheus-k8s-0"
 		queryImagePruner   = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=image_registry_operator_image_pruner_install_status"
@@ -114,49 +112,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(out).Should(o.Equal(tolerationsInfo))
 	})
 
-	// author: wewang@redhat.com
-	g.It("Author:wewang-35906-High-27588-ManagementState setting in Image registry operator config can influence image prune [Disruptive]", func() {
-		//When registry configured using pvc, the following removed registry operation will remove pvc too.
-		//This is not suitable for the defer recoverage. Only run this case on cloud storage.
-		if checkRegistryUsingFSVolume(oc) {
-			g.Skip("Skip for fs volume")
-		}
-
-		g.By("In default image registry cluster Managed and prune-registry flag is true")
-		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.managementState}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(out).Should(o.Equal("Managed"))
-		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("cronjob.batch/image-pruner", "-n", "openshift-image-registry", "-o=jsonpath={.spec.jobTemplate.spec.template.spec.containers[0]}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(out).To(o.ContainSubstring("--prune-registry=true"))
-
-		g.By("Set image registry cluster Removed")
-		defer func() {
-			g.By("Set image registry cluster Managed")
-			err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Managed"}}`, "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			waitRegistryDefaultPodsReady(oc)
-		}()
-		err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Removed"}}`, "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Check image-registry pods are removed")
-		checkRegistrypodsRemoved(oc)
-
-		g.By("Check prune-registry flag is false")
-		time.Sleep(5 * time.Second)
-		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("cronjob.batch/image-pruner", "-n", "openshift-image-registry", "-o=jsonpath={.spec.jobTemplate.spec.template.spec.containers[0]}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(out).To(o.ContainSubstring("--prune-registry=false"))
-
-		g.By("Make update in the pruning custom resource")
-		defer oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"schedule":""}}`, "--type=merge").Execute()
-		err = oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"schedule":"*/1 * * * *"}}`, "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		imagePruneLog(oc, logInfo, warnInfo)
-	})
-
 	//Author: xiuwang@redhat.com
-	g.It("NonPreRelease-ConnectedOnly-Author:xiuwang-Medium-44107-Image pruner should skip images that has already been deleted [Serial][Slow]", func() {
+	g.It("ConnectedOnly-Author:xiuwang-Medium-44107-Image pruner should skip images that has already been deleted [Serial]", func() {
 		g.By("Setup imagepruner")
 		defer oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"keepTagRevisions":3,"keepYoungerThanDuration":null,"schedule":""}}`, "--type=merge").Execute()
 		err := oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"keepTagRevisions":0,"keepYoungerThanDuration":"0s","schedule": "* * * * *"}}`, "--type=merge").Execute()
@@ -164,7 +121,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Image pruner should tolerate concurrent deletion of image objects")
 		oc.SetupProject()
-		for i := 0; i < 6; i++ {
+		for i := 0; i < 3; i++ {
 			bcName := getRandomString()
 			err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("registry.redhat.io/rhel8/httpd-24:latest~https://github.com/openshift/httpd-ex.git", fmt.Sprintf("--name=%s", bcName), "-n", oc.Namespace()).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -175,6 +132,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			exutil.AssertWaitPollNoErr(err, "build is not complete")
 
 			g.By("Delete imagestreamtag when the pruner is processing")
+			err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), bcName, "latest")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("istag", fmt.Sprintf("%s:latest", bcName), "-n", oc.Namespace()).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			imagePruneLog(oc, "", fmt.Sprintf("%s", bcName))
@@ -218,7 +177,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//Author: xiuwang@redhat.com
-	g.It("NonPreRelease-Author:xiuwang-Medium-15126-Registry hard prune procedure works well [Serial]", func() {
+	g.It("Author:xiuwang-Medium-15126-Registry hard prune procedure works well [Serial]", func() {
 		if !checkRegistryUsingFSVolume(oc) {
 			g.Skip("Skip for cloud storage")
 		}

@@ -379,95 +379,68 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("Author:xiuwang-Critial-34680-Image registry storage cannot be removed if set to Unamanaged when image registry is set to Removed [Disruptive]", func() {
+	g.It("Author:xiuwang-Critial-21593-Critial-34680-Medium-35906-High-27588-Image registry storage cannot be removed if set to Unamanaged when image registry is set to Removed [Disruptive]", func() {
 		g.By("Get registry storage info")
 		var storageinfo1, storageinfo2, storageinfo3 string
 		_, storageinfo1 = getRegistryStorageConfig(oc)
+		podNum := getImageRegistryPodNumber(oc)
+
+		g.By("In default image registry cluster Managed and prune-registry flag is true")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.managementState}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).Should(o.Equal("Managed"))
+		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("cronjob.batch/image-pruner", "-n", "openshift-image-registry", "-o=jsonpath={.spec.jobTemplate.spec.template.spec.containers[0]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("--prune-registry=true"))
+
 		g.By("Set image registry storage to Unmanaged, image registry operator to Removed")
 		defer func() {
 			g.By("Recover image registry change")
-			err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Managed","storage":{"managementState":"Managed"}}}`, "--type=merge").Execute()
+			patchInfo := fmt.Sprintf("{\"spec\":{\"managementState\":\"Managed\",\"replicas\": %v,\"storage\":{\"managementState\":\"Managed\"}}}", podNum)
+			err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", patchInfo, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitRegistryDefaultPodsReady(oc)
 		}()
-		err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Removed","storage":{"managementState":"Unmanaged"}}}`, "--type=merge").Execute()
+		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Removed","storage":{"managementState":"Unmanaged"}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(25*time.Second, 2*time.Minute, func() (bool, error) {
-			podList, err1 := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(metav1.ListOptions{LabelSelector: "docker-registry=default"})
-			if err1 != nil {
-				e2e.Logf("Error listing pods: %v", err)
-				return false, nil
-			}
-			if len(podList.Items) != 0 {
-				e2e.Logf("Continue to next round")
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Image registry is not removed")
+
+		g.By("Check image-registry pods are removed")
+		checkRegistrypodsRemoved(oc)
 		_, storageinfo2 = getRegistryStorageConfig(oc)
 		if strings.Compare(storageinfo1, storageinfo2) != 0 {
 			e2e.Failf("Image stroage has changed")
 		}
+
+		g.By("Check prune-registry flag is false")
+		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("cronjob.batch/image-pruner", "-n", "openshift-image-registry", "-o=jsonpath={.spec.jobTemplate.spec.template.spec.containers[0]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("--prune-registry=false"))
+
+		g.By("Make update in the pruning custom resource")
+		defer oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"schedule":""}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"schedule":"*/1 * * * *"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		logInfo := "Only API objects will be removed.  No modifications to the image registry will be made"
+		warnInfo := "batch/v1beta1 CronJob is deprecated in v1.21+, unavailable in v1.25+; use batch/v1 CronJob"
+		imagePruneLog(oc, logInfo, warnInfo)
+
 		g.By("Set image registry operator to Managed again")
 		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Managed"}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(25*time.Second, 2*time.Minute, func() (bool, error) {
-			podList, err1 := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(metav1.ListOptions{LabelSelector: "docker-registry=default"})
-			if err1 != nil {
-				e2e.Logf("Error listing pods: %v", err)
-				return false, nil
-			}
-			if len(podList.Items) == 0 {
-				e2e.Logf("Continue to next round")
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Image registry is not recovered")
+		waitRegistryDefaultPodsReady(oc)
+
 		_, storageinfo3 = getRegistryStorageConfig(oc)
 		if strings.Compare(storageinfo1, storageinfo3) != 0 {
 			e2e.Failf("Image stroage has changed")
 		}
-	})
 
-	// author: wewang@redhat.com
-	g.It("Author:wewang-Critical-21593-Check registry status by changing managementState for image-registry [Disruptive]", func() {
-		g.By("Check platforms")
-		//We set registry use pv on openstack&disconnect cluster, the case will fail on this scenario.
-		//Skip all the fs volume test, only run on object storage backend.
-		if checkRegistryUsingFSVolume(oc) {
-			g.Skip("Skip for fs volume")
-		}
-
-		g.By("Change managementSet from Managed -> Removed")
-		defer func() {
-			g.By("Set image registry cluster Managed")
-			oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Managed"}}`, "--type=merge").Execute()
-			waitRegistryDefaultPodsReady(oc)
-		}()
-		err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Removed"}}`, "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Check image-registry pods are removed")
-		checkRegistrypodsRemoved(oc)
-
-		g.By("Change managementSet from Removed to Managed")
-		err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Managed"}}`, "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		waitRegistryDefaultPodsReady(oc)
-
-		g.By("Change managementSet from Managed to Unmanaged")
-		err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Unmanaged"}}`, "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Update replicas to 1")
-		defer oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"replicas": 2}}`, "--type=merge").Execute()
-		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"replicas": 1}}`, "--type=merge").Execute()
+		g.By("Change managementSet from Managed to Unmanaged and replicas to 3")
+		err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Unmanaged","replicas": 3}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Check image registry pods are still 2")
-		podList, err := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(metav1.ListOptions{LabelSelector: "docker-registry=default"})
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(podList.Items)).Should(o.Equal(2))
+		g.By("Check image registry pods are not change")
+		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
+
 	})
 
 	// author: wewang@redhat.com
@@ -604,18 +577,16 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("Author:wewang-Medium-23583-Registry should not try to pullthrough himself by any name [Serial]", func() {
+	g.It("Author:wewang-Medium-23583-Registry should not try to pullthrough himself by any name ", func() {
 		g.By("Create route to expose the registry")
 		defer restoreRouteExposeRegistry(oc)
 		createRouteExposeRegistry(oc)
 
 		g.By("Get server host")
 		defroute := getRegistryDefaultRoute(oc)
-		userroute := strings.Replace(defroute, "default", "extra", 1)
-		patchInfo := fmt.Sprintf("{\"spec\":{\"routes\":[{\"hostname\": \"%s\", \"name\":\"extra-image-registry\", \"secretName\":\"\"}]}}", userroute)
-		defer oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"routes":null}}`, "--type=merge").Execute()
-		err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", patchInfo, "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		userroute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
 
 		g.By("Get token from secret")
 		oc.SetupProject()
@@ -640,18 +611,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "test")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Check import successfully")
-		err = wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-			successInfo := userroute + "/" + oc.Namespace() + "/myimage@sha256"
-			output, err := oc.WithoutNamespace().AsAdmin().Run("describe").Args("is", "myimage", "-n", oc.Namespace()).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if o.Expect(output).To(o.ContainSubstring(successInfo)) {
-				return true, nil
-			}
-			e2e.Logf("Continue to next round")
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Import failed")
 		g.By("Get blobs from the default registry")
 		getURL := "curl -Lks -u \"" + oc.Username() + ":" + token + "\" -I HEAD https://" + defroute + "/v2/" + oc.Namespace() + "/myimage@sha256:0000000000000000000000000000000000000000000000000000000000000000"
 		curlOutput, err := exec.Command("bash", "-c", getURL).Output()
@@ -1171,7 +1130,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		e2e.Logf("Only baremetal platform supported for the test")
 	})
 
-	g.It("NonPreRelease-VMonly-Author:xiuwang-Medium-48045-Update global pull secret for additional private registries[Disruptive]", func() {
+	g.It("VMonly-Author:xiuwang-Medium-48045-Update global pull secret for additional private registries[Disruptive]", func() {
 		g.By("Setup a private registry")
 		oc.SetupProject()
 		var regUser, regPass = "testuser", getRandomString()
@@ -1440,19 +1399,18 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: yyou@redhat.com
 	g.It("VMonly-NonPreRelease-Author:yyou-Critical-44037-Could configure swift authentication using application credentials [Disruptive]", func() {
-		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(output, "OpenStack") {
+		storagetype, _ := getRegistryStorageConfig(oc)
+		if storagetype != "swift" {
 			g.Skip("Skip for non-supported platform")
 		}
 
 		g.By("Configure image-registry-private-configuration  secret to use new application credentials")
 		defer func() {
-			err = oc.AsAdmin().WithoutNamespace().Run("set").Args("data", "secret/image-registry-private-configuration", "--from-literal=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALID='' ", "--from-literal=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALNAME='' ", "--from-literal=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALSECRET='' ", "-n", "openshift-image-registry").Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("set").Args("data", "secret/image-registry-private-configuration", "--from-literal=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALID='' ", "--from-literal=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALNAME='' ", "--from-literal=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALSECRET='' ", "-n", "openshift-image-registry").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitRegistryDefaultPodsReady(oc)
 		}()
-		err = oc.AsAdmin().WithoutNamespace().Run("set").Args("data", "secret/image-registry-private-configuration", "--from-file=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALID=/root/auto/44037/applicationid", "--from-file=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALNAME=/root/auto/44037/applicationname", "--from-file=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALSECRET=/root/auto/44037/applicationsecret", "-n", "openshift-image-registry").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("set").Args("data", "secret/image-registry-private-configuration", "--from-file=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALID=/root/auto/44037/applicationid", "--from-file=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALNAME=/root/auto/44037/applicationname", "--from-file=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALSECRET=/root/auto/44037/applicationsecret", "-n", "openshift-image-registry").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check image registry pod")
@@ -1667,7 +1625,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-High-NonPreRelease-50219-Setting nodeSelector and tolerations on nodes with taints registry works well [Disruptive]", func() {
+	g.It("Author:jitli-NonPreRelease-Medium-22032-High-50219-Setting nodeSelector and tolerations on nodes with taints registry works well [Disruptive]", func() {
 
 		g.By("Check the image-registry default topology")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.template.spec.topologySpreadConstraints}").Output()
@@ -1713,7 +1671,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("Author:xiuwang-Critical-NonPreRelease-49455-disableRedirect should work when image registry configured object storage", func() {
+	g.It("Author:xiuwang-Critical-49455-disableRedirect should work when image registry configured object storage", func() {
 		g.By("Get registry storage info")
 		storagetype, _ := getRegistryStorageConfig(oc)
 		if storagetype == "pvc" || storagetype == "emptyDir" {
@@ -1945,40 +1903,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("NonPreRelease-Author:jitli-Medium-22032-Config NodeSelector for internal registry [Disruptive]", func() {
-
-		g.By("Set up internal registry NodeSelector")
-		initialConfig, err := oc.AsAdmin().Run("get").Args("config.image/cluster", "-ojsonpath={.spec.nodeSelector}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if initialConfig == "" {
-			initialConfig = `null`
-		}
-
-		defer func() {
-			g.By("Remove nodeSelector for imageregistry")
-			err := oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"nodeSelector":`+initialConfig+`}}`, "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			g.By("Check registry pod well")
-			waitRegistryDefaultPodsReady(oc)
-		}()
-		err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"nodeSelector":{"node-role.kubernetes.io/master": "test22032"}}}`, "--type=merge").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("Check the image-registry pod nodeSelector")
-		err = wait.Poll(5*time.Second, 1*time.Minute, func() (bool, error) {
-			nodeSelector, nodeSelectorErr := oc.AsAdmin().Run("get").Args("pod", "-n", "openshift-image-registry", "-l", "docker-registry=default", `-ojsonpath={.items..spec.nodeSelector}`).Output()
-
-			if strings.Contains(nodeSelector, "test22032") {
-				e2e.Logf("pod metadata updated")
-				return true, nil
-			}
-			e2e.Logf("pod metadata not update, nodeSelector:%v %v", nodeSelector, nodeSelectorErr)
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "pod metadata not update")
-	})
-
-	// author: jitli@redhat.com
 	g.It("VMonly-Author:jitli-Critial-24133-TLS can be added to user-defined registry route [Disruptive]", func() {
 
 		registryCrt := filepath.Join("/root", "auto", "24133", "myregistry.crt")
@@ -2121,7 +2045,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Push a image to the project")
 		checkRegistryFunctionFine(oc, "test-10904", oc.Namespace())
-		e2e.Logf("The namespace is", oc.Namespace())
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "test-10904", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		publicImageName := regRoute + "/" + oc.Namespace() + "/test-10904:latest"
