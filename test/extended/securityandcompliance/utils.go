@@ -422,3 +422,18 @@ func (fi1 *fileintegrity) expectedStringNotExistInConfigmap(oc *exutil.CLI, cmNa
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cm %s contains %s", cmName, expected))
 }
+
+func (fi1 *fileintegrity) checkDBBackupResult(oc *exutil.CLI, nodeName string) {
+	errWait := wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
+		dbBackupResult, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args(`node/`+nodeName, "-n", fi1.namespace, "--", "chroot", "/host", "find", "/etc/kubernetes/", "-maxdepth", "1", "-mmin", "-5").Output()
+		if err != nil {
+			return false, nil
+		}
+		if strings.Contains(dbBackupResult, "aide.db.gz.backup") && strings.Contains(dbBackupResult, "aide.log.backup") {
+			e2e.Logf("the DB backup result for node %s is: %s", nodeName, dbBackupResult)
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("the DB backup result for node %s does not exist", nodeName))
+}

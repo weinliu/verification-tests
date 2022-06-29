@@ -342,6 +342,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		g.By("Create fileintegrity without aide config")
 		fi1.createFIOWithoutConfig(oc, itName, dr)
 		fi1.checkFileintegrityStatus(oc, "running")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		var pod = podModifyD
 		pod.namespace = oc.Namespace()
 		nodeName := getOneRhcosWorkerNodeName(oc)
@@ -369,7 +370,22 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		g.By("trigger reinit")
 		fi1.reinitFileintegrity(oc, "annotated")
 		fi1.checkFileintegrityStatus(oc, "running")
-		fi1.checkFileintegritynodestatus(oc, nodeName, "Succeeded")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		aidpodNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l app=aide-example-fileintegrity", "-n", fi1.namespace,
+			"-o=jsonpath={.items[*].metadata.name}").Output()
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("aidepodNames is %s ", aidpodNames))
+		aidpodName := strings.Fields(aidpodNames)
+		for _, v := range aidpodName {
+			newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"pods", v, "-n", fi1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		}
+		fionodeNames, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-n", fi1.namespace, "-l node.openshift.io/os_id=rhcos",
+			"-o=jsonpath={.items[*].metadata.name}").Output()
+		exutil.AssertWaitPollNoErr(err2, fmt.Sprintf("fionodeNames is %s ", fionodeNames))
+		fionodeName := strings.Fields(fionodeNames)
+		for _, node := range fionodeName {
+			fi1.checkFileintegritynodestatus(oc, node, "Succeeded")
+			fi1.checkDBBackupResult(oc, node)
+		}
 	})
 
 	//author: xiyuan@redhat.com
