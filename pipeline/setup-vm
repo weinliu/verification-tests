@@ -41,7 +41,7 @@ sudo rm -f /etc/yum.repos.d/redhat_offcial.repo /etc/yum.repos.d/localdev-rhel-8
 sudo cp ${WORKBUILDDIR}/pipeline/repo-file/aos-devel-$NIGHTLYFLAG.repo /etc/yum.repos.d/puddle.repo
 sudo ls -lrt /etc/yum.repos.d/
 sudo yum remove 'origin*.x86_64' 'atomic-openshift*.x86_64' 'openshift-clients*.x86_64' -y
-sudo yum -y --enablerepo=aos-devel-4.12-el8 install openshift-clients
+sudo yum -y install openshift-clients
 sudo yum -y install jq patch docker
 sudo yum clean all -y
 sudo pip3 install requests

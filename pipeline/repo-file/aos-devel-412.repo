@@ -1,5 +1,5 @@
-[aos-devel-4.12-el8]
-name=aos-devel-4.12-el8
+[aos-devel-4.12]
+name=aos-devel-4.12
 baseurl=http://download.eng.bos.redhat.com/rcm-guest/puddles/RHAOS/plashets/4.12-el8/stream/building/x86_64/os/
-enabled=0
+enabled=1
 gpgcheck=0
