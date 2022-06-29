@@ -2135,4 +2135,30 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(output).To(o.Equal("testVal"))
 		g.By("40341 SUCCESS")
 	})
+
+	// author: jfan@redhat.com
+	g.It("Author:jfan-Critical-49960-verify an empty CRD description", func() {
+		tmpBasePath := exutil.FixturePath("testdata", "operatorsdk", "ocp-49960-data")
+
+		g.By("step: validate CRD description success")
+		output, err := operatorsdkCLI.Run("bundle").Args("validate", tmpBasePath+"/bundle", "--select-optional", "name=good-practices").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("All validation tests have completed successfully"))
+
+		g.By("step: validate empty CRD description")
+		csvFilePath := filepath.Join(tmpBasePath, "bundle", "manifests", "k8sevent.clusterserviceversion.yaml")
+		replaceContent(csvFilePath, "description: test", "description:")
+		output, err = operatorsdkCLI.Run("bundle").Args("validate", tmpBasePath+"/bundle", "--select-optional", "name=good-practices").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("has an empty description"))
+
+		g.By("step: validate olm unsupported resource")
+		crdFilePath := filepath.Join(tmpBasePath, "bundle", "manifests", "k8s.k8sevent.com_k8sevents.yaml")
+		replaceContent(crdFilePath, "CustomResourceDefinition", "CustomResource")
+		output, err = operatorsdkCLI.Run("bundle").Args("validate", tmpBasePath+"/bundle", "--select-optional", "name=good-practices").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("unsupported media type"))
+
+		g.By("SUCCESS 49960")
+	})
 })
