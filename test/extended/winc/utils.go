@@ -565,18 +565,17 @@ func checkFoldersDoNotExist(bastionHost string, winInternalIP string, folder str
 	return false
 }
 
-// currently not available need to be fix logic
 func waitUntilWMCOStatusChanged(oc *exutil.CLI, message string) {
 	waitLogErr := wait.Poll(10*time.Second, 15*time.Minute, func() (bool, error) {
-		msg, err := oc.WithoutNamespace().Run("logs").Args("deployment.apps/windows-machine-config-operator", "-n", "openshift-windows-machine-config-operator").Output()
+		msg, err := oc.WithoutNamespace().Run("logs").Args("deployment.apps/windows-machine-config-operator", "-n", "openshift-windows-machine-config-operator", "--since=10s").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(msg, message) {
-			e2e.Logf("Failed to check %v, try next round", message)
+		if !strings.Contains(msg, message) {
 			return false, nil
 		}
+		e2e.Logf("Message: %v, found in WMCO logs", message)
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(waitLogErr, fmt.Sprintf("%v still watch label", message))
+	exutil.AssertWaitPollNoErr(waitLogErr, fmt.Sprintf("Failed to find %v in WMCO log after 15 minutes", message))
 }
 
 func waitForEndpointsReady(oc *exutil.CLI, namespace string, waitTime int, numberOfEndpoints int) {
