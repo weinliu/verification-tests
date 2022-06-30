@@ -24,9 +24,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring("patched"))
 
 		g.By("registries.conf gets updated")
-		workNode, _ := exutil.GetFirstWorkerNode(oc)
+		masterNode, _ := exutil.GetFirstMasterNode(oc)
 		err = wait.Poll(30*time.Second, 8*time.Minute, func() (bool, error) {
-			registriesstatus, _ := exutil.DebugNodeWithChroot(oc, workNode, "bash", "-c", "cat /etc/containers/registries.conf |grep -E '\"untrusted.com\"|\"insecure.com\"'")
+			registriesstatus, _ := exutil.DebugNodeWithChroot(oc, masterNode, "bash", "-c", "cat /etc/containers/registries.conf |grep -E '\"untrusted.com\"|\"insecure.com\"'")
 			if strings.Contains(registriesstatus, "location = \"untrusted.com\"") && strings.Contains(registriesstatus, "location = \"insecure.com\"") {
 				e2e.Logf("registries.conf updated")
 				return true, nil
@@ -41,8 +41,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	g.It("NonPreRelease-PstChkUpgrade-Author:wewang-High-26401-Upgrade cluster with insecureRegistries and blockedRegistries defined after upgrade [Disruptive]", func() {
 		g.By("registries.conf gets updated")
 		defer oc.AsAdmin().Run("patch").Args("images.config.openshift.io/cluster", "-p", `{"spec": {"registrySources": null}}`, "--type=merge").Execute()
-		workNode, _ := exutil.GetFirstWorkerNode(oc)
-		registriesstatus, _ := exutil.DebugNodeWithChroot(oc, workNode, "bash", "-c", "cat /etc/containers/registries.conf | grep -E '\"untrusted.com\"|\"insecure.com\"'")
+		masterNode, _ := exutil.GetFirstMasterNode(oc)
+		registriesstatus, _ := exutil.DebugNodeWithChroot(oc, masterNode, "bash", "-c", "cat /etc/containers/registries.conf | grep -E '\"untrusted.com\"|\"insecure.com\"'")
 		if strings.Contains(registriesstatus, "location = \"untrusted.com\"") && strings.Contains(registriesstatus, "location = \"insecure.com\"") {
 			e2e.Logf("registries.conf updated")
 		} else {

@@ -538,19 +538,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		defer icspsrc.delete(oc)
 		icspsrc.create(oc)
 
-		g.By("Get all nodes list")
-		nodeList, err := exutil.GetAllNodes(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("Check registry configs in all nodes")
-		err = wait.Poll(25*time.Second, 2*time.Minute, func() (bool, error) {
-			for _, nodeName := range nodeList {
-				output, err := exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", "cat /etc/containers/registries.conf | grep fake.rhcloud.com")
-				o.Expect(err).NotTo(o.HaveOccurred())
-				if !strings.Contains(output, "fake.rhcloud.com") {
-					e2e.Logf("Continue to next round")
-					return false, nil
-				}
+		g.By("Check registry configs get updated")
+		masterNode, _ := exutil.GetFirstMasterNode(oc)
+		err := wait.Poll(25*time.Second, 2*time.Minute, func() (bool, error) {
+			output, err := exutil.DebugNodeWithChroot(oc, masterNode, "bash", "-c", "cat /etc/containers/registries.conf | grep fake.rhcloud.com")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(output, "fake.rhcloud.com") {
+				e2e.Logf("Continue to next round")
+				return false, nil
 			}
 			return true, nil
 		})
@@ -629,11 +624,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	// author: jitli@redhat.com
 	g.It("NonPreRelease-Longduration-Author:jitli-ConnectedOnly-VMonly-Medium-33051-Images can be imported from an insecure registry without 'insecure: true' if it is in insecureRegistries in image.config/cluster [Disruptive]", func() {
 
-		workNode, _ := exutil.GetFirstWorkerNode(oc)
-		e2e.Logf(workNode)
+		masterNode, _ := exutil.GetFirstMasterNode(oc)
 		defer func() {
 			err := wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
-				regStatus, _ := exutil.DebugNodeWithChroot(oc, workNode, "bash", "-c", "cat /etc/containers/registries.conf | grep \"docker.io\"")
+				regStatus, _ := exutil.DebugNodeWithChroot(oc, masterNode, "bash", "-c", "cat /etc/containers/registries.conf | grep \"docker.io\"")
 				if !strings.Contains(regStatus, "location = \"docker.io\"") {
 					e2e.Logf("registries.conf updated")
 					return true, nil
@@ -677,7 +671,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("registries.conf gets updated")
 		err = wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
-			registriesstatus, _ := exutil.DebugNodeWithChroot(oc, workNode, "bash", "-c", "cat /etc/containers/registries.conf | grep default-route-openshift-image-registry.apps")
+			registriesstatus, _ := exutil.DebugNodeWithChroot(oc, masterNode, "bash", "-c", "cat /etc/containers/registries.conf | grep default-route-openshift-image-registry.apps")
 			if strings.Contains(registriesstatus, "default-route-openshift-image-registry.apps") {
 				e2e.Logf("registries.conf updated")
 				return true, nil
@@ -700,7 +694,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("registries.conf gets updated")
 		err = wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
-			registriesstatus, _ := exutil.DebugNodeWithChroot(oc, workNode, "bash", "-c", "cat /etc/containers/registries.conf | grep \"docker.io\"")
+			registriesstatus, _ := exutil.DebugNodeWithChroot(oc, masterNode, "bash", "-c", "cat /etc/containers/registries.conf | grep \"docker.io\"")
 			if strings.Contains(registriesstatus, "location = \"docker.io\"") {
 				e2e.Logf("registries.conf updated")
 				return true, nil
