@@ -421,7 +421,7 @@ func postCheckOnlineResizeCommonTestSteps(oc *exutil.CLI, pvcName string, depNam
 
 	g.By("# Wait for pv volume to get resized")
 	waitPVVolSizeToGetResized(oc.AsAdmin(), namespace, pvcName, expandedCapacity)
-	o.Expect(getVolSizeFromPvc(oc.AsAdmin(), pvcName, namespace)).To(o.Equal(expandedCapacity))
+	waitPVCVolSizeToGetResized(oc.AsAdmin(), namespace, pvcName, expandedCapacity)
 
 	g.By("# Check if pv have migration annotation parameters after migration")
 	annotationValues := getPvAnnotationValues(oc.AsAdmin(), namespace, pvcName)

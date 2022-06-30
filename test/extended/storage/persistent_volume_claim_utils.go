@@ -260,20 +260,25 @@ func getVolSizeFromPvc(oc *exutil.CLI, pvcName string, namespace string) (string
 }
 
 // Wait for PVC Volume Size to get Resized
-func (pvc *persistentVolumeClaim) waitResizeSuccess(oc *exutil.CLI, volResized string) {
+func (pvc *persistentVolumeClaim) waitResizeSuccess(oc *exutil.CLI, expandedCapactiy string) {
+	waitPVCVolSizeToGetResized(oc, pvc.namespace, pvc.name, expandedCapactiy)
+}
+
+// Wait for PVC capacity expand successfully
+func waitPVCVolSizeToGetResized(oc *exutil.CLI, namespace string, pvcName string, expandedCapactiy string) {
 	err := wait.Poll(15*time.Second, 120*time.Second, func() (bool, error) {
-		status, err := getVolSizeFromPvc(oc, pvc.name, pvc.namespace)
+		capacity, err := getVolSizeFromPvc(oc, pvcName, namespace)
 		if err != nil {
-			e2e.Logf("Err occurred: \"%v\", get PVC: \"%s\" capacity failed.", err, pvc.name)
+			e2e.Logf("Err occurred: \"%v\", get PVC: \"%s\" capacity failed.", err, pvcName)
 			return false, err
 		}
-		if status == volResized {
-			e2e.Logf("The PVC capacity updated to : \"%v\"", status)
+		if capacity == expandedCapactiy {
+			e2e.Logf("The PVC: \"%s\" capacity expand to \"%s\"", pvcName, capacity)
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The volume:%v, did not get Resized.", pvc.name))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Wait for the PVC :%s expand successfully timeout.", pvcName))
 }
 
 // Wait for PVC Volume Size to match with Resizing status
