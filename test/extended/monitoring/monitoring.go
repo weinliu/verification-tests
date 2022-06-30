@@ -32,7 +32,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	// author: hongyli@redhat.com
-	g.It("Author:hongyli-High-49803-Retention size settings for for platform", func() {
+	g.It("Author:hongyli-High-49073-Retention size settings for for platform", func() {
 		checkRetention(oc, "openshift-monitoring", "prometheus-k8s", "storage.tsdb.retention.size=10GiB", platformLoadTime)
 		checkRetention(oc, "openshift-monitoring", "prometheus-k8s", "storage.tsdb.retention.time=45d", 20)
 	})
@@ -117,7 +117,6 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		// author: hongyli@redhat.com
 		g.It("Author:hongyli-High-49745-High-50519-Retention for UWM Prometheus and thanos ruler", func() {
-			exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
 			g.By("Check retention size of prometheus user workload")
 			checkRetention(oc, "openshift-user-workload-monitoring", "prometheus-user-workload", "storage.tsdb.retention.size=5GiB", uwmLoadTime)
 			g.By("Check retention of prometheus user workload")

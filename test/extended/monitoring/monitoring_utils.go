@@ -156,15 +156,22 @@ func bindMonitoringViewRoleToDefaultSA(oc *exutil.CLI, ns, uwmFederateRBACViewNa
 func checkRoute(oc *exutil.CLI, ns, name, token, queryString, metricString string, timeout time.Duration) {
 	var metrics string
 	var err error
-	path, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", name, "-n", ns, "-o=jsonpath={.spec.path}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	host, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", name, "-n", ns, "-o=jsonpath={.spec.host}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	metricCMD := fmt.Sprintf("curl -G -s -k -H \"Authorization: Bearer %s\" https://%s%s --data-urlencode '%s'", token, host, path, queryString)
 	err = wait.Poll(5*time.Second, timeout*time.Second, func() (bool, error) {
+		path, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", name, "-n", ns, "-o=jsonpath={.spec.path}").Output()
+		if err != nil {
+			return false, nil
+		}
+		host, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", name, "-n", ns, "-o=jsonpath={.spec.host}").Output()
+		if err != nil {
+			return false, nil
+		}
+		metricCMD := fmt.Sprintf("curl -G -s -k -H \"Authorization: Bearer %s\" https://%s%s --data-urlencode '%s'", token, host, path, queryString)
 		curlOutput, err := exec.Command("bash", "-c", metricCMD).Output()
+		if err != nil {
+			return false, nil
+		}
 		metrics = string(curlOutput)
-		if err != nil || !strings.Contains(metrics, metricString) {
+		if !strings.Contains(metrics, metricString) {
 			return false, nil
 		}
 		return true, err
