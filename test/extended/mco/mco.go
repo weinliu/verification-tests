@@ -921,48 +921,65 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	})
 
 	g.It("Author:sregidor-NonPreRelease-High-45239-KubeletConfig has a limit of 10 per cluster [Disruptive]", func() {
+		kcsLimit := 10
+
 		g.By("Pause mcp worker")
 		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
 		defer mcp.pause(false)
 		mcp.pause(true)
 
-		g.By("Create 10 kubelet config to add 500 max pods")
-		allKcs := []ResourceInterface{}
+		g.By("Calculate number of existing KubeleteConfigs")
+		kcList := NewKubeletConfigList(oc.AsAdmin())
+		kcs, kclErr := kcList.GetAll()
+		o.Expect(kclErr).ShouldNot(o.HaveOccurred(), "Error getting existing KubeletConfig resources")
+		existingKcs := len(kcs)
+		e2e.Logf("%d existing KubeletConfigs. We need to create %d KubeletConfigs to reach the %d configs limit",
+			existingKcs, kcsLimit-existingKcs, kcsLimit)
+
+		g.By(fmt.Sprintf("Create %d kubelet config to reach the limit", kcsLimit-existingKcs))
+		createdKcs := []ResourceInterface{}
 		kcTemplate := generateTemplateAbsolutePath("change-maxpods-kubelet-config.yaml")
-		for n := 1; n <= 10; n++ {
+		for n := existingKcs + 1; n <= kcsLimit; n++ {
 			kcName := fmt.Sprintf("change-maxpods-kubelet-config-%d", n)
 			kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
 			defer kc.DeleteOrFail()
 			kc.create()
-			allKcs = append(allKcs, *kc)
+			createdKcs = append(createdKcs, *kc)
 			e2e.Logf("Created:\n %s", kcName)
 		}
 
 		g.By("Created kubeletconfigs must be successful")
-		for _, kcItem := range allKcs {
+		for _, kcItem := range createdKcs {
 			kcItem.(KubeletConfig).waitUntilSuccess("10s")
 		}
 
-		g.By("Check that 10 machine configs were created")
+		g.By(fmt.Sprintf("Check that %d machine configs were created", kcsLimit-existingKcs))
 		renderedKcConfigsSuffix := "worker-generated-kubelet"
-		verifyRenderedMcs(oc, renderedKcConfigsSuffix, allKcs)
+		verifyRenderedMcs(oc, renderedKcConfigsSuffix, createdKcs)
 
-		g.By("Create a new Kubeletconfig. The 11th one")
-		kcName := "change-maxpods-kubelet-config-11"
+		g.By(fmt.Sprintf("Create a new Kubeletconfig. The %dth one", kcsLimit+1))
+		kcName := fmt.Sprintf("change-maxpods-kubelet-config-%d", kcsLimit+1)
 		kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
 		defer kc.DeleteOrFail()
 		kc.create()
 
-		g.By("Created kubeletconfigs over the limit must report a failure regarding the 10 configs limit")
-		expectedMsg := "could not get kubelet config key: max number of supported kubelet config (10) has been reached. Please delete old kubelet configs before retrying"
+		g.By(fmt.Sprintf("Created kubeletconfigs over the limit must report a failure regarding the %d configs limit", kcsLimit))
+		expectedMsg := fmt.Sprintf("could not get kubelet config key: max number of supported kubelet config (%d) has been reached. Please delete old kubelet configs before retrying", kcsLimit)
 		kc.waitUntilFailure(expectedMsg, "10s")
 
 		g.By("Created kubeletconfigs inside the limit must be successful")
-		for _, kcItem := range allKcs {
+		for _, kcItem := range createdKcs {
 			kcItem.(KubeletConfig).waitUntilSuccess("10s")
 		}
 
 		g.By("Check that only the right machine configs were created")
+		// Check all ContainerRuntimeConfigs, the one created by this TC and the already existing ones too
+		allKcs := []ResourceInterface{}
+		allKcs = append(allKcs, createdKcs...)
+		for _, kcItem := range kcs {
+			key := kcItem
+			allKcs = append(allKcs, &key)
+		}
 		allMcs := verifyRenderedMcs(oc, renderedKcConfigsSuffix, allKcs)
 
 		kcCounter := 0
@@ -971,55 +988,73 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 				kcCounter++
 			}
 		}
-		o.Expect(kcCounter).Should(o.Equal(10), "Only 10 Kubeletconfig resources should be generated")
+		o.Expect(kcCounter).Should(o.Equal(10), "Only %d Kubeletconfig resources should be generated", kcsLimit)
 
 	})
 
 	g.It("Author:sregidor-NonPreRelease-High-48468-ContainerRuntimeConfig has a limit of 10 per cluster [Disruptive]", func() {
+		crsLimit := 10
+
 		g.By("Pause mcp worker")
 		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
 		defer mcp.pause(false)
 		mcp.pause(true)
 
-		g.By("Create 10 container runtime configs to add 500 max pods")
-		allCrs := []ResourceInterface{}
+		g.By("Calculate number of existing ContainerRuntimeConfigs")
+		crList := NewContainerRuntimeConfigList(oc.AsAdmin())
+		crs, crlErr := crList.GetAll()
+		o.Expect(crlErr).ShouldNot(o.HaveOccurred(), "Error getting existing ContainerRuntimeConfig resources")
+		existingCrs := len(crs)
+		e2e.Logf("%d existing ContainerRuntimeConfig. We need to create %d ContainerRuntimeConfigs to reach the %d configs limit",
+			existingCrs, crsLimit-existingCrs, crsLimit)
+
+		g.By(fmt.Sprintf("Create %d container runtime configs to reach the limit", crsLimit-existingCrs))
+		createdCrs := []ResourceInterface{}
 		crTemplate := generateTemplateAbsolutePath("change-ctr-cr-config.yaml")
-		for n := 1; n <= 10; n++ {
+		for n := existingCrs + 1; n <= crsLimit; n++ {
 			crName := fmt.Sprintf("change-ctr-cr-config-%d", n)
 			cr := NewContainerRuntimeConfig(oc.AsAdmin(), crName, crTemplate)
 			defer cr.DeleteOrFail()
 			cr.create()
-			allCrs = append(allCrs, *cr)
+			createdCrs = append(createdCrs, *cr)
 			e2e.Logf("Created:\n %s", crName)
 		}
 
 		g.By("Created ContainerRuntimeConfigs must be successful")
-		for _, crItem := range allCrs {
+		for _, crItem := range createdCrs {
 			crItem.(ContainerRuntimeConfig).waitUntilSuccess("10s")
 		}
 
-		g.By("Check that 10 machine configs were created")
+		g.By(fmt.Sprintf("Check that %d machine configs were created", crsLimit-existingCrs))
 		renderedCrConfigsSuffix := "worker-generated-containerruntime"
 
-		e2e.Logf("Pre function res: %v", allCrs)
-		verifyRenderedMcs(oc, renderedCrConfigsSuffix, allCrs)
+		e2e.Logf("Pre function res: %v", createdCrs)
+		verifyRenderedMcs(oc, renderedCrConfigsSuffix, createdCrs)
 
-		g.By("Create a new ContainerRuntimeConfig. The 11th one")
-		crName := "change-ctr-cr-config-11"
+		g.By(fmt.Sprintf("Create a new ContainerRuntimeConfig. The %dth one", crsLimit+1))
+		crName := fmt.Sprintf("change-ctr-cr-config-%d", crsLimit+1)
 		cr := NewContainerRuntimeConfig(oc.AsAdmin(), crName, crTemplate)
 		defer cr.DeleteOrFail()
 		cr.create()
 
-		g.By("Created container runtime configs over the limit must report a failure regarding the 10 configs limit")
-		expectedMsg := "could not get ctrcfg key: max number of supported ctrcfgs (10) has been reached. Please delete old ctrcfgs before retrying"
+		g.By(fmt.Sprintf("Created container runtime configs over the limit must report a failure regarding the %d configs limit", crsLimit))
+		expectedMsg := fmt.Sprintf("could not get ctrcfg key: max number of supported ctrcfgs (%d) has been reached. Please delete old ctrcfgs before retrying", crsLimit)
 		cr.waitUntilFailure(expectedMsg, "10s")
 
 		g.By("Created kubeletconfigs inside the limit must be successful")
-		for _, crItem := range allCrs {
+		for _, crItem := range createdCrs {
 			crItem.(ContainerRuntimeConfig).waitUntilSuccess("10s")
 		}
 
 		g.By("Check that only the right machine configs were created")
+		// Check all ContainerRuntimeConfigs, the one created by this TC and the already existing ones too
+		allCrs := []ResourceInterface{}
+		allCrs = append(allCrs, createdCrs...)
+		for _, crItem := range crs {
+			key := crItem
+			allCrs = append(allCrs, &key)
+		}
+
 		allMcs := verifyRenderedMcs(oc, renderedCrConfigsSuffix, allCrs)
 
 		crCounter := 0
@@ -1028,7 +1063,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 				crCounter++
 			}
 		}
-		o.Expect(crCounter).Should(o.Equal(10), "Only 10 containerruntime resources should be generated")
+		o.Expect(crCounter).Should(o.Equal(10), "Only %d containerruntime resources should be generated", crsLimit)
 
 	})
 
