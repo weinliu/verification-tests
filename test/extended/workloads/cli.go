@@ -176,7 +176,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		oc.SetupProject()
 
 		g.By("Create the dc with define command")
-		err := oc.WithoutNamespace().Run("create").Args("deploymentconfig", "-n", oc.Namespace(), "dc44797", "--image="+"quay.io/openshifttest/busybox@sha256:afe605d272837ce1732f390966166c2afff5391208ddd57de10942748694049d", "--", "tail", "-f", "/dev/null").Execute()
+		err := oc.WithoutNamespace().Run("create").Args("deploymentconfig", "-n", oc.Namespace(), "dc44797", "--image="+"quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "--", "tail", "-f", "/dev/null").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the command should be defined")
@@ -185,7 +185,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		e2e.ExpectEqual("tail", comm)
 
 		g.By("Create the deploy with define command")
-		err = oc.WithoutNamespace().Run("create").Args("deployment", "-n", oc.Namespace(), "deploy44797", "--image="+"quay.io/openshifttest/busybox@sha256:afe605d272837ce1732f390966166c2afff5391208ddd57de10942748694049d", "--", "tail", "-f", "/dev/null").Execute()
+		err = oc.WithoutNamespace().Run("create").Args("deployment", "-n", oc.Namespace(), "deploy44797", "--image="+"quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "--", "tail", "-f", "/dev/null").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the command should be defined")

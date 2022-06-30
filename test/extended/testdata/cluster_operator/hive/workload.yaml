@@ -18,7 +18,7 @@ spec:
       - command:
         - sleep
         - "3600"
-        image: quay.io/openshifttest/busybox@sha256:afe605d272837ce1732f390966166c2afff5391208ddd57de10942748694049d
+        image: quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f
         imagePullPolicy: Always
         name: sleep
         resources:
