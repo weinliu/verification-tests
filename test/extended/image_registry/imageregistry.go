@@ -1950,32 +1950,32 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		oc.SetupProject()
 		g.By("Import an image to create imagestream")
-		err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("--from=registry.redhat.io/ubi8/ruby-30:latest", "--confirm=true", "ruby-30-test12766:latest", "-n", oc.Namespace()).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("--from=quay.io/openshifttest/ruby-27@sha256:cdb6a13032184468b1e0607f36cfb8834c97dbeffeeff800e9e6834323bed8fc", "--confirm=true", "ruby-test12766:latest", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "ruby-30-test12766", "latest")
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "ruby-test12766", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create app with imagestream and check the build info")
-		err = oc.AsAdmin().WithoutNamespace().Run("new-build").Args("--image-stream=ruby-30-test12766", "--code=https://github.com/sclorg/ruby-ex.git", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("new-build").Args("--image-stream=ruby-test12766", "--code=https://github.com/sclorg/ruby-ex.git", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		bc, bcErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("bc", "ruby-ex", "-ojsonpath={.status.imageChangeTriggers..lastTriggeredImageID}", "-n", oc.Namespace()).Output()
 		o.Expect(bcErr).NotTo(o.HaveOccurred())
-		o.Expect(bc).To(o.ContainSubstring("ubi8/ruby-30"))
+		o.Expect(bc).To(o.ContainSubstring("openshifttest/ruby-27"))
 
 		g.By("Import an image to create imagestream with --reference-policy=local")
-		err = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("--from=registry.redhat.io/ubi8/ruby-30:latest", "--confirm=true", "ruby-30-test12766-local:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("--from=quay.io/openshifttest/ruby-27@sha256:cdb6a13032184468b1e0607f36cfb8834c97dbeffeeff800e9e6834323bed8fc", "--confirm=true", "ruby-test12766-local:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "ruby-30-test12766-local", "latest")
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "ruby-test12766-local", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create app with imagestream and check the build info")
-		err = oc.AsAdmin().WithoutNamespace().Run("new-build").Args("--image-stream=ruby-30-test12766-local", "--code=https://github.com/sclorg/ruby-ex.git", "--name=rubyapp-12766-local", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("new-build").Args("--image-stream=ruby-test12766-local", "--code=https://github.com/sclorg/ruby-ex.git", "--name=rubyapp-12766-local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		bc, bcErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("bc", "rubyapp-12766-local", "-ojsonpath={.status.imageChangeTriggers..lastTriggeredImageID}", "-n", oc.Namespace()).Output()
 		o.Expect(bcErr).NotTo(o.HaveOccurred())
-		o.Expect(bc).To(o.ContainSubstring(oc.Namespace() + "/ruby-30-test12766-local"))
+		o.Expect(bc).To(o.ContainSubstring(oc.Namespace() + "/ruby-test12766-local"))
 
 	})
 
