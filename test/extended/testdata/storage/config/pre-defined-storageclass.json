@@ -14,9 +14,9 @@
     {
       "name": "azure",
       "storageclass": {
-        "default_sc": "managed-premium",
+        "default_sc": "managed-csi",
         "pre_defined_sc": [
-          "managed-premium",
+          "azurefile-csi",
           "managed-csi"
         ]
       }
@@ -65,7 +65,7 @@
     {
       "name": "openstack",
       "storageclass": {
-        "default_sc": "standard",
+        "default_sc": "standard-csi",
         "pre_defined_sc": [
           "standard",
           "standard-csi"
