@@ -2,6 +2,7 @@ package networking
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -336,4 +337,128 @@ func unique(s []string) []string {
 		}
 	}
 	return result
+}
+
+type azureCredentials struct {
+	AzureClientID       string `json:"azure_client_id,omitempty"`
+	AzureClientSecret   string `json:"azure_client_secret,omitempty"`
+	AzureSubscriptionID string `json:"azure_subscription_id,omitempty"`
+	AzureTenantID       string `json:"azure_tenant_id,omitempty"`
+}
+
+// Get Azure credentials from cluster
+func getAzureCredentialFromCluster(oc *exutil.CLI) error {
+	if exutil.CheckPlatform(oc) != "azure" {
+		g.Skip("it is not azure platform and can not get credential, and then skip it.")
+	}
+	credential, getSecErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/azure-credentials", "-n", "kube-system", "-o=jsonpath={.data}").Output()
+	if getSecErr != nil {
+		e2e.Logf("Cannot get credential from secret/azure-credentials with error : %v,", getSecErr)
+		return getSecErr
+	}
+	azureCreds := azureCredentials{}
+	unmarshalErr := json.Unmarshal([]byte(credential), &azureCreds)
+	if unmarshalErr != nil {
+		e2e.Logf("Unmarshal error : %v,", unmarshalErr)
+		return unmarshalErr
+	}
+	azureClientID, decodeACIDErr := base64.StdEncoding.DecodeString(azureCreds.AzureClientID)
+	if decodeACIDErr != nil {
+		e2e.Logf("Decode azureClientID error : %v ", decodeACIDErr)
+		return decodeACIDErr
+	}
+	azureClientSecret, decodeACSErr := base64.StdEncoding.DecodeString(azureCreds.AzureClientSecret)
+	if decodeACSErr != nil {
+		e2e.Logf("Decode azureClientSecret error: %v", decodeACSErr)
+		return decodeACSErr
+	}
+	azureSubscriptionID, decodeASIDErr := base64.StdEncoding.DecodeString(azureCreds.AzureSubscriptionID)
+	if decodeASIDErr != nil {
+		e2e.Logf("Decode azureSubscriptionID error: %v ", decodeASIDErr)
+		return decodeASIDErr
+	}
+	azureTenantID, decodeATIDErr := base64.StdEncoding.DecodeString(azureCreds.AzureTenantID)
+	if decodeATIDErr != nil {
+		e2e.Logf("Decode azureTenantID error : %v ", decodeATIDErr)
+		return decodeATIDErr
+	}
+	os.Setenv("AZURE_CLIENT_ID", string(azureClientID))
+	os.Setenv("AZURE_CLIENT_SECRET", string(azureClientSecret))
+	os.Setenv("AZURE_SUBSCRIPTION_ID", string(azureSubscriptionID))
+	os.Setenv("AZURE_TENANT_ID", string(azureTenantID))
+	e2e.Logf("Azure credentials successfully loaded.")
+
+	return nil
+}
+
+func getAzureResourceGroup(oc *exutil.CLI) (string, error) {
+	if exutil.CheckPlatform(oc) != "azure" {
+		return "", fmt.Errorf("it is not azure platform and can not get resource group")
+	}
+	credential, getCredErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/azure-credentials", "-n", "kube-system", "-o=jsonpath={.data.azure_resourcegroup}").Output()
+	if getCredErr != nil {
+		e2e.Logf("Cannot get credential from secret/azure-credentials with error : %v,", getCredErr)
+		return "", getCredErr
+	}
+
+	azureResourceGroup, rgErr := base64.StdEncoding.DecodeString(credential)
+	if rgErr != nil {
+		e2e.Logf("Cannot get resource group, error: %v", rgErr)
+		return "", rgErr
+	}
+
+	return string(azureResourceGroup), nil
+}
+
+func getAzureIntSvcVMPrivateIP(oc *exutil.CLI, sess *exutil.AzureSession, rg string) (string, error) {
+	privateIP := ""
+	clusterPrefixName := exutil.GetClusterPrefixName(oc)
+	vmName := clusterPrefixName + "-int-svc"
+	privateIP, getPrivateIPErr := exutil.GetAzureVMPrivateIP(sess, rg, vmName)
+	if getPrivateIPErr != nil {
+		e2e.Logf("Cannot get private IP from int svc vm, error: %v", getPrivateIPErr)
+		return "", getPrivateIPErr
+	}
+	return privateIP, nil
+}
+
+func getAzureIntSvcVMPublicIP(oc *exutil.CLI, sess *exutil.AzureSession, rg string) (string, error) {
+	publicIP := ""
+	clusterPrefixName := exutil.GetClusterPrefixName(oc)
+	vmName := clusterPrefixName + "-int-svc"
+	publicIP, getPublicIPErr := exutil.GetAzureVMPublicIP(sess, rg, vmName)
+	if getPublicIPErr != nil {
+		e2e.Logf("Cannot get public IP from int svc vm, error: %v", getPublicIPErr)
+		return "", getPublicIPErr
+	}
+	return publicIP, nil
+}
+
+func installIPEchoServiceOnAzure(oc *exutil.CLI, sess *exutil.AzureSession, rg string) (string, error) {
+	user := "core"
+	sshkey := os.Getenv("SSH_CLOUD_PRIV_KEY")
+	if sshkey == "" {
+		sshkey = "../internal/config/keys/openshift-qe.pem"
+	}
+	command := "sudo netstat -ntlp | grep 9095 || sudo podman run --name ipecho -d -p 9095:80 quay.io/openshifttest/ip-echo:multiarch"
+	e2e.Logf("Run command, %s \n", command)
+
+	privateIP, privateIPErr := getAzureIntSvcVMPrivateIP(oc, sess, rg)
+	if privateIPErr != nil || privateIP == "" {
+		return "", privateIPErr
+	}
+	publicIP, publicIPErr := getAzureIntSvcVMPublicIP(oc, sess, rg)
+	if publicIPErr != nil || publicIP == "" {
+		return "", publicIPErr
+	}
+
+	sshClient := exutil.SshClient{User: user, Host: publicIP, Port: 22, PrivateKey: sshkey}
+	err := sshClient.Run(command)
+	if err != nil {
+		e2e.Logf("Failed to run %v: %v", command, err)
+		return "", err
+	}
+
+	ipEchoURL := net.JoinHostPort(privateIP, "9095")
+	return ipEchoURL, nil
 }

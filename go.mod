@@ -4,7 +4,10 @@ go 1.16
 
 require (
 	cloud.google.com/go v0.38.0
+	github.com/Azure/azure-sdk-for-go v35.0.0+incompatible
 	github.com/Azure/azure-storage-blob-go v0.15.0
+	github.com/Azure/go-autorest/autorest v0.11.24
+	github.com/Azure/go-autorest/autorest/azure/auth v0.5.11
 	github.com/RangelReale/osincli v0.0.0-20160924135400-fababb0555f2
 	github.com/aws/aws-sdk-go v1.43.10
 	github.com/aws/aws-sdk-go-v2 v1.13.0
