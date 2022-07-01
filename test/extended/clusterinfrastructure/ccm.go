@@ -139,7 +139,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		cccmoPodLogs, err := oc.AsAdmin().Run("logs").Args(cccmoPodName, "-n", "openshift-cloud-controller-manager-operator", "-c", "config-sync-controllers").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(cccmoPodLogs).Should(o.And(
-			o.ContainSubstring("syncing cloud-conf ConfigMap"),
+			o.ContainSubstring("Syncing cloud-conf ConfigMap"),
 			o.ContainSubstring("source and target cloud-config content are equal, no sync needed")))
 	})
 })
