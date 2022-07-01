@@ -22,7 +22,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-High-28001-bug 1749478 KCM should recover when its temporary secrets are deleted [Disruptive]", func() {
+	g.It("Longduration-Author:yinzhou-High-28001-bug 1749478 KCM should recover when its temporary secrets are deleted [Disruptive]", func() {
 		var namespace = "openshift-kube-controller-manager"
 		var temporarySecretsList []string
 
@@ -55,34 +55,14 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		}
 
 		g.By("Check the KCM operator should be in Progressing")
-		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().Run("get").Args("co", "kube-controller-manager").Output()
-			if err != nil {
-				e2e.Logf("clusteroperator kube-controller-manager not start new progress, error: %s. Trying again", err)
-				return false, nil
-			}
-			if matched, _ := regexp.MatchString("True.*True.*False", output); matched {
-				e2e.Logf("clusteroperator kube-controller-manager is Progressing:\n%s", output)
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "clusteroperator kube-controller-manager is not Progressing")
-
-		g.By("Wait for the KCM operator to recover")
-		err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().Run("get").Args("co", "kube-controller-manager").Output()
-			if err != nil {
-				e2e.Logf("Fail to get clusteroperator kube-controller-manager, error: %s. Trying again", err)
-				return false, nil
-			}
-			if matched, _ := regexp.MatchString("True.*False.*False", output); matched {
-				e2e.Logf("clusteroperator kube-controller-manager is recover to normal:\n%s", output)
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "clusteroperator kube-controller-manager is not recovered to normal")
+		e2e.Logf("Checking kube-controller-manager operator should be in Progressing in 100 seconds")
+		expectedStatus := map[string]string{"Progressing": "True"}
+		err = waitCoBecomes(oc, "kube-controller-manager", 100, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-controller-manager operator is not start progressing in 100 seconds")
+		e2e.Logf("Checking kube-controller-manager operator should be Available in 1500 seconds")
+		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err = waitCoBecomes(oc, "kube-controller-manager", 1500, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-controller-manager operator is not becomes available in 1500 seconds")
 	})
 
 	// author: yinzhou@redhat.com
