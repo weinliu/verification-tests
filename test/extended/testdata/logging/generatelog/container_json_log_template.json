@@ -13,7 +13,7 @@
             },
             "kind": "ConfigMap",
             "metadata": {
-                "name": "logtest-config"
+                "name": "${CONFIGMAP}"
             }
         },
         {

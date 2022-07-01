@@ -425,6 +425,105 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
+		g.It("CPaasrunOnly-Author:ikanse-Medium-48786-Vector Forward logs from specified pods using label selector[Serial][Slow]", func() {
+
+			g.By("Create project1 for app logs and deploy the log generator app with run=centos-logtest-qa label")
+			oc.SetupProject()
+			appProj1 := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-p", "LABELS={\"run\": \"centos-logtest-qa\"}", "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create project2 for app logs and deploy the log generator app with run=centos-logtest-dev label")
+			oc.SetupProject()
+			appProj2 := oc.Namespace()
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj2, "-p", "LABELS={\"run\": \"centos-logtest-dev\"}", "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogForwarder instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "48786.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			g.By("Waiting for the Logging pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By("Check the app index in default ES")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-000")
+
+			g.By("Check for logs with run=centos-logtest-qa labels")
+			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"run=centos-logtest-qa\"}}}"
+			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app", checkLog)
+			o.Expect(logs.Hits.Total).ShouldNot(o.Equal(0), "Labels with run=centos-logtest-qa in logs not found in default ES")
+
+			g.By("Check for logs with run=centos-logtest-dev labels")
+			checkLog = "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"run=centos-logtest-dev\"}}}"
+			logs = searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app", checkLog)
+			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Logs with label with run=centos-logtest-dev should not be collected")
+
+		})
+
+		g.It("CPaasrunOnly-Author:ikanse-Medium-48787-Vector Forward logs from specified pods using label and namespace selectors[Serial][Slow]", func() {
+
+			g.By("Create project1 for app logs and deploy the log generator app with run=centos-logtest-qa and run=centos-logtest-stage labels")
+			oc.SetupProject()
+			appProj1 := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-p", "LABELS={\"run\": \"centos-logtest-qa\"}", "-p", "REPLICATIONCONTROLLER=logging-centos-logtest-qa", "-p", "CONFIGMAP=logtest-config-qa", "-p", "CONTAINER=logging-centos-qa", "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-p", "LABELS={\"run\": \"centos-logtest-stage\"}", "-p", "REPLICATIONCONTROLLER=logging-centos-logtest-stage", "-p", "CONFIGMAP=logtest-config-stage", "-p", "CONTAINER=logging-centos-stage", "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create project2 for app logs and deploy the log generator app with run=centos-logtest-dev label")
+			oc.SetupProject()
+			appProj2 := oc.Namespace()
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj2, "-p", "LABELS={\"run\": \"centos-logtest-dev\"}", "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogForwarder instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "48787.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-p", "APP_NAMESPACE="+appProj1+"", "-f", clfTemplate)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			g.By("Waiting for the Logging pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By("Check the app index in default ES")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-000")
+
+			g.By("Check for logs with run=centos-logtest-qa in label")
+			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"run=centos-logtest-qa\"}}}"
+			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app", checkLog)
+			o.Expect(logs.Hits.Total).ShouldNot(o.Equal(0), "Labels with run=centos-logtest-qa in logs not found in default ES")
+
+			g.By("Check for logs with run=centos-logtest-stage in label")
+			checkLog = "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"run=centos-logtest-stage\"}}}"
+			logs = searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app", checkLog)
+			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Labels with run=centos-logtest-dev in logs should not be collected")
+
+			g.By("Check for logs with run=centos-logtest-dev label")
+			checkLog = "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"run=centos-logtest-dev\"}}}"
+			logs = searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app", checkLog)
+			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Labels with run=centos-logtest-dev in logs should not be collected")
+
+		})
+
 	})
 
 })
