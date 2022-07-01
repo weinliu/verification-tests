@@ -272,7 +272,7 @@ func scaleDeployment(oc *exutil.CLI, os string, replicas int, namespace string) 
 }
 
 func scaleWindowsMachineSet(oc *exutil.CLI, windowsMachineSetName string, deadTime int, replicas int, skipWait bool) {
-	err := oc.WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), "machineset", windowsMachineSetName, "-n", "openshift-machine-api").Execute()
+	err := oc.WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), exutil.MapiMachineset, windowsMachineSetName, "-n", "openshift-machine-api").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if !skipWait {
 		waitForMachinesetReady(oc, windowsMachineSetName, deadTime, replicas)
