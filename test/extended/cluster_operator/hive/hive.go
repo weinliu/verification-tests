@@ -2681,4 +2681,93 @@ spec:
 		e2e.Logf("Check replicas will scale down to minimum value")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "0 0 0", ok, 7*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra2", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
 	})
+
+	//author: lwan@redhat.com
+	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "46729"|./bin/extended-platform-tests run --timeout 60m -f -
+	g.It("NonPreRelease-ConnectedOnly-Author:lwan-Medium-46729-[HIVE]Support overriding installer image [Serial]", func() {
+		if iaasPlatform != "gcp" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 46729 is for GCP - skipping test ...")
+		}
+
+		testCaseID := "46729"
+		cdName := "cluster-" + testCaseID
+		imageSetName := cdName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: testOCPImage,
+			template:     imageSetTemp,
+		}
+
+		g.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		oc.SetupProject()
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and gcp-credentials to target namespace for the clusterdeployment
+		g.By("Copy GCP platform credentials...")
+		createGCPCreds(oc, oc.Namespace())
+
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Create GCP Install-Config Secret...")
+		installConfigTemp := filepath.Join(testDataDir, "gcp-install-config.yaml")
+		installConfigSecretName := cdName + "-install-config"
+		projectID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.platformStatus.gcp.projectID}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(projectID).NotTo(o.BeEmpty())
+		installConfigSecret := gcpInstallConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: GCPBaseDomain,
+			name2:      cdName,
+			region:     GCPRegion,
+			projectid:  projectID,
+			template:   installConfigTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
+		installConfigSecret.create(oc)
+
+		g.By("Create GCP ClusterDeployment...")
+		clusterTemp := filepath.Join(testDataDir, "clusterdeployment-gcp.yaml")
+		clusterVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion/version", "-o=jsonpath={.status.desired.version}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterVersion).NotTo(o.BeEmpty())
+		installerImageForOverride, err := getPullSpec(oc, "installer", clusterVersion)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(installerImageForOverride).NotTo(o.BeEmpty())
+		e2e.Logf("ClusterVersion is %s, installerImageForOverride is %s", clusterVersion, installerImageForOverride)
+		cluster := gcpClusterDeployment{
+			fake:                "false",
+			name:                cdName,
+			namespace:           oc.Namespace(),
+			baseDomain:          GCPBaseDomain,
+			clusterName:         cdName,
+			platformType:        "gcp",
+			credRef:             GCPCreds,
+			region:              GCPRegion,
+			imageSetRef:         imageSetName,
+			installConfigSecret: installConfigSecretName,
+			pullSecretRef:       PullSecret,
+			installerImage:      installerImageForOverride,
+			template:            clusterTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
+		cluster.create(oc)
+
+		g.By("Check installer image is overrided via \"installerImageOverride\" field")
+		e2e.Logf("Check cd .status.installerImage")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, installerImageForOverride, ok, 2*DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.installerImage}"}).check(oc)
+		e2e.Logf("Check Installer commitID in provision pod log matches commitID from overrided Installer image")
+		commitID, err := getCommitID(oc, "\" installer \"", clusterVersion)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(commitID).NotTo(o.BeEmpty())
+		e2e.Logf("Installer commitID is %s", commitID)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "", nok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.provisionRef.name}"}).check(oc)
+		provisionName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.provisionRef.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", "logs", asAdmin, withoutNamespace, contain, commitID, ok, DefaultTimeout, []string{"-n", oc.Namespace(), fmt.Sprintf("jobs/%s-provision", provisionName), "-c", "hive"}).check(oc)
+	})
 })

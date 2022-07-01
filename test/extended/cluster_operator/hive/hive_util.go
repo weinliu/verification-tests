@@ -220,6 +220,7 @@ type gcpClusterDeployment struct {
 	imageSetRef         string
 	installConfigSecret string
 	pullSecretRef       string
+	installerImage      string
 	template            string
 }
 
@@ -291,6 +292,7 @@ func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 	exutil.AssertWaitPollNoErr(err, "fail to create config file")
 
 	e2e.Logf("the file of resource is %s", cfgFileJSON)
+	defer os.Remove(cfgFileJSON)
 	return oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", cfgFileJSON).Execute()
 }
 
@@ -459,7 +461,7 @@ func (config *gcpInstallConfig) create(oc *exutil.CLI) {
 }
 
 func (cluster *gcpClusterDeployment) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cluster.template, "-p", "FAKE="+cluster.fake, "NAME="+cluster.name, "NAMESPACE="+cluster.namespace, "BASEDOMAIN="+cluster.baseDomain, "CLUSTERNAME="+cluster.clusterName, "PLATFORMTYPE="+cluster.platformType, "CREDREF="+cluster.credRef, "REGION="+cluster.region, "IMAGESETREF="+cluster.imageSetRef, "INSTALLCONFIGSECRET="+cluster.installConfigSecret, "PULLSECRETREF="+cluster.pullSecretRef)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cluster.template, "-p", "FAKE="+cluster.fake, "NAME="+cluster.name, "NAMESPACE="+cluster.namespace, "BASEDOMAIN="+cluster.baseDomain, "CLUSTERNAME="+cluster.clusterName, "PLATFORMTYPE="+cluster.platformType, "CREDREF="+cluster.credRef, "REGION="+cluster.region, "IMAGESETREF="+cluster.imageSetRef, "INSTALLCONFIGSECRET="+cluster.installConfigSecret, "PULLSECRETREF="+cluster.pullSecretRef, "INSTALLERIMAGE="+cluster.installerImage)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -775,4 +777,36 @@ func checkResourceNumber(oc *exutil.CLI, filterName string, resource []string) i
 	resourceOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource...).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strings.Count(resourceOutput, filterName)
+}
+
+func getPullSecret(oc *exutil.CLI) (string, error) {
+	return oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/pull-secret", "-n", "openshift-config", `--template={{index .data ".dockerconfigjson" | base64decode}}`).OutputToFile("auth.dockerconfigjson")
+}
+
+func getCommitID(oc *exutil.CLI, component string, clusterVersion string) (string, error) {
+	secretFile, secretErr := getPullSecret(oc)
+	defer os.Remove(secretFile)
+	if secretErr != nil {
+		return "", secretErr
+	}
+	outFilePath, ocErr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", "--registry-config="+secretFile, "--commits", clusterVersion, "--insecure=true").OutputToFile("commitIdLogs.txt")
+	defer os.Remove(outFilePath)
+	if ocErr != nil {
+		return "", ocErr
+	}
+	commitID, cmdErr := exec.Command("bash", "-c", "cat "+outFilePath+" | grep "+component+" | awk '{print $3}'").Output()
+	return strings.TrimSuffix(string(commitID), "\n"), cmdErr
+}
+
+func getPullSpec(oc *exutil.CLI, component string, clusterVersion string) (string, error) {
+	secretFile, secretErr := getPullSecret(oc)
+	defer os.Remove(secretFile)
+	if secretErr != nil {
+		return "", secretErr
+	}
+	pullSpec, ocErr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", "--registry-config="+secretFile, "--image-for="+component, clusterVersion, "--insecure=true").Output()
+	if ocErr != nil {
+		return "", ocErr
+	}
+	return pullSpec, nil
 }

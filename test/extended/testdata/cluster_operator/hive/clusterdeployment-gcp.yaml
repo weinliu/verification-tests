@@ -27,6 +27,7 @@ objects:
         name: "${IMAGESETREF}"
       installConfigSecretRef:
         name: "${INSTALLCONFIGSECRET}"
+      installerImageOverride: "${INSTALLERIMAGE}"
     pullSecretRef:
       name: "${PULLSECRETREF}"
 parameters:
@@ -41,3 +42,4 @@ parameters:
 - name: IMAGESETREF
 - name: INSTALLCONFIGSECRET
 - name: PULLSECRETREF
+- name: INSTALLERIMAGE
