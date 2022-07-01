@@ -13,7 +13,7 @@ nightly-test:
 	./hack/nightly_test.sh
 
 name-check:
-	python ./hack/rule.py 
+	python3 ./hack/rule.py
 
 check-code:
 	./hack/check-code.sh master
