@@ -3,7 +3,9 @@ reviewers:
   - kuiwang02
   - bandrade
   - jianzhangbjz
+  - rioliu-rh
 approvers:
+  - rioliu-rh 
   - yapei
   - Xia-Zhao-rh
   - kuiwang02
