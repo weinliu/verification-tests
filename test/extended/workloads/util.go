@@ -438,7 +438,7 @@ func getPodNodeName(oc *exutil.CLI, namespace string, podName string) string {
 }
 
 func createLdapService(oc *exutil.CLI, namespace string, podName string, initGroup string) {
-	err := oc.Run("run").Args(podName, "--image", "quay.io/openshifttest/ldap:openldap-2441-centos7", "-n", namespace).Execute()
+	err := oc.Run("run").Args(podName, "--image", "quay.io/openshifttest/ldap@sha256:6db999e796e6247823e9705c03fde29dbe1d49433efaf18ab2a3a1fec1cc0a99", "-n", namespace).Execute()
 	if err != nil {
 		oc.Run("delete").Args("pod/ldapserver", "-n", namespace).Execute()
 		e2e.Failf("failed to run the ldap pod")
