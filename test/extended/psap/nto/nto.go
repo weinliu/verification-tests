@@ -1115,16 +1115,15 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		isPAOInOperatorHub := exutil.IsPAOInOperatorHub(oc)
-		if !isPAOInOperatorHub {
-			g.Skip("PAO is not in OperatorHub - skipping test ...")
-		}
-
 		skipPAODeploy := skipDeployPAO(oc)
 		isPAOInstalled = exutil.IsPAOInstalled(oc)
 		if skipPAODeploy || isPAOInstalled {
 			e2e.Logf("PAO has been installed and continue to execute test case")
 		} else {
+			isPAOInOperatorHub := exutil.IsPAOInOperatorHub(oc)
+			if !isPAOInOperatorHub {
+				g.Skip("PAO is not in OperatorHub - skipping test ...")
+			}
 			exutil.InstallPAO(oc, paoNamespace)
 		}
 
@@ -1240,16 +1239,15 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		isPAOInOperatorHub := exutil.IsPAOInOperatorHub(oc)
-		if !isPAOInOperatorHub {
-			g.Skip("PAO is not in OperatorHub - skipping test ...")
-		}
-
 		skipPAODeploy := skipDeployPAO(oc)
 		isPAOInstalled = exutil.IsPAOInstalled(oc)
 		if skipPAODeploy || isPAOInstalled {
 			e2e.Logf("PAO has been installed and continue to execute test case")
 		} else {
+			isPAOInOperatorHub := exutil.IsPAOInOperatorHub(oc)
+			if !isPAOInOperatorHub {
+				g.Skip("PAO is not in OperatorHub - skipping test ...")
+			}
 			exutil.InstallPAO(oc, paoNamespace)
 		}
 
@@ -2028,16 +2026,15 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		isPAOInOperatorHub := exutil.IsPAOInOperatorHub(oc)
-		if !isPAOInOperatorHub {
-			g.Skip("PAO is not in OperatorHub - skipping test ...")
-		}
-
 		skipPAODeploy := skipDeployPAO(oc)
 		isPAOInstalled = exutil.IsPAOInstalled(oc)
 		if skipPAODeploy || isPAOInstalled {
 			e2e.Logf("PAO has been installed and continue to execute test case")
 		} else {
+			isPAOInOperatorHub := exutil.IsPAOInOperatorHub(oc)
+			if !isPAOInOperatorHub {
+				g.Skip("PAO is not in OperatorHub - skipping test ...")
+			}
 			exutil.InstallPAO(oc, paoNamespace)
 		}
 
