@@ -719,6 +719,7 @@ spec:
 		)
 		defer os.RemoveAll(dirname)
 		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Check the configuration of priority level")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "workload-low", "-o", `jsonpath={.spec.limited.assuredConcurrencyShares}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -745,9 +746,12 @@ spec:
 		}
 
 		g.By("Stress the cluster")
-		cmd := fmt.Sprintf(`clusterbuster -P server -b 5 -p 10 -D .01 -M 1 -N %d -r 4 -d 2 -c 10 -m 1000 -v -s 20 -x > %v`, namespaceCount, dirname+"clusterbuster.log")
+		cmd := fmt.Sprintf(`clusterbuster -P server -b 5 -p 10 -D .01 -M 1 -N %d -r 4 -d 2 -c 10 -m 1000 -v -x > %v`, namespaceCount, dirname+"clusterbuster.log")
 		_, err = exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		// LoadSecrets no. of secrets per namespace
+		LoadSecrets(oc, 20, "test-ocp40667", 50)
+
 		cmd = fmt.Sprintf(`cat %v | grep -iE '%s' || true`, dirname+"clusterbuster.log", keywords)
 		busterLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -868,6 +872,7 @@ spec:
 			_, err := exec.Command("bash", "-c", cmd).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
+
 		err := os.MkdirAll(dirname, 0755)
 		g.By("Check the configuration of priority level")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "workload-low", "-o", `jsonpath={.spec.limited.assuredConcurrencyShares}`).Output()

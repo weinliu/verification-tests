@@ -357,3 +357,34 @@ func isSNOCluster(oc *exutil.CLI) bool {
 	}
 	return false
 }
+
+// LoadSecrets used to create secrets
+func LoadSecrets(oc *exutil.CLI, noOfSecrets int, ns string, noOfNamespace int) {
+	for j := 1; j <= noOfNamespace; j++ {
+		_ = oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", ns+strconv.Itoa(j)).Execute()
+		for i := 1; i <= noOfSecrets; i++ {
+			_ = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "secret-"+ns+"-"+strconv.Itoa(i), "-n", ns+strconv.Itoa(j), "--from-literal", `abcdefg='12345^&*()'`).Execute()
+		}
+	}
+	namespaceOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", "-A").Output()
+	secretOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "-A").Output()
+	if strings.Count(namespaceOutput, ns) == noOfNamespace && strings.Count(secretOutput, "secret-"+ns) == noOfSecrets*noOfNamespace {
+		e2e.Logf("No. of namespaces created :: %v \n No. of secrets created :: %v", noOfNamespace, noOfSecrets*noOfNamespace)
+	} else {
+		defer CleanNamespace(oc, noOfNamespace, ns)
+		e2e.Failf("No. of namespaces not created :: %v \n No. of secrets not created :: %v", noOfNamespace, noOfSecrets)
+
+	}
+}
+
+// CleanNamespace is used to delete namespaces.
+func CleanNamespace(oc *exutil.CLI, noOfNamespace int, ns string) {
+	deleteFail := false
+	for i := 1; i <= noOfNamespace; i++ {
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("namespace", ns+strconv.Itoa(i), "--ignore-not-found").Execute()
+		if err != nil {
+			deleteFail = true
+		}
+	}
+	o.Expect(deleteFail).To(o.BeFalse())
+}
