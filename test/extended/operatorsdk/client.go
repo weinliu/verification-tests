@@ -204,6 +204,15 @@ func copy(src string, target string) error {
 	return nil
 }
 
+func logDebugInfo(oc *exutil.CLI, ns string) {
+	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", ns).Output()
+	e2e.Logf(output)
+	output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("ip", "-n", ns).Output()
+	e2e.Logf(output)
+	output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns).Output()
+	e2e.Logf(output)
+}
+
 //the method is to create one resource with template
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 	var configFile string

@@ -1552,6 +1552,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		g.By("step: run bundle 1")
 		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/kubeturbo-bundle:v8.4.0", "-n", ns, "--timeout", "5m").Output()
+		if err != nil {
+			logDebugInfo(oc, ns)
+		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
 
@@ -1593,6 +1596,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		g.By("step: upgrade bundle")
 		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/kubeturbo-bundle:v8.5.0", "-n", ns, "--timeout", "5m").Output()
+		if err != nil {
+			logDebugInfo(oc, ns)
+		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
 		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
