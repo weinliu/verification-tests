@@ -120,11 +120,21 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			ls.waitForLokiStackToBeReady(oc)
 
+			// deploy collector pods
+			g.By("deploy collector pods")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=fluentd")
+			resource{"serviceaccount", "logcollector", cl.namespace}.WaitForResourceToAppear(oc)
+			defer removeLokiStackPermissionFromSA(oc, "lokistack-dev-tenant-logs")
+			grantLokiPermissionsToSA(oc, "lokistack-dev-tenant-logs", "logcollector", cloNS)
+			bearerToken := getSAToken(oc, "logcollector", cloNS)
+
 			g.By("create CLF to forward logs to loki")
 			lokiSecret := resource{"secret", "lokistack-gateway", cloNS}
 			defer lokiSecret.clear(oc)
-			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", lokiSecret.namespace, "secret", "generic", lokiSecret.name, "--from-literal=token=/var/run/secrets/kubernetes.io/serviceaccount/token").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.createPipelineSecretForCollector(oc, lokiSecret.name, lokiSecret.namespace, bearerToken)
 			lokiGatewaySVC := ls.name + "-gateway-http." + ls.namespace + ".svc:8080"
 			g.By("create clusterlogforwarder/instance")
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "49364.yaml")
@@ -132,21 +142,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer clf.clear(oc)
 			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRET="+lokiSecret.name, "-p", "GATEWAY_SVC="+lokiGatewaySVC)
 			o.Expect(err).NotTo(o.HaveOccurred())
-
-			// deploy collector pods
-			g.By("deploy collector pods")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=fluentd")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
-			defer removeLokiStackPermissionFromSA(oc, "lokistack-dev-tenant-logs")
-			grantLokiPermissionsToSA(oc, "lokistack-dev-tenant-logs", "logcollector", cloNS)
+			resource{"daemonset", "collector", cl.namespace}.WaitForResourceToAppear(oc)
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 			//check logs in loki stack
 			g.By("check logs in loki")
-			bearerToken := getSAToken(oc, "logcollector", cloNS)
-			lc := lokiClient{"", "", "http://" + getRouteAddress(oc, ls.namespace, ls.name), "", bearerToken, "", 5, "", true}
+			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure"} {
 				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
 					res, err := lc.queryRange(logType, "{log_type=\""+logType+"\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
@@ -171,7 +173,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			grantLokiPermissionsToSA(oc, sa.name, sa.name, sa.namespace)
 			token := getSAToken(oc, sa.name, sa.namespace)
 
-			lcAudit := lokiClient{"", "", "http://" + getRouteAddress(oc, ls.namespace, ls.name), "", token, "", 5, "", true}
+			lcAudit := newLokiClient(route).withToken(token).retry(5)
 			err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
 				res, err := lcAudit.queryRange("audit", "{log_type=\"audit\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
 				if err != nil {
@@ -183,7 +185,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not founded", "audit"))
+			exutil.AssertWaitPollNoErr(err, "audit logs are not founded")
 
 			appLog, err := lc.queryRange("application", "{kubernetes_namespace_name=\""+appProj+"\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
 			o.Expect(err).NotTo(o.HaveOccurred())

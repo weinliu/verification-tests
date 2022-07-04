@@ -1,7 +1,6 @@
 package logging
 
 import (
-	"fmt"
 	"time"
 
 	g "github.com/onsi/ginkgo"
@@ -92,7 +91,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("failed searching for %s logs in Loki", "application"))
+			exutil.AssertWaitPollNoErr(err, "failed searching for application logs in Loki")
 			e2e.Logf("Application Logs Query is a success")
 
 		})
@@ -135,7 +134,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed searching for %s logs in Loki", "application"))
+			exutil.AssertWaitPollNoErr(err, "Failed searching for application logs in Loki")
 			e2e.Logf("Application Logs Query using namespace as tenantKey is a success")
 
 		})
@@ -183,7 +182,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed searching for %s logs in Loki", "application"))
+			exutil.AssertWaitPollNoErr(err, "Failed searching for application logs in Loki")
 			e2e.Logf("App logs found with matching LabelKey: " + labelKeys + " and pod Label: " + podLabel)
 
 			g.By("Searching for Application Logs in Loki using LabelKey - Negative match")
@@ -195,7 +194,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed searching for %s logs in Loki", "application"))
+			exutil.AssertWaitPollNoErr(err, "Failed searching for application logs in Loki")
 			e2e.Logf("No App logs found with matching LabelKey: " + labelKeys + " and pod Label: " + podLabel)
 
 		})
@@ -239,7 +238,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed searching for %s logs in Loki", "application"))
+			exutil.AssertWaitPollNoErr(err, "Failed searching for application logs in Loki")
 			e2e.Logf("Application Logs Query using kubernetes.container_name as tenantKey is a success")
 		})
 

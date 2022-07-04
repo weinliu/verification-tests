@@ -163,7 +163,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The EO doesn't add %s to index setting", "index.blocks.read_only_allow_delete"))
+		exutil.AssertWaitPollNoErr(err, "The EO doesn't add index.blocks.read_only_allow_delete to index setting")
 
 		g.By("release ES node disk")
 		removeFile := "rm -rf /elasticsearch/persistent/file.txt"
@@ -186,7 +186,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 			}
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The EO doesn't remove %s from index setting", "index.blocks.read_only_allow_delete"))
+		exutil.AssertWaitPollNoErr(err, "The EO doesn't remove index.blocks.read_only_allow_delete from index setting")
 	})
 
 	// author qitang@redhat.com
@@ -242,7 +242,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ES pod count is not %d", 4))
+		exutil.AssertWaitPollNoErr(err, "ES pod count is not 4")
 		checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.status.cluster.status}"})
 
 		g.By("reduce ES nodeCount to 2")

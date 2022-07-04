@@ -1,7 +1,6 @@
 package logging
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -379,7 +378,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch 
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The value of metric %s isn't more than 0", "es_index_namespaces_total"))
+		exutil.AssertWaitPollNoErr(err, "The value of metric es_index_namespaces_total isn't more than 0")
 
 		g.By("check ES metric es_index_document_count")
 		metricData2, err := queryPrometheus(oc, "", "/api/v1/query?", "es_index_document_count", "GET")
@@ -498,7 +497,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch 
 			}
 			return match, nil
 		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprint("The ES pods are not updated", ""))
+		exutil.AssertWaitPollNoErr(err, "The ES pods are not updated")
 		// make sure ES cluster health is green in the end
 		checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.status.cluster.status}"})
 		checkResource(oc, false, false, "preparationComplete", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.status.nodes[*].upgradeStatus.upgradePhase}"})

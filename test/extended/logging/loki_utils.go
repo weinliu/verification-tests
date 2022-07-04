@@ -543,6 +543,19 @@ func (l lokiStack) removeLokiStack(oc *exutil.CLI) {
 	}
 }
 
+func (l lokiStack) createPipelineSecretForCollector(oc *exutil.CLI, name, namespace, token string) {
+	dirname := "/tmp/" + oc.Namespace() + getRandomString()
+	defer os.RemoveAll(dirname)
+	err := os.MkdirAll(dirname, 0777)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/"+l.name+"-ca-bundle", "-n", l.namespace, "--keys=service-ca.crt", "--confirm", "--to="+dirname).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "secret", "generic", name, "--from-literal=token="+token, "--from-file=ca-bundle.crt="+dirname+"/service-ca.crt").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 func grantLokiPermissionsToSA(oc *exutil.CLI, rbacName, sa, ns string) {
 	rbac := exutil.FixturePath("testdata", "logging", "lokistack", "loki-rbac.yaml")
 	file, err := processTemplate(oc, "-f", rbac, "-p", "NAME="+rbacName, "-p", "SA="+sa, "NAMESPACE="+ns)
@@ -568,6 +581,36 @@ type lokiClient struct {
 	queryTags       string //adds X-Query-Tags header to API requests.
 	quiet           bool   //Suppress query metadata.
 }
+
+// newLokiClient initializes a lokiClient with server address
+func newLokiClient(routeAddress string) *lokiClient {
+	client := &lokiClient{}
+	client.address = routeAddress
+	client.retries = 5
+	return client
+}
+
+// retry sets how many times to retry each query
+func (c *lokiClient) retry(retry int) *lokiClient {
+	nc := *c
+	nc.retries = retry
+	return &nc
+}
+
+// withToken sets the token used to do query
+func (c *lokiClient) withToken(bearerToken string) *lokiClient {
+	nc := *c
+	nc.bearerToken = bearerToken
+	return &nc
+}
+
+/*
+func (c *lokiClient) withTokenFile(bearerTokenFile string) *lokiClient {
+	nc := *c
+	nc.bearerTokenFile = bearerTokenFile
+	return &nc
+}
+*/
 
 func (c *lokiClient) getHTTPRequestHeader() (http.Header, error) {
 	h := make(http.Header)
