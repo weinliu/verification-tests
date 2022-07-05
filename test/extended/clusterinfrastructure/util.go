@@ -11,6 +11,7 @@ import (
 
 const (
 	machineAPINamespace      = "openshift-machine-api"
+	clusterAPINamespace      = "openshift-cluster-api"
 	machineApproverNamespace = "openshift-cluster-machine-approver"
 	mapiMachineset           = "machinesets.machine.openshift.io"
 	mapiMachine              = "machines.machine.openshift.io"
