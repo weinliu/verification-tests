@@ -61,7 +61,7 @@ func (service *service) createServiceFromTemplate(oc *exutil.CLI) {
 
 func compareAPIServerWebhookConditions(oc *exutil.CLI, conditionReason string, conditionStatus string, conditionTypes []string) {
 	for _, webHookErrorConditionType := range conditionTypes {
-		err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+		err := wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
 			webhookError, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath='{.status.conditions[?(@.type=="`+webHookErrorConditionType+`")]}'`).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(webhookError).Should(o.MatchRegexp(`"type":"%s"`, webHookErrorConditionType), "Mismatch in 'type' of admission errors reported")
