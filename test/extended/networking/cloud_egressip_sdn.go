@@ -1298,6 +1298,56 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(sourceIP).Should(o.Equal(nodeIP2))
 		o.Expect(sourceIP).ShouldNot(o.ContainSubstring(freeIPs[0]))
 	})
+
+	// author: jechen@redhat.com
+	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-47464-The egressIP will be unavailable if it is set to multiple hostsubnets. [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+
+		g.By("1. Get list of nodes, get subnet from two worker nodes that have same subnet")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
+		if !ok || len(egressNodes) < 2 {
+			g.Skip("The prerequirement was not fullfilled, skip the case!!")
+		}
+		egressNode1 := egressNodes[0]
+		egressNode2 := egressNodes[1]
+
+		g.By("2. Get subnet from egressIP node, find 1 unused IPs from one egress node")
+		sub := getIfaddrFromNode(egressNode1, oc)
+		freeIPs := findUnUsedIPsOnNode(oc, egressNode1, sub, 1)
+		o.Expect(len(freeIPs) == 1).Should(o.BeTrue())
+
+		g.By("3. Patch the same egressIP to both egress nodes")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
+
+		g.By("4. Create a namespaces, apply the egressIP to the namespace, and create a test pod in it")
+		ns := oc.Namespace()
+
+		pod := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+
+		pod.createPingPod(oc)
+		waitPodReady(oc, pod.namespace, pod.name)
+
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
+
+		g.By("5.Verify the egressIP is not added to any egress node's primary NIC")
+		checkPrimaryNIC(oc, egressNode1, freeIPs[0], false)
+		checkPrimaryNIC(oc, egressNode2, freeIPs[0], false)
+
+		g.By("6. Curl from the test pod should not succeed, error is expected")
+		_, err = e2e.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		o.Expect(err).To(o.HaveOccurred())
+	})
 })
 
 var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
