@@ -23,6 +23,7 @@ type ingctrlNodePortDescription struct {
 	namespace   string
 	defaultCert string
 	domain      string
+	shard       string
 	replicas    int
 	template    string
 }
@@ -32,6 +33,14 @@ type ipfailoverDescription struct {
 	namespace string
 	image     string
 	vip       string
+	template  string
+}
+
+type routeDescription struct {
+	name      string
+	namespace string
+	domain    string
+	subDomain string
 	template  string
 }
 
@@ -69,7 +78,7 @@ func (ingctrl *ingctrlNodePortDescription) create(oc *exutil.CLI) {
 	if availableWorkerNode < 1 {
 		g.Skip("Skipping as there is no enough worker nodes")
 	}
-	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ingctrl.template, "-p", "NAME="+ingctrl.name, "NAMESPACE="+ingctrl.namespace, "DOMAIN="+ingctrl.domain)
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ingctrl.template, "-p", "NAME="+ingctrl.name, "NAMESPACE="+ingctrl.namespace, "DOMAIN="+ingctrl.domain, "SHARD="+ingctrl.shard)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -77,7 +86,16 @@ func (ingctrl *ingctrlNodePortDescription) delete(oc *exutil.CLI) error {
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ingctrl.namespace, "ingresscontroller", ingctrl.name).Execute()
 }
 
-func createResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
+// create route object from file.
+func (rut *routeDescription) create(oc *exutil.CLI) {
+	parameters := []string{"--ignore-unknown-parameters=true", "-f", rut.template, "-p", "SUBDOMAIN_NAME=" + rut.subDomain, "NAMESPACE=" + rut.namespace, "DOMAIN=" + rut.domain}
+	jsonCfg := parseToJSON(oc, parameters)
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", rut.namespace, "-f", jsonCfg).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// parse the yaml file to json.
+func parseToJSON(oc *exutil.CLI, parameters []string) string {
 	var jsonCfg string
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + "-temp-resource.json")
@@ -89,8 +107,12 @@ func createResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to process %v", parameters))
-
 	e2e.Logf("the file of resource is %s", jsonCfg)
+	return jsonCfg
+}
+
+func createResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
+	jsonCfg := parseToJSON(oc, parameters)
 	return oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", jsonCfg).Execute()
 }
 
@@ -786,4 +808,39 @@ func waitForLoadBalancerProvision(oc *exutil.CLI, ns string, ingressName string)
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the Load Balancer is not provisioned"))
+}
+
+// curl command with poll
+func waitForCurl(oc *exutil.CLI, podName, baseDomain string, routestring string, searchWord string, controllerIP string) {
+	e2e.Logf("Polling for curl command")
+	var output string
+	var err error
+	waitErr := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+		if controllerIP != "" {
+			route := routestring + baseDomain + ":80"
+			toDst := routestring + baseDomain + ":80:" + controllerIP
+			output, err = oc.Run("exec").Args(podName, "--", "curl", "-v", "http://"+route, "--resolve", toDst).Output()
+		} else {
+			curlCmd2 := routestring + baseDomain
+			output, err = oc.Run("exec").Args(podName, "--", "curl", "-v", "http://"+curlCmd2).Output()
+		}
+		if err != nil {
+			e2e.Logf("curl is not yet resolving, retrying...")
+			return false, nil
+		}
+		if !strings.Contains(output, searchWord) {
+			e2e.Logf("retrying...cannot find the searchWord '%s' in the output:- %v ", searchWord, output)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the route is not reachable"))
+}
+
+// this function will get the route detail
+func getRoutes(oc *exutil.CLI, ns string) string {
+	output, err := oc.Run("get").Args("route", "-n", ns).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("oc get route: %v", output)
+	return output
 }
