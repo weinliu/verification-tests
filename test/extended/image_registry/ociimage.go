@@ -3,6 +3,7 @@ package imageregistry
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
@@ -78,7 +79,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("podman tag an image")
-		output, err := containerCLI.Run("pull").Args(ociImage, "--authfile="+authFile, "--tls-verify=false").Output()
+		dockerConfig := filepath.Join("/home", "cloud-user", ".docker", "auto", "48710.json")
+		output, err := containerCLI.Run("pull").Args(ociImage, "--authfile="+dockerConfig, "--tls-verify=false").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if err != nil {
 			e2e.Logf(output)
