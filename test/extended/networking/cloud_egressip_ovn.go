@@ -57,7 +57,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			if ipEchoURL == "" {
 				// If an int-svc instance with external IP found, IpEcho service will be installed on the int-svc instance
 				// otherwise, just give error message and skip the test
-				infraID, err := exutil.GetInfraId(oc)
+				infraID, err := exutil.GetInfraID(oc)
 				o.Expect(err).NotTo(o.HaveOccurred())
 				host, err := getIntSvcExternalIPFromGcp(oc, infraID)
 				if err != nil {
@@ -898,7 +898,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			// for gcp, remove the postfix "c.openshift-qe.internal" to get its instance name
 			instance = strings.Split(nodeList.Items[1].Name, ".")
 			e2e.Logf("\n\n\n the worker node to be shutdown is: %v\n\n\n", instance[0])
-			infraID, err := exutil.GetInfraId(oc)
+			infraID, err := exutil.GetInfraID(oc)
 			zone, err = getZoneOfInstanceFromGcp(oc, infraID, instance[0])
 			o.Expect(err).NotTo(o.HaveOccurred())
 			defer checkNodeStatus(oc, instance[0], "Ready")

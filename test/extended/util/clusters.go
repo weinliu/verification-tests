@@ -3,6 +3,7 @@ package util
 import (
 	"strings"
 
+	g "github.com/onsi/ginkgo"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -17,24 +18,25 @@ func GetClusterVersion(oc *CLI) (string, string, error) {
 	return clusterVersion, clusterBuild, err
 }
 
-// GetInfraId returns the infra id
-func GetInfraId(oc *CLI) (string, error) {
-	infraId, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o", "jsonpath='{.status.infrastructureName}'").Output()
+// GetInfraID returns the infra id
+func GetInfraID(oc *CLI) (string, error) {
+	infraID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o", "jsonpath='{.status.infrastructureName}'").Output()
 	if err != nil {
 		return "", err
 	}
-	return strings.Trim(infraId, "'"), err
+	return strings.Trim(infraID, "'"), err
 }
 
-// GetGcpProjectId returns the gcp project id
-func GetGcpProjectId(oc *CLI) (string, error) {
-	projectId, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o", "jsonpath='{.status.platformStatus.gcp.projectID}'").Output()
+// GetGcpProjectID returns the gcp project id
+func GetGcpProjectID(oc *CLI) (string, error) {
+	projectID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o", "jsonpath='{.status.platformStatus.gcp.projectID}'").Output()
 	if err != nil {
 		return "", err
 	}
-	return strings.Trim(projectId, "'"), err
+	return strings.Trim(projectID, "'"), err
 }
 
+// GetClusterPrefixName return Cluster Prefix Name
 func GetClusterPrefixName(oc *CLI) string {
 	output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("route", "console", "-n", "openshift-console", "-o=jsonpath={.spec.host}").Output()
 	if err != nil {
@@ -44,6 +46,7 @@ func GetClusterPrefixName(oc *CLI) string {
 	return strings.Split(output, ".")[2]
 }
 
+// GetClusterArchitecture return ClusterArchitecture
 func GetClusterArchitecture(oc *CLI) string {
 	output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("nodes", "-o=jsonpath={.items[0].status.nodeInfo.architecture}").Output()
 	if err != nil {
@@ -51,4 +54,13 @@ func GetClusterArchitecture(oc *CLI) string {
 		return ""
 	}
 	return output
+}
+
+// SkipARM64 skip the test if cluster is arm64
+func SkipARM64(oc *CLI) {
+	arch := GetClusterArchitecture(oc)
+	e2e.Logf("architecture is " + arch)
+	if arch == "arm64" {
+		g.Skip("Skip for arm64")
+	}
 }

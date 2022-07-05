@@ -179,7 +179,7 @@ func getgcloudClient(oc *exutil.CLI) *exutil.Gcloud {
 	if exutil.CheckPlatform(oc) != "gcp" {
 		g.Skip("it is not gcp platform!")
 	}
-	projectID, err := exutil.GetGcpProjectId(oc)
+	projectID, err := exutil.GetGcpProjectID(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if projectID != "openshift-qe" {
 		g.Skip("openshift-qe project is needed to execute this test case!")
@@ -232,7 +232,7 @@ func installIPEchoServiceOnGCP(oc *exutil.CLI, infraID string, host string) (str
 }
 
 func uninstallIPEchoServiceOnGCP(oc *exutil.CLI) {
-	infraID, err := exutil.GetInfraId(oc)
+	infraID, err := exutil.GetInfraID(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	host, err := getIntSvcExternalIPFromGcp(oc, infraID)
 	o.Expect(err).NotTo(o.HaveOccurred())
