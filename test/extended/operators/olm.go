@@ -185,26 +185,12 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		itName := g.CurrentGinkgoTestDescription().TestText
 		dr.addIr(itName)
 
-		g.By("1) Create a CatalogSource that contains the Learn,Sample operators")
-		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-image-template.yaml")
-		cs := catalogSourceDescription{
-			name:        "cs-46964",
-			namespace:   "openshift-marketplace",
-			displayName: "OLM QE Operators",
-			publisher:   "Jian",
-			sourceType:  "grpc",
-			address:     "quay.io/olmqe/learn-operator-index:v1",
-			template:    csImageTemplate,
-		}
-		defer cs.delete(itName, dr)
-		cs.createWithCheck(oc, itName, dr)
-
-		g.By("2) Subscribe to learn perator v0.0.3 with AllNamespaces mode")
+		g.By("1) Subscribe to learn operator v0.0.3 with AllNamespaces mode")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-learn-46964",
 			namespace:              "openshift-operators",
-			catalogSourceName:      "cs-46964",
+			catalogSourceName:      "qe-app-registry",
 			catalogSourceNamespace: "openshift-marketplace",
 			channel:                "beta",
 			ipApproval:             "Automatic",
@@ -217,7 +203,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer sub.deleteCSV(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", "openshift-operators", "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("3) Create testing projects and Multi OperatorGroup")
+		g.By("2) Create testing projects and Multi OperatorGroup")
 		ogMultiTemplate := filepath.Join(buildPruningBaseDir, "og-multins.yaml")
 		og := operatorGroupDescription{
 			name:         "og-46964",
@@ -240,18 +226,18 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		p1.targetNamespace = oc.Namespace()
 		p2.targetNamespace = oc.Namespace()
 		og.namespace = oc.Namespace()
-		g.By("3-1) create new projects and label them")
+		g.By("2-1) create new projects and label them")
 		p1.create(oc, itName, dr)
 		p1.label(oc, "label-46964")
 		p2.create(oc, itName, dr)
 		p2.label(oc, "label-46964")
 		og.create(oc, itName, dr)
 
-		g.By("4) Subscribe to Sample operator with MultiNamespaces mode")
+		g.By("3) Subscribe to Sample operator with MultiNamespaces mode")
 		subSample := subscriptionDescription{
 			subName:                "sub-sample-46964",
 			namespace:              oc.Namespace(),
-			catalogSourceName:      "cs-46964",
+			catalogSourceName:      "qe-app-registry",
 			catalogSourceNamespace: "openshift-marketplace",
 			channel:                "alpha",
 			ipApproval:             "Automatic",
@@ -264,10 +250,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		subSample.findInstalledCSV(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subSample.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("5) Enable this `disableCopiedCSVs` feature")
+		g.By("4) Enable this `disableCopiedCSVs` feature")
 		patchResource(oc, asAdmin, withoutNamespace, "olmconfig", "cluster", "-p", "{\"spec\":{\"features\":{\"disableCopiedCSVs\": true}}}", "--type=merge")
 
-		g.By("6) Check if the AllNamespaces Copied CSV are removed")
+		g.By("5) Check if the AllNamespaces Copied CSV are removed")
 
 		err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			copiedCSV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), "--no-headers").Output()
@@ -281,10 +267,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "AllNamespace Copied CSV should be remove")
 
-		g.By("7) Disable this `disableCopiedCSVs` feature")
+		g.By("6) Disable this `disableCopiedCSVs` feature")
 		patchResource(oc, asAdmin, withoutNamespace, "olmconfig", "cluster", "-p", "{\"spec\":{\"features\":{\"disableCopiedCSVs\": false}}}", "--type=merge")
 
-		g.By("8) Check if the AllNamespaces Copied CSV are back")
+		g.By("7) Check if the AllNamespaces Copied CSV are back")
 		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			copiedCSV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), "--no-headers").Output()
 			if err != nil {
@@ -1034,26 +1020,12 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) Create a CatalogSource that contains the Learn operator")
-		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-image-template.yaml")
-		cs := catalogSourceDescription{
-			name:        "cs-37710",
-			namespace:   "openshift-marketplace",
-			displayName: "OLM QE Operators",
-			publisher:   "Jian",
-			sourceType:  "grpc",
-			address:     "quay.io/olmqe/learn-operator-index:v1",
-			template:    csImageTemplate,
-		}
-		defer cs.delete(itName, dr)
-		cs.createWithCheck(oc, itName, dr)
-
-		g.By("3) Install the learn-operator.v0.0.1 with Manual approval")
+		g.By("2) Install the learn-operator.v0.0.1 with Manual approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-37710",
 			namespace:              oc.Namespace(),
-			catalogSourceName:      "cs-37710",
+			catalogSourceName:      "qe-app-registry",
 			catalogSourceNamespace: "openshift-marketplace",
 			channel:                "alpha",
 			ipApproval:             "Manual",
@@ -1067,24 +1039,24 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer sub.update(oc, itName, dr)
 		sub.create(oc, itName, dr)
 
-		g.By("4) Apprrove this learn-operator.v0.0.1, it should be in Complete state")
+		g.By("3) Apprrove this learn-operator.v0.0.1, it should be in Complete state")
 		sub.approveSpecificIP(oc, itName, dr, "learn-operator.v0.0.1", "Complete")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.1", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
 		// The conditions array will be added to OperatorCondition’s spec and operator is now expected to only update the conditions in the spec to reflect its condition
 		// and no longer push changes to OperatorCondition’s status.
 		// $oc patch operatorcondition learn-operator.v0.0.1 -p '{"spec":{"conditions":[{"type":"Upgradeable", "observedCondition":1,"status":"False","reason":"bug","message":"not ready","lastUpdateTime":"2021-06-16T16:56:44Z","lastTransitionTime":"2021-06-16T16:56:44Z"}]}}' --type=merge
-		g.By("5) Patch the spec.conditions[0].Upgradeable to False")
+		g.By("4) Patch the spec.conditions[0].Upgradeable to False")
 		patchResource(oc, asAdmin, withoutNamespace, "-n", oc.Namespace(), "operatorcondition", "learn-operator.v0.0.1", "-p", "{\"spec\": {\"conditions\": [{\"type\": \"Upgradeable\", \"status\": \"False\", \"reason\": \"upgradeIsNotSafe\", \"message\": \"Disbale the upgrade\", \"observedCondition\":1, \"lastUpdateTime\":\"2021-06-16T16:56:44Z\",\"lastTransitionTime\":\"2021-06-16T16:56:44Z\"}]}}", "--type=merge")
 
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Upgradeable", ok, []string{"operatorcondition", "learn-operator.v0.0.1", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[0].type}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "False", ok, []string{"operatorcondition", "learn-operator.v0.0.1", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[0].status}"}).check(oc)
 
-		g.By("6) Apprrove this learn-operator.v0.0.2, the corresponding CSV should be in Pending state")
+		g.By("5) Apprrove this learn-operator.v0.0.2, the corresponding CSV should be in Pending state")
 		sub.approveSpecificIP(oc, itName, dr, "learn-operator.v0.0.2", "Complete")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Pending", ok, []string{"csv", "learn-operator.v0.0.2", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("7) Check the CSV message, the operator is not upgradeable")
+		g.By("6) Check the CSV message, the operator is not upgradeable")
 		err := wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", oc.Namespace(), "csv", "learn-operator.v0.0.2", "-o=jsonpath={.status.message}").Output()
 			if !strings.Contains(msg, "operator is not upgradeable") {
@@ -1094,10 +1066,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "learn-operator.v0.0.2 operator is upgradeable")
 
-		g.By("8) Patch the spec.conditions[0].Upgradeable to True")
+		g.By("7) Patch the spec.conditions[0].Upgradeable to True")
 		// $oc patch operatorcondition learn-operator.v0.0.1 -p '{"spec":{"conditions":[{"type":"Upgradeable", "observedCondition":1,"status":"True","reason":"bug","message":"ready","lastUpdateTime":"2021-06-16T16:56:44Z","lastTransitionTime":"2021-06-16T16:56:44Z"}]}}' --type=merge
 		patchResource(oc, asAdmin, withoutNamespace, "-n", oc.Namespace(), "operatorcondition", "learn-operator.v0.0.1", "-p", "{\"spec\": {\"conditions\": [{\"type\": \"Upgradeable\", \"status\": \"True\", \"reason\": \"ready\", \"message\": \"enable the upgrade\", \"observedCondition\":1, \"lastUpdateTime\":\"2021-06-16T17:56:44Z\",\"lastTransitionTime\":\"2021-06-16T17:56:44Z\"}]}}", "--type=merge")
-		g.By("9) the learn-operator.v0.0.1 can be upgraded to etcdoperator.v0.9.4 successfully")
+		g.By("8) the learn-operator.v0.0.1 can be upgraded to etcdoperator.v0.9.4 successfully")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.2", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 	})
 
@@ -2494,32 +2466,18 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("ConnectedOnly-Author:jiazha-Critical-22070-support grpc sourcetype [Serial]", func() {
-		g.By("1) Start to create the CatalogSource CR")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		dr := make(describerResrouce)
 		itName := g.CurrentGinkgoTestDescription().TestText
 		dr.addIr(itName)
 
-		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-image-template.yaml")
-		cs := catalogSourceDescription{
-			name:        "cs-22070",
-			namespace:   "openshift-marketplace",
-			displayName: "OLM QE Operators",
-			publisher:   "Jian",
-			sourceType:  "grpc",
-			address:     "quay.io/olmqe/learn-operator-index:v1",
-			template:    csImageTemplate,
-		}
-		defer cs.delete(itName, dr)
-		cs.createWithCheck(oc, itName, dr)
-
-		g.By("2) Start to subscribe this etcd operator")
+		g.By("1) Start to subscribe the learn operator")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		oc.SetupProject()
 		sub := subscriptionDescription{
 			subName:                "sub-22070",
 			namespace:              "openshift-operators",
-			catalogSourceName:      "cs-22070",
+			catalogSourceName:      "qe-app-registry",
 			catalogSourceNamespace: "openshift-marketplace",
 			channel:                "beta",
 			ipApproval:             "Automatic",
@@ -2533,7 +2491,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("3) Assert that etcd dependency is resolved")
+		g.By("3) Assert that learn operator dependency is resolved")
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("learn-operator.v0.0.3"))
