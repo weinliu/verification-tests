@@ -263,7 +263,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("Try to add one more upstream resolver, totally 16 upstream resolvers by patching dns operator")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceName, "--patch="+cfgAddOneUpstreams, "--type=json").Output()
-		o.Expect(output).To(o.ContainSubstring("spec.upstreamResolvers.upstreams in body should have at most 15 items"))
+		o.Expect(output).To(o.ContainSubstring("have at most 15 items"))
 
 		g.By("Try to add a upstream resolver with a string as an address")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceName, "--patch="+invalidCfgStringUpstreams, "--type=json").Output()

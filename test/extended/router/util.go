@@ -439,7 +439,7 @@ func readDNSCorefile(oc *exutil.CLI, DNSPodName, searchString, grepOption string
 func ensureClusterOperatorProgress(oc *exutil.CLI, coName string) {
 	e2e.Logf("waiting for CO %v to start rolling update......", coName)
 	jsonPath := "-o=jsonpath={.status.conditions[?(@.type==\"Progressing\")].status}"
-	waitErr := wait.Poll(3*time.Second, 120*time.Second, func() (bool, error) {
+	waitErr := wait.Poll(6*time.Second, 180*time.Second, func() (bool, error) {
 		status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/"+coName, jsonPath).Output()
 		primary := false
 		if strings.Compare(status, "True") == 0 {

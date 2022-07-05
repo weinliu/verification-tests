@@ -379,7 +379,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		NegHealthCheckInterval = "abc"
 		output, err2 := oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", "{\"spec\": {\"tuningOptions\": {\"healthCheckInterval\": \""+NegHealthCheckInterval+"\"}}}", "--type=merge", "-n", ingctrl.namespace).Output()
 		o.Expect(err2).To(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Invalid value: \"abc\": spec.tuningOptions.healthCheckInterval in body must be of type duration: \"abc\""))
+		o.Expect(output).To(o.ContainSubstring("Invalid value: \"abc\": spec.tuningOptions.healthCheckInterval in body should match '^0|([0-9]+(\\.[0-9]+)?(ns|us|µs|μs|ms|s|m|h))+$'"))
 	})
 
 	// author: shudili@redhat.com
