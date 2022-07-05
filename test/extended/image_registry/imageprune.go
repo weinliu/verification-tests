@@ -215,4 +215,55 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(`Deleting manifest link: %s/image-15126`, oc.Namespace()))
 	})
+
+	//author: xiuwang@redhat.com
+	g.It("Author:xiuwang-Medium-52705-Medium-11623-Could delete recently created images when --prune-over-size-limit is used", func() {
+		var (
+			imageRegistryBaseDir = exutil.FixturePath("testdata", "image_registry")
+			limitFile            = filepath.Join(imageRegistryBaseDir, "project-limitRange-image.yaml")
+			limitsrc             = limitSource{
+				name:      "52705-image-limit-range",
+				namespace: "",
+				size:      "1Mi",
+				template:  limitFile,
+			}
+		)
+		g.By("Create 2 imagestream, one image is large than 1M, anther one is small than 1M")
+		oc.SetupProject()
+		err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("busybox:smaller", "--from", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "--confirm", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "busybox", "smaller")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/registry@sha256:01493571d994fd021da18c1f87aba1091482df3fc20825f443b4e60b3416c820", "registry:bigger", "--reference-policy=local", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "registry", "bigger")
+
+		g.By("Create project limit for image")
+		limitsrc.namespace = oc.Namespace()
+		limitsrc.create(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("policy").Args("remove-role-from-user", "system:image-pruner", "-z", "default", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("policy").Args("add-role-to-user", "system:image-pruner", "-z", "default", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Get external registry host")
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		token, err := getSAToken(oc, "default", oc.Namespace())
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(token).NotTo(o.BeEmpty())
+
+		g.By("Could prune images with --prune-over-size-limit")
+		pruneout, pruneerr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "images", "--prune-over-size-limit", "--token="+token, "--registry-url="+regRoute, "-n", oc.Namespace()).Output()
+		o.Expect(pruneerr).NotTo(o.HaveOccurred())
+		o.Expect(pruneout).To(o.ContainSubstring("Deleting 1 items from image stream " + oc.Namespace() + "/registry"))
+		o.Expect(pruneout).NotTo(o.ContainSubstring(oc.Namespace() + "/busybox"))
+
+		g.By("11623-Can not prune image by conflicted condition flags")
+		conflictinfo1, _ := oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "images", "--prune-over-size-limit", "--token="+token, "--registry-url="+regRoute, "-n", oc.Namespace(), "--keep-younger-than=1m", "--confirm").Output()
+		o.Expect(conflictinfo1).To(o.ContainSubstring("error: --prune-over-size-limit cannot be specified with --keep-tag-revisions nor --keep-younger-than"))
+		conflictinfo2, _ := oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "images", "--prune-over-size-limit", "--token="+token, "--registry-url="+regRoute, "-n", oc.Namespace(), "--keep-tag-revisions=1", "--confirm").Output()
+		o.Expect(conflictinfo2).To(o.ContainSubstring("error: --prune-over-size-limit cannot be specified with --keep-tag-revisions nor --keep-younger-than"))
+
+	})
 })

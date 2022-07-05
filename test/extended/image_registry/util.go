@@ -1110,3 +1110,15 @@ type prometheusImageregistryStorageType struct {
 	} `json:"data"`
 	Status string `json:"status"`
 }
+
+type limitSource struct {
+	name      string
+	namespace string
+	size      string
+	template  string
+}
+
+func (limitsrc *limitSource) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", limitsrc.template, "-p", "NAME="+limitsrc.name, "NAMESPACE="+limitsrc.namespace, "SIZE="+limitsrc.size)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}

@@ -2143,4 +2143,5 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring("unauthorized: authentication required"))
 
 	})
+
 })
