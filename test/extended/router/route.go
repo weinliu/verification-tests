@@ -87,29 +87,35 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	// author: mjoseph@redhat.com
 	g.It("Author:mjoseph-High-49802-HTTPS redirect happens even if there is a more specific http-only", func() {
 		var (
-			output              string
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			testEdge            = filepath.Join(buildPruningBaseDir, "49802-route.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			customTemp          = filepath.Join(buildPruningBaseDir, "49802-route.yaml")
+			rut                 = routeDescription{
+				namespace: "",
+				template:  customTemp,
+			}
 		)
 
-		g.By("create project and a 'Hello' pod")
+		g.By("create project and a pod")
 		baseDomain := getBaseDomain(oc)
 		oc.SetupProject()
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		err := waitForPodWithLabelReady(oc, oc.Namespace(), "app=hello-pod")
+		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=hello-pod, Ready status not met")
+		podName := getPodName(oc, oc.Namespace(), "name=web-server-rc")
+		defaultContPod := getRouterPod(oc, "default")
 
-		g.By("create a clusterip service")
-		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("service", "clusterip", "hello-pod", "--tcp=80:8080", "--tcp=443:8443", "-n", oc.Namespace()).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		output, err = oc.Run("get").Args("service").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("hello-pod"))
-		podName := getPodName(oc, oc.Namespace(), "app=hello-pod")
+		g.By("create routes and get the details")
+		rut.namespace = oc.Namespace()
+		rut.create(oc)
+		getRoutes(oc, oc.Namespace())
 
-		g.By("create http and https routes")
-		createResourceFromFile(oc, oc.Namespace(), testEdge)
+		g.By("check the reachability of the secure route with redirection")
+		waitForCurl(oc, podName[0], baseDomain, "hello-pod-"+oc.Namespace()+".apps.", "HTTP/1.1 302 Found", "")
+		waitForCurl(oc, podName[0], baseDomain, "hello-pod-"+oc.Namespace()+".apps.", `location: https://hello-pod-`, "")
+
+		g.By("check the reachability of the insecure routes")
+		waitForCurl(oc, podName[0], baseDomain+"/test/", "hello-pod-http-"+oc.Namespace()+".apps.", "HTTP/1.1 200 OK", "")
 
 		g.By("check the reachability of the secure route")
 		curlCmd := fmt.Sprintf("curl -I -k https://hello-pod-%s.apps.%s", oc.Namespace(), baseDomain)
@@ -117,17 +123,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(statsOut).Should(o.ContainSubstring("HTTP/1.1 200 OK"))
 
-		g.By("check the reachability of the secure route with redirection")
-		curlCmd1 := fmt.Sprintf("curl -I http://hello-pod-%s.apps.%s", oc.Namespace(), baseDomain)
-		statsOut1, err := exutil.RemoteShPod(oc, oc.Namespace(), podName[0], "sh", "-c", curlCmd1)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(statsOut1).Should(o.ContainSubstring("HTTP/1.1 302 Found"))
-		o.Expect(statsOut1).Should(o.ContainSubstring("location: https://hello-pod-%s.apps.%s", oc.Namespace(), baseDomain))
-
-		g.By("check the reachability of the insecure routes")
-		curlCmd2 := fmt.Sprintf(`curl -I http://hello-pod-http-%s.apps.%s/test/`, oc.Namespace(), baseDomain)
-		statsOut2, err := exutil.RemoteShPod(oc, oc.Namespace(), podName[0], "sh", "-c", curlCmd2)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(statsOut2).Should(o.ContainSubstring("HTTP/1.1 200 OK"))
+		g.By("check the router pod and ensure the routes are loaded in haproxy.config")
+		searchOutput := readRouterPodData(oc, defaultContPod, "cat haproxy.config", "hello-pod")
+		o.Expect(searchOutput).To(o.ContainSubstring("backend be_edge_http:" + oc.Namespace() + ":hello-pod"))
+		searchOutput1 := readRouterPodData(oc, defaultContPod, "cat haproxy.config", "hello-pod-http")
+		o.Expect(searchOutput1).To(o.ContainSubstring("backend be_http:" + oc.Namespace() + ":hello-pod-http"))
 	})
 })

@@ -88,9 +88,7 @@ func (ingctrl *ingctrlNodePortDescription) delete(oc *exutil.CLI) error {
 
 // create route object from file.
 func (rut *routeDescription) create(oc *exutil.CLI) {
-	parameters := []string{"--ignore-unknown-parameters=true", "-f", rut.template, "-p", "SUBDOMAIN_NAME=" + rut.subDomain, "NAMESPACE=" + rut.namespace, "DOMAIN=" + rut.domain}
-	jsonCfg := parseToJSON(oc, parameters)
-	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", rut.namespace, "-f", jsonCfg).Execute()
+	err := createResourceToNsFromTemplate(oc, rut.namespace, "--ignore-unknown-parameters=true", "-f", rut.template, "-p", "SUBDOMAIN_NAME="+rut.subDomain, "NAMESPACE="+rut.namespace, "DOMAIN="+rut.domain)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -114,6 +112,11 @@ func parseToJSON(oc *exutil.CLI, parameters []string) string {
 func createResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 	jsonCfg := parseToJSON(oc, parameters)
 	return oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", jsonCfg).Execute()
+}
+
+func createResourceToNsFromTemplate(oc *exutil.CLI, ns string, parameters ...string) error {
+	jsonCfg := parseToJSON(oc, parameters)
+	return oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "-f", jsonCfg).Execute()
 }
 
 func waitForCustomIngressControllerAvailable(oc *exutil.CLI, icname string) error {

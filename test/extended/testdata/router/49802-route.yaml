@@ -1,39 +1,31 @@
-apiVersion: v1
-kind: List
-items:
+apiVersion: template.openshift.io/v1
+kind: Template
+objects:
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
-    creationTimestamp: null
     labels:
-      app: hello-pod
+      name: service-unsecure
     name: hello-pod
+  namespace: ${NAMESPACE}
   spec:
-    port:
-      targetPort: 8080
     tls:
       termination: edge
       insecureEdgeTerminationPolicy: Redirect
     to:
-      kind: ""
-      name: hello-pod
-      weight: null
-  status:
-    ingress: null
+      kind: Service
+      name: service-unsecure
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
-    creationTimestamp: null
     labels:
-      app: hello-pod
+      name: service-unsecure
     name: hello-pod-http
+  namespace: ${NAMESPACE}
   spec:
-    port:
-      targetPort: 8080
     path: "/test"
     to:
       kind: Service
-      name: hello-pod
-      weight: null
-    status:
-      ingress: null
+      name: service-unsecure
+parameters:
+- name: NAMESPACE
