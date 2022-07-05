@@ -22,7 +22,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	)
 	g.It("Author:wewang-Medium-29780-Controller metrics reported from openshift-controller-manager [Flaky]", func() {
 		g.By("check controller metrics")
-		token, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("-n", "openshift-monitoring", "get-token", "prometheus-k8s").Output()
+		token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", "-n", "openshift-monitoring", "prometheus-k8s").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		foundMetrics := false
 		podList, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(metav1.ListOptions{})
