@@ -7425,7 +7425,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// Test case: OCP-42829, author:xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-42829-Install plan should be blocked till a valid OperatorGroup is detected", func() {
-		SkipARM64(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -7439,21 +7438,21 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 			catsrc = catalogSourceDescription{
 				name:        "catsrc-42829",
-				namespace:   "openshift-marketplace",
-				displayName: "Test planetscale Operators",
+				namespace:   oc.Namespace(),
+				displayName: "Test Operators",
 				publisher:   "OLM QE",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/planetscale-index:v1-4.8",
+				address:     "quay.io/olmqe/nginxolm-operator-index:v1",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
-				subName:                "planetscale-sub",
+				subName:                "sub-42829",
 				namespace:              oc.Namespace(),
 				catalogSourceName:      "catsrc-42829",
-				catalogSourceNamespace: "openshift-marketplace",
-				channel:                "beta",
+				catalogSourceNamespace: oc.Namespace(),
+				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "planetscale",
+				operatorPackage:        "nginx-operator",
 				singleNamespace:        true,
 				template:               subTemplate,
 			}
@@ -7466,22 +7465,15 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		g.By("2) install sub")
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("3) check ip status")
-		installPlan := sub.getIP(oc)
-		o.Expect(installPlan).NotTo(o.BeEmpty())
-		err := newCheck("expect", asAdmin, withoutNamespace, contain, "no operator group found", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).checkWithoutAssert(oc)
-		if err != nil {
-			output := getResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status}")
-			e2e.Logf(output)
-		}
-		exutil.AssertWaitPollNoErr(err, "status.conditions of installplan does not contain 'no operator group found'")
-		phase := getResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}")
-		o.Expect(phase).To(o.Equal("Installing"))
+		g.By("3) check sub status")
+		err := newCheck("expect", asAdmin, withoutNamespace, contain, "found 0 operatorgroups", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).checkWithoutAssert(oc)
 
 		g.By("4) install og")
 		og.createwithCheck(oc, itName, dr)
 
 		g.By("check ip and csv")
+		installPlan := sub.getIP(oc)
+		o.Expect(installPlan).NotTo(o.BeEmpty())
 		err = newCheck("expect", asAdmin, withoutNamespace, compare, "Complete", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).checkWithoutAssert(oc)
 		if err != nil {
 			output := getResource(oc, asAdmin, withoutNamespace, "installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.conditions}}")
