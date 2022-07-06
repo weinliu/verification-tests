@@ -31,9 +31,13 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		var kn = "node"
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
-		if err != nil {
-			e2e.Logf("Unexpected error occurred: %v", err)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		nodeNum := 4
+		if len(nodeList.Items) < nodeNum {
+			g.Skip("Not enough worker nodes for this test, skip the case!!")
 		}
+
 		g.By("Apply dedicated Key for this test on the 3 nodes.")
 		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, kz, "zoneA")
 		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, kn, "node1")
@@ -221,9 +225,13 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		var ktn = "testnode"
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
-		if err != nil {
-			e2e.Logf("Unexpected error occurred: %v", err)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		nodeNum := 4
+		if len(nodeList.Items) < nodeNum {
+			g.Skip("Not enough worker nodes for this test, skip the case!!")
 		}
+
 		expectNodeList := []string{nodeList.Items[0].Name, nodeList.Items[1].Name}
 		g.By("Apply dedicated Key for this test on the 3 nodes.")
 		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, ktz, "testzoneA")
@@ -306,9 +314,13 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		var kn = "node33824"
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
-		if err != nil {
-			e2e.Logf("Unexpected error occurred: %v", err)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		nodeNum := 4
+		if len(nodeList.Items) < nodeNum {
+			g.Skip("Not enough worker nodes for this test, skip the case!!")
 		}
+
 		g.By("Apply dedicated Key for this test on the 3 nodes.")
 		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, kz, "zone33824A")
 		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, kn, "node338241")
@@ -435,9 +447,13 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		var kn = "node34017"
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
-		if err != nil {
-			e2e.Logf("Unexpected error occurred: %v", err)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		nodeNum := 4
+		if len(nodeList.Items) < nodeNum {
+			g.Skip("Not enough worker nodes for this test, skip the case!!")
 		}
+
 		g.By("Apply dedicated Key for this test on the 3 nodes.")
 		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, kz, "zone34017A")
 		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, kn, "node340171")
@@ -526,9 +542,13 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		var kn = "node34014"
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
-		if err != nil {
-			e2e.Logf("Unexpected error occurred: %v", err)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		nodeNum := 4
+		if len(nodeList.Items) < nodeNum {
+			g.Skip("Not enough worker nodes for this test, skip the case!!")
 		}
+
 		g.By("Apply dedicated Key for this test on the 3 nodes.")
 		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, kz, "zone34014A")
 		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, kn, "node340141")
