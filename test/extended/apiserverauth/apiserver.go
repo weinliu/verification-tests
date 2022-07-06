@@ -1527,6 +1527,7 @@ spec:
 			kubeApiserverCoStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 			serviceName           = "testservice"
 			serviceNamespace      = "testnamespace"
+			reason                = "AdmissionWebhookMatchesVirtualResource"
 		)
 
 		g.By("Pre-requisities step : Create new namespace for the tests.")
@@ -1571,15 +1572,7 @@ spec:
 		e2e.Logf("Test step-2 has passed : Kube-apiserver operators are in normal after virtual resource reference for a validating webhook added.")
 
 		g.By("3) Check for information message on kube-apiserver cluster w.r.t virtual resource reference for a validating webhook")
-
-		virtValidatingOut, virtValidatingErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath='{.status.conditions[?(@.type=="VirtualResourceAdmissionError")]}'`).Output()
-		o.Expect(virtValidatingErr).NotTo(o.HaveOccurred())
-		e2e.Logf("kube-apiserver reports the virtual resource error in Validating admission webhook as \n %s ", string(virtValidatingOut))
-		o.Expect(virtValidatingOut).Should(o.And(
-			o.MatchRegexp(`"message":"Validating webhook.*virtual resource.*"`),
-			o.MatchRegexp(`"reason":"AdmissionWebhookMatchesVirtualResource"`),
-			o.MatchRegexp(`"status":"True"`),
-			o.MatchRegexp(`"type":"VirtualResourceAdmissionError"`)), "Mismatch in admission errors reported")
+		compareAPIServerWebhookConditions(oc, reason, "True", []string{`VirtualResourceAdmissionError`})
 		validatingDelErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", validatingWebhookName).Execute()
 		o.Expect(validatingDelErr).NotTo(o.HaveOccurred())
 		e2e.Logf("Test step-3 has passed : Kube-apiserver reports expected informational errors after virtual resource reference for a validating webhook added.")
@@ -1598,24 +1591,13 @@ spec:
 		e2e.Logf("Test step-5 has passed : Kube-apiserver operators are in normal after virtual resource reference for a mutating webhook added.")
 
 		g.By("6) Check for information message on kube-apiserver cluster w.r.t virtual resource reference for mutating webhook")
-		virtMutatingOut, virtMutatingErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath='{.status.conditions[?(@.type=="VirtualResourceAdmissionError")]}'`).Output()
-		o.Expect(virtMutatingErr).NotTo(o.HaveOccurred())
-		e2e.Logf("kube-apiserver reports the virtual resource error in Mutating admission webhook as \n %s ", string(virtMutatingOut))
-		o.Expect(virtMutatingOut).Should(o.And(
-			o.MatchRegexp(`"message":"Mutating webhook.*virtual resource.*"`),
-			o.MatchRegexp(`"reason":"AdmissionWebhookMatchesVirtualResource"`),
-			o.MatchRegexp(`"status":"True"`),
-			o.MatchRegexp(`"type":"VirtualResourceAdmissionError"`)), "Mismatch in admission errors reported")
+		compareAPIServerWebhookConditions(oc, reason, "True", []string{`VirtualResourceAdmissionError`})
 		mutatingDelErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("MutatingWebhookConfiguration", mutatingWebhookName).Execute()
 		o.Expect(mutatingDelErr).NotTo(o.HaveOccurred())
 		e2e.Logf("Test step-6 has passed : Kube-apiserver reports expected informational errors after virtual resource reference for a mutating webhook added.")
 
 		g.By("7) Check for webhook admission error free kube-apiserver cluster after deleting webhooks.")
-		virtualOut, virtualErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath='{.status.conditions[?(@.type=="VirtualResourceAdmissionError")]}'`).Output()
-		o.Expect(virtualErr).NotTo(o.HaveOccurred())
-		o.Expect(virtualOut).Should(o.And(
-			o.MatchRegexp(`"type":"VirtualResourceAdmissionError"`),
-			o.MatchRegexp(`"status":"False"`)), "VirtualResourceAdmissionError is wrongly set for kube-apiserver.")
+		compareAPIServerWebhookConditions(oc, "", "False", []string{`VirtualResourceAdmissionError`})
 		checkCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 		e2e.Logf("Test step-7 has passed : No webhook admission error seen after purging webhooks.")
 		e2e.Logf("All test case steps are passed.!")
