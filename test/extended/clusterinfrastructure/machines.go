@@ -39,94 +39,93 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-45377-Enable accelerated network via MachineSets on Azure [Disruptive]", func() {
 		g.By("Create a new machineset with acceleratedNetworking: true")
 		exutil.SkipConditionally(oc)
-		if exutil.CheckPlatform(oc) == "azure" {
-			machinesetName := "machineset-45377"
-			ms := exutil.MachineSetDescription{machinesetName, 0}
-			defer ms.DeleteMachineSet(oc)
-			ms.CreateMachineSet(oc)
-			g.By("Update machineset with acceleratedNetworking: true")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"acceleratedNetworking":true,"vmSize":"Standard_D4s_v3"}}}}}}`, "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			//test when set acceleratedNetworking: true, machine running needs nearly 9 minutes. so change the method timeout as 10 minutes.
-			exutil.WaitForMachinesRunning(oc, 1, machinesetName)
-
-			g.By("Check machine with acceleratedNetworking: true")
-			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.acceleratedNetworking}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("out:%s", out)
-			o.Expect(out).To(o.ContainSubstring("true"))
+		if iaasPlatform != "azure" {
+			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
 		}
-		e2e.Logf("Only azure platform supported for the test")
+		machinesetName := "machineset-45377"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		g.By("Update machineset with acceleratedNetworking: true")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"acceleratedNetworking":true,"vmSize":"Standard_D4s_v3"}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//test when set acceleratedNetworking: true, machine running needs nearly 9 minutes. so change the method timeout as 10 minutes.
+		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		g.By("Check machine with acceleratedNetworking: true")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.acceleratedNetworking}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("out:%s", out)
+		o.Expect(out).To(o.ContainSubstring("true"))
 	})
 
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-46967-Implement Ephemeral OS Disks - OS cache placement on Azure [Disruptive]", func() {
 		g.By("Create a new machineset with Ephemeral OS Disks - OS cache placement")
 		exutil.SkipConditionally(oc)
-		if exutil.CheckPlatform(oc) == "azure" {
-			machinesetName := "machineset-46967"
-			ms := exutil.MachineSetDescription{machinesetName, 0}
-			defer ms.DeleteMachineSet(oc)
-			ms.CreateMachineSet(oc)
-			g.By("Update machineset with Ephemeral OS Disks - OS cache placement")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"vmSize":"Standard_D4s_v3","osDisk":{"diskSizeGB":30,"cachingType":"ReadOnly","diskSettings":{"ephemeralStorageLocation":"Local"},"managedDisk":{"storageAccountType":""}}}}}}}}`, "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			exutil.WaitForMachinesRunning(oc, 1, machinesetName)
-
-			g.By("Check machine with Ephemeral OS Disks - OS cache placement")
-			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.osDisk.diskSettings.ephemeralStorageLocation}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("out:%s", out)
-			o.Expect(out).To(o.ContainSubstring("Local"))
+		if iaasPlatform != "azure" {
+			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
 		}
-		e2e.Logf("Only azure platform supported for the test")
+		machinesetName := "machineset-46967"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		g.By("Update machineset with Ephemeral OS Disks - OS cache placement")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"vmSize":"Standard_D4s_v3","osDisk":{"diskSizeGB":30,"cachingType":"ReadOnly","diskSettings":{"ephemeralStorageLocation":"Local"},"managedDisk":{"storageAccountType":""}}}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		g.By("Check machine with Ephemeral OS Disks - OS cache placement")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.osDisk.diskSettings.ephemeralStorageLocation}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("out:%s", out)
+		o.Expect(out).To(o.ContainSubstring("Local"))
 	})
 
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-46303-Availability sets could be created when needed for Azure [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		if exutil.CheckPlatform(oc) == "azure" {
-			defaultWorkerMachinesetName := exutil.GetRandomMachineSetName(oc)
-			region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, defaultWorkerMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			infrastructureName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.infrastructureName}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			availabilitySetName := infrastructureName + "_" + defaultWorkerMachinesetName + "-as"
-			if region == "northcentralus" || region == "westus" {
-				/*
-					This case only supports on a region which doesn't have zones.
-					These two regions cover most of the templates in flexy-templates and they don't have zones,
-					so restricting the test is only applicable in these two regions.
-				*/
-				g.By("Create a new machineset")
-				machinesetName := "machineset-46303"
-				ms := exutil.MachineSetDescription{machinesetName, 0}
-				defer ms.DeleteMachineSet(oc)
-				ms.CreateMachineSet(oc)
-
-				g.By("Update machineset with availabilitySet already created for the default worker machineset")
-				/*
-				 If the availability set is not created for the default worker machineset,
-				 the machine will create failed and error message shows "Availability Set cannot be found".
-				 Therefore, if machine created successfully with the availability set,
-				 then it can prove that the availability set has been created when the default worker machineset is created.
-				*/
-				err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"availabilitySet":"`+availabilitySetName+`"}}}}}}`, "--type=merge").Execute()
-				o.Expect(err).NotTo(o.HaveOccurred())
-
-				exutil.WaitForMachinesRunning(oc, 1, machinesetName)
-
-				g.By("Check machine with availabilitySet")
-				out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.availabilitySet}").Output()
-				o.Expect(err).NotTo(o.HaveOccurred())
-				e2e.Logf("out:%s", out)
-				o.Expect(out == availabilitySetName).To(o.BeTrue())
-			}
-			e2e.Logf("The test is only applicable in \"northcentralus\" or \"westus\" region")
+		if iaasPlatform != "azure" {
+			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
 		}
-		e2e.Logf("Only azure platform supported for the test")
+		defaultWorkerMachinesetName := exutil.GetRandomMachineSetName(oc)
+		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, defaultWorkerMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if region != "northcentralus" && region != "westus" {
+			/*
+				This case only supports on a region which doesn't have zones.
+				These two regions cover most of the templates in flexy-templates and they don't have zones,
+				so restricting the test is only applicable in these two regions.
+			*/
+			g.Skip("Skip this test scenario because the test is only applicable in \"northcentralus\" or \"westus\" region")
+		}
+
+		g.By("Create a new machineset")
+		machinesetName := "machineset-46303"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		g.By("Update machineset with availabilitySet already created for the default worker machineset")
+		/*
+			If the availability set is not created for the default worker machineset,
+			machine status will be failed and error message shows "Availability Set cannot be found".
+			Therefore, if machine created successfully with the availability set,
+			then it can prove that the availability set has been created when the default worker machineset is created.
+		*/
+		availabilitySetName := defaultWorkerMachinesetName + "-as"
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"availabilitySet":"`+availabilitySetName+`"}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		g.By("Check machine with availabilitySet")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.availabilitySet}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("availability set name is: %s", out)
+		o.Expect(out == availabilitySetName).To(o.BeTrue())
 	})
 
 	// author: huliu@redhat.com
@@ -216,30 +215,30 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-44977-Machine with GPU is supported on gcp [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		if exutil.CheckPlatform(oc) == "gcp" {
-			g.By("Create a new machineset")
-			machinesetName := "machineset-44977"
-			ms := exutil.MachineSetDescription{machinesetName, 0}
-			defer ms.DeleteMachineSet(oc)
-			ms.CreateMachineSet(oc)
-			g.By("Update machineset with GPU")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"a2-highgpu-1g","onHostMaintenance":"Terminate","restartPolicy":"Always"}}}}}}`, "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			exutil.WaitForMachinesRunning(oc, 1, machinesetName)
-
-			g.By("Check machine with GPU")
-			machineType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.machineType}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			onHostMaintenance, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.onHostMaintenance}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			restartPolicy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.restartPolicy}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			e2e.Logf("machineType:%s, onHostMaintenance:%s, restartPolicy:%s", machineType, onHostMaintenance, restartPolicy)
-			o.Expect(strings.Contains(machineType, "a2-highgpu-1g") && strings.Contains(onHostMaintenance, "Terminate") && strings.Contains(restartPolicy, "Always")).To(o.BeTrue())
+		if iaasPlatform != "gcp" {
+			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
 		}
-		e2e.Logf("Only gcp platform supported for the test")
+		g.By("Create a new machineset")
+		machinesetName := "machineset-44977"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		g.By("Update machineset with GPU")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"machineType":"a2-highgpu-1g","onHostMaintenance":"Terminate","restartPolicy":"Always"}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		g.By("Check machine with GPU")
+		machineType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.machineType}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		onHostMaintenance, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.onHostMaintenance}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		restartPolicy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.restartPolicy}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("machineType:%s, onHostMaintenance:%s, restartPolicy:%s", machineType, onHostMaintenance, restartPolicy)
+		o.Expect(strings.Contains(machineType, "a2-highgpu-1g") && strings.Contains(onHostMaintenance, "Terminate") && strings.Contains(restartPolicy, "Always")).To(o.BeTrue())
 	})
 
 	// author: zhsun@redhat.com
@@ -259,66 +258,66 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-High-35513-Windows machine should successfully provision for aws [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		if exutil.CheckPlatform(oc) == "aws" {
-			g.By("Create a new machineset")
-			machinesetName := "machineset-35513"
-			ms := exutil.MachineSetDescription{machinesetName, 0}
-			defer ms.DeleteMachineSet(oc)
-			ms.CreateMachineSet(oc)
-			region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			var amiID string
-			switch region {
-			case "us-east-1", "us-iso-east-1":
-				amiID = "ami-0d9cdd823beb0f50b"
-			case "us-east-2":
-				amiID = "ami-0e05cb5a56f9043da"
-			case "cn-north-1":
-				amiID = "ami-07a0c9b547ce24896"
-			case "us-gov-west-1":
-				amiID = "ami-0fc1f8653c0f1c371"
-			default:
-				e2e.Logf("Not support region for the case for now.")
-				g.Skip("Not support region for the case for now.")
-			}
-			g.By("Update machineset with windows ami")
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"metadata":{"labels":{"machine.openshift.io/os-id": "Windows"}},"spec":{"providerSpec":{"value":{"ami":{"id":"`+amiID+`"}}}}}}}`, "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			exutil.WaitForMachineProvisioned(oc, machinesetName)
+		if iaasPlatform != "aws" {
+			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
 		}
-		e2e.Logf("Only aws platform supported for the test")
+		g.By("Create a new machineset")
+		machinesetName := "machineset-35513"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		var amiID string
+		switch region {
+		case "us-east-1", "us-iso-east-1":
+			amiID = "ami-0d9cdd823beb0f50b"
+		case "us-east-2":
+			amiID = "ami-0e05cb5a56f9043da"
+		case "cn-north-1":
+			amiID = "ami-07a0c9b547ce24896"
+		case "us-gov-west-1":
+			amiID = "ami-0fc1f8653c0f1c371"
+		default:
+			e2e.Logf("Not support region for the case for now.")
+			g.Skip("Not support region for the case for now.")
+		}
+		g.By("Update machineset with windows ami")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"metadata":{"labels":{"machine.openshift.io/os-id": "Windows"}},"spec":{"providerSpec":{"value":{"ami":{"id":"`+amiID+`"}}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.WaitForMachineProvisioned(oc, machinesetName)
 	})
 
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-48012-Change AWS EBS GP3 IOPS in MachineSet should take affect on aws [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		if exutil.CheckPlatform(oc) == "aws" {
-			g.By("Create a new machineset")
-			machinesetName := "machineset-48012"
-			ms := exutil.MachineSetDescription{machinesetName, 0}
-			defer ms.DeleteMachineSet(oc)
-			ms.CreateMachineSet(oc)
-			g.By("Update machineset with gp3 iops 5000")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"blockDevices":[{"ebs":{"volumeType":"gp3","iops":5000}}]}}}}}}`, "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			exutil.WaitForMachinesRunning(oc, 1, machinesetName)
-
-			g.By("Check on aws instance with gp3 iops 5000")
-			instanceID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-o=jsonpath={.items[0].status.providerStatus.instanceId}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			c2sConfigPrefix, stsConfigPrefix := exutil.GetAwsCredentialFromCluster(oc)
-			defer exutil.DeleteAwsCredentialTmpFile(c2sConfigPrefix, stsConfigPrefix)
-
-			volumeInfo, err := exutil.GetAwsVolumeInfoAttachedToInstanceID(instanceID)
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			e2e.Logf("volumeInfo:%s", volumeInfo)
-			o.Expect(strings.Contains(volumeInfo, "\"Iops\":5000") && strings.Contains(volumeInfo, "\"VolumeType\":\"gp3\"")).To(o.BeTrue())
+		if iaasPlatform != "aws" {
+			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
 		}
-		e2e.Logf("Only aws platform supported for the test")
+		g.By("Create a new machineset")
+		machinesetName := "machineset-48012"
+		ms := exutil.MachineSetDescription{machinesetName, 0}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		g.By("Update machineset with gp3 iops 5000")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"blockDevices":[{"ebs":{"volumeType":"gp3","iops":5000}}]}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		g.By("Check on aws instance with gp3 iops 5000")
+		instanceID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-o=jsonpath={.items[0].status.providerStatus.instanceId}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		c2sConfigPrefix, stsConfigPrefix := exutil.GetAwsCredentialFromCluster(oc)
+		defer exutil.DeleteAwsCredentialTmpFile(c2sConfigPrefix, stsConfigPrefix)
+
+		volumeInfo, err := exutil.GetAwsVolumeInfoAttachedToInstanceID(instanceID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("volumeInfo:%s", volumeInfo)
+		o.Expect(strings.Contains(volumeInfo, "\"Iops\":5000") && strings.Contains(volumeInfo, "\"VolumeType\":\"gp3\"")).To(o.BeTrue())
 	})
 
 	// author: zhsun@redhat.com
