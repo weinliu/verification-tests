@@ -20,7 +20,7 @@ objects:
             rootVolume:
               iops: 100
               size: 22
-              type: gp2
+              type: gp3
             type: m4.xlarge
         replicas: 3
       controlPlane:
@@ -30,7 +30,7 @@ objects:
             rootVolume:
               iops: 100
               size: 22
-              type: gp2
+              type: gp3
             type: m4.xlarge
         replicas: 3
       metadata:

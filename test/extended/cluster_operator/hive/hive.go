@@ -2105,7 +2105,7 @@ spec:
       rootVolume:
         iops: 100
         size: 22
-        type: gp2
+        type: gp3
       type: m4.2xlarge`
 		output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("MachinePool", cdName+"-worker", "-n", oc.Namespace(), "--type", "merge", "-p", patchYaml).Output()
 		o.Expect(err).To(o.HaveOccurred())
@@ -2342,7 +2342,7 @@ spec:
       rootVolume:
         iops: 100
         size: 22
-        type: gp2
+        type: gp3
       type: m4.xlarge
       zones:
       - ` + AWSRegion + `a

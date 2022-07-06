@@ -246,7 +246,7 @@ type gcpClusterPool struct {
 const (
 	HiveNamespace           = "hive" //Hive Namespace
 	OCP49ReleaseImage       = "quay.io/openshift-release-dev/ocp-release:4.9.0-rc.6-x86_64"
-	OCP410ReleaseImage      = "quay.io/openshift-release-dev/ocp-release:4.10.14-x86_64"
+	OCP410ReleaseImage      = "quay.io/openshift-release-dev/ocp-release:4.10.20-x86_64"
 	PullSecret              = "pull-secret"
 	ClusterInstallTimeout   = 3600
 	DefaultTimeout          = 120
