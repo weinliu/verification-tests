@@ -6097,33 +6097,33 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("2) Install the etcdoperator v0.9.4 with Automatic approval")
+		g.By("2) Install the learn-operator with Automatic approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-24917",
 			namespace:              oc.Namespace(),
-			catalogSourceName:      "community-operators",
+			catalogSourceName:      "qe-app-registry",
 			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "singlenamespace-alpha",
 			ipApproval:             "Automatic",
-			operatorPackage:        "etcd",
-			startingCSV:            "etcdoperator.v0.9.4",
+			channel:                "beta",
+			operatorPackage:        "learn",
 			singleNamespace:        true,
 			template:               subTemplate,
 		}
+
 		defer sub.delete(itName, dr)
 		defer sub.deleteCSV(itName, dr)
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "AtLatestKnown", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}"}).check(oc)
 
 		g.By("3) check if this operator's SA can list all namespaces")
-		expectedSA := fmt.Sprintf("system:serviceaccount:%s:etcd-operator", oc.Namespace())
+		expectedSA := fmt.Sprintf("system:serviceaccount:%s:learn-operator", oc.Namespace())
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("policy").Args("who-can", "list", "namespaces").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(msg, expectedSA)).To(o.BeFalse())
 
 		g.By("4) get the token of this operator's SA")
-		token, err := getSAToken(oc, "etcd-operator", oc.Namespace())
+		token, err := getSAToken(oc, "learn-operator", oc.Namespace())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("5) get the cluster server")
