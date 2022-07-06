@@ -1,4 +1,4 @@
-//Kata operator tests
+// Package kata operator tests
 package kata
 
 import (
@@ -32,9 +32,7 @@ var (
 // author: tbuskey@redhat.com,abhbaner@redhat.com
 func subscribeFromTemplate(oc *exutil.CLI, sub subscriptionDescription, subTemplate, nsFile, ogFile string) (msg string, err error) {
 	g.By(" (1) INSTALLING sandboxed-operator in '" + sub.namespace + "' namespace")
-	csvName := ""
 	subFile := ""
-	v := ""
 
 	g.By("(1.1) Applying namespace yaml")
 	msg, err = oc.AsAdmin().Run("apply").Args("-f", nsFile).Output()
@@ -59,54 +57,35 @@ func subscribeFromTemplate(oc *exutil.CLI, sub subscriptionDescription, subTempl
 	e2e.Logf("Applied subscription %v: %v, %v", subFile, msg, err)
 
 	g.By("(1.5) Verify the operator finished subscribing")
-	errCheck := wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}").Output()
-		// o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Compare(msg, "AtLatestKnown") == 0 {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "--no-headers").Output()
-			return true, nil
-		}
-		return false, nil
-	})
-	e2e.Logf("Subscription %v %v, %v", msg, err, errCheck)
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("subscription %v is not correct status in ns %v", sub.subName, sub.namespace))
-
-	g.By("(1.6) Get csvName")
-	csvName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installedCSV}").Output()
-	e2e.Logf("csvName %v %v", csvName, err)
+	msg, err = subscriptionIsFinished(oc, sub)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(csvName).NotTo(o.BeEmpty())
+	o.Expect(msg).NotTo(o.BeEmpty())
 
-	g.By("(1.7) Verify the csv '" + csvName + "' has finished")
-	errCheck = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", sub.namespace, "-o=jsonpath={.status.phase}{.status.reason}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Compare(msg, "SucceededInstallSucceeded") == 0 {
-			v, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", sub.namespace, "--no-headers").Output()
-			msg = fmt.Sprintf("%v state %v", v, msg)
-			return true, nil
-		}
-		return false, nil
-	})
-	e2e.Logf("csv %v: %v %v", csvName, msg, err)
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status in ns %v: %v %v", csvName, sub.namespace, msg, err))
 	return msg, err
 }
 
 // author: tbuskey@redhat.com, abhbaner@redhat.com
-func createKataConfig(oc *exutil.CLI, kcTemplate, kcName, kcMonitorImageName, subNamespace string) (msg string, err error) {
+func createKataConfig(oc *exutil.CLI, kcTemplate, kcName, kcMonitorImageName string, sub subscriptionDescription) (msg string, err error) {
 	// If this is used, label the caller with [Disruptive][Serial][Slow]
 	// If kataconfig already exists, this must not error
 	var configFile string
 
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", "--no-headers", "-n", subNamespace).Output()
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", "--no-headers", "-n", sub.namespace).Output()
 	if strings.Contains(msg, kcName) {
 		g.By("(2) kataconfig is previously installed")
 		return msg, err // no need to go through the rest
 	}
 
+	g.By("Make sure subscription has finished before kataconfig")
+	msg, err = subscriptionIsFinished(oc, sub)
+	if err != nil {
+		e2e.Logf("The subscription has not finished: %v %v", msg, err)
+	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(msg).NotTo(o.BeEmpty())
+
 	g.By("(2) Create kataconfig file")
-	configFile, err = oc.AsAdmin().WithoutNamespace().Run("process").Args("--ignore-unknown-parameters=true", "-f", kcTemplate, "-p", "NAME="+kcName, "MONITOR="+kcMonitorImageName, "-n", subNamespace).OutputToFile(getRandomString() + "kataconfig-common.json")
+	configFile, err = oc.AsAdmin().WithoutNamespace().Run("process").Args("--ignore-unknown-parameters=true", "-f", kcTemplate, "-p", "NAME="+kcName, "MONITOR="+kcMonitorImageName, "-n", sub.namespace).OutputToFile(getRandomString() + "kataconfig-common.json")
 	e2e.Logf("the kataconfig file is %s, %v", configFile, err)
 
 	g.By("(2.1) Apply kataconfig file")
@@ -211,5 +190,46 @@ func deleteKataConfig(oc *exutil.CLI, kcName string) (msg string, err error) {
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("kataconfig %v did not get deleted: %v %v", kcName, msg, err))
 
 	g.By("(3.2) kataconfig is gone")
+	return msg, err
+}
+
+func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg string, err error) {
+	var (
+		csvName string
+		v       string
+	)
+	g.By("Check that operator is AtLatestKnown")
+	errCheck := wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}").Output()
+		// o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Compare(msg, "AtLatestKnown") == 0 {
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "--no-headers").Output()
+			return true, nil
+		}
+		return false, nil
+	})
+	e2e.Logf("Subscription %v %v, %v", msg, err, errCheck)
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("subscription %v is not correct status in ns %v", sub.subName, sub.namespace))
+
+	g.By("Get csvName to check its finish")
+	csvName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installedCSV}").Output()
+	// e2e.Logf("csvName %v %v", csvName, err)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(csvName).NotTo(o.BeEmpty())
+
+	g.By("Check that the csv '" + csvName + "' has finished")
+	errCheck = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", sub.namespace, "-o=jsonpath={.status.phase}{.status.reason}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Compare(msg, "SucceededInstallSucceeded") == 0 {
+			v, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", sub.namespace, "--no-headers").Output()
+			msg = fmt.Sprintf("%v state %v", v, msg)
+			return true, nil
+		}
+		return false, nil
+	})
+	e2e.Logf("csv %v: %v %v", csvName, msg, err)
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status in ns %v: %v %v", csvName, sub.namespace, msg, err))
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "--no-headers").Output()
 	return msg, err
 }

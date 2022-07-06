@@ -1,4 +1,4 @@
-//Kata operator tests
+// Package kata operator tests
 package kata
 
 import (
@@ -64,7 +64,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		msg, err = subscribeFromTemplate(oc, subscription, subTemplate, ns, og)
 		e2e.Logf("---------- subscription %v succeeded with channel %v %v", subscription.subName, subscription.channel, err)
 
-		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, subscription.namespace)
+		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, subscription)
 		e2e.Logf("---------- kataconfig %v create succeeded %v %v", commonKataConfigName, msg, err)
 	})
 
@@ -272,7 +272,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		e2e.Logf("kataconfig %v was deleted\n--------- %v %v", commonKataConfigName, msg, err)
 
 		g.By("Recreating kataconfig in 43523 for the remaining test cases")
-		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, subscription.namespace)
+		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, subscription)
 		e2e.Logf("recreated kataconfig %v: %v %v", commonKataConfigName, msg, err)
 
 		g.By("SUCCESS")
@@ -298,7 +298,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("SUCCESSS - build acceptance passed")
 
 		g.By("Recreating kataconfig for the remaining test cases")
-		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, subscription.namespace)
+		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, subscription)
 		e2e.Logf("recreated kataconfig %v: %v %v", commonKataConfigName, msg, err)
 	})
 
