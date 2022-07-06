@@ -298,7 +298,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		oc.SetupProject()
 		namespace := oc.Namespace()
 		msg, _ := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/raffaelespazzoli-proactive-node-scaling-operator-bundle:latest-", "-n", namespace, "--timeout", "5m").Output()
-		o.Expect(msg).To(o.ContainSubstring("Successfully created registry pod: raffaelespazzoli-proactive-node-scaling-operator-bundle-latest"))
+		o.Expect(msg).To(o.ContainSubstring("reated registry pod: raffaelespazzoli-proactive-node-scaling-operator-bundle-latest"))
 	})
 
 	// author: jfan@redhat.com
