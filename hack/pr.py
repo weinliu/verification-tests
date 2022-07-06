@@ -49,7 +49,7 @@ for filename in modifedFiles.decode("utf-8").strip(os.linesep).split():
                 continue
             if not lineIndex.startswith("+"):
                 continue
-            if re.search("VMonly|NonUnifyCI｜CPaasrunOnly｜ProdrunOnly｜StagerunOnly", lineIndex):
+            if re.search("VMonly|NonUnifyCI｜CPaasrunOnly｜ProdrunOnly｜StagerunOnly|DisconnectedOnly", lineIndex):
                 continue
             caseString = lineIndex.split("\"")[1]
             caseIDs = patternIt.findall(caseString)
