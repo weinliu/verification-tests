@@ -2144,4 +2144,71 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	})
 
+	//author: xiuwang@redhat.com
+	g.It("ConnectedOnly-Author:xiuwang-Medium-29706-Node secret takes effect when common secret is removed", func() {
+		g.By("Add the secret of registry.redhat.io to project")
+		tempDataDir, err := extractPullSecret(oc)
+		defer os.RemoveAll(tempDataDir)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		oc.SetupProject()
+		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("secret", "generic", "pj-secret", "--from-file="+tempDataDir+"/.dockerconfigjson", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Could pull image with the secret under project")
+		err = oc.AsAdmin().Run("tag").Args("registry.redhat.io/ubi8/httpd-24:latest", "httpd-29706:latest", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "httpd-29706", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Could pull image using node secret after project secret removed")
+		err = oc.WithoutNamespace().AsAdmin().Run("delete").Args("secret", "pj-secret", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().Run("import-image").Args("mysql-29706:latest", "--from=registry.redhat.io/rhel8/mysql-80:latest", "--confirm", "--reference-policy=local", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "mysql-29706", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("set").Args("image-lookup", "mysql-29706", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("run").Args("mysql", "--image=mysql-29706:latest", "--env=MYSQL_ROOT_PASSWORD=test", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkPodsRunningWithLabel(oc, oc.Namespace(), "run=mysql", 1)
+	})
+
+	//author: xiuwang@redhat.com
+	g.It("DisconnectedOnly-Author:xiuwang-Critial-29693-Import image from a secure registry using node credentials", func() {
+		g.By("Check if image-policy-aosqe created")
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("imagecontentsourcepolicy").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("image-policy-aosqe"))
+
+		g.By("Could pull image from secure registry using node credentials")
+		mirrorReg, mrerr := exec.Command("bash", "-c", "oc get imagecontentsourcepolicy image-policy-0 -o jsonpath={.spec.repositoryDigestMirrors[0].mirrors[0]} | awk -F'/' '{print $1}'").Output()
+		o.Expect(mrerr).NotTo(o.HaveOccurred())
+		mReg := strings.TrimSuffix(string(mirrorReg), "\n")
+		err = oc.AsAdmin().Run("import-image").Args("httpd-dis:latest", "--from="+mReg+"/rhel8/httpd-24:latest", "--confirm", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "httpd-dis", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("set").Args("image-lookup", "httpd-dis", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		expectInfo := `Successfully pulled image "` + mReg
+		createSimpleRunPod(oc, "httpd-dis", expectInfo)
+	})
+
+	//author: xiuwang@redhat.com
+	g.It("Author:xiuwang-Critial-29696-Use node credentials in imagestream import", func() {
+		g.By("Create image stream whose auth has added to node credentials")
+		dockerImage, err := exutil.GetDockerImageReference(oc.ImageClient().ImageV1().ImageStreams("openshift"), "cli", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().Run("import-image").Args("cli-29696", "--from="+dockerImage, "--confirm", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "cli-29696", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Could pull image")
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--name=cli-pod", "-i", "cli-29696:latest", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkPodsRunningWithLabel(oc, oc.Namespace(), "deployment=cli-pod", 1)
+	})
+
 })
