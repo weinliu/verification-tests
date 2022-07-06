@@ -56,6 +56,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 	// author: knarra@redhat.com
 	g.It("Author:knarra-High-21205-Low-36584-Install descheduler operator via a deployment & verify it should not violate PDB [Slow] [Disruptive] [Flaky]", func() {
+		exutil.SkipARM64(oc)
 		deploydpT := filepath.Join(buildPruningBaseDir, "deploy_duplicatepodsrs.yaml")
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -242,6 +243,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 	// author: knarra@redhat.com
 	g.It("Author:knarra-High-37463-High-40055-Descheduler-Validate AffinityAndTaints and TopologyAndDuplicates profile [Disruptive][Slow] [Flaky]", func() {
+		exutil.SkipARM64(oc)
 		deployT := filepath.Join(buildPruningBaseDir, "deploy_nodeaffinity.yaml")
 		deploynT := filepath.Join(buildPruningBaseDir, "deploy_nodetaint.yaml")
 		deploypT := filepath.Join(buildPruningBaseDir, "deploy_interpodantiaffinity.yaml")
@@ -598,6 +600,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 	// author: knarra@redhat.com
 	g.It("Longduration-NonPreRelease-Author:knarra-High-43287-High-43283-Descheduler-Descheduler operator should verify config does not conflict with scheduler and SoftTopologyAndDuplicates profile [Disruptive][Slow]", func() {
+		exutil.SkipARM64(oc)
 		deploysptT := filepath.Join(buildPruningBaseDir, "deploy_softPodTopologySpread.yaml")
 		deploysdT := filepath.Join(buildPruningBaseDir, "deploy_softdemopod.yaml")
 
@@ -853,6 +856,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 	// author: knarra@redhat.com
 	g.It("Author:knarra-Medium-43277-High-50941-Descheduler-Validate Predictive and Automatic mode for descheduler [Flaky][Slow]", func() {
+		exutil.SkipARM64(oc)
 		deschedulerpT := filepath.Join(buildPruningBaseDir, "kubedescheduler_podlifetime.yaml")
 
 		_, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -987,6 +991,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 	// author: knarra@redhat.com
 	g.It("Author:knarra-High-50193-High-50191-Descheduler-Validate priorityFiltering with thresholdPriorityClassName & thresholdPriority param [Disruptive][Slow] [Flaky]", func() {
+		exutil.SkipARM64(oc)
 		deschedulerpcN := filepath.Join(buildPruningBaseDir, "kubedescheduler_priorityclassname.yaml")
 		deploypT := filepath.Join(buildPruningBaseDir, "deploy_interpodantiaffinity.yaml")
 		deploypmT := filepath.Join(buildPruningBaseDir, "deploy_interpodantiaffinitytpm.yaml")
