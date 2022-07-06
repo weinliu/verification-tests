@@ -133,7 +133,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		pod43032.createPodMirror(oc)
 		defer oc.Run("delete").Args("pod/mypod43032", "-n", oc.Namespace()).Execute()
 		g.By("check the mirror pod status")
-		err := wait.Poll(5*time.Second, 600*time.Second, func() (bool, error) {
+		err := wait.Poll(5*time.Second, 900*time.Second, func() (bool, error) {
 			out, err := oc.Run("get").Args("-n", oc.Namespace(), "pod", pod43032.name, "-o=jsonpath={.status.phase}").Output()
 			if err != nil {
 				e2e.Logf("Fail to get pod: %s, error: %s and try again", pod43032.name, err)
@@ -243,7 +243,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		defer oc.Run("delete").Args("pod/mypod43034", "-n", oc.Namespace()).Execute()
 		pod43034.createPodMirror(oc)
 		g.By("check the mirror pod status")
-		err := wait.Poll(5*time.Second, 600*time.Second, func() (bool, error) {
+		err := wait.Poll(5*time.Second, 900*time.Second, func() (bool, error) {
 			out, err := oc.Run("get").Args("-n", oc.Namespace(), "pod", pod43034.name, "-o=jsonpath={.status.phase}").Output()
 			if err != nil {
 				e2e.Logf("Fail to get pod: %s, error: %s and try again", pod43034.name, err)
@@ -511,6 +511,10 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 	// author: yinzhou@redhat.com
 	g.It("Author:yinzhou-Medium-50399-oc apply could update EgressNetworkPolicy resource", func() {
+		networkType := checkNetworkType(oc)
+		if strings.Contains(networkType, "ovn") {
+			g.Skip("Skip for ovn cluster !!!")
+		}
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		egressnetworkP := filepath.Join(buildPruningBaseDir, "egressnetworkpolicy.yaml")
 		updateegressnetworkP := filepath.Join(buildPruningBaseDir, "update_egressnetworkpolicy.yaml")

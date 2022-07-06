@@ -438,23 +438,12 @@ func getPodNodeName(oc *exutil.CLI, namespace string, podName string) string {
 }
 
 func createLdapService(oc *exutil.CLI, namespace string, podName string, initGroup string) {
-	err := oc.Run("run").Args(podName, "--image", "quay.io/openshifttest/ldap@sha256:6db999e796e6247823e9705c03fde29dbe1d49433efaf18ab2a3a1fec1cc0a99", "-n", namespace).Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("run").Args(podName, "--image", "quay.io/openshifttest/ldap@sha256:6db999e796e6247823e9705c03fde29dbe1d49433efaf18ab2a3a1fec1cc0a99", "-n", namespace).Execute()
 	if err != nil {
 		oc.Run("delete").Args("pod/ldapserver", "-n", namespace).Execute()
 		e2e.Failf("failed to run the ldap pod")
 	}
-	err = wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		podStatus, _ := oc.AsAdmin().Run("get").Args("pod", podName, "-n", namespace, "-o=jsonpath={.status.phase}").Output()
-		if strings.Compare(podStatus, "Running") != 0 {
-			e2e.Logf("the podstatus is :%v, and try next round", podStatus)
-			return false, nil
-		}
-		return true, nil
-	})
-	if err != nil {
-		oc.Run("delete").Args("pod/ldapserver", "-n", namespace).Execute()
-		e2e.Failf("ldap pod run failed")
-	}
+	checkPodStatus(oc, "run="+podName, namespace, "Running")
 	err = oc.Run("cp").Args("-n", namespace, initGroup, podName+":/tmp/").Execute()
 	if err != nil {
 		oc.Run("delete").Args("pod/ldapserver", "-n", oc.Namespace()).Execute()
@@ -916,4 +905,9 @@ func (pc *priorityClassDefinition) deletePriorityClass(oc *exutil.CLI) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("priorityclass %s is not deleted successfully", pc.name))
+}
+
+func checkNetworkType(oc *exutil.CLI) string {
+	output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("network.operator", "cluster", "-o=jsonpath={.spec.defaultNetwork.type}").Output()
+	return strings.ToLower(output)
 }
