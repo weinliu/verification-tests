@@ -41,13 +41,6 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		template:               subTemplate,
 	}
 
-	operatorVer, sub := getVersionInfo(oc, subscription, opNamespace, subTemplate)
-	if os.Getenv("cmMsg") != "" { //env var cmMsg will have no value if configmap is not found
-		subscription = sub
-	}
-
-	kcMonitorImageName = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:" + operatorVer
-
 	g.BeforeEach(func() {
 		// Creating/deleting kataconfig reboots all worker node and extended-platform-tests may timeout after 20m.
 		// add --timeout 50m
@@ -58,6 +51,12 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			err error
 			msg string
 		)
+		operatorVer, sub := getVersionInfo(oc, subscription, opNamespace, subTemplate)
+		if os.Getenv("cmMsg") != "" { //env var cmMsg will have no value if configmap is not found
+			subscription = sub
+		}
+
+		kcMonitorImageName = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:" + operatorVer
 
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
