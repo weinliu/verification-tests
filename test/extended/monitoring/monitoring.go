@@ -32,9 +32,29 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	// author: hongyli@redhat.com
-	g.It("Author:hongyli-High-49073-Retention size settings for for platform", func() {
+	g.It("Author:hongyli-High-49073-Retention size settings for platform", func() {
 		checkRetention(oc, "openshift-monitoring", "prometheus-k8s", "storage.tsdb.retention.size=10GiB", platformLoadTime)
 		checkRetention(oc, "openshift-monitoring", "prometheus-k8s", "storage.tsdb.retention.time=45d", 20)
+	})
+
+	// author: hongyli@redhat.com
+	g.It("Author:hongyli-High-49514-federate service endpoint and route of platform Prometheus", func() {
+		var err error
+		g.By("Bind cluster-monitoring-view cluster role to current user")
+		clusterRoleBindingName := "clusterMonitoringViewFederate"
+		defer deleteClusterRoleBinding(oc, clusterRoleBindingName)
+		clusterRoleBinding, err := bindClusterRoleToUser(oc, "cluster-monitoring-view", oc.Username(), clusterRoleBindingName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Created: %v %v", "ClusterRoleBinding", clusterRoleBinding.Name)
+
+		g.By("Get token of current user")
+		token := oc.UserConfig().BearerToken
+		g.By("check federate endpoint service")
+		checkMetric(oc, "https://prometheus-k8s.openshift-monitoring.svc:9091/federate --data-urlencode 'match[]=cluster_version'", token, "cluster_version{endpoint", platformLoadTime)
+
+		g.By("check federate route")
+		checkRoute(oc, "openshift-monitoring", "prometheus-k8s-federate", token, "match[]=cluster_version", "cluster_version{endpoint", platformLoadTime)
+
 	})
 
 	g.Context("user workload monitoring", func() {

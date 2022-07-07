@@ -152,6 +152,28 @@ func bindMonitoringViewRoleToDefaultSA(oc *exutil.CLI, ns, uwmFederateRBACViewNa
 		},
 	})
 }
+func deleteClusterRoleBinding(oc *exutil.CLI, clusterRoleBindingName string) {
+	err := oc.AdminKubeClient().RbacV1().ClusterRoleBindings().Delete(clusterRoleBindingName, &metav1.DeleteOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+func bindClusterRoleToUser(oc *exutil.CLI, clusterRoleName, userName, clusterRoleBindingName string) (*rbacv1.ClusterRoleBinding, error) {
+	return oc.AdminKubeClient().RbacV1().ClusterRoleBindings().Create(&rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: clusterRoleBindingName,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name:     clusterRoleName,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind: "User",
+				Name: userName,
+			},
+		},
+	})
+}
 
 func checkRoute(oc *exutil.CLI, ns, name, token, queryString, metricString string, timeout time.Duration) {
 	var metrics string
