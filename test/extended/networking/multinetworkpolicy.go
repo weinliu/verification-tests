@@ -9,7 +9,6 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
-	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 var _ = g.Describe("[sig-networking] SDN", func() {
@@ -20,7 +19,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.BeforeEach(func() {
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(msg, "bm2-zzhao") {
+		if !strings.Contains(msg, "sriov.openshift-qe.sdn.com") {
 			g.Skip("These cases only can be run on Beijing local baremetal server , skip for other envrionment!!!")
 		}
 	})
@@ -43,36 +42,26 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("2. Get IPs of the pod1ns1's secondary interface in first namespace.")
 		pod1ns1IPv4, pod1ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-1")
-		pod1ns1IPv4 = strings.TrimSpace(pod1ns1IPv4)
-		pod1ns1IPv6 = strings.TrimSpace(pod1ns1IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod1ns1IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod1ns1IPv6)
 
 		g.By("3. Get IPs of the pod2ns1's secondary interface in first namespace.")
 		pod2ns1IPv4, pod2ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-2")
-		pod2ns1IPv4 = strings.TrimSpace(pod2ns1IPv4)
-		pod2ns1IPv6 = strings.TrimSpace(pod2ns1IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod2ns1IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod2ns1IPv6)
 
 		g.By("4. Get IPs of the pod3ns1's secondary interface in first namespace.")
 		pod3ns1IPv4, pod3ns1IPv6 := getPodMultiNetwork(oc, ns1, "red-pod-1")
-		pod3ns1IPv4 = strings.TrimSpace(pod3ns1IPv4)
-		pod3ns1IPv6 = strings.TrimSpace(pod3ns1IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod3ns1IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod3ns1IPv6)
 
 		g.By("5. Get IPs of the pod1ns2's secondary interface in second namespace.")
 		pod1ns2IPv4, pod1ns2IPv6 := getPodMultiNetwork(oc, ns2, "blue-pod-3")
-		pod1ns2IPv4 = strings.TrimSpace(pod1ns2IPv4)
-		pod1ns2IPv6 = strings.TrimSpace(pod1ns2IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod1ns2IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod1ns2IPv6)
 
 		g.By("6. Get IPs of the pod2ns2's secondary interface in second namespace.")
 		pod2ns2IPv4, pod2ns2IPv6 := getPodMultiNetwork(oc, ns2, "red-pod-2")
-		pod2ns2IPv4 = strings.TrimSpace(pod2ns2IPv4)
-		pod2ns2IPv6 = strings.TrimSpace(pod2ns2IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod2ns2IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod2ns2IPv6)
 
@@ -127,36 +116,27 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("2. Get IPs of the pod1ns1's secondary interface in first namespace.")
 		pod1ns1IPv4, pod1ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-1")
-		pod1ns1IPv4 = strings.TrimSpace(pod1ns1IPv4)
-		pod1ns1IPv6 = strings.TrimSpace(pod1ns1IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod1ns1IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod1ns1IPv6)
 
 		g.By("3. Get IPs of the pod2ns1's secondary interface in first namespace.")
 		pod2ns1IPv4, pod2ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-2")
-		pod2ns1IPv4 = strings.TrimSpace(pod2ns1IPv4)
-		pod2ns1IPv6 = strings.TrimSpace(pod2ns1IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod2ns1IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod2ns1IPv6)
 
 		g.By("4. Get IPs of the pod3ns1's secondary interface in first namespace.")
 		pod3ns1IPv4, pod3ns1IPv6 := getPodMultiNetwork(oc, ns1, "red-pod-1")
-		pod3ns1IPv4 = strings.TrimSpace(pod3ns1IPv4)
-		pod3ns1IPv6 = strings.TrimSpace(pod3ns1IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod3ns1IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod3ns1IPv6)
 
 		g.By("5. Get IPs of the pod1ns2's secondary interface in second namespace.")
 		pod1ns2IPv4, pod1ns2IPv6 := getPodMultiNetwork(oc, ns2, "blue-pod-3")
-		pod1ns2IPv4 = strings.TrimSpace(pod1ns2IPv4)
-		pod1ns2IPv6 = strings.TrimSpace(pod1ns2IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod1ns2IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod1ns2IPv6)
 
 		g.By("6. Get IPs of the pod2ns2's secondary interface in second namespace.")
 		pod2ns2IPv4, pod2ns2IPv6 := getPodMultiNetwork(oc, ns2, "red-pod-2")
-		pod2ns2IPv4 = strings.TrimSpace(pod2ns2IPv4)
-		pod2ns2IPv6 = strings.TrimSpace(pod2ns2IPv6)
+
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod2ns2IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod2ns2IPv6)
 
@@ -210,36 +190,27 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("2. Get IPs of the pod1ns1's secondary interface in first namespace.")
 		pod1ns1IPv4, pod1ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-1")
-		pod1ns1IPv4 = strings.TrimSpace(pod1ns1IPv4)
-		pod1ns1IPv6 = strings.TrimSpace(pod1ns1IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod1ns1IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod1ns1IPv6)
 
 		g.By("3. Get IPs of the pod2ns1's secondary interface in first namespace.")
 		pod2ns1IPv4, pod2ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-2")
-		pod2ns1IPv4 = strings.TrimSpace(pod2ns1IPv4)
-		pod2ns1IPv6 = strings.TrimSpace(pod2ns1IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod2ns1IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod2ns1IPv6)
 
 		g.By("4. Get IPs of the pod3ns1's secondary interface in first namespace.")
 		pod3ns1IPv4, pod3ns1IPv6 := getPodMultiNetwork(oc, ns1, "red-pod-1")
-		pod3ns1IPv4 = strings.TrimSpace(pod3ns1IPv4)
-		pod3ns1IPv6 = strings.TrimSpace(pod3ns1IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod3ns1IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod3ns1IPv6)
 
 		g.By("5. Get IPs of the pod1ns2's secondary interface in second namespace.")
 		pod1ns2IPv4, pod1ns2IPv6 := getPodMultiNetwork(oc, ns2, "blue-pod-3")
-		pod1ns2IPv4 = strings.TrimSpace(pod1ns2IPv4)
-		pod1ns2IPv6 = strings.TrimSpace(pod1ns2IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod1ns2IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod1ns2IPv6)
 
 		g.By("6. Get IPs of the pod2ns2's secondary interface in second namespace.")
 		pod2ns2IPv4, pod2ns2IPv6 := getPodMultiNetwork(oc, ns2, "red-pod-2")
-		pod2ns2IPv4 = strings.TrimSpace(pod2ns2IPv4)
-		pod2ns2IPv6 = strings.TrimSpace(pod2ns2IPv6)
+
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod2ns2IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod2ns2IPv6)
 
@@ -293,36 +264,26 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("2. Get IPs of the pod1ns1's secondary interface in first namespace.")
 		pod1ns1IPv4, pod1ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-1")
-		pod1ns1IPv4 = strings.TrimSpace(pod1ns1IPv4)
-		pod1ns1IPv6 = strings.TrimSpace(pod1ns1IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod1ns1IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod1ns1IPv6)
 
 		g.By("3. Get IPs of the pod2ns1's secondary interface in first namespace.")
 		pod2ns1IPv4, pod2ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-2")
-		pod2ns1IPv4 = strings.TrimSpace(pod2ns1IPv4)
-		pod2ns1IPv6 = strings.TrimSpace(pod2ns1IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod2ns1IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod2ns1IPv6)
 
 		g.By("4. Get IPs of the pod3ns1's secondary interface in first namespace.")
 		pod3ns1IPv4, pod3ns1IPv6 := getPodMultiNetwork(oc, ns1, "red-pod-1")
-		pod3ns1IPv4 = strings.TrimSpace(pod3ns1IPv4)
-		pod3ns1IPv6 = strings.TrimSpace(pod3ns1IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod3ns1IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod3ns1IPv6)
 
 		g.By("5. Get IPs of the pod1ns2's secondary interface in second namespace.")
 		pod1ns2IPv4, pod1ns2IPv6 := getPodMultiNetwork(oc, ns2, "blue-pod-3")
-		pod1ns2IPv4 = strings.TrimSpace(pod1ns2IPv4)
-		pod1ns2IPv6 = strings.TrimSpace(pod1ns2IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod1ns2IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod1ns2IPv6)
 
 		g.By("6. Get IPs of the pod2ns2's secondary interface in second namespace.")
 		pod2ns2IPv4, pod2ns2IPv6 := getPodMultiNetwork(oc, ns2, "red-pod-2")
-		pod2ns2IPv4 = strings.TrimSpace(pod2ns2IPv4)
-		pod2ns2IPv6 = strings.TrimSpace(pod2ns2IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod2ns2IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod2ns2IPv6)
 
@@ -384,15 +345,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("ipblock-net"))
 
-		g.By("4. Get node list")
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("5. Create six pods for ip range policy testing")
+		g.By("4. Create six pods for ip range policy testing")
 		pod1ns1 := testPodMultinetwork{
 			name:      "blue-pod-1",
 			namespace: ns1,
-			nodename:  nodeList.Items[0].Name,
+			nodename:  "worker-0",
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -403,7 +360,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod2ns1 := testPodMultinetwork{
 			name:      "blue-pod-2",
 			namespace: ns1,
-			nodename:  nodeList.Items[0].Name,
+			nodename:  "worker-0",
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -414,7 +371,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod3ns1 := testPodMultinetwork{
 			name:      "blue-pod-3",
 			namespace: ns1,
-			nodename:  nodeList.Items[0].Name,
+			nodename:  "worker-0",
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -425,7 +382,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod4ns1 := testPodMultinetwork{
 			name:      "blue-pod-4",
 			namespace: ns1,
-			nodename:  nodeList.Items[1].Name,
+			nodename:  "worker-1",
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -436,7 +393,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod5ns1 := testPodMultinetwork{
 			name:      "blue-pod-5",
 			namespace: ns1,
-			nodename:  nodeList.Items[1].Name,
+			nodename:  "worker-1",
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -447,7 +404,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod6ns1 := testPodMultinetwork{
 			name:      "blue-pod-6",
 			namespace: ns1,
-			nodename:  nodeList.Items[1].Name,
+			nodename:  "worker-1",
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -455,44 +412,32 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod6ns1.createTestPodMultinetwork(oc)
 		waitPodReady(oc, pod6ns1.namespace, pod6ns1.name)
 
-		g.By("6. Get IPs from all six pod's secondary interfaces")
+		g.By("5. Get IPs from all six pod's secondary interfaces")
 		pod1ns1IPv4, pod1ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-1")
-		pod1ns1IPv4 = strings.TrimSpace(pod1ns1IPv4)
-		pod1ns1IPv6 = strings.TrimSpace(pod1ns1IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod1ns1IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod1ns1IPv6)
 
 		pod2ns1IPv4, pod2ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-2")
-		pod2ns1IPv4 = strings.TrimSpace(pod2ns1IPv4)
-		pod2ns1IPv6 = strings.TrimSpace(pod2ns1IPv6)
 		e2e.Logf("The v4 address of pod2ns1is: %v", pod2ns1IPv4)
 		e2e.Logf("The v6 address of pod2ns1is: %v", pod2ns1IPv6)
 
 		pod3ns1IPv4, pod3ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-3")
-		pod3ns1IPv4 = strings.TrimSpace(pod3ns1IPv4)
-		pod3ns1IPv6 = strings.TrimSpace(pod3ns1IPv6)
 		e2e.Logf("The v4 address of pod3ns1is: %v", pod3ns1IPv4)
 		e2e.Logf("The v6 address of pod3ns1is: %v", pod3ns1IPv6)
 
 		pod4ns1IPv4, pod4ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-4")
-		pod4ns1IPv4 = strings.TrimSpace(pod4ns1IPv4)
-		pod4ns1IPv6 = strings.TrimSpace(pod4ns1IPv6)
 		e2e.Logf("The v4 address of pod4ns1is: %v", pod4ns1IPv4)
 		e2e.Logf("The v6 address of pod4ns1is: %v", pod4ns1IPv6)
 
 		pod5ns1IPv4, pod5ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-5")
-		pod5ns1IPv4 = strings.TrimSpace(pod5ns1IPv4)
-		pod5ns1IPv6 = strings.TrimSpace(pod5ns1IPv6)
 		e2e.Logf("The v4 address of pod5ns1is: %v", pod5ns1IPv4)
 		e2e.Logf("The v6 address of pod5ns1is: %v", pod5ns1IPv6)
 
 		pod6ns1IPv4, pod6ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-6")
-		pod6ns1IPv4 = strings.TrimSpace(pod6ns1IPv4)
-		pod6ns1IPv6 = strings.TrimSpace(pod6ns1IPv6)
 		e2e.Logf("The v4 address of pod6ns1is: %v", pod6ns1IPv4)
 		e2e.Logf("The v6 address of pod6ns1is: %v", pod6ns1IPv6)
 
-		g.By("7. All curl should pass before applying policy")
+		g.By("6. All curl should pass before applying policy")
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod2ns1IPv4, pod2ns1IPv6)
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod3ns1IPv4, pod3ns1IPv6)
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod4ns1IPv4, pod4ns1IPv6)
@@ -506,13 +451,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-6", pod5ns1IPv4, pod5ns1IPv6)
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-6", pod6ns1IPv4, pod6ns1IPv6)
 
-		g.By("8. Create ingress-ipBlock policy in ns1")
+		g.By("7. Create ingress-ipBlock policy in ns1")
 		oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", policyFile, "-n", ns1).Execute()
 		output, err3 := oc.AsAdmin().Run("get").Args("multi-networkpolicy", "-n", ns1).Output()
 		o.Expect(err3).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("ingress-ipblock"))
 
-		g.By("9. curl should fail for ip range 192.168.0.4-192.168.0.6 after applying policy")
+		g.By("8. curl should fail for ip range 192.168.0.4-192.168.0.6 after applying policy")
 		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-1", pod4ns1IPv4, pod4ns1IPv6)
 		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-1", pod5ns1IPv4, pod5ns1IPv6)
 		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-1", pod6ns1IPv4, pod6ns1IPv6)
@@ -525,12 +470,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-6", pod4ns1IPv4, pod4ns1IPv6)
 		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-6", pod5ns1IPv4, pod5ns1IPv6)
 
-		g.By("10. Delete ingress-ipBlock policy in ns1")
+		g.By("9. Delete ingress-ipBlock policy in ns1")
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns1, "multi-networkpolicy", "ingress-ipblock").Execute()
 		output1, _ := oc.AsAdmin().Run("get").Args("multi-networkpolicy", "-n", ns1).Output()
 		o.Expect(output1).NotTo(o.ContainSubstring("ingress-ipblock"))
 
-		g.By("11. All curl should pass again after deleting policy")
+		g.By("10. All curl should pass again after deleting policy")
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod4ns1IPv4, pod4ns1IPv6)
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod5ns1IPv4, pod5ns1IPv6)
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod6ns1IPv4, pod6ns1IPv6)
@@ -544,7 +489,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-6", pod5ns1IPv4, pod5ns1IPv6)
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-6", pod6ns1IPv4, pod6ns1IPv6)
 
-		g.By("12. Delete two namespaces and disable useMultiNetworkPolicy")
+		g.By("11. Delete two namespaces and disable useMultiNetworkPolicy")
 	})
 
 	// author: weliang@redhat.com
@@ -585,15 +530,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(nadErr).NotTo(o.HaveOccurred())
 		o.Expect(nadOutput).To(o.ContainSubstring("ipblock-net"))
 
-		g.By("4. Get node list")
-		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
-		o.Expect(nodeErr).NotTo(o.HaveOccurred())
-
-		g.By("5. Create six pods for egress ip range policy testing")
+		g.By("4. Create six pods for egress ip range policy testing")
 		pod1ns1 := testPodMultinetwork{
 			name:      "blue-pod-1",
 			namespace: ns1,
-			nodename:  nodeList.Items[0].Name,
+			nodename:  "worker-0",
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -604,7 +545,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod2ns1 := testPodMultinetwork{
 			name:      "blue-pod-2",
 			namespace: ns1,
-			nodename:  nodeList.Items[0].Name,
+			nodename:  "worker-0",
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -615,7 +556,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod3ns1 := testPodMultinetwork{
 			name:      "blue-pod-3",
 			namespace: ns1,
-			nodename:  nodeList.Items[0].Name,
+			nodename:  "worker-0",
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -626,7 +567,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod4ns1 := testPodMultinetwork{
 			name:      "blue-pod-4",
 			namespace: ns1,
-			nodename:  nodeList.Items[1].Name,
+			nodename:  "worker-1",
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -637,7 +578,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod5ns1 := testPodMultinetwork{
 			name:      "blue-pod-5",
 			namespace: ns1,
-			nodename:  nodeList.Items[1].Name,
+			nodename:  "worker-1",
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -648,7 +589,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod6ns1 := testPodMultinetwork{
 			name:      "blue-pod-6",
 			namespace: ns1,
-			nodename:  nodeList.Items[1].Name,
+			nodename:  "worker-1",
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -656,44 +597,32 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		pod6ns1.createTestPodMultinetwork(oc)
 		waitPodReady(oc, pod6ns1.namespace, pod6ns1.name)
 
-		g.By("6. Get IPs from all six pod's secondary interfaces")
+		g.By("5. Get IPs from all six pod's secondary interfaces")
 		pod1ns1IPv4, pod1ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-1")
-		pod1ns1IPv4 = strings.TrimSpace(pod1ns1IPv4)
-		pod1ns1IPv6 = strings.TrimSpace(pod1ns1IPv6)
 		e2e.Logf("The v4 address of pod1ns1is: %v", pod1ns1IPv4)
 		e2e.Logf("The v6 address of pod1ns1is: %v", pod1ns1IPv6)
 
 		pod2ns1IPv4, pod2ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-2")
-		pod2ns1IPv4 = strings.TrimSpace(pod2ns1IPv4)
-		pod2ns1IPv6 = strings.TrimSpace(pod2ns1IPv6)
 		e2e.Logf("The v4 address of pod2ns1is: %v", pod2ns1IPv4)
 		e2e.Logf("The v6 address of pod2ns1is: %v", pod2ns1IPv6)
 
 		pod3ns1IPv4, pod3ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-3")
-		pod3ns1IPv4 = strings.TrimSpace(pod3ns1IPv4)
-		pod3ns1IPv6 = strings.TrimSpace(pod3ns1IPv6)
 		e2e.Logf("The v4 address of pod3ns1is: %v", pod3ns1IPv4)
 		e2e.Logf("The v6 address of pod3ns1is: %v", pod3ns1IPv6)
 
 		pod4ns1IPv4, pod4ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-4")
-		pod4ns1IPv4 = strings.TrimSpace(pod4ns1IPv4)
-		pod4ns1IPv6 = strings.TrimSpace(pod4ns1IPv6)
 		e2e.Logf("The v4 address of pod4ns1is: %v", pod4ns1IPv4)
 		e2e.Logf("The v6 address of pod4ns1is: %v", pod4ns1IPv6)
 
 		pod5ns1IPv4, pod5ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-5")
-		pod5ns1IPv4 = strings.TrimSpace(pod5ns1IPv4)
-		pod5ns1IPv6 = strings.TrimSpace(pod5ns1IPv6)
 		e2e.Logf("The v4 address of pod5ns1is: %v", pod5ns1IPv4)
 		e2e.Logf("The v6 address of pod5ns1is: %v", pod5ns1IPv6)
 
 		pod6ns1IPv4, pod6ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-6")
-		pod6ns1IPv4 = strings.TrimSpace(pod6ns1IPv4)
-		pod6ns1IPv6 = strings.TrimSpace(pod6ns1IPv6)
 		e2e.Logf("The v4 address of pod6ns1is: %v", pod6ns1IPv4)
 		e2e.Logf("The v6 address of pod6ns1is: %v", pod6ns1IPv6)
 
-		g.By("7. All curl should pass before applying policy")
+		g.By("6. All curl should pass before applying policy")
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod2ns1IPv4, pod2ns1IPv6)
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod3ns1IPv4, pod3ns1IPv6)
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod4ns1IPv4, pod4ns1IPv6)
@@ -707,13 +636,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-6", pod5ns1IPv4, pod5ns1IPv6)
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-6", pod6ns1IPv4, pod6ns1IPv6)
 
-		g.By("8. Create egress-ipBlock policy in ns1")
-		oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", policyFile, "-n", ns1).Execute()
+		g.By("7. Create egress-ipBlock policy in ns1")
+		policyCreateErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", policyFile, "-n", ns1).Execute()
+		o.Expect(policyCreateErr).NotTo(o.HaveOccurred())
 		policyCreOutput, policyCreErr := oc.AsAdmin().Run("get").Args("multi-networkpolicy", "-n", ns1).Output()
 		o.Expect(policyCreErr).NotTo(o.HaveOccurred())
 		o.Expect(policyCreOutput).To(o.ContainSubstring("egress-ipblock"))
 
-		g.By("9. curl should fail for ip range 192.168.0.4-192.168.0.6 after applying policy")
+		g.By("8. curl should fail for ip range 192.168.0.4-192.168.0.6 after applying policy")
 		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-1", pod4ns1IPv4, pod4ns1IPv6)
 		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-1", pod5ns1IPv4, pod5ns1IPv6)
 		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-1", pod6ns1IPv4, pod6ns1IPv6)
@@ -726,13 +656,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-6", pod4ns1IPv4, pod4ns1IPv6)
 		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-6", pod5ns1IPv4, pod5ns1IPv6)
 
-		g.By("10. Delete egress-ipBlock policy in ns1")
-		oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns1, "multi-networkpolicy", "egress-ipblock").Execute()
+		g.By("9. Delete egress-ipBlock policy in ns1")
+		policyDeleteErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns1, "multi-networkpolicy", "egress-ipblock").Execute()
+		o.Expect(policyDeleteErr).NotTo(o.HaveOccurred())
 		policyDelOutput, policyDelErr := oc.AsAdmin().Run("get").Args("multi-networkpolicy", "-n", ns1).Output()
 		o.Expect(policyDelErr).NotTo(o.HaveOccurred())
 		o.Expect(policyDelOutput).NotTo(o.ContainSubstring("egress-ipblock"))
 
-		g.By("11. All curl should pass again after deleting policy")
+		g.By("10. All curl should pass again after deleting policy")
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod4ns1IPv4, pod4ns1IPv6)
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod5ns1IPv4, pod5ns1IPv6)
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod6ns1IPv4, pod6ns1IPv6)

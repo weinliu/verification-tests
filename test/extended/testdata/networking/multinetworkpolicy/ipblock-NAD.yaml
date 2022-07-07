@@ -7,6 +7,7 @@ spec:
       "cniVersion": "0.3.1",
       "type": "macvlan",
       "mode": "bridge",
+      "master": "enp1s0",
       "ipam": {
         "type": "whereabouts",
         "range": "192.168.10.0/29"

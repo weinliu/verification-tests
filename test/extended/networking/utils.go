@@ -18,7 +18,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
-	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	netutils "k8s.io/utils/net"
 )
 
@@ -1329,9 +1328,11 @@ func getPodMultiNetwork(oc *exutil.CLI, namespace string, podName string) (strin
 	cmd2 := "ip a sho net1 | awk 'NR==5{print $2}' |grep -Po '([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}'"
 	podIPv4, err := e2e.RunHostCmd(namespace, podName, cmd1)
 	o.Expect(err).NotTo(o.HaveOccurred())
+	pod2ns1IPv4 := strings.TrimSpace(podIPv4)
 	podIPv6, err1 := e2e.RunHostCmd(namespace, podName, cmd2)
 	o.Expect(err1).NotTo(o.HaveOccurred())
-	return podIPv4, podIPv6
+	pod2ns1IPv6 := strings.TrimSpace(podIPv6)
+	return pod2ns1IPv4, pod2ns1IPv6
 }
 
 //Pinging pod's secondary interfaces should pass
@@ -1366,11 +1367,6 @@ func curlPod2PodMultiNetworkFail(oc *exutil.CLI, namespaceSrc string, podNameSrc
 
 //This function will bring 2 namespaces, 5 pods and 2 NADs for all multus multinetworkpolicy cases
 func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo string) {
-	nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if len(nodeList.Items) < 2 {
-		g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
-	}
 
 	buildPruningBaseDir := exutil.FixturePath("testdata", "networking/multinetworkpolicy")
 	netAttachDefFile1 := filepath.Join(buildPruningBaseDir, "MultiNetworkPolicy-NAD1.yaml")
@@ -1398,7 +1394,7 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pod1ns1 := testPodMultinetwork{
 		name:      "blue-pod-1",
 		namespace: ns1,
-		nodename:  nodeList.Items[0].Name,
+		nodename:  "worker-0",
 		nadname:   "macvlan-nad1",
 		labelname: "blue-openshift",
 		template:  pingPodTemplate,
@@ -1410,7 +1406,7 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pod2ns1 := testPodMultinetwork{
 		name:      "blue-pod-2",
 		namespace: ns1,
-		nodename:  nodeList.Items[1].Name,
+		nodename:  "worker-1",
 		nadname:   "macvlan-nad1",
 		labelname: "blue-openshift",
 		template:  pingPodTemplate,
@@ -1422,7 +1418,7 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pod3ns1 := testPodMultinetwork{
 		name:      "red-pod-1",
 		namespace: ns1,
-		nodename:  nodeList.Items[0].Name,
+		nodename:  "worker-0",
 		nadname:   "macvlan-nad1",
 		labelname: "red-openshift",
 		template:  pingPodTemplate,
@@ -1447,7 +1443,7 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pod1ns2 := testPodMultinetwork{
 		name:      "blue-pod-3",
 		namespace: ns2,
-		nodename:  nodeList.Items[0].Name,
+		nodename:  "worker-0",
 		nadname:   "macvlan-nad2",
 		labelname: "blue-openshift",
 		template:  pingPodTemplate,
@@ -1459,7 +1455,7 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pod2ns2 := testPodMultinetwork{
 		name:      "red-pod-2",
 		namespace: ns2,
-		nodename:  nodeList.Items[0].Name,
+		nodename:  "worker-0",
 		nadname:   "macvlan-nad2",
 		labelname: "red-openshift",
 		template:  pingPodTemplate,
