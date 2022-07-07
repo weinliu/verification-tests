@@ -50,10 +50,6 @@ describe('(OCP-41858, OCP-45303, NETOBSERV) Console Network Policies form tests'
         cy.visit(nwpolicyPage.getProjectPolicyURL(operatingProject))
     })
 
-    afterEach(() => {
-        checkErrors();
-    });
-
     after(function () {
         projects.forEach((project) => {
             cy.deleteProject(project);

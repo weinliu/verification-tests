@@ -19,7 +19,6 @@ describe('Dynamic plugins features', () => {
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     });
     after(() => {
-        checkErrors();
         cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
         cy.exec(`oc patch console.operator cluster -p '{"spec":{"plugins":null}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
         cy.exec(`oc delete consoleplugin console-demo-plugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);

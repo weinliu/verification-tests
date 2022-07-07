@@ -8,11 +8,7 @@ describe('Operator Hub tests', () => {
         cy.exec(`echo '${JSON.stringify(customCatalog)}' | oc create -f - --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     });
-  
-    afterEach(() => {
-        checkErrors();
-    });
-  
+
     after(() => {
         cy.exec(`oc delete CatalogSource custom-catalogsource -n openshift-marketplace --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
         cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);

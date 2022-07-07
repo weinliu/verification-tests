@@ -23,10 +23,6 @@ describe('Notification drawer tests', () => {
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
   })
 
-  afterEach(() => {
-    checkErrors();
-  })
-
   after(() => {
     cy.exec(`oc delete project test-ocp45305 --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);

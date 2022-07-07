@@ -6,10 +6,6 @@ describe('Projects', () => {
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
   });
 
-  afterEach(() => {
-    checkErrors();
-  });
-
   after(() => {
     cy.logout;
   });
