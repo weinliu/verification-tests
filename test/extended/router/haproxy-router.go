@@ -709,4 +709,104 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).To(o.ContainSubstring("503 Service Unavailable"))
 		o.Expect(output).To(o.ContainSubstring("Custom error page:The requested application is not available"))
 	})
+
+	g.It("Author:aiyengar-Critical-41186-The Power-of-two balancing features switches to roundrobin mode for REEN/Edge/insecure/passthrough routes with multiple backends configured with weights", func() {
+		var (
+			baseDomain = getBaseDomain(oc)
+			defaultPod = getRouterPod(oc, "default")
+		)
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+		addSvc := filepath.Join(buildPruningBaseDir, "svc-additional-backend.yaml")
+
+		g.By("Deploy project with pods and service resources")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
+		createResourceFromFile(oc, oc.Namespace(), addSvc)
+		checkPodstate := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(checkPodstate, "project resource creation failed!")
+
+		g.By("Expose a edge/insecure/REEN/passthrough type routes via the services inside project")
+		edgeRoute := "route-edge" + "-" + oc.Namespace() + "." + baseDomain
+		reenRoute := "route-reen" + "-" + oc.Namespace() + "." + baseDomain
+		passthRoute := "route-passth" + "-" + oc.Namespace() + "." + baseDomain
+		exposeRouteEdge(oc, oc.Namespace(), "route-edge", "service-unsecure1", edgeRoute)
+		output, err := oc.Run("get").Args("route").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("route-edge"))
+		exposeRouteReen(oc, oc.Namespace(), "route-reen", "service-secure1", reenRoute)
+		output, err = oc.Run("get").Args("route").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("route-reen"))
+		exposeRoutePassth(oc, oc.Namespace(), "route-passth", "service-unsecure1", passthRoute)
+		output, err = oc.Run("get").Args("route").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("route-passth"))
+		exposeRoute(oc, oc.Namespace(), "svc/service-unsecure1")
+		output, err = oc.Run("get").Args("route").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("service-unsecure1"))
+
+		g.By("Check the default loadbalance algorithm inside proxy pod")
+		edgeBackend := "be_edge_http:" + project1 + ":route-edge"
+		reenBackend := "be_secure:" + project1 + ":route-reen"
+		insecBackend := "be_http:" + project1 + ":service-unsecure"
+		lbAlgoCheckEdge := readHaproxyConfig(oc, defaultPod, edgeBackend, "-A5", "balance")
+		o.Expect(lbAlgoCheckEdge).To(o.ContainSubstring("random"))
+		lbAlgoCheckReen := readHaproxyConfig(oc, defaultPod, reenBackend, "-A5", "balance")
+		o.Expect(lbAlgoCheckReen).To(o.ContainSubstring("random"))
+		lbAlgoCheckInsecure := readHaproxyConfig(oc, defaultPod, insecBackend, "-A5", "balance")
+		o.Expect(lbAlgoCheckInsecure).To(o.ContainSubstring("random"))
+
+		g.By("Add service as weighted backend to the routes and check the balancing algorithm value")
+		passthBackend := "be_tcp:" + project1 + ":route-passth"
+		_, edgerr := oc.Run("set").WithoutNamespace().Args("route-backends", "route-edge", "service-unsecure1=100", "service-unsecure2=150").Output()
+		o.Expect(edgerr).NotTo(o.HaveOccurred())
+		_, reenerr := oc.Run("set").WithoutNamespace().Args("route-backends", "route-reen", "service-secure1=100", "service-secure2=150").Output()
+		o.Expect(reenerr).NotTo(o.HaveOccurred())
+		_, passtherr := oc.Run("set").WithoutNamespace().Args("route-backends", "route-passth", "service-secure1=100", "service-secure2=150").Output()
+		o.Expect(passtherr).NotTo(o.HaveOccurred())
+		_, insecerr := oc.Run("set").WithoutNamespace().Args("route-backends", "service-unsecure1", "service-unsecure1=100", "service-unsecure2=150").Output()
+		o.Expect(insecerr).NotTo(o.HaveOccurred())
+		lbAlgoCheckEdge = readHaproxyConfig(oc, defaultPod, edgeBackend, "-A5", "balance")
+		o.Expect(lbAlgoCheckEdge).To(o.ContainSubstring("roundrobin"))
+		lbAlgoCheckReen = readHaproxyConfig(oc, defaultPod, reenBackend, "-A5", "balance")
+		o.Expect(lbAlgoCheckReen).To(o.ContainSubstring("roundrobin"))
+		lbAlgoCheckInsecure = readHaproxyConfig(oc, defaultPod, insecBackend, "-A5", "balance")
+		o.Expect(lbAlgoCheckInsecure).To(o.ContainSubstring("roundrobin"))
+		lbAlgoCheckPasthrough := readHaproxyConfig(oc, defaultPod, passthBackend, "-A5", "balance")
+		o.Expect(lbAlgoCheckPasthrough).To(o.ContainSubstring("roundrobin"))
+
+	})
+
+	g.It("Author:aiyengar-High-52738-The Power-of-two balancing features switches to source algorithm for passthrough routes", func() {
+		var (
+			baseDomain = getBaseDomain(oc)
+			defaultPod = getRouterPod(oc, "default")
+		)
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+
+		g.By("Deploy project with pods and service resources")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
+		checkPodstate := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(checkPodstate, "project resource creation failed!")
+
+		g.By("Expose a passthrough type routes via the services inside project")
+		passthRoute := "route-passth" + "-" + oc.Namespace() + "." + baseDomain
+		exposeRoutePassth(oc, oc.Namespace(), "route-passth", "service-secure1", passthRoute)
+		output, err := oc.Run("get").Args("route").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("route-passth"))
+
+		g.By("Check the default loadbalance algorithm inside proxy pod and check the default LB variable to confirm power-of-two is active")
+		rtrParamCheck := readPodEnv(oc, defaultPod, "openshift-ingress", "ROUTER_LOAD_BALANCE_ALGORITHM")
+		o.Expect(rtrParamCheck).To(o.ContainSubstring("random"))
+		passthBackend := "be_tcp:" + project1 + ":route-passth"
+		lbAlgoCheckPasthrough := readHaproxyConfig(oc, defaultPod, passthBackend, "-A5", "balance")
+		o.Expect(lbAlgoCheckPasthrough).To(o.ContainSubstring("source"))
+
+	})
+
 })

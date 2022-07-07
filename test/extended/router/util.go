@@ -847,3 +847,17 @@ func getRoutes(oc *exutil.CLI, ns string) string {
 	e2e.Logf("oc get route: %v", output)
 	return output
 }
+
+// Function to deploy passthough route with default ceritifcates
+func exposeRoutePassth(oc *exutil.CLI, ns, route, service, hostname string) {
+	_, err := oc.WithoutNamespace().Run("create").Args("-n", ns, "route", "passthrough", route, "--service="+service, "--hostname="+hostname).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Function to deploy Reencrypt route  with service serving certificate:
+// https://docs.openshift.com/container-platform/4.10/security/certificates/service-serving-certificate.html
+// To be only with web-server-signed-rc.yaml pod template.
+func exposeRouteReen(oc *exutil.CLI, ns, route, service, hostname string) {
+	_, err := oc.WithoutNamespace().Run("create").Args("-n", ns, "route", "reencrypt", route, "--service="+service, "--hostname="+hostname).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
