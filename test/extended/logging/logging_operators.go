@@ -15,6 +15,7 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -42,6 +43,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 
 	// author qitang@redhat.com
 	g.It("CPaasrunOnly-Author:qitang-Medium-42405-No configurations when forward to external ES with only username or password set in pipeline secret[Serial]", func() {
+		oc.SetupProject()
+		esProj := oc.Namespace()
+		ees := externalES{esProj, "6.8", "elasticsearch-server", true, true, true, "test", "redhat", "external-es", cloNS}
+		defer ees.remove(oc)
+		ees.deploy(oc)
+		eesURL := "https://" + ees.serverName + "." + ees.namespace + ".svc:9200"
+
 		g.By("create secret in openshift-logging namespace")
 		s := resource{"secret", "pipelinesecret", cloNS}
 		defer s.clear(oc)
@@ -52,27 +60,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 		clf := resource{"clusterlogforwarder", "instance", cloNS}
 		defer clf.clear(oc)
 		clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "42405.yaml")
-		err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate)
+		err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "PIPELINE_SECRET_NAME="+s.name, "-p", "URL="+eesURL)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("deploy EFK pods")
-		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+		g.By("deploy collector pods")
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 		cl := resource{"clusterlogging", "instance", cloNS}
 		defer cl.deleteClusterLogging(oc)
 		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-		WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
-
-		g.By("extract configmap/collector, and check if it is empty")
-		baseDir := exutil.FixturePath("testdata", "logging")
-		TestDataPath := filepath.Join(baseDir, "temp")
-		defer exec.Command("rm", "-r", TestDataPath).Output()
-		err = os.MkdirAll(TestDataPath, 0755)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", cloNS, "cm/collector", "--confirm", "--to="+TestDataPath).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		fileStat, err := os.Stat(filepath.Join(TestDataPath, "fluent.conf"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(fileStat.Size() == 0).To(o.BeTrue())
+		cl.WaitForResourceToAppear(oc)
+		clo, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "name=cluster-logging-operator"})
+		err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cloNS, clo.Items[0].Name, "--since=2m").Output()
+			if err != nil {
+				return false, err
+			}
+			return (strings.Contains(output, "Error reconciling clusterlogging instance") && strings.Contains(output, "Error reconciling clusterlogging instance") && strings.Contains(output, "Error reconciling clusterlogging instance")), nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Expected logs are not found in CLO")
+		_, err = oc.AdminKubeClient().CoreV1().ConfigMaps(cloNS).Get("collector", metav1.GetOptions{})
+		o.Expect(apierrors.IsNotFound(err)).Should(o.BeTrue())
 	})
 
 	// author qitang@redhat.com
@@ -142,7 +149,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		g.By("make ES disk usage > 95%")
 		podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		o.Expect(err).NotTo(o.HaveOccurred())
-		createFile := "dd if=/dev/urandom of=/elasticsearch/persistent/file.txt bs=1048576 count=20000"
+		createFile := "dd if=/dev/urandom of=/elasticsearch/persistent/file.txt bs=1048576 count=19000"
 		_, _ = e2e.RunHostCmd(cloNS, podList.Items[0].Name, createFile)
 		checkDiskUsage := "es_util --query=_cat/nodes?h=h,disk.used_percent"
 		stdout, err := e2e.RunHostCmdWithRetries(cloNS, podList.Items[0].Name, checkDiskUsage, 3*time.Second, 30*time.Second)
@@ -561,8 +568,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 			g.By(fmt.Sprintf("upgrade CLO to %s", currentCloCSV))
 			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", cloNS, "sub/"+preCLO.PackageName, "-p", "{\"spec\": {\"source\": \"qe-app-registry\"}}", "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			//add workaround for bz 2002276
-			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-n", "openshift-marketplace", "-l", "olm.catalogSource=qe-app-registry").Execute()
 			checkResource(oc, true, true, currentCloCSV, []string{"sub", preCLO.PackageName, "-n", preCLO.Namespace, "-ojsonpath={.status.currentCSV}"})
 			WaitForDeploymentPodsToBeReady(oc, preCLO.Namespace, preCLO.OperatorName)
 			upgraded = true
@@ -571,15 +576,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 			g.By(fmt.Sprintf("upgrade EO to %s", currentEoCSV))
 			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", eoNS, "sub/"+preEO.PackageName, "-p", "{\"spec\": {\"source\": \"qe-app-registry\"}}", "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			//add workaround for bz 2002276
-			_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-n", "openshift-marketplace", "-l", "olm.catalogSource=qe-app-registry").Execute()
 			checkResource(oc, true, true, currentEoCSV, []string{"sub", preEO.PackageName, "-n", preEO.Namespace, "-ojsonpath={.status.currentCSV}"})
 			WaitForDeploymentPodsToBeReady(oc, preEO.Namespace, preEO.OperatorName)
 			upgraded = true
 		}
 
 		if upgraded {
-			g.By("waiting for the EFK pods to be ready after upgrade")
+			g.By("waiting for the ECK pods to be ready after upgrade")
 			WaitForECKPodsToBeReady(oc, cloNS)
 			checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", preCLO.Namespace, "-ojsonpath={.status.cluster.status}"})
 			//check PVC count, it should be equal to ES node count
@@ -600,15 +603,15 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 
 	// author: qitang@redhat.com
 	g.It("Longduration-CPaasrunOnly-Author:qitang-Medium-40508-upgrade from prior version to current version[Serial][Slow]", func() {
-		// to add logging 5.3, create a new catalog source with image: quay.io/openshift-qe-optional-operators/ocp4-index:latest
+		// to add logging 5.4, create a new catalog source with image: quay.io/openshift-qe-optional-operators/ocp4-index:latest
 		catsrcTemplate := exutil.FixturePath("testdata", "logging", "subscription", "catsrc.yaml")
 		catsrc := resource{"catsrc", "logging-upgrade-" + getRandomString(), "openshift-marketplace"}
 		defer catsrc.clear(oc)
 		catsrc.applyFromTemplate(oc, "-f", catsrcTemplate, "-n", catsrc.namespace, "-p", "NAME="+catsrc.name, "-p", "IMAGE=quay.io/openshift-qe-optional-operators/ocp4-index:latest")
 		waitForPodReadyWithLabel(oc, catsrc.namespace, "olm.catalogSource="+catsrc.name)
 
-		// for 5.4, test upgrade from 5.3 to 5.4
-		preSource := CatalogSourceObjects{"stable-5.3", catsrc.name, catsrc.namespace}
+		// for 5.5, test upgrade from 5.4 to 5.5
+		preSource := CatalogSourceObjects{"stable-5.4", catsrc.name, catsrc.namespace}
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", preSource.Channel))
 		preCLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, preSource}
 		preEO := SubscriptionObjects{eo, eoNS, AllNamespaceOG, subTemplate, eoPackageName, preSource}
@@ -627,7 +630,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		WaitForECKPodsToBeReady(oc, preCLO.Namespace)
 
 		//change channel, and wait for the new operators to be ready
-		var source = CatalogSourceObjects{"stable-5.4", "qe-app-registry", "openshift-marketplace"}
+		var source = CatalogSourceObjects{"stable-5.5", "qe-app-registry", "openshift-marketplace"}
 		//change channel, and wait for the new operators to be ready
 		version := strings.Split(source.Channel, "-")[1]
 		g.By(fmt.Sprintf("upgrade CLO&EO to %s", source.Channel))
@@ -635,9 +638,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", eoNS, "sub/"+preEO.PackageName, "-p", "{\"spec\": {\"channel\": \""+source.Channel+"\", \"source\": \""+source.SourceName+"\", \"sourceNamespace\": \""+source.SourceNamespace+"\"}}", "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-
-		//add workaround for bz 2002276
-		_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-n", "openshift-marketplace", "-l", "olm.catalogSource="+source.SourceName).Execute()
 
 		checkResource(oc, true, false, version, []string{"sub", preCLO.PackageName, "-n", preCLO.Namespace, "-ojsonpath={.status.currentCSV}"})
 		cloCurrentCSV, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", preCLO.Namespace, preCLO.PackageName, "-ojsonpath={.status.currentCSV}").Output()
@@ -651,7 +651,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		checkResource(oc, true, true, "Succeeded", []string{"csv", eoCurrentCSV, "-n", preEO.Namespace, "-ojsonpath={.status.phase}"})
 		WaitForDeploymentPodsToBeReady(oc, preEO.Namespace, preEO.OperatorName)
 
-		g.By("waiting for the EFK pods to be ready after upgrade")
+		g.By("waiting for the ECK pods to be ready after upgrade")
 		WaitForECKPodsToBeReady(oc, cloNS)
 		checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", preCLO.Namespace, "-ojsonpath={.status.cluster.status}"})
 

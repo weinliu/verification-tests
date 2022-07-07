@@ -26,8 +26,10 @@ objects:
       module(load="imudp" TimeRequery="500")
       input(type="imtcp" port="6514")
       input(type="imudp" port="514")
-      :msg, contains, "app-write" /var/log/clf/app-container.log
-      :msg, contains, "infra-write" /var/log/clf/infra-container.log
+      :msg, contains, "docker"{
+        if $msg contains "infrastructure" then /var/log/clf/infra-container.log
+        if $msg contains "application" then /var/log/clf/app-container.log
+      }
       :msg, contains, "_STREAM_ID" /var/log/clf/infra.log
       :msg, contains, "auditID" /var/log/clf/audit.log
 parameters:

@@ -241,7 +241,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "ES_NODE_COUNT=1", "-p", "REDUNDANCY_POLICY=ZeroRedundancy", "-p", "TOTAL_LIMIT_SIZE=1000G")
 
-			g.By("Waiting for the EFK pods to be ready...")
+			g.By("Waiting for the ECK pods to be ready...")
 			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("Check Fluentd pod logs when Fluentd buffer totalLimitSize is set more than available space")
@@ -272,7 +272,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Medium-49212-Logging should work as usual when secrets deleted or regenerated[Serial]", func() {
-			g.By("deploy EFK pods")
+			g.By("deploy ECK pods")
 			sc, err := getStorageClassName(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")

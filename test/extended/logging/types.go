@@ -109,8 +109,8 @@ type SearchResult struct {
 					MasterURL        string   `json:"master_url"`
 					PodID            string   `json:"pod_id"`
 					NamespaceLabels  struct {
-						KubernetesIOMetadataName     string `json:"kubernetes_io/metadata_name,omitempty"`
-						OpenshiftIOClusterMonitoring string `json:"openshift_io/cluster-monitoring,omitempty"`
+						KubernetesIOMetadataName     string `json:"kubernetes.io/metadata.name,omitempty"`
+						OpenshiftIOClusterMonitoring string `json:"openshift.io/cluster-monitoring,omitempty"`
 					} `json:"namespace_labels,omitempty"`
 					ContainerImage string `json:"container_image"`
 					NamespaceName  string `json:"namespace_name"`

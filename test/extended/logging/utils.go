@@ -761,8 +761,7 @@ func chkMustGather(oc *exutil.CLI, ns string) {
 		cloImgDir + "/cluster-logging/es",
 		cloImgDir + "/cluster-logging/install",
 		cloImgDir + "/cluster-logging/kibana/",
-		cloImgDir + "/cluster-logging/clo/clf-events.yaml",
-		cloImgDir + "/cluster-logging/clo/clo-events.yaml",
+		cloImgDir + "/cluster-logging/clo/openshift-logging-events.yaml",
 	}
 
 	for _, v := range checkPath {

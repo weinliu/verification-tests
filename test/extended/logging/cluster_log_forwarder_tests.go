@@ -88,13 +88,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			// check data in ES for QA namespace
 			g.By("check logs in ES pod for QA namespace in CLF")
-			logs := searchDocByQuery(oc, cloNS, podList.Items[0].Name, "app", "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+appProjQa+"\"}}}")
-			o.Expect(logs.Hits.DataHits[0].Source.Kubernetes.NamespaceLabels.KubernetesIOMetadataName).Should(o.Equal(appProjQa))
+			count1, err := getDocCountByQuery(oc, cloNS, podList.Items[0].Name, "app", "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+appProjQa+"\"}}}")
+			o.Expect(count1 > 0).Should(o.BeTrue())
 
 			//check that no data exists for the other Dev namespace - Negative test
 			g.By("check logs in ES pod for Dev namespace in CLF")
-			count, _ := getDocCountByQuery(oc, cloNS, podList.Items[0].Name, "app-0000", "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+appProjDev+"\"}}}")
-			o.Expect(count).Should(o.Equal(0))
+			count2, _ := getDocCountByQuery(oc, cloNS, podList.Items[0].Name, "app-0000", "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+appProjDev+"\"}}}")
+			o.Expect(count2).Should(o.Equal(0))
 
 		})
 
