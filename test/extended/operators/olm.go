@@ -1762,14 +1762,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("Author:bandrade-Medium-24771-OLM should support for user defined ServiceAccount for OperatorGroup", func() {
-		exutil.SkipARM64(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		saRoles := filepath.Join(buildPruningBaseDir, "scoped-sa-roles.yaml")
 		oc.SetupProject()
 		namespace := oc.Namespace()
 		ogSAtemplate := filepath.Join(buildPruningBaseDir, "operatorgroup-serviceaccount.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		csv := "etcdoperator.v0.9.4"
+		csv := "learn-operator.v0.0.3"
 		sa := "scoped-24771"
 
 		// create the namespace
@@ -1801,16 +1800,16 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		g.By("4) Create a Subscription")
 		sub := subscriptionDescription{
-			subName:                "etcd",
+			subName:                "sub-24771",
 			namespace:              namespace,
-			catalogSourceName:      "community-operators",
+			catalogSourceName:      "qe-app-registry",
 			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "singlenamespace-alpha",
+			channel:                "beta",
 			ipApproval:             "Automatic",
-			operatorPackage:        "etcd",
-			singleNamespace:        true,
+			operatorPackage:        "learn",
+			startingCSV:            "learn-operator.v0.0.3",
+			singleNamespace:        false,
 			template:               subTemplate,
-			startingCSV:            csv,
 		}
 		sub.createWithoutCheck(oc, itName, dr)
 
@@ -1896,7 +1895,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		namespace := oc.Namespace()
 		ogSAtemplate := filepath.Join(buildPruningBaseDir, "operatorgroup-serviceaccount.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		csv := "etcdoperator.v0.9.4"
+		csv := "learn-operator.v0.0.3"
 		sa := "scoped-24772"
 
 		// create the namespace
@@ -1928,16 +1927,16 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		g.By("4) Create a Subscription")
 		sub := subscriptionDescription{
-			subName:                "etcd",
+			subName:                "sub-24772",
 			namespace:              namespace,
-			catalogSourceName:      "community-operators",
+			catalogSourceName:      "qe-app-registry",
 			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "singlenamespace-alpha",
+			channel:                "beta",
 			ipApproval:             "Automatic",
-			operatorPackage:        "etcd",
-			singleNamespace:        true,
+			operatorPackage:        "learn",
+			startingCSV:            "learn-operator.v0.0.3",
+			singleNamespace:        false,
 			template:               subTemplate,
-			startingCSV:            csv,
 		}
 		sub.createWithoutCheck(oc, itName, dr)
 
@@ -1961,7 +1960,6 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("Author:bandrade-Medium-24886-OLM should support for user defined ServiceAccount permission changes", func() {
-		exutil.SkipARM64(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		saRoles := filepath.Join(buildPruningBaseDir, "scoped-sa-etcd.yaml")
 		oc.SetupProject()
@@ -1969,7 +1967,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		ogTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		ogSAtemplate := filepath.Join(buildPruningBaseDir, "operatorgroup-serviceaccount.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		csv := "etcdoperator.v0.9.4"
+		csv := "learn-operator.v0.0.3"
 		sa := "scoped-24886"
 
 		// create the namespace
@@ -1996,16 +1994,16 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		g.By("3) Create a Subscription")
 		sub := subscriptionDescription{
-			subName:                "etcd",
+			subName:                "sub-24886",
 			namespace:              namespace,
-			catalogSourceName:      "community-operators",
+			catalogSourceName:      "qe-app-registry",
 			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "singlenamespace-alpha",
+			channel:                "beta",
 			ipApproval:             "Automatic",
-			operatorPackage:        "etcd",
-			singleNamespace:        true,
+			operatorPackage:        "learn",
+			startingCSV:            "learn-operator.v0.0.3",
+			singleNamespace:        false,
 			template:               subTemplate,
-			startingCSV:            csv,
 		}
 		sub.create(oc, itName, dr)
 
