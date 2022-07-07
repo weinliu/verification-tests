@@ -1425,4 +1425,61 @@ var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
 		o.Expect(patchErr).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("invalid: egressIPs"))
 	})
+
+	// author: jechen@redhat.com
+	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-47466-High-47467-Related iptables/openflow and egressIP to node's primary NIC will be added/removed once egressIP is added/removed to/from netnamespace. [Disruptive]", func() {
+
+		g.By("1. Get list of nodes, choose first node as egressNode, get subnet and 1 unused ip address from the egressNode")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		egressNode := nodeList.Items[0].Name
+		sub := getIfaddrFromNode(egressNode, oc)
+
+		// Find 1 unused IP from the egress node
+		freeIPs := findUnUsedIPsOnNode(oc, egressNode, sub, 1)
+		o.Expect(len(freeIPs) == 1).Should(o.BeTrue())
+
+		g.By("2. Patch the egressIP to the egressIP node")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
+
+		g.By("3. Create first namespace, patch the egressIP to the namespace")
+		ns := oc.Namespace()
+
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
+
+		g.By("4. Verify that iptable rule is added on egressNode")
+		IPtableCmd := "iptables-save  |grep " + freeIPs[0]
+		CmdOutput, CmdErr := execCommandInSDNPodOnNode(oc, egressNode, IPtableCmd)
+		o.Expect(CmdErr).NotTo(o.HaveOccurred())
+		o.Expect(CmdOutput).Should(
+			o.And(
+				o.ContainSubstring("OPENSHIFT-MASQUERADE"),
+				o.ContainSubstring("OPENSHIFT-FIREWALL-ALLOW")))
+
+		g.By("5. Verify that openflow rule is added on egressNode")
+		OpenflowCmd := "ovs-ofctl dump-flows br0 -O OpenFlow13  |grep table=101"
+		CmdOutput, CmdErr = execCommandInSDNPodOnNode(oc, egressNode, OpenflowCmd)
+		o.Expect(CmdErr).NotTo(o.HaveOccurred())
+		o.Expect(CmdOutput).Should(o.ContainSubstring("reg0=0x"))
+
+		g.By("6. Verify that the egressIP is added to egressNode's primary NIC")
+		checkPrimaryNIC(oc, egressNode, freeIPs[0], true)
+
+		g.By("7.Unpatch egressIP to the namespace, verify iptable rule is removed from egressNode")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+		CmdOutput, CmdErr = execCommandInSDNPodOnNode(oc, egressNode, IPtableCmd)
+		o.Expect(CmdErr).To(o.HaveOccurred())
+
+		g.By("8.Verify openflow rule is removed from egressNode")
+		CmdOutput, CmdErr = execCommandInSDNPodOnNode(oc, egressNode, OpenflowCmd)
+		o.Expect(CmdErr).NotTo(o.HaveOccurred())
+		e2e.Logf("\n Get CmdOutput as %v \n", CmdOutput)
+		o.Expect(CmdOutput).ShouldNot(o.ContainSubstring("reg0=0x"))
+
+		g.By("9.Verify egressIP is also removed from egressNode's primary NIC")
+		checkPrimaryNIC(oc, egressNode, freeIPs[0], false)
+	})
 })
