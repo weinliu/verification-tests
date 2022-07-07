@@ -676,6 +676,10 @@ github.com/openshift/onsi-ginkgo v1.4.1-0.20190902091932-d0603c19fe78 h1:2+/NEJO
 github.com/openshift/onsi-ginkgo v1.4.1-0.20190902091932-d0603c19fe78/go.mod h1:azqkkH4Vpp9A579CC26hicol/wViXag9rOwElif6v9E=
 github.com/openshift/opencontainers-runc v1.0.0-rc4.0.20190926164333-b942ff4cc6f8 h1:jTJxPtkl1HmKHC0jmAE1tM66ns7VucuFZiaACncbAh4=
 github.com/openshift/opencontainers-runc v1.0.0-rc4.0.20190926164333-b942ff4cc6f8/go.mod h1:HPgCLT2yw6clkrh3z6KnZbLeBIfmP+y73vSnU4SuzZ8=
+github.com/openshift/openshift-tests v0.0.0-20210916082130-4fca21c38ee6 h1:rGS/saDhr1UOV5HLUqRasX5FlKKcUVl1hU27ZjN9AcE=
+github.com/openshift/openshift-tests v0.0.0-20210916082130-4fca21c38ee6/go.mod h1:aVIbnkWbEcnHw4KVA6wjlyF4dcmPBcOqUiGlRmQzH0w=
+github.com/openshift/openshift-tests v0.0.0-20220601033601-549bac00f683 h1:3uV+OcZnd78kaKov5zCngDxPuTZ35a4jlNRWjUWX0z0=
+github.com/openshift/openshift-tests v0.0.0-20220601033601-549bac00f683/go.mod h1:Yz2/ltJjy4UV41ZxElCoX8P5058Gp/nACUMCesE60sg=
 github.com/openshift/openshift-tests v0.0.0-20220615161834-b10b15889908 h1:6qhIP9zyjs/N5jjSZuaCam5tgYUrmve2hBjtE4tL61M=
 github.com/openshift/openshift-tests v0.0.0-20220615161834-b10b15889908/go.mod h1:Yz2/ltJjy4UV41ZxElCoX8P5058Gp/nACUMCesE60sg=
 github.com/pborman/uuid v1.2.0 h1:J7Q5mO4ysT1dv8hyrUGHb9+ooztCXu1D8MY8DZYsu3g=

@@ -1,8 +1,9 @@
-// Package kata operator tests
+//Package kata operator tests
 package kata
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -40,14 +41,19 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		template:               subTemplate,
 	}
 
-	if subscription.channel == "stable-1.2" {
-		kcMonitorImageName = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:1.2.0"
+	operatorVer, sub := getVersionInfo(oc, subscription, opNamespace, subTemplate)
+	if os.Getenv("cmMsg") != "" { //env var cmMsg will have no value if configmap is not found
+		subscription = sub
 	}
+
+	kcMonitorImageName = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:" + operatorVer
 
 	g.BeforeEach(func() {
 		// Creating/deleting kataconfig reboots all worker node and extended-platform-tests may timeout after 20m.
 		// add --timeout 50m
 		// tag with [Slow][Serial][Disruptive] when deleting/recreating kataconfig
+		// getting versions
+
 		var (
 			err error
 			msg string

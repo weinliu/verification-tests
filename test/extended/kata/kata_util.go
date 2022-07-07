@@ -1,9 +1,10 @@
-// Package kata operator tests
+//Package kata operator tests
 package kata
 
 import (
 	"fmt"
 	"math/rand"
+	"os"
 	"strings"
 	"time"
 
@@ -26,7 +27,7 @@ type subscriptionDescription struct {
 }
 
 var (
-	snooze time.Duration = 1200
+	snooze time.Duration = 2400
 )
 
 // author: tbuskey@redhat.com,abhbaner@redhat.com
@@ -193,6 +194,34 @@ func deleteKataConfig(oc *exutil.CLI, kcName string) (msg string, err error) {
 	return msg, err
 }
 
+func getVersionInfo(oc *exutil.CLI, sub subscriptionDescription, opNamespace, subTemplate string) (string, subscriptionDescription) {
+
+	var operatorVer = "1.2.0" //default val
+	ConfigMapFound, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap/example-config-env", "-n", "default").Output()
+	//If CM exists it means its a Jenkins CI
+	if strings.Contains(ConfigMapFound, "example-config-env") && strings.Contains(ConfigMapFound, "4") {
+		configMap, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("configmap/example-config-env", "-n", "default").Output()
+		versions := strings.Split(configMap, "\n")
+		ocpMajorVer := versions[9]
+		ocpMinorVer := versions[12]
+		channelName := versions[15]
+		operatorVer := versions[18]
+		e2e.Logf("ocpMajorVer : %s", ocpMajorVer)
+		e2e.Logf("ocpMinorVer : %s", ocpMinorVer)
+		e2e.Logf("operatorVer : %s", operatorVer)
+		e2e.Logf("Channel : %s", channelName)
+		//for CI runs - catsrcName set
+		catsrcName := "kataci-index"
+		e2e.Logf("catalogSourceName : %s", catsrcName)
+		os.Setenv("cmMsg", "True")
+		sub.catalogSourceName = catsrcName
+		sub.channel = channelName
+		return operatorVer, sub
+	}
+
+	return operatorVer, sub
+}
+
 func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg string, err error) {
 	var (
 		csvName string
@@ -232,4 +261,5 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status in ns %v: %v %v", csvName, sub.namespace, msg, err))
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "--no-headers").Output()
 	return msg, err
+
 }
