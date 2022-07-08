@@ -145,14 +145,9 @@ func chkPodsStatus(oc *exutil.CLI, ns, lable string) {
 
 //clear specified sriovnetworknodepolicy
 func rmSriovNetworkPolicy(oc *exutil.CLI, policyname, ns string) {
-	sriovPolicyList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("SriovNetworkNodePolicy", "-n", ns).Output()
+	_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("SriovNetworkNodePolicy", policyname, "-n", ns, "--ignore-not-found").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if strings.Contains(sriovPolicyList, policyname) {
-		_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("SriovNetworkNodePolicy", policyname, "-n", ns).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForSriovPolicyReady(oc, ns)
-	}
-	e2e.Logf("SriovNetworkPolicy already be removed")
+	waitForSriovPolicyReady(oc, ns)
 }
 
 //clear specified sriovnetwork
@@ -192,8 +187,7 @@ func (pod *sriovPod) waitForPodReady(oc *exutil.CLI) {
 }
 
 // Wait for sriov network policy ready
-func waitForSriovPolicyReady(oc *exutil.CLI, ns string) bool {
-	res := false
+func waitForSriovPolicyReady(oc *exutil.CLI, ns string) {
 	err := wait.Poll(20*time.Second, 20*time.Minute, func() (bool, error) {
 		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sriovnetworknodestates", "-n", ns, "-o=jsonpath={.items[*].status.syncStatus}").Output()
 		e2e.Logf("the status of sriov policy is %v", status)
@@ -208,11 +202,9 @@ func waitForSriovPolicyReady(oc *exutil.CLI, ns string) bool {
 				return false, nil
 			}
 		}
-		res = true
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "sriovnetworknodestates is not ready")
-	return res
 }
 
 //check interface on pod

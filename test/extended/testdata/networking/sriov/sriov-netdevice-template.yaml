@@ -1,0 +1,24 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: sriovpod-template
+objects:
+- kind: Pod
+  apiVersion: v1
+  metadata:
+    name: ${PODNAME}
+    namespace: "${NAMESPACE}"
+    labels:
+      name: sriov-netdevice
+    annotations:
+      k8s.v1.cni.cncf.io/networks: ${SRIOVNETNAME}
+  spec:
+    containers:
+    - name: sriovnet
+      image: quay.io/openshifttest/hello-sdn@sha256:2af5b5ec480f05fda7e9b278023ba04724a3dd53a296afcd8c13f220dec52197
+      imagePullPolicy: IfNotPresent
+
+parameters:
+- name: PODNAME
+- name: SRIOVNETNAME
+- name: NAMESPACE
