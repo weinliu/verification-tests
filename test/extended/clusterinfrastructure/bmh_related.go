@@ -33,4 +33,26 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			e2e.Failf("baremetal hosts not provisioned properly")
 		}
 	})
+	// author: miyadav@redhat.com
+	g.It("Author:miyadav-Critical-32198-Verify all master bmh are 'externally provisioned'", func() {
+		g.By("Check if baremetal cluster")
+		if !(iaasPlatform == "baremetal") {
+			e2e.Logf("Cluster is: %s", iaasPlatform)
+			g.Skip("For Non-baremetal cluster , this is not supported!")
+		}
+		g.By("Verify all master bmh are 'externally provisioned'")
+		bmhNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("baremetalhosts", "-n", machineAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, bmhMastersWorkers := range strings.Fields(bmhNames) {
+			if strings.Contains(bmhMastersWorkers, "master") {
+				bmhMasters := bmhMastersWorkers
+				g.By("Check if master bmh is externally provisioned")
+				state, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("baremetalhosts", bmhMasters, "-n", machineAPINamespace, "-o=jsonpath={.spec.externallyProvisioned}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if state != "true" {
+					e2e.Failf("baremetal master not provisioned externally")
+				}
+			}
+		}
+	})
 })
