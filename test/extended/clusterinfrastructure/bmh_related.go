@@ -1,0 +1,36 @@
+package clusterinfrastructure
+
+import (
+	"strings"
+
+	g "github.com/onsi/ginkgo"
+	o "github.com/onsi/gomega"
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
+)
+
+var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
+	defer g.GinkgoRecover()
+	var (
+		oc           = exutil.NewCLI("cluster-baremetal-operator", exutil.KubeConfigPath())
+		iaasPlatform string
+	)
+	g.BeforeEach(func() {
+		iaasPlatform = exutil.CheckPlatform(oc)
+	})
+	// author: miyadav@redhat.com
+	g.It("Author:miyadav-Critical-29147-Check that all the baremetalhosts are up and running", func() {
+		g.By("Check if baremetal cluster")
+		if !(iaasPlatform == "baremetal") {
+			e2e.Logf("Cluster is: %s", iaasPlatform)
+			g.Skip("For Non-baremetal cluster , this is not supported!")
+		}
+		g.By("Check if baremetal hosts are up and running")
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("baremetalhosts", "--all-namespaces", "-o=jsonpath={.items[*].status.poweredOn}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(status, "false") {
+			g.By("Issue with bmh provisioning please review")
+			e2e.Failf("baremetal hosts not provisioned properly")
+		}
+	})
+})
