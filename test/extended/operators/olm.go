@@ -1768,6 +1768,19 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		namespace := oc.Namespace()
 		ogSAtemplate := filepath.Join(buildPruningBaseDir, "operatorgroup-serviceaccount.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+
+		sub := subscriptionDescription{
+			subName:                "sub-24771",
+			namespace:              namespace,
+			catalogSourceName:      "qe-app-registry",
+			catalogSourceNamespace: "openshift-marketplace",
+			channel:                "beta",
+			ipApproval:             "Automatic",
+			operatorPackage:        "learn",
+			startingCSV:            "learn-operator.v0.0.3",
+			singleNamespace:        false,
+			template:               subTemplate,
+		}
 		csv := "learn-operator.v0.0.3"
 		sa := "scoped-24771"
 
@@ -1788,45 +1801,41 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		itName := g.CurrentGinkgoTestDescription().TestText
 		dr.addIr(itName)
 
-		g.By("1) Create the namespace")
-		project.createwithCheck(oc, itName, dr)
-
-		g.By("2) Create the OperatorGroup")
-		og.createwithCheck(oc, itName, dr)
-
-		g.By("3) Create the service account")
-		_, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", namespace).Output()
+		g.By("1) check if this operator ready for installing")
+		e2e.Logf("Check if %v exists in the %v catalog", sub.operatorPackage, sub.catalogSourceName)
+		exists, err := clusterPackageExists(oc, sub)
+		if !exists {
+			g.Skip("SKIP:PackageMissing learn does not exist in catalog qe-app-registry")
+		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("4) Create a Subscription")
-		sub := subscriptionDescription{
-			subName:                "sub-24771",
-			namespace:              namespace,
-			catalogSourceName:      "qe-app-registry",
-			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "beta",
-			ipApproval:             "Automatic",
-			operatorPackage:        "learn",
-			startingCSV:            "learn-operator.v0.0.3",
-			singleNamespace:        false,
-			template:               subTemplate,
-		}
+		g.By("2) Create the namespace")
+		project.createwithCheck(oc, itName, dr)
+
+		g.By("3) Create the OperatorGroup")
+		og.createwithCheck(oc, itName, dr)
+
+		g.By("4) Create the service account")
+		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("5) Create a Subscription")
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("5) The install plan is Failed")
+		g.By("6) The install plan is Failed")
 		installPlan := getResourceNoEmpty(oc, asAdmin, withoutNamespace, "installplan", "-n", sub.namespace, "-o=jsonpath={.items..metadata.name}")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "InstallComponentFailed", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.conditions..reason}"}).check(oc)
 
-		g.By("6) Grant the proper permissions to the service account")
+		g.By("7) Grant the proper permissions to the service account")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f", saRoles, "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("7) Recreate the Subscription")
+		g.By("8) Recreate the Subscription")
 		sub.delete(itName, dr)
 		sub.deleteCSV(itName, dr)
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("8) Checking the state of CSV")
+		g.By("9) Checking the state of CSV")
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", csv, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 	})
@@ -1897,6 +1906,18 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		csv := "learn-operator.v0.0.3"
 		sa := "scoped-24772"
+		sub := subscriptionDescription{
+			subName:                "sub-24772",
+			namespace:              namespace,
+			catalogSourceName:      "qe-app-registry",
+			catalogSourceNamespace: "openshift-marketplace",
+			channel:                "beta",
+			ipApproval:             "Automatic",
+			operatorPackage:        "learn",
+			startingCSV:            "learn-operator.v0.0.3",
+			singleNamespace:        false,
+			template:               subTemplate,
+		}
 
 		// create the namespace
 		project := projectDescription{
@@ -1915,45 +1936,42 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		itName := g.CurrentGinkgoTestDescription().TestText
 		dr.addIr(itName)
 
-		g.By("1) Create the namespace")
-		project.createwithCheck(oc, itName, dr)
-
-		g.By("2) Create the OperatorGroup")
-		og.createwithCheck(oc, itName, dr)
-
-		g.By("3) Create the service account")
-		_, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", namespace).Output()
+		g.By("1) check if this operator ready for installing")
+		e2e.Logf("Check if %v exists in the %v catalog", sub.operatorPackage, sub.catalogSourceName)
+		exists, err := clusterPackageExists(oc, sub)
+		if !exists {
+			g.Skip("SKIP:PackageMissing learn does not exist in catalog qe-app-registry")
+		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("4) Create a Subscription")
-		sub := subscriptionDescription{
-			subName:                "sub-24772",
-			namespace:              namespace,
-			catalogSourceName:      "qe-app-registry",
-			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "beta",
-			ipApproval:             "Automatic",
-			operatorPackage:        "learn",
-			startingCSV:            "learn-operator.v0.0.3",
-			singleNamespace:        false,
-			template:               subTemplate,
-		}
+		g.By("2) Create the namespace")
+		project.createwithCheck(oc, itName, dr)
+
+		g.By("3) Create the OperatorGroup")
+		og.createwithCheck(oc, itName, dr)
+
+		g.By("4) Create the service account")
+		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("5) Create a Subscription")
+
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("5) The install plan is Failed")
+		g.By("6) The install plan is Failed")
 		installPlan := getResourceNoEmpty(oc, asAdmin, withoutNamespace, "installplan", "-n", sub.namespace, "-o=jsonpath={.items..metadata.name}")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Failed", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("6) Grant the proper permissions to the service account")
+		g.By("7) Grant the proper permissions to the service account")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f", saRoles, "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("7) Recreate the Subscription")
+		g.By("8) Recreate the Subscription")
 		sub.delete(itName, dr)
 		sub.deleteCSV(itName, dr)
 		sub.createWithoutCheck(oc, itName, dr)
 
-		g.By("8) Checking the state of CSV")
+		g.By("9) Checking the state of CSV")
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", csv, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 	})
@@ -1970,6 +1988,18 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		csv := "learn-operator.v0.0.3"
 		sa := "scoped-24886"
 
+		sub := subscriptionDescription{
+			subName:                "sub-24772",
+			namespace:              namespace,
+			catalogSourceName:      "qe-app-registry",
+			catalogSourceNamespace: "openshift-marketplace",
+			channel:                "beta",
+			ipApproval:             "Automatic",
+			operatorPackage:        "learn",
+			startingCSV:            "learn-operator.v0.0.3",
+			singleNamespace:        false,
+			template:               subTemplate,
+		}
 		// create the namespace
 		project := projectDescription{
 			name: namespace,
@@ -1986,31 +2016,27 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		itName := g.CurrentGinkgoTestDescription().TestText
 		dr.addIr(itName)
 
-		g.By("1) Create the namespace")
+		g.By("1) check if this operator ready for installing")
+		e2e.Logf("Check if %v exists in the %v catalog", sub.operatorPackage, sub.catalogSourceName)
+		exists, err := clusterPackageExists(oc, sub)
+		if !exists {
+			g.Skip("SKIP:PackageMissing learn does not exist in catalog qe-app-registry")
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("2) Create the namespace")
 		project.createwithCheck(oc, itName, dr)
 
-		g.By("2) Create the OperatorGroup without service account")
+		g.By("3) Create the OperatorGroup without service account")
 		og.createwithCheck(oc, itName, dr)
 
-		g.By("3) Create a Subscription")
-		sub := subscriptionDescription{
-			subName:                "sub-24886",
-			namespace:              namespace,
-			catalogSourceName:      "qe-app-registry",
-			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "beta",
-			ipApproval:             "Automatic",
-			operatorPackage:        "learn",
-			startingCSV:            "learn-operator.v0.0.3",
-			singleNamespace:        false,
-			template:               subTemplate,
-		}
+		g.By("4) Create a Subscription")
 		sub.create(oc, itName, dr)
 
-		g.By("4) Checking the state of CSV")
+		g.By("5) Checking the state of CSV")
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", csv, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		g.By("5) Delete the Operator Group")
+		g.By("6) Delete the Operator Group")
 		og.delete(itName, dr)
 
 		// create the OperatorGroup resource
@@ -2024,7 +2050,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		ogSA.createwithCheck(oc, itName, dr)
 
 		g.By("7) Create the service account")
-		_, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", namespace).Output()
+		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("9) Grant the proper permissions to the service account")
