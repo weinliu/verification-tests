@@ -28,15 +28,10 @@ objects:
           component: "loki"
           appname: loki-server
       spec:
-        serviceAccount: loki-sa
-        serviceAccountName: loki-sa
         containers:
         - name: "loki"
           image: quay.io/openshifttest/grafana-loki:2.3.0
           imagePullPolicy: IfNotPresent
-          securityContext:
-            privileged: true
-            procMount: Default
           ports:
           - containerPort: 3100
             name: tcp

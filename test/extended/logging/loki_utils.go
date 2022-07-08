@@ -587,6 +587,7 @@ func newLokiClient(routeAddress string) *lokiClient {
 	client := &lokiClient{}
 	client.address = routeAddress
 	client.retries = 5
+	client.quiet = true
 	return client
 }
 
@@ -780,8 +781,29 @@ func (c *lokiClient) queryRange(logType string, queryStr string, limit int, star
 	params.setInt("start", start.UnixNano())
 	params.setInt("end", end.UnixNano())
 	params.setString("direction", direction())
-	logPath := apiPath + logType + queryRangePath
+	logPath := ""
+	if len(logType) > 0 {
+		logPath = apiPath + logType + queryRangePath
+	} else {
+		logPath = queryRangePath
+	}
+
 	return c.doQuery(logPath, params.encode(), c.quiet)
+}
+
+func (c *lokiClient) searchLogsInLoki(logType, query string) (*lokiQueryResponse, error) {
+	res, err := c.queryRange(logType, query, 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
+	return res, err
+}
+
+func (c *lokiClient) searchByKey(logType, key, value string) (*lokiQueryResponse, error) {
+	res, err := c.searchLogsInLoki(logType, "{"+key+"=\""+value+"\"}")
+	return res, err
+}
+
+func (c *lokiClient) searchByNamespace(logType, projectName string) (*lokiQueryResponse, error) {
+	res, err := c.searchByKey(logType, "kubernetes_namespace_name", projectName)
+	return res, err
 }
 
 // buildURL concats a url `http://foo/bar` with a path `/buzz`.
@@ -963,4 +985,39 @@ func validateInfraAndResourcesForLoki(oc *exutil.CLI, supportedPlatforms []strin
 		}
 	}
 	return contain(supportedPlatforms, currentPlatform) && compareClusterResources(oc, reqCPU, reqMemory)
+}
+
+type externalLoki struct {
+	name      string
+	namespace string
+}
+
+func (l externalLoki) deployLoki(oc *exutil.CLI) {
+	//Create configmap for Loki
+	CMTemplate := exutil.FixturePath("testdata", "logging", "external-log-stores", "loki", "loki-configmap.yaml")
+	lokiCM := resource{"configmap", l.name, l.namespace}
+	err := lokiCM.applyFromTemplate(oc, "-n", l.namespace, "-f", CMTemplate, "-p", "LOKINAMESPACE="+l.namespace, "-p", "LOKICMNAME="+l.name)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	//Create Deployment for Loki
+	deployTemplate := exutil.FixturePath("testdata", "logging", "external-log-stores", "loki", "loki-deployment.yaml")
+	lokiDeploy := resource{"deployment", l.name, l.namespace}
+	err = lokiDeploy.applyFromTemplate(oc, "-n", l.namespace, "-f", deployTemplate, "-p", "LOKISERVERNAME="+l.name, "-p", "LOKINAMESPACE="+l.namespace, "-p", "LOKICMNAME="+l.name)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	//Expose Loki as a Service
+	WaitForDeploymentPodsToBeReady(oc, l.namespace, l.name)
+	err = oc.AsAdmin().WithoutNamespace().Run("expose").Args("-n", l.namespace, "deployment", l.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// expose loki route
+	err = oc.AsAdmin().WithoutNamespace().Run("expose").Args("-n", l.namespace, "svc", l.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (l externalLoki) remove(oc *exutil.CLI) {
+	resource{"configmap", l.name, l.namespace}.clear(oc)
+	resource{"deployment", l.name, l.namespace}.clear(oc)
+	resource{"svc", l.name, l.namespace}.clear(oc)
+	resource{"route", l.name, l.namespace}.clear(oc)
 }

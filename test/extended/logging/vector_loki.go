@@ -16,27 +16,21 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 	var (
 		oc             = exutil.NewCLI("vector-loki-namespace", exutil.KubeConfigPath())
-		eo             = "elasticsearch-operator"
 		clo            = "cluster-logging-operator"
 		cloPackageName = "cluster-logging"
-		eoPackageName  = "elasticsearch-operator"
 	)
 
 	g.Context("test forward logs to loki log store", func() {
 		var (
 			subTemplate       = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
 			SingleNamespaceOG = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
-			AllNamespaceOG    = exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml")
 			loglabeltemplate  = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 		)
 		cloNS := "openshift-logging"
-		eoNS := "openshift-operators-redhat"
 		CLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, CatalogSourceObjects{}}
-		EO := SubscriptionObjects{eo, eoNS, AllNamespaceOG, subTemplate, eoPackageName, CatalogSourceObjects{}}
 		g.BeforeEach(func() {
-			g.By("deploy CLO and EO")
+			g.By("deploy CLO")
 			CLO.SubscribeOperator(oc)
-			EO.SubscribeOperator(oc)
 			oc.SetupProject()
 		})
 
@@ -48,44 +42,37 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create Loki project and deploy Loki Server")
-			lokiNS := deployExternalLokiServer(oc, "loki-config", "loki-server")
+			oc.SetupProject()
+			lokiNS := oc.Namespace()
+			loki := externalLoki{"loki-server", lokiNS}
+			defer loki.remove(oc)
+			loki.deployLoki(oc)
 
 			g.By("Create ClusterLogForwarder instance")
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "47760.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=http://loki-server."+lokiNS+".svc:3100")
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogging instance")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			g.By("Waiting for the collector pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
 
-			g.By("Searching for Audit Logs in Loki")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=collector"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			auditLogs := searchLogsInLoki(oc, cloNS, lokiNS, podList.Items[0].Name, "audit")
-			o.Expect(auditLogs.Status).Should(o.Equal("success"))
-			o.Expect(auditLogs.Data.Result[0].Stream.LogType).Should(o.Equal("audit"))
-			o.Expect(auditLogs.Data.Stats.Summary.BytesProcessedPerSecond).ShouldNot(o.BeZero())
-			e2e.Logf("Audit Logs Query is a success")
-
-			g.By("Searching for Infra Logs in Loki")
-			infraLogs := searchLogsInLoki(oc, cloNS, lokiNS, podList.Items[0].Name, "infra")
-			o.Expect(infraLogs.Status).Should(o.Equal("success"))
-			o.Expect(infraLogs.Data.Result[0].Stream.LogType).Should(o.Equal("infrastructure"))
-			o.Expect(infraLogs.Data.Stats.Summary.BytesProcessedPerSecond).ShouldNot(o.BeZero())
-			e2e.Logf("Infra Logs Query is a success")
-
+			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
+			lc := newLokiClient(route)
 			g.By("Searching for Application Logs in Loki")
 			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
-				appLogs := searchAppLogsInLokiByNamespace(oc, cloNS, lokiNS, podList.Items[0].Name, appProj)
+				appLogs, err := lc.searchByNamespace("", appProj)
+				if err != nil {
+					return false, err
+				}
 				if appLogs.Status == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Result[0].Stream.LogType == "application" && appLogs.Data.Result[0].Stream.KubernetesPodName == appPodName.Items[0].Name {
 					return true, nil
 				}
@@ -93,6 +80,20 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			})
 			exutil.AssertWaitPollNoErr(err, "failed searching for application logs in Loki")
 			e2e.Logf("Application Logs Query is a success")
+
+			g.By("Searching for Audit Logs in Loki")
+			auditLogs, err := lc.searchLogsInLoki("", "{log_type=\"audit\"}")
+			o.Expect(auditLogs.Status).Should(o.Equal("success"))
+			o.Expect(auditLogs.Data.Result[0].Stream.LogType).Should(o.Equal("audit"))
+			o.Expect(auditLogs.Data.Stats.Summary.BytesProcessedPerSecond).ShouldNot(o.BeZero())
+			e2e.Logf("Audit Logs Query is a success")
+
+			g.By("Searching for Infra Logs in Loki")
+			infraLogs, err := lc.searchLogsInLoki("", "{log_type=\"infrastructure\"}")
+			o.Expect(infraLogs.Status).Should(o.Equal("success"))
+			o.Expect(infraLogs.Data.Result[0].Stream.LogType).Should(o.Equal("infrastructure"))
+			o.Expect(infraLogs.Data.Stats.Summary.BytesProcessedPerSecond).ShouldNot(o.BeZero())
+			e2e.Logf("Infra Logs Query is a success")
 
 		})
 
@@ -104,32 +105,39 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create Loki project and deploy Loki Server")
-			lokiNS := deployExternalLokiServer(oc, "loki-config", "loki-server")
+			oc.SetupProject()
+			lokiNS := oc.Namespace()
+			loki := externalLoki{"loki-server", lokiNS}
+			defer loki.remove(oc)
+			loki.deployLoki(oc)
 			tenantKey := "kubernetes_namespace_name"
 
 			g.By("Create ClusterLogForwarder instance")
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "48922.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "TENANTKEY=kubernetes.namespace_name", "-p", "URL=http://loki-server."+lokiNS+".svc:3100")
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "TENANTKEY=kubernetes.namespace_name", "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogging instance")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			g.By("Waiting for the collector pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
 
 			g.By("Searching for Application Logs in Loki using tenantKey")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=collector"})
-			o.Expect(err).NotTo(o.HaveOccurred())
+			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
+			lc := newLokiClient(route)
 			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
-				appLogs := searchAppLogsInLokiByTenantKey(oc, cloNS, lokiNS, podList.Items[0].Name, tenantKey, appProj)
-				if appLogs.Status == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Result[0].Stream.LogType == "application" && appLogs.Data.Result[0].Stream.KubernetesPodName == appPodName.Items[0].Name {
+				logs, err := lc.searchByKey("", tenantKey, appProj)
+				if err != nil {
+					return false, err
+				}
+				if logs.Status == "success" && logs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && logs.Data.Result[0].Stream.LogType == "application" && logs.Data.Result[0].Stream.KubernetesPodName == appPodName.Items[0].Name {
 					return true, nil
 				}
 				return false, nil
@@ -153,7 +161,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create Loki project and deploy Loki Server")
-			lokiNS := deployExternalLokiServer(oc, "loki-config", "loki-server")
+			oc.SetupProject()
+			lokiNS := oc.Namespace()
+			loki := externalLoki{"loki-server", lokiNS}
+			defer loki.remove(oc)
+			loki.deployLoki(oc)
 			labelKeys := "kubernetes_pod_labels_positive"
 			podLabel := "centos-logtest"
 
@@ -161,22 +173,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "47801.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "LABELKEY=kubernetes.pod_labels.positive", "-p", "URL=http://loki-server."+lokiNS+".svc:3100")
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "LABELKEY=kubernetes.pod_labels.positive", "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogging instance")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			g.By("Waiting for the collector pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
 
 			g.By("Searching for Application Logs in Loki using LabelKey - Postive match")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=collector"})
-			o.Expect(err).NotTo(o.HaveOccurred())
+			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
+			lc := newLokiClient(route)
 			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
-				appLogs := searchAppLogsInLokiByLabelKeys(oc, cloNS, lokiNS, podList.Items[0].Name, labelKeys, podLabel)
+				appLogs, err := lc.searchByKey("", labelKeys, podLabel)
+				if err != nil {
+					return false, err
+				}
 				if appLogs.Status == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Stats.Ingester.TotalLinesSent != 0 {
 					return true, nil
 				}
@@ -188,7 +203,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Searching for Application Logs in Loki using LabelKey - Negative match")
 			labelKeys = "kubernetes_pod_labels_negative"
 			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
-				appLogs := searchAppLogsInLokiByLabelKeys(oc, cloNS, lokiNS, podList.Items[0].Name, labelKeys, podLabel)
+				appLogs, err := lc.searchByKey("", labelKeys, podLabel)
+				if err != nil {
+					return false, err
+				}
 				if appLogs.Status == "success" && appLogs.Data.Stats.Store.TotalChunksDownloaded == 0 && appLogs.Data.Stats.Summary.BytesProcessedPerSecond == 0 {
 					return true, nil
 				}
@@ -207,32 +225,39 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create Loki project and deploy Loki Server")
-			lokiNS := deployExternalLokiServer(oc, "loki-config", "loki-server")
+			oc.SetupProject()
+			lokiNS := oc.Namespace()
+			loki := externalLoki{"loki-server", lokiNS}
+			defer loki.remove(oc)
+			loki.deployLoki(oc)
 			tenantKey := "kubernetes_container_name"
 
 			g.By("Create ClusterLogForwarder instance")
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "48922.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "TENANTKEY=kubernetes.container_name", "-p", "URL=http://loki-server."+lokiNS+".svc:3100")
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "TENANTKEY=kubernetes.container_name", "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogging instance")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
-			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			g.By("Waiting for the collector pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
 
 			g.By("Searching for Application Logs in Loki using tenantKey")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=collector"})
-			o.Expect(err).NotTo(o.HaveOccurred())
+			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
+			lc := newLokiClient(route)
 			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			tenantKeyID := "logging-centos-logtest"
 			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
-				appLogs := searchAppLogsInLokiByTenantKey(oc, cloNS, lokiNS, podList.Items[0].Name, tenantKey, tenantKeyID)
+				appLogs, err := lc.searchByKey("", tenantKey, tenantKeyID)
+				if err != nil {
+					return false, err
+				}
 				if appLogs.Status == "success" && appLogs.Data.Stats.Summary.BytesProcessedPerSecond != 0 && appLogs.Data.Result[0].Stream.LogType == "application" && appLogs.Data.Result[0].Stream.KubernetesPodName == appPodName.Items[0].Name {
 					return true, nil
 				}

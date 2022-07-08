@@ -12,7 +12,7 @@ objects:
     outputs:
     - name: loki-server
       type: ${TYPE}
-      url: http://loki-server.${LOKINAMESPACE}.svc:3100
+      url: ${URL}
     pipelines:
     - name: forward-to-loki
       inputRefs:
@@ -28,5 +28,4 @@ parameters:
   value: "openshift-logging"
 - name: TYPE
   value: "loki"
-- name: LOKINAMESPACE
-  value: "loki-aosqe"
+- name: URL
