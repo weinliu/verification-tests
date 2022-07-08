@@ -2211,4 +2211,49 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		checkPodsRunningWithLabel(oc, oc.Namespace(), "deployment=cli-pod", 1)
 	})
 
+	// author: jitli@redhat.com
+	g.It("NonPreRelease-Author:jitli-Medium-21926-Check function of oc registry info command [Serial]", func() {
+
+		g.By("Check options for oc registry info")
+		output, err := oc.AsAdmin().Run("registry").Args("info", "--internal=true").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("image-registry.openshift-image-registry.svc:5000"))
+
+		output, _ = oc.AsAdmin().Run("registry").Args("info", "--internal=true", "--quiet=true").Output()
+		o.Expect(output).To(o.ContainSubstring("error: registry could not be contacted"))
+
+		output, _ = oc.AsAdmin().Run("registry").Args("info", "--internal=21926").Output()
+		o.Expect(output).To(o.ContainSubstring("invalid"))
+
+		output, _ = oc.AsAdmin().Run("registry").Args("info", "--quiet=21926").Output()
+		o.Expect(output).To(o.ContainSubstring("invalid"))
+
+		g.By("Check options --public")
+		defer func() {
+			restoreRouteExposeRegistry(oc)
+			err = wait.Poll(25*time.Second, 200*time.Second, func() (bool, error) {
+				publicT, _ := oc.AsAdmin().Run("registry").Args("info", "--public=true").Output()
+				publicF, _ := oc.AsAdmin().Run("registry").Args("info", "--public=false").Output()
+				if strings.Contains(publicT, "registry does not have public hostname") && strings.Contains(publicF, "image-registry.openshift-image-registry.svc:5000") {
+					return true, nil
+				}
+				e2e.Logf("Not update, Continue to next round")
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "registry configs are not changed")
+		}()
+		createRouteExposeRegistry(oc)
+		err = wait.Poll(25*time.Second, 200*time.Second, func() (bool, error) {
+			publicT, _ := oc.AsAdmin().Run("registry").Args("info", "--public=true").Output()
+			publicF, _ := oc.AsAdmin().Run("registry").Args("info", "--public=false").Output()
+			if strings.Contains(publicT, "default-route-openshift-image-registry") && strings.Contains(publicF, "default-route-openshift-image-registry") {
+				return true, nil
+			}
+			e2e.Logf("Not update, Continue to next round")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "registry configs are not changed")
+
+	})
+
 })
