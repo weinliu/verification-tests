@@ -2099,6 +2099,82 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
+	//author: yyou@redhat.com
+	g.It("Author:yyou-Critical-24160-lookupPolicy can be set by oc set image-lookup", func() {
+
+		g.By("Import an image stream")
+		operationErr := oc.WithoutNamespace().AsAdmin().Run("import-image").Args("is24160-1-lookup", "--from=quay.io/openshifttest/base-alpine@sha256:0b379877aba876774e0043ea5ba41b0c574825ab910d32b43c05926fab4eea22", "--confirm=true", "-n", oc.Namespace()).Execute()
+		o.Expect(operationErr).NotTo(o.HaveOccurred())
+		tagErr := exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "is24160-1-lookup", "latest")
+		o.Expect(tagErr).NotTo(o.HaveOccurred())
+
+		g.By("Create pod from the imagestream without full repository")
+		expectInfo := `Failed to pull image "is24160-1-lookup"`
+		createSimpleRunPod(oc, "is24160-1-lookup", expectInfo)
+
+		g.By("Set image-lookup and check lookupPolicy is updated ")
+		lookupErr := oc.WithoutNamespace().AsAdmin().Run("set").Args("image-lookup", "is24160-1-lookup", "-n", oc.Namespace()).Execute()
+		o.Expect(lookupErr).NotTo(o.HaveOccurred())
+		output, updateErr := oc.WithoutNamespace().AsAdmin().Run("get").Args("imagestreams", "is24160-1-lookup", "-n", oc.Namespace(), "-o=jsonpath={.spec.lookupPolicy.local}").Output()
+		o.Expect(updateErr).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("true"))
+
+		g.By("Create pod again from the imagestream without full repository")
+		expectInfo = `Successfully pulled image "quay.io/openshifttest/base-alpine@sha256:`
+		createSimpleRunPod(oc, "is24160-1-lookup", expectInfo)
+
+		g.By("Create an imagestream with pullthrough and set image-lookup")
+		operationErr = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("is24160-2-lookup", "--from=quay.io/openshifttest/base-alpine@sha256:0b379877aba876774e0043ea5ba41b0c574825ab910d32b43c05926fab4eea22", "--confirm=true", "--reference-policy=local", "-n", oc.Namespace()).Execute()
+		o.Expect(operationErr).NotTo(o.HaveOccurred())
+		lookupErr = oc.WithoutNamespace().AsAdmin().Run("set").Args("image-lookup", "is24160-2-lookup", "-n", oc.Namespace()).Execute()
+		o.Expect(lookupErr).NotTo(o.HaveOccurred())
+
+		g.By("Create pod and check pod could pull image")
+		expectInfo = `Successfully pulled image "image-registry.openshift-image-registry.svc:5000/`
+		createSimpleRunPod(oc, "is24160-2-lookup", expectInfo)
+
+		g.By("Create another imagestream and create a deploy")
+		operationErr = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("is24160-3-lookup", "--from=quay.io/openshifttest/base-alpine@sha256:0b379877aba876774e0043ea5ba41b0c574825ab910d32b43c05926fab4eea22", "--confirm=true", "-n", oc.Namespace()).Execute()
+		o.Expect(operationErr).NotTo(o.HaveOccurred())
+		deployErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("deploy", "deploy-lookup", "--image=is24160-3-lookup", "--port=5000", "-n", oc.Namespace()).Execute()
+		o.Expect(deployErr).NotTo(o.HaveOccurred())
+
+		g.By("Check whether the image can be pulled")
+		expectInfo = `Failed to pull image "is24160-3-lookup"`
+		pollErr := wait.Poll(3*time.Second, 6*time.Second, func() (bool, error) {
+			output, describeErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", "-l", "app=deploy-lookup", "-n", oc.Namespace()).Output()
+			o.Expect(describeErr).NotTo(o.HaveOccurred())
+			if strings.Contains(output, expectInfo) {
+				return true, nil
+			}
+			e2e.Logf("Continue to next round")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Pod doesn't show expected log %v", expectInfo))
+
+		g.By("Set image-lookup for deploy")
+		lookupErr = oc.WithoutNamespace().AsAdmin().Run("set").Args("image-lookup", "deploy/deploy-lookup", "-n", oc.Namespace()).Execute()
+		o.Expect(lookupErr).NotTo(o.HaveOccurred())
+
+		g.By("Check again lookupPolicy is updated")
+		output, updateErr = oc.WithoutNamespace().AsAdmin().Run("get").Args("deploy", "deploy-lookup", "-n", oc.Namespace(), "-o=jsonpath={..annotations}").Output()
+		o.Expect(updateErr).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`"alpha.image.policy.openshift.io/resolve-names":"*"`))
+
+		g.By("Check whether the image can be pulled again")
+		expectInfo = `Successfully pulled image`
+		pollErr = wait.Poll(3*time.Second, 6*time.Second, func() (bool, error) {
+			output, describeErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", "-l", "app=deploy-lookup", "-n", oc.Namespace()).Output()
+			o.Expect(describeErr).NotTo(o.HaveOccurred())
+			if strings.Contains(output, expectInfo) {
+				return true, nil
+			}
+			e2e.Logf("Continue to next round")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Pod doesn't show expected log %v", expectInfo))
+	})
+
 	//author: xiuwang@redhat.com
 	g.It("ConnectedOnly-VMonly-Author:xiuwang-Low-11314-Support unauthenticated with registry-viewer role", func() {
 		g.By("Add registry-viewer role to a project")
