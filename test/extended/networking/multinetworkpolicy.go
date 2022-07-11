@@ -20,7 +20,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "sriov.openshift-qe.sdn.com") {
-			g.Skip("These cases only can be run on Beijing local baremetal server , skip for other envrionment!!!")
+			g.Skip("These cases can only be run on networking team's private RDU2 cluster , skip for other envrionment!!!")
 		}
 	})
 
