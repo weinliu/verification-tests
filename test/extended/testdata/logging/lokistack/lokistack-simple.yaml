@@ -4,7 +4,7 @@ metadata:
   name: lokiStack-template
 objects:
 - kind: "LokiStack"
-  apiVersion: "loki.grafana.com/v1beta1"
+  apiVersion: "loki.grafana.com/v1"
   metadata:
     name: ${NAME}
     namespace: ${NAMESPACE}
