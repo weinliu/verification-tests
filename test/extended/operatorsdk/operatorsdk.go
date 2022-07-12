@@ -953,6 +953,17 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Writing kustomize manifests"))
 
+		g.By("step: OCP-52625 operatorsdk generate operator base image match the release version.")
+		dockerFile := filepath.Join(tmpPath, "Dockerfile")
+		content := getContent(dockerFile)
+		o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-ansible-operator:v4.11"))
+		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-operator:v4.11", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v4.11")
+
+		managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
+		content = getContent(managerAuthProxyPatch)
+		o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.11"))
+		replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.11", "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.10")
+
 		dataPath := "test/extended/util/operatorsdk/ocp-34427-data/roles/memcached/"
 		err = copy(filepath.Join(dataPath, "tasks", "main.yml"), filepath.Join(tmpPath, "roles", "memcached34427", "tasks", "main.yml"))
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1023,6 +1034,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 			return false, nil
 		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
 		exutil.AssertWaitPollNoErr(waitErr, "No memcached-operator-34427-controller-manager")
 
 		g.By("step: Create the resource")
@@ -1038,6 +1052,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 			return false, nil
 		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
 		exutil.AssertWaitPollNoErr(waitErr, "No pod memcached34427-sample")
 		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/memcached34427-sample-memcached", "-n", nsOperator).Output()
@@ -1096,6 +1113,17 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err := operatorsdkCLI.Run("init").Args("--plugins=ansible", "--domain", "example.com").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Next"))
+
+		g.By("step: modify Dockerfile.")
+		dockerFile := filepath.Join(tmpPath, "Dockerfile")
+		content := getContent(dockerFile)
+		o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-ansible-operator:v4.11"))
+		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-operator:v4.11", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v4.11")
+
+		managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
+		content = getContent(managerAuthProxyPatch)
+		o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.11"))
+		replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.11", "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.10")
 
 		g.By("step: Create API.")
 		output, err = operatorsdkCLI.Run("create").Args("api", "--group", "cache", "--version", "v1alpha1", "--kind", "Memcached34366", "--generate-role").Output()
@@ -1163,6 +1191,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 			return false, nil
 		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
 		exutil.AssertWaitPollNoErr(waitErr, "memcached-operator-34366-controller-manager has no Starting workers")
 
 		output, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/memcached-operator-34366-controller-manager", "-c", "manager", "-n", nsOperator).Output()
@@ -1377,7 +1408,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: chuo@redhat.com
-	g.It("ConnectedOnly-VMonly-Author:chuo-High-34426-Ensure that Helm Based Operators creation is working ", func() {
+	g.It("ConnectedOnly-VMonly-Author:chuo-High-34426-Critical-52625-Ensure that Helm Based Operators creation is working ", func() {
 		architecture := exutil.GetClusterArchitecture(oc)
 		if architecture != "amd64" && architecture != "arm64" {
 			g.Skip("Do not support " + architecture)
@@ -1427,6 +1458,17 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err = operatorsdkCLI.Run("create").Args("api", "--group", "demo", "--version", "v1", "--kind", "Nginx34426").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("nginx"))
+
+		g.By("step: OCP-52625 operatorsdk generate operator base image match the release version	.")
+		dockerFile := filepath.Join(tmpPath, "Dockerfile")
+		content := getContent(dockerFile)
+		o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-helm-operator:v4.11"))
+		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-helm-operator:v4.11", "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-operator:v4.11")
+
+		managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
+		content = getContent(managerAuthProxyPatch)
+		o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.11"))
+		replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.11", "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.10")
 
 		g.By("step: modify namespace")
 		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/name: system/name: %s/g' `grep -rl \"name: system\" %s`", nsSystem, tmpPath)).Output()
@@ -1495,6 +1537,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 			return false, nil
 		})
+		if err != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
 		exutil.AssertWaitPollNoErr(waitErr, "No nginx-operator-34426-controller-manager")
 
 		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-user", "anyuid", fmt.Sprintf("system:serviceaccount:%s:nginx34426-sample", nsOperator)).Output()
@@ -1530,8 +1575,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			return false, nil
 		})
 		if waitErr != nil {
-			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", nsOperator).Output()
-			e2e.Logf(msg)
+			logDebugInfo(oc, nsOperator, "events", "pod")
 		}
 		exutil.AssertWaitPollNoErr(waitErr, "No nginx34426-sample is in Running status")
 	})
@@ -1553,7 +1597,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		g.By("step: run bundle 1")
 		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/kubeturbo-bundle:v8.4.0", "-n", ns, "--timeout", "5m").Output()
 		if err != nil {
-			logDebugInfo(oc, ns)
+			logDebugInfo(oc, ns, "csv", "pod", "ip")
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
@@ -1597,7 +1641,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		g.By("step: upgrade bundle")
 		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/kubeturbo-bundle:v8.5.0", "-n", ns, "--timeout", "5m").Output()
 		if err != nil {
-			logDebugInfo(oc, ns)
+			logDebugInfo(oc, ns, "csv", "pod", "ip")
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
@@ -1655,7 +1699,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
-		imageTag := "registry-proxy.engineering.redhat.com/rh-osbs/openshift-ose-ansible-operator:v4.10"
+		imageTag := "registry-proxy.engineering.redhat.com/rh-osbs/openshift-ose-ansible-operator:v4.11"
 		containerCLI := container.NewPodmanCLI()
 		e2e.Logf("create container with image %s", imageTag)
 		id, err := containerCLI.ContainerCreate(imageTag, "test-42028", "/bin/sh", true)
@@ -1677,15 +1721,15 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		e2e.Logf("start container %s successful", id)
 
 		commandStr := []string{"pip3", "show", "kubernetes"}
-		e2e.Logf("run command %s", commandStr)
 		output, err := containerCLI.Exec(id, commandStr)
+		e2e.Logf("command %s: %s", commandStr, output)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Version:"))
 		o.Expect(output).To(o.ContainSubstring("12.0."))
 
 		commandStr = []string{"pip3", "show", "openshift"}
-		e2e.Logf("run command %s", commandStr)
 		output, err = containerCLI.Exec(id, commandStr)
+		e2e.Logf("command %s: %s", commandStr, output)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Version:"))
 		o.Expect(output).To(o.ContainSubstring("0.12."))
@@ -1803,6 +1847,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 			return false, nil
 		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached-operator-44295-controller-manager in project %s", nsOperator))
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/memcached-operator-44295-controller-manager", "-c", "manager", "-n", nsOperator).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1820,6 +1867,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 			return false, nil
 		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached44295-sample in project %s", nsOperator))
 
 		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
@@ -1948,6 +1998,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 			return false, nil
 		})
+		if waitErr != nil {
+			logDebugInfo(oc, ns, "events", "pod")
+		}
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached-quarkus-operator-52371-operator in project %s", ns))
 		label := `app.kubernetes.io/name=memcached-quarkus-operator-52371-operator`
 		podName, err := oc.AsAdmin().Run("get").Args("-n", ns, "pod", "-l", label, "-ojsonpath={..metadata.name}").Output()
@@ -2049,6 +2102,16 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Writing kustomize manifests"))
 
+		g.By("step: modify Dockerfile.")
+		dockerFile := filepath.Join(tmpPath, "Dockerfile")
+		content := getContent(dockerFile)
+		o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-ansible-operator:v4.11"))
+		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-operator:v4.11", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v4.11")
+		managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
+		content = getContent(managerAuthProxyPatch)
+		o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.11"))
+		replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.11", "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.10")
+
 		deployfilepath := filepath.Join(tmpPath, "config", "samples", "cache_v1alpha1_memcached40341.yaml")
 		exec.Command("bash", "-c", fmt.Sprintf("sed -i '$d' %s", deployfilepath)).Output()
 		exec.Command("bash", "-c", fmt.Sprintf("sed -i '$a\\  size: 3' %s", deployfilepath)).Output()
@@ -2116,6 +2179,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 			return false, nil
 		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
 		exutil.AssertWaitPollNoErr(waitErr, "No memcached-operator-40341-controller-manager")
 
 		g.By("step: Create the resource")
@@ -2130,6 +2196,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 			return false, nil
 		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
 		exutil.AssertWaitPollNoErr(waitErr, "No cr memcached40341-sample")
 
 		g.By("step: check vars")

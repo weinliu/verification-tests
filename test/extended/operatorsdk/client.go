@@ -171,6 +171,12 @@ func replaceContent(filePath string, src string, target string) {
 	}
 }
 
+func getContent(filePath string) string {
+	content, err := ioutil.ReadFile(filePath)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return string(content)
+}
+
 func insertContent(filePath string, src string, insertStr string) {
 	input, err := ioutil.ReadFile(filePath)
 	if err != nil {
@@ -204,13 +210,35 @@ func copy(src string, target string) error {
 	return nil
 }
 
-func logDebugInfo(oc *exutil.CLI, ns string) {
-	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", ns).Output()
-	e2e.Logf(output)
-	output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("ip", "-n", ns).Output()
-	e2e.Logf(output)
-	output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns).Output()
-	e2e.Logf(output)
+func notInList(target string, strArray []string) bool {
+	for _, element := range strArray {
+		if target == element {
+			return false
+		}
+	}
+	return true
+}
+
+func logDebugInfo(oc *exutil.CLI, ns string, resource ...string) {
+	for _, resourceIndex := range resource {
+		e2e.Logf("oc get %s:", resourceIndex)
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(resourceIndex, "-n", ns).Output()
+		if strings.Contains(resourceIndex, "event") {
+			var warningEventList []string
+			lines := strings.Split(output, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "Warning") {
+					warningStr := strings.Split(line, "Warning")[1]
+					if notInList(warningStr, warningEventList) {
+						warningEventList = append(warningEventList, "Warning"+warningStr)
+					}
+				}
+			}
+			e2e.Logf(strings.Join(warningEventList, "\n"))
+		} else {
+			e2e.Logf(output)
+		}
+	}
 }
 
 //the method is to create one resource with template
