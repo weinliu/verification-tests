@@ -3361,8 +3361,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		depNew.create(oc)
 		defer depNew.deleteAsAdmin(oc)
 		depNew.waitReady(oc)
-		//dep.getPodMountedVolumeData(oc)
-
+		dep.checkPodMountedVolumeDataExist(oc, true)
 	})
 })
 
@@ -3401,7 +3400,7 @@ func resizeOnlineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep 
 
 	g.By("#. Check origin data intact and write new data in pod")
 	if dep.typepath == "mountPath" {
-		dep.getPodMountedVolumeData(oc)
+		dep.checkPodMountedVolumeDataExist(oc, true)
 		// After volume expand write 80% data of the new capacity should succeed
 		msg, err := execCommandInSpecificPod(oc, pvc.namespace, dep.getPodList(oc)[0], "fallocate -l "+fmt.Sprintf("%.2f", float64(capacityInt64)*0.8)+"G "+dep.mpath+"/"+getRandomString()+" ||true")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -3477,7 +3476,7 @@ func resizeOfflineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep
 
 	g.By("#. Check origin data intact and write new data in pod")
 	if dep.typepath == "mountPath" {
-		dep.getPodMountedVolumeData(oc)
+		dep.checkPodMountedVolumeDataExist(oc, true)
 		// After volume expand write 80% data of the new capacity should succeed
 		msg, err := execCommandInSpecificPod(oc, pvc.namespace, dep.getPodList(oc)[0], "fallocate -l "+fmt.Sprintf("%.2f", float64(capacityInt64)*0.8)+"G "+dep.mpath+"/"+getRandomString()+" ||true")
 		o.Expect(err).NotTo(o.HaveOccurred())

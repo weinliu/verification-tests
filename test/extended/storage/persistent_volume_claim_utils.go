@@ -205,6 +205,12 @@ func (pvc *persistentVolumeClaim) getDescription(oc *exutil.CLI) (string, error)
 	return output, err
 }
 
+//  Get the PersistentVolumeClaim bound pv's nodeAffinity nodeSelectorTerms matchExpressions "topology.gke.io/zone" values
+func (pvc *persistentVolumeClaim) getVolumeNodeAffinityAvaiableZones(oc *exutil.CLI) []string {
+	volName := pvc.getVolumeName(oc)
+	return getPvNodeAffinityAvaiableZones(oc, volName)
+}
+
 // Expand the PersistentVolumeClaim capacity, e.g. expandCapacity string "10Gi"
 func (pvc *persistentVolumeClaim) expand(oc *exutil.CLI, expandCapacity string) {
 	expandPatchPath := "{\"spec\":{\"resources\":{\"requests\":{\"storage\":\"" + expandCapacity + "\"}}}}"

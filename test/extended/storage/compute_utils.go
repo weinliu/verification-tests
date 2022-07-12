@@ -343,3 +343,24 @@ func getOneSchedulableMaster(allNodes []node) (expectedMater node) {
 	o.Expect(expectedMater.name).NotTo(o.BeEmpty())
 	return expectedMater
 }
+
+// Get 2 schedulable woker nodes with different avaiable zones
+func getTwoSchedulableWorkersWithDifferentAzs(oc *exutil.CLI) []node {
+	var (
+		expectedWorkers            = make([]node, 0, 2)
+		allNodes                   = getAllNodesInfo(oc)
+		allSchedulableLinuxWorkers = getSchedulableLinuxWorkers(allNodes)
+	)
+	if len(allSchedulableLinuxWorkers) < 2 {
+		e2e.Logf("Schedulable workers less than 2")
+		return expectedWorkers
+	}
+	for i := 1; i <= len(allSchedulableLinuxWorkers); i++ {
+		if allSchedulableLinuxWorkers[0].avaiableZone != allSchedulableLinuxWorkers[i].avaiableZone {
+			e2e.Logf("2 Schedulable workers with different avaiable zones are: [%v|%v]", allSchedulableLinuxWorkers[0], allSchedulableLinuxWorkers[i])
+			return append(expectedWorkers, allSchedulableLinuxWorkers[0], allSchedulableLinuxWorkers[i])
+		}
+	}
+	e2e.Logf("All Schedulable workers are the same az")
+	return expectedWorkers
+}

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	g "github.com/onsi/ginkgo"
@@ -36,15 +37,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: chaoyang@redhat.com
-	// [GKE-PD-CSI] [Dynamic Regional PV]Check provisioned region pv and drain node function
-	g.It("Author:chaoyang-Critical-37490-[GKE-PD-CSI] Check provisioned region pv and drain node function [Disruptive]", func() {
+	// [GKE-PD-CSI] [Dynamic Regional PV] regional pv should store data and sync in different avaiable zones
+	g.It("Author:chaoyang-Critical-37490-[GKE-PD-CSI] regional pv should store data and sync in different avaiable zones", func() {
 		var (
 			storageClass = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("pd.csi.storage.gke.io"))
-
+			// Regional diskDisk size minim size is 200 GB
 			pvc = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name),
-				setPersistentVolumeClaimCapacity("200Gi"))
+				setPersistentVolumeClaimCapacity(strconv.FormatInt(getRandomNum(200, 300), 10)+"Gi"))
 
-			dep                    = newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+			depA                   = newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+			depB                   = newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 			storageClassParameters = map[string]string{
 
 				"type":             "pd-standard",
@@ -53,46 +55,47 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				"parameters":           storageClassParameters,
 				"allowVolumeExpansion": true,
 			}
+			myWorkers = getTwoSchedulableWorkersWithDifferentAzs(oc)
 		)
 
-		g.By("0. Create new project for the scenario")
+		g.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
-		pvc.namespace = oc.Namespace()
-		dep.namespace = pvc.namespace
 
-		g.By("1. Create gcp-pd-csi storageclass")
+		g.By("# Create regional CSI storageclass")
 		storageClass.createWithExtraParameters(oc, extraParameters)
 		defer storageClass.deleteAsAdmin(oc)
 
-		g.By("2. Create a pvc with the gcp-pd-csi storageclass")
+		g.By("# Create a pvc with the CSI storageclass")
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 
-		g.By("3. Create deployment with the created pvc and wait for the pod ready")
-		dep.create(oc)
-		defer dep.deleteAsAdmin(oc)
+		g.By("# Create deployment A with the created pvc and wait for it becomes ready")
+		depA.createWithNodeSelector(oc, "topology\\.kubernetes\\.io/zone", myWorkers[0].avaiableZone)
+		defer depA.deleteAsAdmin(oc)
+		depA.waitReady(oc)
 
-		g.By("4. Wait for the deployment ready")
-		dep.waitReady(oc)
-		podLabel := "app=" + dep.applabel
+		g.By("# Check deployment's pod mount vlolume could read and write")
+		depA.checkPodMountedVolumeCouldRW(oc)
 
-		g.By("5. Drain the pod to other nodes")
-		nodeName0 := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
-		nodeZone0, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes/"+nodeName0, "-o=jsonpath={.metadata.labels.topology\\.gke\\.io\\/zone}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		errDrain := oc.AsAdmin().WithoutNamespace().Run("adm").Args("drain", "nodes/"+nodeName0, "--pod-selector", podLabel).Execute()
-		o.Expect(errDrain).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", "nodes/"+nodeName0).Execute()
+		if len(myWorkers) == 2 {
+			// Regional volumes have 2 avaiable zones volumes
+			g.By("Get the regional volume avaiable zones")
+			volAvaiableZones := pvc.getVolumeNodeAffinityAvaiableZones(oc)
+			o.Expect(volAvaiableZones).Should(o.HaveLen(2))
 
-		g.By("6. Wait for the pod ready again")
-		dep.waitReady(oc)
-		nodeName1 := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
-		nodeZone1, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes/"+nodeName1, "-o=jsonpath={.metadata.labels.topology\\.gke\\.io\\/zone}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+			g.By("# Delete the deployment A")
+			deleteSpecifiedResource(oc, "deployment", depA.name, depA.namespace)
 
-		g.By("7. Check node0 and node1 are in different zones")
-		o.Expect(nodeZone0).ShouldNot(o.Equal(nodeZone1))
+			g.By("# Create deployment B with the same pvc and wait for it becomes ready")
+			// deployment B nodeSelector zone is different from deploymentA
+			o.Expect(volAvaiableZones[0]).ShouldNot(o.Equal(volAvaiableZones[1]))
+			depB.createWithNodeSelector(oc, "topology\\.kubernetes\\.io/zone", deleteElement(volAvaiableZones, myWorkers[0].avaiableZone)[0])
+			defer depB.deleteAsAdmin(oc)
+			depB.waitReady(oc)
 
+			g.By("# Check deployment B also could read the origin data which is written data by deployment A in different avaiable zones")
+			depB.checkPodMountedVolumeDataExist(oc, true)
+		}
 	})
 
 	// author: chaoyang@redhat.com

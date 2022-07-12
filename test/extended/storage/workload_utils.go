@@ -811,10 +811,14 @@ func (dep *deployment) checkPodMountedVolumeCouldRW(oc *exutil.CLI) {
 	}
 }
 
-// Get the deployment data written from checkPodMountedVolumeCouldRW
-func (dep *deployment) getPodMountedVolumeData(oc *exutil.CLI) {
-	for _, podinstance := range dep.getPodList(oc) {
-		o.Expect(execCommandInSpecificPod(oc, dep.namespace, podinstance, "cat "+dep.mpath+"/testfile_*")).To(o.ContainSubstring("storage test"))
+// Check whether the deployment pod mounted volume orgin written data exist
+func (dep *deployment) checkPodMountedVolumeDataExist(oc *exutil.CLI, checkFlag bool) {
+	if checkFlag {
+		o.Expect(execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat "+dep.mpath+"/testfile_*")).To(o.ContainSubstring("storage test"))
+	} else {
+		output, err := execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat "+dep.mpath+"/testfile_*")
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("No such file or directory"))
 	}
 }
 

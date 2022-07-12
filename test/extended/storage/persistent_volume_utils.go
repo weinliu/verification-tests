@@ -9,6 +9,7 @@ import (
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -371,4 +372,17 @@ func checkPvNodeAffinityContains(oc *exutil.CLI, pvName string, content string) 
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("PV \"%s\" nodeAffinity: %s", pvName, nodeAffinity)
 	return strings.Contains(nodeAffinity, content)
+}
+
+// Get persistent volume nodeAffinity nodeSelectorTerms matchExpressions "topology.gke.io/zone" values
+func getPvNodeAffinityAvaiableZones(oc *exutil.CLI, pvName string) []string {
+	pvInfo, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o", "json").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	avaiableZonesStr := gjson.Get(pvInfo, `spec.nodeAffinity.required.nodeSelectorTerms.#.matchExpressions.#(key=topology.gke.io/zone)#.values|@ugly|@flatten`).String()
+	delSybols := []string{"[", "]", "\""}
+	for _, delSybol := range delSybols {
+		avaiableZonesStr = strings.ReplaceAll(avaiableZonesStr, delSybol, "")
+	}
+	e2e.Logf("PV \"%s\" nodeAffinity \"topology.gke.io/zone\" values: %s", pvName, avaiableZonesStr)
+	return strings.Split(avaiableZonesStr, ",")
 }
