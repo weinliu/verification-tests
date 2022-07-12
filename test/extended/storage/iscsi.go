@@ -18,6 +18,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvTemplate         string
 		pvcTemplate        string
 		deploymentTemplate string
+		svcTemplate        string
 	)
 	// setup iSCSI server before each test case
 	g.BeforeEach(func() {
@@ -27,6 +28,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvTemplate = filepath.Join(storageTeamBaseDir, "csi-pv-template.yaml")
 		pvcTemplate = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 		deploymentTemplate = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+		svcTemplate = filepath.Join(storageTeamBaseDir, "service-template.yaml")
 	})
 
 	g.AfterEach(func() {
@@ -94,6 +96,85 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("#. Check the volume umount from the origin node")
 		checkVolumeNotMountOnNode(oc, volName, originNodeName)
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-52770 [ISCSI] Check iscsi multipath working
+	g.It("Author:rdeore-High-52770-[ISCSI] Check iscsi multipath working", func() {
+		//Set the resource objects definition for the scenario
+		var (
+			scName      = "iscsi-sc-" + getRandomString()
+			serviceName = "iscsi-service-" + getRandomString()
+			port        = "3260"
+			pvc         = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("2Gi"),
+				setPersistentVolumeClaimAccessmode("ReadWriteOnce"), setPersistentVolumeClaimStorageClassName(scName))
+			dep = newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+			pv  = newPersistentVolume(setPersistentVolumeTemplate(pvTemplate), setPersistentVolumeAccessMode("ReadWriteOnce"), setPersistentVolumeKind("iscsi"),
+				setPersistentVolumeStorageClassName(scName), setPersistentVolumeReclaimPolicy("Delete"), setPersistentVolumeCapacity("2Gi"))
+			svc = newService(setServiceTemplate(svcTemplate), setServiceName(serviceName), setServiceSelectorLable(svcIscsiServer.deploy.applabel), setServiceNodePort("0"),
+				setServicePort(port), setServiceTargetPort(port), setServiceProtocol("TCP"))
+		)
+
+		g.By("#. Create a new iscsi service")
+		svc.create(oc)
+		defer svc.deleteAsAdmin(oc)
+		svc.getClusterIP(oc)
+
+		g.By("#. Create a network portal on iscsi-target using new service IP")
+		svcIscsiServer.createIscsiNetworkPortal(oc, svc.clusterIP)
+
+		g.By("#. Create new project for the scenario")
+		oc.SetupProject()
+
+		g.By("#. Create a pv with the storageclass")
+		pv.iscsiServerIP = svcIscsiServer.svc.clusterIP
+		pv.iscsiPortals = []string{svc.clusterIP + ":" + port}
+		pv.create(oc)
+		defer pv.deleteAsAdmin(oc)
+
+		g.By("#. Create a pvc with the storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("#. Create deployment to consume the created pvc and wait for the deployment ready")
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+		dep.waitReady(oc)
+
+		g.By("#. Check the pods can read/write data inside volume")
+		dep.checkPodMountedVolumeCouldRW(oc)
+
+		g.By("#. Check the deployment's pod mounted volume have the exec right")
+		dep.checkPodMountedVolumeHaveExecRight(oc)
+
+		g.By("#. Check the volume mounted on the pod located node filesystem type as expected")
+		volName := pvc.getVolumeName(oc)
+		nodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
+		checkVolumeMountCmdContain(oc, volName, nodeName, "ext4")
+
+		g.By("#. Delete the first iscsi service")
+		deleteSpecifiedResource(oc.AsAdmin(), "svc", svcIscsiServer.svc.name, svcIscsiServer.svc.namespace)
+
+		g.By("#. Scale down the replicas number to 0")
+		dep.scaleReplicas(oc, "0")
+
+		g.By("#. Wait for the deployment scale down completed and check nodes has no mounted volume")
+		dep.waitReady(oc)
+		checkVolumeNotMountOnNode(oc, volName, nodeName)
+
+		g.By("#. Scale up the deployment replicas number to 1")
+		dep.scaleReplicas(oc, "1")
+
+		g.By("#. Wait for the deployment scale up completed")
+		dep.waitReady(oc)
+
+		g.By("#. Check testdata still in the volume and volume has exec right")
+		output, err := execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat "+dep.mpath+"/testfile*")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("storage test"))
+		output, err = execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], dep.mpath+"/hello")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Hello OpenShift Storage"))
 	})
 })
 

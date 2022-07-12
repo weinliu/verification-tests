@@ -29,6 +29,13 @@ func setServiceName(name string) serviceOption {
 	}
 }
 
+// Replace the default value of service template
+func setServiceTemplate(template string) serviceOption {
+	return func(svc *service) {
+		svc.template = template
+	}
+}
+
 // Replace the default value of service namespace
 func setServiceNamespace(namespace string) serviceOption {
 	return func(svc *service) {

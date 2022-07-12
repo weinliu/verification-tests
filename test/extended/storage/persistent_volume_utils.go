@@ -29,6 +29,7 @@ type persistentVolume struct {
 	volumeKind    string
 	nfsServerIP   string
 	iscsiServerIP string
+	iscsiPortals  []string
 }
 
 // function option mode to change the default values of PersistentVolume Object attributes, e.g. name, namespace, accessmode, capacity, volumemode etc.
@@ -111,6 +112,13 @@ func setPersistentVolumeIscsiServerIP(iscsiServerIP string) persistentVolumeOpti
 	}
 }
 
+// Replace the default value of PersistentVolume iscsiPortals attribute
+func setPersistentVolumeIscsiPortals(iscsiPortals []string) persistentVolumeOption {
+	return func(this *persistentVolume) {
+		this.iscsiPortals = iscsiPortals
+	}
+}
+
 // Replace the default value of PersistentVolume volumeKind attribute
 func setPersistentVolumeKind(volumeKind string) persistentVolumeOption {
 	return func(this *persistentVolume) {
@@ -169,14 +177,14 @@ func (pv *persistentVolume) create(oc *exutil.CLI) {
 	// iscsi kind PersistentVolume
 	case "iscsi":
 		iscsiParameters := map[string]interface{}{
-			"targetPortal":  pv.iscsiServerIP,
+			"targetPortal":  pv.iscsiServerIP + ":3260",
 			"iqn":           "iqn.2016-04.test.com:storage.target00",
 			"lun":           0,
 			"iface":         "default",
 			"fsType":        "ext4",
 			"readOnly":      false,
 			"initiatorName": "iqn.2016-04.test.com:test.img",
-			"portals":       []string{pv.iscsiServerIP + ":3260"},
+			"portals":       pv.iscsiPortals,
 		}
 		pvExtraParameters = map[string]interface{}{
 			"jsonPath": `items.0.spec.`,

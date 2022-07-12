@@ -83,8 +83,8 @@ func setIscsiServerSvc(svc service) iscsiServerOption {
 
 //  Create a new customized iscsiServer object
 func newIscsiServer(opts ...iscsiServerOption) iscsiServer {
-	serverName := "iscsi-target" + getRandomString()
-	serviceName := "iscsi-service" + getRandomString()
+	serverName := "iscsi-target-" + getRandomString()
+	serviceName := "iscsi-service-" + getRandomString()
 	defaultIscsiServer := iscsiServer{
 		deploy: newDeployment(setDeploymentName(serverName), setDeploymentApplabel(serverName), setDeploymentMountpath("/lib/modules")),
 		svc:    newService(setServiceName(serviceName), setServiceSelectorLable(serverName), setServiceNodePort("0"), setServicePort("3260"), setServiceTargetPort("3260"), setServiceProtocol("TCP")),
@@ -101,10 +101,7 @@ func (iscsi *iscsiServer) install(oc *exutil.CLI) {
 	iscsi.deploy.waitReady(oc)
 	iscsi.svc.create(oc)
 	iscsi.svc.getClusterIP(oc)
-	cmd := "targetcli /iscsi/iqn.2016-04.test.com:storage.target00/tpg1/portals create " + iscsi.svc.clusterIP //setup to work with service
-	msg, _err := execCommandInSpecificPod(oc, iscsi.deploy.namespace, iscsi.deploy.getPodList(oc)[0], cmd)
-	o.Expect(_err).NotTo(o.HaveOccurred())
-	o.Expect(msg).To(o.ContainSubstring("Created network portal " + iscsi.svc.clusterIP + ":3260"))
+	iscsi.createIscsiNetworkPortal(oc, iscsi.svc.clusterIP)
 	e2e.Logf("Install iSCSI server successful, serverIP is %s", iscsi.svc.clusterIP)
 }
 
@@ -112,4 +109,12 @@ func (iscsi *iscsiServer) install(oc *exutil.CLI) {
 func (iscsi *iscsiServer) uninstall(oc *exutil.CLI) {
 	iscsi.svc.deleteAsAdmin(oc)
 	iscsi.deploy.deleteAsAdmin(oc)
+}
+
+// Create network portal on iSCSI target
+func (iscsi *iscsiServer) createIscsiNetworkPortal(oc *exutil.CLI, serviceIP string) {
+	cmd := "targetcli /iscsi/iqn.2016-04.test.com:storage.target00/tpg1/portals create " + serviceIP
+	msg, _err := execCommandInSpecificPod(oc, iscsi.deploy.namespace, iscsi.deploy.getPodList(oc)[0], cmd)
+	o.Expect(_err).NotTo(o.HaveOccurred())
+	o.Expect(msg).To(o.ContainSubstring("Created network portal " + serviceIP + ":3260"))
 }
