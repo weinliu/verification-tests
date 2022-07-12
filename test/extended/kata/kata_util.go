@@ -66,7 +66,7 @@ func subscribeFromTemplate(oc *exutil.CLI, sub subscriptionDescription, subTempl
 }
 
 // author: tbuskey@redhat.com, abhbaner@redhat.com
-func createKataConfig(oc *exutil.CLI, kcTemplate, kcName, kcMonitorImageName string, sub subscriptionDescription) (msg string, err error) {
+func createKataConfig(oc *exutil.CLI, kcTemplate, kcName, kcMonitorImageName, kcLogLevel string, sub subscriptionDescription) (msg string, err error) {
 	// If this is used, label the caller with [Disruptive][Serial][Slow]
 	// If kataconfig already exists, this must not error
 	var configFile string
@@ -86,7 +86,7 @@ func createKataConfig(oc *exutil.CLI, kcTemplate, kcName, kcMonitorImageName str
 	o.Expect(msg).NotTo(o.BeEmpty())
 
 	g.By("(2) Create kataconfig file")
-	configFile, err = oc.AsAdmin().WithoutNamespace().Run("process").Args("--ignore-unknown-parameters=true", "-f", kcTemplate, "-p", "NAME="+kcName, "MONITOR="+kcMonitorImageName, "-n", sub.namespace).OutputToFile(getRandomString() + "kataconfig-common.json")
+	configFile, err = oc.AsAdmin().WithoutNamespace().Run("process").Args("--ignore-unknown-parameters=true", "-f", kcTemplate, "-p", "NAME="+kcName, "MONITOR="+kcMonitorImageName, "LOGLEVEL="+kcLogLevel, "-n", sub.namespace).OutputToFile(getRandomString() + "kataconfig-common.json")
 	e2e.Logf("the kataconfig file is %s, %v", configFile, err)
 
 	g.By("(2.1) Apply kataconfig file")
@@ -262,4 +262,60 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "--no-headers").Output()
 	return msg, err
 
+}
+
+// author: valiev@redhat.com
+func getNodeListByLabel(oc *exutil.CLI, labelKey string) (nodeNameList []string, msg string, err error) {
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", labelKey, "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	nodeNameList = strings.Fields(msg)
+	return nodeNameList, msg, err
+}
+
+// author: tbuskey@redhat.com
+func waitForNodesInDebug(oc *exutil.CLI) (msg string, err error) {
+	count := 0
+	workerNodeList, msg, err := getNodeListByLabel(oc, "node-role.kubernetes.io/worker=")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	workerNodeCount := len(workerNodeList)
+	if workerNodeCount < 1 {
+		e2e.Logf("ERROR no worker nodes: %v, %v %v", workerNodeList, msg, err)
+	}
+	o.Expect(workerNodeList).NotTo(o.BeEmpty())
+	e2e.Logf("Waiting for %v nodes to enter debug: %v", workerNodeCount, workerNodeList)
+
+	// loop all workers until they all have debug
+	errCheck := wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+		count = 0
+		for index := range workerNodeList {
+			msg, err = oc.AsAdmin().Run("debug").Args("node/"+workerNodeList[index], "--", "chroot", "/host", "crio", "config").Output()
+			if strings.Contains(msg, "log_level = \"debug") {
+				count++
+				o.Expect(msg).To(o.ContainSubstring("log_level = \"debug"))
+			}
+		}
+		if count == workerNodeCount {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("only %v of %v total worker nodes are in debug: %v\n %v", count, workerNodeCount, workerNodeList, msg, err))
+	msg = fmt.Sprintf("All %v worker nodes are in debug mode: %v", workerNodeCount, workerNodeList)
+	err = nil
+	return msg, err
+}
+
+// author: tbuskey@redhat.com
+func imageContentSourcePolicy(oc *exutil.CLI, configFile, name string) (msg string, err error) {
+	g.By("Applying ImageContentSourcePolicy")
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Output()
+	errCheck := wait.Poll(10*time.Second, 360*time.Second, func() (bool, error) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "--no-headers").Output()
+		if strings.Contains(msg, name) {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("applying ImageContentSourcePolicy %v failed: %v %v", configFile, msg, err))
+	return msg, err
 }

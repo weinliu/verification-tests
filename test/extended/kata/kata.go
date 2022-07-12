@@ -3,8 +3,10 @@ package kata
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,7 +29,10 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		kcTemplate           = filepath.Join(testDataDir, "kataconfig.yaml")
 		defaultDeployment    = filepath.Join(testDataDir, "deployment-example.yaml")
 		subTemplate          = filepath.Join(testDataDir, "subscription_template.yaml")
-		kcMonitorImageName   = ""
+		kcLogLevel           = "info"
+		kcMonitorImageName   = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:1.2.0"
+		mustGatherImage      = "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.2.0"
+		release              = "GA"
 	)
 
 	subscription := subscriptionDescription{
@@ -40,6 +45,9 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		operatorPackage:        "sandboxed-containers-operator",
 		template:               subTemplate,
 	}
+
+	// prerelease overrides for must-gather 42167
+	release = "pre-GA"
 
 	g.BeforeEach(func() {
 		// Creating/deleting kataconfig reboots all worker node and extended-platform-tests may timeout after 20m.
@@ -69,7 +77,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		msg, err = subscribeFromTemplate(oc, subscription, subTemplate, ns, og)
 		e2e.Logf("---------- subscription %v succeeded with channel %v %v", subscription.subName, subscription.channel, err)
 
-		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, subscription)
+		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, kcLogLevel, subscription)
 		e2e.Logf("---------- kataconfig %v create succeeded %v %v", commonKataConfigName, msg, err)
 	})
 
@@ -277,7 +285,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		e2e.Logf("kataconfig %v was deleted\n--------- %v %v", commonKataConfigName, msg, err)
 
 		g.By("Recreating kataconfig in 43523 for the remaining test cases")
-		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, subscription)
+		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, kcLogLevel, subscription)
 		e2e.Logf("recreated kataconfig %v: %v %v", commonKataConfigName, msg, err)
 
 		g.By("SUCCESS")
@@ -303,7 +311,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("SUCCESSS - build acceptance passed")
 
 		g.By("Recreating kataconfig for the remaining test cases")
-		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, subscription)
+		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, kcLogLevel, subscription)
 		e2e.Logf("recreated kataconfig %v: %v %v", commonKataConfigName, msg, err)
 	})
 
@@ -363,6 +371,269 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		})
 		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Pod replica could not be restarted"))
 		g.By("SUCCESSS - kataconfig installed and post that pod with runc successfully restarted ")
+	})
+
+	// author: tbuskey@redhat.com
+	g.It("Longduration-NonPreRelease-Author:tbuskey-High-42167-Must-gather collects sandboxed operator logs[Serial]", func() {
+
+		type counts struct {
+			audits           int
+			crio             int
+			qemuLogs         int
+			qemuVersion      int
+			describeCsv      int
+			describeKc       int
+			describeServices int
+			describeSub      int
+			describeVwebhook int
+		}
+
+		oc.SetupProject()
+
+		var (
+			crioFile              string
+			crioRuntimeConfigName = "crio-debug-42167"
+			crioRuntimeLogLevel   = "debug"
+			crioTemplate          = filepath.Join(testDataDir, "containerruntimeconfig_template.yaml")
+			deployConfigFile      string
+			deployName            = "mg-42167"
+			deploymentTemplate    = filepath.Join(testDataDir, "deployment-example.yaml")
+			err                   error
+			fails                 = 0
+			logFile               string
+			mustgatherFiles       = []string{""}
+			mustgatherName        = "mustgather" + getRandomString()
+			mustgatherDir         = "/tmp/" + mustgatherName
+			mustgatherLog         = mustgatherName + ".log"
+			mustgatherTopdir      string
+			msg                   string
+			nodeControlCount                    = 0
+			nodeWorkerCount                     = 0
+			podNs                               = oc.Namespace()
+			preGAregistry                       = "kata-brew-registry"
+			readyReplicas                       = 0
+			snooze                time.Duration = 660
+		)
+
+		mustgatherChecks := counts{
+			audits:           0,
+			crio:             0,
+			qemuLogs:         0,
+			qemuVersion:      0,
+			describeCsv:      0,
+			describeKc:       0,
+			describeServices: 0,
+			describeSub:      0,
+			describeVwebhook: 0,
+		}
+
+		nodeControlList, msg, err := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeControlCount = len(nodeControlList)
+
+		nodeWorkerList, msg, err := getNodeListByLabel(oc, "node-role.kubernetes.io/worker=")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeWorkerCount = len(nodeWorkerList)
+
+		mustgatherExpected := counts{
+			audits:           nodeWorkerCount,
+			crio:             nodeWorkerCount + nodeControlCount,
+			qemuLogs:         nodeWorkerCount, // Need to change from deployment
+			qemuVersion:      nodeWorkerCount,
+			describeCsv:      1,
+			describeKc:       1,
+			describeServices: 1,
+			describeSub:      1,
+			describeVwebhook: 1,
+		}
+
+		// prerelease overrides
+		if release != "GA" {
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("imagecontentsourcepolicy", preGAregistry, "--ignore-not-found").Execute()
+			msg, err = imageContentSourcePolicy(oc, filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml"), preGAregistry)
+			e2e.Logf("Applied ICSP %v %v", msg, err)
+			// must-gather does not need a catalog.  It just needs an ICSP
+			mustGatherImage = "brew.registry.redhat.io/rh-osbs/openshift-sandboxed-containers-operator-must-gather:1.3.0-9"
+		}
+
+		g.By("Create ContainerRuntimeConfig to put worker nodes into debug mode")
+		// or logLevel: debug in kataconfig for 1.3 will already do it
+		crioFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", crioTemplate, "-p", "NAME="+crioRuntimeConfigName, "LOGLEVEL="+crioRuntimeLogLevel, "-n", subscription.namespace).OutputToFile(getRandomString() + "-crioRuntimeConfigFile.json")
+		e2e.Logf("Created the ContainerRuntimeConfig yaml %s, %v", crioFile, err)
+
+		g.By("Applying ContainerRuntimeConfig yaml")
+		// no need to check for an existing one
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crioFile).Output()
+		e2e.Logf("Applied ContainerRuntimeConfig %v: %v, %v", crioFile, msg, err)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("containerruntimeconfig", crioRuntimeConfigName, "-n", subscription.namespace, "--ignore-not-found").Execute()
+
+		g.By("Wait for worker nodes to be in crio debug mode")
+		msg, err = waitForNodesInDebug(oc)
+
+		g.By("Create a deployment file from template")
+		// This creates N replicas where N=worker node
+		// It does not ensure that there is a replica on each worker node.
+		deployConfigFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", deploymentTemplate, "-p", "NAME="+deployName, "-p", "NAMESPACE="+podNs, "-p", "REPLICAS="+fmt.Sprintf("%v", nodeWorkerCount)).OutputToFile(getRandomString() + "dep-common.json")
+		e2e.Logf("Deploy file: %v %v", deployConfigFile, err)
+
+		g.By("Apply deployment " + deployConfigFile)
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", deployConfigFile, "-n", podNs).Output()
+		e2e.Logf("Applied deployment %v: %v %v", deployName, msg, err)
+
+		g.By("Wait for deployment to be ready")
+		errCheck := wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", podNs, deployName, "-o=jsonpath={.status.readyReplicas}").Output()
+			readyReplicas, _ = strconv.Atoi(msg)
+			if readyReplicas == nodeWorkerCount {
+				return true, nil
+			}
+			return false, nil
+		})
+		if errCheck != nil {
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", podNs, deployName, "-o", "yaml").Output()
+			e2e.Logf("timeout %v %v", msg, err)
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", podNs, deployName, "-o=jsonpath={.status.readyReplicas}").Output()
+		}
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Deployment has %v replicas, not %v", msg, nodeWorkerCount))
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
+
+		g.By("run must-gather")
+		defer os.RemoveAll(mustgatherDir)
+		logFile, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("-n", subscription.namespace, "must-gather", "--image="+mustGatherImage, "--dest-dir="+mustgatherDir).OutputToFile(mustgatherLog)
+		e2e.Logf("created mustgather from image %v in %v logged to %v,%v %v", mustGatherImage, mustgatherDir, mustgatherLog, logFile, err)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("look in " + mustgatherDir)
+		files, err := ioutil.ReadDir(mustgatherDir)
+		e2e.Logf("%v contents %v\n", mustgatherDir, err)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, file := range files {
+			if strings.Contains(file.Name(), "sha256") {
+				mustgatherTopdir = mustgatherDir + "/" + file.Name()
+				break
+			}
+		}
+
+		g.By("Walk through " + mustgatherTopdir)
+		err = filepath.Walk(mustgatherTopdir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			// qemu will create a directory but might not create files
+			if info.IsDir() {
+				if strings.Contains(path, "worker") && strings.Contains(path, "/run/vc/crio/fifo") && !strings.Contains(path, "/run/vc/crio/fifo/io") {
+					mustgatherChecks.qemuLogs++
+				}
+			} else {
+				mustgatherFiles = append(mustgatherFiles, path)
+				if strings.Contains(path, "audit.log.gz") {
+					mustgatherChecks.audits++
+				}
+
+				if strings.Contains(path, "/nodes/") {
+					if strings.Contains(path, "_logs_crio") {
+						mustgatherChecks.crio++
+					}
+					if strings.Contains(path, "worker") && strings.Contains(path, "/version") {
+						mustgatherChecks.qemuVersion++
+						// read file to extract kata-containers-* and qemu-kvm-core-* ?
+					}
+				}
+
+				if strings.Contains(path, "/sandboxed-containers") {
+					if strings.Contains(path, "/clusterserviceversion_description") {
+						mustgatherChecks.describeCsv++
+					}
+					if strings.Contains(path, "/kataconfig_description") {
+						mustgatherChecks.describeKc++
+					}
+					if strings.Contains(path, "/services_description") {
+						mustgatherChecks.describeServices++
+					}
+					if strings.Contains(path, "/subscription_description") {
+						mustgatherChecks.describeSub++
+					}
+					if strings.Contains(path, "/validatingwebhookconfigurations_description") {
+						mustgatherChecks.describeVwebhook++
+					}
+				}
+			}
+			return nil
+		})
+		e2e.Logf("%v files in must-gather dir %v", len(mustgatherFiles), mustgatherTopdir)
+		e2e.Logf("counts %v, expected %v", mustgatherChecks, mustgatherExpected)
+
+		g.By("Compare walkthrough counts to expected from " + mustgatherTopdir)
+
+		e2e.Logf("mustgatherChecks.audits : %v", mustgatherChecks.audits)
+		if mustgatherChecks.audits != mustgatherExpected.audits {
+			e2e.Logf("Audit logs (%v) did not exist on all worker nodes (%v)", mustgatherChecks.audits, mustgatherExpected.audits)
+			fails++
+		}
+		e2e.Logf("mustgatherChecks.crio : %v", mustgatherChecks.crio)
+		if mustgatherChecks.crio != (mustgatherExpected.crio) {
+			e2e.Logf("crio logs (%v) did exist on all nodes (%v)", mustgatherChecks.crio, (mustgatherExpected.crio))
+			fails++
+		}
+
+		// A deployment will place VMs based on loads
+		// to ensure a VM is on each node another method is needed
+		e2e.Logf("mustgatherChecks.qemuLogs : %v", mustgatherChecks.qemuLogs)
+		if mustgatherChecks.qemuLogs != mustgatherExpected.qemuLogs {
+			e2e.Logf("qemu log directory (%v) does not exist on all worker nodes (%v)", mustgatherChecks.qemuLogs, mustgatherExpected.qemuLogs)
+			// VMs should be 1 on each worker node but k8s might put 2 on a node & 0 on another per node load
+			if mustgatherChecks.qemuLogs < 1 { // because deployment is used
+				fails++
+			}
+		}
+
+		e2e.Logf("mustgatherChecks.qemuVersion : %v", mustgatherChecks.qemuVersion)
+		if mustgatherChecks.qemuVersion != mustgatherExpected.qemuVersion {
+			e2e.Logf("rpm version log (%v) did not exist on worker nodes (%v)", mustgatherChecks.qemuVersion, mustgatherExpected.qemuVersion)
+			fails++
+		}
+
+		e2e.Logf("mustgatherChecks.describeCsv : %v", mustgatherChecks.describeCsv)
+		if mustgatherChecks.describeCsv != mustgatherExpected.describeCsv {
+			e2e.Logf("describeCsv (%v) did not exist", mustgatherChecks.describeCsv)
+			fails++
+		}
+		e2e.Logf("mustgatherChecks.describeKc : %v", mustgatherChecks.describeKc)
+		if mustgatherChecks.describeKc != mustgatherExpected.describeKc {
+			e2e.Logf("describeKc (%v) did not exist", mustgatherChecks.describeKc)
+			fails++
+		}
+		e2e.Logf("mustgatherChecks.describeServices : %v", mustgatherChecks.describeServices)
+		if mustgatherChecks.describeServices != mustgatherExpected.describeServices {
+			e2e.Logf("describeServices (%v) did not exist", mustgatherChecks.describeServices)
+			fails++
+		}
+		e2e.Logf("mustgatherChecks.describeSub : %v", mustgatherChecks.describeSub)
+		if mustgatherChecks.describeSub != mustgatherExpected.describeSub {
+			e2e.Logf("describeSub (%v) did not exist", mustgatherChecks.describeSub)
+			fails++
+		}
+		e2e.Logf("mustgatherChecks.describeVwebhook : %v", mustgatherChecks.describeVwebhook)
+		if mustgatherChecks.describeVwebhook != mustgatherExpected.describeVwebhook {
+			e2e.Logf("describeVwebhook (%v) did not exist", mustgatherChecks.describeVwebhook)
+			fails++
+		}
+
+		if fails != 0 {
+			e2e.Logf("%v logs did not match expectd results", fails)
+		}
+		o.Expect(fails).To(o.Equal(0))
+
+		g.By("Tear down pod")
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", "-n", podNs, deployName).Execute()
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("containerruntimeconfig", crioRuntimeConfigName, "-n", subscription.namespace).Execute()
+		os.RemoveAll(mustgatherDir)
+		if release != "GA" {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("imagecontentsourcepolicy", preGAregistry).Execute()
+		}
+
+		g.By("SUCCESS")
 	})
 
 })

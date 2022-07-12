@@ -10,11 +10,11 @@ objects:
     spec:
       checkNodeEligibility: false
       kataMonitorImage: "${MONITOR}"
-      #  kataConfigPoolSelector:
-      #    matchLabels:
-      #       custom-kata1: test
-      #Note: you could add more config in this template for your common usage.
-
+      logLevel: "${LOGLEVEL}"
 parameters:
   - name: NAME
+    value: "example kataconfig"
   - name: MONITOR
+    value: "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:1.2.0"
+  - name: LOGLEVEL
+    value: "info"
