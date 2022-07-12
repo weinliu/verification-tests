@@ -166,14 +166,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			loki := externalLoki{"loki-server", lokiNS}
 			defer loki.remove(oc)
 			loki.deployLoki(oc)
-			labelKeys := "kubernetes_pod_labels_positive"
+			labelKeys := "kubernetes_labels_positive"
 			podLabel := "centos-logtest"
 
 			g.By("Create ClusterLogForwarder instance")
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "47801.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "LABELKEY=kubernetes.pod_labels.positive", "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "LABELKEY=kubernetes.labels.positive", "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogging instance")
@@ -201,7 +201,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("App logs found with matching LabelKey: " + labelKeys + " and pod Label: " + podLabel)
 
 			g.By("Searching for Application Logs in Loki using LabelKey - Negative match")
-			labelKeys = "kubernetes_pod_labels_negative"
+			labelKeys = "kubernetes_labels_negative"
 			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
 				appLogs, err := lc.searchByKey("", labelKeys, podLabel)
 				if err != nil {

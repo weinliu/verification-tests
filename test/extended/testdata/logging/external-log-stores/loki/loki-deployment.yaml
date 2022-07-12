@@ -30,7 +30,7 @@ objects:
       spec:
         containers:
         - name: "loki"
-          image: quay.io/openshifttest/grafana-loki:2.3.0
+          image: quay.io/openshifttest/grafana-loki@sha256:bbf6dbf3264af939a541b6f3c014cba21a2bdc8f22cb7962eee7e9048b41ea5e
           imagePullPolicy: IfNotPresent
           ports:
           - containerPort: 3100
