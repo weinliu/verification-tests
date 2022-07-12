@@ -26,6 +26,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	var mvnCLI = NewMVNCLI()
 	var oc = exutil.NewCLIWithoutNamespace("default")
 	var ocpversion = "4.11"
+	var ocppreversion = "4.10"
+	var upstream = true
 
 	// author: jfan@redhat.com
 	g.It("VMonly-Author:jfan-High-37465-SDK olm improve olm related sub commands", func() {
@@ -917,9 +919,10 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if architecture != "amd64" && architecture != "arm64" {
 			g.Skip("Do not support " + architecture)
 		}
+
 		imageTag := "quay.io/olmqe/memcached-operator-ansible-base:v" + ocpversion + getRandomString()
 		if architecture == "arm64" {
-			imageTag = "quay.io/olmqe/memcached-operator-ansible-base:v4.11-34427"
+			imageTag = "quay.io/olmqe/memcached-operator-ansible-base:v" + ocpversion + "-34427"
 		}
 		nsSystem := "system-ocp34427" + getRandomString()
 		nsOperator := "memcached-operator-34427-system-" + getRandomString()
@@ -932,7 +935,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		operatorsdkCLI.ExecCommandPath = tmpPath
 		makeCLI.ExecCommandPath = tmpPath
 
-		if imageTag != "quay.io/olmqe/memcached-operator-ansible-base:v4.11-34427" {
+		if imageTag != "quay.io/olmqe/memcached-operator-ansible-base:v"+ocpversion+"-34427" {
 			quayCLI := container.NewQuayCLI()
 			defer quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
 		}
@@ -953,16 +956,18 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Writing kustomize manifests"))
 
-		g.By("step: OCP-52625 operatorsdk generate operator base image match the release version.")
-		dockerFile := filepath.Join(tmpPath, "Dockerfile")
-		content := getContent(dockerFile)
-		o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-ansible-operator:v4.11"))
-		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-operator:v4.11", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v4.11")
+		if !upstream {
+			g.By("step: OCP-52625 operatorsdk generate operator base image match the release version.")
+			dockerFile := filepath.Join(tmpPath, "Dockerfile")
+			content := getContent(dockerFile)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-ansible-operator:v" + ocpversion))
+			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
 
-		managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
-		content = getContent(managerAuthProxyPatch)
-		o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.11"))
-		replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.11", "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.10")
+			managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
+			content = getContent(managerAuthProxyPatch)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v" + ocpversion))
+			replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocppreversion)
+		}
 
 		dataPath := "test/extended/util/operatorsdk/ocp-34427-data/roles/memcached/"
 		err = copy(filepath.Join(dataPath, "tasks", "main.yml"), filepath.Join(tmpPath, "roles", "memcached34427", "tasks", "main.yml"))
@@ -1085,7 +1090,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 		imageTag := "quay.io/olmqe/memcached-operator-max-worker:v" + ocpversion + getRandomString()
 		if architecture == "arm64" {
-			imageTag = "quay.io/olmqe/memcached-operator-max-worker:v4.11-34366"
+			imageTag = "quay.io/olmqe/memcached-operator-max-worker:v" + ocpversion + "-34366"
 		}
 		nsSystem := "system-ocp34366" + getRandomString()
 		nsOperator := "memcached-operator-34366-system-" + getRandomString()
@@ -1098,7 +1103,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		operatorsdkCLI.ExecCommandPath = tmpPath
 		makeCLI.ExecCommandPath = tmpPath
 
-		if imageTag != "quay.io/olmqe/memcached-operator-max-worker:v4.11-34366" {
+		if imageTag != "quay.io/olmqe/memcached-operator-max-worker:v"+ocpversion+"-34366" {
 			quayCLI := container.NewQuayCLI()
 			defer quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
 		}
@@ -1114,16 +1119,18 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Next"))
 
-		g.By("step: modify Dockerfile.")
-		dockerFile := filepath.Join(tmpPath, "Dockerfile")
-		content := getContent(dockerFile)
-		o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-ansible-operator:v4.11"))
-		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-operator:v4.11", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v4.11")
+		if !upstream {
+			g.By("step: modify Dockerfile.")
+			dockerFile := filepath.Join(tmpPath, "Dockerfile")
+			content := getContent(dockerFile)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-ansible-operator:v" + ocpversion))
+			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
 
-		managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
-		content = getContent(managerAuthProxyPatch)
-		o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.11"))
-		replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.11", "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.10")
+			managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
+			content = getContent(managerAuthProxyPatch)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v" + ocpversion))
+			replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocppreversion)
+		}
 
 		g.By("step: Create API.")
 		output, err = operatorsdkCLI.Run("create").Args("api", "--group", "cache", "--version", "v1alpha1", "--kind", "Memcached34366", "--generate-role").Output()
@@ -1413,7 +1420,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if architecture != "amd64" && architecture != "arm64" {
 			g.Skip("Do not support " + architecture)
 		}
-		imageTag := "quay.io/olmqe/nginx-operator-base:v4.10-34426" + getRandomString()
+		imageTag := "quay.io/olmqe/nginx-operator-base:v" + ocpversion + "-34426" + getRandomString()
 		nsSystem := "system-34426-" + getRandomString()
 		nsOperator := "nginx-operator-34426-system"
 
@@ -1459,16 +1466,18 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("nginx"))
 
-		g.By("step: OCP-52625 operatorsdk generate operator base image match the release version	.")
-		dockerFile := filepath.Join(tmpPath, "Dockerfile")
-		content := getContent(dockerFile)
-		o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-helm-operator:v4.11"))
-		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-helm-operator:v4.11", "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-operator:v4.11")
+		if !upstream {
+			g.By("step: OCP-52625 operatorsdk generate operator base image match the release version	.")
+			dockerFile := filepath.Join(tmpPath, "Dockerfile")
+			content := getContent(dockerFile)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-helm-operator:v" + ocpversion))
+			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-helm-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-operator:v"+ocpversion)
 
-		managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
-		content = getContent(managerAuthProxyPatch)
-		o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.11"))
-		replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.11", "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.10")
+			managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
+			content = getContent(managerAuthProxyPatch)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v" + ocpversion))
+			replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocppreversion)
+		}
 
 		g.By("step: modify namespace")
 		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/name: system/name: %s/g' `grep -rl \"name: system\" %s`", nsSystem, tmpPath)).Output()
@@ -1699,7 +1708,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
-		imageTag := "registry-proxy.engineering.redhat.com/rh-osbs/openshift-ose-ansible-operator:v4.11"
+		imageTag := "registry-proxy.engineering.redhat.com/rh-osbs/openshift-ose-ansible-operator:v" + ocpversion
 		containerCLI := container.NewPodmanCLI()
 		e2e.Logf("create container with image %s", imageTag)
 		id, err := containerCLI.ContainerCreate(imageTag, "test-42028", "/bin/sh", true)
@@ -2064,7 +2073,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			g.Skip("Do not support " + architecture)
 		}
 		if architecture == "arm64" {
-			imageTag = "quay.io/olmqe/memcached-operator-pass-unsafe:v4.11-40341"
+			imageTag = "quay.io/olmqe/memcached-operator-pass-unsafe:v" + ocpversion + "-40341"
 		}
 		nsSystem := "system-40341-" + getRandomString()
 		nsOperator := "memcached-operator-40341-system-" + getRandomString()
@@ -2078,7 +2087,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		makeCLI.ExecCommandPath = tmpPath
 
 		defer func() {
-			if imageTag != "quay.io/olmqe/memcached-operator-pass-unsafe:v4.11-40341" {
+			if imageTag != "quay.io/olmqe/memcached-operator-pass-unsafe:v"+ocpversion+"-40341" {
 				quayCLI := container.NewQuayCLI()
 				quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
 			}
@@ -2102,15 +2111,17 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Writing kustomize manifests"))
 
-		g.By("step: modify Dockerfile.")
-		dockerFile := filepath.Join(tmpPath, "Dockerfile")
-		content := getContent(dockerFile)
-		o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-ansible-operator:v4.11"))
-		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-operator:v4.11", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v4.11")
-		managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
-		content = getContent(managerAuthProxyPatch)
-		o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.11"))
-		replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.11", "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.10")
+		if !upstream {
+			g.By("step: modify Dockerfile.")
+			dockerFile := filepath.Join(tmpPath, "Dockerfile")
+			content := getContent(dockerFile)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-ansible-operator:v" + ocpversion))
+			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
+			managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
+			content = getContent(managerAuthProxyPatch)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v" + ocpversion))
+			replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocppreversion)
+		}
 
 		deployfilepath := filepath.Join(tmpPath, "config", "samples", "cache_v1alpha1_memcached40341.yaml")
 		exec.Command("bash", "-c", fmt.Sprintf("sed -i '$d' %s", deployfilepath)).Output()
