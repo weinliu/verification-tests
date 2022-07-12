@@ -1348,6 +1348,138 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		_, err = e2e.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
 		o.Expect(err).To(o.HaveOccurred())
 	})
+
+	// author: jechen@redhat.com
+	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-47468-High-47469-Pod access external through egressIP if egress node hosts the egressIP that assigned to netns, or it lose access to external if no node hosts the egressIP that assigned to netns. [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+
+		g.By("1. Get list of nodes, choose first node as egressNode, get subnet and 1 unused ip address from the egressNode")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("Not enough nodes for the test, need at least 2 nodes, skip the case!!")
+		}
+
+		egressNode := nodeList.Items[0].Name
+		nonEgressNode := nodeList.Items[1].Name
+		sub := getIfaddrFromNode(egressNode, oc)
+
+		// Find 3 unused IP from the egress node
+		freeIPs := findUnUsedIPsOnNode(oc, egressNode, sub, 3)
+		o.Expect(len(freeIPs) == 3).Should(o.BeTrue())
+
+		g.By("2. Patch first two unused IP above as egressIP to the egressIP node")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[\""+freeIPs[0]+"\", \""+freeIPs[1]+"\"]}")
+
+		g.By("3. Create first namespace, patch the first egressIP to the namespace")
+		ns1 := oc.Namespace()
+
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns1, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns1, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
+
+		g.By("4. Create two test pods in the first namespace, one on the egressNode, another on a non-egressNode")
+		pod1 := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns1,
+			nodename:  egressNode,
+			template:  pingPodNodeTemplate,
+		}
+		pod1.createPingPodNode(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		pod2 := pingPodResourceNode{
+			name:      "hello-pod2",
+			namespace: ns1,
+			nodename:  nonEgressNode,
+			template:  pingPodNodeTemplate,
+		}
+		pod2.createPingPodNode(oc)
+		waitPodReady(oc, pod2.namespace, pod2.name)
+
+		g.By("5. Create a second namespace, patch the second egressIP to the namespace")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns2, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns2, "{\"egressIPs\":[\""+freeIPs[1]+"\"]}")
+
+		g.By("6. Create two test pods in the second namespace, one on the egressNode, another on a non-egressNode")
+		pod3 := pingPodResourceNode{
+			name:      "hello-pod3",
+			namespace: ns2,
+			nodename:  egressNode,
+			template:  pingPodNodeTemplate,
+		}
+		pod3.createPingPodNode(oc)
+		waitPodReady(oc, pod3.namespace, pod3.name)
+
+		pod4 := pingPodResourceNode{
+			name:      "hello-pod4",
+			namespace: ns2,
+			nodename:  nonEgressNode,
+			template:  pingPodNodeTemplate,
+		}
+		pod4.createPingPodNode(oc)
+		waitPodReady(oc, pod4.namespace, pod4.name)
+
+		g.By("7. Curl from test pods of the first namespace, verify their sourceIP is the egressIP associated with first namespace regardless the test pod is on egressNode or not")
+		sourceIP, CurlErr := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		e2e.Logf("\n Curl from first pod on egressNode, get sourceIP as %v \n", sourceIP)
+		o.Expect(CurlErr).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).Should(o.Equal(freeIPs[0]))
+
+		sourceIP, CurlErr = e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		e2e.Logf("\n Curl from second pod on Non-egress Node, get sourceIP as %v \n", sourceIP)
+		o.Expect(CurlErr).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).Should(o.Equal(freeIPs[0]))
+
+		g.By("8. Curl from test pods of the second namespace, verify their sourceIP is the egressIP associated with second namespace regardless the test pod is on egressNode or not")
+		sourceIP, CurlErr = e2e.RunHostCmd(pod3.namespace, pod3.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		e2e.Logf("\n Curl from third pod on egressNode, get sourceIP as %v \n", sourceIP)
+		o.Expect(CurlErr).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).Should(o.Equal(freeIPs[1]))
+
+		sourceIP, CurlErr = e2e.RunHostCmd(pod4.namespace, pod4.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		e2e.Logf("\n Curl from forth pod on Non-egress Node, get sourceIP as %v \n", sourceIP)
+		o.Expect(CurlErr).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).Should(o.Equal(freeIPs[1]))
+
+		g.By("9. Create a third namespace, patch the third egressIP to the namespace without it being assigned to an egressNode")
+		oc.SetupProject()
+		ns3 := oc.Namespace()
+
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns3, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns3, "{\"egressIPs\":[\""+freeIPs[2]+"\"]}")
+
+		g.By("10. Create two test pods in the third namespace, one on the egressNode, another on a non-egressNode")
+		pod5 := pingPodResourceNode{
+			name:      "hello-pod5",
+			namespace: ns3,
+			nodename:  egressNode,
+			template:  pingPodNodeTemplate,
+		}
+		pod5.createPingPodNode(oc)
+		waitPodReady(oc, pod5.namespace, pod5.name)
+
+		pod6 := pingPodResourceNode{
+			name:      "hello-pod6",
+			namespace: ns3,
+			nodename:  nonEgressNode,
+			template:  pingPodNodeTemplate,
+		}
+		pod6.createPingPodNode(oc)
+		waitPodReady(oc, pod6.namespace, pod6.name)
+
+		g.By("11. Curl from test pods of the third namespace, verify they can not access external because there is no node hosts the egressIP, even though it is assigned to third netnamespace, error is expected for curl command")
+		sourceIP, CurlErr = e2e.RunHostCmd(pod5.namespace, pod5.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		o.Expect(CurlErr).To(o.HaveOccurred())
+
+		sourceIP, CurlErr = e2e.RunHostCmd(pod6.namespace, pod6.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		o.Expect(CurlErr).To(o.HaveOccurred())
+	})
+
 })
 
 var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
