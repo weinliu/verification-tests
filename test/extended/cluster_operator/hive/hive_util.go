@@ -2,6 +2,7 @@ package hive
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -240,6 +241,25 @@ type gcpClusterPool struct {
 	maxConcurrent  int
 	hibernateAfter string
 	template       string
+}
+
+type prometheusQueryResult struct {
+	Data struct {
+		Result []struct {
+			Metric struct {
+				Name      string `json:"__name__"`
+				Endpoint  string `json:"endpoint"`
+				Instance  string `json:"instance"`
+				Job       string `json:"job"`
+				Namespace string `json:"namespace"`
+				Pod       string `json:"pod"`
+				Service   string `json:"service"`
+			} `json:"metric"`
+			Value []interface{} `json:"value"`
+		} `json:"result"`
+		ResultType string `json:"resultType"`
+	} `json:"data"`
+	Status string `json:"status"`
 }
 
 //Hive Configurations
@@ -809,4 +829,78 @@ func getPullSpec(oc *exutil.CLI, component string, clusterVersion string) (strin
 		return "", ocErr
 	}
 	return pullSpec, nil
+}
+
+const (
+	enable  = true
+	disable = false
+)
+
+//If enable hive exportMetric
+func exportMetric(oc *exutil.CLI, action bool) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HiveConfig", "hive", "-o=jsonpath={.spec.exportMetrics}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if action {
+		if strings.Contains(output, "true") {
+			e2e.Logf("The exportMetrics has been enabled in hiveconfig, won't change")
+		} else {
+			e2e.Logf("Enable hive exportMetric in Hiveconfig.")
+			newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"HiveConfig", "hive", "--type", "merge", "-p", `{"spec":{"exportMetrics": true}}`}).check(oc)
+			hiveNS, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("Hiveconfig", "hive", "-o=jsonpath={.spec.targetNamespace}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(hiveNS).NotTo(o.BeEmpty())
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "prometheus-k8s", ok, DefaultTimeout, []string{"role", "-n", hiveNS}).check(oc)
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "prometheus-k8s", ok, DefaultTimeout, []string{"rolebinding", "-n", hiveNS}).check(oc)
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-clustersync", ok, DefaultTimeout, []string{"servicemonitor", "-n", hiveNS, "-o=name"}).check(oc)
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", ok, DefaultTimeout, []string{"servicemonitor", "-n", hiveNS, "-o=name"}).check(oc)
+		}
+	}
+	if !action {
+		if !strings.Contains(output, "true") {
+			e2e.Logf("The exportMetrics has been disabled in hiveconfig, won't change")
+		} else {
+			e2e.Logf("Disable hive exportMetric in Hiveconfig.")
+			newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"HiveConfig", "hive", "--type", "merge", "-p", `{"spec":{"exportMetrics": false}}`}).check(oc)
+			hiveNS, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("Hiveconfig", "hive", "-o=jsonpath={.spec.targetNamespace}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(hiveNS).NotTo(o.BeEmpty())
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "prometheus-k8s", nok, DefaultTimeout, []string{"role", "-n", hiveNS}).check(oc)
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "prometheus-k8s", nok, DefaultTimeout, []string{"rolebinding", "-n", hiveNS}).check(oc)
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-clustersync", nok, DefaultTimeout, []string{"servicemonitor", "-n", hiveNS, "-o=name"}).check(oc)
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-controllers", nok, DefaultTimeout, []string{"servicemonitor", "-n", hiveNS, "-o=name"}).check(oc)
+		}
+	}
+
+}
+
+func doPrometheusQuery(oc *exutil.CLI, token string, url string, query string) prometheusQueryResult {
+	var data prometheusQueryResult
+	msg, _, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(
+		"-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "-i", "--",
+		"curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", token),
+		fmt.Sprintf("%s%s", url, query)).Outputs()
+	if err != nil {
+		e2e.Failf("Failed Prometheus query, error: %v", err)
+	}
+	o.Expect(msg).NotTo(o.BeEmpty())
+	json.Unmarshal([]byte(msg), &data)
+	return data
+}
+
+//parameter expect: ok, expected to have expectContent; nok, not expected to have expectContent
+func checkMetric(oc *exutil.CLI, expect bool, token string, url string, query string) {
+	err := wait.Poll(1*time.Minute, (ClusterResumeTimeout/60)*time.Minute, func() (bool, error) {
+		data := doPrometheusQuery(oc, token, url, query)
+		if expect && len(data.Data.Result) > 0 {
+			e2e.Logf("Metric %s exist, expected", query)
+			return true, nil
+		}
+		if !expect && len(data.Data.Result) == 0 {
+			e2e.Logf("Metric %s doesn't exist, expected", query)
+			return true, nil
+		}
+		return false, nil
+
+	})
+	exutil.AssertWaitPollNoErr(err, "can not get expected result")
 }

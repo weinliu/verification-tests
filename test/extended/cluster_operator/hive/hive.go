@@ -31,14 +31,15 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc           = exutil.NewCLI("hive-"+getRandomString(), exutil.KubeConfigPath())
-		ns           hiveNameSpace
-		og           operatorGroup
-		sub          subscription
-		hc           hiveconfig
-		testDataDir  string
-		iaasPlatform string
-		testOCPImage string
+		oc            = exutil.NewCLI("hive-"+getRandomString(), exutil.KubeConfigPath())
+		ns            hiveNameSpace
+		og            operatorGroup
+		sub           subscription
+		hc            hiveconfig
+		testDataDir   string
+		iaasPlatform  string
+		prometheusURL string
+		testOCPImage  string
 	)
 	g.BeforeEach(func() {
 		testDataDir = exutil.FixturePath("testdata", "cluster_operator/hive")
@@ -80,6 +81,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
+		prometheusURL = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
 		//get the latest 4-stable image for Hive testing
 		var err error
 		testOCPImage, err = exutil.GetLatest4StableImage()
@@ -99,6 +101,8 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		g.By("Create hiveconfig !!!")
 		hc.createIfNotExist(oc)
 
+		//Enable hive Metric
+		exportMetric(oc, enable)
 	})
 
 	//author: lwan@redhat.com
@@ -2769,5 +2773,24 @@ spec:
 		provisionName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.provisionRef.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", "logs", asAdmin, withoutNamespace, contain, commitID, ok, DefaultTimeout, []string{"-n", oc.Namespace(), fmt.Sprintf("jobs/%s-provision", provisionName), "-c", "hive"}).check(oc)
+	})
+
+	//author: lwan@redhat.com
+	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "44914"|./bin/extended-platform-tests run --timeout 15m -f -
+	g.It("NonPreRelease-ConnectedOnly-Author:lwan-Medium-44914-View Hive Metrics with OpenShift Cluster Monitoring [Serial]", func() {
+		g.By("Verify hive metrics can get from prometheus...")
+		token, err := exutil.GetSAToken(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(token).NotTo(o.BeEmpty())
+		e2e.Logf("Check hive metrics can be query from promethues")
+		query := "hive_clustersync_first_success_duration_seconds_count"
+		checkMetric(oc, ok, token, prometheusURL, query)
+
+		g.By("Disabled exportedMetric in HiveConfig, Check hive metrics disappear from prometheus...")
+		defer exportMetric(oc, enable)
+		exportMetric(oc, disable)
+		e2e.Logf("Check hive metrics can't be query from promethues after exportedMetric disabled in HiveConfig")
+		checkMetric(oc, nok, token, prometheusURL, query)
 	})
 })
