@@ -1,6 +1,7 @@
 package mco
 
 import (
+	"fmt"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -122,27 +123,48 @@ func (n *Node) UnmaskService(svcName string) (string, error) {
 // PollIsCordoned returns a function that can be used by Gomega to poll the if the node is cordoned (with Eventually/Consistently)
 func (n *Node) PollIsCordoned() func() bool {
 	return func() bool {
-		key, err := n.Get(`{.spec.taints[?(@.effect=="NoSchedule")].key}`)
+		key, err := n.Get(`{.spec.taints[?(@.key=="node.kubernetes.io/unschedulable")].key}`)
 		if err != nil {
 			return false
 		}
-		return key == "node.kubernetes.io/unschedulable"
+
+		return key != ""
 	}
 }
 
 // GetCurrentMachineConfig returns the ID of the current machine config used in the node
-func (n *Node) GetCurrentMachineConfig() string {
+func (n Node) GetCurrentMachineConfig() string {
 	return n.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/currentConfig}`)
 }
 
 // GetDesiredMachineConfig returns the ID of the machine config that we want the node to use
-func (n *Node) GetDesiredMachineConfig() string {
+func (n Node) GetDesiredMachineConfig() string {
 	return n.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/desiredConfig}`)
 }
 
 // GetMachineConfigState returns the State of machineconfiguration process
-func (n *Node) GetMachineConfigState() string {
+func (n Node) GetMachineConfigState() string {
 	return n.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/state}`)
+}
+
+// GetDesiredConfig returns the desired machine config for this node
+func (n Node) GetDesiredConfig() string {
+	return n.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/desiredConfig}`)
+}
+
+// GetDesiredDrain returns the last desired machine config that needed a drain operation in this node
+func (n Node) GetDesiredDrain() string {
+	return n.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/desiredDrain}`)
+}
+
+// GetLastAppliedDrain returns the last applied drain in this node
+func (n Node) GetLastAppliedDrain() string {
+	return n.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/lastAppliedDrain}`)
+}
+
+// HasBeenDrained returns a true if the desired and the last applied drain annotations have the same value
+func (n Node) HasBeenDrained() bool {
+	return n.GetLastAppliedDrain() == n.GetDesiredDrain()
 }
 
 // IsUpdated returns if the node is pending for machineconfig configuration or it is up to date
@@ -165,6 +187,123 @@ func (n *Node) IsUpdating() bool {
 func (n Node) IsReady() bool {
 	readyCondition := JSON(n.GetOrFail(`{.status.conditions[?(@.type=="Ready")]}`))
 	return "True" == readyCondition.Get("status").ToString()
+}
+
+// GetMCDaemonLogs retuns the logs of the MachineConfig daemonset pod for this node. The logs will be grepped using the 'filter' parameter
+func (n Node) GetMCDaemonLogs(filter string) (string, error) {
+	return exutil.GetSpecificPodLogs(n.oc, MCONamespace, "machine-config-daemon", n.GetMachineConfigDaemon(), filter)
+}
+
+// PollMCDaemonLogs retuns a function that can be used by gomega Eventually/Consistently functions to poll logs results
+// If ther is an error, it will return empty string, new need to take that into account building our Eventually/Consistently statement
+func (n Node) PollMCDaemonLogs(filter string) func() string {
+	return func() string {
+		logs, err := n.GetMCDaemonLogs(filter)
+		if err != nil {
+			return ""
+		}
+		return logs
+	}
+}
+
+// CaptureMCDaemonLogsUntilRestartWithTimeout captures all the logs in the MachineConfig daemon pod for this node until the daemon pod is restarted
+func (n Node) CaptureMCDaemonLogsUntilRestartWithTimeout(timeout string) (string, error) {
+	machineConfigDaemon := n.GetMachineConfigDaemon()
+	duration, err := time.ParseDuration(timeout)
+	if err != nil {
+		return "", err
+	}
+
+	c := make(chan string, 1)
+
+	go func() {
+		logs, err := n.oc.WithoutNamespace().Run("logs").Args("-n", MCONamespace, machineConfigDaemon, "-c", "machine-config-daemon", "-f").Output()
+		if err != nil {
+			e2e.Logf("Error getting %s logs: %s", machineConfigDaemon, err)
+		}
+		c <- logs
+	}()
+
+	select {
+	case logs := <-c:
+		return logs, nil
+	case <-time.After(duration):
+		errMsg := fmt.Sprintf(`Node "%s". Timeout while waiting for the daemon pod "%s" -n  "%s" to be restarted`,
+			n.GetName(), machineConfigDaemon, MCONamespace)
+		e2e.Logf(errMsg)
+		return "", fmt.Errorf(errMsg)
+	}
+
+}
+
+// GetDate executes `date`command and returns the current time in the node
+func (n Node) GetDate() (time.Time, error) {
+	date, _, err := n.oc.Run("debug").Args(`node/`+n.GetName(), `--`, `chroot`, `/host`, `date`, `+%Y-%m-%dT%H:%M:%SZ`).Outputs()
+
+	e2e.Logf("node %s. DATE: %s", n.GetName(), date)
+	if err != nil {
+		e2e.Logf("Error trying to get date in node %s: %s", n.GetName(), err)
+		return time.Time{}, err
+	}
+	layout := "2006-01-02T15:04:05Z"
+	returnTime, perr := time.Parse(layout, date)
+	if perr != nil {
+		e2e.Logf("Error trying to parsing date %s in node %s: %s", date, n.GetName(), perr)
+		return time.Time{}, perr
+	}
+
+	return returnTime, nil
+}
+
+// GetUptime executes `uptime -s` command and returns the time when the node was booted
+func (n Node) GetUptime() (time.Time, error) {
+	uptime, _, err := n.oc.Run("debug").Args(`node/`+n.GetName(), `--`, `chroot`, `/host`, `uptime`, `-s`).Outputs()
+
+	e2e.Logf("node %s. UPTIME: %s", n.GetName(), uptime)
+	if err != nil {
+		e2e.Logf("Error trying to get uptime in node %s: %s", n.GetName(), err)
+		return time.Time{}, err
+	}
+	layout := "2006-01-02 15:04:05"
+	returnTime, perr := time.Parse(layout, uptime)
+	if perr != nil {
+		e2e.Logf("Error trying to parsing uptime %s in node %s: %s", uptime, n.GetName(), perr)
+		return time.Time{}, perr
+	}
+
+	return returnTime, nil
+}
+
+// GetEventsByReasonSince returns a list of all the events with the given reason that are related to this node since the provided date
+func (n Node) GetEventsByReasonSince(since time.Time, reason string) ([]Event, error) {
+	eventList := NewEventList(n.oc, "default")
+	eventList.ByFieldSelector(`reason=` + reason + `,involvedObject.name=` + n.GetName())
+
+	return eventList.GetAllSince(since)
+}
+
+// GetAllEventsSince returns a list of all the events related to this node since the provided date
+func (n Node) GetAllEventsSince(since time.Time) ([]Event, error) {
+	eventList := NewEventList(n.oc, "default")
+	eventList.ByFieldSelector(`involvedObject.name=` + n.GetName())
+
+	return eventList.GetAllSince(since)
+}
+
+// GetDateWithDelta returns the date in the node +delta
+func (n Node) GetDateWithDelta(delta string) (time.Time, error) {
+	date, err := n.GetDate()
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	timeDuration, terr := time.ParseDuration(delta)
+	if terr != nil {
+		e2e.Logf("Error getting delta time %s", terr)
+		return time.Time{}, terr
+	}
+
+	return date.Add(timeDuration), nil
 }
 
 //GetAll returns a []Node list with all existing nodes

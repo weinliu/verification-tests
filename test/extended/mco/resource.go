@@ -139,6 +139,7 @@ func (r *Resource) Delete() error {
 	return err
 }
 
+// DeleteOrFail deletes the resource, and if any error happens it fails the testcase
 func (r *Resource) DeleteOrFail() {
 	err := r.Delete()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -244,6 +245,11 @@ func (l *ResourceList) SortByZone() {
 // ByLabel will use the given label to filter the list
 func (l *ResourceList) ByLabel(label string) {
 	l.extraParams = append(l.extraParams, fmt.Sprintf("--selector=%s", label))
+}
+
+// ByFieldSelector will use the given field selector to fileter the list
+func (l *ResourceList) ByFieldSelector(fieldSelector string) {
+	l.extraParams = append(l.extraParams, fmt.Sprintf("--field-selector=%s", fieldSelector))
 }
 
 // GetAll returns a list of Resource structs with the resources found in this list

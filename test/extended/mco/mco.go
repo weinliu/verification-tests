@@ -62,14 +62,24 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	g.It("Author:rioliu-Longduration-Critical-42361-add chrony systemd config [Disruptive]", func() {
 		g.By("create new mc to apply chrony config on worker nodes")
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		mcName := "change-workers-chrony-configuration"
 		mcTemplate := generateTemplateAbsolutePath("change-workers-chrony-configuration.yaml")
 		mc := MachineConfig{name: mcName, template: mcTemplate, pool: "worker"}
 		defer mc.delete(oc)
+
+		startTime, _ := workerNode.GetDate()
+
 		mc.create(oc)
 
+		g.By("verify that drain and reboot events were triggered")
+		nodeEvents, eErr := workerNode.GetAllEventsSince(startTime)
+		o.Expect(eErr).ShouldNot(o.HaveOccurred(), "Error getting drain events for node %s", workerNode.GetName())
+		o.Expect(nodeEvents).To(HaveEventsSequence("Cordon", "Drain", "OSUpdateStarted",
+			"OSUpgradeSkipped", "OSUpdateStaged", "PendingConfig",
+			"Reboot", "Rebooted", "Uncordon"))
+
 		g.By("get one worker node to verify the config changes")
-		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		stdout, err := workerNode.DebugNodeWithChroot("cat", "/etc/chrony.conf")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(stdout)
@@ -1992,7 +2002,99 @@ nulla pariatur.`
 			"machine-config Operator should not report degraded status anymore")
 
 	})
+	g.It("Author:sregidor-NonPreRelease-Medium-52520-Configure unqualified-search-registries in Image.config resource [Disruptive]", func() {
+		expectedDropinFilePath := "/etc/containers/registries.conf.d/01-image-searchRegistries.conf"
+		expectedDropinContent := "unqualified-search-registries = [\"quay.io\"]\nshort-name-mode = \"\"\n"
 
+		g.By("Get current image.config cluster configuration")
+		ic := NewResource(oc.AsAdmin(), "image.config", "cluster")
+		icInitialConfig := ic.GetOrFail(`{.spec}`)
+		e2e.Logf("Initial image.config cluster configuration: %s", icInitialConfig)
+
+		wmcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mmcp := NewMachineConfigPool(oc.AsAdmin(), "master")
+
+		workers, wsErr := wmcp.GetSortedNodes()
+		o.Expect(wsErr).ShouldNot(o.HaveOccurred(), "Error getting the nodes in worker pool")
+
+		masters, msErr := mmcp.GetSortedNodes()
+		o.Expect(msErr).ShouldNot(o.HaveOccurred(), "Error getting the nodes in master pool")
+
+		firstUpdatedWorker := workers[0]
+		firstUpdatedMaster := masters[0]
+
+		defer func() {
+			e2e.Logf("Start TC defer block")
+
+			e2e.Logf("Restore original image.config cluster config %s", icInitialConfig)
+			_ = ic.Patch("json", `[{ "op": "add", "path": "/spec", "value": `+icInitialConfig+`}]`)
+
+			e2e.Logf("Wait for the original configuration to be applied")
+			wmcp.waitForComplete()
+			mmcp.waitForComplete()
+
+			e2e.Logf("End TC defer block")
+		}()
+
+		g.By("Add quay.io to unqualified-search-regisitries list in image.config cluster resource")
+		startTime, dErr := firstUpdatedMaster.GetDate()
+		o.Expect(dErr).ShouldNot(o.HaveOccurred(), "Error getting date in node %s", firstUpdatedMaster.GetName())
+
+		patchErr := ic.Patch("merge", `{"spec": {"registrySources": {"containerRuntimeSearchRegistries":["quay.io"]}}}`)
+		o.Expect(patchErr).ShouldNot(o.HaveOccurred(), "Error while partching the image.config cluster resource")
+
+		g.By("Wait for first nodes to be configured")
+		// Worker and master nodes should go into 'working' status
+		o.Eventually(func() bool { return firstUpdatedWorker.IsUpdating() }, "5m", "20s").Should(o.BeTrue(),
+			"Node %s is not in 'working' status after the new image.conig is configured")
+		o.Eventually(func() bool { return firstUpdatedMaster.IsUpdating() }, "5m", "20s").Should(o.BeTrue(),
+			"Node %s is not in 'working' status after the new image.conig is configured")
+
+		// We dont actually wait for the whole configuration to be applied
+		//  we will only wait for those nodes to be unpdated
+		// Not waiting for the MCPs to finish the configuration makes this test case faster
+		// If it causes unstability, just wait here for the MCPs to complete the configuration instead
+		// Worker and master nodes should go into 'working' status
+		o.Eventually(func() bool { return firstUpdatedWorker.IsUpdated() }, "10m", "20s").Should(o.BeTrue(),
+			"Node %s is not in 'Done' status after the configuration is applied")
+		o.Eventually(func() bool { return firstUpdatedMaster.IsUpdated() }, "10m", "20s").Should(o.BeTrue(),
+			"Node %s is not in 'Done' status after the configuration is applied")
+
+		g.By("Verify that a drain and reboot events were triggered for worker node")
+		wEvents, weErr := firstUpdatedWorker.GetAllEventsSince(startTime)
+		o.Expect(weErr).ShouldNot(o.HaveOccurred(), "Error getting events for node %s", firstUpdatedWorker.GetName())
+		o.Expect(wEvents).To(HaveEventsSequence("Drain", "Reboot"),
+			"Error, the expected sequence of events is not found in node %s", firstUpdatedWorker.GetName())
+
+		g.By("Verify that a drain and reboot events were triggered for master node")
+		mEvents, meErr := firstUpdatedMaster.GetAllEventsSince(startTime)
+		o.Expect(meErr).ShouldNot(o.HaveOccurred(), "Error getting drain events for node %s", firstUpdatedMaster.GetName())
+		o.Expect(mEvents).To(HaveEventsSequence("Drain", "Reboot"),
+			"Error, the expected sequence of events is not found in node %s", firstUpdatedWorker.GetName())
+
+		g.By("Verify that the node was actually rebooted")
+		o.Expect(firstUpdatedWorker.GetUptime()).Should(o.BeTemporally(">", startTime),
+			"The node %s should have been rebooted after the configurion. Uptime didnt happen after start config time.")
+		o.Expect(firstUpdatedMaster.GetUptime()).Should(o.BeTemporally(">", startTime),
+			"The node %s should have been rebooted after the configurion. Uptime didnt happen after start config time.")
+
+		g.By("Verify dropin file's content in worker node")
+		wdropinFile := NewRemoteFile(firstUpdatedWorker, expectedDropinFilePath)
+		wfetchErr := wdropinFile.Fetch()
+		o.Expect(wfetchErr).ShouldNot(o.HaveOccurred(), "Error getting the content offile %s in node %s",
+			expectedDropinFilePath, firstUpdatedWorker.GetName())
+
+		o.Expect(wdropinFile.GetTextContent()).Should(o.Equal(expectedDropinContent))
+
+		g.By("Verify dropin file's content in master node")
+		mdropinFile := NewRemoteFile(firstUpdatedMaster, expectedDropinFilePath)
+		mfetchErr := mdropinFile.Fetch()
+		o.Expect(mfetchErr).ShouldNot(o.HaveOccurred(), "Error getting the content offile %s in node %s",
+			expectedDropinFilePath, firstUpdatedMaster.GetName())
+
+		o.Expect(mdropinFile.GetTextContent()).Should(o.Equal(expectedDropinContent))
+
+	})
 })
 
 func createMcAndVerifyMCValue(oc *exutil.CLI, stepText string, mcName string, workerNode Node, textToVerify TextToVerify, cmd ...string) {
