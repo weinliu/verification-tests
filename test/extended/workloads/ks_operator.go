@@ -4,9 +4,6 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
-	"time"
-
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
@@ -23,7 +20,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 
 	// author: yinzhou@redhat.com
 	//It is destructive case, will make kube-scheduler roll out, so adding [Disruptive]. One rollout costs about 5mins, so adding [Slow]
-	g.It("Author:yinzhou-Medium-31939-Verify logLevel settings in kube scheduler operator [Disruptive][Slow]", func() {
+	g.It("Longduration-NonPreRelease-Author:yinzhou-Medium-31939-Verify logLevel settings in kube scheduler operator [Disruptive][Slow]", func() {
 		patchYamlToRestore := `[{"op": "replace", "path": "/spec/logLevel", "value":"Normal"}]`
 
 		g.By("Set the loglevel to TraceAll")
@@ -37,64 +34,26 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Check the scheduler operator should be in Progressing")
-			err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "kube-scheduler").Output()
-				if err != nil {
-					e2e.Logf("clusteroperator kube-scheduler not start new progress, error: %s. Trying again", err)
-					return false, nil
-				}
-				if matched, _ := regexp.MatchString("True.*True.*False", output); matched {
-					e2e.Logf("clusteroperator kube-scheduler is Progressing:\n%s", output)
-					return true, nil
-				}
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(err, "clusteroperator kube-scheduler is not Progressing")
+			e2e.Logf("Checking kube-scheduler operator should be in Progressing in 100 seconds")
+			expectedStatus := map[string]string{"Progressing": "True"}
+			err = waitCoBecomes(oc, "kube-scheduler", 100, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not start progressing in 100 seconds")
+			e2e.Logf("Checking kube-scheduler operator should be Available in 1500 seconds")
+			expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			err = waitCoBecomes(oc, "kube-scheduler", 1500, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not becomes available in 1500 seconds")
 
-			g.By("Wait for the scheduler operator to rollout")
-			err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
-				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "kube-scheduler").Output()
-				if err != nil {
-					e2e.Logf("Fail to get clusteroperator kube-scheduler, error: %s. Trying again", err)
-					return false, nil
-				}
-				if matched, _ := regexp.MatchString("True.*False.*False", output); matched {
-					e2e.Logf("clusteroperator kube-scheduler is recover to normal:\n%s", output)
-					return true, nil
-				}
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(err, "clusteroperator kube-scheduler is not recovered to normal")
 		}()
-		g.By("Check the scheduler operator should be in Progressing")
-		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "kube-scheduler").Output()
-			if err != nil {
-				e2e.Logf("clusteroperator kube-scheduler not start new progress, error: %s. Trying again", err)
-				return false, nil
-			}
-			if matched, _ := regexp.MatchString("True.*True.*False", output); matched {
-				e2e.Logf("clusteroperator kube-scheduler is Progressing:\n%s", output)
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "clusteroperator kube-scheduler is not Progressing")
 
-		g.By("Wait for the scheduler operator to rollout")
-		err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "kube-scheduler").Output()
-			if err != nil {
-				e2e.Logf("Fail to get clusteroperator kube-scheduler, error: %s. Trying again", err)
-				return false, nil
-			}
-			if matched, _ := regexp.MatchString("True.*False.*False", output); matched {
-				e2e.Logf("clusteroperator kube-scheduler is recover to normal:\n%s", output)
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "clusteroperator kube-scheduler is not recovered to normal")
+		g.By("Check the scheduler operator should be in Progressing")
+		e2e.Logf("Checking kube-scheduler operator should be in Progressing in 100 seconds")
+		expectedStatus := map[string]string{"Progressing": "True"}
+		err = waitCoBecomes(oc, "kube-scheduler", 100, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not start progressing in 100 seconds")
+		e2e.Logf("Checking kube-scheduler operator should be Available in 1500 seconds")
+		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err = waitCoBecomes(oc, "kube-scheduler", 1500, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not becomes available in 1500 seconds")
 
 		g.By("Check the loglevel setting for the pod")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pods", "-n", "openshift-kube-scheduler", "-l", "app=openshift-kube-scheduler").Output()
@@ -109,34 +68,14 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the scheduler operator should be in Progressing")
-		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "kube-scheduler").Output()
-			if err != nil {
-				e2e.Logf("clusteroperator kube-scheduler not start new progress, error: %s. Trying again", err)
-				return false, nil
-			}
-			if matched, _ := regexp.MatchString("True.*True.*False", output); matched {
-				e2e.Logf("clusteroperator kube-scheduler is Progressing:\n%s", output)
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "clusteroperator kube-scheduler is not Progressing")
-
-		g.By("Wait for the scheduler operator to rollout")
-		err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "kube-scheduler").Output()
-			if err != nil {
-				e2e.Logf("Fail to get clusteroperator kube-scheduler, error: %s. Trying again", err)
-				return false, nil
-			}
-			if matched, _ := regexp.MatchString("True.*False.*False", output); matched {
-				e2e.Logf("clusteroperator kube-scheduler is recover to normal:\n%s", output)
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "clusteroperator kube-scheduler is not recovered to normal")
+		e2e.Logf("Checking kube-scheduler operator should be in Progressing in 100 seconds")
+		expectedStatus = map[string]string{"Progressing": "True"}
+		err = waitCoBecomes(oc, "kube-scheduler", 100, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not start progressing in 100 seconds")
+		e2e.Logf("Checking kube-scheduler operator should be Available in 1500 seconds")
+		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err = waitCoBecomes(oc, "kube-scheduler", 1500, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not becomes available in 1500 seconds")
 
 		g.By("Check the loglevel setting for the pod")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("pods", "-n", "openshift-kube-scheduler", "-l", "app=openshift-kube-scheduler").Output()
@@ -151,34 +90,14 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the scheduler operator should be in Progressing")
-		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "kube-scheduler").Output()
-			if err != nil {
-				e2e.Logf("clusteroperator kube-scheduler not start new progress, error: %s. Trying again", err)
-				return false, nil
-			}
-			if matched, _ := regexp.MatchString("True.*True.*False", output); matched {
-				e2e.Logf("clusteroperator kube-scheduler is Progressing:\n%s", output)
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "clusteroperator kube-scheduler is not Progressing")
-
-		g.By("Wait for the scheduler operator to rollout")
-		err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "kube-scheduler").Output()
-			if err != nil {
-				e2e.Logf("Fail to get clusteroperator kube-scheduler, error: %s. Trying again", err)
-				return false, nil
-			}
-			if matched, _ := regexp.MatchString("True.*False.*False", output); matched {
-				e2e.Logf("clusteroperator kube-scheduler is recover to normal:\n%s", output)
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "clusteroperator kube-scheduler is not recovered to normal")
+		e2e.Logf("Checking kube-scheduler operator should be in Progressing in 100 seconds")
+		expectedStatus = map[string]string{"Progressing": "True"}
+		err = waitCoBecomes(oc, "kube-scheduler", 100, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not start progressing in 100 seconds")
+		e2e.Logf("Checking kube-scheduler operator should be Available in 1500 seconds")
+		expectedStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err = waitCoBecomes(oc, "kube-scheduler", 1500, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-scheduler operator is not becomes available in 1500 seconds")
 
 		g.By("Check the loglevel setting for the pod")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("pods", "-n", "openshift-kube-scheduler", "-l", "app=openshift-kube-scheduler").Output()
