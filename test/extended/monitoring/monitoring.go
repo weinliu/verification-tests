@@ -145,6 +145,15 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			checkRetention(oc, "openshift-user-workload-monitoring", "thanos-ruler-user-workload", "retention=15d", uwmLoadTime)
 		})
 
+		// author: juzhao@redhat.com
+		g.It("Author:juzhao-Medium-42956-Should not have PrometheusNotIngestingSamples alert if enabled user workload monitoring only", func() {
+			g.By("Get token of SA prometheus-k8s")
+			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+			g.By("check alerts, Should not have PrometheusNotIngestingSamples alert fired")
+			checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusNotIngestingSamples"}'`, token, `"result":[]`, uwmLoadTime)
+		})
+
 	})
 
 	// author: hongyli@redhat.com
