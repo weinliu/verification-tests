@@ -499,13 +499,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		patch := "[{\"op\":\"add\" , \"path\" : \"/spec/requiredHSTSPolicies\" , \"value\" : [{\"domainPatterns\" :" + "['*" + "." + ingctldomain + "'" + "] , \"maxAge\":{\"largestMaxAge\": -40000, \"smallestMaxAge\": 100 }}]}]"
 		output1, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("ingresses.config.openshift.io/cluster", "--patch="+patch, "--type=json").Output()
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(output1).To(o.ContainSubstring("spec.requiredHSTSPolicies.maxAge.largestMaxAge: Invalid value"))
+		o.Expect(output1).To(o.ContainSubstring("largestMaxAge in body should be greater than or equal to 0"))
 
 		g.By("Add the HSTS policy with  smallestMaxAge set to negative value")
 		patch = "[{\"op\":\"add\" , \"path\" : \"/spec/requiredHSTSPolicies\" , \"value\" : [{\"domainPatterns\" :" + "['*" + "." + ingctldomain + "'" + "] , \"maxAge\":{\"largestMaxAge\": 40000, \"smallestMaxAge\": -100 }}]}]"
 		output2, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("ingresses.config.openshift.io/cluster", "--patch="+patch, "--type=json").Output()
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(output2).To(o.ContainSubstring("spec.requiredHSTSPolicies.maxAge.smallestMaxAge: Invalid value"))
+		o.Expect(output2).To(o.ContainSubstring("smallestMaxAge in body should be greater than or equal to 0"))
 
 	})
 
