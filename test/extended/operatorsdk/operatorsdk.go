@@ -2247,4 +2247,71 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		g.By("SUCCESS 49960")
 	})
+
+	// author: jfan@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:jfan-High-48885-SDK-generate digest type bundle of ansible", func() {
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture != "amd64" && architecture != "arm64" {
+			g.Skip("Do not support " + architecture)
+		}
+		tmpBasePath := "/tmp/ocp-48885-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-48885")
+		err := os.MkdirAll(tmpPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
+
+		g.By("step: init Ansible Based Operator")
+		output, err := operatorsdkCLI.Run("init").Args("--plugins=ansible", "--domain", "example.com").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Next"))
+
+		g.By("step: Create API.")
+		output, err = operatorsdkCLI.Run("create").Args("api", "--group", "cache", "--version", "v1", "--kind", "Memcached48885", "--generate-role").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Writing kustomize manifests"))
+
+		g.By("step: modify files to get the quay.io/olmqe images.")
+		dataPath := "test/extended/util/operatorsdk/ocp-48885-data/"
+		// copy task main.yml
+		err = copy(filepath.Join(dataPath, "main.yml"), filepath.Join(tmpPath, "roles", "memcached48885", "tasks", "main.yml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// copy manager.yaml
+		err = copy(filepath.Join(dataPath, "manager.yaml"), filepath.Join(tmpPath, "config", "manager", "manager.yaml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// update the Makefile
+		makefileFilePath := filepath.Join(tmpPath, "Makefile")
+		replaceContent(makefileFilePath, "controller:latest", "quay.io/olmqe/ansibledisconnected:v"+ocpversion)
+		replaceContent(makefileFilePath, "operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)", "operator-sdk generate bundle $(BUNDLE_GEN_FLAGS)")
+		// update the rbac file
+		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+
+		g.By("step: make bundle.")
+		// copy manifests
+		manifestsPath := filepath.Join(tmpPath, "config", "manifests", "bases")
+		err = os.MkdirAll(manifestsPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		manifestsFile := filepath.Join(manifestsPath, "memcached-operator-48885.clusterserviceversion.yaml")
+		_, err = os.Create(manifestsFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = copy(filepath.Join(dataPath, "memcached-operator-48885.clusterserviceversion.yaml"), filepath.Join(manifestsFile))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// make bundle use image digests
+		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
+			msg, err := makeCLI.Run("bundle").Args("USE_IMAGE_DIGESTS=true").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(string(msg), "operator-sdk bundle validate ./bundle") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "operator-sdk bundle generate failed")
+		csvFile := filepath.Join(tmpPath, "bundle", "manifests", "memcached-operator-48885.clusterserviceversion.yaml")
+		content := getContent(csvFile)
+		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/memcached@sha256:"))
+		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/kube-rbac-proxy@sha256:"))
+		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/ansibledisconnected@sha256:"))
+	})
 })
