@@ -809,4 +809,101 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	})
 
+	g.It("Author:aiyengar-High-41206-Power-of-two feature allows unsupportedConfigOverrides ingress operator option to enable leastconn balancing algorithm", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+		var (
+			ingctrl = ingctrlNodePortDescription{
+				name:      "41206",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+
+		g.By("Create a custom ingresscontroller, and get its router name")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		routerpod := getRouterPod(oc, ingctrl.name)
+
+		g.By("Patch ingresscontroller with unsupportedConfigOverrides option")
+		ingctrlResource := "ingresscontrollers/" + ingctrl.name
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"unsupportedConfigOverrides\":{\"loadBalancingAlgorithm\":\"leastconn\"}}}")
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
+		newrouterpod := getRouterPod(oc, ingctrl.name)
+
+		g.By("verify ROUTER_LOAD_BALANCE_ALGORITHM variable of the deployed router pod")
+		checkenv := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOAD_BALANCE_ALGORITHM")
+		o.Expect(checkenv).To(o.ContainSubstring(`ROUTER_LOAD_BALANCE_ALGORITHM=leastconn`))
+
+		g.By("deploy pod resource and expose a route via the ingresscontroller")
+		oc.SetupProject()
+		project1 := oc.Namespace()
+		edgeRoute := "route-edge" + "-" + project1 + "." + ingctrl.domain
+		createResourceFromFile(oc, project1, testPodSvc)
+		err = waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "project resource creation failed!")
+		exposeRouteEdge(oc, project1, "route-edge", "service-unsecure1", edgeRoute)
+		output, err := oc.Run("get").Args("route").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("route-edge"))
+
+		g.By("Check the router config for the default LB algorithm set at the backend")
+		edgeBackend := "be_edge_http:" + project1 + ":route-edge"
+		lbAlgoCheckEdge := readHaproxyConfig(oc, newrouterpod, edgeBackend, "-A5", "balance")
+		o.Expect(lbAlgoCheckEdge).To(o.ContainSubstring("leastconn"))
+
+	})
+
+	g.It("Author:aiyengar-High-41042-The Power-of-two balancing features defaults to random LB algorithm instead of leastconn for REEN/Edge/insecure routes", func() {
+		var (
+			baseDomain = getBaseDomain(oc)
+			defaultPod = getRouterPod(oc, "default")
+		)
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+		addSvc := filepath.Join(buildPruningBaseDir, "svc-additional-backend.yaml")
+
+		g.By("Deploy project with pods and service resources")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		createResourceFromFile(oc, project1, addSvc)
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "project resource creation failed!")
+
+		g.By("Expose a edge/insecure/REEN/passthrough type routes via the services inside project")
+		edgeRoute := "route-edge" + "-" + project1 + "." + baseDomain
+		reenRoute := "route-reen" + "-" + project1 + "." + baseDomain
+		exposeRouteEdge(oc, project1, "route-edge", "service-unsecure1", edgeRoute)
+		output, err := oc.Run("get").Args("route").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("route-edge"))
+		exposeRouteReen(oc, project1, "route-reen", "service-secure1", reenRoute)
+		output, err = oc.Run("get").Args("route").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("route-reen"))
+		exposeRoute(oc, project1, "svc/service-unsecure1")
+		output, err = oc.Run("get").Args("route").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("service-unsecure1"))
+
+		g.By("Check the default loadbalance algorithm inside proxy pod")
+		edgeBackend := "be_edge_http:" + project1 + ":route-edge"
+		reenBackend := "be_secure:" + project1 + ":route-reen"
+		insecBackend := "be_http:" + project1 + ":service-unsecure"
+		lbAlgoCheckEdge := readHaproxyConfig(oc, defaultPod, edgeBackend, "-A5", "balance")
+		o.Expect(lbAlgoCheckEdge).To(o.ContainSubstring("random"))
+		lbAlgoCheckReen := readHaproxyConfig(oc, defaultPod, reenBackend, "-A5", "balance")
+		o.Expect(lbAlgoCheckReen).To(o.ContainSubstring("random"))
+		lbAlgoCheckInsecure := readHaproxyConfig(oc, defaultPod, insecBackend, "-A5", "balance")
+		o.Expect(lbAlgoCheckInsecure).To(o.ContainSubstring("random"))
+
+	})
+
 })
