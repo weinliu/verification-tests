@@ -523,6 +523,114 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
+		g.It("CPaasrunOnly-Author:ikanse-Medium-47753-Vector Forward logs to external Elasticsearch with username password HTTP[Serial][Slow]", func() {
+
+			g.By("Create external Elasticsearch instance")
+			esProj := oc.Namespace()
+			ees := externalES{esProj, "6.8", "elasticsearch-server", false, false, true, "user1", "redhat", "ees-http", cloNS}
+			defer ees.remove(oc)
+			ees.deploy(oc)
+
+			g.By("Create project for app logs and deploy the log generator app")
+			oc.SetupProject()
+			appProj := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogForwarder instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_SECRET="+ees.secretName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			g.By("Waiting for the Logging pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+
+			g.By("Check logs in external ES")
+			ees.waitForIndexAppear(oc, "app")
+			ees.waitForIndexAppear(oc, "infra")
+			ees.waitForIndexAppear(oc, "audit")
+
+		})
+
+		g.It("CPaasrunOnly-Author:ikanse-Medium-47755-Vector Forward logs to external Elasticsearch with username password HTTPS[Serial][Slow]", func() {
+
+			g.By("Create external Elasticsearch instance")
+			esProj := oc.Namespace()
+			ees := externalES{esProj, "6.8", "elasticsearch-server", true, false, true, "user1", "redhat", "ees-https", cloNS}
+			defer ees.remove(oc)
+			ees.deploy(oc)
+
+			g.By("Create project for app logs and deploy the log generator app")
+			oc.SetupProject()
+			appProj := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogForwarder instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_SECRET="+ees.secretName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			g.By("Waiting for the Logging pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+
+			g.By("Check logs in external ES")
+			ees.waitForIndexAppear(oc, "app")
+			ees.waitForIndexAppear(oc, "infra")
+			ees.waitForIndexAppear(oc, "audit")
+
+		})
+
+		g.It("CPaasrunOnly-Author:ikanse-Medium-47758-Vector Forward logs to external Elasticsearch with username password mTLS[Serial][Slow]", func() {
+
+			g.By("Create external Elasticsearch instance")
+			esProj := oc.Namespace()
+			ees := externalES{esProj, "6.8", "elasticsearch-server", true, true, true, "user1", "redhat", "ees-https", cloNS}
+			defer ees.remove(oc)
+			ees.deploy(oc)
+
+			g.By("Create project for app logs and deploy the log generator app")
+			oc.SetupProject()
+			appProj := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogForwarder instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_SECRET="+ees.secretName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			g.By("Waiting for the Logging pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+
+			g.By("Check logs in external ES")
+			ees.waitForIndexAppear(oc, "app")
+			ees.waitForIndexAppear(oc, "infra")
+			ees.waitForIndexAppear(oc, "audit")
+
+		})
+
 	})
 
 })
