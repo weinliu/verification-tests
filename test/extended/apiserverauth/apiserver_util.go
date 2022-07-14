@@ -361,9 +361,11 @@ func isSNOCluster(oc *exutil.CLI) bool {
 // LoadSecrets used to create secrets
 func LoadSecrets(oc *exutil.CLI, noOfSecrets int, ns string, noOfNamespace int) {
 	for j := 1; j <= noOfNamespace; j++ {
-		_ = oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", ns+strconv.Itoa(j)).Execute()
+		namespaceCMD := fmt.Sprintf("oc create ns " + ns + strconv.Itoa(j) + ">/dev/null")
+		_, _ = exec.Command("bash", "-c", namespaceCMD).Output()
 		for i := 1; i <= noOfSecrets; i++ {
-			_ = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "secret-"+ns+"-"+strconv.Itoa(i), "-n", ns+strconv.Itoa(j), "--from-literal", `abcdefg='12345^&*()'`).Execute()
+			secretCMD := fmt.Sprintf("oc create secret generic secret-" + ns + "-" + strconv.Itoa(i) + " -n " + ns + strconv.Itoa(j) + ` --from-literal abcdefg='12345^&*()'>/dev/null`)
+			_, _ = exec.Command("bash", "-c", secretCMD).Output()
 		}
 	}
 	namespaceOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", "-A").Output()
@@ -372,8 +374,7 @@ func LoadSecrets(oc *exutil.CLI, noOfSecrets int, ns string, noOfNamespace int) 
 		e2e.Logf("No. of namespaces created :: %v \n No. of secrets created :: %v", noOfNamespace, noOfSecrets*noOfNamespace)
 	} else {
 		defer CleanNamespace(oc, noOfNamespace, ns)
-		e2e.Failf("No. of namespaces not created :: %v \n No. of secrets not created :: %v", noOfNamespace, noOfSecrets)
-
+		e2e.Failf("No. of namespaces not created :: %v \n No. of secrets not created :: %v", noOfNamespace, noOfSecrets*noOfNamespace)
 	}
 }
 
@@ -381,7 +382,7 @@ func LoadSecrets(oc *exutil.CLI, noOfSecrets int, ns string, noOfNamespace int) 
 func CleanNamespace(oc *exutil.CLI, noOfNamespace int, ns string) {
 	deleteFail := false
 	for i := 1; i <= noOfNamespace; i++ {
-		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("namespace", ns+strconv.Itoa(i), "--ignore-not-found").Execute()
+		_, err := exec.Command("bash", "-c", "oc delete namespace "+ns+strconv.Itoa(i)+" --ignore-not-found >/dev/null").Output()
 		if err != nil {
 			deleteFail = true
 		}

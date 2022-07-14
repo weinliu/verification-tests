@@ -983,6 +983,7 @@ spec:
 			namespaceCount = 0
 		)
 		defer os.RemoveAll(dirname)
+		defer CleanNamespace(oc, 50, "test-ocp40861")
 		defer func() {
 			cmd := fmt.Sprintf(`clusterbuster --cleanup`)
 			_, err := exec.Command("bash", "-c", cmd).Output()
@@ -1004,7 +1005,7 @@ spec:
 		e2e.Logf("Number of nodes are %d", len(node))
 		noOfNodes := len(node)
 		if noOfNodes > 1 && cpuAvgVal < 50 && memAvgVal < 50 {
-			e2e.Logf("Cluster has load normal..CPU %d %% and Memory %d %%...So using value of N=10", cpuAvgVal, memAvgVal)
+			e2e.Logf("Cluster has load normal..CPU %d %% and Memory %d %%...So using value of N=8", cpuAvgVal, memAvgVal)
 			namespaceCount = 10
 		} else if noOfNodes == 1 && cpuAvgVal < 60 && memAvgVal < 60 {
 			e2e.Logf("Cluster is SNO...CPU %d %% and Memory %d %%....So using value of N=3", cpuAvgVal, memAvgVal)
@@ -1015,9 +1016,11 @@ spec:
 		}
 
 		g.By("Stress the cluster")
-		cmd := fmt.Sprintf(`clusterbuster -P server -b 5 -p 10 -D .01 -M 1 -N %d -r 4 -d 2 -c 10 -m 1000 -v -s 20 -t 1200 -x > %v`, namespaceCount, dirname+"clusterbuster.log")
+		cmd := fmt.Sprintf(`clusterbuster -P server -b 5 -p 10 -D .01 -M 1 -N %d -r 4 -d 2 -c 10 -m 1000 -v -t 1200 -x > %v`, namespaceCount, dirname+"clusterbuster.log")
 		_, err = exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		// LoadSecrets no. of secrets per namespace
+		LoadSecrets(oc, 20, "test-ocp40861", 50)
 		cmd = fmt.Sprintf(`cat %v | grep -iE '%s' || true`, dirname+"clusterbuster.log", keywords)
 		busterLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
