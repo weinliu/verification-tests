@@ -11,7 +11,7 @@ describe('Projects', () => {
   });
 
   it('(OCP-44210) check description and help text on project creation page', () => {
-    projectsPage.navToProjectsPage();
+    projectsPage.goToProjectsPage();
     listPage.clickCreateYAMLbutton();
     projectsPage.checkCreationModalHelpText();
     projectsPage.checkCreationModalHelpLink();

@@ -13,7 +13,7 @@ describe('Insights check', () => {
   });
 
   it('(OCP-48054,admin) Add severity links on insights popover', () => {
-    Overview.navToDashboard();
+    Overview.goToDashboard();
     Overview.isLoaded();
     Insights.openInsightsPopup();
     cy.exec(`oc get clusterversions.config.openshift.io version --template={{.spec.clusterID}} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((result) => {

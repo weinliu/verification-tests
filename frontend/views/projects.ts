@@ -1,7 +1,7 @@
 import { listPage } from '../upstream/views/list-page';
 
 export const projectsPage = {
-    navToProjectsPage: () => {
+    goToProjectsPage: () => {
         cy.visit('/k8s/cluster/projects').get('[data-test-id="resource-title"]').should('be.visible')
     },
     filterByRequester: (selector: string) => {

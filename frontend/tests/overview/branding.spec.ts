@@ -10,7 +10,7 @@ describe("Branding check", () => {
   });
 
   it("(OCP-48357) Switch the OCP branding logo and title to Red Hat OpenShift logo and title", () => {
-    Overview.navToDashboard();
+    Overview.goToDashboard();
     Overview.checkUpperLeftLogo();
     Overview.toggleAbout();
     Branding.checkAboutModalLogo();

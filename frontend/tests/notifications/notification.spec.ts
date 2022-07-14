@@ -35,16 +35,16 @@ describe('Notification drawer tests', () => {
   })
 
   it('(OCP-45305,admin) check alert on overview page and notification drawer list (admin)', () => {
-    preferNotifications.navToNotificationsTab();
+    preferNotifications.goToNotificationsTab();
     preferNotifications.setHideNotifications();
-    Overview.navToDashboard();
+    Overview.goToDashboard();
     Overview.isLoaded();
     cy.contains('Testing 123').should('not.exist')
     Overview.clickNotificationDrawer();
     cy.contains('Testing 123').should('not.exist');
-    preferNotifications.navToNotificationsTab();
+    preferNotifications.goToNotificationsTab();
     cy.contains('Hide user workload notifications').click();
-    Overview.navToDashboard();
+    Overview.goToDashboard();
     Overview.isLoaded();
     cy.get('span.co-break-word').contains('Testing 123');
     Overview.clickNotificationDrawer();
