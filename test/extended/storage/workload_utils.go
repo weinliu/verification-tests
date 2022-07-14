@@ -623,6 +623,15 @@ func (dep *deployment) createWithExtraParameters(oc *exutil.CLI, extraParameters
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// Create new Deployment with multi extra parameters
+func (dep *deployment) createWithMultiExtraParameters(oc *exutil.CLI, jsonPathsAndActions []map[string]string, multiExtraParameters []map[string]interface{}) {
+	if dep.namespace == "" {
+		dep.namespace = oc.Namespace()
+	}
+	err := applyResourceFromTemplateWithMultiExtraParameters(oc, jsonPathsAndActions, multiExtraParameters, "--ignore-unknown-parameters=true", "-f", dep.template, "-p", "DNAME="+dep.name, "DNAMESPACE="+dep.namespace, "PVCNAME="+dep.pvcname, "REPLICASNUM="+dep.replicasno, "DLABEL="+dep.applabel, "MPATH="+dep.mpath, "VOLUMETYPE="+dep.volumetype, "TYPEPATH="+dep.typepath)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 // Create new Deployment with InlineVolume
 func (dep *deployment) createWithInlineVolume(oc *exutil.CLI, inVol InlineVolume) {
 	if dep.namespace == "" {

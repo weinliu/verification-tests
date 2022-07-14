@@ -241,6 +241,31 @@ func jsonAddExtraParametersToFile(jsonInput string, extraParameters map[string]i
 	return path, ioutil.WriteFile(path, pretty.Pretty([]byte(jsonInput)), 0644)
 }
 
+// Batch process jsonPaths with new values and save to json file
+func jsonPathsBatchProcessToFile(jsonInput string, jsonPathsAndActions []map[string]string, multiExtraParameters []map[string]interface{}) (string, error) {
+	var err error
+	for i := 0; i < len(jsonPathsAndActions); i++ {
+		for jsonPath, action := range jsonPathsAndActions[i] {
+			switch action {
+			case "set":
+				for extraParametersKey, extraParametersValue := range multiExtraParameters[i] {
+					jsonInput, err = sjson.Set(jsonInput, jsonPath+extraParametersKey, extraParametersValue)
+					debugLogf("Process jsonPath: \"%s\" Value: \"%s\"", jsonPath+extraParametersKey, extraParametersValue)
+					o.Expect(err).NotTo(o.HaveOccurred())
+				}
+			case "delete":
+				jsonInput, err = sjson.Delete(jsonInput, jsonPath)
+				debugLogf("Delete jsonPath: \"%s\"", jsonPath)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			default:
+				e2e.Logf("Unknow JSON process action: \"%s\"", action)
+			}
+		}
+	}
+	path := filepath.Join(e2e.TestContext.OutputDir, "storageConfig"+"-"+getRandomString()+".json")
+	return path, ioutil.WriteFile(path, pretty.Pretty([]byte(jsonInput)), 0644)
+}
+
 // Json delete paths to jsonfile
 func jsonDeletePathsToFile(jsonInput string, deletePaths []string) (string, error) {
 	var err error
@@ -292,6 +317,26 @@ func applyResourceFromTemplateWithExtraParametersAsAdmin(oc *exutil.CLI, extraPa
 	jsonOutput, _ := ioutil.ReadFile(configFile)
 	debugLogf("The file content is: \n%s", jsonOutput)
 	return oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
+}
+
+// Use oc client apply yaml template with multi extra parameters
+func applyResourceFromTemplateWithMultiExtraParameters(oc *exutil.CLI, jsonPathsAndActions []map[string]string, multiExtraParameters []map[string]interface{}, parameters ...string) error {
+	var configFile string
+	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().Run("process").Args(parameters...).Output()
+		if err != nil {
+			e2e.Logf("the err:%v, and try next round", err)
+			return false, nil
+		}
+		configFile, _ = jsonPathsBatchProcessToFile(output, jsonPathsAndActions, multiExtraParameters)
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("as admin fail to process %v", parameters))
+
+	e2e.Logf("the file of resource is %s", configFile)
+	jsonOutput, _ := ioutil.ReadFile(configFile)
+	debugLogf("The file content is: \n%s", jsonOutput)
+	return oc.WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
 }
 
 // None dupulicate element slice intersect
