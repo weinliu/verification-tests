@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	g "github.com/onsi/ginkgo"
 	"math/rand"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -903,4 +905,83 @@ func checkMetric(oc *exutil.CLI, expect bool, token string, url string, query st
 
 	})
 	exutil.AssertWaitPollNoErr(err, "can not get expected result")
+}
+
+func createCD(testDataDir string, testOCPImage string, oc *exutil.CLI, ns string, installConfigSecret interface{}, cd interface{}) {
+	switch x := cd.(type) {
+	case clusterDeployment:
+		g.By("Create AWS ClusterDeployment..." + ns)
+		imageSet := clusterImageSet{
+			name:         x.name + "-imageset",
+			releaseImage: testOCPImage,
+			template:     filepath.Join(testDataDir, "clusterimageset.yaml"),
+		}
+		g.By("Create ClusterImageSet...")
+		imageSet.create(oc)
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
+		g.By("Copy AWS platform credentials...")
+		createAWSCreds(oc, ns)
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, ns)
+		g.By("Create AWS Install-Config Secret...")
+		switch ic := installConfigSecret.(type) {
+		case installConfig:
+			ic.create(oc)
+		default:
+			g.Fail("Please provide correct install-config type")
+		}
+		x.create(oc)
+	case gcpClusterDeployment:
+		g.By("Create gcp ClusterDeployment..." + ns)
+		imageSet := clusterImageSet{
+			name:         x.name + "-imageset",
+			releaseImage: testOCPImage,
+			template:     filepath.Join(testDataDir, "clusterimageset.yaml"),
+		}
+		g.By("Create ClusterImageSet...")
+		imageSet.create(oc)
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
+		g.By("Copy GCP platform credentials...")
+		createGCPCreds(oc, ns)
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, ns)
+		g.By("Create GCP Install-Config Secret...")
+		switch ic := installConfigSecret.(type) {
+		case gcpInstallConfig:
+			ic.create(oc)
+		default:
+			g.Fail("Please provide correct install-config type")
+		}
+		x.create(oc)
+	case azureClusterDeployment:
+		g.By("Create azure ClusterDeployment..." + ns)
+		imageSet := clusterImageSet{
+			name:         x.name + "-imageset",
+			releaseImage: testOCPImage,
+			template:     filepath.Join(testDataDir, "clusterimageset.yaml"),
+		}
+		g.By("Create ClusterImageSet...")
+		imageSet.create(oc)
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
+		g.By("Copy Azure platform credentials...")
+		createAzureCreds(oc, ns)
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, ns)
+		g.By("Create Azure Install-Config Secret...")
+		switch ic := installConfigSecret.(type) {
+		case azureInstallConfig:
+			ic.create(oc)
+		default:
+			g.Fail("Please provide correct install-config type")
+		}
+		x.create(oc)
+	default:
+		g.By("unknown ClusterDeployment type")
+	}
+}
+
+func cleanCD(oc *exutil.CLI, clusterImageSetName string, ns string, secretName string, cdName string) {
+	defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", clusterImageSetName})
+	defer cleanupObjects(oc, objectTableRef{"secret", ns, secretName})
+	defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", ns, cdName})
 }
