@@ -761,7 +761,7 @@ func expectedResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, isCom
 	})
 }
 func exposeService(oc *exutil.CLI, ns, resource, name, port string) {
-	err := oc.WithoutNamespace().Run("expose").Args(resource, "--name="+name, "--port="+port, "-n", ns).Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("expose").Args(resource, "--name="+name, "--port="+port, "-n", ns).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

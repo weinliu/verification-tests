@@ -18,36 +18,77 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	)
 	// author: wewang@redhat.com
 	g.It("NonPreRelease-PreChkUpgrade-Author:wewang-High-26401-Upgrade cluster with insecureRegistries and blockedRegistries defined prepare [Disruptive]", func() {
-		g.By("Add insecureRegistries and blockedRegistries to image.config")
-		output, err := oc.AsAdmin().Run("patch").Args("images.config.openshift.io/cluster", "-p", `{"spec":{"registrySources":{"blockedRegistries": ["untrusted.com"],"insecureRegistries": ["insecure.com"]}}}`, "--type=merge").Output()
+		g.By("Create two registries")
+		ns := "26401-upgrade-ns"
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("patched"))
+		blockedRoute := setSecureRegistryWithoutAuth(oc, ns, "blockedreg", "quay.io/openshifttest/registry@sha256:01493571d994fd021da18c1f87aba1091482df3fc20825f443b4e60b3416c820", "5000")
+		insecuredRoute := setSecureRegistryWithoutAuth(oc, ns, "insecuredreg", "quay.io/openshifttest/registry@sha256:01493571d994fd021da18c1f87aba1091482df3fc20825f443b4e60b3416c820", "5000")
+		blockedImage := blockedRoute + "/" + ns + "/blockedimage:latest"
+		insecuredImage := insecuredRoute + "/" + ns + "/insecuredimage:latest"
 
-		g.By("registries.conf gets updated")
-		masterNode, _ := exutil.GetFirstMasterNode(oc)
-		err = wait.Poll(30*time.Second, 8*time.Minute, func() (bool, error) {
-			registriesstatus, _ := exutil.DebugNodeWithChroot(oc, masterNode, "bash", "-c", "cat /etc/containers/registries.conf |grep -E '\"untrusted.com\"|\"insecure.com\"'")
-			if strings.Contains(registriesstatus, "location = \"untrusted.com\"") && strings.Contains(registriesstatus, "location = \"insecure.com\"") {
-				e2e.Logf("registries.conf updated")
+		g.By("Push images to two registries")
+		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", blockedImage, "--insecure", "--keep-manifest-list=true", "--filter-by-os=.*").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", insecuredImage, "--insecure", "--keep-manifest-list=true", "--filter-by-os=.*").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Without --insecure the imagestream will import fail")
+		insecuredOut, insecuredErr := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("insecured-firstis:latest", "--from="+insecuredImage, "--confirm", "-n", ns).Output()
+		o.Expect(insecuredErr).NotTo(o.HaveOccurred())
+		o.Expect(string(insecuredOut)).To(o.ContainSubstring("x509"))
+
+		g.By("Add insecureRegistries and blockedRegistries to image.config")
+		err = oc.AsAdmin().Run("patch").Args("images.config.openshift.io/cluster", "-p", `{"spec":{"registrySources":{"blockedRegistries": ["`+blockedRoute+`"],"insecureRegistries": ["`+insecuredRoute+`"]}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Can't import image from blocked registry")
+		err = wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
+			blockedOut, blockedErr := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("blocked-firstis:latest", "--from="+blockedImage, "--reference-policy=local", "--insecure", "--confirm", "-n", ns).Output()
+			o.Expect(blockedErr).NotTo(o.HaveOccurred())
+			if strings.Contains(blockedOut, blockedRoute+" blocked") {
+				e2e.Logf("output is %s", blockedOut)
 				return true, nil
 			}
-			e2e.Logf("registries.conf not update")
+			e2e.Logf("blockedRegistries function does not work")
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "registries.conf not contains registrysources")
+		exutil.AssertWaitPollNoErr(err, "blockedRegistries function does not work")
+
+		g.By("Could import image from the insecured registry without --insecure")
+		insecuredOut, insecuredErr = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("insecured-secondis:latest", "--from="+insecuredImage, "--confirm", "-n", ns).Output()
+		o.Expect(insecuredErr).NotTo(o.HaveOccurred())
+		o.Expect(string(insecuredOut)).NotTo(o.ContainSubstring("x509"))
 	})
 
 	// author: wewang@redhat.com
 	g.It("NonPreRelease-PstChkUpgrade-Author:wewang-High-26401-Upgrade cluster with insecureRegistries and blockedRegistries defined after upgrade [Disruptive]", func() {
-		g.By("registries.conf gets updated")
-		defer oc.AsAdmin().Run("patch").Args("images.config.openshift.io/cluster", "-p", `{"spec": {"registrySources": null}}`, "--type=merge").Execute()
-		masterNode, _ := exutil.GetFirstMasterNode(oc)
-		registriesstatus, _ := exutil.DebugNodeWithChroot(oc, masterNode, "bash", "-c", "cat /etc/containers/registries.conf | grep -E '\"untrusted.com\"|\"insecure.com\"'")
-		if strings.Contains(registriesstatus, "location = \"untrusted.com\"") && strings.Contains(registriesstatus, "location = \"insecure.com\"") {
-			e2e.Logf("registries.conf updated")
-		} else {
-			e2e.Failf("registries.conf not update")
-		}
+		g.By("Setup upgrade info")
+		ns := "26401-upgrade-ns"
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("namespace", ns, "--ignore-not-found").Execute()
+		blockedRoute, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "blockedreg", "-n", ns, "-o=jsonpath={.spec.host}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		insecuredRoute, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "insecuredreg", "-n", ns, "-o=jsonpath={.spec.host}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		blockedImage := blockedRoute + "/" + ns + "/blockedimage:latest"
+		insecuredImage := insecuredRoute + "/" + ns + "/insecuredimage:latest"
+
+		g.By("Push images to two registries")
+		//After upgrade the reigstry pods restarted, the data should be lost
+		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", blockedImage, "--insecure", "--keep-manifest-list=true", "--filter-by-os=.*").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", insecuredImage, "--insecure", "--keep-manifest-list=true", "--filter-by-os=.*").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Can't import image from blocked registry")
+		blockedOut, blockedErr := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("blocked-secondis:latest", "--from="+blockedImage, "--reference-policy=local", "--insecure", "--confirm", "-n", ns).Output()
+		o.Expect(blockedErr).NotTo(o.HaveOccurred())
+		o.Expect(string(blockedOut)).To(o.ContainSubstring(blockedRoute + " blocked"))
+
+		g.By("Could import image from the insecured registry without --insecure")
+		insecuredOut, insecuredErr := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("insecured-thirdis:latest", "--from="+insecuredImage, "--confirm", "-n", ns).Output()
+		o.Expect(insecuredErr).NotTo(o.HaveOccurred())
+		o.Expect(string(insecuredOut)).NotTo(o.ContainSubstring("x509"))
 	})
 
 	// author: wewang@redhat.com
