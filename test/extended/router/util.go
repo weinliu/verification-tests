@@ -44,6 +44,14 @@ type routeDescription struct {
 	template  string
 }
 
+type ingressDescription struct {
+	name        string
+	namespace   string
+	domain      string
+	serviceName string
+	template    string
+}
+
 func getRandomString() string {
 	chars := "abcdefghijklmnopqrstuvwxyz0123456789"
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -83,12 +91,18 @@ func (ingctrl *ingctrlNodePortDescription) create(oc *exutil.CLI) {
 }
 
 func (ingctrl *ingctrlNodePortDescription) delete(oc *exutil.CLI) error {
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ingctrl.namespace, "ingresscontroller", ingctrl.name).Execute()
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("--ignore-not-found", "-n", ingctrl.namespace, "ingresscontroller", ingctrl.name).Execute()
 }
 
 // create route object from file.
 func (rut *routeDescription) create(oc *exutil.CLI) {
 	err := createResourceToNsFromTemplate(oc, rut.namespace, "--ignore-unknown-parameters=true", "-f", rut.template, "-p", "SUBDOMAIN_NAME="+rut.subDomain, "NAMESPACE="+rut.namespace, "DOMAIN="+rut.domain)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// create ingress object from file.
+func (ing *ingressDescription) create(oc *exutil.CLI) {
+	err := createResourceToNsFromTemplate(oc, ing.namespace, "--ignore-unknown-parameters=true", "-f", ing.template, "-p", "NAME="+ing.name, "NAMESPACE="+ing.namespace, "DOMAIN="+ing.domain, "SERVICE_NAME="+ing.serviceName)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -860,4 +874,31 @@ func exposeRoutePassth(oc *exutil.CLI, ns, route, service, hostname string) {
 func exposeRouteReen(oc *exutil.CLI, ns, route, service, hostname string) {
 	_, err := oc.WithoutNamespace().Run("create").Args("-n", ns, "route", "reencrypt", route, "--service="+service, "--hostname="+hostname).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// this function will get the ingress detail
+func getIngress(oc *exutil.CLI, ns string) string {
+	output, err := oc.Run("get").Args("ingress", "-n", ns).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("oc get ingress: %v", output)
+	return output
+}
+
+// this function will help to create Opaque secret using cert file and its key_name
+func createGenericSecret(oc *exutil.CLI, ns, name, keyName, certFile string) {
+	cmd := fmt.Sprintf(`--from-file=%s=%v`, keyName, certFile)
+	_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args(
+		"secret", "generic", name, cmd, "-n", ns).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// this function is to obtain the resource name like ingress's,route's name
+func getResourceName(oc *exutil.CLI, namespace, resourceName string) []string {
+	var resourceList []string
+	resourceNames, err := oc.AsAdmin().Run("get").Args("-n", namespace, resourceName,
+		"-ojsonpath={.items..metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	resourceList = strings.Split(resourceNames, " ")
+	e2e.Logf("The resource '%s' names are  %v ", resourceName, resourceList)
+	return resourceList
 }
