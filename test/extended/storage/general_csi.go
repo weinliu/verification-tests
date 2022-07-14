@@ -3348,19 +3348,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		waitForPersistentVolumeStatusAsExpected(oc, pvName, "Available")
 
 		g.By("Re-create pvc, Set the volumeName field of the PVC to the name of the PV")
-		pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity(expandedCapactiyFirst), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(cloudProvider, "ebs.csi.aws.com")))
+		pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimName(pvc.name), setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity(expandedCapactiyFirst), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(cloudProvider, "ebs.csi.aws.com")))
+		// As the pvcNew use the same name with the origin pvc, no need to use new defer deleted
 		pvcNew.createWithSpecifiedPV(oc, pvName)
-		defer pvcNew.deleteAsAdmin(oc)
 
 		g.By("Restore the reclaim policy on the PV")
 		patchResourceAsAdmin(oc, "", "pv/"+pvName, pvPatchDelete, "merge")
 
 		g.By("Check origianl data in the volume")
-		depNew := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvcNew.name))
-		depNew.namespace = oc.Namespace()
-		depNew.create(oc)
-		defer depNew.deleteAsAdmin(oc)
-		depNew.waitReady(oc)
+		dep.scaleReplicas(oc, "1")
+		dep.waitReady(oc)
 		dep.checkPodMountedVolumeDataExist(oc, true)
 	})
 })
