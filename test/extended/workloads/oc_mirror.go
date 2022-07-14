@@ -2,11 +2,13 @@ package workloads
 
 import (
 	"os"
+	"path/filepath"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	//e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-cli] Workloads", func() {
@@ -26,11 +28,10 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		defer func() {
 			os.RemoveAll(dockerCreFile)
 			_, err = os.Stat(homePath + "/.docker/config.json.back")
-                        if err == nil {
+			if err == nil {
 				copyFile(homePath+"/.docker/config.json.back", homePath+"/.docker/config.json")
-                        }
-                }()
-
+			}
+		}()
 
 		out, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("list", "operators", "--version=4.11").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -120,6 +121,32 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("list", "operators", "--catalog=registry.redhat.io/redhat/redhat-operator-index:v4.11", "--package=cluster-logging").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+	})
+	g.It("Author:yinzhou-Medium-46818-Low-46523-check the User Agent for oc-mirror", func() {
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		operatorS := filepath.Join(ocmirrorBaseDir, "catlog-loggings.yaml")
+
+		dirname := "/tmp/case46523"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer os.RemoveAll("/tmp/case46523/oc-mirror-workspace")
+		out, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--config", operatorS, "file:///tmp/case46523", "-v", "7", "--dry-run").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//check user-agent and dry-run should write mapping file
+		checkMessage := []string{
+			"User-Agent: oc-mirror",
+			"Writing image mapping",
+		}
+		for _, v := range checkMessage {
+			o.Expect(out).To(o.ContainSubstring(v))
+		}
+		_, err = os.Stat("/tmp/case46523/oc-mirror-workspace/mapping.txt")
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
 })
