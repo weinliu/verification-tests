@@ -15,6 +15,7 @@ import (
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
+	"github.com/tidwall/gjson"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1973,15 +1974,13 @@ spec:
 		errWatcher := wait.Poll(60*time.Second, 500*time.Second, func() (bool, error) {
 			alertOutput, alertErr := GetAlertsByName(oc, "ExtremelyHighIndividualControlPlaneCPU")
 			o.Expect(alertErr).NotTo(o.HaveOccurred())
-			jqCmd := fmt.Sprintf(`echo '%s' | jq -r '.data.alerts[] | select( .labels.alertname | contains("%s"))' | jq -r 'select( .labels.severity| contains("%s")) | .state'`, alertOutput, alert, severity[0])
-			jqOutput, jqErr := exec.Command("bash", "-c", jqCmd).Output()
-			o.Expect(jqErr).NotTo(o.HaveOccurred())
-			if strings.Contains(string(jqOutput), "firing") {
+			alertName := gjson.Parse(alertOutput).String()
+			alertOutputWarning1 := gjson.Get(alertName, `data.alerts.#(labels.alertname=="`+alert+`")#`).String()
+			alertOutputWarning2 := gjson.Get(alertOutputWarning1, `#(labels.severity=="`+severity[0]+`").state`).String()
+			if strings.Contains(string(alertOutputWarning2), "firing") {
 				e2e.Logf("%s with %s is firing", alert, severity[0])
-				jqCmd = fmt.Sprintf(`echo '%s' | jq -r '.data.alerts[] | select( .labels.alertname | contains("%s"))' | jq -r 'select( .labels.severity| contains("%s")) | .state'`, alertOutput, alert, severity[1])
-				jqOutput, jqErr = exec.Command("bash", "-c", jqCmd).Output()
-				o.Expect(jqErr).NotTo(o.HaveOccurred())
-				o.Expect(jqOutput).Should(o.ContainSubstring("pending"), fmt.Sprintf("%s with %s is not pending", alert, severity[1]))
+				alertOuptutCritical := gjson.Get(alertOutputWarning1, `#(labels.severity=="`+severity[1]+`").state`).String()
+				o.Expect(alertOuptutCritical).Should(o.ContainSubstring("pending"), fmt.Sprintf("%s with %s is not pending", alert, severity[1]))
 				e2e.Logf("%s with %s is pending", alert, severity[1])
 				return true, nil
 			}
