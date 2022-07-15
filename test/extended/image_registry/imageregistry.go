@@ -2345,4 +2345,25 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	})
 
+	//author: yyou@redhat.com
+	g.It("Author:yyou-High-27562-Recreate Rollouts for Image Registry is enabled", func() {
+
+		g.By("Check Image registry's deployment defaults value")
+		output, operationErr := oc.WithoutNamespace().AsAdmin().Run("get").Args("configs.imageregistry.operator.openshift.io/cluster", "-o=jsonpath={.spec.rolloutStrategy}").Output()
+		o.Expect(operationErr).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "RollingUpdate") && !strings.Contains(output, "Recreate") {
+			e2e.Failf("The  rolloutStrategy of image-registry is not correct")
+		}
+
+		g.By("Check Image registry's deployment invalid value")
+		output, patchErr := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry.operator.openshift.io/cluster", "-p", `{"spec":{"rolloutStrategy":123}}`, "--type=merge").Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`Invalid value: "integer": spec.rolloutStrategy in body must be of type string: "integer"`))
+
+		g.By("Check Image registry's deployment invalid value again")
+		output, patchErr = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry.operator.openshift.io/cluster", "-p", `{"spec":{"rolloutStrategy":"test"}}`, "--type=merge").Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`Invalid value: "test": spec.rolloutStrategy in body should match '^(RollingUpdate|Recreate)$'`))
+	})
+
 })
