@@ -2073,6 +2073,160 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		g.By("OCP 52371 SUCCESS")
 	})
 
+	// author: xzha@redhat.com
+	g.It("ConnectedOnly-VMonly-Author:xzha-High-52377-operatorSDK support java plugin", func() {
+		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
+			g.Skip("HTTP_PROXY is not empty - skipping test ...")
+		}
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture != "amd64" {
+			g.Skip("Do not support " + architecture)
+		}
+		var (
+			buildPruningBaseDir        = exutil.FixturePath("testdata", "operatorsdk")
+			dataPath                   = filepath.Join(buildPruningBaseDir, "ocp-52377-data")
+			clusterrolebindingtemplate = filepath.Join(buildPruningBaseDir, "cluster-role-binding.yaml")
+			quayCLI                    = container.NewQuayCLI()
+			imageTag                   = "quay.io/olmqe/memcached-quarkus-operator:52377-" + getRandomString()
+			bundleImage                = "quay.io/olmqe/memcached-quarkus-bundle:52377-" + getRandomString()
+			tmpBasePath                = "/tmp/ocp-52377-" + getRandomString()
+			tmpOperatorPath            = filepath.Join(tmpBasePath, "memcached-quarkus-operator-52377")
+		)
+		operatorsdkCLI.ExecCommandPath = tmpOperatorPath
+		makeCLI.ExecCommandPath = tmpOperatorPath
+		mvnCLI.ExecCommandPath = tmpOperatorPath
+		err := os.MkdirAll(tmpOperatorPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+
+		g.By("step: generate java type operator")
+		output, err := operatorsdkCLI.Run("init").Args("--plugins=quarkus", "--domain=example.com").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("operator-sdk create api"))
+
+		g.By("step: Create API.")
+		_, err = operatorsdkCLI.Run("create").Args("api", "--plugins=quarkus", "--group=cache", "--version=v1", "--kind=Memcached52377").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step: update API and Controller")
+		examplePath := filepath.Join(tmpOperatorPath, "src", "main", "java", "com", "example")
+		err = copy(filepath.Join(dataPath, "Memcached52377Reconciler.java"), filepath.Join(examplePath, "Memcached52377Reconciler.java"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = copy(filepath.Join(dataPath, "Memcached52377Spec.java"), filepath.Join(examplePath, "Memcached52377Spec.java"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = copy(filepath.Join(dataPath, "Memcached52377Status.java"), filepath.Join(examplePath, "Memcached52377Status.java"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = copy(filepath.Join(dataPath, "pom.xml"), filepath.Join(tmpOperatorPath, "pom.xml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step:mvn clean install")
+		output, err = mvnCLI.Run("clean").Args("install").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("BUILD SUCCESS"))
+
+		g.By("step: Build and push the operator image")
+		defer quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
+		output, err = makeCLI.Run("docker-build").Args("docker-push", "IMG="+imageTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("BUILD SUCCESS"))
+
+		g.By("step: make bundle.")
+		output, err = makeCLI.Run("bundle").Args().Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("operator-sdk bundle validate"))
+
+		g.By("step: update csv file")
+		csvFile := filepath.Join(tmpOperatorPath, "bundle", "manifests", "memcached-quarkus-operator-52377.clusterserviceversion.yaml")
+		replaceContent(csvFile, "supported: false", "supported: true")
+
+		g.By("step: build and push bundle image.")
+		defer quayCLI.DeleteTag(strings.Replace(bundleImage, "quay.io/", "", 1))
+		_, err = makeCLI.Run("bundle-build").Args("bundle-push", "BUNDLE_IMG="+bundleImage).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step: create new project")
+		oc.SetupProject()
+		ns := oc.Namespace()
+
+		g.By("step: run bundle")
+		defer func() {
+			output, err = operatorsdkCLI.Run("cleanup").Args("memcached-quarkus-operator-52377").Output()
+			if err != nil {
+				e2e.Logf(output)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}()
+		output, err = operatorsdkCLI.Run("run").Args("bundle", bundleImage, "-n", ns, "--timeout", "5m").Output()
+		if err != nil {
+			logDebugInfo(oc, ns, "csv", "pod", "ip")
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
+
+		g.By("step: create clusterrolebinding")
+		clusterrolebinding := clusterrolebindingDescription{
+			name:      "memcached52377-operator-admin",
+			namespace: ns,
+			saname:    "memcached-quarkus-operator-52377-operator",
+			template:  clusterrolebindingtemplate,
+		}
+		clusterrolebinding.create(oc)
+
+		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lines := strings.Split(podList, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "memcached-quarkus-operator-52377-operator") {
+					e2e.Logf("found pod memcached-quarkus-operator-52377-operator")
+					if strings.Contains(line, "Running") {
+						e2e.Logf("the status of pod memcached-quarkus-operator-52377-operator is Running")
+						return true, nil
+					}
+					e2e.Logf("the status of pod memcached-quarkus-operator-52377-operator is not Running")
+					return false, nil
+				}
+			}
+			return false, nil
+		})
+		if waitErr != nil {
+			logDebugInfo(oc, ns, "pod", "csv", "catsrc")
+		}
+
+		g.By("step: Create CR")
+		crFilePath := filepath.Join(dataPath, "memcached-sample.yaml")
+		defer func() {
+			g.By("step: delete cr.")
+			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", crFilePath, "-n", ns).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", ns).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lines := strings.Split(podList, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "memcached52377-sample") {
+					e2e.Logf("found pod memcached52377-sample")
+					if strings.Contains(line, "Running") {
+						e2e.Logf("the status of pod memcached52377-sample is Running")
+						return true, nil
+					}
+					e2e.Logf("the status of pod memcached52377-sample is not Running")
+					return false, nil
+				}
+			}
+			return false, nil
+		})
+		if waitErr != nil {
+			logDebugInfo(oc, ns, "Memcached52377", "pod", "events")
+		}
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached52377-sample in project %s or the pod is not running", ns))
+
+		g.By("OCP 52377 SUCCESS")
+	})
+
 	// author: chuo@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:chuo-High-40341-Ansible operator needs a way to pass vars as unsafe ", func() {
 		imageTag := "quay.io/olmqe/memcached-operator-pass-unsafe:v" + ocpversion + getRandomString()
