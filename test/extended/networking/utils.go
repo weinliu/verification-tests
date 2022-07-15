@@ -653,7 +653,7 @@ func checkSctpModule(oc *exutil.CLI, nodeName string) {
 }
 
 func getPodIPv4(oc *exutil.CLI, namespace string, podName string) string {
-	podIPv4, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.podIPs[0].ip}").Output()
+	podIPv4, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.podIPs[0].ip}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The pod  %s IP in namespace %s is %q", podName, namespace, podIPv4)
 	return podIPv4
@@ -661,7 +661,7 @@ func getPodIPv4(oc *exutil.CLI, namespace string, podName string) string {
 
 func getPodIPv6(oc *exutil.CLI, namespace string, podName string, ipStack string) string {
 	if ipStack == "ipv6single" {
-		podIPv6, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.podIPs[0].ip}").Output()
+		podIPv6, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.podIPs[0].ip}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("The pod  %s IP in namespace %s is %q", podName, namespace, podIPv6)
 		return podIPv6
@@ -1535,4 +1535,16 @@ func checkovnkubeMasterNetworkProgrammingetrics(oc *exutil.CLI, url string, metr
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(metricsErr, fmt.Sprintf("Fail to get metric and the error is:%s", metricsErr))
+}
+
+func getControllerManagerLeaderIP(oc *exutil.CLI, namespace string, cmName string) string {
+	leaderJSONPayload, getJSONPayloadErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-n", namespace, "-o=jsonpath={.metadata.annotations.control-plane\\.alpha\\.kubernetes\\.io/leader}").Output()
+	o.Expect(getJSONPayloadErr).NotTo(o.HaveOccurred())
+	holderID, parseHolderIDErr := exec.Command("bash", "-c", fmt.Sprintf("echo '%s' | jq -r .holderIdentity", leaderJSONPayload)).Output()
+	o.Expect(parseHolderIDErr).NotTo(o.HaveOccurred())
+	leaderPodName := strings.TrimSuffix(string(holderID), "\n")
+	o.Expect(leaderPodName).ShouldNot(o.BeEmpty(), "leader pod name is empty")
+	e2e.Logf("The leader pod name is %s", leaderPodName)
+	leaderPodIP := getPodIPv4(oc, namespace, leaderPodName)
+	return leaderPodIP
 }

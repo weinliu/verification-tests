@@ -388,12 +388,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		g.By("get controller-managert service ip address")
-		ManagertServiceIP, _ := getSvcIP(oc, "openshift-controller-manager", "controller-manager") //Right now, the cluster svc only get single IP
+		managertServiceIP := getControllerManagerLeaderIP(oc, "openshift-controller-manager", "openshift-master-controllers")
 		var prometheusURL string
 		if ipStackType == "ipv6single" {
-			prometheusURL = "https://[" + ManagertServiceIP + "]/metrics"
+			prometheusURL = "https://[" + managertServiceIP + "]:8443/metrics"
 		} else {
-			prometheusURL = "https://" + ManagertServiceIP + "/metrics"
+			prometheusURL = "https://" + managertServiceIP + ":8443/metrics"
 		}
 		//Because Bug 2064786: Not always can get the metrics of openshift_unidle_events_total
 		//Need curl several times to get the metrics of openshift_unidle_events_total
