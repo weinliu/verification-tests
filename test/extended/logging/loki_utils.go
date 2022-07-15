@@ -441,15 +441,14 @@ func getStorageType(oc *exutil.CLI) string {
 
 // lokiStack contains the configurations of loki stack
 type lokiStack struct {
-	name              string // lokiStack name
-	namespace         string // lokiStack namespace
-	tSize             string // size
-	storageType       string // the backend storage type, currently support s3, gcs and azure
-	storageSecret     string // the secret name for loki to use to connect to backend storage
-	replicationFactor string // replicationFactor
-	storageClass      string // storage class name
-	bucketName        string // the butcket or the container name where loki stores it's data in
-	template          string // the file used to create the loki stack
+	name          string // lokiStack name
+	namespace     string // lokiStack namespace
+	tSize         string // size
+	storageType   string // the backend storage type, currently support s3, gcs and azure
+	storageSecret string // the secret name for loki to use to connect to backend storage
+	storageClass  string // storage class name
+	bucketName    string // the butcket or the container name where loki stores it's data in
+	template      string // the file used to create the loki stack
 }
 
 // prepareResourcesForLokiStack creates buckets/containers in backend storage provider, and creates the secret for Loki to use
@@ -491,10 +490,10 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 	return err
 }
 
-// deployLokiStack creates the lokiStack CR with basic settings: name, namespace, replicationFactor, size, storage.secret.name, storage.secret.type, storageClassName
+// deployLokiStack creates the lokiStack CR with basic settings: name, namespace, size, storage.secret.name, storage.secret.type, storageClassName
 // optionalParameters is designed for adding parameters to deploy lokiStack with different tenants
 func (l lokiStack) deployLokiStack(oc *exutil.CLI, optionalParameters ...string) error {
-	parameters := []string{"-f", l.template, "-n", l.namespace, "-p", "NAME=" + l.name, "NAMESPACE=" + l.namespace, "REPLICAS_FACTOR=" + l.replicationFactor, "SIZE=" + l.tSize, "SECRET_NAME=" + l.storageSecret, "STORAGE_TYPE=" + l.storageType, "STORAGE_CLASS=" + l.storageClass}
+	parameters := []string{"-f", l.template, "-n", l.namespace, "-p", "NAME=" + l.name, "NAMESPACE=" + l.namespace, "SIZE=" + l.tSize, "SECRET_NAME=" + l.storageSecret, "STORAGE_TYPE=" + l.storageType, "STORAGE_CLASS=" + l.storageClass}
 	if len(optionalParameters) != 0 {
 		parameters = append(parameters, optionalParameters...)
 	}

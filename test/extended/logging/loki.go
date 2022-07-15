@@ -7,7 +7,9 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
@@ -49,7 +51,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			// deploy loki
 			g.By("deploy loki stack")
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
-			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", "s3", "s3-secret", "1", sc, "logging-loki-49168-" + getInfrastructureName(oc), lokiStackTemplate}
+			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", "s3", "s3-secret", sc, "logging-loki-49168-" + getInfrastructureName(oc), lokiStackTemplate}
 			defer ls.removeLokiStack(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -69,7 +71,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			// deploy loki
 			g.By("deploy loki stack")
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
-			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", "gcs", "gcs-secret", "1", sc, "logging-loki-49169-" + getInfrastructureName(oc), lokiStackTemplate}
+			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", "gcs", "gcs-secret", sc, "logging-loki-49169-" + getInfrastructureName(oc), lokiStackTemplate}
 			defer ls.removeLokiStack(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -89,7 +91,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			// deploy loki
 			g.By("deploy loki stack")
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
-			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", "azure", "azure-secret", "1", sc, "logging-loki-49171-" + getInfrastructureName(oc), lokiStackTemplate}
+			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", "azure", "azure-secret", sc, "logging-loki-49171-" + getInfrastructureName(oc), lokiStackTemplate}
 			defer ls.removeLokiStack(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -112,7 +114,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			g.By("deploy loki stack")
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
-			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", "1", sc, "logging-loki-49364-" + getInfrastructureName(oc), lokiStackTemplate}
+			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-49364-" + getInfrastructureName(oc), lokiStackTemplate}
 			defer ls.removeLokiStack(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -190,6 +192,116 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			appLog, err := lc.queryRange("application", "{kubernetes_namespace_name=\""+appProj+"\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
+		})
+
+		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-Critical-48607-Loki Operator - Verify replica support for 1x.small and 1x.medium t-shirt size[Serial]", func() {
+
+			// This test needs m5.8xlarge (AWS) instance type and similar instance requirement for other public clouds
+
+			if !validateInfraAndResourcesForLoki(oc, []string{"aws", "gcp", "azure"}, "150Gi", "64") {
+				g.Skip("Current platform not supported/resources not available for this test!")
+			}
+
+			sc, err := getStorageClassName(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploying LokiStack CR for 1x.small tshirt size")
+			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+			ls := lokiStack{"my-loki", cloNS, "1x.small", getStorageType(oc), "storage-secret", sc, "logging-loki-48608-" + getInfrastructureName(oc), lokiStackTemplate}
+			defer ls.removeLokiStack(oc)
+			err = ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+			e2e.Logf("LokiStack deployed")
+
+			g.By("Checking Ingester Replica count for 1x.small tshirt size")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods("openshift-logging").List(metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=ingester"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(podList.Items) == 2).Should(o.BeTrue())
+			e2e.Logf("Ingester pod count is %d \n", len(podList.Items))
+
+			g.By("Checking Querier Replica count for 1x.small tshirt size")
+			podList, err = oc.AdminKubeClient().CoreV1().Pods("openshift-logging").List(metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=querier"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(podList.Items) == 2).Should(o.BeTrue())
+			e2e.Logf("Querier pod count is %d \n", len(podList.Items))
+
+			g.By("Redeploying LokiStack with 1x.medium tshirt size")
+			ls.removeLokiStack(oc)
+			lokiStackTemplate = exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+			ls = lokiStack{"my-loki", cloNS, "1x.medium", getStorageType(oc), "storage-secret", sc, "logging-loki-48608-" + getInfrastructureName(oc), lokiStackTemplate}
+			err = ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+			e2e.Logf("LokiStack redeployed")
+
+			g.By("Checking Ingester Replica count for 1x.medium tshirt size")
+			podList, err = oc.AdminKubeClient().CoreV1().Pods("openshift-logging").List(metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=ingester"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(podList.Items) == 3).Should(o.BeTrue())
+			e2e.Logf("Ingester pod count is %d \n", len(podList.Items))
+
+			g.By("Checking Querier Replica count for 1x.medium tshirt size")
+			podList, err = oc.AdminKubeClient().CoreV1().Pods("openshift-logging").List(metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=querier"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(podList.Items) == 3).Should(o.BeTrue())
+			e2e.Logf("Querier pod count is %d \n", len(podList.Items))
+
+		})
+
+		//Author: kbharti@redhat.com (GitHub: kabirbhartiRH)
+		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-Critical-48608-Loki Operator-Reconcile and re-create objects on accidental user deletes[Serial]", func() {
+
+			if !validateInfraAndResourcesForLoki(oc, []string{"aws", "gcp", "azure"}, "10Gi", "6") {
+				g.Skip("Current platform not supported/resources not available for this test!")
+			}
+
+			sc, err := getStorageClassName(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
+			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-48608-" + getInfrastructureName(oc), lokiStackTemplate}
+			defer ls.removeLokiStack(oc)
+			err = ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+			e2e.Logf("LokiStack deployed")
+
+			e2e.Logf("Getting List of configmaps managed by Loki Controller")
+			lokiCMList, err := oc.AdminKubeClient().CoreV1().ConfigMaps("openshift-logging").List(metav1.ListOptions{LabelSelector: "app.kubernetes.io/created-by=lokistack-controller"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(lokiCMList.Items) == 3).Should(o.BeTrue())
+
+			e2e.Logf("Deleting Loki Configmaps")
+			for _, items := range lokiCMList.Items {
+				err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("cm/"+items.Name, "-n", "openshift-logging").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+
+			e2e.Logf("Deleting Loki Distributor deployment")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("deployment/my-loki-distributor", "-n", "openshift-logging").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			e2e.Logf("Check to see reconciliation of Loki Distributor by Controller....")
+			ls.waitForLokiStackToBeReady(oc)
+			podList, err := oc.AdminKubeClient().CoreV1().Pods("openshift-logging").List(metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=distributor"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(podList.Items) == 1).Should(o.BeTrue())
+			e2e.Logf("Distributor deployment reconciled!")
+
+			e2e.Logf("Check to see reconciliation of configmaps by Controller....")
+			lokiCMList, err = oc.AdminKubeClient().CoreV1().ConfigMaps("openshift-logging").List(metav1.ListOptions{LabelSelector: "app.kubernetes.io/created-by=lokistack-controller"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(lokiCMList.Items) == 3).Should(o.BeTrue())
+			e2e.Logf("Loki Configmaps are reconciled \n")
+
 		})
 
 	})
