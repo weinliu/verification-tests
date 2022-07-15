@@ -2523,8 +2523,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				"-o=jsonpath={.status.phase}"}).check(oc)
 			subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
 
-			g.By("Check the total number of CIS Manual rules.. !!!\n")
-			checkResourceNumber(oc, 24, "compliancecheckresult", "-l", "compliance.openshift.io/check-status=MANUAL", "--no-headers", "-n", subD.namespace)
+			g.By("Check the instructions exists for cis manual rules.. !!!\n")
 			checkCisRulesInstruction(oc)
 
 			g.By("Verify the nodeName shows in target & fact:identifier elements of complianceScan XCCDF format result.. !!!\n")
