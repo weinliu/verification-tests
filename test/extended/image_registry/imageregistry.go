@@ -2345,6 +2345,28 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	})
 
+	// author: jitli@redhat.com
+	g.It("Author:jitli-Medium-22596-ImageRegistry Create app with template eap74-basic-s2i with jbosseap rhel7 image", func() {
+
+		g.By("Create app with template")
+		newappErr := oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--template=eap74-basic-s2i", "-n", oc.Namespace()).Execute()
+		o.Expect(newappErr).NotTo(o.HaveOccurred())
+
+		g.By("Check eap-app-build-artifacts status")
+		waitErr := exutil.WaitForABuild(oc.BuildClient().BuildV1().Builds(oc.Namespace()), "eap-app-build-artifacts-1", nil, nil, nil)
+		if waitErr != nil {
+			exutil.DumpBuildLogs("eap-app-build-artifacts", oc)
+		}
+		o.Expect(waitErr).NotTo(o.HaveOccurred())
+
+		waitErr = exutil.WaitForABuild(oc.BuildClient().BuildV1().Builds(oc.Namespace()), "eap-app-2", nil, nil, nil)
+		if waitErr != nil {
+			exutil.DumpBuildLogs("eap-app", oc)
+		}
+		o.Expect(waitErr).NotTo(o.HaveOccurred())
+
+	})
+
 	//author: yyou@redhat.com
 	g.It("Author:yyou-High-27562-Recreate Rollouts for Image Registry is enabled", func() {
 
