@@ -2597,13 +2597,122 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(token).NotTo(o.BeEmpty())
 		e2e.Logf("Check hive metrics can be query from promethues")
-		query := "hive_clustersync_first_success_duration_seconds_count"
-		checkMetric(oc, ok, token, prometheusURL, query)
+		query := []string{"hive_clustersync_first_success_duration_seconds_count"}
+		checkMetricExist(oc, ok, token, prometheusURL, query)
 
 		g.By("Disabled exportedMetric in HiveConfig, Check hive metrics disappear from prometheus...")
 		defer exportMetric(oc, enable)
 		exportMetric(oc, disable)
 		e2e.Logf("Check hive metrics can't be query from promethues after exportedMetric disabled in HiveConfig")
-		checkMetric(oc, nok, token, prometheusURL, query)
+		checkMetricExist(oc, nok, token, prometheusURL, query)
+	})
+
+	//author: lwan@redhat.com
+	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "45279"|./bin/extended-platform-tests run --timeout 15m -f -
+	g.It("NonPreRelease-ConnectedOnly-Author:lwan-Medium-45279-Test Metric for ClusterClaim[Serial]", func() {
+		if iaasPlatform != "gcp" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 45279 is for GCP - skipping test ...")
+		}
+		testCaseID := "45279"
+		poolName := "pool-" + testCaseID
+		imageSetName := poolName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: testOCPImage,
+			template:     imageSetTemp,
+		}
+
+		g.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		g.By("Check if ClusterImageSet was created successfully")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
+
+		oc.SetupProject()
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and gcp-credentials to target namespace for the pool
+		g.By("Copy GCP platform credentials...")
+		createGCPCreds(oc, oc.Namespace())
+
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Create ClusterPool...")
+		poolTemp := filepath.Join(testDataDir, "clusterpool-gcp.yaml")
+		pool := gcpClusterPool{
+			name:           poolName,
+			namespace:      oc.Namespace(),
+			fake:           "true",
+			baseDomain:     GCPBaseDomain,
+			imageSetRef:    imageSetName,
+			platformType:   "gcp",
+			credRef:        GCPCreds,
+			region:         GCPRegion,
+			pullSecretRef:  PullSecret,
+			size:           2,
+			maxSize:        2,
+			runningCount:   2,
+			maxConcurrent:  2,
+			hibernateAfter: "360m",
+			template:       poolTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
+		pool.create(oc)
+
+		g.By("Check if GCP ClusterPool created successfully and become ready")
+		//runningCount is 2 so pool status should be standby: 0, ready: 2
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.ready}"}).check(oc)
+
+		g.By("Check if CD is Running")
+		cdListStr := getCDlistfromPool(oc, poolName)
+		var cdArray []string
+		cdArray = strings.Split(strings.TrimSpace(cdListStr), "\n")
+		for i := range cdArray {
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, DefaultTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i]}).check(oc)
+		}
+
+		g.By("Create ClusterClaim...")
+		claimTemp := filepath.Join(testDataDir, "clusterclaim.yaml")
+		claimName1 := poolName + "-claim-1"
+		claim1 := clusterClaim{
+			name:            claimName1,
+			namespace:       oc.Namespace(),
+			clusterPoolName: poolName,
+			template:        claimTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterClaim", oc.Namespace(), claimName1})
+		claim1.create(oc)
+		e2e.Logf("Check if ClusterClaim %s created successfully", claimName1)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, claimName1, ok, DefaultTimeout, []string{"ClusterClaim", "-n", oc.Namespace(), "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check Metrics for ClusterClaim...")
+		token, err := exutil.GetSAToken(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(token).NotTo(o.BeEmpty())
+		query1 := "hive_clusterclaim_assignment_delay_seconds_sum"
+		query2 := "hive_clusterclaim_assignment_delay_seconds_count"
+		query3 := "hive_clusterclaim_assignment_delay_seconds_bucket"
+		query := []string{query1, query2, query3}
+		g.By("Check hive metrics for clusterclaim exist")
+		checkMetricExist(oc, ok, token, prometheusURL, query)
+		e2e.Logf("Check metric %s Value is 1", query2)
+		checkClusterPoolMetricValue(oc, poolName, oc.Namespace(), "1", token, prometheusURL, query2)
+
+		g.By("Create another ClusterClaim...")
+		claimName2 := poolName + "-claim-2"
+		claim2 := clusterClaim{
+			name:            claimName2,
+			namespace:       oc.Namespace(),
+			clusterPoolName: poolName,
+			template:        claimTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterClaim", oc.Namespace(), claimName2})
+		claim2.create(oc)
+		e2e.Logf("Check if ClusterClaim %s created successfully", claimName2)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, claimName2, ok, DefaultTimeout, []string{"ClusterClaim", "-n", oc.Namespace(), "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		e2e.Logf("Check metric %s Value change to 2", query2)
+		checkClusterPoolMetricValue(oc, poolName, oc.Namespace(), "2", token, prometheusURL, query2)
 	})
 })

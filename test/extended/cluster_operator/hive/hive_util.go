@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	g "github.com/onsi/ginkgo"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -12,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	g "github.com/onsi/ginkgo"
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -249,13 +250,15 @@ type prometheusQueryResult struct {
 	Data struct {
 		Result []struct {
 			Metric struct {
-				Name      string `json:"__name__"`
-				Endpoint  string `json:"endpoint"`
-				Instance  string `json:"instance"`
-				Job       string `json:"job"`
-				Namespace string `json:"namespace"`
-				Pod       string `json:"pod"`
-				Service   string `json:"service"`
+				Name                 string `json:"__name__"`
+				ClusterpoolName      string `json:"clusterpool_name"`
+				ClusterpoolNamespace string `json:"clusterpool_namespace"`
+				Endpoint             string `json:"endpoint"`
+				Instance             string `json:"instance"`
+				Job                  string `json:"job"`
+				Namespace            string `json:"namespace"`
+				Pod                  string `json:"pod"`
+				Service              string `json:"service"`
 			} `json:"metric"`
 			Value []interface{} `json:"value"`
 		} `json:"result"`
@@ -890,21 +893,44 @@ func doPrometheusQuery(oc *exutil.CLI, token string, url string, query string) p
 }
 
 //parameter expect: ok, expected to have expectContent; nok, not expected to have expectContent
-func checkMetric(oc *exutil.CLI, expect bool, token string, url string, query string) {
+func checkMetricExist(oc *exutil.CLI, expect bool, token string, url string, query []string) {
+	for _, v := range query {
+		e2e.Logf("Check metric %s", v)
+		err := wait.Poll(1*time.Minute, (ClusterResumeTimeout/60)*time.Minute, func() (bool, error) {
+			data := doPrometheusQuery(oc, token, url, v)
+			if expect && len(data.Data.Result) > 0 {
+				e2e.Logf("Metric %s exist, expected", v)
+				return true, nil
+			}
+			if !expect && len(data.Data.Result) == 0 {
+				e2e.Logf("Metric %s doesn't exist, expected", v)
+				return true, nil
+			}
+			return false, nil
+
+		})
+		exutil.AssertWaitPollNoErr(err, "\"checkMetricExist\" fail, can not get expected result")
+	}
+
+}
+
+func checkClusterPoolMetricValue(oc *exutil.CLI, poolName, poolNamespace string, expectedResult string, token string, url string, query string) {
 	err := wait.Poll(1*time.Minute, (ClusterResumeTimeout/60)*time.Minute, func() (bool, error) {
 		data := doPrometheusQuery(oc, token, url, query)
-		if expect && len(data.Data.Result) > 0 {
-			e2e.Logf("Metric %s exist, expected", query)
-			return true, nil
-		}
-		if !expect && len(data.Data.Result) == 0 {
-			e2e.Logf("Metric %s doesn't exist, expected", query)
-			return true, nil
+		for _, v := range data.Data.Result {
+			if v.Metric.ClusterpoolName == poolName && v.Metric.ClusterpoolNamespace == poolNamespace {
+				e2e.Logf("Found metric for pool %s in namespace %s", poolName, poolNamespace)
+				if v.Value[1].(string) == expectedResult {
+					e2e.Logf("The metric Value %s matches expected %s", v.Value[1].(string), expectedResult)
+					return true, nil
+				}
+				e2e.Logf("The metric Value %s didn't match expected %s, try next round", v.Value[1].(string), expectedResult)
+				return false, nil
+			}
 		}
 		return false, nil
-
 	})
-	exutil.AssertWaitPollNoErr(err, "can not get expected result")
+	exutil.AssertWaitPollNoErr(err, "\"checkClusterPoolMetricValue\" fail, can not get expected result")
 }
 
 func createCD(testDataDir string, testOCPImage string, oc *exutil.CLI, ns string, installConfigSecret interface{}, cd interface{}) {
