@@ -1392,21 +1392,21 @@ spec:
 		} else {
 			e2e.Logf("List of api Removed in next EUS & Non-EUS releases\n %v", listOutput)
 			apisRmRelList := bufio.NewScanner(strings.NewReader(listOutput))
+			g.By("Step 4 & 5) Checking Alert & Client compenents accessing for APIRemovedInNextReleaseInUse")
 			for apisRmRelList.Scan() {
 				removeReleaseAPI := strings.Fields(apisRmRelList.Text())[0]
 				removeRelease, _ := strconv.ParseFloat(strings.Fields(apisRmRelList.Text())[1], 64)
 				// Checking the alert & logs for next APIRemovedInNextReleaseInUse & APIRemovedInNextEUSReleaseInUse
 				if removeRelease == nxtReleases {
-					g.By("4) Checking Alert For APIRemovedInNextReleaseInUse")
 					e2e.Logf("Api %v and release %v", removeReleaseAPI, removeRelease)
-					// Checking alerts, Wait for max 5 min to generate all the alert.
-					err = wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+					// Checking alerts, Wait for max 10 min to generate all the alert.
+					err = wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
 						// Generating Alert for removed apis
 						_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(removeReleaseAPI).Output()
 						o.Expect(err).NotTo(o.HaveOccurred())
 						alertOutput, err := oc.Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-s", "-k", "http://localhost:9090/api/v1/alerts").Output()
 						o.Expect(err).NotTo(o.HaveOccurred())
-						cmd := fmt.Sprintf(`echo '%v' | egrep 'APIRemovedInNextReleaseInUse' | grep -oh '%s'`, alertOutput, removeReleaseAPI)
+						cmd := fmt.Sprintf(`echo '%s' | egrep 'APIRemovedInNextReleaseInUse' | grep -oh '%s'`, strings.ReplaceAll(alertOutput, "'", ""), removeReleaseAPI)
 						_, outerr := exec.Command("bash", "-c", cmd).Output()
 						o.Expect(err).NotTo(o.HaveOccurred())
 						if outerr == nil {
@@ -1419,32 +1419,31 @@ spec:
 					})
 					exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test Fail:  Not Get Alert for APIRemovedInNextReleaseInUse, %v : release %v", removeReleaseAPI, removeRelease))
 
-					g.By("5) Checking Client compenents accessing the APIRemovedInNextReleaseInUse")
-					out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("apirequestcount", removeReleaseAPI, "-o", `jsonpath='{range .status.currentHour..byUser[*]}{..byVerb[*].verb}{","}{.username}{","}{.userAgent}{"\n"}{end}'`).Output()
-					stdOutput := strings.TrimRight(strings.Trim(out, "'"), "\n")
+					out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("apirequestcount", removeReleaseAPI, "-o", `jsonpath={range .status.currentHour..byUser[*]}{..byVerb[*].verb}{","}{.username}{","}{.userAgent}{"\n"}{end}`).Output()
+					stdOutput := strings.TrimRight(string(out), "\n")
 					o.Expect(err).NotTo(o.HaveOccurred())
 					cmd := fmt.Sprintf(`echo "%s" | egrep -v '%s' || true`, stdOutput, ignoreCase)
 					clientAccessLog, err := exec.Command("bash", "-c", cmd).Output()
 					o.Expect(err).NotTo(o.HaveOccurred())
-					if len(clientAccessLog) > 0 {
+					if len(strings.TrimSpace(string(clientAccessLog))) > 0 {
 						e2e.Logf("%v", string(clientAccessLog))
-						e2e.Failf("Test Failed: Client components access Apis logs found, file a bug.")
+						e2e.Failf("Step 5, Test Failed: Client components access Apis logs found, file a bug.")
 					} else {
-						e2e.Logf("Test Passed: No client components access Apis logs found\n")
+						e2e.Logf("Step 5, Test Passed: No client components access Apis logs found\n")
 					}
 				}
 				// Checking the alert & logs for next APIRemovedInNextEUSReleaseInUse
 				if elemsCheckers(eusReleases[clusterVersion], removeRelease) {
 					g.By("6) Checking the alert for APIRemovedInNextEUSReleaseInUse")
 					e2e.Logf("Api %v and release %v", removeReleaseAPI, removeRelease)
-					// Checking alerts, Wait for max 5 min to generate all the alert.
-					err = wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+					// Checking alerts, Wait for max 10 min to generate all the alert.
+					err = wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
 						// Generating Alert for removed apis
 						_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(removeReleaseAPI).Output()
 						o.Expect(err).NotTo(o.HaveOccurred())
 						alertOutput, err := oc.Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-s", "-k", "http://localhost:9090/api/v1/alerts").Output()
 						o.Expect(err).NotTo(o.HaveOccurred())
-						cmd := fmt.Sprintf(`echo '%v' | egrep 'APIRemovedInNextEUSReleaseInUse' | grep -oh '%s'`, alertOutput, removeReleaseAPI)
+						cmd := fmt.Sprintf(`echo '%v' | egrep 'APIRemovedInNextEUSReleaseInUse' | grep -oh '%s'`, strings.ReplaceAll(alertOutput, "'", ""), removeReleaseAPI)
 						_, outerr := exec.Command("bash", "-c", cmd).Output()
 						o.Expect(err).NotTo(o.HaveOccurred())
 						if outerr == nil {
@@ -1459,13 +1458,13 @@ spec:
 
 					// Checking logs for APIRemovedInNextEUSReleaseInUse apis client components logs.
 					g.By("7) Checking client components access logs for APIRemovedInNextEUSReleaseInUse")
-					out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("apirequestcount", removeReleaseAPI, "-o", `jsonpath='{range .status.currentHour..byUser[*]}{..byVerb[*].verb}{","}{.username}{","}{.userAgent}{"\n"}{end}'`).Output()
-					stdOutput := strings.TrimRight(strings.Trim(out, "'"), "\n")
+					out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("apirequestcount", removeReleaseAPI, "-o", `jsonpath={range .status.currentHour..byUser[*]}{..byVerb[*].verb}{","}{.username}{","}{.userAgent}{"\n"}{end}`).Output()
+					stdOutput := strings.TrimRight(string(out), "\n")
 					o.Expect(err).NotTo(o.HaveOccurred())
 					cmd := fmt.Sprintf(`echo "%s" | egrep -v '%s' || true`, stdOutput, ignoreCase)
 					clientCompAccess, err := exec.Command("bash", "-c", cmd).Output()
 					o.Expect(err).NotTo(o.HaveOccurred())
-					if len(clientCompAccess) > 0 {
+					if len(strings.TrimSpace(string(clientCompAccess))) > 0 {
 						e2e.Logf(string(clientCompAccess))
 						e2e.Failf("Test Failed: Client components access Apis logs found, file a bug.")
 					} else {
