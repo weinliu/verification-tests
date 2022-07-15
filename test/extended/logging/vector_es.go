@@ -633,4 +633,233 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 	})
 
+	g.Context("JSON log tests", func() {
+		var (
+			subTemplate           = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
+			SingleNamespaceOG     = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
+			AllNamespaceOG        = exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml")
+			multiContainerJSONLog = exutil.FixturePath("testdata", "logging", "generatelog", "multi_container_json_log_template.yaml")
+			jsonLogFile           = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+		)
+		cloNS := "openshift-logging"
+		eoNS := "openshift-operators-redhat"
+		CLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, CatalogSourceObjects{}}
+		EO := SubscriptionObjects{eo, eoNS, AllNamespaceOG, subTemplate, eoPackageName, CatalogSourceObjects{}}
+		g.BeforeEach(func() {
+			g.By("deploy CLO and EO")
+			CLO.SubscribeOperator(oc)
+			EO.SubscribeOperator(oc)
+			oc.SetupProject()
+		})
+
+		//author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-High-52128-Vector Send JSON logs from containers in the same pod to separate indices -- outputDefaults[Serial][Slow]", func() {
+			app := oc.Namespace()
+			containerName := "log-52128-" + getRandomString()
+			err := oc.WithoutNamespace().Run("new-app").Args("-f", multiContainerJSONLog, "-n", app, "-p", "CONTAINER="+containerName).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("create clusterlogforwarder/instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "structured-container-output-default.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "STRUCTURED_CONTAINER=true")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			// create clusterlogging instance
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=vector")
+			g.By("waiting for the ECK pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By("check indices in ES pod")
+			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(oc, cloNS, esPods.Items[0].Name, "app-"+containerName+"-0")
+			waitForIndexAppear(oc, cloNS, esPods.Items[0].Name, "app-"+containerName+"-1")
+			waitForIndexAppear(oc, cloNS, esPods.Items[0].Name, "app-"+app)
+
+			queryContainerLog := func(container string) string {
+				return "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match_phrase\": {\"kubernetes.container_name\": \"" + container + "\"}}}"
+			}
+
+			// in index $containerName-0, only logs in container $containerName-0 are stored in it, and json logs are parsed
+			log0 := searchDocByQuery(oc, cloNS, esPods.Items[0].Name, "app-"+containerName+"-0", queryContainerLog(containerName+"-0"))
+			o.Expect(len(log0.Hits.DataHits) > 0).To(o.BeTrue())
+			o.Expect(log0.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			log01 := searchDocByQuery(oc, cloNS, esPods.Items[0].Name, "app-"+containerName+"-0", queryContainerLog(containerName+"-1"))
+			o.Expect(len(log01.Hits.DataHits) == 0).To(o.BeTrue())
+			log02 := searchDocByQuery(oc, cloNS, esPods.Items[0].Name, "app-"+containerName+"-0", queryContainerLog(containerName+"-2"))
+			o.Expect(len(log02.Hits.DataHits) == 0).To(o.BeTrue())
+
+			// in index $containerName-1, only logs in container $containerName-1 are stored in it, and json logs are parsed
+			log1 := searchDocByQuery(oc, cloNS, esPods.Items[0].Name, "app-"+containerName+"-1", queryContainerLog(containerName+"-1"))
+			o.Expect(len(log1.Hits.DataHits) > 0).To(o.BeTrue())
+			o.Expect(log1.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			log10 := searchDocByQuery(oc, cloNS, esPods.Items[0].Name, "app-"+containerName+"-1", queryContainerLog(containerName+"-0"))
+			o.Expect(len(log10.Hits.DataHits) == 0).To(o.BeTrue())
+			log12 := searchDocByQuery(oc, cloNS, esPods.Items[0].Name, "app-"+containerName+"-1", queryContainerLog(containerName+"-2"))
+			o.Expect(len(log12.Hits.DataHits) == 0).To(o.BeTrue())
+
+			// in index app-$app-project, only logs in container $containerName-2 are stored in it, and json logs are parsed
+			log2 := searchDocByQuery(oc, cloNS, esPods.Items[0].Name, "app-"+app, queryContainerLog(containerName+"-2"))
+			o.Expect(len(log2.Hits.DataHits) > 0).To(o.BeTrue())
+			o.Expect(log2.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			log20 := searchDocByQuery(oc, cloNS, esPods.Items[0].Name, "app-"+app, queryContainerLog(containerName+"-0"))
+			o.Expect(len(log20.Hits.DataHits) == 0).To(o.BeTrue())
+			log21 := searchDocByQuery(oc, cloNS, esPods.Items[0].Name, "app-"+app, queryContainerLog(containerName+"-1"))
+			o.Expect(len(log21.Hits.DataHits) == 0).To(o.BeTrue())
+
+		})
+
+		// author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-Medium-52129-Vector Send JSON logs from containers in the same pod to separate indices[Serial]", func() {
+			app := oc.Namespace()
+			containerName := "log-52129-" + getRandomString()
+			err := oc.WithoutNamespace().Run("new-app").Args("-f", multiContainerJSONLog, "-n", app, "-p", "CONTAINER="+containerName).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			oc.SetupProject()
+			esProj := oc.Namespace()
+			ees := externalES{esProj, "6.8", "external-es", true, false, false, "", "", "json-log", cloNS}
+			defer ees.remove(oc)
+			ees.deploy(oc)
+			eesURL := "https://" + ees.serverName + "." + ees.namespace + ".svc:9200"
+
+			g.By("create clusterlogforwarder/instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "structured-container-logs.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "STRUCTURED_CONTAINER=true", "URL="+eesURL, "SECRET="+ees.secretName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			// create clusterlogging instance
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=vector")
+			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+
+			g.By("check indices in externale ES")
+			ees.waitForIndexAppear(oc, containerName+"-0")
+			ees.waitForIndexAppear(oc, containerName+"-1")
+			ees.waitForIndexAppear(oc, "app-"+app)
+
+			queryContainerLog := func(container string) string {
+				return "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match_phrase\": {\"kubernetes.container_name\": \"" + container + "\"}}}"
+			}
+
+			// in index app-$containerName-0, only logs in container $containerName-0 are stored in it, and json logs are parsed
+			log0 := ees.searchDocByQuery(oc, "app-"+containerName+"-0", queryContainerLog(containerName+"-0"))
+			o.Expect(len(log0.Hits.DataHits) > 0).To(o.BeTrue())
+			o.Expect(log0.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			log01 := ees.searchDocByQuery(oc, "app-"+containerName+"-0", queryContainerLog(containerName+"-1"))
+			o.Expect(len(log01.Hits.DataHits) == 0).To(o.BeTrue())
+			log02 := ees.searchDocByQuery(oc, "app-"+containerName+"-0", queryContainerLog(containerName+"-2"))
+			o.Expect(len(log02.Hits.DataHits) == 0).To(o.BeTrue())
+
+			// in index app-$containerName-1, only logs in container $containerName-1 are stored in it, and json logs are parsed
+			log1 := ees.searchDocByQuery(oc, "app-"+containerName+"-1", queryContainerLog(containerName+"-1"))
+			o.Expect(len(log1.Hits.DataHits) > 0).To(o.BeTrue())
+			o.Expect(log1.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			log10 := ees.searchDocByQuery(oc, "app-"+containerName+"-1", queryContainerLog(containerName+"-0"))
+			o.Expect(len(log10.Hits.DataHits) == 0).To(o.BeTrue())
+			log12 := ees.searchDocByQuery(oc, "app-"+containerName+"-1", queryContainerLog(containerName+"-2"))
+			o.Expect(len(log12.Hits.DataHits) == 0).To(o.BeTrue())
+
+			// in index app-$app-project, only logs in container $containerName-2 are stored in it, and json logs are parsed
+			log2 := ees.searchDocByQuery(oc, "app-"+app, queryContainerLog(containerName+"-2"))
+			o.Expect(len(log2.Hits.DataHits) > 0).To(o.BeTrue())
+			o.Expect(log2.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			log20 := ees.searchDocByQuery(oc, "app-"+app, queryContainerLog(containerName+"-0"))
+			o.Expect(len(log20.Hits.DataHits) == 0).To(o.BeTrue())
+			log21 := ees.searchDocByQuery(oc, "app-"+app, queryContainerLog(containerName+"-1"))
+			o.Expect(len(log21.Hits.DataHits) == 0).To(o.BeTrue())
+		})
+
+		// author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-Medium-52130-Vector JSON logs from containers in the same pod are not sent to separate indices when enableStructuredContainerLogs is false[Serial]", func() {
+			app := oc.Namespace()
+			containerName := "log-52130-" + getRandomString()
+			err := oc.WithoutNamespace().Run("new-app").Args("-f", multiContainerJSONLog, "-n", app, "-p", "CONTAINER="+containerName).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("create clusterlogforwarder/instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "structured-container-output-default.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "STRUCTURED_CONTAINER=false")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			// create clusterlogging instance
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=vector")
+			g.By("waiting for the ECK pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By("check indices in ES pod")
+			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(oc, cloNS, esPods.Items[0].Name, "app-"+app)
+
+			indices, err := getESIndices(oc, cloNS, esPods.Items[0].Name)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, index := range indices {
+				o.Expect(index.Index).NotTo(o.ContainSubstring(containerName))
+			}
+
+			// logs in container-0, container-1 and contianer-2 are stored in index app-$app-project, and json logs are parsed
+			for _, container := range []string{containerName + "-0", containerName + "-1", containerName + "-2"} {
+				log := searchDocByQuery(oc, cloNS, esPods.Items[0].Name, "app-"+app, "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match_phrase\": {\"kubernetes.container_name\": \""+container+"\"}}}")
+				o.Expect(len(log.Hits.DataHits) > 0).To(o.BeTrue())
+				o.Expect(log.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			}
+		})
+
+		// author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-Medium-52131-Vector Logs from different projects are forwarded to the same index if the pods have same annotation[Serial]", func() {
+			containerName := "log-52131-" + getRandomString()
+			app1 := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app1, "-p", "CONTAINER="+containerName).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			oc.SetupProject()
+			app2 := oc.Namespace()
+			err = oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app2, "-p", "CONTAINER="+containerName).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("create clusterlogforwarder/instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "structured-container-output-default.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "STRUCTURED_CONTAINER=true")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			// create clusterlogging instance
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=vector")
+			g.By("waiting for the ECK pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By("check indices in ES pod")
+			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(oc, cloNS, esPods.Items[0].Name, "app-"+containerName)
+
+			g.By("check data in ES")
+			for _, proj := range []string{app1, app2} {
+				count, err := getDocCountByQuery(oc, cloNS, esPods.Items[0].Name, "app-"+containerName, "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+proj+"\"}}}")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(count > 0).To(o.BeTrue())
+			}
+		})
+
+	})
+
 })

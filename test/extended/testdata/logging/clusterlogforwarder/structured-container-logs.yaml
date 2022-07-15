@@ -38,6 +38,6 @@ parameters:
 - name: TYPE_NAME
   value: test-json-log
 - name: URL
-  value: http://elasticsearch.openshift-logging.svc:9200
+  value: https://elasticsearch.openshift-logging.svc:9200
 - name: SECRET
   value: collector
