@@ -478,42 +478,18 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		}
 		testCaseID := "23040"
 		cdName := "cluster-" + testCaseID
-		imageSetName := cdName + "-imageset"
-		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
-		imageSet := clusterImageSet{
-			name:         imageSetName,
-			releaseImage: testOCPImage,
-			template:     imageSetTemp,
-		}
-
-		g.By("Create ClusterImageSet...")
-		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
-		imageSet.create(oc)
-
 		oc.SetupProject()
-		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
-		g.By("Copy AWS platform credentials...")
-		createAWSCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
-		createPullSecret(oc, oc.Namespace())
-
-		g.By("Create Install-Config Secret...")
-		installConfigTemp := filepath.Join(testDataDir, "aws-install-config.yaml")
-		installConfigSecretName := cdName + "-install-config"
+		g.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
-			name1:      installConfigSecretName,
+			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
 			baseDomain: AWSBaseDomain,
 			name2:      cdName,
 			region:     AWSRegion,
-			template:   installConfigTemp,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
-		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
-		installConfigSecret.create(oc)
-
-		g.By("Create ClusterDeployment...")
-		clusterTemp := filepath.Join(testDataDir, "clusterdeployment.yaml")
+		g.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -523,14 +499,14 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 			platformType:         "aws",
 			credRef:              AWSCreds,
 			region:               AWSRegion,
-			imageSetRef:          imageSetName,
-			installConfigSecret:  installConfigSecretName,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
 			pullSecretRef:        PullSecret,
 			installAttemptsLimit: 3,
-			template:             clusterTemp,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
 		}
-		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
-		cluster.create(oc)
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
 		g.By("Create SyncSet for resource apply......")
 		syncSetName := testCaseID + "-syncset1"
@@ -1246,42 +1222,18 @@ spec:
 		}
 		testCaseID := "32223"
 		cdName := "cluster-" + testCaseID
-		imageSetName := cdName + "-imageset"
-		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
-		imageSet := clusterImageSet{
-			name:         imageSetName,
-			releaseImage: testOCPImage,
-			template:     imageSetTemp,
-		}
-
-		g.By("Create ClusterImageSet...")
-		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
-		imageSet.create(oc)
-
 		oc.SetupProject()
-		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
-		g.By("Copy AWS platform credentials...")
-		createAWSCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
-		createPullSecret(oc, oc.Namespace())
-
-		g.By("Create Install-Config Secret...")
-		installConfigTemp := filepath.Join(testDataDir, "aws-install-config.yaml")
-		installConfigSecretName := cdName + "-install-config"
+		g.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
-			name1:      installConfigSecretName,
+			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
 			baseDomain: AWSBaseDomain,
 			name2:      cdName,
 			region:     AWSRegion,
-			template:   installConfigTemp,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
-		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
-		installConfigSecret.create(oc)
-
-		g.By("Create ClusterDeployment...")
-		clusterTemp := filepath.Join(testDataDir, "clusterdeployment.yaml")
+		g.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -1291,17 +1243,17 @@ spec:
 			platformType:         "aws",
 			credRef:              AWSCreds,
 			region:               AWSRegion,
-			imageSetRef:          imageSetName,
-			installConfigSecret:  installConfigSecretName,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
 			pullSecretRef:        PullSecret,
-			template:             clusterTemp,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
 			installAttemptsLimit: 3,
 		}
-		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
-		cluster.create(oc)
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
 		g.By("Check if ClusterDeployment created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
-
 		g.By("test OCP-32223 check install")
 		provisionName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.provisionRef.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1785,42 +1737,18 @@ spec:
 		}
 		testCaseID := "33642"
 		cdName := "cluster-" + testCaseID
-		imageSetName := cdName + "-imageset"
-		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
-		imageSet := clusterImageSet{
-			name:         imageSetName,
-			releaseImage: testOCPImage,
-			template:     imageSetTemp,
-		}
-
-		g.By("Create ClusterImageSet...")
-		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
-		imageSet.create(oc)
-
 		oc.SetupProject()
-		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
-		g.By("Copy AWS platform credentials...")
-		createAWSCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
-		createPullSecret(oc, oc.Namespace())
-
-		g.By("Create Install-Config Secret...")
-		installConfigTemp := filepath.Join(testDataDir, "aws-install-config.yaml")
-		installConfigSecretName := cdName + "-install-config"
+		g.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
-			name1:      installConfigSecretName,
+			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
 			baseDomain: AWSBaseDomain,
 			name2:      cdName,
 			region:     AWSRegion,
-			template:   installConfigTemp,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
-		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
-		installConfigSecret.create(oc)
-
-		g.By("Create ClusterDeployment...")
-		clusterTemp := filepath.Join(testDataDir, "clusterdeployment.yaml")
+		g.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -1830,14 +1758,15 @@ spec:
 			platformType:         "aws",
 			credRef:              AWSCreds,
 			region:               AWSRegion,
-			imageSetRef:          imageSetName,
-			installConfigSecret:  installConfigSecretName,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
 			pullSecretRef:        PullSecret,
-			template:             clusterTemp,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
 			installAttemptsLimit: 3,
 		}
-		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
-		cluster.create(oc)
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
 		g.By("Check AWS ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
@@ -1962,42 +1891,19 @@ spec:
 		}
 		testCaseID := "34882"
 		cdName := "cluster-" + testCaseID
-		imageSetName := cdName + "-imageset"
-		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
-		imageSet := clusterImageSet{
-			name:         imageSetName,
-			releaseImage: testOCPImage,
-			template:     imageSetTemp,
-		}
-
-		g.By("Create ClusterImageSet...")
-		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
-		imageSet.create(oc)
-
 		oc.SetupProject()
-		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
-		g.By("Copy AWS platform credentials...")
-		createAWSCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
-		createPullSecret(oc, oc.Namespace())
-
-		g.By("Create Install-Config Secret...")
-		installConfigTemp := filepath.Join(testDataDir, "aws-install-config.yaml")
-		installConfigSecretName := cdName + "-install-config"
+		g.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
-			name1:      installConfigSecretName,
+			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
 			baseDomain: AWSBaseDomain,
 			name2:      cdName,
 			region:     AWSRegion,
-			template:   installConfigTemp,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
-		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
-		installConfigSecret.create(oc)
 
-		g.By("Create ClusterDeployment...")
-		clusterTemp := filepath.Join(testDataDir, "clusterdeployment.yaml")
+		g.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -2007,14 +1913,14 @@ spec:
 			platformType:         "aws",
 			credRef:              AWSCreds,
 			region:               AWSRegion,
-			imageSetRef:          imageSetName,
-			installConfigSecret:  installConfigSecretName,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
 			pullSecretRef:        PullSecret,
-			template:             clusterTemp,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
 			installAttemptsLimit: 3,
 		}
-		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
-		cluster.create(oc)
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
 		workermachinepoolAWSTemp := filepath.Join(testDataDir, "machinepool-worker-aws.yaml")
 		workermp := machinepool{
@@ -2091,42 +1997,19 @@ spec:
 		}
 		testCaseID := "28867"
 		cdName := "cluster-" + testCaseID
-		imageSetName := cdName + "-imageset"
-		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
-		imageSet := clusterImageSet{
-			name:         imageSetName,
-			releaseImage: OCP410ReleaseImage,
-			template:     imageSetTemp,
-		}
-
-		g.By("Create ClusterImageSet...")
-		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
-		imageSet.create(oc)
-
 		oc.SetupProject()
-		//secrets can be accessed by pod in the same namespace, so copy pull-secret and aws-creds to target namespace for the pool
-		g.By("Copy AWS platform credentials...")
-		createAWSCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
-		createPullSecret(oc, oc.Namespace())
-
-		g.By("Create Install-Config Secret...")
-		installConfigTemp := filepath.Join(testDataDir, "aws-install-config.yaml")
-		installConfigSecretName := cdName + "-install-config"
+		g.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
-			name1:      installConfigSecretName,
+			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
 			baseDomain: AWSBaseDomain,
 			name2:      cdName,
 			region:     AWSRegion,
-			template:   installConfigTemp,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
-		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
-		installConfigSecret.create(oc)
 
-		g.By("Create ClusterDeployment...")
-		clusterTemp := filepath.Join(testDataDir, "clusterdeployment.yaml")
+		g.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
 			fake:                 "false",
 			name:                 cdName,
@@ -2136,14 +2019,14 @@ spec:
 			platformType:         "aws",
 			credRef:              AWSCreds,
 			region:               AWSRegion,
-			imageSetRef:          imageSetName,
-			installConfigSecret:  installConfigSecretName,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
 			pullSecretRef:        PullSecret,
-			template:             clusterTemp,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
 			installAttemptsLimit: 3,
 		}
-		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
-		cluster.create(oc)
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
 		g.By("Create worker and infra MachinePool ...")
 		workermachinepoolAWSTemp := filepath.Join(testDataDir, "machinepool-worker-aws.yaml")
