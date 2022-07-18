@@ -2332,6 +2332,32 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	})
 
+	// author: jitli@redhat.com
+	g.It("Author:jitli-Medium-11252-ImageRegistry Check the registry-admin permission", func() {
+
+		g.By("Add registry-admin role to a project")
+		defer oc.AsAdmin().WithoutNamespace().Run("policy").Args("remove-role-from-user", "registry-admin", oc.Username(), "-n", oc.Namespace()).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("policy").Args("add-role-to-user", "registry-admin", oc.Username(), "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the user policy")
+		policyOutput, err := oc.Run("auth").Args("can-i", "create", "imagestreamimages", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(policyOutput).To(o.ContainSubstring("yes"))
+		policyOutput, err = oc.Run("auth").Args("can-i", "create", "imagestreamimports", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(policyOutput).To(o.ContainSubstring("yes"))
+		policyOutput, _ = oc.Run("auth").Args("can-i", "list", "imagestreamimports", "-n", oc.Namespace()).Output()
+		o.Expect(policyOutput).To(o.ContainSubstring("no"))
+		policyOutput, err = oc.Run("auth").Args("can-i", "get", "imagestreamtags", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(policyOutput).To(o.ContainSubstring("yes"))
+		policyOutput, err = oc.Run("auth").Args("can-i", "update", "imagestreams/layers", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(policyOutput).To(o.ContainSubstring("yes"))
+
+	})
+
 	//author: yyou@redhat.com
 	g.It("Author:yyou-High-23651-oc explain work for image-registry operator", func() {
 
