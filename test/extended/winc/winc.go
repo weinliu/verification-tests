@@ -747,7 +747,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		oc.WithoutNamespace().Run("create").Args("-f", windowsWebServerNoTaint, "-n", namespace).Output()
 		poolErr := wait.Poll(20*time.Second, 60*time.Second, func() (bool, error) {
 			msg, err = oc.WithoutNamespace().Run("get").Args("pod", "--selector=app=win-webserver-no-taint", "-o=jsonpath={.items[].status.conditions[].message}", "-n", namespace).Output()
-			if strings.Contains(msg, "didn't tolerate") {
+			if strings.Contains(msg, "had untolerated taint") {
 				return true, nil
 			}
 			return false, nil
