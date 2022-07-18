@@ -76,3 +76,26 @@ func (gcloud *Gcloud) StartInstance(nodeName string, zoneName string) error {
 func (gcloud *Gcloud) StopInstance(nodeName string, zoneName string) error {
 	return exec.Command("bash", "-c", fmt.Sprintf(`gcloud compute instances stop %s --zone=%s`, nodeName, zoneName)).Run()
 }
+
+// GetGcpInstanceByNode returns the instance name
+func (gcloud *Gcloud) GetGcpInstanceByNode(nodeIdentity string) (string, error) {
+	instanceID, err := exec.Command("bash", "-c", fmt.Sprintf(`gcloud compute instances list --filter="%s" --format="value(name)"`, nodeIdentity)).Output()
+	if string(instanceID) == "" {
+		return "", fmt.Errorf("VM is not found")
+	}
+	return strings.Trim(string(instanceID), "\n"), err
+}
+
+// GetGcpInstanceStateByNode returns the instance state
+func (gcloud *Gcloud) GetGcpInstanceStateByNode(nodeIdentity string) (string, error) {
+	instanceState, err := exec.Command("bash", "-c", fmt.Sprintf(`gcloud compute instances list --filter="%s" --format="value(status)"`, nodeIdentity)).Output()
+	if string(instanceState) == "" {
+		return "", fmt.Errorf("Not able to get instance state")
+	}
+	return strings.Trim(string(instanceState), "\n"), err
+}
+
+// StopInstanceAsync Shutdown GCP node/instance with async
+func (gcloud *Gcloud) StopInstanceAsync(nodeName string, zoneName string) error {
+	return exec.Command("bash", "-c", fmt.Sprintf(`gcloud compute instances stop %s --async --zone=%s`, nodeName, zoneName)).Run()
+}
