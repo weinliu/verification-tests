@@ -1801,44 +1801,20 @@ spec:
 		}
 		testCaseID := "35297"
 		cdName := "cluster-" + testCaseID
-		imageSetName := cdName + "-imageset"
-		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
-		imageSet := clusterImageSet{
-			name:         imageSetName,
-			releaseImage: testOCPImage,
-			template:     imageSetTemp,
-		}
-
-		g.By("Create ClusterImageSet...")
-		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
-		imageSet.create(oc)
-
 		oc.SetupProject()
-		//secrets can be accessed by pod in the same namespace, so copy pull-secret and azure-credentials to target namespace for the cluster
-		g.By("Copy Azure platform credentials...")
-		createAzureCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
-		createPullSecret(oc, oc.Namespace())
-
-		g.By("Create Azure Install-Config Secret...")
-		installConfigTemp := filepath.Join(testDataDir, "azure-install-config.yaml")
-		installConfigSecretName := cdName + "-install-config"
+		g.By("Config Azure Install-Config Secret...")
 		installConfigSecret := azureInstallConfig{
-			name1:      installConfigSecretName,
+			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
 			baseDomain: AzureBaseDomain,
 			name2:      cdName,
 			region:     AzureRegion,
 			resGroup:   AzureRESGroup,
 			azureType:  AzurePublic,
-			template:   installConfigTemp,
+			template:   filepath.Join(testDataDir, "azure-install-config.yaml"),
 		}
-		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
-		installConfigSecret.create(oc)
-
-		g.By("Create Azure ClusterDeployment...")
-		clusterTemp := filepath.Join(testDataDir, "clusterdeployment-azure.yaml")
+		g.By("Config Azure ClusterDeployment...")
 		cluster := azureClusterDeployment{
 			fake:                "false",
 			name:                cdName,
@@ -1850,13 +1826,14 @@ spec:
 			region:              AzureRegion,
 			resGroup:            AzureRESGroup,
 			azureType:           AzurePublic,
-			imageSetRef:         imageSetName,
-			installConfigSecret: installConfigSecretName,
+			imageSetRef:         cdName + "-imageset",
+			installConfigSecret: cdName + "-install-config",
 			pullSecretRef:       PullSecret,
-			template:            clusterTemp,
+			template:            filepath.Join(testDataDir, "clusterdeployment-azure.yaml"),
 		}
-		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
-		cluster.create(oc)
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
 		g.By("Check Azure ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
@@ -2348,44 +2325,20 @@ spec:
 		}
 		testCaseID := "52415"
 		cdName := "cluster-" + testCaseID
-		imageSetName := cdName + "-imageset"
-		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
-		imageSet := clusterImageSet{
-			name:         imageSetName,
-			releaseImage: testOCPImage,
-			template:     imageSetTemp,
-		}
-
-		g.By("Create ClusterImageSet...")
-		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
-		imageSet.create(oc)
-
 		oc.SetupProject()
-		//secrets can be accessed by pod in the same namespace, so copy pull-secret and azure-credentials to target namespace for the cluster
-		g.By("Copy Azure platform credentials...")
-		createAzureCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
-		createPullSecret(oc, oc.Namespace())
-
-		g.By("Create Azure Install-Config Secret...")
-		installConfigTemp := filepath.Join(testDataDir, "azure-install-config.yaml")
-		installConfigSecretName := cdName + "-install-config"
+		g.By("Config Azure Install-Config Secret...")
 		installConfigSecret := azureInstallConfig{
-			name1:      installConfigSecretName,
+			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
 			baseDomain: AzureBaseDomain,
 			name2:      cdName,
 			region:     AzureRegion,
 			resGroup:   AzureRESGroup,
 			azureType:  AzurePublic,
-			template:   installConfigTemp,
+			template:   filepath.Join(testDataDir, "azure-install-config.yaml"),
 		}
-		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
-		installConfigSecret.create(oc)
-
-		g.By("Create Azure ClusterDeployment...")
-		clusterTemp := filepath.Join(testDataDir, "clusterdeployment-azure.yaml")
+		g.By("Config Azure ClusterDeployment...")
 		cluster := azureClusterDeployment{
 			fake:                "false",
 			name:                cdName,
@@ -2397,13 +2350,13 @@ spec:
 			region:              AzureRegion,
 			resGroup:            AzureRESGroup,
 			azureType:           AzurePublic,
-			imageSetRef:         imageSetName,
-			installConfigSecret: installConfigSecretName,
+			imageSetRef:         cdName + "-imageset",
+			installConfigSecret: cdName + "-install-config",
 			pullSecretRef:       PullSecret,
-			template:            clusterTemp,
+			template:            filepath.Join(testDataDir, "clusterdeployment-azure.yaml"),
 		}
-		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
-		cluster.create(oc)
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
 		g.By("Create infra MachinePool ...")
 		inframachinepoolAzureTemp := filepath.Join(testDataDir, "machinepool-infra-azure.yaml")
