@@ -1013,7 +1013,7 @@ spec:
 		cdName := "cluster-" + testCaseID
 		oc.SetupProject()
 
-		g.By("config GCP Install-Config Secret...")
+		g.By("Config GCP Install-Config Secret...")
 		projectID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.platformStatus.gcp.projectID}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(projectID).NotTo(o.BeEmpty())
@@ -1026,8 +1026,7 @@ spec:
 			projectid:  projectID,
 			template:   filepath.Join(testDataDir, "gcp-install-config.yaml"),
 		}
-
-		g.By("Create GCP ClusterDeployment...")
+		g.By("Config GCP ClusterDeployment...")
 		cluster := gcpClusterDeployment{
 			fake:                "false",
 			name:                cdName,
@@ -1377,46 +1376,22 @@ spec:
 		}
 		testCaseID := "41499"
 		cdName := "cluster-" + testCaseID
-		imageSetName := cdName + "-imageset"
-		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
-		imageSet := clusterImageSet{
-			name:         imageSetName,
-			releaseImage: testOCPImage,
-			template:     imageSetTemp,
-		}
-
-		g.By("Create ClusterImageSet...")
-		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
-		imageSet.create(oc)
-
 		oc.SetupProject()
-		//secrets can be accessed by pod in the same namespace, so copy pull-secret and gcp-credentials to target namespace for the clusterdeployment
-		g.By("Copy GCP platform credentials...")
-		createGCPCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
-		createPullSecret(oc, oc.Namespace())
-
-		g.By("Create GCP Install-Config Secret...")
-		installConfigTemp := filepath.Join(testDataDir, "gcp-install-config.yaml")
-		installConfigSecretName := cdName + "-install-config"
+		g.By("Config GCP Install-Config Secret...")
 		projectID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.platformStatus.gcp.projectID}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(projectID).NotTo(o.BeEmpty())
 		installConfigSecret := gcpInstallConfig{
-			name1:      installConfigSecretName,
+			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
 			baseDomain: GCPBaseDomain,
 			name2:      cdName,
 			region:     GCPRegion,
 			projectid:  projectID,
-			template:   installConfigTemp,
+			template:   filepath.Join(testDataDir, "gcp-install-config.yaml"),
 		}
-		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
-		installConfigSecret.create(oc)
-
-		g.By("Create GCP ClusterDeployment...")
-		clusterTemp := filepath.Join(testDataDir, "clusterdeployment-gcp.yaml")
+		g.By("Config GCP ClusterDeployment...")
 		cluster := gcpClusterDeployment{
 			fake:                "false",
 			name:                cdName,
@@ -1426,13 +1401,14 @@ spec:
 			platformType:        "gcp",
 			credRef:             GCPCreds,
 			region:              GCPRegion,
-			imageSetRef:         imageSetName,
-			installConfigSecret: installConfigSecretName,
+			imageSetRef:         cdName + "-imageset",
+			installConfigSecret: cdName + "-install-config",
 			pullSecretRef:       PullSecret,
-			template:            clusterTemp,
+			template:            filepath.Join(testDataDir, "clusterdeployment-gcp.yaml"),
 		}
-		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
-		cluster.create(oc)
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
 		g.By("Check GCP ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
@@ -1647,46 +1623,22 @@ spec:
 		}
 		testCaseID := "35069"
 		cdName := "cluster-" + testCaseID
-		imageSetName := cdName + "-imageset"
-		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
-		imageSet := clusterImageSet{
-			name:         imageSetName,
-			releaseImage: testOCPImage,
-			template:     imageSetTemp,
-		}
-
-		g.By("Create ClusterImageSet...")
-		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
-		imageSet.create(oc)
-
 		oc.SetupProject()
-		//secrets can be accessed by pod in the same namespace, so copy pull-secret and gcp-credentials to target namespace for the clusterdeployment
-		g.By("Copy GCP platform credentials...")
-		createGCPCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
-		createPullSecret(oc, oc.Namespace())
-
-		g.By("Create GCP Install-Config Secret...")
-		installConfigTemp := filepath.Join(testDataDir, "gcp-install-config.yaml")
-		installConfigSecretName := cdName + "-install-config"
+		g.By("Config GCP Install-Config Secret...")
 		projectID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.platformStatus.gcp.projectID}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(projectID).NotTo(o.BeEmpty())
 		installConfigSecret := gcpInstallConfig{
-			name1:      installConfigSecretName,
+			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
 			baseDomain: GCPBaseDomain,
 			name2:      cdName,
 			region:     GCPRegion,
 			projectid:  projectID,
-			template:   installConfigTemp,
+			template:   filepath.Join(testDataDir, "gcp-install-config.yaml"),
 		}
-		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
-		installConfigSecret.create(oc)
-
-		g.By("Create GCP ClusterDeployment...")
-		clusterTemp := filepath.Join(testDataDir, "clusterdeployment-gcp.yaml")
+		g.By("Config GCP ClusterDeployment...")
 		cluster := gcpClusterDeployment{
 			fake:                "false",
 			name:                cdName,
@@ -1696,19 +1648,18 @@ spec:
 			platformType:        "gcp",
 			credRef:             GCPCreds,
 			region:              GCPRegion,
-			imageSetRef:         imageSetName,
-			installConfigSecret: installConfigSecretName,
+			imageSetRef:         cdName + "-imageset",
+			installConfigSecret: cdName + "-install-config",
 			pullSecretRef:       PullSecret,
-			template:            clusterTemp,
+			template:            filepath.Join(testDataDir, "clusterdeployment-gcp.yaml"),
 		}
-		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
-		cluster.create(oc)
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
 		g.By("Check GCP ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
-
 		g.By("Check CD has Hibernating condition")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
-
 		g.By("patch the CD to Hibernating...")
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"powerState": "Hibernating"}}`}).check(oc)
 		e2e.Logf("Wait for CD to be Hibernating")
@@ -2165,46 +2116,22 @@ spec:
 		}
 		testCaseID := "52411"
 		cdName := "cluster-" + testCaseID
-		imageSetName := cdName + "-imageset"
-		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
-		imageSet := clusterImageSet{
-			name:         imageSetName,
-			releaseImage: testOCPImage,
-			template:     imageSetTemp,
-		}
-
-		g.By("Create ClusterImageSet...")
-		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
-		imageSet.create(oc)
-
 		oc.SetupProject()
-		//secrets can be accessed by pod in the same namespace, so copy pull-secret and gcp-credentials to target namespace for the clusterdeployment
-		g.By("Copy GCP platform credentials...")
-		createGCPCreds(oc, oc.Namespace())
 
-		g.By("Copy pull-secret...")
-		createPullSecret(oc, oc.Namespace())
-
-		g.By("Create GCP Install-Config Secret...")
-		installConfigTemp := filepath.Join(testDataDir, "gcp-install-config.yaml")
-		installConfigSecretName := cdName + "-install-config"
+		g.By("Config GCP Install-Config Secret...")
 		projectID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.platformStatus.gcp.projectID}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(projectID).NotTo(o.BeEmpty())
 		installConfigSecret := gcpInstallConfig{
-			name1:      installConfigSecretName,
+			name1:      cdName + "-install-config",
 			namespace:  oc.Namespace(),
 			baseDomain: GCPBaseDomain,
 			name2:      cdName,
 			region:     GCPRegion,
 			projectid:  projectID,
-			template:   installConfigTemp,
+			template:   filepath.Join(testDataDir, "gcp-install-config.yaml"),
 		}
-		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
-		installConfigSecret.create(oc)
-
-		g.By("Create GCP ClusterDeployment...")
-		clusterTemp := filepath.Join(testDataDir, "clusterdeployment-gcp.yaml")
+		g.By("Config GCP ClusterDeployment...")
 		cluster := gcpClusterDeployment{
 			fake:                "false",
 			name:                cdName,
@@ -2214,13 +2141,13 @@ spec:
 			platformType:        "gcp",
 			credRef:             GCPCreds,
 			region:              GCPRegion,
-			imageSetRef:         imageSetName,
-			installConfigSecret: installConfigSecretName,
+			imageSetRef:         cdName + "-imageset",
+			installConfigSecret: cdName + "-install-config",
 			pullSecretRef:       PullSecret,
-			template:            clusterTemp,
+			template:            filepath.Join(testDataDir, "clusterdeployment-gcp.yaml"),
 		}
-		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
-		cluster.create(oc)
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
 		g.By("Create infra MachinePool ...")
 		inframachinepoolGCPTemp := filepath.Join(testDataDir, "machinepool-infra-gcp.yaml")
