@@ -110,9 +110,9 @@ public class Memcached52377Reconciler implements Reconciler<Memcached52377> {
                             new PodSpecBuilder()
                                 .withContainers(
                                     new ContainerBuilder()
-                                        .withImage("memcached:1.4.36-alpine")
+                                        .withImage("quay.io/olmqe/memcached-docker:multi-arch")
                                         .withName("memcached")
-                                        .withCommand("memcached", "-m=64", "-o", "modern", "-v")
+                                        .withCommand("memcached", "-o", "modern", "-v")
                                         .withPorts(
                                             new ContainerPortBuilder()
                                                 .withContainerPort(11211)
