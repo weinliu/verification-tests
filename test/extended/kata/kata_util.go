@@ -27,7 +27,9 @@ type subscriptionDescription struct {
 }
 
 var (
-	snooze time.Duration = 2400
+	snooze     time.Duration = 2400
+	kataSnooze time.Duration = 5400 // Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
+
 )
 
 // author: tbuskey@redhat.com,abhbaner@redhat.com
@@ -69,7 +71,9 @@ func subscribeFromTemplate(oc *exutil.CLI, sub subscriptionDescription, subTempl
 func createKataConfig(oc *exutil.CLI, kcTemplate, kcName, kcMonitorImageName, kcLogLevel string, sub subscriptionDescription) (msg string, err error) {
 	// If this is used, label the caller with [Disruptive][Serial][Slow]
 	// If kataconfig already exists, this must not error
-	var configFile string
+	var (
+		configFile string
+	)
 
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", "--no-headers", "-n", sub.namespace).Output()
 	if strings.Contains(msg, kcName) {
@@ -113,7 +117,8 @@ func createKataConfig(oc *exutil.CLI, kcTemplate, kcName, kcMonitorImageName, kc
 	// -o=jsonpath={.status.installationStatus.IsInProgress} "True" at this point
 
 	g.By("(2.3) Wait for kataconfig to finish install")
-	errCheck = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+	// Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
+	errCheck = wait.Poll(30*time.Second, kataSnooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-o=jsonpath={.status.installationStatus.IsInProgress}").Output()
 		if strings.Contains(msg, "false") {
 			return true, nil
@@ -181,7 +186,7 @@ func deleteKataConfig(oc *exutil.CLI, kcName string) (msg string, err error) {
 	e2e.Logf("%v %v", msg, err)
 
 	g.By("(3.1) Wait for kataconfig to be deleted")
-	errCheck := wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+	errCheck := wait.Poll(30*time.Second, kataSnooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig").Output()
 		if strings.Contains(msg, "No resources found") {
 			return true, nil

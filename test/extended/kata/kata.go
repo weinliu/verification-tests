@@ -50,10 +50,10 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	release = "pre-GA"
 
 	g.BeforeEach(func() {
-		// Creating/deleting kataconfig reboots all worker node and extended-platform-tests may timeout after 20m.
-		// add --timeout 50m
+		// Creating/deleting kataconfig reboots all worker node and extended-platform-tests may timeout.
+		// --------- AWS baremetal may take >20m per node ----------------
+		// add --timeout 70m
 		// tag with [Slow][Serial][Disruptive] when deleting/recreating kataconfig
-		// getting versions
 
 		var (
 			err error
