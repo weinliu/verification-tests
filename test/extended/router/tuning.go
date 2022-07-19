@@ -365,21 +365,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("Try to patch tuningOptions/healthCheckInterval -1s which is a minus value, to the ingress-controller")
 		NegHealthCheckInterval = "-1s"
 		podname = getRouterPod(oc, ingctrl.name)
-		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"healthCheckInterval\": \""+NegHealthCheckInterval+"\"}}}")
-		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
-
-		g.By("Try to find the ROUTER_BACKEND_CHECK_INTERVAL env in a route pod which shouldn't be seen by default for the healthCheckInterval less than 1s")
-		podname = getRouterPod(oc, ingctrl.name)
-		cmd := fmt.Sprintf("/usr/bin/env | grep %s", "ROUTER_BACKEND_CHECK_INTERVAL")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", podname, "--", "bash", "-c", cmd).Output()
-		o.Expect(err).To(o.HaveOccurred())
+		output, err1 := oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", "{\"spec\": {\"tuningOptions\": {\"healthCheckInterval\": \""+NegHealthCheckInterval+"\"}}}", "--type=merge", "-n", ingctrl.namespace).Output()
+		o.Expect(err1).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Invalid value: \"-1s\""))
 
 		g.By("Try to patch tuningOptions/healthCheckInterval abc which is a string, to the ingress-controller")
-		NegHealthCheckInterval = "abc"
+		NegHealthCheckInterval = "0abc"
 		output, err2 := oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", "{\"spec\": {\"tuningOptions\": {\"healthCheckInterval\": \""+NegHealthCheckInterval+"\"}}}", "--type=merge", "-n", ingctrl.namespace).Output()
 		o.Expect(err2).To(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Invalid value: \"abc\": spec.tuningOptions.healthCheckInterval in body should match '^0|([0-9]+(\\.[0-9]+)?(ns|us|µs|μs|ms|s|m|h))+$'"))
+		o.Expect(output).To(o.ContainSubstring("Invalid value: \"0abc\":"))
 	})
 
 	// author: shudili@redhat.com
