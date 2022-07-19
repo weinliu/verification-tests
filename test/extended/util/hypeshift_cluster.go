@@ -2,11 +2,13 @@ package util
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 // ValidHypershiftAndGetGuestKubeConf check if it is hypershift env and get kubeconf of the guest cluster
@@ -36,10 +38,16 @@ func ValidHypershiftAndGetGuestKubeConf(oc *CLI) (string, string) {
 	//get first guest cluster to run test
 	guestClusterName := strings.Split(clusterNames, " ")[0]
 
-	guestClusterKubeconfigFile := "/tmp/guestcluster-kubeconfig-" + guestClusterName + "-" + getRandomString()
-	_, err = exec.Command("bash", "-c", fmt.Sprintf("hypershift create kubeconfig --name %s > %s",
-		guestClusterName, guestClusterKubeconfigFile)).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	var guestClusterKubeconfigFile string
+	if os.Getenv("GUEST_KUBECONFIG") != "" {
+		guestClusterKubeconfigFile = os.Getenv("GUEST_KUBECONFIG")
+		e2e.Logf(fmt.Sprintf("use a known guest cluster kubeconfig: %v", guestClusterKubeconfigFile))
+	} else {
+		guestClusterKubeconfigFile = "/tmp/guestcluster-kubeconfig-" + guestClusterName + "-" + getRandomString()
+		_, err = exec.Command("bash", "-c", fmt.Sprintf("hypershift create kubeconfig --name %s > %s",
+			guestClusterName, guestClusterKubeconfigFile)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf(fmt.Sprintf("create a new guest cluster kubeconfig: %v", guestClusterKubeconfigFile))
+	}
 	return guestClusterName, guestClusterKubeconfigFile
-
 }

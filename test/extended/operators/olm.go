@@ -11086,6 +11086,41 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 	})
 
 	// author: jiazha@redhat.com
+	g.It("Author:bandrade-High-45408-Eliminate use of imagestreams in catalog management", func() {
+		g.By("1) check the cronjob in the control-plane project")
+		controlProject := fmt.Sprintf("clusters-%s", guestClusterName)
+		cronjobs, err := oc.AsAdmin().Run("get").Args("cronjob", "-n", controlProject).Output()
+		if err != nil {
+			e2e.Failf("Fail to get cronjob in project: %s, error:%v", controlProject, err)
+		}
+		catalogs := []string{"certified-operators", "community-operators", "redhat-marketplace", "redhat-operators"}
+		for _, catalog := range catalogs {
+			if !strings.Contains(cronjobs, catalog) {
+				e2e.Failf("Cannot find %s in cronjob:%v", catalog, cronjobs)
+			}
+		}
+		g.By("2) check if uses the ImageStream resource")
+		is := []string{"olm-certified-catalogs", "olm-community-catalogs", "redhat-marketplace-catalogs", "redhat-operators-catalogs"}
+		for _, imageStream := range is {
+			isContent, _ := oc.AsAdmin().Run("get").Args("is", imageStream, "-n", controlProject).Output()
+			if !strings.Contains(isContent, "not found") {
+				e2e.Failf("find ImageStream:%s in project:%v", imageStream, controlProject)
+			}
+		}
+		g.By("3) check if Deployment uses the ImageStream")
+		deploys := []string{"certified-operators-catalog", "community-operators-catalog", "redhat-marketplace-catalog", "redhat-operators-catalog"}
+		for _, deploy := range deploys {
+			annotations, err := oc.AsAdmin().Run("get").Args("deployment", "-n", controlProject, deploy, "-o=jsonpath={.metadata.annotations}").Output()
+			if err != nil {
+				e2e.Failf("Fail to get deploy:%s in project: %s, error:%v", deploy, controlProject, err)
+			}
+			if strings.Contains(strings.ToLower(annotations), "imagestream") {
+				e2e.Failf("The deploy uses ImageStream: %v", annotations)
+			}
+		}
+	})
+
+	// author: jiazha@redhat.com
 	g.It("Author:jiazha-High-45348-High-45543-Enable hypershift to deploy OLM resources", func() {
 
 		g.By("1, check if any resource running in the guest cluster")
