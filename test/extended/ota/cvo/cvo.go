@@ -141,14 +141,12 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		g.By("Set invalid baselineCapabilitySet")
 		cmdOut, err := changeCap(oc, true, "Invalid")
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(cmdOut).To(o.ContainSubstring("spec.capabilities.baselineCapabilitySet: " +
-			"Unsupported value: \"Invalid\": supported values: \"None\", \"v4.11\", \"vCurrent\""))
+		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"None\", \"v4.11\", \"vCurrent\""))
 
 		g.By("Set invalid additionalEnabledCapabilities")
 		cmdOut, err = changeCap(oc, false, []string{"Invalid"})
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(cmdOut).To(o.ContainSubstring("spec.capabilities.additionalEnabledCapabilities: " +
-			"Unsupported value: \"Invalid\": supported values: \"openshift-samples\", \"baremetal\", \"marketplace\""))
+		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"openshift-samples\", \"baremetal\", \"marketplace\""))
 	})
 
 	//author: yanyang@redhat.com

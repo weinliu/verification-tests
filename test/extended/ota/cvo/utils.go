@@ -585,6 +585,18 @@ func changeCap(oc *exutil.CLI, base bool, cap interface{}) (string, error) {
 	if cap == nil {
 		return ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"remove", spec, nil}})
 	}
+	// if spec.capabilities is not present, patch to add capabilities
+	orgCap, err := getCVObyJP(oc, ".spec.capabilities")
+	if err != nil {
+		return "", err
+	}
+	if orgCap == "" {
+		value := make(map[string]interface{})
+		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/capabilities", value}})
+		if err != nil {
+			return "", err
+		}
+	}
 	return ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", spec, cap}})
 }
 
