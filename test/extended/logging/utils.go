@@ -1361,9 +1361,10 @@ type cloudwatchStreamResult struct {
 }
 
 // In this function, verify all infra logs from all nodes infra (both journal and container) are present on Cloudwatch
-func (cw cloudwatchSpec) infrastructureLogsFound(client *cloudwatchlogs.Client) bool {
+func (cw cloudwatchSpec) infrastructureLogsFound(client *cloudwatchlogs.Client, strict bool) bool {
 	var infraLogGroupNames []string
 	var logFoundAll bool = true
+	var logFoundOne bool = false
 	var streamsToVerify []*cloudwatchStreamResult
 
 	logGroupNames := cw.getGroupNames(client, cw.groupPrefix)
@@ -1388,6 +1389,7 @@ func (cw cloudwatchSpec) infrastructureLogsFound(client *cloudwatchlogs.Client) 
 		logStreams := cw.getStreamNames(client, infraLogGroupNames[0], e.streamPattern)
 		if len(logStreams) > 0 {
 			e.streamFound = true
+			logFoundOne = true
 		}
 	}
 
@@ -1397,7 +1399,10 @@ func (cw cloudwatchSpec) infrastructureLogsFound(client *cloudwatchlogs.Client) 
 			logFoundAll = false
 		}
 	}
-	return logFoundAll
+	if strict {
+		return logFoundAll
+	}
+	return logFoundOne
 }
 
 // In this function, verify all type of audit logs can be found.
@@ -1407,8 +1412,9 @@ func (cw cloudwatchSpec) infrastructureLogsFound(client *cloudwatchlogs.Client) 
 //    anli48022-gwbb4-master-2.openshift-audit.log
 //    anli48022-gwbb4-master-1.k8s-audit.log
 //    ip-10-0-136-31.us-east-2.compute.internal.linux-audit.log
-func (cw cloudwatchSpec) auditLogsFound(client *cloudwatchlogs.Client) bool {
+func (cw cloudwatchSpec) auditLogsFound(client *cloudwatchlogs.Client, strict bool) bool {
 	var logFoundAll bool = true
+	var logFoundOne bool = false
 	var auditLogGroupNames []string
 	var streamsToVerify []*cloudwatchStreamResult
 
@@ -1457,7 +1463,7 @@ func (cw cloudwatchSpec) auditLogsFound(client *cloudwatchlogs.Client) bool {
 	// TBD: produce audit message on every node
 	streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{streamPattern: ".k8s-audit.log$", logType: "k8saudit", streamFound: false})
 	streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{streamPattern: ".openshift-audit.log$", logType: "ocpaudit", streamFound: false})
-	streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{streamPattern: ".linux-audit.log$", logType: "linuxaudit", streamFound: false})
+	//streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{streamPattern: ".linux-audit.log$", logType: "linuxaudit", streamFound: false})
 	streamsToVerify = append(streamsToVerify, &cloudwatchStreamResult{streamPattern: ".ovn-audit.log", logType: "ovnaudit", streamFound: ovnFoundInit})
 
 	logStreams := cw.getStreamNames(client, auditLogGroupNames[0], "")
@@ -1467,6 +1473,7 @@ func (cw cloudwatchSpec) auditLogsFound(client *cloudwatchlogs.Client) bool {
 			match, _ := regexp.MatchString(e.streamPattern, streamName)
 			if match {
 				e.streamFound = true
+				logFoundOne = true
 			}
 		}
 	}
@@ -1477,7 +1484,10 @@ func (cw cloudwatchSpec) auditLogsFound(client *cloudwatchlogs.Client) bool {
 			logFoundAll = false
 		}
 	}
-	return logFoundAll
+	if strict {
+		return logFoundAll
+	}
+	return logFoundOne
 }
 
 // In this function, verify the pod's groupNames can be found in cloudwatch
@@ -1655,8 +1665,8 @@ func (cw cloudwatchSpec) logsFound() bool {
 
 	for _, logType := range cw.logTypes {
 		if logType == "infrastructure" {
-			err1 := wait.Poll(15*time.Second, 90*time.Second, func() (done bool, err error) {
-				return cw.infrastructureLogsFound(client), nil
+			err1 := wait.Poll(15*time.Second, 180*time.Second, func() (done bool, err error) {
+				return cw.infrastructureLogsFound(client, false), nil
 			})
 			if err1 != nil {
 				infraFound = false
@@ -1666,8 +1676,8 @@ func (cw cloudwatchSpec) logsFound() bool {
 			}
 		}
 		if logType == "audit" {
-			err2 := wait.Poll(15*time.Second, 90*time.Second, func() (done bool, err error) {
-				return cw.auditLogsFound(client), nil
+			err2 := wait.Poll(15*time.Second, 180*time.Second, func() (done bool, err error) {
+				return cw.auditLogsFound(client, true), nil
 			})
 			if err2 != nil {
 				auditFound = false
@@ -1677,7 +1687,7 @@ func (cw cloudwatchSpec) logsFound() bool {
 			}
 		}
 		if logType == "application" {
-			err3 := wait.Poll(15*time.Second, 90*time.Second, func() (done bool, err error) {
+			err3 := wait.Poll(15*time.Second, 180*time.Second, func() (done bool, err error) {
 				return cw.applicationLogsFound(client), nil
 			})
 			if err3 != nil {
