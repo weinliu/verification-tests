@@ -428,4 +428,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		checkovnkubeMasterNetworkProgrammingetrics(oc, prometheusURL, metricName1)
 		checkovnkubeMasterNetworkProgrammingetrics(oc, prometheusURL, metricName2)
 	})
+
+	g.It("Author:zzhao-Medium-53030-bug2060079- NodeProxyApplySlow should have correct value.", func() {
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "openshiftsdn") {
+			g.Skip("Skip testing on non-sdn cluster!!!")
+		}
+
+		alertExpr, NameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-sdn", "networking-rules", "-o=jsonpath={.spec.groups[*].rules[?(@.alert==\"NodeProxyApplySlow\")].expr}").Output()
+		o.Expect(NameErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The alertExpr is %v", alertExpr)
+		o.Expect(alertExpr).To(o.ContainSubstring("histogram_quantile(.95, sum(rate(kubeproxy_sync_proxy_rules_duration_seconds_bucket[5m])) by (le, namespace, pod))"))
+
+	})
 })
