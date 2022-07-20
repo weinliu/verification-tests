@@ -1266,7 +1266,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwangredhat.com
-	g.It("VMonly-Author:xiuwang-Critical-48744-Pull through for images that have dots in their namespace", func() {
+	g.It("VMonly-Author:xiuwang-Critical-48744-High-18995-Pull through for images that have dots in their namespace", func() {
 
 		g.By("Setup a private registry")
 		oc.SetupProject()
@@ -2374,6 +2374,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	// author: jitli@redhat.com
 	g.It("Author:jitli-Medium-22596-ImageRegistry Create app with template eap74-basic-s2i with jbosseap rhel7 image", func() {
 
+		//Check if openshift-sample operator installed
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/openshift-samples").Output()
+		if err != nil && strings.Contains(output, `openshift-samples" not found`) {
+			g.Skip("Skip test for openshift-samples which managed templates and imagestream are not installed")
+		}
+
 		g.By("Create app with template")
 		newappErr := oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--template=eap74-basic-s2i", "-n", oc.Namespace()).Execute()
 		o.Expect(newappErr).NotTo(o.HaveOccurred())
@@ -2412,6 +2418,67 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		output, patchErr = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry.operator.openshift.io/cluster", "-p", `{"spec":{"rolloutStrategy":"test"}}`, "--type=merge").Output()
 		o.Expect(patchErr).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(`Invalid value: "test": spec.rolloutStrategy in body should match '^(RollingUpdate|Recreate)$'`))
+	})
+
+	g.It("Author:xiuwang-Low-18994-Copy internal image to another tag via 'oc image mirror'", func() {
+
+		g.By("Get external registry host")
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+
+		g.By("Save the external registry auth with the specific token")
+		authFile, err := saveImageRegistryAuth(oc, "builder", regRoute, oc.Namespace())
+		defer os.RemoveAll(authFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, "openshift", "cli", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Copy internal image to another tag")
+		myimage := regRoute + "/" + oc.Namespace() + "/myimage:latest"
+		mirrorErr := oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", regRoute+"/openshift/cli:latest", myimage, "--insecure", "-a", authFile).Execute()
+		o.Expect(mirrorErr).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+	})
+
+	g.It("Author:xiuwang-Medium-18998-Mirror multiple images to another registry", func() {
+
+		g.By("Check the cluster using architecture")
+		// https://issues.redhat.com/browse/IR-192
+		//Since internal registry still not supports fat manifest, so skip test except x86_64
+		masterNode, _ := exutil.GetFirstMasterNode(oc)
+		output, archErr := exutil.DebugNodeWithChroot(oc, masterNode, "uname", "-m")
+		o.Expect(archErr).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "x86_64") {
+			g.Skip("Skip test for non x86_64 arch image")
+		}
+
+		g.By("Get external registry host")
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+
+		g.By("Save the external registry auth with the specific token")
+		authFile, err := saveImageRegistryAuth(oc, "builder", regRoute, oc.Namespace())
+		defer os.RemoveAll(authFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Copy multiple images to internal registry")
+		//Using x86_64 images
+		firstImagePair := "quay.io/openshifttest/alpine@sha256:b85ab970ed9d2f6dd270a76897c0dd7de8e2e3beb504a9c3a568ad1c283c58a9=" + regRoute + "/" + oc.Namespace() + "/myimage1:latest"
+		secondImagePair := "quay.io/openshifttest/busybox@sha256:0415f56ccc05526f2af5a7ae8654baec97d4a614f24736e8eef41a4591f08019=" + regRoute + "/" + oc.Namespace() + "/myimage2:latest"
+		thirdImagePair := "quay.io/openshifttest/registry@sha256:f4cf1bfd98c39784777f614a5d8a7bd4f2e255e87d7a28a05ff7a3e452506fdb=" + regRoute + "/" + oc.Namespace() + "/myimage3:latest"
+		mirrorErr := oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", firstImagePair, secondImagePair, thirdImagePair, "--insecure", "-a", authFile).Execute()
+		o.Expect(mirrorErr).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage1", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage2", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage3", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 	})
 
 })
