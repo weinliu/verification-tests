@@ -2218,4 +2218,57 @@ spec:
 		o.Expect(checkKubeapiserverOperatorConditionErr).NotTo(o.HaveOccurred())
 		o.Expect(state).Should(o.BeEmpty())
 	})
+
+	// author: dpunia@redhat.com
+	g.It("Author:dpunia-Medium-15870-APIServer Verify node authorization is enabled", func() {
+		var (
+			podname    = "ocp-15870-openshift"
+			image      = "quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e"
+			secretname = "ocp-15870-mysecret"
+		)
+
+		g.By("1) Create new project required for this test execution")
+		oc.SetupProject()
+		namespace := oc.Namespace()
+
+		g.By("2) Get cluster worker node list")
+		workernodes, workernodegeterr := exutil.GetClusterNodesBy(oc, "worker")
+		o.Expect(workernodegeterr).NotTo(o.HaveOccurred())
+
+		g.By("3) Create new hello pod on first worker node")
+		podTemplate := getTestDataFilePath("create-pod.yaml")
+		pod := exutil.Pod{Name: podname, Namespace: namespace, Template: podTemplate, Parameters: []string{"IMAGE=" + image, "HOSTNAME=" + workernodes[0], "PORT=8080"}}
+		defer pod.Delete(oc)
+		pod.Create(oc)
+
+		g.By("4) Acessing non-existint secret with impersonate parameter")
+		impersonate := fmt.Sprintf(`system:node:%v`, workernodes[0])
+		notexitsecretoutput, notexitsecreterror := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "secret", "not-existing-secret", "--as", impersonate, "--as-group", "system:nodes").Output()
+		o.Expect(notexitsecretoutput).Should(o.ContainSubstring("Forbidden"))
+		o.Expect(notexitsecreterror).To(o.HaveOccurred())
+
+		g.By("5) Accessing existing secret that no pod use it")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", namespace, "secret", secretname, "--ignore-not-found").Execute()
+		_, secretcreateerror := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "secret", "generic", secretname, "--from-literal=user=Bob").Output()
+		o.Expect(secretcreateerror).NotTo(o.HaveOccurred())
+		exitsecretoutput, exitsecreterror := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "secret", secretname, "--as", impersonate, "--as-group", "system:nodes").Output()
+		o.Expect(exitsecretoutput).Should(o.ContainSubstring("Forbidden"))
+		o.Expect(exitsecreterror).To(o.HaveOccurred())
+
+		g.By("6) Getting secret name used to create above pod")
+		serviceaccount, serviceaccountgeterr := oc.WithoutNamespace().Run("get").Args("po", "-n", namespace, podname, "-o", `jsonpath={.spec.serviceAccountName}`).Output()
+		o.Expect(serviceaccountgeterr).NotTo(o.HaveOccurred())
+		podusedsecret, podusedsecretgeterr := oc.WithoutNamespace().Run("get").Args("sa", "-n", namespace, serviceaccount, "-o", `jsonpath={.secrets[*].name}`).Output()
+		o.Expect(podusedsecretgeterr).NotTo(o.HaveOccurred())
+
+		g.By("7) Accessing secret used to create pod with impersonate parameter")
+		secretaccess, secretaccesserr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "secret", podusedsecret, "--as", impersonate, "--as-group", "system:nodes").Output()
+		o.Expect(secretaccesserr).NotTo(o.HaveOccurred())
+		o.Expect(secretaccess).Should(o.ContainSubstring(podusedsecret))
+
+		g.By("8) Impersonate one node to operate on other different node, e.g. create/label other node")
+		nodelabeloutput, nodelabelerror := oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", namespace, "no", workernodes[1], "testlabel=testvalue", "--as", impersonate, "--as-group", "system:nodes").Output()
+		o.Expect(nodelabeloutput).Should(o.ContainSubstring("Forbidden"))
+		o.Expect(nodelabelerror).To(o.HaveOccurred())
+	})
 })
