@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"regexp"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -112,24 +115,17 @@ func (c *CLI) Output() (string, error) {
 	}
 }
 
-func assertCheckProfileControls(oc *exutil.CLI, profl string, keyword [2]string) {
-	var kw string
-	var flag = true
-	proControl, err := OcComplianceCLI().Run("controls").Args("profile", profl, "-n", oc.Namespace()).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	for _, v := range keyword {
-		kw = fmt.Sprintf("%s", v)
-		if !strings.Contains(proControl, kw) {
-			e2e.Failf("The keyword %v not exist!", v)
-			flag = false
-			break
-		} else {
-			e2e.Logf("keyword matches '%v' with profile '%v' standards and controls", v, profl)
+func assertCheckProfileControls(oc *exutil.CLI, prof string, keyword string) {
+	errWait := wait.Poll(5*time.Second, 10*time.Second, func() (bool, error) {
+		proControl, err := OcComplianceCLI().Run("controls").Args("profile", prof, "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString(keyword, string(proControl)); matched {
+			e2e.Logf("keyword %s matched with standards and controls for profile %s", keyword, prof)
+			return true, nil
 		}
-	}
-	if flag == false {
-		e2e.Failf("The keyword not exist!")
-	}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("tkeyword %v matched with standards and controls for profile %s", keyword, prof))
 }
 
 func assertRuleResult(oc *exutil.CLI, rule string, namespace string, keyword [2]string) {
