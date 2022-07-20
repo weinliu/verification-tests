@@ -863,24 +863,28 @@ func getEgressCIDRs(oc *exutil.CLI, node string) string {
 // When they are multiple egressIPs on the node, egressIp list is in format of ["10.0.247.116","10.0.156.51"]
 // as an example from the output of command "oc get hostsubnet <node> -o=jsonpath={.egressIPs}"
 // convert the iplist into an array of ip addresses
-func getEgressIPonSDNHost(oc *exutil.CLI, node string, expectedNum int) ([]string, error) {
+func getEgressIPByKind(oc *exutil.CLI, kind string, kindName string, expectedNum int) ([]string, error) {
 	var ip = []string{}
-	iplist, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostsubnet", node, "-o=jsonpath={.egressIPs}").Output()
-	if iplist != "" {
+	iplist, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(kind, kindName, "-o=jsonpath={.egressIPs}").Output()
+	isIPListEmpty := (iplist == "" || iplist == "[]")
+	if expectedNum == 0 && isIPListEmpty {
+		return ip, nil
+	}
+	if !isIPListEmpty {
 		ip = strings.Split(iplist[2:len(iplist)-2], "\",\"")
 	}
-	if iplist == "" || len(ip) < expectedNum || err != nil {
+	if isIPListEmpty || len(ip) < expectedNum || err != nil {
 		err = wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
-			iplist, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("hostsubnet", node, "-o=jsonpath={.egressIPs}").Output()
-			if iplist != "" {
+			iplist, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(kind, kindName, "-o=jsonpath={.egressIPs}").Output()
+			if len(iplist) > 0 {
 				ip = strings.Split(iplist[2:len(iplist)-2], "\",\"")
 			}
 			if len(ip) < expectedNum || err != nil {
 				e2e.Logf("only got %d egressIP, or have err:%v, and try next round", len(ip), err)
 				return false, nil
 			}
-			if iplist != "" && len(ip) == expectedNum {
-				e2e.Logf("Found egressIP list for node %v is: %v", node, iplist)
+			if len(iplist) > 0 && len(ip) == expectedNum {
+				e2e.Logf("Found egressIP list for %v %v is: %v", kind, kindName, iplist)
 				return true, nil
 			}
 			return false, nil
@@ -1286,13 +1290,14 @@ func SDNHostwEgressIP(oc *exutil.CLI, node []string, egressip string) string {
 	var foundHost string
 	for i := 0; i < len(node); i++ {
 		iplist, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostsubnet", node[i], "-o=jsonpath={.egressIPs}").Output()
-		if iplist != "" {
+		e2e.Logf("iplist for node %v: %v", node, iplist)
+		if iplist != "" && iplist != "[]" {
 			ip = strings.Split(iplist[2:len(iplist)-2], "\",\"")
 		}
-		if iplist == "" || err != nil {
+		if iplist == "" || iplist == "[]" || err != nil {
 			err = wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
 				iplist, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("hostsubnet", node[i], "-o=jsonpath={.egressIPs}").Output()
-				if iplist != "" {
+				if iplist != "" && iplist != "[]" {
 					e2e.Logf("Found egressIP list for node %v is: %v", node, iplist)
 					ip = strings.Split(iplist[2:len(iplist)-2], "\",\"")
 					return true, nil
@@ -1487,7 +1492,7 @@ func checkPrimaryNIC(oc *exutil.CLI, nodeName string, ip string, flag bool) {
 
 func checkEgressIPonSDNHost(oc *exutil.CLI, node string, expectedEgressIP []string) {
 	checkErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
-		ip, err := getEgressIPonSDNHost(oc, node, len(expectedEgressIP))
+		ip, err := getEgressIPByKind(oc, "hostsubnet", node, len(expectedEgressIP))
 		if err != nil {
 			e2e.Logf("\n got the error: %v\n, try again", err)
 			return false, nil
@@ -1547,4 +1552,24 @@ func getControllerManagerLeaderIP(oc *exutil.CLI, namespace string, cmName strin
 	e2e.Logf("The leader pod name is %s", leaderPodName)
 	leaderPodIP := getPodIPv4(oc, namespace, leaderPodName)
 	return leaderPodIP
+}
+
+func describeCheckEgressIPByKind(oc *exutil.CLI, kind string, kindName string) string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args(kind, kindName).Output()
+
+	o.Expect(err).NotTo(o.HaveOccurred())
+	egressIPReg, _ := regexp.Compile(".*Egress IPs.*")
+	egressIPStr := egressIPReg.FindString(output)
+	egressIPArr := strings.Split(egressIPStr, ":")
+
+	//remove whitespace in front of the ip address
+	ip := strings.TrimSpace(egressIPArr[1])
+	e2e.Logf("get egressIP from oc describe %v %v: --->%s<---", kind, kindName, ip)
+	return ip
+}
+
+func findUnUsedIPsOnNodeOrFail(oc *exutil.CLI, nodeName, cidr string, expectedNum int) []string {
+	freeIPs := findUnUsedIPsOnNode(oc, nodeName, cidr, expectedNum)
+	o.Expect(len(freeIPs) == expectedNum).Should(o.BeTrue())
+	return freeIPs
 }
