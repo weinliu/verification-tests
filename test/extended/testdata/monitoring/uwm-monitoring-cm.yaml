@@ -6,6 +6,8 @@ metadata:
 data:
   config.yaml: |
     prometheus:
+      externalLabels:
+        labelmy: test
       retentionSize: 5GiB
       retention: 15d
     thanosRuler:

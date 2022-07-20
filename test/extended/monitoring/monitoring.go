@@ -100,7 +100,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
 				g.By("check metrics")
-				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version{namespace=\""+ns+"\"}'", token, "\"result\":[]", uwmLoadTime)
+				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version{namespace=\""+ns+"\"}'", token, "\"result\":[]", 2*uwmLoadTime)
 				g.By("check alerts")
 				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{namespace=\""+ns+"\"}'", token, "\"result\":[]", uwmLoadTime)
 
@@ -108,7 +108,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				labelNameSpace(oc, ns, "openshift.io/user-monitoring=true")
 
 				g.By("check metrics")
-				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version{namespace=\""+ns+"\"}'", token, "prometheus-example-app", uwmLoadTime)
+				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version{namespace=\""+ns+"\"}'", token, "prometheus-example-app", 2*uwmLoadTime)
 
 				g.By("check alerts")
 				checkMetric(oc, "https://thanos-ruler.openshift-user-workload-monitoring.svc:9091/api/v1/alerts", token, "TestAlert", uwmLoadTime)
@@ -132,6 +132,21 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				g.By("check uwm federate route")
 				checkRoute(oc, "openshift-user-workload-monitoring", "federate", token, "match[]=version", "prometheus-example-app", 20)
 
+			})
+
+			// author: tagao@redhat.com
+			g.It("Author:tagao-Medium-50241-Prometheus (uwm) externalLabels not showing always in alerts", func() {
+				var (
+					exampleAppRule = filepath.Join(monitoringBaseDir, "in-cluster_query_alert_rule.yaml")
+				)
+				g.By("Create alert rule with expression about data provided by in-cluster prometheus")
+				createResourceFromYaml(oc, ns, exampleAppRule)
+
+				g.By("Get token of SA prometheus-k8s")
+				token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+				g.By("Check labelmy is in the alert")
+				checkMetric(oc, "https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts", token, "labelmy", 2*uwmLoadTime)
 			})
 		})
 
