@@ -2588,4 +2588,121 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/kube-rbac-proxy@sha256:"))
 		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/memcached-operator@sha256:"))
 	})
+
+	// author: jfan@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:jfan-High-52814-SDK-generate digest type bundle of go", func() {
+		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
+			g.Skip("HTTP_PROXY is not empty - skipping test ...")
+		}
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture != "amd64" && architecture != "arm64" {
+			g.Skip("Do not support " + architecture)
+		}
+		tmpBasePath := "/tmp/ocp-52814-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-52814")
+		imageTag := "quay.io/olmqe/memcached-operator:52814-" + getRandomString()
+		err := os.MkdirAll(tmpPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
+		defer func() {
+			quayCLI := container.NewQuayCLI()
+			quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
+		}()
+
+		g.By("step: init Go Based Operator")
+		output, err := operatorsdkCLI.Run("init").Args("--domain=disconnected.com", "--repo=github.com/example-inc/memcached-operator").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Next"))
+
+		g.By("step: create api")
+		output, err = operatorsdkCLI.Run("create").Args("api", "--group=test", "--version=v1", "--kind=Memcached52814", "--controller", "--resource").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("make manifests"))
+
+		g.By("step: modify files to get the quay.io/olmqe images.")
+		dataPath := "test/extended/util/operatorsdk/ocp-52814-data/"
+		// copy api/v1/memcached52814_types.go
+		err = copy(filepath.Join(dataPath, "memcached52814_types.go"), filepath.Join(tmpPath, "api", "v1", "memcached52814_types.go"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// copy controllers/memcached52814_controller.go
+		err = copy(filepath.Join(dataPath, "memcached52814_controller.go"), filepath.Join(tmpPath, "controllers", "memcached52814_controller.go"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// copy the manager
+		err = copy(filepath.Join(dataPath, "manager.yaml"), filepath.Join(tmpPath, "config", "manager", "manager.yaml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// update the Dockerfile
+		dockerfileFilePath := filepath.Join(tmpPath, "Dockerfile")
+		replaceContent(dockerfileFilePath, "golang", "quay.io/olmqe/golang")
+
+		g.By("step: Build and push the operator image")
+		tokenDir := "/tmp/ocp-52814" + getRandomString()
+		err = os.MkdirAll(tokenDir, os.ModePerm)
+		defer os.RemoveAll(tokenDir)
+		if err != nil {
+			e2e.Failf("fail to create the token folder:%s", tokenDir)
+		}
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", tokenDir), "--confirm").Output()
+		if err != nil {
+			e2e.Failf("Fail to get the cluster auth %v", err)
+		}
+		switch architecture {
+		case "amd64":
+			podmanCLI := container.NewPodmanCLI()
+			podmanCLI.ExecCommandPath = tmpPath
+			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "amd64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("Successfully"))
+			output, err = podmanCLI.Run("push").Args(imageTag).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+		case "arm64":
+			podmanCLI := container.NewPodmanCLI()
+			podmanCLI.ExecCommandPath = tmpPath
+			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "arm64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("Successfully"))
+			output, err = podmanCLI.Run("push").Args(imageTag).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+		}
+		// update the Makefile
+		makefileFilePath := filepath.Join(tmpPath, "Makefile")
+		replaceContent(makefileFilePath, "controller:latest", imageTag)
+		// update the rbac file
+		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+
+		g.By("step: Install kustomize")
+		kustomizePath := "/root/kustomize"
+		binPath := filepath.Join(tmpPath, "bin")
+		exec.Command("bash", "-c", fmt.Sprintf("cp %s %s", kustomizePath, binPath)).Output()
+
+		g.By("step: make bundle.")
+		// copy manifests
+		manifestsPath := filepath.Join(tmpPath, "config", "manifests", "bases")
+		err = os.MkdirAll(manifestsPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		manifestsFile := filepath.Join(manifestsPath, "memcached-operator-52814.clusterserviceversion.yaml")
+		_, err = os.Create(manifestsFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = copy(filepath.Join(dataPath, "memcached-operator-52814.clusterserviceversion.yaml"), filepath.Join(manifestsFile))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// make bundle use image digests
+		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
+			msg, err := makeCLI.Run("bundle").Args("USE_IMAGE_DIGESTS=true").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(string(msg), "operator-sdk bundle validate ./bundle") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "operator-sdk bundle generate failed")
+		csvFile := filepath.Join(tmpPath, "bundle", "manifests", "memcached-operator-52814.clusterserviceversion.yaml")
+		content := getContent(csvFile)
+		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/memcached@sha256:"))
+		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/kube-rbac-proxy@sha256:"))
+		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/memcached-operator@sha256:"))
+	})
 })
