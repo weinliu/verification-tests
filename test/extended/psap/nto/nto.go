@@ -2167,4 +2167,42 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(cpuManagerStateOutput).To(o.ContainSubstring("guaranteed-pod"))
 		e2e.Logf("The settings of CPU Manager cpuManagerState on labeled nodes: \n%v", cpuManagerStateOutput)
 	})
+	g.It("Author:liqcui-Medium-53053-NTO will automatically delete profile with unknown/stuck state. [Disruptive]", func() {
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		var (
+			ntoUnknownProfile = exutil.FixturePath("testdata", "psap", "nto", "nto-unknown-profile.yaml")
+		)
+
+		//Get NTO operator pod name
+		ntoOperatorPod, err := getNTOPodName(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Use the first worker node as labeled node
+		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+
+		g.By("Get cloud provider name ...")
+		providerName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("profile", tunedNodeName, "-n", ntoNamespace, "-ojsonpath={.spec.config.providerName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(providerName).NotTo(o.BeEmpty())
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("profile", "worker-does-not-exist-openshift-node", "-n", ntoNamespace, "--ignore-not-found").Execute()
+
+		g.By("Apply worker-does-not-exist-openshift-node profile ...")
+		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", ntoUnknownProfile, "-p", "PROVIDER_NAME="+providerName)
+
+		g.By("The profile worker-does-not-exist-openshift-node will be deleted automatically once created.")
+		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNames).NotTo(o.ContainSubstring("worker-does-not-exist-openshift-node"))
+
+		g.By("Assert NTO logs to match key words  Node 'worker-does-not-exist-openshift-node' not found")
+		assertNTOPodLogsLastLines(oc, ntoNamespace, ntoOperatorPod, "4", 120, " Node \"worker-does-not-exist-openshift-node\" not found")
+
+	})
 })
