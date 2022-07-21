@@ -17,7 +17,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-func getESIndices(oc *exutil.CLI, ns string, pod string) ([]ESIndex, error) {
+func getESIndices(ns string, pod string) ([]ESIndex, error) {
 	cmd := "es_util --query=_cat/indices?format=JSON"
 	stdout, err := e2e.RunHostCmdWithRetries(ns, pod, cmd, 3*time.Second, 9*time.Second)
 	indices := []ESIndex{}
@@ -25,7 +25,7 @@ func getESIndices(oc *exutil.CLI, ns string, pod string) ([]ESIndex, error) {
 	return indices, err
 }
 
-func getESIndicesByName(oc *exutil.CLI, ns string, pod string, indexName string) ([]ESIndex, error) {
+func getESIndicesByName(ns string, pod string, indexName string) ([]ESIndex, error) {
 	cmd := "es_util --query=_cat/indices/" + indexName + "*?format=JSON"
 	stdout, err := e2e.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
 	indices := []ESIndex{}
@@ -33,9 +33,9 @@ func getESIndicesByName(oc *exutil.CLI, ns string, pod string, indexName string)
 	return indices, err
 }
 
-func waitForIndexAppear(oc *exutil.CLI, ns string, pod string, indexName string) {
+func waitForIndexAppear(ns string, pod string, indexName string) {
 	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
-		indices, err := getESIndices(oc, ns, pod)
+		indices, err := getESIndices(ns, pod)
 		count := 0
 		for _, index := range indices {
 			if strings.Contains(index.Index, indexName) {
@@ -53,7 +53,7 @@ func waitForIndexAppear(oc *exutil.CLI, ns string, pod string, indexName string)
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Index %s is not appeared or the doc count is 0 in last 180 seconds.", indexName))
 }
 
-func getDocCountByQuery(oc *exutil.CLI, ns string, pod string, indexName string, queryString string) (int, error) {
+func getDocCountByQuery(ns string, pod string, indexName string, queryString string) (int, error) {
 	cmd := "es_util --query=" + indexName + "*/_count?format=JSON -d '" + queryString + "'"
 	stdout, err := e2e.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
 	res := CountResult{}
@@ -61,10 +61,10 @@ func getDocCountByQuery(oc *exutil.CLI, ns string, pod string, indexName string,
 	return res.Count, err
 }
 
-func waitForProjectLogsAppear(oc *exutil.CLI, ns string, pod string, projectName string, indexName string) {
+func waitForProjectLogsAppear(ns string, pod string, projectName string, indexName string) {
 	query := "{\"query\": {\"regexp\": {\"kubernetes.namespace_name\": \"" + projectName + "\"}}}"
 	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
-		logCount, err := getDocCountByQuery(oc, ns, pod, indexName, query)
+		logCount, err := getDocCountByQuery(ns, pod, indexName, query)
 		if err != nil {
 			return false, err
 		}
@@ -76,7 +76,7 @@ func waitForProjectLogsAppear(oc *exutil.CLI, ns string, pod string, projectName
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The logs of project %s weren't collected to index %s in last 180 seconds.", projectName, indexName))
 }
 
-func searchDocByQuery(oc *exutil.CLI, ns string, pod string, indexName string, queryString string) SearchResult {
+func searchDocByQuery(ns string, pod string, indexName string, queryString string) SearchResult {
 	cmd := "es_util --query=" + indexName + "*/_search?format=JSON -d '" + queryString + "'"
 	stdout, err := e2e.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
 	o.Expect(err).ShouldNot(o.HaveOccurred())

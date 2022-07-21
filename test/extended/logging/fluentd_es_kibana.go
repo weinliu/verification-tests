@@ -93,7 +93,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cl.assertResourceStatus(oc, "jsonpath={.status.logStore.elasticsearchStatus[0].cluster.status}", "green")
 			prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForIndexAppear(oc, cloNS, prePodList.Items[0].Name, "infra-00")
+			waitForIndexAppear(cloNS, prePodList.Items[0].Name, "infra-00")
 
 			g.By("Set the Elasticsearch operator instance managementState to Unmanaged.")
 			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("es/elasticsearch", "-n", cloNS, "-p", "{\"spec\": {\"managementState\": \"Unmanaged\"}}", "--type=merge").Execute()
@@ -137,8 +137,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Get the log count for logtest app namespace")
 			postPodList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForIndexAppear(oc, cloNS, postPodList.Items[0].Name, "infra-00")
-			LogCount, err := getDocCountByQuery(oc, cloNS, postPodList.Items[0].Name, "app", "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+appProj+"\"}}}")
+			waitForIndexAppear(cloNS, postPodList.Items[0].Name, "infra-00")
+			LogCount, err := getDocCountByQuery(cloNS, postPodList.Items[0].Name, "app", "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+appProj+"\"}}}")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("Logcount for the logtest app in %s project is %d", appProj, LogCount)
 
@@ -360,7 +360,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch 
 		g.By("check logs in ES pod")
 		podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "infra-00")
+		waitForIndexAppear(cloNS, podList.Items[0].Name, "infra-00")
 
 		g.By("check ES metric es_index_namespaces_total")
 		err = wait.Poll(5*time.Second, 120*time.Second, func() (done bool, err error) {
@@ -537,7 +537,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Fluentd should
 		WaitForECKPodsToBeReady(oc, cloNS)
 		podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "infra")
+		waitForIndexAppear(cloNS, podList.Items[0].Name, "infra")
 
 		g.By("check metrics")
 		for _, metric := range []string{"log_logged_bytes_total", "log_collected_bytes_total"} {

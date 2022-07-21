@@ -308,7 +308,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		masterPods, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		projects := []string{proj1, proj2, proj3, proj4}
 		for _, proj := range projects {
-			waitForProjectLogsAppear(oc, cloNS, masterPods.Items[0].Name, proj, "app-00")
+			waitForProjectLogsAppear(cloNS, masterPods.Items[0].Name, proj, "app-00")
 		}
 
 		// make sure there have enough data in ES
@@ -325,19 +325,19 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		g.By("check if the logs are removed correctlly")
 		// for proj1, logs collected 3 minutes ago should be removed, here check doc count collected 4 minutes ago as it takes some time for the jobs to complete
 		query1 := "{\"query\": {\"bool\": {\"must\": [{\"match_phrase\": {\"kubernetes.namespace_name\": \"" + proj1 + "\"}},{\"range\": {\"@timestamp\": {\"lte\": \"now-4m/m\"}}}]}}}"
-		count1, err := getDocCountByQuery(oc, cloNS, masterPods.Items[0].Name, "app", query1)
+		count1, err := getDocCountByQuery(cloNS, masterPods.Items[0].Name, "app", query1)
 		o.Expect(count1 == 0).Should(o.BeTrue())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// for proj2, logs collected 3 minutes ago should not be removed
 		query2 := "{\"query\": {\"bool\": {\"must\": [{\"match_phrase\": {\"kubernetes.namespace_name\": \"" + proj2 + "\"}},{\"range\": {\"@timestamp\": {\"lte\": \"now-4m/m\"}}}]}}}"
-		count2, err := getDocCountByQuery(oc, cloNS, masterPods.Items[0].Name, "app", query2)
+		count2, err := getDocCountByQuery(cloNS, masterPods.Items[0].Name, "app", query2)
 		o.Expect(count2 > 0).Should(o.BeTrue())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// for proj3 and proj4, logs collected 3 minutes ago should be removed, this is to test the namespace prefix
 		query3 := "{\"query\": {\"bool\": {\"must\": [{\"regexp\": {\"kubernetes.namespace_name\": \"logging-46775@\"}},{\"range\": {\"@timestamp\": {\"lte\": \"now-4m/m\"}}}]}}}"
-		count3, err := getDocCountByQuery(oc, cloNS, masterPods.Items[0].Name, "app", query3)
+		count3, err := getDocCountByQuery(cloNS, masterPods.Items[0].Name, "app", query3)
 		o.Expect(count3 == 0).Should(o.BeTrue())
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
@@ -369,8 +369,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		WaitForECKPodsToBeReady(oc, cloNS)
 		WaitForIMCronJobToAppear(oc, cloNS, "elasticsearch-im-prune-app")
 		masterPods, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
-		waitForProjectLogsAppear(oc, cloNS, masterPods.Items[0].Name, proj1, "app-00")
-		waitForProjectLogsAppear(oc, cloNS, masterPods.Items[0].Name, proj2, "app-00")
+		waitForProjectLogsAppear(cloNS, masterPods.Items[0].Name, proj1, "app-00")
+		waitForProjectLogsAppear(cloNS, masterPods.Items[0].Name, proj2, "app-00")
 
 		// make sure there have enough data in ES
 		// if there doesn't have any data collected 3 minutes ago, then the following checking steps don't make sense
@@ -392,7 +392,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		// sometimes the count isn't 0 because the job is completed, but the data haven't been removed, so here need to wait for several seconds
 		query1 := "{\"query\": {\"bool\": {\"must\": [{\"match_phrase\": {\"kubernetes.namespace_name\": \"" + proj1 + "\"}},{\"range\": {\"@timestamp\": {\"lte\": \"now-4m/m\"}}}]}}}"
 		err = wait.Poll(3*time.Second, 45*time.Second, func() (done bool, err error) {
-			count1, err := getDocCountByQuery(oc, cloNS, masterPods.Items[0].Name, "app", query1)
+			count1, err := getDocCountByQuery(cloNS, masterPods.Items[0].Name, "app", query1)
 			if err != nil {
 				return false, err
 			}
@@ -403,7 +403,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("There still have some logs from %s", proj1))
 		// for proj2, logs collected 3 minutes ago should not be removed
-		count2, err := getDocCountByQuery(oc, cloNS, masterPods.Items[0].Name, "app", "{\"query\": {\"bool\": {\"must\": [{\"match_phrase\": {\"kubernetes.namespace_name\": \""+proj2+"\"}},{\"range\": {\"@timestamp\": {\"lte\": \"now-4m/m\"}}}]}}}")
+		count2, err := getDocCountByQuery(cloNS, masterPods.Items[0].Name, "app", "{\"query\": {\"bool\": {\"must\": [{\"match_phrase\": {\"kubernetes.namespace_name\": \""+proj2+"\"}},{\"range\": {\"@timestamp\": {\"lte\": \"now-4m/m\"}}}]}}}")
 		o.Expect(count2 > 0).Should(o.BeTrue())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -414,15 +414,15 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		waitForIMJobsToComplete(oc, cloNS, 240*time.Second)
 
 		g.By("check logs in ES again, for proj1, no logs exist, for proj2, logs collected 6 minutes ago should be removed")
-		count3, err := getDocCountByQuery(oc, cloNS, masterPods.Items[0].Name, "app", "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+proj1+"\"}}}")
+		count3, err := getDocCountByQuery(cloNS, masterPods.Items[0].Name, "app", "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+proj1+"\"}}}")
 		o.Expect(count3 == 0).Should(o.BeTrue())
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// for proj2, logs collected 6 minutes ago should be removed, here check doc count collected 7 minutes ago as it takes some time for the jobs to complete
-		count4, err := getDocCountByQuery(oc, cloNS, masterPods.Items[0].Name, "app", "{\"query\": {\"bool\": {\"must\": [{\"match_phrase\": {\"kubernetes.namespace_name\": \""+proj2+"\"}},{\"range\": {\"@timestamp\": {\"lte\": \"now-7m/m\"}}}]}}}")
+		count4, err := getDocCountByQuery(cloNS, masterPods.Items[0].Name, "app", "{\"query\": {\"bool\": {\"must\": [{\"match_phrase\": {\"kubernetes.namespace_name\": \""+proj2+"\"}},{\"range\": {\"@timestamp\": {\"lte\": \"now-7m/m\"}}}]}}}")
 		o.Expect(count4 == 0).Should(o.BeTrue())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		count5, err := getDocCountByQuery(oc, cloNS, masterPods.Items[0].Name, "app", "{\"query\": {\"bool\": {\"must\": [{\"match_phrase\": {\"kubernetes.namespace_name\": \""+proj2+"\"}},{\"range\": {\"@timestamp\": {\"gte\": \"now-7m/m\", \"lte\": \"now-4m/m\"}}}]}}}")
+		count5, err := getDocCountByQuery(cloNS, masterPods.Items[0].Name, "app", "{\"query\": {\"bool\": {\"must\": [{\"match_phrase\": {\"kubernetes.namespace_name\": \""+proj2+"\"}},{\"range\": {\"@timestamp\": {\"gte\": \"now-7m/m\", \"lte\": \"now-4m/m\"}}}]}}}")
 		o.Expect(count5 > 0).Should(o.BeTrue())
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
@@ -597,7 +597,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 			o.Expect(err).NotTo(o.HaveOccurred())
 			prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForProjectLogsAppear(oc, cloNS, prePodList.Items[0].Name, appProj, "app-00")
+			waitForProjectLogsAppear(cloNS, prePodList.Items[0].Name, appProj, "app-00")
 		}
 	})
 
@@ -667,6 +667,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		o.Expect(err).NotTo(o.HaveOccurred())
 		prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForProjectLogsAppear(oc, cloNS, prePodList.Items[0].Name, appProj, "app-00")
+		waitForProjectLogsAppear(cloNS, prePodList.Items[0].Name, appProj, "app-00")
 	})
 })

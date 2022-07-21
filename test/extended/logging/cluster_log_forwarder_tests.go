@@ -81,19 +81,19 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("check indices in ES pod")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-000")
+			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-000")
 
 			//Waiting for the app index to be populated
-			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, appProjQa, "app-000")
+			waitForProjectLogsAppear(cloNS, podList.Items[0].Name, appProjQa, "app-000")
 
 			// check data in ES for QA namespace
 			g.By("check logs in ES pod for QA namespace in CLF")
-			count1, err := getDocCountByQuery(oc, cloNS, podList.Items[0].Name, "app", "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+appProjQa+"\"}}}")
+			count1, err := getDocCountByQuery(cloNS, podList.Items[0].Name, "app", "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+appProjQa+"\"}}}")
 			o.Expect(count1 > 0).Should(o.BeTrue())
 
 			//check that no data exists for the other Dev namespace - Negative test
 			g.By("check logs in ES pod for Dev namespace in CLF")
-			count2, _ := getDocCountByQuery(oc, cloNS, podList.Items[0].Name, "app-0000", "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+appProjDev+"\"}}}")
+			count2, _ := getDocCountByQuery(cloNS, podList.Items[0].Name, "app-0000", "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+appProjDev+"\"}}}")
 			o.Expect(count2).Should(o.Equal(0))
 
 		})
@@ -144,26 +144,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("check indices in ES pod")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app-00")
+			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-00")
 
 			//Waiting for the app index to be populated
-			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, appProjQa, "app-00")
-			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, appProjDev, "app-00")
+			waitForProjectLogsAppear(cloNS, podList.Items[0].Name, appProjQa, "app-00")
+			waitForProjectLogsAppear(cloNS, podList.Items[0].Name, appProjDev, "app-00")
 
 			g.By("check doc count in ES pod for QA1 namespace in CLF")
-			logCount, _ := getDocCountByQuery(oc, cloNS, podList.Items[0].Name, "app-00", "{\"query\": {\"terms\": {\"kubernetes.flat_labels\": [\"run=centos-logtest-qa-1\"]}}}")
+			logCount, _ := getDocCountByQuery(cloNS, podList.Items[0].Name, "app-00", "{\"query\": {\"terms\": {\"kubernetes.flat_labels\": [\"run=centos-logtest-qa-1\"]}}}")
 			o.Expect(logCount).ShouldNot(o.Equal(0))
 
 			g.By("check doc count in ES pod for QA2 namespace in CLF")
-			logCount, _ = getDocCountByQuery(oc, cloNS, podList.Items[0].Name, "app-00", "{\"query\": {\"terms\": {\"kubernetes.flat_labels\": [\"run=centos-logtest-qa-2\"]}}}")
+			logCount, _ = getDocCountByQuery(cloNS, podList.Items[0].Name, "app-00", "{\"query\": {\"terms\": {\"kubernetes.flat_labels\": [\"run=centos-logtest-qa-2\"]}}}")
 			o.Expect(logCount).Should(o.Equal(0))
 
 			g.By("check doc count in ES pod for DEV1 namespace in CLF")
-			logCount, _ = getDocCountByQuery(oc, cloNS, podList.Items[0].Name, "app-00", "{\"query\": {\"terms\": {\"kubernetes.flat_labels\": [\"run=centos-logtest-dev-1\"]}}}")
+			logCount, _ = getDocCountByQuery(cloNS, podList.Items[0].Name, "app-00", "{\"query\": {\"terms\": {\"kubernetes.flat_labels\": [\"run=centos-logtest-dev-1\"]}}}")
 			o.Expect(logCount).ShouldNot(o.Equal(0))
 
 			g.By("check doc count in ES pod for DEV2 namespace in CLF")
-			logCount, _ = getDocCountByQuery(oc, cloNS, podList.Items[0].Name, "app-00", "{\"query\": {\"terms\": {\"kubernetes.flat_labels\": [\"run=centos-logtest-dev-2\"]}}}")
+			logCount, _ = getDocCountByQuery(cloNS, podList.Items[0].Name, "app-00", "{\"query\": {\"terms\": {\"kubernetes.flat_labels\": [\"run=centos-logtest-dev-2\"]}}}")
 			o.Expect(logCount).Should(o.Equal(0))
 
 		})
@@ -214,7 +214,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Check audit index in ES pod")
 			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForIndexAppear(oc, cloNS, esPods.Items[0].Name, "audit-00")
+			waitForIndexAppear(cloNS, esPods.Items[0].Name, "audit-00")
 
 			g.By("Create a test project, enable OVN network log collection on it, add the OVN log app and network policies for the project")
 			oc.SetupProject()
@@ -358,12 +358,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("check logs in internal ES")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "app")
-			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "infra")
-			waitForIndexAppear(oc, cloNS, podList.Items[0].Name, "audit")
+			waitForIndexAppear(cloNS, podList.Items[0].Name, "app")
+			waitForIndexAppear(cloNS, podList.Items[0].Name, "infra")
+			waitForIndexAppear(cloNS, podList.Items[0].Name, "audit")
 
-			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, appProj1, "app")
-			waitForProjectLogsAppear(oc, cloNS, podList.Items[0].Name, appProj2, "app")
+			waitForProjectLogsAppear(cloNS, podList.Items[0].Name, appProj1, "app")
+			waitForProjectLogsAppear(cloNS, podList.Items[0].Name, appProj2, "app")
 		})
 
 		// author qitang@redhat.com
