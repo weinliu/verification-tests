@@ -958,6 +958,72 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(sourceIP).Should(o.ContainSubstring(freeIP3[0]))
 	})
 
+	// author: huirwang@redhat.com
+	g.It("ConnectedOnly-Author:huirwang-High-53069-[Bug2097243] EgressIP should work for recreated same name pod. [Serial]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
+
+		g.By("1. Get list of nodes \n")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		egressNode := nodeList.Items[0].Name
+
+		g.By("2. Apply EgressLabel Key for this test on one node.\n")
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
+
+		g.By("3.1 Get temp namespace\n")
+		ns1 := oc.Namespace()
+
+		g.By("3.2 Apply label to namespace\n")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("4. Create a pod in temp namespace. \n")
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns1,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		g.By("5. Create an egressip object\n")
+		sub1 := getIfaddrFromNode(egressNode, oc)
+		freeIps := findUnUsedIPsOnNode(oc, egressNode, sub1, 2)
+		o.Expect(len(freeIps) == 2).Should(o.BeTrue())
+		egressip1 := egressIPResource1{
+			name:      "egressip-53069",
+			template:  egressIPTemplate,
+			egressIP1: freeIps[0],
+			egressIP2: freeIps[1],
+		}
+		egressip1.createEgressIPObject1(oc)
+		defer egressip1.deleteEgressIPObject1(oc)
+
+		g.By("4. Check EgressIP assigned in the object.\n")
+		egressIPMaps := getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps) == 1).Should(o.BeTrue())
+
+		g.By("5. Check the source ip.\n")
+		e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
+		sourceIP, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).Should(o.Equal(egressIPMaps[0]["egressIP"]))
+
+		g.By("6. Delete the test pod and recreate it. \n")
+		pod1.deletePingPod(oc)
+		pod1.createPingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		g.By("7. Check the source ip.\n")
+		sourceIP, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sourceIP).Should(o.Equal(egressIPMaps[0]["egressIP"]))
+
+	})
+
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
