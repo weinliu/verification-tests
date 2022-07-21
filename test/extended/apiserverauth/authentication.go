@@ -104,7 +104,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Waiting for project openshift-authentication-operator back")
 		// It needs more time to wait for project openshift-authentication-operator back. In test, the max time observed is up to 6 mins, so the Poll parameters are larger
-		err = wait.Poll(30*time.Second, 480*time.Second, func() (bool, error) {
+		err = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
 			output, err := oc.WithoutNamespace().Run("get").Args("project", "openshift-authentication-operator").Output()
 			if err != nil {
 				e2e.Logf("Fail to get project openshift-authentication-operator, error: %s. Trying again", err)
