@@ -2271,4 +2271,146 @@ spec:
 		o.Expect(nodelabeloutput).Should(o.ContainSubstring("Forbidden"))
 		o.Expect(nodelabelerror).To(o.HaveOccurred())
 	})
+
+	// author: zxiao@redhat.com
+	g.It("Author:zxiao-High-39601-Examine abnormal errors in openshift-kube-apiserver pod logs and audit logs", func() {
+		g.By("1) Create log arrays.")
+		podAbnormalLogs := make([]string, 0)
+		masterNodeAbnormalLogs := make([]string, 0)
+		externalPanicLogs := make([]string, 0)
+		auditAbnormalLogs := make([]string, 0)
+		totalAbnormalLogCount := 0
+
+		g.By("2) Setup start/end tags for extracting logs from other unrelated stdout like oc debug warning")
+		startTag := "<START_LOG>"
+		endTag := "</END_LOG>"
+		trimStartTag, regexErr := regexp.Compile(fmt.Sprintf("(.|\n|\r)*%s", startTag))
+		o.Expect(regexErr).NotTo(o.HaveOccurred())
+		trimEndTag, regexErr := regexp.Compile(fmt.Sprintf("%s(.|\n|\r)*", endTag))
+		o.Expect(regexErr).NotTo(o.HaveOccurred())
+
+		g.By("3) Get all master nodes.")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		g.By("4) Check kas pod logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs, expect none.")
+		clusterOperator := "openshift-kube-apiserver-operator"
+		keywords := "panic|fatal|SHOULD NOT HAPPEN"
+		format := `(.*)\.go:[0-9]{1,}]|namespace="([a-zA-Z0-9]|\-)*"|name="([a-zA-Z0-9]|\-)*"`
+		removeTimestamp := `s/^[0-9]{4}-[0-9]{2}.*(Z|\+[0-9]{2}:[0-9]{2})//`
+		cmd := fmt.Sprintf(`export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig
+		co='%s'
+		pod=$(oc get pod -n $co --no-headers | cut -d ' ' -f1)
+		oc logs -n "$co" "$pod" | grep -iE '(%s)' | sort > /tmp/OCP-39601-pod-errors.log
+		sed -E 's/((%s)( )*){1,}/.*/g' /tmp/OCP-39601-pod-errors.log | grep -v '^[[:space:]]*$' | sort | uniq | head -10 > /tmp/OCP-39601-pod-uniq-errors.log
+		echo '%s'
+		while read line; do
+			grep "$line" /tmp/OCP-39601-pod-errors.log | sed -E '%s' | head -1
+		done < /tmp/OCP-39601-pod-uniq-errors.log
+		echo '%s'`, clusterOperator, keywords, format, startTag, removeTimestamp, endTag)
+		masterNode := masterNodes[0]
+
+		g.By(fmt.Sprintf("4.1 -> step 1) Get log file from %s", masterNode))
+		podLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+		o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
+
+		g.By(fmt.Sprintf("4.1 -> step 2) Format log file from %s", masterNode))
+		podLogs = trimStartTag.ReplaceAllString(podLogs, "")
+		podLogs = trimEndTag.ReplaceAllString(podLogs, "")
+		for _, line := range strings.Split(podLogs, "\n") {
+			if strings.Trim(line, " ") != "" {
+				podAbnormalLogs = append(podAbnormalLogs, fmt.Sprintf("> %s", line))
+			}
+		}
+		e2e.Logf("Pod Abnormal Logs:\n%s", strings.Join(podAbnormalLogs, "\n"))
+		totalAbnormalLogCount += len(podAbnormalLogs)
+
+		g.By("5) On all master nodes, check kas log files for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs, expect none.")
+		format = `(\/.*)\.go:[0-9]{1,}]|namespace="([a-zA-Z0-9]|\-)*"|name="([a-zA-Z0-9]|\-)*"`
+		exceptions := "(SHOULD NOT HAPPEN|Should not happen).*(Kind=CertificateSigningRequest|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|non-fatal"
+		cmd = fmt.Sprintf(`grep -irE '(%s)' /var/log/pods/openshift-kube-apiserver_kube-apiserver* | grep -Ev '%s' | sort > /tmp/OCP-39601-kas-errors.log
+		sed -E 's/((%s)( )*){1,}/.*/g' /tmp/OCP-39601-kas-errors.log | grep -v '^[[:space:]]*$' | sort | uniq | head -10 > /tmp/OCP-39601-kas-uniq-errors.log
+		echo '%s'
+		while read line; do
+			grep "$line" /tmp/OCP-39601-kas-errors.log | sed -E '%s' | head -1
+		done < /tmp/OCP-39601-kas-uniq-errors.log
+		echo '%s'`, keywords, exceptions, format, startTag, removeTimestamp, endTag)
+
+		for i, masterNode := range masterNodes {
+			g.By(fmt.Sprintf("5.%d -> step 1) Get log file from %s", i+1, masterNode))
+			masterNodeLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
+
+			g.By(fmt.Sprintf("5.%d -> step 2) Format log file from %s", i+1, masterNode))
+			masterNodeLogs = trimStartTag.ReplaceAllString(masterNodeLogs, "")
+			masterNodeLogs = trimEndTag.ReplaceAllString(masterNodeLogs, "")
+			for _, line := range strings.Split(masterNodeLogs, "\n") {
+				if strings.Trim(line, " ") != "" {
+					masterNodeAbnormalLogs = append(masterNodeAbnormalLogs, fmt.Sprintf("> %s", line))
+				}
+			}
+		}
+		e2e.Logf("Master Node Abnormal Logs:\n%s", strings.Join(masterNodeAbnormalLogs, "\n"))
+		totalAbnormalLogCount += len(masterNodeAbnormalLogs)
+
+		g.By("6) On all master nodes, check external panic logs.")
+		cmd = fmt.Sprintf(`RETAG="[EWI][0-9]{4}\s[0-9]{2}:[0-9]{2}"
+		PANIC="${RETAG}.*panic"
+		panic_logfiles=$(grep -riE "${PANIC}" /var/log/pods/openshift-kube-apiserver_kube-apiserver* | grep -Ev '%s' | cut -d ':' -f1 | head -10 | uniq)
+		echo '%s'
+		for f in ${panic_logfiles}; do
+			echo ">>> Panic log file: ${f}"
+			sed -nE "/${PANIC}/I,/${RETAG}/p" $f | sed -E '%s' | head -30
+		done
+		echo '%s'`, exceptions, startTag, removeTimestamp, endTag)
+
+		for i, masterNode := range masterNodes {
+			g.By(fmt.Sprintf("6.%d -> step 1) Get log file from %s", i+1, masterNode))
+			externalLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
+
+			g.By(fmt.Sprintf("6.%d -> step 2) Format log file from %s", i+1, masterNode))
+			externalLogs = trimStartTag.ReplaceAllString(externalLogs, "")
+			externalLogs = trimEndTag.ReplaceAllString(externalLogs, "")
+			for _, line := range strings.Split(externalLogs, "\n") {
+				if strings.Trim(line, " ") != "" {
+					externalPanicLogs = append(externalPanicLogs, fmt.Sprintf("> %s", line))
+				}
+			}
+		}
+		e2e.Logf("External Panic Logs:\n%s", strings.Join(externalPanicLogs, "\n"))
+		totalAbnormalLogCount += len(externalPanicLogs)
+
+		g.By("7) On all master nodes, check kas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
+		format = `[0-9TZm.:]{2,}|namespace="([a-zA-Z0-9]|\-)*"|name="([a-zA-Z0-9]|\-)*"`
+		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)"
+		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/kube-apiserver/audit*.log | jq -r '.requestURI + .responseStatus.status + .responseStatus.message + .responseStatus.reason + .user.username' | grep -Ev '%s' | sort > /tmp/OCP-39601-audit-errors.log
+		sed -E 's/((%s)( )*){1,}/.*/g' /tmp/OCP-39601-audit-errors.log | grep -v '^[[:space:]]*$' | sort | uniq | head -10 > /tmp/OCP-39601-audit-uniq-errors.log
+		echo '%s'
+		while read line; do
+			grep "$line" /tmp/OCP-39601-audit-errors.log | sed -E '%s' | head -1
+		done < /tmp/OCP-39601-audit-uniq-errors.log
+		echo '%s'`, keywords, exceptions, format, startTag, removeTimestamp, endTag)
+
+		for i, masterNode := range masterNodes {
+			g.By(fmt.Sprintf("7.%d -> step 1) Get log file from %s", i+1, masterNode))
+			auditLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
+
+			g.By(fmt.Sprintf("7.%d -> step 2) Format log file from %s", i+1, masterNode))
+			auditLogs = trimStartTag.ReplaceAllString(auditLogs, "")
+			auditLogs = trimEndTag.ReplaceAllString(auditLogs, "")
+			for _, line := range strings.Split(auditLogs, "\n") {
+				if strings.Trim(line, " ") != "" {
+					auditAbnormalLogs = append(auditAbnormalLogs, fmt.Sprintf("> %s", line))
+				}
+			}
+		}
+		e2e.Logf("Audit Abnormal Logs:\n%s", strings.Join(auditAbnormalLogs, "\n"))
+		totalAbnormalLogCount += len(auditAbnormalLogs)
+
+		g.By("8) Assert if abnormal log exits")
+		o.Expect(totalAbnormalLogCount).Should(o.BeZero())
+	})
 })
