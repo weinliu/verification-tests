@@ -107,7 +107,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		}
 	})
 
-	g.It("Author:knarra-High-44049-DefaultPodTopologySpread doesn't work in non-CloudProvider env in OpenShift 4.7 [Flaky]", func() {
+	g.It("Author:knarra-High-44049-DefaultPodTopologySpread doesn't work in non-CloudProvider env in OpenShift 4.7 [Disruptive][Flaky]", func() {
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		// Create test project
 		g.By("Create test project")
