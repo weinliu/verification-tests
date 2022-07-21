@@ -624,4 +624,125 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		CurlPod2PodFail(oc, ns1, testPodName[3], ns1, testPodName[4])
 
 	})
+
+	// author: asood@redhat.com
+	g.It("Author:asood-Medium-46807-network policy with egress rule with ipBlock", func() {
+		var (
+			buildPruningBaseDir         = exutil.FixturePath("testdata", "networking")
+			ipBlockEgressTemplateDual   = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-egress-dual-CIDRs-template.yaml")
+			ipBlockEgressTemplateSingle = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-egress-single-CIDR-template.yaml")
+			pingPodNodeTemplate         = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		)
+
+		ipStackType := checkIPStackType(oc)
+		o.Expect(ipStackType).NotTo(o.BeEmpty())
+
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+		g.By("Obtain the namespace")
+		ns1 := oc.Namespace()
+
+		g.By("create 1st hello pod in ns1")
+		pod1ns1 := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns1,
+			nodename:  nodeList.Items[0].Name,
+			template:  pingPodNodeTemplate,
+		}
+		pod1ns1.createPingPodNode(oc)
+		waitPodReady(oc, pod1ns1.namespace, pod1ns1.name)
+
+		g.By("create 2nd hello pod in ns1")
+		pod2ns1 := pingPodResourceNode{
+			name:      "hello-pod2",
+			namespace: ns1,
+			nodename:  nodeList.Items[1].Name,
+			template:  pingPodNodeTemplate,
+		}
+		pod2ns1.createPingPodNode(oc)
+		waitPodReady(oc, pod2ns1.namespace, pod2ns1.name)
+
+		g.By("create 3rd hello pod in ns1")
+		pod3ns1 := pingPodResourceNode{
+			name:      "hello-pod3",
+			namespace: ns1,
+			nodename:  nodeList.Items[1].Name,
+			template:  pingPodNodeTemplate,
+		}
+		pod3ns1.createPingPodNode(oc)
+		waitPodReady(oc, pod3ns1.namespace, pod3ns1.name)
+
+		helloPod1ns1IP1, helloPod1ns1IP2 := getPodIP(oc, ns1, pod1ns1.name)
+
+		if ipStackType == "dualstack" {
+			helloPod1ns1IPv6WithCidr := helloPod1ns1IP1 + "/128"
+			helloPod1ns1IPv4WithCidr := helloPod1ns1IP2 + "/32"
+			g.By("create ipBlock Egress Dual CIDRs Policy in ns1")
+			npIPBlockNS1 := ipBlockEgressDual{
+				name:      "ipblock-dual-cidrs-egress",
+				template:  ipBlockEgressTemplateDual,
+				cidrIpv4:  helloPod1ns1IPv4WithCidr,
+				cidrIpv6:  helloPod1ns1IPv6WithCidr,
+				namespace: ns1,
+			}
+			npIPBlockNS1.createipBlockEgressObjectDual(oc)
+
+			output, err := oc.Run("get").Args("networkpolicy").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("ipblock-dual-cidrs-egress"))
+
+		} else {
+			if ipStackType == "ipv6single" {
+				helloPod1ns1IPv6WithCidr := helloPod1ns1IP1 + "/128"
+				npIPBlockNS1 := ipBlockEgressSingle{
+					name:      "ipblock-single-cidr-egress",
+					template:  ipBlockEgressTemplateSingle,
+					cidr:      helloPod1ns1IPv6WithCidr,
+					namespace: ns1,
+				}
+				npIPBlockNS1.createipBlockEgressObjectSingle(oc)
+			} else {
+				helloPod1ns1IPv4WithCidr := helloPod1ns1IP1 + "/32"
+				npIPBlockNS1 := ipBlockEgressSingle{
+					name:      "ipblock-single-cidr-egress",
+					template:  ipBlockEgressTemplateSingle,
+					cidr:      helloPod1ns1IPv4WithCidr,
+					namespace: ns1,
+				}
+				npIPBlockNS1.createipBlockEgressObjectSingle(oc)
+			}
+
+			output, err := oc.Run("get").Args("networkpolicy").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("ipblock-single-cidr-egress"))
+		}
+		g.By("Checking connectivity from pod2 to pod1")
+		CurlPod2PodPass(oc, ns1, "hello-pod2", ns1, "hello-pod1")
+
+		g.By("Checking connectivity from pod2 to pod3")
+		CurlPod2PodFail(oc, ns1, "hello-pod2", ns1, "hello-pod3")
+
+		if ipStackType == "dualstack" {
+			g.By("Delete networkpolicy from ns1 so no networkpolicy in namespace")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("networkpolicy", "ipblock-dual-cidrs-egress", "-n", ns1).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			g.By("Delete networkpolicy from ns1 so no networkpolicy in namespace")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("networkpolicy", "ipblock-single-cidr-egress", "-n", ns1).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		g.By("Check connectivity works fine across all failed ones above to make sure all policy flows are cleared properly")
+
+		g.By("Checking connectivity from pod2 to pod1")
+		CurlPod2PodPass(oc, ns1, "hello-pod2", ns1, "hello-pod1")
+
+		g.By("Checking connectivity from pod2 to pod3")
+		CurlPod2PodPass(oc, ns1, "hello-pod2", ns1, "hello-pod3")
+
+	})
+
 })

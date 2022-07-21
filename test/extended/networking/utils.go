@@ -79,7 +79,28 @@ type ipBlockIngressDual struct {
 	template  string
 }
 
+type ipBlockEgressDual struct {
+	name      string
+	namespace string
+	cidrIpv4  string
+	cidrIpv6  string
+	cidr2Ipv4 string
+	cidr2Ipv6 string
+	cidr3Ipv4 string
+	cidr3Ipv6 string
+	template  string
+}
+
 type ipBlockIngressSingle struct {
+	name      string
+	namespace string
+	cidr      string
+	cidr2     string
+	cidr3     string
+	template  string
+}
+
+type ipBlockEgressSingle struct {
 	name      string
 	namespace string
 	cidr      string
@@ -254,6 +275,18 @@ func (ipBlock_ingress_policy *ipBlockIngressDual) createipBlockIngressObjectDual
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create network policy %v", ipBlock_ingress_policy.name))
 }
 
+func (ipBlock_egress_policy *ipBlockEgressDual) createipBlockEgressObjectDual(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		policyApplyError := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipBlock_egress_policy.template, "-p", "NAME="+ipBlock_egress_policy.name, "NAMESPACE="+ipBlock_egress_policy.namespace, "cidrIpv6="+ipBlock_egress_policy.cidrIpv6, "cidrIpv4="+ipBlock_egress_policy.cidrIpv4)
+		if policyApplyError != nil {
+			e2e.Logf("the err:%v, and try next round", policyApplyError)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create network policy %v", ipBlock_egress_policy.name))
+}
+
 func (ipBlock_ingress_policy *ipBlockIngressSingle) createipBlockIngressObjectSingle(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipBlock_ingress_policy.template, "-p", "NAME="+ipBlock_ingress_policy.name, "NAMESPACE="+ipBlock_ingress_policy.namespace, "CIDR="+ipBlock_ingress_policy.cidr)
@@ -264,6 +297,18 @@ func (ipBlock_ingress_policy *ipBlockIngressSingle) createipBlockIngressObjectSi
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create network policy %v", ipBlock_ingress_policy.name))
+}
+
+func (ipBlock_egress_policy *ipBlockEgressSingle) createipBlockEgressObjectSingle(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		policyApplyError := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipBlock_egress_policy.template, "-p", "NAME="+ipBlock_egress_policy.name, "NAMESPACE="+ipBlock_egress_policy.namespace, "CIDR="+ipBlock_egress_policy.cidr)
+		if policyApplyError != nil {
+			e2e.Logf("the err:%v, and try next round", policyApplyError)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create network policy %v", ipBlock_egress_policy.name))
 }
 
 func (ipBlock_ingress_policy *ipBlockIngressDual) createipBlockMultipleCidrIngressObjectDual(oc *exutil.CLI) {
