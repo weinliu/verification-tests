@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 
@@ -1165,6 +1166,10 @@ func (cw cloudwatchSpec) init(oc *exutil.CLI) cloudwatchSpec {
 // Get the AWS key from cluster
 func getAWSKey(oc *exutil.CLI) (string, string) {
 	credential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system", "-o", "json").Output()
+	if err != nil {
+		g.Skip("Can not get secret/aws-creds. Maybe that is an aws STS cluster.")
+		//ToDo: support sts secret from 5.5
+	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	accessKeyIDBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).Str, gjson.Get(credential, `data.aws_secret_access_key`).Str
 	accessKeyID, err1 := base64.StdEncoding.DecodeString(accessKeyIDBase64)
