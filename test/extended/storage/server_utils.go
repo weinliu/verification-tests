@@ -101,7 +101,7 @@ func (iscsi *iscsiServer) install(oc *exutil.CLI) {
 	iscsi.deploy.waitReady(oc)
 	iscsi.svc.create(oc)
 	iscsi.svc.getClusterIP(oc)
-	iscsi.createIscsiNetworkPortal(oc, iscsi.svc.clusterIP)
+	iscsi.createIscsiNetworkPortal(oc, iscsi.svc.clusterIP, iscsi.deploy.getPodList(oc)[0])
 	e2e.Logf("Install iSCSI server successful, serverIP is %s", iscsi.svc.clusterIP)
 }
 
@@ -112,9 +112,35 @@ func (iscsi *iscsiServer) uninstall(oc *exutil.CLI) {
 }
 
 // Create network portal on iSCSI target
-func (iscsi *iscsiServer) createIscsiNetworkPortal(oc *exutil.CLI, serviceIP string) {
+func (iscsi *iscsiServer) createIscsiNetworkPortal(oc *exutil.CLI, serviceIP string, iscsiTargetPodName string) {
 	cmd := "targetcli /iscsi/iqn.2016-04.test.com:storage.target00/tpg1/portals create " + serviceIP
-	msg, _err := execCommandInSpecificPod(oc, iscsi.deploy.namespace, iscsi.deploy.getPodList(oc)[0], cmd)
+	msg, _err := execCommandInSpecificPod(oc, iscsi.deploy.namespace, iscsiTargetPodName, cmd)
 	o.Expect(_err).NotTo(o.HaveOccurred())
 	o.Expect(msg).To(o.ContainSubstring("Created network portal " + serviceIP + ":3260"))
+}
+
+// Enable or disable iSCSI Target Discovery Authentication on iSCSI target, set flg= true/false for enable/disable
+func (iscsi *iscsiServer) enableTargetDiscoveryAuth(oc *exutil.CLI, flg bool, iscsiTargetPodName string) {
+	var (
+		cmd    = "targetcli iscsi/ set discovery_auth enable=1"
+		output = "Parameter enable is now 'True'"
+	)
+	if !flg {
+		cmd = "targetcli iscsi/ set discovery_auth enable=0"
+		output = "Parameter enable is now 'False'"
+	}
+	msg, _err := execCommandInSpecificPod(oc, iscsi.deploy.namespace, iscsiTargetPodName, cmd)
+	o.Expect(_err).NotTo(o.HaveOccurred())
+	o.Expect(msg).To(o.ContainSubstring(output))
+}
+
+// Set iSCSI Target Discovery Authentication credentials on iSCSI target
+func (iscsi *iscsiServer) setTargetDiscoveryAuthCreds(oc *exutil.CLI, user string, password string, muser string, mpassword string, iscsiTargetPodName string) {
+	cmd := "targetcli iscsi/ set discovery_auth userid=" + user + " password=" + password + " mutual_userid=" + muser + " mutual_password=" + mpassword
+	msg, _err := execCommandInSpecificPod(oc, iscsi.deploy.namespace, iscsiTargetPodName, cmd)
+	o.Expect(_err).NotTo(o.HaveOccurred())
+	o.Expect(msg).To(o.ContainSubstring("userid is now '" + user + "'"))
+	o.Expect(msg).To(o.ContainSubstring("password is now '" + password + "'"))
+	o.Expect(msg).To(o.ContainSubstring("mutual_userid is now '" + muser + "'"))
+	o.Expect(msg).To(o.ContainSubstring("mutual_password is now '" + mpassword + "'"))
 }

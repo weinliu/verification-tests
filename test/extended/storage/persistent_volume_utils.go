@@ -29,6 +29,7 @@ type persistentVolume struct {
 	volumeKind    string
 	nfsServerIP   string
 	iscsiServerIP string
+	secretName    string
 	iscsiPortals  []string
 }
 
@@ -126,6 +127,13 @@ func setPersistentVolumeKind(volumeKind string) persistentVolumeOption {
 	}
 }
 
+// Replace the default value of PersistentVolume secretName attribute
+func setPersistentSecretName(secretName string) persistentVolumeOption {
+	return func(this *persistentVolume) {
+		this.secretName = secretName
+	}
+}
+
 //  Create a new customized PersistentVolume object
 func newPersistentVolume(opts ...persistentVolumeOption) persistentVolume {
 	var defaultVolSize string
@@ -185,6 +193,28 @@ func (pv *persistentVolume) create(oc *exutil.CLI) {
 			"readOnly":      false,
 			"initiatorName": "iqn.2016-04.test.com:test.img",
 			"portals":       pv.iscsiPortals,
+		}
+		pvExtraParameters = map[string]interface{}{
+			"jsonPath": `items.0.spec.`,
+			"iscsi":    iscsiParameters,
+		}
+		// iscs-chap kind PersistentVolume
+	case "iscsi-chap":
+		secretParam := map[string]string{
+			"name": pv.secretName,
+		}
+		iscsiParameters := map[string]interface{}{
+			"targetPortal":      pv.iscsiServerIP + ":3260",
+			"iqn":               "iqn.2016-04.test.com:storage.target00",
+			"lun":               0,
+			"iface":             "default",
+			"fsType":            "ext4",
+			"readOnly":          false,
+			"initiatorName":     "iqn.2016-04.test.com:test.img",
+			"portals":           pv.iscsiPortals,
+			"chapAuthDiscovery": true,
+			"chapAuthSession":   true,
+			"secretRef":         secretParam,
 		}
 		pvExtraParameters = map[string]interface{}{
 			"jsonPath": `items.0.spec.`,
