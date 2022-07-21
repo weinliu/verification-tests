@@ -14,8 +14,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	// author: mjoseph@redhat.com
 	g.It("Author:mjoseph-Critical-41049-DNS controlls pod placement by node selector [Disruptive]", func() {
 		var (
-			dns_worker_nodeselector = "[{\"op\":\"add\", \"path\":\"/spec/nodePlacement/nodeSelector\", \"value\":{\"node-role.kubernetes.io/worker\":\"\"}}]"
-			dns_master_nodeselector = "[{\"op\":\"replace\", \"path\":\"/spec/nodePlacement/nodeSelector\", \"value\":{\"node-role.kubernetes.io/master\":\"\"}}]"
+			dnsWorkerNodeselector = "[{\"op\":\"add\", \"path\":\"/spec/nodePlacement/nodeSelector\", \"value\":{\"node-role.kubernetes.io/worker\":\"\"}}]"
+			dnsMasterNodeselector = "[{\"op\":\"replace\", \"path\":\"/spec/nodePlacement/nodeSelector\", \"value\":{\"node-role.kubernetes.io/master\":\"\"}}]"
 		)
 
 		g.By("check the default dns pod placement is present")
@@ -26,32 +26,32 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("Patch dns operator with worker as node selector in dns.operator default")
 		dnspodname := getDNSPodName(oc)
 		defer restoreDNSOperatorDefault(oc)
-		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dns_worker_nodeselector)
+		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dnsWorkerNodeselector)
 		err = waitForResourceToDisappear(oc, "openshift-dns", "pod/"+dnspodname)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+dnspodname))
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "ds/dns-default").Output()
+		output1, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "ds/dns-default").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("kubernetes.io/worker"))
-		output_lcfg, err_lcfg := oc.AsAdmin().Run("get").Args("ds/dns-default", "-n", "openshift-dns", "-o=jsonpath={.spec.template.spec.nodeSelector}").Output()
-		o.Expect(err_lcfg).NotTo(o.HaveOccurred())
-		o.Expect(output_lcfg).To(o.ContainSubstring(`"node-role.kubernetes.io/worker":""`))
+		o.Expect(output1).To(o.ContainSubstring("kubernetes.io/worker"))
+		outputLcfg, errLcfg := oc.AsAdmin().Run("get").Args("ds/dns-default", "-n", "openshift-dns", "-o=jsonpath={.spec.template.spec.nodeSelector}").Output()
+		o.Expect(errLcfg).NotTo(o.HaveOccurred())
+		o.Expect(outputLcfg).To(o.ContainSubstring(`"node-role.kubernetes.io/worker":""`))
 
 		g.By("Patch dns operator with master as node selector in dns.operator default")
 		dnspodname1 := getDNSPodName(oc)
-		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dns_master_nodeselector)
+		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dnsMasterNodeselector)
 		err = waitForResourceToDisappear(oc, "openshift-dns", "pod/"+dnspodname1)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+dnspodname1))
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "ds/dns-default").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("kubernetes.io/master"))
-		output_lcfg, err_lcfg = oc.AsAdmin().Run("get").Args("ds/dns-default", "-n", "openshift-dns", "-o=jsonpath={.spec.template.spec.nodeSelector}").Output()
-		o.Expect(err_lcfg).NotTo(o.HaveOccurred())
-		o.Expect(output_lcfg).To(o.ContainSubstring(`"node-role.kubernetes.io/master":""`))
+		outputLcfg1, errLcfg1 := oc.AsAdmin().Run("get").Args("ds/dns-default", "-n", "openshift-dns", "-o=jsonpath={.spec.template.spec.nodeSelector}").Output()
+		o.Expect(errLcfg1).NotTo(o.HaveOccurred())
+		o.Expect(outputLcfg1).To(o.ContainSubstring(`"node-role.kubernetes.io/master":""`))
 	})
 	// author: mjoseph@redhat.com
 	g.It("Author:mjoseph-Critical-41050-DNS controll pod placement by tolerations [Disruptive]", func() {
 		var (
-			dns_master_toleration = "[{\"op\":\"replace\", \"path\":\"/spec/nodePlacement\", \"value\":{\"tolerations\":[" +
+			dnsMasterToleration = "[{\"op\":\"replace\", \"path\":\"/spec/nodePlacement\", \"value\":{\"tolerations\":[" +
 				"{\"effect\":\"NoExecute\",\"key\":\"my-dns-test\", \"operators\":\"Equal\", \"value\":\"abc\"}]}}]"
 		)
 		g.By("check the dns pod placement to confirm it is running on default mode")
@@ -60,74 +60,74 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).To(o.ContainSubstring("kubernetes.io/os=linux"))
 
 		g.By("check dns pod placement to confirm it is running on default tolerations")
-		output_lcfg, err_lcfg := oc.AsAdmin().Run("get").Args("ds/dns-default", "-n", "openshift-dns", "-o=jsonpath={.spec.template.spec.tolerations}").Output()
-		o.Expect(err_lcfg).NotTo(o.HaveOccurred())
-		o.Expect(output_lcfg).To(o.ContainSubstring(`{"key":"node-role.kubernetes.io/master","operator":"Exists"}`))
+		outputLcfg, errLcfg := oc.AsAdmin().Run("get").Args("ds/dns-default", "-n", "openshift-dns", "-o=jsonpath={.spec.template.spec.tolerations}").Output()
+		o.Expect(errLcfg).NotTo(o.HaveOccurred())
+		o.Expect(outputLcfg).To(o.ContainSubstring(`{"key":"node-role.kubernetes.io/master","operator":"Exists"}`))
 
-		g.By("Patch dns operator config with custom tolerations of dns pod, not to tolerate master node taints)")
+		g.By("Patch dns operator config with custom tolerations of dns pod, not to tolerate master node taints")
 		dnspodname := getDNSPodName(oc)
 		defer restoreDNSOperatorDefault(oc)
-		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dns_master_toleration)
+		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dnsMasterToleration)
 		err = waitForResourceToDisappear(oc, "openshift-dns", "pod/"+dnspodname)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+dnspodname))
-		output_lcfg, err_lcfg = oc.AsAdmin().Run("get").Args("ds/dns-default", "-n", "openshift-dns", "-o=jsonpath={.spec.template.spec.tolerations}").Output()
-		o.Expect(err_lcfg).NotTo(o.HaveOccurred())
-		o.Expect(output_lcfg).To(o.ContainSubstring(`{"effect":"NoExecute","key":"my-dns-test","value":"abc"}`))
+		outputLcfg1, errLcfg1 := oc.AsAdmin().Run("get").Args("ds/dns-default", "-n", "openshift-dns", "-o=jsonpath={.spec.template.spec.tolerations}").Output()
+		o.Expect(errLcfg1).NotTo(o.HaveOccurred())
+		o.Expect(outputLcfg1).To(o.ContainSubstring(`{"effect":"NoExecute","key":"my-dns-test","value":"abc"}`))
 
 		g.By("check dns.operator status to see any error messages")
-		output_lcfg, err_lcfg = oc.AsAdmin().Run("get").Args("dns.operator/default", "-o=jsonpath={.status}").Output()
-		o.Expect(err_lcfg).NotTo(o.HaveOccurred())
-		o.Expect(output_lcfg).NotTo(o.ContainSubstring("error"))
+		outputLcfg2, errLcfg2 := oc.AsAdmin().Run("get").Args("dns.operator/default", "-o=jsonpath={.status}").Output()
+		o.Expect(errLcfg2).NotTo(o.HaveOccurred())
+		o.Expect(outputLcfg2).NotTo(o.ContainSubstring("error"))
 	})
 	// author: shudili@redhat.com
 	g.It("Author:shudili-NonPreRelease-Medium-46873-Configure operatorLogLevel under the default dns operator and check the logs flag [Disruptive]", func() {
 		var (
-			resourceName          = "dns.operator.openshift.io/default"
-			cfg_oploglevel_debug  = "[{\"op\":\"replace\", \"path\":\"/spec/operatorLogLevel\", \"value\":\"Debug\"}]"
-			cfg_oploglevel_trace  = "[{\"op\":\"replace\", \"path\":\"/spec/operatorLogLevel\", \"value\":\"Trace\"}]"
-			cfg_oploglevel_normal = "[{\"op\":\"replace\", \"path\":\"/spec/operatorLogLevel\", \"value\":\"Normal\"}]"
+			resourceName        = "dns.operator.openshift.io/default"
+			cfgOploglevelDebug  = "[{\"op\":\"replace\", \"path\":\"/spec/operatorLogLevel\", \"value\":\"Debug\"}]"
+			cfgOploglevelTrace  = "[{\"op\":\"replace\", \"path\":\"/spec/operatorLogLevel\", \"value\":\"Trace\"}]"
+			cfgOploglevelNormal = "[{\"op\":\"replace\", \"path\":\"/spec/operatorLogLevel\", \"value\":\"Normal\"}]"
 		)
 		defer restoreDNSOperatorDefault(oc)
 
 		g.By("Check default log level of dns operator")
-		output_opcfg,err_opcfg := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.operator", "default", "-o=jsonpath={.spec.operatorLogLevel}").Output()
-		o.Expect(err_opcfg).NotTo(o.HaveOccurred())
-		o.Expect(output_opcfg).To(o.ContainSubstring("Normal"))
+		outputOpcfg, errOpcfg := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.operator", "default", "-o=jsonpath={.spec.operatorLogLevel}").Output()
+		o.Expect(errOpcfg).NotTo(o.HaveOccurred())
+		o.Expect(outputOpcfg).To(o.ContainSubstring("Normal"))
 
 		//Remove the dns operator pod and wait for the new pod is created, which is useful to check the dns operator log
 		g.By("Remove dns operator pod")
 		dnsOperatorPodName := getPodName(oc, "openshift-dns-operator", "name=dns-operator")[0]
-		_, err_delpod := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", dnsOperatorPodName, "-n", "openshift-dns-operator").Output()
-		o.Expect(err_delpod).NotTo(o.HaveOccurred())
-		err_podDis := waitForResourceToDisappear(oc, "openshift-dns-operator", "pod/"+dnsOperatorPodName)
-		exutil.AssertWaitPollNoErr(err_podDis, fmt.Sprintf("the dns-operator pod isn't terminated"))
-		err_podRdy := waitForPodWithLabelReady(oc, "openshift-dns-operator", "name=dns-operator")
-		exutil.AssertWaitPollNoErr(err_podRdy, fmt.Sprintf("dns-operator pod isn't ready"))
+		_, errDelpod := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", dnsOperatorPodName, "-n", "openshift-dns-operator").Output()
+		o.Expect(errDelpod).NotTo(o.HaveOccurred())
+		errPodDis := waitForResourceToDisappear(oc, "openshift-dns-operator", "pod/"+dnsOperatorPodName)
+		exutil.AssertWaitPollNoErr(errPodDis, fmt.Sprintf("the dns-operator pod isn't terminated"))
+		errPodRdy := waitForPodWithLabelReady(oc, "openshift-dns-operator", "name=dns-operator")
+		exutil.AssertWaitPollNoErr(errPodRdy, fmt.Sprintf("dns-operator pod isn't ready"))
 
 		g.By("Patch dns operator with operator logLevel Debug")
-		patchGlobalResourceAsAdmin(oc, resourceName, cfg_oploglevel_debug)
+		patchGlobalResourceAsAdmin(oc, resourceName, cfgOploglevelDebug)
 		g.By("Check logLevel debug in dns operator")
-		output_opcfg,err_opcfg = oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.operator", "default", "-o=jsonpath={.spec.operatorLogLevel}").Output()
-		o.Expect(err_opcfg).NotTo(o.HaveOccurred())
-		o.Expect(output_opcfg).To(o.ContainSubstring("Debug"))
+		outputOpcfg, errOpcfg = oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.operator", "default", "-o=jsonpath={.spec.operatorLogLevel}").Output()
+		o.Expect(errOpcfg).NotTo(o.HaveOccurred())
+		o.Expect(outputOpcfg).To(o.ContainSubstring("Debug"))
 
 		g.By("Patch dns operator with operator logLevel trace")
-		patchGlobalResourceAsAdmin(oc, resourceName, cfg_oploglevel_trace)
+		patchGlobalResourceAsAdmin(oc, resourceName, cfgOploglevelTrace)
 		g.By("Check logLevel trace in dns operator")
-		output_opcfg,err_opcfg = oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.operator", "default", "-o=jsonpath={.spec.operatorLogLevel}").Output()
-		o.Expect(err_opcfg).NotTo(o.HaveOccurred())
-		o.Expect(output_opcfg).To(o.ContainSubstring("Trace"))
+		outputOpcfg, errOpcfg = oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.operator", "default", "-o=jsonpath={.spec.operatorLogLevel}").Output()
+		o.Expect(errOpcfg).NotTo(o.HaveOccurred())
+		o.Expect(outputOpcfg).To(o.ContainSubstring("Trace"))
 
 		g.By("Patch dns operator with operator logLevel normal")
-		patchGlobalResourceAsAdmin(oc, resourceName, cfg_oploglevel_normal)
+		patchGlobalResourceAsAdmin(oc, resourceName, cfgOploglevelNormal)
 		g.By("Check logLevel normal in dns operator")
-		output_opcfg,err_opcfg = oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.operator", "default", "-o=jsonpath={.spec.operatorLogLevel}").Output()
-		o.Expect(err_opcfg).NotTo(o.HaveOccurred())
-		o.Expect(output_opcfg).To(o.ContainSubstring("Normal"))
+		outputOpcfg, errOpcfg = oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.operator", "default", "-o=jsonpath={.spec.operatorLogLevel}").Output()
+		o.Expect(errOpcfg).NotTo(o.HaveOccurred())
+		o.Expect(outputOpcfg).To(o.ContainSubstring("Normal"))
 
 		g.By("Check logs of dns operator")
-		output_logs, err_log := oc.AsAdmin().Run("logs").Args("deployment/dns-operator", "-n", "openshift-dns-operator", "-c", "dns-operator").Output()
-		o.Expect(err_log).NotTo(o.HaveOccurred())
-		o.Expect(output_logs).To(o.ContainSubstring("level=info"))
+		outputLogs, errLog := oc.AsAdmin().Run("logs").Args("deployment/dns-operator", "-n", "openshift-dns-operator", "-c", "dns-operator").Output()
+		o.Expect(errLog).NotTo(o.HaveOccurred())
+		o.Expect(outputLogs).To(o.ContainSubstring("level=info"))
 	})
 })

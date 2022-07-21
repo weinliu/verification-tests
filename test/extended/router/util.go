@@ -168,7 +168,7 @@ func waitForPodWithLabelReady(oc *exutil.CLI, ns, label string) error {
 
 // wait for the named resource is disappeared, e.g. used while router deployment rolled out
 func waitForResourceToDisappear(oc *exutil.CLI, ns, rsname string) error {
-	return wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
+	return wait.Poll(20*time.Second, 5*time.Minute, func() (bool, error) {
 		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(rsname, "-n", ns).Output()
 		e2e.Logf("check resource %v and got: %v", rsname, status)
 		primary := false
@@ -390,8 +390,9 @@ func exposeRouteEdge(oc *exutil.CLI, ns, route, service, hostname string) {
 
 // To patch global resources as Admin. Can used for patching resources such as ingresses or CVO
 func patchGlobalResourceAsAdmin(oc *exutil.CLI, resource, patch string) {
-	err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resource, "--patch="+patch, "--type=json").Execute()
+	patchOut, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resource, "--patch="+patch, "--type=json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The output from the patch is:- %q ", patchOut)
 }
 
 // this function helps to get the ipv4 address of the given pod
