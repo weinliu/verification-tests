@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -344,32 +343,69 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	})
 
 	g.It("Author:abhbaner-High-43524-Existing deployments (with runc) should restart normally after kata runtime install", func() {
-		g.By("Creating a deployment")
 
 		oc.SetupProject()
-		ns := oc.Namespace()
-		newDeployName := "dep-43524"
-		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+newDeployName).OutputToFile(getRandomString() + "dep-common.json")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", ns).Execute()
+		var (
+			podNs      = oc.Namespace()
+			deployName = "dep-43524"
+			msg        string
+			podName    string
+			newPodName string
+		)
+
+		g.By("Create deployment config from template")
+		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName).OutputToFile(getRandomString() + "dep-common.json")
+		if err != nil {
+			e2e.Logf("Could not create configFile %v %v", configFile, err)
+		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		deployMsg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns, "-o=jsonpath={..name}").Output()
-		e2e.Logf(" get pods for ns %v, output - %v", ns, deployMsg)
-		o.Expect(deployMsg).To(o.ContainSubstring(newDeployName))
+		g.By("Applying deployment file " + configFile)
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", podNs).Output()
+		if err != nil {
+			e2e.Logf("Could not apply configFile %v %v", msg, err)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
 
-		defaultPodName := strings.Split(deployMsg, " example")[0]
-		//deleting pod from the deployment and checking its status
-		e2e.Logf("delete pod %s in namespace %s", defaultPodName, "%s ns", ns)
-		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", defaultPodName, "-n", ns).Execute()
+		g.By("Wait for deployment to be ready")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
+		msg, err = waitForDeployment(oc, podNs, deployName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(msg).NotTo(o.BeEmpty())
+
+		g.By("Wait for pods to be ready")
 		errCheck := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
-			deployAfterDeleteMsg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", ns).Output()
-			if strings.Contains(deployAfterDeleteMsg, "3/3") {
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
+			if !strings.Contains(msg, "No resources found") {
 				return true, nil
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Pod replica could not be restarted"))
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Timed out waiting for pods %v %v", msg, err))
+
+		g.By("Get pod name")
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
+		podName = strings.Split(msg, " ")[0]
+		e2e.Logf("podname %v %v", msg, err)
+
+		msg = fmt.Sprintf("Deleting pod %v from deployment", podName)
+		g.By(msg)
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", podName, "-n", podNs).Output()
+		e2e.Logf("%v pod deleted: %v %v", podName, msg, err)
+
+		g.By("Wait for deployment to re-replicate")
+		msg, err = waitForDeployment(oc, podNs, deployName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(msg).NotTo(o.BeEmpty())
+
+		g.By("Get new pod name")
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
+		newPodName = strings.Split(msg, " ")[0]
+		e2e.Logf("new podname %v %v", msg, err)
+		if newPodName == podName {
+			e2e.Failf("A new pod did not get created")
+		}
+
 		g.By("SUCCESSS - kataconfig installed and post that pod with runc successfully restarted ")
 	})
 
@@ -407,12 +443,10 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			mustgatherLog         = mustgatherName + ".log"
 			mustgatherTopdir      string
 			msg                   string
-			nodeControlCount                    = 0
-			nodeWorkerCount                     = 0
-			podNs                               = oc.Namespace()
-			preGAregistry                       = "kata-brew-registry"
-			readyReplicas                       = 0
-			snooze                time.Duration = 660
+			nodeControlCount      = 0
+			nodeWorkerCount       = 0
+			podNs                 = oc.Namespace()
+			preGAregistry         = "kata-brew-registry"
 		)
 
 		mustgatherChecks := counts{
@@ -481,21 +515,10 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		e2e.Logf("Applied deployment %v: %v %v", deployName, msg, err)
 
 		g.By("Wait for deployment to be ready")
-		errCheck := wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", podNs, deployName, "-o=jsonpath={.status.readyReplicas}").Output()
-			readyReplicas, _ = strconv.Atoi(msg)
-			if readyReplicas == nodeWorkerCount {
-				return true, nil
-			}
-			return false, nil
-		})
-		if errCheck != nil {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", podNs, deployName, "-o", "yaml").Output()
-			e2e.Logf("timeout %v %v", msg, err)
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", podNs, deployName, "-o=jsonpath={.status.readyReplicas}").Output()
-		}
-		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Deployment has %v replicas, not %v", msg, nodeWorkerCount))
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", "-n", podNs, deployName, "--ignore-not-found").Execute()
+		msg, err = waitForDeployment(oc, podNs, deployName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(msg).NotTo(o.BeEmpty())
 
 		g.By("run must-gather")
 		defer os.RemoveAll(mustgatherDir)

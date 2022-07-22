@@ -324,3 +324,33 @@ func imageContentSourcePolicy(oc *exutil.CLI, configFile, name string) (msg stri
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("applying ImageContentSourcePolicy %v failed: %v %v", configFile, msg, err))
 	return msg, err
 }
+
+func waitForDeployment(oc *exutil.CLI, podNs, deployName string) (msg string, err error) {
+	var (
+		snooze   time.Duration = 300
+		replicas string
+	)
+
+	replicas, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", podNs, deployName, "-o=jsonpath={.spec.replicas}").Output()
+	if err != nil {
+		e2e.Logf("replica fetch failed %v %v", replicas, err)
+	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(replicas).NotTo(o.BeEmpty())
+
+	errCheck := wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", podNs, deployName, "-o=jsonpath={.status.readyReplicas}").Output()
+		if msg == replicas {
+			return true, nil
+		}
+		return false, nil
+	})
+
+	if errCheck != nil {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", podNs, deployName, "-o=jsonpath={.status}").Output()
+		e2e.Logf("timed out %v != %v %v", replicas, msg, err)
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", podNs, deployName, "-o=jsonpath={.status.readyReplicas}").Output()
+	}
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Deployment has %v replicas, not %v %v", replicas, msg, err))
+	return msg, err
+}
