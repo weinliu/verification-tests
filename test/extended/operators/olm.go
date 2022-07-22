@@ -4573,11 +4573,19 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				}
 			}
 			if count != 1 {
+				e2e.Logf("the install plan is \n%s", ips)
 				return false, nil
 			}
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "the generated InstallPlan != 1")
+
+		g.By("Waiting for install plan Complete")
+		//if installplan status is Installing, csv will be re-created.
+		installPlan := sub.getIP(oc)
+		o.Expect(installPlan).NotTo(o.BeEmpty())
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Complete", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+
 	})
 
 	// It will cover test case: OCP-24438, author: kuiwang@redhat.com
