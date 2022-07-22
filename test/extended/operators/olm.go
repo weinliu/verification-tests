@@ -6504,23 +6504,31 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(olmPodname).NotTo(o.BeEmpty())
 
 		g.By("check metrics")
-		metrics, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(olmPodname, "-n", "openshift-operator-lifecycle-manager", "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), "https://localhost:8443/metrics").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(metrics).NotTo(o.BeEmpty())
 
-		var metricsVal, metricsVar string
-		for _, s := range strings.Fields(metrics) {
-			if next {
-				metricsVal = s
-				break
+		waitErr := wait.Poll(10*time.Second, 150*time.Second, func() (bool, error) {
+			next = false
+			metrics, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(olmPodname, "-n", "openshift-operator-lifecycle-manager", "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), "https://localhost:8443/metrics").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(metrics).NotTo(o.BeEmpty())
+			var metricsVal, metricsVar string
+			for _, s := range strings.Fields(metrics) {
+				if next {
+					metricsVal = s
+					break
+				}
+				if strings.Contains(s, "csv_abnormal{") && strings.Contains(s, csvName) && strings.Contains(s, oc.Namespace()) {
+					metricsVar = s
+					next = true
+				}
 			}
-			if strings.Contains(s, "csv_abnormal{") && strings.Contains(s, csvName) && strings.Contains(s, oc.Namespace()) {
-				metricsVar = s
-				next = true
+			e2e.Logf("\nMetrics\n    %v == %v\n", metricsVar, metricsVal)
+			if metricsVal != "" {
+				e2e.Logf("csv_abnormal metric is created")
+				return true, nil
 			}
-		}
-		e2e.Logf("\nMetrics\n    %v == %v\n", metricsVar, metricsVal)
-		o.Expect(metricsVal).NotTo(o.BeEmpty())
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "csv_abnormal metric is not created")
 
 		g.By("reset og to single namespace")
 		og.delete(itName, dr)
@@ -6542,7 +6550,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(strings.Contains(msg, "completed with no errors")).To(o.BeTrue())
 
 		g.By("Make sure pods are fully running")
-		waitErr := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		waitErr = wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", oc.Namespace()).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "etcd-operator") && strings.Contains(msg, "Running") && strings.Contains(msg, "3/3") {
@@ -6554,26 +6562,31 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.AssertWaitPollNoErr(waitErr, "etcd-operator pod is not running as 3")
 
 		g.By("check new metrics")
-		next = false
-		metricsVar = ""
-		metricsVal = ""
-		metrics, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args(olmPodname, "-n", "openshift-operator-lifecycle-manager", "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), "https://localhost:8443/metrics").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(metrics).NotTo(o.BeEmpty())
-		for _, s := range strings.Fields(metrics) {
-			if next {
-				metricsVal = s
-				break
-			}
-			if strings.Contains(s, "csv_succeeded{") && strings.Contains(s, csvName) && strings.Contains(s, oc.Namespace()) {
-				metricsVar = s
-				next = true
-			}
-		}
-		e2e.Logf("\nMetrics\n%v ==  %v\n", metricsVar, metricsVal)
-		o.Expect(metricsVar).NotTo(o.BeEmpty())
-		o.Expect(metricsVal).NotTo(o.BeEmpty())
 
+		waitErr = wait.Poll(5*time.Second, 150*time.Second, func() (bool, error) {
+			next = false
+			metrics, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(olmPodname, "-n", "openshift-operator-lifecycle-manager", "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), "https://localhost:8443/metrics").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(metrics).NotTo(o.BeEmpty())
+			var metricsVal, metricsVar string
+			for _, s := range strings.Fields(metrics) {
+				if next {
+					metricsVal = s
+					break
+				}
+				if strings.Contains(s, "csv_succeeded{") && strings.Contains(s, csvName) && strings.Contains(s, oc.Namespace()) {
+					metricsVar = s
+					next = true
+				}
+			}
+			e2e.Logf("\nMetrics\n    %v == %v\n", metricsVar, metricsVal)
+			if metricsVal != "" {
+				e2e.Logf("csv_succeeded metric is created")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "csv_succeeded metric is not created")
 		g.By("SUCCESS")
 
 	})
