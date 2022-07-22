@@ -35,10 +35,8 @@ objects:
         tolerations: ${{TOLERATIONS}}
         replicas: 1
     collection:
-      logs:
-        type: ${COLLECTOR}
-        fluentd:
-          tolerations: ${{TOLERATIONS}}
+      type: ${COLLECTOR}
+      tolerations: ${{TOLERATIONS}}
 parameters:
   - name: NAME
     value: "instance"

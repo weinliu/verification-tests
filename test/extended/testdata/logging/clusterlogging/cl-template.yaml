@@ -31,9 +31,7 @@ objects:
       kibana:
         replicas: 1
     collection:
-      logs:
-        type: ${COLLECTOR}
-        fluentd: {}
+      type: ${COLLECTOR}
 parameters:
   - name: NAME
     value: "instance"

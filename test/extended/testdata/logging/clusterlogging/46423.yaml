@@ -33,9 +33,7 @@ objects:
       kibana:
         replicas: 1
     collection:
-      logs:
-        type: "fluentd"
-        fluentd: {}
+      type: "fluentd"
     forwarder:
       fluentd:
         buffer:

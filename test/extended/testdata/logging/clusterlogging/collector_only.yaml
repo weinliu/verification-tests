@@ -11,9 +11,7 @@ objects:
   spec:
     managementState: "Managed"
     collection:
-      logs:
-        type: ${COLLECTOR}
-        fluentd: {}
+      type: ${COLLECTOR}
 parameters:
   - name: NAME
     value: "instance"
