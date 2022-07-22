@@ -127,16 +127,22 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	//author: yanyang@redhat.com
 	g.It("Author:yanyang-Low-49670-change spec.capabilities to invalid value", func() {
-		orgBaseCap, err := getCVObyJP(oc, ".spec.capabilities.baselineCapabilitySet")
+		orgCap, err := getCVObyJP(oc, ".spec.capabilities")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		orgAddCapstr, err := getCVObyJP(oc, ".spec.capabilities.additionalEnabledCapabilities[*]")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf(orgBaseCap, orgAddCapstr)
+		if orgCap == "" {
+			defer ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"remove", "/spec/capabilities", nil}})
+		} else {
+			orgBaseCap, err := getCVObyJP(oc, ".spec.capabilities.baselineCapabilitySet")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			orgAddCapstr, err := getCVObyJP(oc, ".spec.capabilities.additionalEnabledCapabilities[*]")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf(orgBaseCap, orgAddCapstr)
 
-		orgAddCap := strings.Split(orgAddCapstr, " ")
+			orgAddCap := strings.Split(orgAddCapstr, " ")
 
-		defer changeCap(oc, true, orgBaseCap)
-		defer changeCap(oc, false, orgAddCap)
+			defer changeCap(oc, true, orgBaseCap)
+			defer changeCap(oc, false, orgAddCap)
+		}
 
 		g.By("Set invalid baselineCapabilitySet")
 		cmdOut, err := changeCap(oc, true, "Invalid")
