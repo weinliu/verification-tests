@@ -802,7 +802,7 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "aws-load-balancer-operator", "-n", ns, "-o=jsonpath={.status.installedCSV}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(csvName).NotTo(o.BeEmpty())
-	errCheck = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+	errCheck = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 		csvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", ns, "-o=jsonpath={.status.phase}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Compare(csvState, "Succeeded") == 0 {
@@ -810,8 +810,12 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 			e2e.Logf("CSV check complete!!!")
 		}
 		return false, nil
-
 	})
+	// output entire status of CSV for debugging
+	if errCheck != nil {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", ns, "-o=jsonpath={.status}").Output()
+		e2e.Logf("The detailed output of CSV is: %v", output)
+	}
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status", csvName))
 }
 
