@@ -820,9 +820,15 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Medium-41726-Forward logs to different kafka brokers[Serial][Slow]", func() {
+			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if nodes.Items[0].Status.NodeInfo.Architecture == "arm64" {
+				g.Skip("Current platform not supported/resources not available for this test!")
+			}
+
 			g.By("create log producer")
 			appProj := oc.Namespace()
-			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("subscribe AMQ kafka into 2 different namespaces")
