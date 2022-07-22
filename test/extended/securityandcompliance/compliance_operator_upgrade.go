@@ -53,6 +53,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Pre-check and post-check f
 		)
 
 		g.BeforeEach(func() {
+			g.By("Skip test for arm64 !!!")
+			exutil.SkipARM64(oc)
+
 			g.By("Check csv and pods for ns1 !!!")
 			rsCsvName := getResourceNameWithKeywordForNamespace(oc, "csv", "compliance-operator", ns1)
 			newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", rsCsvName, "-n", ns1,

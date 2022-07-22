@@ -149,6 +149,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("Author:pdhamdhe-Critical-34378-Install the Compliance Operator through olm using CatalogSource and Subscription", func() {
+		g.By("Skip test for arm64 !!!")
+		exutil.SkipARM64(oc)
 
 		var itName = g.CurrentGinkgoTestDescription().TestText
 		oc.SetupProject()
@@ -199,6 +201,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		var itName string
 
 		g.BeforeEach(func() {
+			g.By("Skip test for arm64 !!!")
+			exutil.SkipARM64(oc)
+
 			oc.SetupProject()
 			ogD.namespace = oc.Namespace()
 			subD.namespace = oc.Namespace()

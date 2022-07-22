@@ -31,6 +31,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	)
 
 	g.BeforeEach(func() {
+		g.By("Skip test for arm64 !!!")
+		exutil.SkipARM64(oc)
+
 		buildPruningBaseDir = exutil.FixturePath("testdata", "securityandcompliance")
 		ogSingleTemplate = filepath.Join(buildPruningBaseDir, "operator-group.yaml")
 		subTemplate = filepath.Join(buildPruningBaseDir, "subscription.yaml")

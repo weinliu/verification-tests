@@ -22,6 +22,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Pre-check and post-check f
 	)
 
 	g.Context("When the file-integrity-operator is installed", func() {
+		g.By("Skip test for arm64 !!!")
+		exutil.SkipARM64(oc)
+
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "securityandcompliance")
 			fioTemplate         = filepath.Join(buildPruningBaseDir, "fileintegrity.yaml")
