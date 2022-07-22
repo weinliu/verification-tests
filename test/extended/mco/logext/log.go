@@ -1,4 +1,4 @@
-package mco
+package logext
 
 /*
   author: rioliu@redhat.com
@@ -19,14 +19,16 @@ const (
 	EnableDebugLog = "GINKGO_TEST_ENABLE_DEBUG_LOG"
 )
 
-// LogWrapper wrapper interface for zerolog
-type LogWrapper struct {
+// logWrapper wrapper interface for zerolog
+type logWrapper struct {
 	log zerolog.Logger
 }
 
+var logger *logWrapper = newLogger()
+
 // NewLogger initialize log wrapper with zerolog logger
 // default log level is INFO, user can enable debug logging by env variable GINKGO_TEST_ENABLE_DEBUG_LOG
-func NewLogger() *LogWrapper {
+func newLogger() *logWrapper {
 
 	// customize time field format to sync with e2e framework
 	zerolog.TimeFieldFormat = time.StampMilli
@@ -40,7 +42,7 @@ func NewLogger() *LogWrapper {
 	output.FormatTimestamp = func(i interface{}) string {
 		return fmt.Sprintf("%s:", i)
 	}
-	logger := &LogWrapper{log: zerolog.New(output).With().Timestamp().Logger()}
+	logger := &logWrapper{log: zerolog.New(output).With().Timestamp().Logger()}
 	// set default log level to INFO
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	// if system env var is defined, enable debug logging
@@ -52,16 +54,16 @@ func NewLogger() *LogWrapper {
 }
 
 // Infof log info level message
-func (lw *LogWrapper) Infof(format string, v ...interface{}) {
-	lw.log.Info().Msgf(format, v...)
+func Infof(format string, v ...interface{}) {
+	logger.log.Info().Msgf(format, v...)
 }
 
 // Debugf log debug level message
-func (lw *LogWrapper) Debugf(format string, v ...interface{}) {
-	lw.log.Debug().Msgf(format, v...)
+func Debugf(format string, v ...interface{}) {
+	logger.log.Debug().Msgf(format, v...)
 }
 
 // Errorf log error level message
-func (lw *LogWrapper) Errorf(format string, v ...interface{}) {
-	lw.log.Error().Msgf(format, v...)
+func Errorf(format string, v ...interface{}) {
+	logger.log.Error().Msgf(format, v...)
 }

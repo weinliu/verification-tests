@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -1121,28 +1122,40 @@ nulla pariatur.`
 		g.By("Validate openshift-machine-config-operator run level")
 		mcoNs := NewResource(oc.AsAdmin(), "ns", "openshift-machine-config-operator")
 		runLevel := mcoNs.GetOrFail(`{.metadata.labels.openshift\.io/run-level}`)
-		o.Expect(runLevel).To(o.Equal(""))
+
+		logger.Debugf("Namespace defintion:\n%s", mcoNs.PrettyString())
+		o.Expect(runLevel).To(o.Equal(""), `openshift-machine-config-operator namespace should have run-level annotation equal to ""`)
 
 		g.By("Validate machine-config-operator SCC")
 		podsList := NewNamespacedResourceList(oc.AsAdmin(), "pods", mcoNs.name)
 		podsList.ByLabel("k8s-app=machine-config-operator")
 		mcoPods, err := podsList.GetAll()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		logger.Infof("Validating that there is only one machine-config-operator pod")
 		o.Expect(mcoPods).To(o.HaveLen(1))
 		mcoPod := mcoPods[0]
 		scc := mcoPod.GetOrFail(`{.metadata.annotations.openshift\.io/scc}`)
+
+		logger.Infof("Validating that the operator pod has the right SCC")
+		logger.Debugf("Machine-config-operator pod defintion:\n%s", mcoPod.PrettyString())
 		// on baremetal cluster, value of openshift.io/scc is nfs-provisioner, on AWS cluster it is hostmount-anyuid
-		o.Expect(scc).Should(o.SatisfyAny(o.Equal("hostmount-anyuid"), o.Equal("nfs-provisioner")))
+		o.Expect(scc).Should(o.SatisfyAny(o.Equal("hostmount-anyuid"), o.Equal("nfs-provisioner")),
+			`machine-config-operator pod is not using the right SCC`)
 
 		g.By("Validate machine-config-daemon clusterrole")
 		mcdCR := NewResource(oc.AsAdmin(), "clusterrole", "machine-config-daemon")
 		mcdRules := mcdCR.GetOrFail(`{.rules[?(@.apiGroups[0]=="security.openshift.io")]}`)
-		o.Expect(mcdRules).Should(o.ContainSubstring("privileged"))
+
+		logger.Debugf("Machine-config-operator clusterrole defintion:\n%s", mcdCR.PrettyString())
+		o.Expect(mcdRules).Should(o.ContainSubstring("privileged"),
+			`machine-config-daemon clusterrole has not the right configuration for ApiGroup "security.openshift.io"`)
 
 		g.By("Validate machine-config-server clusterrole")
 		mcsCR := NewResource(oc.AsAdmin(), "clusterrole", "machine-config-server")
 		mcsRules := mcsCR.GetOrFail(`{.rules[?(@.apiGroups[0]=="security.openshift.io")]}`)
-		o.Expect(mcsRules).Should(o.ContainSubstring("hostnetwork"))
+		logger.Debugf("Machine-config-server clusterrole defintion:\n%s", mcdCR.PrettyString())
+		o.Expect(mcsRules).Should(o.ContainSubstring("hostnetwork"),
+			`machine-config-server clusterrole has not the right configuration for ApiGroup "security.openshift.io"`)
 
 	})
 	g.It("Author:sregidor-Longduration-NonPreRelease-High-46434-Mask service [Serial]", func() {

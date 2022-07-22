@@ -1,6 +1,7 @@
 package mco
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -39,6 +40,7 @@ type ResourceInterface interface {
 	Patch(patchType string, patch string) error
 	GetAnnotationOrFail(annotation string) string
 	GetConditionByType(ctype string) string
+	PrettyString() string
 }
 
 // Resource will provide the functionality to hanlde general openshift resources
@@ -182,6 +184,26 @@ func (r *Resource) GetAnnotationOrFail(annotation string) string {
 // GetConditionByType returns the status.condition matching the given type
 func (r *Resource) GetConditionByType(ctype string) string {
 	return r.GetOrFail(`{.status.conditions[?(@.type=="` + ctype + `")]}`)
+}
+
+// PrettyString returns an indented json string with the definition of the resource
+func (r *Resource) PrettyString() string {
+	definition, dErr := r.Get(`{}`)
+	if dErr != nil {
+		return dErr.Error()
+	}
+
+	var data interface{}
+	if err := json.Unmarshal([]byte(definition), &data); err != nil {
+		return err.Error()
+	}
+
+	formattedDefinition, err := json.MarshalIndent(data, "", "    ")
+	if err != nil {
+		return err.Error()
+	}
+	return string(formattedDefinition)
+
 }
 
 // NewMCOTemplate creates a new template using the MCO fixture directory as the base path of the template file
