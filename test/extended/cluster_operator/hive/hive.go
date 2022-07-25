@@ -2489,6 +2489,34 @@ spec:
 
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "41932"|./bin/extended-platform-tests run --timeout 15m -f -
+	g.It("NonPreRelease-ConnectedOnly-Author:lwan-Medium-41932-Add metric for hive-operator[Serial]", func() {
+		g.By("Create PodMonitor for HiveConfig...")
+		podMonitorYaml := filepath.Join(testDataDir, "hive-operator-podmonitor.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", podMonitorYaml, "--ignore-not-found").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", podMonitorYaml).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check hive-operator metrics can be query from promethues")
+		token, err := exutil.GetSAToken(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(token).NotTo(o.BeEmpty())
+		query1 := "hive_operator_reconcile_seconds_sum"
+		query2 := "hive_operator_reconcile_seconds_count"
+		query3 := "hive_operator_reconcile_seconds_bucket"
+		query4 := "hive_hiveconfig_conditions"
+		query := []string{query1, query2, query3, query4}
+		checkMetricExist(oc, ok, token, prometheusURL, query)
+
+		g.By("Check HiveConfig status from Metric...")
+		expectedType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HiveConfig", "hive", "-o=jsonpath={.status.conditions[0].type}").Output()
+		expectedReason, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HiveConfig", "hive", "-o=jsonpath={.status.conditions[0].reason}").Output()
+		checkHiveConfigMetric(oc, "condition", expectedType, token, prometheusURL, query4)
+		checkHiveConfigMetric(oc, "reason", expectedReason, token, prometheusURL, query4)
+	})
+
+	//author: lwan@redhat.com
+	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "45279"|./bin/extended-platform-tests run --timeout 15m -f -
 	g.It("NonPreRelease-ConnectedOnly-Author:lwan-Medium-45279-Test Metric for ClusterClaim[Serial]", func() {
 		if iaasPlatform != "gcp" {

@@ -253,6 +253,8 @@ type prometheusQueryResult struct {
 				Name                 string `json:"__name__"`
 				ClusterpoolName      string `json:"clusterpool_name"`
 				ClusterpoolNamespace string `json:"clusterpool_namespace"`
+				Condition            string `json:"condition"`
+				Reason               string `json:"reason"`
 				Endpoint             string `json:"endpoint"`
 				Instance             string `json:"instance"`
 				Job                  string `json:"job"`
@@ -931,6 +933,29 @@ func checkClusterPoolMetricValue(oc *exutil.CLI, poolName, poolNamespace string,
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "\"checkClusterPoolMetricValue\" fail, can not get expected result")
+}
+
+func checkHiveConfigMetric(oc *exutil.CLI, field string, expectedResult string, token string, url string, query string) {
+	err := wait.Poll(1*time.Minute, (ClusterResumeTimeout/60)*time.Minute, func() (bool, error) {
+		data := doPrometheusQuery(oc, token, url, query)
+		switch field {
+		case "condition":
+			if data.Data.Result[0].Metric.Condition == expectedResult {
+				e2e.Logf("the Metric %s field \"%s\" matched the expected result \"%s\"", query, field, expectedResult)
+				return true, nil
+			}
+		case "reason":
+			if data.Data.Result[0].Metric.Reason == expectedResult {
+				e2e.Logf("the Metric %s field \"%s\" matched the expected result \"%s\"", query, field, expectedResult)
+				return true, nil
+			}
+		default:
+			e2e.Logf("the Metric %s doesn't contain field %s", query, field)
+			return false, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "\"checkHiveConfigMetric\" fail, can not get expected result")
 }
 
 func createCD(testDataDir string, testOCPImage string, oc *exutil.CLI, ns string, installConfigSecret interface{}, cd interface{}) {
