@@ -2705,4 +2705,167 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/kube-rbac-proxy@sha256:"))
 		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/memcached-operator@sha256:"))
 	})
+
+	// author: jfan@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:jfan-High-44550-SDK-support ansible type operator for http_proxy env", func() {
+		if os.Getenv("HTTP_PROXY") == "" && os.Getenv("http_proxy") == "" {
+			g.Skip("HTTP_PROXY is empty - skipping test ...")
+		}
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture != "amd64" && architecture != "arm64" {
+			g.Skip("Do not support " + architecture)
+		}
+		tmpBasePath := "/tmp/ocp-44550-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-44550")
+		err := os.MkdirAll(tmpPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
+		nsOperator := "memcached-operator-44550-system"
+		imageTag := "quay.io/olmqe/memcached-operator:44550-" + getRandomString()
+		dataPath := "test/extended/util/operatorsdk/ocp-44550-data/"
+		crFilePath := filepath.Join(dataPath, "cache_v1_memcached44550.yaml")
+		quayCLI := container.NewQuayCLI()
+		defer quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
+
+		defer func() {
+			_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", crFilePath, "-n", nsOperator).Output()
+			g.By("step: undeploy")
+			_, err = makeCLI.Run("undeploy").Args().Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("step: init Ansible Based Operator")
+		output, err := operatorsdkCLI.Run("init").Args("--plugins=ansible", "--domain", "example.com").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Next"))
+
+		g.By("step: Create API.")
+		output, err = operatorsdkCLI.Run("create").Args("api", "--group", "cache", "--version", "v1", "--kind", "Memcached44550", "--generate-role").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Writing kustomize manifests"))
+
+		g.By("step: modify files to get the quay.io/olmqe images.")
+		// copy task main.yml
+		err = copy(filepath.Join(dataPath, "main.yml"), filepath.Join(tmpPath, "roles", "memcached44550", "tasks", "main.yml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// copy manager.yaml
+		err = copy(filepath.Join(dataPath, "manager.yaml"), filepath.Join(tmpPath, "config", "manager", "manager.yaml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// update the Makefile
+		makefileFilePath := filepath.Join(tmpPath, "Makefile")
+		replaceContent(makefileFilePath, "controller:latest", imageTag)
+		replaceContent(makefileFilePath, "build config/default | kubectl apply -f -", "build config/default | CLUSTER_PROXY=$(shell kubectl get proxies.config.openshift.io cluster  -o json | jq '.spec.httpProxy') envsubst | kubectl apply -f -")
+		// update the Dockerfile
+		dockerFile := filepath.Join(tmpPath, "Dockerfile")
+		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
+		replaceContent(dockerFile, "install -r ${HOME}/requirements.yml", "install -r ${HOME}/requirements.yml --force")
+		// update the rbac file
+		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+
+		g.By("step: Build and push the operator image")
+		tokenDir := "/tmp/ocp-44550" + getRandomString()
+		err = os.MkdirAll(tokenDir, os.ModePerm)
+		defer os.RemoveAll(tokenDir)
+		if err != nil {
+			e2e.Failf("fail to create the token folder:%s", tokenDir)
+		}
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", tokenDir), "--confirm").Output()
+		if err != nil {
+			e2e.Failf("Fail to get the cluster auth %v", err)
+		}
+		switch architecture {
+		case "amd64":
+			podmanCLI := container.NewPodmanCLI()
+			podmanCLI.ExecCommandPath = tmpPath
+			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "amd64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("Successfully"))
+			output, err = podmanCLI.Run("push").Args(imageTag).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+		case "arm64":
+			podmanCLI := container.NewPodmanCLI()
+			podmanCLI.ExecCommandPath = tmpPath
+			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "arm64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("Successfully"))
+			output, err = podmanCLI.Run("push").Args(imageTag).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+		}
+
+		g.By("step: Install the CRD")
+		output, err = makeCLI.Run("install").Args().Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("memcached44550s.cache.example.com"))
+
+		g.By("step: Deploy the operator")
+		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("deployment.apps/memcached-operator-44550-controller-manager"))
+
+		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lines := strings.Split(podList, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "memcached-operator-44550-controller-manager") {
+					e2e.Logf("found pod memcached-operator-44550-controller-manager")
+					if strings.Contains(line, "Running") {
+						e2e.Logf("the status of pod memcached-operator-44550-controller-manager is Running")
+						return true, nil
+					}
+					e2e.Logf("the status of pod memcached-operator-44550-controller-manager is not Running")
+					return false, nil
+				}
+			}
+			return false, nil
+		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached-operator-44550-controller-manager in project %s", nsOperator))
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/memcached-operator-44550-controller-manager", "-c", "manager", "-n", nsOperator).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(msg, "Starting workers") {
+			e2e.Failf("Starting workers failed")
+		}
+
+		g.By("step: Create the resource")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", nsOperator).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(msg, "memcached44550-sample-ansiblehttp") {
+				e2e.Logf("found pod memcached44550-sample-ansiblehttp")
+				return true, nil
+			}
+			return false, nil
+		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached44550-sample in project %s", nsOperator))
+
+		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			proxyMsg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxies.config.openshift.io", "cluster", "-o=jsonpath={.spec.httpProxy}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/memcached44550-sample-ansiblehttp", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(msg).To(o.ContainSubstring("HTTP_PROXY:  " + proxyMsg))
+			if strings.Contains(msg, "3 desired | 3 updated | 3 total | 3 available | 0 unavailable") {
+				e2e.Logf("deployment/memcach44550-sample is created successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events")
+		}
+		exutil.AssertWaitPollNoErr(waitErr, "the status of deployment/memcached44550-sample-ansiblehttp is wrong")
+	})
 })
