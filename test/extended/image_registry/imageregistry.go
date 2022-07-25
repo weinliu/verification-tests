@@ -601,7 +601,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Tag the image point to itself address")
-		err = oc.WithoutNamespace().AsAdmin().Run("tag").Args(userroute+"/"+oc.Namespace()+"/myimage", "myimage:test", "--insecure=true", "-n", oc.Namespace()).Execute()
+		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("myimage:test", "--from="+userroute+"/"+oc.Namespace()+"/myimage", "--insecure=true", "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "test")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1755,8 +1755,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		createSimpleRunPod(oc, "test-51055:latest", expectInfo)
 		output, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args("deploy/image-registry", "--since=30s", "-n", "openshift-image-registry").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("unable to pullthrough manifest"))
-		o.Expect(output).To(o.ContainSubstring("err.code=toomanyrequests"))
+		if !strings.Contains(output, "err.code=toomanyrequests") && !strings.Contains(output, "got 429 Too Many Requests") {
+			e2e.Failf("Image registry doesn't respect 429 error")
+		}
 	})
 
 	// author: jitli@redhat.com
