@@ -8851,17 +8851,19 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 			}
 		)
 
-		defer p1.delete(oc)
-		defer p2.delete(oc)
 		//oc.TeardownProject()
 		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		p1.targetNamespace = oc.Namespace()
 		p2.targetNamespace = oc.Namespace()
 		og.namespace = oc.Namespace()
 		g.By("Create new projects and label them")
-		p1.create(oc, itName, dr)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", p1.name, "--ignore-not-found").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", p1.name).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		p1.label(oc, "test-og-label-1651")
-		p2.create(oc, itName, dr)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", p2.name, "--ignore-not-found").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", p2.name).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		p2.label(oc, "test-og-label-1651")
 
 		g.By("Create og and check the label")
