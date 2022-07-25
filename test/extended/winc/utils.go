@@ -179,7 +179,7 @@ func getWindowsNodesUptime(oc *exutil.CLI, privateKey string, iaasPlatform strin
 	for _, winhost := range winInternalIP {
 		uptime, err := runPSCommand(bastionHost, winhost, "Get-CimInstance -ClassName Win32_OperatingSystem | Select LastBootUpTime", privateKey, iaasPlatform)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		winUptime[winhost], err = time.Parse(layout, strings.TrimSpace(strings.Split(uptime, "\r\n")[4]))
+		winUptime[winhost], err = time.Parse(layout, strings.TrimSpace(strings.Split(uptime, "\r\n--------------")[1]))
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 

@@ -951,7 +951,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 				// Check that the kubelet client CA is included in bundleContent variable
 				// We need to split bundleContent by \r\n as it contains both Stdout and Stderr
 				// and we are just interested on the Stdout
-				if strings.Contains(strings.Split(bundleContent, "\r\n")[1], kubeletCAFormatted) {
+				if strings.Contains(strings.Split(bundleContent, "\r\n-----BEGIN CERTIFICATE-----")[1], kubeletCAFormatted) {
 					return true, nil
 				}
 				e2e.Logf("kubelet CA not found in Windows worker node bundle %v. Retrying...", winhost)
