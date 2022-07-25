@@ -430,15 +430,20 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	// author: heli@redhat.com
 	g.It("Author:heli-Critical-46711-Test HCP components to use service account tokens", func() {
 		g.By("hypershift OCP-46711-Test HCP components to use service account tokens")
-		secrets := []string{
-			//capi secret
-			guestClusterName + "-node-mgmt-creds",
-			//controlplaneoperator Secret
-			guestClusterName + "-cpo-creds",
-			//kubeapiSecret
-			guestClusterName + "-cloud-ctrl-creds",
-		}
 
+		//get capi-provider secret
+		apiPattern := `-ojsonpath={.spec.template.spec.volumes[?(@.name=="credentials")].secret.secretName}`
+		apiSecret := doOcpReq(oc, OcpGet, true, []string{"deploy", "capi-provider", "-n", guestClusterNamespace, apiPattern})
+
+		//get control plane operator secret
+		cpoPattern := `-ojsonpath={.spec.template.spec.volumes[?(@.name=="provider-creds")].secret.secretName}`
+		cpoSecret := doOcpReq(oc, OcpGet, true, []string{"deploy", "control-plane-operator", "-n", guestClusterNamespace, cpoPattern})
+
+		//get kube-apiserver secret
+		kubeAPIPattern := `-ojsonpath={.spec.template.spec.volumes[?(@.name=="cloud-creds")].secret.secretName}`
+		kubeAPISecret := doOcpReq(oc, OcpGet, true, []string{"deploy", "kube-apiserver", "-n", guestClusterNamespace, kubeAPIPattern})
+
+		secrets := []string{apiSecret, cpoSecret, kubeAPISecret}
 		for _, sec := range secrets {
 			cre := doOcpReq(oc, OcpGet, true, []string{"secret", sec, "-n", guestClusterNamespace, "-ojsonpath={.data.credentials}"})
 			roleInfo, err := base64.StdEncoding.DecodeString(cre)
