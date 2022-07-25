@@ -9298,14 +9298,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		}
 
 		g.By("check alert has been raised")
-		alerts := []string{"CommunityOperatorsCatalogError", "CertifiedOperatorsCatalogError", "RedhatOperatorsCatalogError", "RedhatMarketplaceCatalogError"}
+		alerts := []string{"redhat-marketplace", "certified-operators", "community-operators", "redhat-operators"}
 		token, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "prometheus-k8s", "-n", "openshift-monitoring", "-o=jsonpath={.spec.host}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = wait.Poll(60*time.Second, 600*time.Second, func() (bool, error) {
 			for _, alertString := range alerts {
-				alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"%s\")'", token, url, alertString)
+				alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"OperatorHubSourceError\" and .labels.name == \"%s\")'", token, url, alertString)
 				output, err := exec.Command("bash", "-c", alertCMD).Output()
 				if err != nil {
 					e2e.Logf("Error retrieving prometheus alert metrics: %v, retry ...", err)
@@ -9317,7 +9317,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 				}
 				if !strings.Contains(string(output), "firing") && !strings.Contains(string(output), "pending") {
 					e2e.Logf(string(output))
-					return false, fmt.Errorf("alert state is not firing or pending")
+					return false, fmt.Errorf(" %s alert state is not firing or pending", alertString)
 				}
 			}
 			return true, nil
