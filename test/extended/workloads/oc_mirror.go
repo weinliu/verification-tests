@@ -57,8 +57,6 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			"businessautomation-operator",
 			"cincinnati-operator",
 			"cluster-logging",
-			"codeready-workspaces",
-			"codeready-workspaces2",
 			"compliance-operator",
 			"container-security-operator",
 			"costmanagement-metrics-operator",
