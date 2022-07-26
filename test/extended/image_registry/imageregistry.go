@@ -324,7 +324,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("Author:wewang-Medium-27985-Image with invalid resource name can be pruned", func() {
+	g.It("Author:wewang-Medium-27985-Image with invalid resource name can be pruned [Disruptive]", func() {
 		//When registry configured pvc or emptryDir, the replicas is 1 and with recreate pod policy.
 		//This is not suitable for the defer recoverage. Only run this case on cloud storage.
 		platforms := map[string]bool{
@@ -1714,9 +1714,16 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(token).NotTo(o.BeEmpty())
 		cmd = "curl -Lks -u " + oc.Username() + ":" + token + " -I HEAD https://" + regRoute + "/v2/" + oc.Namespace() + "/test-49455/blobs/" + string(imageblob)
-		curlOutput, err := exec.Command("bash", "-c", cmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(string(curlOutput)).To(o.ContainSubstring(storageclient))
+		err = wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
+			curlOutput, err := exec.Command("bash", "-c", cmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(string(curlOutput), storageclient) {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "The disableRedirect doesn't work")
+
 	})
 
 	// author: xiuwang@redhat.com
