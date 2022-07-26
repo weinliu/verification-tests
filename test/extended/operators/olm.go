@@ -3469,18 +3469,20 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			singleNamespace:        true,
 			template:               Sub,
 		}
-		defer sub.delete(itName, dr)
-		defer sub.deleteCSV(itName, dr)
 		sub.create(oc, itName, dr)
 
 		e2e.Logf("Check operator")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
+		e2e.Logf("Check install plan complete")
+		installPlan := sub.getIP(oc)
+		o.Expect(installPlan).NotTo(o.BeEmpty())
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Complete", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+
 		e2e.Logf("Check event in failed")
 		eventOutput, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", namespace).Output()
 		o.Expect(err1).NotTo(o.HaveOccurred())
 		o.Expect(eventOutput).NotTo(o.ContainSubstring("Failed"))
-
 	})
 
 	// author: scolange@redhat.com
