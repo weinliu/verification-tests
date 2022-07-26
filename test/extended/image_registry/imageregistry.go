@@ -44,6 +44,15 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		imageRegistryBaseDir = exutil.FixturePath("testdata", "image_registry")
 		requireRules         = "requiredDuringSchedulingIgnoredDuringExecution"
 	)
+
+	g.BeforeEach(func() {
+		registryDegrade := checkRegistryDegraded(oc)
+		if registryDegrade {
+			message, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].message}").Output()
+			e2e.Failf("Image registry is degraded with info %s", message)
+		}
+	})
+
 	// author: wewang@redhat.com
 	g.It("Author:wewang-High-39027-Check AWS secret and access key with an OpenShift installed in a regular way", func() {
 		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
@@ -1758,7 +1767,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Create pod with the imagestream")
 		err = oc.Run("set").Args("image-lookup", "test-51055", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		expectInfo := "429 Too Many Requests"
+		expectInfo := "Failed to pull image"
 		createSimpleRunPod(oc, "test-51055:latest", expectInfo)
 		output, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args("deploy/image-registry", "--since=30s", "-n", "openshift-image-registry").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
