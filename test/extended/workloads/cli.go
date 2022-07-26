@@ -91,7 +91,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-High-43032-oc adm release mirror generating correct imageContentSources when using --to and --to-release-image [Slow]", func() {
+	g.It("Longduration-NonPreRelease-Author:yinzhou-High-43032-oc adm release mirror generating correct imageContentSources when using --to and --to-release-image [Slow]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		podMirrorT := filepath.Join(buildPruningBaseDir, "pod_mirror.yaml")
 		g.By("create new namespace")
