@@ -54,4 +54,38 @@ export class OCCli {
             })
         }
     }
+
+    create_project(name: string): void {
+        cy.exec(`oc new-project ${name}`).then(result => {
+            expect(result.stderr).to.be.empty
+        })
+    }
+
+    apply_manifest(manifest: Object): void {
+        let cmd = `echo '${JSON.stringify(manifest)}' | oc create -f -`
+        cy.exec(cmd).then(result => {
+            expect(result.stderr).to.be.empty
+        })
+    }
+
+    wait_pod_ready(label: string, namespace: string): void {
+        let cmd = `oc wait --timeout=180s --for=condition=ready pod -l ${label} -n ${namespace}`
+        cy.exec(cmd).then(result => {
+            expect(result.stderr).to.be.empty
+        })
+    }
+
+    delete_project(name: string): void {
+        let cmd = `oc delete project ${name}`
+        cy.exec(cmd).then(result => {
+            expect(result.stderr).to.be.empty
+        })
+    }
+
+    delete_resources(manifest: Object): void {
+        let cmd = `echo '${JSON.stringify(manifest)}' | oc delete -f -`
+        cy.exec(cmd).then(result => {
+            expect(result.stderr).to.be.empty
+        })
+    }
 }
