@@ -6431,7 +6431,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-25644, author: tbuskey@redhat.com
-	g.It("Author:bandrade-Medium-25644-OLM collect CSV health per version", func() {
+	g.It("ConnectedOnly-Author:bandrade-Medium-25644-OLM collect CSV health per version", func() {
 		exutil.SkipARM64(oc)
 		var err error
 		var (
