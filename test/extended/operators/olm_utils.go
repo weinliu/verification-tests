@@ -206,10 +206,8 @@ func (sub *subscriptionDescription) findInstalledCSV(oc *exutil.CLI, itName stri
 		return false, nil
 	})
 	if err != nil {
-		output := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o", "yaml")
-		e2e.Logf(output)
-		output = getResource(oc, asAdmin, withoutNamespace, "pod", "-n", sub.catalogSourceNamespace)
-		e2e.Logf(output)
+		getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath-as-json={.status}")
+		getResource(oc, asAdmin, withoutNamespace, "pod", "-n", sub.catalogSourceNamespace)
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("sub %s stat is not AtLatestKnown", sub.subName))
 
