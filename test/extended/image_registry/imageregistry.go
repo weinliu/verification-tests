@@ -1752,7 +1752,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Push image to the limit registry")
 		myimage := regRoute + "/" + oc.Namespace() + "/myimage:latest"
-		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", myimage, "--insecure", "--keep-manifest-list=true", "--filter-by-os=.*").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:fc01c814423a9fe24a0de038595eb6ed46dea56c7479ac24396ed4660ed91b1f", myimage, "--insecure", "--keep-manifest-list=true", "--filter-by-os=.*").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("import-image").Args("test-51055", "--from", myimage, "--confirm", "--reference-policy=local", "--insecure").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
