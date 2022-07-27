@@ -1274,6 +1274,9 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 	})
 
 	g.It("Author:xzha-ConnectedOnly-Medium-43756-resolve and mirror dependencies automatically", func() {
+		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
+			g.Skip("HTTP_PROXY is not empty - skipping test ...")
+		}
 		imagetag1 := "quay.io/olmqe/community-operator-index:43756-1"
 		imagetag2 := "quay.io/olmqe/community-operator-index:43756-2"
 		imagetag3 := "quay.io/olmqe/community-operator-index:43756-3-dc"
