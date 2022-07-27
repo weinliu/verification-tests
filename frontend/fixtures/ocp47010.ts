@@ -1,0 +1,12 @@
+export const tlssecret = {
+    "apiVersion": "v1",
+    "kind": "Secret",
+    "metadata": {
+      "name": "tlssecret"
+    },
+    "type": "kubernetes.io/tls",
+    "data": {
+      "tls.crt": "QUFBCg==",
+      "tls.key": "QkJCCg=="
+    }
+} 
