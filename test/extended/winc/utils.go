@@ -210,19 +210,27 @@ func checkWorkloadCreated(oc *exutil.CLI, deploymentName string, namespace strin
 	return true
 }
 
-func createWindowsWorkload(oc *exutil.CLI, namespace string, workloadFile string, containerImage string) {
+/* replacement contains a slice with string to replace (as written in the template, for example:
+   <windows_container_image>) and the value to be replaced by. Example:
+   var toReplace map[string]string = map[string]string{
+		"<windows_container_image>": "mcr.microsoft.com/windows/servercore:ltsc2019",
+		"<kernelID>": "k3Rn3L-1d"
+*/
+func createWindowsWorkload(oc *exutil.CLI, namespace string, workloadFile string, replacement map[string]string) {
 	windowsWebServer := getFileContent("winc", workloadFile)
-	windowsWebServer = strings.ReplaceAll(windowsWebServer, "<windows_container_image>", containerImage)
+	for rep, value := range replacement {
+		windowsWebServer = strings.ReplaceAll(windowsWebServer, rep, value)
+	}
 	tempFileName := namespace + "-windows-workload"
 	defer os.Remove(namespace + "-windows-workload")
 	ioutil.WriteFile(tempFileName, []byte(windowsWebServer), 0644)
 	oc.WithoutNamespace().Run("create").Args("-f", tempFileName, "-n", namespace).Output()
-	// Wait up to 30 minutes for Windows workload ready in case of Windows image is not pre-pulled
-	poolErr := wait.Poll(30*time.Second, 30*time.Minute, func() (bool, error) {
+	// Wait up to 15 minutes for Windows workload ready in case of Windows image is not pre-pulled
+	poolErr := wait.Poll(30*time.Second, 15*time.Minute, func() (bool, error) {
 		return checkWorkloadCreated(oc, "win-webserver", namespace, 1), nil
 	})
 	if poolErr != nil {
-		e2e.Failf("Windows workload is not ready after waiting up to 30 minutes ...")
+		e2e.Failf("Windows workload is not ready after waiting up to 15 minutes ...")
 	}
 }
 
@@ -330,13 +338,13 @@ func truncatedVersion(s string) string {
 	str = str[:2]
 	return strings.Join(str[:], ".")
 }
-func getMachinesetFileName(oc *exutil.CLI, iaasPlatform, winVersion string, machineSetName string, fileName string) (machinesetFileName string, err error) {
-	windowsMachineSet := ""
-	infrastructureID := ""
+func getMachinesetFileName(oc *exutil.CLI, iaasPlatform, winVersion string, machineSetName string, fileName string, imageOrder string) (machinesetFileName string, err error) {
+	infrastructureID, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+	windowsMachineSet := getFileContent("winc", fileName)
+	// imageOrder parameter stores if we request the primary or secondary image/container
+	imageID := getConfigMapData(oc, imageOrder+"_windows_image")
+
 	if iaasPlatform == "aws" {
-		windowsMachineSet = getFileContent("winc", fileName)
-		infrastructureID, err = oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
-		// TODO fetch region/zone from configmap
 		region, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		if err != nil {
 			e2e.Logf("Using default AWS region: us-east-2")
@@ -347,40 +355,27 @@ func getMachinesetFileName(oc *exutil.CLI, iaasPlatform, winVersion string, mach
 			e2e.Logf("Using default AWS zone: us-east-2a")
 			zone = "us-east-2a"
 		}
-		windowsAMI := getConfigMapData(oc, "windows_container_ami")
-		if winVersion == "20H2" {
-			windowsAMI = getConfigMapData(oc, "windows_container_ami_20H2")
-		}
+
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<name>", machineSetName)
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<infrastructureID>", infrastructureID)
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<region>", region)
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<zone>", zone)
-		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<windows_image_with_container_runtime_installed>", windowsAMI)
+		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<windows_image_with_container_runtime_installed>", imageID)
 	} else if iaasPlatform == "azure" {
-		windowsMachineSet = getFileContent("winc", fileName)
-		infrastructureID, err = oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
 		location, err := oc.WithoutNamespace().Run("get").Args("nodes", "-o=jsonpath=\"{.items[0].metadata.labels.topology\\.kubernetes\\.io\\/region}\"").Output()
 		if err != nil {
-			e2e.Logf("Using default Azure region: centralus")
-			location = "centralus"
+			e2e.Logf("Using default Azure region: southcentralus")
+			location = "southcentralus"
 		}
-		sku := "2019-Datacenter-with-Containers"
-		if winVersion == "2004" {
-			sku = "datacenter-core-2004-with-containers-smalldisk"
-		}
+
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<infrastructureID>", infrastructureID)
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<location>", location)
-		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<SKU>", sku)
+		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<SKU>", imageID)
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<name>", machineSetName)
 	} else if iaasPlatform == "vsphere" {
-		windowsMachineSet = getFileContent("winc", "vsphere_byoh_machineset.yaml")
-		template := "openshift-qe-winserver-ver-2004"
-		if winVersion == "2022" {
-			template = "openshift-qe-winserver-2022"
-		}
-		infrastructureID, err = oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<infrastructureID>", infrastructureID)
-		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<template>", template)
+		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<template>", imageID)
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<name>", machineSetName)
 	} else {
 		e2e.Failf("IAAS platform: %s is not automated yet", iaasPlatform)
@@ -425,18 +420,6 @@ func getNodeNameFromIP(oc *exutil.CLI, nodeIP string, iaasPlatform string) strin
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	return nodeName
-}
-
-func createRuntimeClass(oc *exutil.CLI, runtimeClassFile, node string) error {
-	runtimeClass := ""
-	runtimeClass = getFileContent("winc", runtimeClassFile)
-	buildID, err := getWindowsBuildID(oc, node)
-	e2e.Logf("-------- Windows build ID is " + buildID + "-----------")
-	runtimeClass = strings.ReplaceAll(runtimeClass, "<kernelID>", buildID)
-	defer os.Remove(runtimeClassFile)
-	ioutil.WriteFile(runtimeClassFile, []byte(runtimeClass), 0644)
-	_, err = oc.WithoutNamespace().Run("create").Args("-f", runtimeClassFile).Output()
-	return err
 }
 
 func checkLBConnectivity(attempts int, externalIP string) bool {
@@ -621,7 +604,7 @@ func setBYOH(oc *exutil.CLI, iaasPlatform string, addressType string, machineset
 		machinesetFileName = "vsphere_byoh_machineset.yaml"
 	}
 	// here we need to use a hardcoded machineset 'byoh' since AWS machineset name is too long.
-	MSFileName, err := getMachinesetFileName(oc, iaasPlatform, winVersion, "byoh", machinesetFileName)
+	MSFileName, err := getMachinesetFileName(oc, iaasPlatform, winVersion, "byoh", machinesetFileName, "primary")
 	defer os.Remove(MSFileName)
 	createMachineset(oc, MSFileName)
 	o.Expect(err).NotTo(o.HaveOccurred())

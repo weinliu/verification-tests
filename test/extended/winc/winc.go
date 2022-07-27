@@ -228,7 +228,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		namespace := "winc-32273"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", getConfigMapData(oc, "windows_container_image"))
+		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")})
 		externalIP, err := getExternalIP(iaasPlatform, oc, "windows", namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Load balancer takes about 3 minutes to work, set timeout as 5 minutes
@@ -248,33 +248,44 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 
 	// author rrasouli@redhat.com
 	g.It("Smokerun-Longduration-Author:rrasouli-NonPreRelease-High-37096-Schedule Windows workloads with cluster running multiple Windows OS variants [Slow][Disruptive]", func() {
-		// TODO remove skip line when more OS variants are supported
-		g.Skip("Test is not in use, no multiple OS variants supported")
+		if iaasPlatform != "azure" {
+			// Currently vSphere supports only Windows 2022 and AWS support for Windows 2022
+			// was dropped. Support for AWS will be added in the next release.
+			g.Skip("vSphere and AWS only support one operating system, skipping")
+		}
 		// we assume 2 Windows Nodes created with the default server 2019 image, here we create new server
 		namespace := "winc-37096"
-		winVersion := "20H2"
-		machinesetName := "win20h2"
-		machinesetMultiOSFileName := "aws_windows_machineset.yaml"
-		if iaasPlatform == "azure" {
-			machinesetMultiOSFileName = "azure_windows_machineset.yaml"
-		}
-		machinesetFileName, err := getMachinesetFileName(oc, iaasPlatform, winVersion, machinesetName, machinesetMultiOSFileName)
+		machinesetName := "winsecond"
+		machinesetMultiOSFileName := iaasPlatform + "_windows_machineset.yaml"
+		machinesetFileName, err := getMachinesetFileName(oc, iaasPlatform, winVersion, machinesetName, machinesetMultiOSFileName, "secondary")
 		o.Expect(err).NotTo(o.HaveOccurred())
+		// AWS Machineset has a different naming rule <infra>-<name>-worker-<zone>
+		if iaasPlatform == "aws" {
+			infrastructureID, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+			zone, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			machinesetName = infrastructureID + "-" + machinesetName + "-worker-" + zone
+		}
 		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", "openshift-machine-api").Output()
 		defer os.Remove(machinesetFileName)
 		createMachineset(oc, machinesetFileName)
-		waitForMachinesetReady(oc, machinesetName, 10, 1)
+		// here we provision 1 webservers with a runtime class ID, up to 20 minutes due to pull image on AWS
+		waitForMachinesetReady(oc, machinesetName, 20, 1)
 		// Here we fetch machine IP from machineset
 		machineIP := fetchAddress(oc, "InternalIP", machinesetName)
 		nodeName := getNodeNameFromIP(oc, machineIP[0], iaasPlatform)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		// here we update the runtime class file with the Kernel ID of multiple OS
-		defer oc.WithoutNamespace().Run("delete").Args("runtimeclass", "multiple-windows-os")
-		createRuntimeClass(oc, "runtime-class.yaml", nodeName)
-		// here we provision 1 webservers with a runtime class ID, up to 20 minutes due to pull image on AWS
+
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_webserver_runtime_class.yaml", getConfigMapData(oc, "windows_container_ami_20H2"))
+
+		buildID, err := getWindowsBuildID(oc, nodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		replacement := map[string]string{
+			"<windows_container_image>": getConfigMapData(oc, "secondary_windows_container_image"),
+			"<kernelID>":                buildID,
+		}
+		createWindowsWorkload(oc, namespace, "windows_webserver_secondary_os.yaml", replacement)
 		e2e.Logf("-------- Windows workload scaled on node IP %v -------------", machineIP[0])
 		e2e.Logf("-------- Scaling up workloads to 5 -------------")
 		scaleDeployment(oc, "windows", 5, namespace)
@@ -344,7 +355,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		setBYOH(oc, iaasPlatform, "InternalIP", machinesetName)
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server_byoh.yaml", getConfigMapData(oc, "windows_container_image"))
+		createWindowsWorkload(oc, namespace, "windows_web_server_byoh.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")})
 		scaleDeployment(oc, "windows", 5, namespace)
 		msg, err := oc.WithoutNamespace().Run("get").Args("pods", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -356,7 +367,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		namespace := "winc-39451"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", getConfigMapData(oc, "windows_container_image"))
+		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")})
 		createLinuxWorkload(oc, namespace)
 		g.By("Check access through clusterIP from Linux and Windows pods")
 		windowsClusterIP, err := getServiceClusterIP(oc, "windows", namespace)
@@ -441,7 +452,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		namespace := "winc-31276"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", getConfigMapData(oc, "windows_container_image"))
+		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")})
 		createLinuxWorkload(oc, namespace)
 		// we scale the deployment to 5 windows pods
 		scaleDeployment(oc, "windows", 5, namespace)
@@ -640,7 +651,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		namespace := "winc-37472"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", getConfigMapData(oc, "windows_container_image"))
+		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")})
 		windowsHostName := getWindowsHostNames(oc)[0]
 		oc.WithoutNamespace().Run("annotate").Args("node", windowsHostName, "windowsmachineconfig.openshift.io/version-").Output()
 
@@ -790,7 +801,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create Windows Pod with Projected Volume")
-		createWindowsWorkload(oc, namespace, "windows_webserver_projected_volume.yaml", getConfigMapData(oc, "windows_container_image"))
+		createWindowsWorkload(oc, namespace, "windows_webserver_projected_volume.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")})
 		winpod, err := getWorkloadsNames(oc, "windows", namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Check in Windows pod, the projected-volume directory contains your projected sources")
