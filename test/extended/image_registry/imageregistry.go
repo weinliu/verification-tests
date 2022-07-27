@@ -1961,7 +1961,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		oc.SetupProject()
 		g.By("Import an image to create imagestream")
-		err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("--from=quay.io/openshifttest/ruby-27@sha256:cdb6a13032184468b1e0607f36cfb8834c97dbeffeeff800e9e6834323bed8fc", "--confirm=true", "ruby-test12766:latest", "-n", oc.Namespace()).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/ruby-27@sha256:cdb6a13032184468b1e0607f36cfb8834c97dbeffeeff800e9e6834323bed8fc", "ruby-test12766:latest", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "ruby-test12766", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1975,7 +1975,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(bc).To(o.ContainSubstring("openshifttest/ruby-27"))
 
 		g.By("Import an image to create imagestream with --reference-policy=local")
-		err = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("--from=quay.io/openshifttest/ruby-27@sha256:cdb6a13032184468b1e0607f36cfb8834c97dbeffeeff800e9e6834323bed8fc", "--confirm=true", "ruby-test12766-local:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/ruby-27@sha256:cdb6a13032184468b1e0607f36cfb8834c97dbeffeeff800e9e6834323bed8fc", "ruby-test12766-local:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "ruby-test12766-local", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1984,9 +1984,16 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("new-build").Args("--image-stream=ruby-test12766-local", "--code=https://github.com/sclorg/ruby-ex.git", "--name=rubyapp-12766-local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		bc, bcErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("bc", "rubyapp-12766-local", "-ojsonpath={.status.imageChangeTriggers..lastTriggeredImageID}", "-n", oc.Namespace()).Output()
-		o.Expect(bcErr).NotTo(o.HaveOccurred())
-		o.Expect(bc).To(o.ContainSubstring(oc.Namespace() + "/ruby-test12766-local"))
+		pollErr := wait.Poll(6*time.Second, 30*time.Second, func() (bool, error) {
+			bc, bcErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("bc", "rubyapp-12766-local", "-ojsonpath={.status.imageChangeTriggers..lastTriggeredImageID}", "-n", oc.Namespace()).Output()
+			o.Expect(bcErr).NotTo(o.HaveOccurred())
+			if strings.Contains(bc, oc.Namespace()+"/ruby-test12766-local") {
+				return true, nil
+			}
+			e2e.Logf("Failed to get bc with ruby-test12766-local, continue to next round")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(pollErr, "Failed to get bc with ruby-test12766-local")
 
 	})
 
