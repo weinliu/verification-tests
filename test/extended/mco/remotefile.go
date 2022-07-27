@@ -2,9 +2,10 @@ package mco
 
 import (
 	"fmt"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 	"regexp"
 	"strings"
+
+	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
 )
 
 const (
@@ -67,10 +68,10 @@ func (rf *RemoteFile) fetchTextContent() error {
 
 // PushNewPermissions modifies the remote file's permissions, setting the provided new permissions using `chmod newperm`
 func (rf *RemoteFile) PushNewPermissions(newperm string) error {
-	e2e.Logf("Push permissions %s to file %s in node %s", newperm, rf.fullPath, rf.node.GetName())
+	logger.Infof("Push permissions %s to file %s in node %s", newperm, rf.fullPath, rf.node.GetName())
 	_, err := rf.node.DebugNodeWithChroot("sh", "-c", fmt.Sprintf("chmod %s %s", newperm, rf.fullPath))
 	if err != nil {
-		e2e.Logf("Error: %s", err)
+		logger.Errorf("Error: %s", err)
 		return err
 	}
 	return nil
@@ -78,10 +79,10 @@ func (rf *RemoteFile) PushNewPermissions(newperm string) error {
 
 // PushNewTextContent modifies the remote file's content
 func (rf *RemoteFile) PushNewTextContent(newTextContent string) error {
-	e2e.Logf("Push content `%s` to file %s in node %s", newTextContent, rf.fullPath, rf.node.GetName())
+	logger.Infof("Push content `%s` to file %s in node %s", newTextContent, rf.fullPath, rf.node.GetName())
 	_, err := rf.node.DebugNodeWithChroot("sh", "-c", fmt.Sprintf("echo -n '%s' > '%s'", newTextContent, rf.fullPath))
 	if err != nil {
-		e2e.Logf("Error: %s", err)
+		logger.Errorf("Error: %s", err)
 		return err
 	}
 	return nil
@@ -189,7 +190,7 @@ func (rf RemoteFile) GetFilteredTextContent(regex string) ([]string, error) {
 	for _, line := range content {
 		match, err := regexp.MatchString(regex, line)
 		if err != nil {
-			e2e.Logf("Error filtering content lines. Error: %s", err)
+			logger.Errorf("Error filtering content lines. Error: %s", err)
 			return nil, err
 		}
 

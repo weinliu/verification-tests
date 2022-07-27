@@ -3,8 +3,8 @@ package mco
 import (
 	o "github.com/onsi/gomega"
 
+	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 // ContainerRuntimeConfig struct is used to handle ContainerRuntimeConfig resources in OCP
@@ -33,13 +33,13 @@ func (cr *ContainerRuntimeConfig) create() {
 }
 
 func (cr ContainerRuntimeConfig) waitUntilSuccess(timeout string) {
-	e2e.Logf("wait for %s to report success", cr.name)
+	logger.Infof("wait for %s to report success", cr.name)
 	o.Eventually(func() map[string]interface{} {
 		successCond := JSON(cr.GetConditionByType("Success"))
 		if successCond.Exists() {
 			return successCond.ToMap()
 		}
-		e2e.Logf("success condition not found, conditions are %s", cr.GetOrFail(`{.status.conditions}`))
+		logger.Infof("success condition not found, conditions are %s", cr.GetOrFail(`{.status.conditions}`))
 		return nil
 	},
 		timeout, "2s").Should(o.SatisfyAll(o.HaveKeyWithValue("status", "True"),
@@ -47,13 +47,13 @@ func (cr ContainerRuntimeConfig) waitUntilSuccess(timeout string) {
 }
 
 func (cr ContainerRuntimeConfig) waitUntilFailure(expectedMsg string, timeout string) {
-	e2e.Logf("wait for %s to report failure", cr.name)
+	logger.Infof("wait for %s to report failure", cr.name)
 	o.Eventually(func() map[string]interface{} {
 		failureCond := JSON(cr.GetConditionByType("Failure"))
 		if failureCond.Exists() {
 			return failureCond.ToMap()
 		}
-		e2e.Logf("Failure condition not found, conditions are %s", cr.GetOrFail(`{.status.conditions}`))
+		logger.Infof("Failure condition not found, conditions are %s", cr.GetOrFail(`{.status.conditions}`))
 		return nil
 	},
 		timeout, "2s").Should(o.SatisfyAll(o.HaveKeyWithValue("status", "False"), o.HaveKeyWithValue("message", o.ContainSubstring(expectedMsg))))

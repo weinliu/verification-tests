@@ -16,7 +16,6 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-mco] MCO", func() {
@@ -32,33 +31,33 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		for _, node := range nodes {
 			o.Expect(node.IsReady()).To(o.BeTrue(), "Node %s is not Ready. We can't continue testing.", node.GetName())
 		}
-		e2e.Logf("End Of MCO Preconditions")
+		logger.Infof("End Of MCO Preconditions")
 	})
 
 	g.It("Author:rioliu-Critical-42347-health check for machine-config-operator [Serial]", func() {
 		g.By("checking mco status")
 		co := NewResource(oc.AsAdmin(), "co", "machine-config")
 		coStatus := co.GetOrFail(`{range .status.conditions[*]}{.type}{.status}{"\n"}{end}`)
-		e2e.Logf(coStatus)
+		logger.Infof(coStatus)
 		o.Expect(coStatus).Should(o.ContainSubstring("ProgressingFalse"))
 		o.Expect(coStatus).Should(o.ContainSubstring("UpgradeableTrue"))
 		o.Expect(coStatus).Should(o.ContainSubstring("DegradedFalse"))
 		o.Expect(coStatus).Should(o.ContainSubstring("AvailableTrue"))
-		e2e.Logf("machine config operator is healthy")
+		logger.Infof("machine config operator is healthy")
 
 		g.By("checking mco pod status")
 		pod := NewNamespacedResource(oc.AsAdmin(), "pods", "openshift-machine-config-operator", "")
 		podStatus := pod.GetOrFail(`{.items[*].status.conditions[?(@.type=="Ready")].status}`)
-		e2e.Logf(podStatus)
+		logger.Infof(podStatus)
 		o.Expect(podStatus).ShouldNot(o.ContainSubstring("False"))
-		e2e.Logf("mco pods are healthy")
+		logger.Infof("mco pods are healthy")
 
 		g.By("checking mcp status")
 		mcp := NewResource(oc.AsAdmin(), "mcp", "")
 		mcpStatus := mcp.GetOrFail(`{.items[*].status.conditions[?(@.type=="Degraded")].status}`)
-		e2e.Logf(mcpStatus)
+		logger.Infof(mcpStatus)
 		o.Expect(mcpStatus).ShouldNot(o.ContainSubstring("True"))
-		e2e.Logf("mcps are not degraded")
+		logger.Infof("mcps are not degraded")
 
 	})
 
@@ -84,7 +83,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		g.By("get one worker node to verify the config changes")
 		stdout, err := workerNode.DebugNodeWithChroot("cat", "/etc/chrony.conf")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf(stdout)
+		logger.Infof(stdout)
 		o.Expect(stdout).Should(o.ContainSubstring("pool 0.rhel.pool.ntp.org iburst"))
 		o.Expect(stdout).Should(o.ContainSubstring("driftfile /var/lib/chrony/drift"))
 		o.Expect(stdout).Should(o.ContainSubstring("makestep 1.0 3"))
@@ -114,7 +113,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 				break
 			}
 		}
-		e2e.Logf("api time cost is: %f", timecost)
+		logger.Infof("api time cost is: %f", timecost)
 		o.Expect(float64(timecost)).Should(o.BeNumerically("<", 10.0))
 	})
 
@@ -160,7 +159,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Eventually(mcp.pollMachineCount(), "1m", "10s").Should(o.Equal("1"), "The pool should report 1 machine count")
 		o.Eventually(mcp.pollReadyMachineCount(), "1m", "10s").Should(o.Equal("1"), "The pool should report 1 machine ready")
 
-		e2e.Logf("Custom mcp is created successfully!")
+		logger.Infof("Custom mcp is created successfully!")
 
 		g.By("Remove custom label from the node")
 		unlabeledOutput, err := workerNode.DeleteLabel(infraLabel)
@@ -168,7 +167,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(unlabeledOutput).Should(o.ContainSubstring(workerNode.name))
 		o.Expect(workerNode.WaitForLabelRemoved(infraLabel)).Should(o.Succeed(),
 			fmt.Sprintf("Label %s has not been removed from node %s", infraLabel, workerNode.GetName()))
-		e2e.Logf("Label removed")
+		logger.Infof("Label removed")
 
 		g.By("Check custom infra label is removed from the node")
 		nodeList.ByLabel(infraLabel)
@@ -183,7 +182,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		mcpOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp/" + mcpName).Output()
 		o.Expect(err).Should(o.HaveOccurred())
 		o.Expect(mcpOut).Should(o.ContainSubstring("NotFound"))
-		e2e.Logf("Custom mcp is deleted successfully!")
+		logger.Infof("Custom mcp is deleted successfully!")
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42365-add real time kernel argument [Disruptive]", func() {
@@ -276,7 +275,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		coreOsCmdlineOut, err := coreOs.DebugNodeWithChroot("cat", "/proc/cmdline")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(coreOsCmdlineOut).Should(o.ContainSubstring("z=10"))
-		e2e.Logf("Kernel argument, kernel type and extension changes are verified on both rhcos and rhel worker nodes!")
+		logger.Infof("Kernel argument, kernel type and extension changes are verified on both rhcos and rhel worker nodes!")
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42368-add max pods to the kubelet config [Disruptive]", func() {
@@ -293,19 +292,19 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		kc.waitUntilSuccess("10s")
 		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
 		mcp.waitForComplete()
-		e2e.Logf("Kubelet config is created successfully!")
+		logger.Infof("Kubelet config is created successfully!")
 
 		g.By("Check max pods in the created kubelet config")
 		kcOut := kc.GetOrFail(`{.spec}`)
 		o.Expect(kcOut).Should(o.ContainSubstring(`"maxPods":500`))
-		e2e.Logf("Max pods are verified in the created kubelet config!")
+		logger.Infof("Max pods are verified in the created kubelet config!")
 
 		g.By("Check kubelet config in the worker node")
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		maxPods, err := workerNode.DebugNodeWithChroot("cat", "/etc/kubernetes/kubelet.conf")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(maxPods).Should(o.ContainSubstring("\"maxPods\": 500"))
-		e2e.Logf("Max pods are verified in the worker node!")
+		logger.Infof("Max pods are verified in the worker node!")
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42369-add container runtime config [Disruptive]", func() {
@@ -327,7 +326,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		cr.create()
 		mcp := NewMachineConfigPool(cr.oc.AsAdmin(), "worker")
 		mcp.waitForComplete()
-		e2e.Logf("Container runtime config is created successfully!")
+		logger.Infof("Container runtime config is created successfully!")
 
 		g.By("Check container runtime config values in the created config")
 		crOut := cr.GetOrFail(`{.spec}`)
@@ -337,7 +336,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 				o.ContainSubstring(`"logSizeMax":"-1"`),
 				o.ContainSubstring(`"pidsLimit":2048`),
 				o.ContainSubstring(`"overlaySize":"8G"`)))
-		e2e.Logf("Container runtime config values are verified in the created config!")
+		logger.Infof("Container runtime config values are verified in the created config!")
 
 		g.By("Check container runtime config values in the worker node")
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
@@ -350,7 +349,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			o.And(
 				o.ContainSubstring("log_level = \"debug\""),
 				o.ContainSubstring("pids_limit = 2048")))
-		e2e.Logf("Container runtime config values are verified in the worker node!")
+		logger.Infof("Container runtime config values are verified in the worker node!")
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42438-add journald systemd config [Disruptive]", func() {
@@ -364,13 +363,13 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		jc := MachineConfig{name: jcName, template: jcTemplate, pool: "worker", parameters: journaldConf}
 		defer jc.delete(oc)
 		jc.create(oc)
-		e2e.Logf("Journald systemd config is created successfully!")
+		logger.Infof("Journald systemd config is created successfully!")
 
 		g.By("Check journald config value in the created machine config!")
 		jcOut, err := getMachineConfigDetails(oc, jc.name)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(jcOut).Should(o.ContainSubstring(conf))
-		e2e.Logf("Journald config is verified in the created machine config!")
+		logger.Infof("Journald config is verified in the created machine config!")
 
 		g.By("Check journald config values in the worker node")
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
@@ -384,7 +383,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 				o.ContainSubstring("Storage=volatile"),
 				o.ContainSubstring("Compress=no"),
 				o.ContainSubstring("MaxRetentionSec=30s")))
-		e2e.Logf("Journald config values are verified in the worker node!")
+		logger.Infof("Journald config values are verified in the worker node!")
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-High-43405-High-50508-node drain is not needed for mirror config change in container registry. Nodes not tainted. [Disruptive]", func() {
@@ -408,7 +407,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		g.By("Check MCD logs to make sure drain is skipped")
 		podLogs, err := exutil.GetSpecificPodLogs(oc, "openshift-machine-config-operator", "machine-config-daemon", workerNode.GetMachineConfigDaemon(), "drain")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Pod logs to skip node drain :\n %v", podLogs)
+		logger.Infof("Pod logs to skip node drain :\n %v", podLogs)
 		o.Expect(podLogs).Should(
 			o.And(
 				o.ContainSubstring("/etc/containers/registries.conf: changes made are safe to skip drain"),
@@ -551,9 +550,9 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		currentSearch, sErr := registriesConf.GetFilteredTextContent("unqualified-search-registries")
 		o.Expect(sErr).ShouldNot(o.HaveOccurred())
-		e2e.Logf("Initial search configuration: %s", strings.Join(currentSearch, "\n"))
+		logger.Infof("Initial search configuration: %s", strings.Join(currentSearch, "\n"))
 
-		e2e.Logf("Adding %s registry to the initial search configuration", newSearchRegistry)
+		logger.Infof("Adding %s registry to the initial search configuration", newSearchRegistry)
 		currentConfig := registriesConf.GetTextContent()
 		// add the "quay.io" registry to the unqualified-search-registries list defined in the registries.conf file
 		// this regexp inserts `, "quay.io"` before  `]` in the unqualified-search-registries line.
@@ -576,7 +575,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		g.By("Check content of registries file to verify quay.io added to unqualified-search-registries list")
 		regOut, errDebug := workerNode.DebugNodeWithChroot("cat", registriesConfPath)
-		e2e.Logf("File content of registries conf: %v", regOut)
+		logger.Infof("File content of registries conf: %v", regOut)
 		o.Expect(errDebug).NotTo(o.HaveOccurred(), "Error executing debug command on node %s", workerNode.GetName())
 		o.Expect(regOut).Should(o.ContainSubstring(newSearchRegistry),
 			"registry %s has not been added to the %s file", newSearchRegistry, registriesConfPath)
@@ -584,7 +583,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		g.By("Check MCD logs to make sure drain is successful and pods are evicted")
 		podLogs, errLogs := exutil.GetSpecificPodLogs(oc, "openshift-machine-config-operator", "machine-config-daemon", workerNode.GetMachineConfigDaemon(), "\"evicted\\|drain\\|crio\"")
 		o.Expect(errLogs).NotTo(o.HaveOccurred(), "Error getting logs from node %s", workerNode.GetName())
-		e2e.Logf("Pod logs for node drain, pods evicted and crio service reload :\n %v", podLogs)
+		logger.Infof("Pod logs for node drain, pods evicted and crio service reload :\n %v", podLogs)
 		// get clusterversion
 		cv, _, cvErr := exutil.GetClusterVersion(oc)
 		o.Expect(cvErr).NotTo(o.HaveOccurred())
@@ -604,7 +603,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		}
 		// check whether crio.service is reloaded in 4.6+ env
 		if CompareVersions(cv, ">", "4.6") {
-			e2e.Logf("cluster version is > 4.6, need to check crio service is reloaded or not")
+			logger.Infof("cluster version is > 4.6, need to check crio service is reloaded or not")
 			o.Expect(podLogs).Should(o.ContainSubstring("crio config reloaded successfully"))
 		}
 
@@ -638,11 +637,11 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			updated = strings.Trim(stdouta, "'")
 			updating = strings.Trim(stdoutb, "'")
 			if erra != nil || errb != nil {
-				e2e.Logf("error occurred %v%v", erra, errb)
+				logger.Errorf("error occurred %v%v", erra, errb)
 				return false, nil
 			}
 			if updated != "" && updating != "" {
-				e2e.Logf("updated: %v, updating: %v", updated, updating)
+				logger.Infof("updated: %v, updating: %v", updated, updating)
 				return true, nil
 			}
 			return false, nil
@@ -680,8 +679,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 				renderedWorkerConf = conf
 			}
 		}
-		e2e.Logf("new rendered config generated for master: %s", renderedMasterConf)
-		e2e.Logf("new rendered config generated for worker: %s", renderedWorkerConf)
+		logger.Infof("new rendered config generated for master: %s", renderedMasterConf)
+		logger.Infof("new rendered config generated for worker: %s", renderedWorkerConf)
 
 		g.By("check logs of machine-config-daemon on master-n-worker nodes, make sure CA change is detected, drain and reboot are skipped")
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
@@ -696,18 +695,18 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(workerMcdLogErr).NotTo(o.HaveOccurred())
 		foundOnMaster := containsMultipleStrings(masterMcdLogs, expectedStringsForMaster)
 		o.Expect(foundOnMaster).Should(o.BeTrue())
-		e2e.Logf("mcd log on master node %s contains expected strings: %v", masterNode.name, expectedStringsForMaster)
+		logger.Infof("mcd log on master node %s contains expected strings: %v", masterNode.name, expectedStringsForMaster)
 		foundOnWorker := containsMultipleStrings(workerMcdLogs, expectedStringsForWorker)
 		o.Expect(foundOnWorker).Should(o.BeTrue())
-		e2e.Logf("mcd log on worker node %s contains expected strings: %v", workerNode.name, expectedStringsForWorker)
+		logger.Infof("mcd log on worker node %s contains expected strings: %v", workerNode.name, expectedStringsForWorker)
 	})
 
 	g.It("Author:rioliu-NonPreRelease-High-43085-check mcd crash-loop-back-off error in log [Serial]", func() {
 		g.By("get master and worker nodes")
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		masterNode := NewNodeList(oc).GetAllMasterNodesOrFail()[0]
-		e2e.Logf("master node %s", masterNode)
-		e2e.Logf("worker node %s", workerNode)
+		logger.Infof("master node %s", masterNode)
+		logger.Infof("worker node %s", workerNode)
 
 		g.By("check error messages in mcd logs for both master and worker nodes")
 		expectedStrings := []string{"unable to update node", "cannot apply annotation for SSH access due to"}
@@ -717,10 +716,10 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(workerMcdLogErr).NotTo(o.HaveOccurred())
 		foundOnMaster := containsMultipleStrings(masterMcdLogs, expectedStrings)
 		o.Expect(foundOnMaster).Should(o.BeFalse())
-		e2e.Logf("mcd log on master node %s does not contain error messages: %v", masterNode.name, expectedStrings)
+		logger.Infof("mcd log on master node %s does not contain error messages: %v", masterNode.name, expectedStrings)
 		foundOnWorker := containsMultipleStrings(workerMcdLogs, expectedStrings)
 		o.Expect(foundOnWorker).Should(o.BeFalse())
-		e2e.Logf("mcd log on worker node %s does not contain error messages: %v", workerNode.name, expectedStrings)
+		logger.Infof("mcd log on worker node %s does not contain error messages: %v", workerNode.name, expectedStrings)
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Medium-43245-bump initial drain sleeps down to 1min [Disruptive]", func() {
@@ -774,9 +773,9 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			return false, nil
 		})
 		o.Expect(waitErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Cannot get 'Drain failed' log lines from controller for node %s", workerNode.GetName()))
-		e2e.Logf("Drain log lines for node %s:\n %s", workerNode.GetName(), podLogs)
+		logger.Infof("Drain log lines for node %s:\n %s", workerNode.GetName(), podLogs)
 		timestamps := filterTimestampFromLogs(podLogs, 6)
-		e2e.Logf("Timestamps %s", timestamps)
+		logger.Infof("Timestamps %s", timestamps)
 		// First 5 retries should be queued every 1 minute. We check 1 min < time < 2.7 min
 		o.Expect(getTimeDifferenceInMinute(timestamps[0], timestamps[1])).Should(o.BeNumerically("<=", 2.7))
 		o.Expect(getTimeDifferenceInMinute(timestamps[0], timestamps[1])).Should(o.BeNumerically(">=", 1))
@@ -793,26 +792,26 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		_, clusterVersion, cvErr := exutil.GetClusterVersion(oc)
 		o.Expect(cvErr).NotTo(o.HaveOccurred())
 		o.Expect(clusterVersion).NotTo(o.BeEmpty())
-		e2e.Logf("cluster version is %s", clusterVersion)
+		logger.Infof("cluster version is %s", clusterVersion)
 		commitID, commitErr := getCommitID(oc, "machine-config", clusterVersion)
 		o.Expect(commitErr).NotTo(o.HaveOccurred())
 		o.Expect(commitID).NotTo(o.BeEmpty())
-		e2e.Logf("machine config commit id is %s", commitID)
+		logger.Infof("machine config commit id is %s", commitID)
 		goVersion, verErr := getGoVersion("machine-config-operator", commitID)
 		o.Expect(verErr).NotTo(o.HaveOccurred())
-		e2e.Logf("go version is: %f", goVersion)
+		logger.Infof("go version is: %f", goVersion)
 		o.Expect(float64(goVersion)).Should(o.BeNumerically(">", 1.15))
 
 		g.By("verify TLS protocol version is 1.3")
 		masterNode := NewNodeList(oc).GetAllMasterNodesOrFail()[0]
 		sslOutput, sslErr := masterNode.DebugNodeWithChroot("bash", "-c", "openssl s_client -connect localhost:6443 2>&1|grep -A3 SSL-Session")
-		e2e.Logf("ssl protocol version is:\n %s", sslOutput)
+		logger.Infof("ssl protocol version is:\n %s", sslOutput)
 		o.Expect(sslErr).NotTo(o.HaveOccurred())
 		o.Expect(sslOutput).Should(o.ContainSubstring("TLSv1.3"))
 
 		g.By("verify whether the unsafe cipher is disabled")
 		cipherOutput, cipherErr := masterNode.DebugNodeWithOptions([]string{"--image=quay.io/openshifttest/testssl@sha256:b19136b96702cedf44ee68a9a6a745ce1a457f6b99b0e0baa7ac2b822415e821", "-n", "openshift-machine-config-operator"}, "testssl.sh", "--quiet", "--sweet32", "localhost:6443")
-		e2e.Logf("test ssh script output:\n %s", cipherOutput)
+		logger.Infof("test ssh script output:\n %s", cipherOutput)
 		o.Expect(cipherErr).NotTo(o.HaveOccurred())
 		o.Expect(cipherOutput).Should(o.ContainSubstring("not vulnerable (OK)"))
 	})
@@ -828,7 +827,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		token := getSATokenFromContainer(oc, "prometheus-k8s-0", "openshift-monitoring", "prometheus")
 
 		statsCmd := fmt.Sprintf("curl -s -k  -H 'Authorization: Bearer %s' https://%s:%s/metrics | grep 'mcd_' | grep -v '#'", token, clusterIP, port)
-		e2e.Logf("stats output:\n %s", statsCmd)
+		logger.Infof("stats output:\n %s", statsCmd)
 		statsOut, err := exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", statsCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(statsOut).Should(o.ContainSubstring("mcd_drain_err"))
@@ -848,7 +847,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		g.By("Check node label in mcd_state metrics")
 		stateQuery := getPrometheusQueryResults(oc, "mcd_state")
-		e2e.Logf("metrics:\n %s", stateQuery)
+		logger.Infof("metrics:\n %s", stateQuery)
 		firstMasterNode := NewNodeList(oc).GetAllMasterNodesOrFail()[0]
 		firstWorkerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		o.Expect(stateQuery).Should(o.ContainSubstring(`"node":"` + firstMasterNode.name + `"`))
@@ -858,7 +857,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	g.It("Author:sregidor-NonPreRelease-High-43726-Azure ControllerConfig Infrastructure does not match cluster Infrastructure resource [Serial]", func() {
 		g.By("Get machine-config-controller platform status.")
 		mccPlatformStatus := NewResource(oc.AsAdmin(), "controllerconfig", "machine-config-controller").GetOrFail("{.spec.infra.status.platformStatus}")
-		e2e.Logf("test mccPlatformStatus:\n %s", mccPlatformStatus)
+		logger.Infof("test mccPlatformStatus:\n %s", mccPlatformStatus)
 
 		if exutil.CheckPlatform(oc) == "azure" {
 			g.By("check cloudName field.")
@@ -874,7 +873,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		g.By("Get infrastructure platform status.")
 		infraPlatformStatus := NewResource(oc.AsAdmin(), "infrastructures", "cluster").GetOrFail("{.status.platformStatus}")
-		e2e.Logf("infraPlatformStatus:\n %s", infraPlatformStatus)
+		logger.Infof("infraPlatformStatus:\n %s", infraPlatformStatus)
 
 		g.By("Check same status in infra and machine-config-controller.")
 		o.Expect(mccPlatformStatus).To(o.Equal(infraPlatformStatus))
@@ -917,8 +916,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 				renderedWorkerConf = conf
 			}
 		}
-		e2e.Logf("New rendered config generated for master: %s", renderedMasterConf)
-		e2e.Logf("New rendered config generated for worker: %s", renderedWorkerConf)
+		logger.Infof("New rendered config generated for master: %s", renderedMasterConf)
+		logger.Infof("New rendered config generated for worker: %s", renderedWorkerConf)
 
 		g.By("Check logs of machine-config-daemon on master-n-worker nodes, make sure pull secret changes are detected, drain and reboot are skipped")
 		masterNode := NewNodeList(oc).GetAllMasterNodesOrFail()[0]
@@ -932,10 +931,10 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(workerMcdLogErr).NotTo(o.HaveOccurred())
 		foundOnMaster := containsMultipleStrings(masterMcdLogs, expectedStringsForMaster)
 		o.Expect(foundOnMaster).Should(o.BeTrue())
-		e2e.Logf("MCD log on master node %s contains expected strings: %v", masterNode.name, expectedStringsForMaster)
+		logger.Infof("MCD log on master node %s contains expected strings: %v", masterNode.name, expectedStringsForMaster)
 		foundOnWorker := containsMultipleStrings(workerMcdLogs, expectedStringsForWorker)
 		o.Expect(foundOnWorker).Should(o.BeTrue())
-		e2e.Logf("MCD log on worker node %s contains expected strings: %v", workerNode.name, expectedStringsForWorker)
+		logger.Infof("MCD log on worker node %s contains expected strings: %v", workerNode.name, expectedStringsForWorker)
 	})
 
 	g.It("Author:sregidor-NonPreRelease-High-45239-KubeletConfig has a limit of 10 per cluster [Disruptive]", func() {
@@ -951,7 +950,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		kcs, kclErr := kcList.GetAll()
 		o.Expect(kclErr).ShouldNot(o.HaveOccurred(), "Error getting existing KubeletConfig resources")
 		existingKcs := len(kcs)
-		e2e.Logf("%d existing KubeletConfigs. We need to create %d KubeletConfigs to reach the %d configs limit",
+		logger.Infof("%d existing KubeletConfigs. We need to create %d KubeletConfigs to reach the %d configs limit",
 			existingKcs, kcsLimit-existingKcs, kcsLimit)
 
 		g.By(fmt.Sprintf("Create %d kubelet config to reach the limit", kcsLimit-existingKcs))
@@ -963,7 +962,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			defer kc.DeleteOrFail()
 			kc.create()
 			createdKcs = append(createdKcs, *kc)
-			e2e.Logf("Created:\n %s", kcName)
+			logger.Infof("Created:\n %s", kcName)
 		}
 
 		g.By("Created kubeletconfigs must be successful")
@@ -1023,7 +1022,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		crs, crlErr := crList.GetAll()
 		o.Expect(crlErr).ShouldNot(o.HaveOccurred(), "Error getting existing ContainerRuntimeConfig resources")
 		existingCrs := len(crs)
-		e2e.Logf("%d existing ContainerRuntimeConfig. We need to create %d ContainerRuntimeConfigs to reach the %d configs limit",
+		logger.Infof("%d existing ContainerRuntimeConfig. We need to create %d ContainerRuntimeConfigs to reach the %d configs limit",
 			existingCrs, crsLimit-existingCrs, crsLimit)
 
 		g.By(fmt.Sprintf("Create %d container runtime configs to reach the limit", crsLimit-existingCrs))
@@ -1035,7 +1034,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			defer cr.DeleteOrFail()
 			cr.create()
 			createdCrs = append(createdCrs, *cr)
-			e2e.Logf("Created:\n %s", crName)
+			logger.Infof("Created:\n %s", crName)
 		}
 
 		g.By("Created ContainerRuntimeConfigs must be successful")
@@ -1046,7 +1045,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		g.By(fmt.Sprintf("Check that %d machine configs were created", crsLimit-existingCrs))
 		renderedCrConfigsSuffix := "worker-generated-containerruntime"
 
-		e2e.Logf("Pre function res: %v", createdCrs)
+		logger.Infof("Pre function res: %v", createdCrs)
 		verifyRenderedMcs(oc, renderedCrConfigsSuffix, createdCrs)
 
 		g.By(fmt.Sprintf("Create a new ContainerRuntimeConfig. The %dth one", crsLimit+1))
@@ -1195,9 +1194,9 @@ nulla pariatur.`
 				_, err := worker.UnmaskService(svcName)
 				// just print out unmask op result here, make sure unmask op can be executed on all the worker nodes
 				if err != nil {
-					e2e.Logf("unmask %s failed on node %s: %v", svcName, worker.name, err)
+					logger.Errorf("unmask %s failed on node %s: %v", svcName, worker.name, err)
 				} else {
-					e2e.Logf("unmask %s success on node %s", svcName, worker.name)
+					logger.Infof("unmask %s success on node %s", svcName, worker.name)
 				}
 			}
 		}()
@@ -1309,7 +1308,7 @@ nulla pariatur.`
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 		fileContent, fileErr := workerNode.DebugNodeWithChroot("cat", "/etc/containers/policy.json")
 		o.Expect(fileErr).NotTo(o.HaveOccurred())
-		e2e.Logf(fileContent)
+		logger.Infof(fileContent)
 		o.Expect(fileContent).Should(o.ContainSubstring(`{"default": [{"type": "insecureAcceptAnything"}]}`))
 		o.Expect(fileContent).ShouldNot(o.ContainSubstring("transports"))
 
@@ -1560,13 +1559,13 @@ nulla pariatur.`
 	g.It("Author:sregidor-Longduration-NonPreRelease-High-49568-Check nodes updating order maxUnavailable=1 [Serial]", func() {
 		g.By("Scale machinesets and 1 more replica to make sure we have at least 2 nodes per machineset")
 		platform := exutil.CheckPlatform(oc)
-		e2e.Logf("Platform is %s", platform)
+		logger.Infof("Platform is %s", platform)
 		if platform != "none" && platform != "" {
 			err := AddToAllMachineSets(oc, 1)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			defer func() { o.Expect(AddToAllMachineSets(oc, -1)).NotTo(o.HaveOccurred()) }()
 		} else {
-			e2e.Logf("Platform is %s, skipping the MachineSets replica configuration", platform)
+			logger.Infof("Platform is %s, skipping the MachineSets replica configuration", platform)
 		}
 
 		g.By("Get the nodes in the worker pool sorted by update order")
@@ -1592,7 +1591,7 @@ nulla pariatur.`
 		maxUnavailable := 1
 		updatedNodes := mcp.GetSortedUpdatedNodes(maxUnavailable)
 		for _, n := range updatedNodes {
-			e2e.Logf("updated node: %s created: %s zone: %s", n.GetName(), n.GetOrFail(`{.metadata.creationTimestamp}`), n.GetOrFail(`{.metadata.labels.topology\.kubernetes\.io/zone}`))
+			logger.Infof("updated node: %s created: %s zone: %s", n.GetName(), n.GetOrFail(`{.metadata.creationTimestamp}`), n.GetOrFail(`{.metadata.labels.topology\.kubernetes\.io/zone}`))
 		}
 
 		g.By("Wait for the configuration to be applied in all nodes")
@@ -1614,13 +1613,13 @@ nulla pariatur.`
 	g.It("Author:sregidor-Longduration-NonPreRelease-High-49672-Check nodes updating order maxUnavailable>1 [Serial]", func() {
 		g.By("Scale machinesets and 1 more replica to make sure we have at least 2 nodes per machineset")
 		platform := exutil.CheckPlatform(oc)
-		e2e.Logf("Platform is %s", platform)
+		logger.Infof("Platform is %s", platform)
 		if platform != "none" && platform != "" {
 			err := AddToAllMachineSets(oc, 1)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			defer func() { o.Expect(AddToAllMachineSets(oc, -1)).NotTo(o.HaveOccurred()) }()
 		} else {
-			e2e.Logf("Platform is %s, skipping the MachineSets replica configuration", platform)
+			logger.Infof("Platform is %s, skipping the MachineSets replica configuration", platform)
 		}
 
 		// If the number of nodes is 2, since we are using maxUnavailable=2, all nodes will be cordoned at
@@ -1658,7 +1657,7 @@ nulla pariatur.`
 		g.By("Poll the nodes sorted by the order they are updated")
 		updatedNodes := mcp.GetSortedUpdatedNodes(maxUnavailable)
 		for _, n := range updatedNodes {
-			e2e.Logf("updated node: %s created: %s zone: %s", n.GetName(), n.GetOrFail(`{.metadata.creationTimestamp}`), n.GetOrFail(`{.metadata.labels.topology\.kubernetes\.io/zone}`))
+			logger.Infof("updated node: %s created: %s zone: %s", n.GetName(), n.GetOrFail(`{.metadata.creationTimestamp}`), n.GetOrFail(`{.metadata.labels.topology\.kubernetes\.io/zone}`))
 		}
 
 		g.By("Wait for the configuration to be applied in all nodes")
@@ -1684,7 +1683,7 @@ nulla pariatur.`
 		defer func() {
 			deleteErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", ruleFile).Execute()
 			if deleteErr != nil {
-				e2e.Logf("delete customized prometheus rule failed %v", deleteErr)
+				logger.Errorf("delete customized prometheus rule failed %v", deleteErr)
 			}
 		}()
 		createRuleErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", ruleFile).Execute()
@@ -1722,7 +1721,7 @@ nulla pariatur.`
 			cmd := "curl -k -H \"" + fmt.Sprintf("Authorization: Bearer %v", saToken) + "\" https://localhost:9001/metrics|grep machine_config_controller"
 			metrics, metricErr := exutil.RemoteShPodWithBash(oc.AsAdmin(), "openshift-machine-config-operator", ctrlerPod, cmd)
 			if metrics == "" || metricErr != nil {
-				e2e.Logf("get mcc metrics failed in poller: %v, will try next round", metricErr)
+				logger.Errorf("get mcc metrics failed in poller: %v, will try next round", metricErr)
 				return false, nil
 			}
 			if len(metrics) > 0 {
@@ -1732,7 +1731,7 @@ nulla pariatur.`
 					if strings.Contains(line, `machine_config_controller_paused_pool_kubelet_ca{pool="worker"}`) {
 						if !strings.HasSuffix(line, "0") {
 							metric = line
-							e2e.Logf("found metric %s", line)
+							logger.Infof("found metric %s", line)
 							return true, nil
 						}
 					}
@@ -1754,7 +1753,7 @@ nulla pariatur.`
 			if counter++; counter == 11 {
 				return true, nil
 			}
-			e2e.Logf("waiting for alert state change %s", strings.Repeat("=", counter))
+			logger.Infof("waiting for alert state change %s", strings.Repeat("=", counter))
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waiterErrX, "alert waiter poller is failed")
@@ -1775,7 +1774,7 @@ nulla pariatur.`
 			if counter++; counter == 6 {
 				return true, nil
 			}
-			e2e.Logf("waiting for alert state change %s", strings.Repeat("=", counter))
+			logger.Infof("waiting for alert state change %s", strings.Repeat("=", counter))
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waiterErrY, "alert waiter poller is failed")
@@ -1808,7 +1807,7 @@ nulla pariatur.`
 		g.By("Check service accounts in daemon pods")
 		checkNodePermissions := func(node Node) {
 			daemonPodName := node.GetMachineConfigDaemon()
-			e2e.Logf("Checking permissions in daemon pod %s", daemonPodName)
+			logger.Infof("Checking permissions in daemon pod %s", daemonPodName)
 			daemonPod := NewNamespacedResource(node.oc, "pod", MCONamespace, daemonPodName)
 			o.Expect(daemonPod.GetOrFail(`{.spec.containers[?(@.name == "oauth-proxy")].args}`)).
 				Should(o.ContainSubstring(fmt.Sprintf("--openshift-service-account=%s", expectedServiceAcc)),
@@ -1941,31 +1940,31 @@ nulla pariatur.`
 		g.By("Get current proxy configuration")
 		proxy := NewResource(oc.AsAdmin(), "proxy", "cluster")
 		proxyInitialConfig := proxy.GetOrFail(`{.spec}`)
-		e2e.Logf("Initial proxy configuration: %s", proxyInitialConfig)
+		logger.Infof("Initial proxy configuration: %s", proxyInitialConfig)
 
 		wmcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
 		mmcp := NewMachineConfigPool(oc.AsAdmin(), "master")
 
 		defer func() {
-			e2e.Logf("Start TC defer block")
+			logger.Infof("Start TC defer block")
 
-			e2e.Logf("Restore original proxy config %s", proxyInitialConfig)
+			logger.Infof("Restore original proxy config %s", proxyInitialConfig)
 			_ = proxy.Patch("json", `[{ "op": "add", "path": "/spec", "value": `+proxyInitialConfig+`}]`)
 
-			e2e.Logf("Wait for new machine configs to be rendered and paused pools to report updated status")
+			logger.Infof("Wait for new machine configs to be rendered and paused pools to report updated status")
 			// We need to make sure that the config will NOT be applied, since the proxy is a fake one and if
 			// we dont make sure that the config proxy is reverted, the nodes will be broken and go into
 			// NotReady status
 			_ = wmcp.WaitForUpdatedStatus()
 			_ = mmcp.WaitForUpdatedStatus()
 
-			e2e.Logf("Unpause worker pool")
+			logger.Infof("Unpause worker pool")
 			wmcp.pause(false)
 
-			e2e.Logf("Unpause master pool")
+			logger.Infof("Unpause master pool")
 			mmcp.pause(false)
 
-			e2e.Logf("End TC defer block")
+			logger.Infof("End TC defer block")
 		}()
 
 		g.By("Pause MCPs")
@@ -2029,7 +2028,7 @@ nulla pariatur.`
 		g.By("Get current image.config cluster configuration")
 		ic := NewResource(oc.AsAdmin(), "image.config", "cluster")
 		icInitialConfig := ic.GetOrFail(`{.spec}`)
-		e2e.Logf("Initial image.config cluster configuration: %s", icInitialConfig)
+		logger.Infof("Initial image.config cluster configuration: %s", icInitialConfig)
 
 		wmcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
 		mmcp := NewMachineConfigPool(oc.AsAdmin(), "master")
@@ -2044,16 +2043,16 @@ nulla pariatur.`
 		firstUpdatedMaster := masters[0]
 
 		defer func() {
-			e2e.Logf("Start TC defer block")
+			logger.Infof("Start TC defer block")
 
-			e2e.Logf("Restore original image.config cluster config %s", icInitialConfig)
+			logger.Infof("Restore original image.config cluster config %s", icInitialConfig)
 			_ = ic.Patch("json", `[{ "op": "add", "path": "/spec", "value": `+icInitialConfig+`}]`)
 
-			e2e.Logf("Wait for the original configuration to be applied")
+			logger.Infof("Wait for the original configuration to be applied")
 			wmcp.waitForComplete()
 			mmcp.waitForComplete()
 
-			e2e.Logf("End TC defer block")
+			logger.Infof("End TC defer block")
 		}()
 
 		g.By("Add quay.io to unqualified-search-regisitries list in image.config cluster resource")
@@ -2123,13 +2122,13 @@ func createMcAndVerifyMCValue(oc *exutil.CLI, stepText string, mcName string, wo
 	mc := MachineConfig{name: mcName, template: mcTemplate, pool: "worker"}
 	defer mc.delete(oc)
 	mc.create(oc)
-	e2e.Logf("Machine config is created successfully!")
+	logger.Infof("Machine config is created successfully!")
 
 	g.By(fmt.Sprintf("Check %s in the created machine config", stepText))
 	mcOut, err := getMachineConfigDetails(oc, mc.name)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(mcOut).Should(o.ContainSubstring(textToVerify.textToVerifyForMC))
-	e2e.Logf("%s is verified in the created machine config!", stepText)
+	logger.Infof("%s is verified in the created machine config!", stepText)
 
 	g.By(fmt.Sprintf("Check %s in the machine config daemon", stepText))
 	var podOut string
@@ -2142,7 +2141,7 @@ func createMcAndVerifyMCValue(oc *exutil.CLI, stepText string, mcName string, wo
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(podOut).Should(o.ContainSubstring(textToVerify.textToVerifyForNode))
-	e2e.Logf("%s is verified in the machine config daemon!", stepText)
+	logger.Infof("%s is verified in the machine config daemon!", stepText)
 }
 
 // skipTestIfClusterVersion skips the test case if the provided version matches the constraints.
@@ -2218,7 +2217,7 @@ func verifyRenderedMcs(oc *exutil.CLI, renderSuffix string, allRes []ResourceInt
 			if owners.Exists() {
 				for _, owner := range owners.Items() {
 					if strings.EqualFold(owner.Get("kind").ToString(), res.GetKind()) && strings.EqualFold(owner.Get("name").ToString(), res.GetName()) {
-						e2e.Logf("Resource '%s' '%s' owns MC '%s'", res.GetKind(), res.GetName(), mc.GetName())
+						logger.Infof("Resource '%s' '%s' owns MC '%s'", res.GetKind(), res.GetName(), mc.GetName())
 						// Each resource can only own one MC
 						o.Expect(ownedMc).To(o.BeNil(), "Resource %s owns more than 1 MC: %s and %s", res.GetName(), mc.GetName(), ownedMc)
 						// we need to do this to avoid the loop variable to override our value
@@ -2228,7 +2227,7 @@ func verifyRenderedMcs(oc *exutil.CLI, renderSuffix string, allRes []ResourceInt
 					}
 				}
 			} else {
-				e2e.Logf("MC '%s' has no owner.", mc.name)
+				logger.Infof("MC '%s' has no owner.", mc.name)
 			}
 
 		}
@@ -2315,7 +2314,7 @@ func verifyDriftConfig(mcp *MachineConfigPool, rf *RemoteFile, newMode string, f
 //   If step=1, it is the same as comparing that both lists are equal.
 func checkUpdatedLists(l []Node, r []Node, step int) bool {
 	if len(l) != len(r) {
-		e2e.Logf("Compared lists have different size")
+		logger.Errorf("Compared lists have different size")
 		return false
 	}
 
@@ -2343,7 +2342,7 @@ func checkUpdatedLists(l []Node, r []Node, step int) bool {
 
 			}
 			if !found {
-				e2e.Logf("Nodes were not updated in the right order. Comparing steps %s and %s\n", stepL, stepR)
+				logger.Errorf("Nodes were not updated in the right order. Comparing steps %s and %s\n", stepL, stepR)
 				return false
 			}
 		}

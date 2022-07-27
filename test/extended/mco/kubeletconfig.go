@@ -3,8 +3,8 @@ package mco
 import (
 	o "github.com/onsi/gomega"
 
+	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 // KubeletConfig struct is used to handle KubeletConfig resources in OCP
@@ -33,13 +33,13 @@ func (kc *KubeletConfig) create() {
 }
 
 func (kc KubeletConfig) waitUntilSuccess(timeout string) {
-	e2e.Logf("wait for %s to report success", kc.name)
+	logger.Infof("wait for %s to report success", kc.name)
 	o.Eventually(func() map[string]interface{} {
 		successCond := JSON(kc.GetConditionByType("Success"))
 		if successCond.Exists() {
 			return successCond.ToMap()
 		}
-		e2e.Logf("success condition not found, conditions are %s", kc.GetOrFail(`{.status.conditions}`))
+		logger.Infof("success condition not found, conditions are %s", kc.GetOrFail(`{.status.conditions}`))
 		return nil
 	},
 		timeout, "2s").Should(o.SatisfyAll(o.HaveKeyWithValue("status", "True"),
@@ -49,13 +49,13 @@ func (kc KubeletConfig) waitUntilSuccess(timeout string) {
 
 func (kc KubeletConfig) waitUntilFailure(expectedMsg, timeout string) {
 
-	e2e.Logf("wait for %s to report failure", kc.name)
+	logger.Infof("wait for %s to report failure", kc.name)
 	o.Eventually(func() map[string]interface{} {
 		failureCond := JSON(kc.GetConditionByType("Failure"))
 		if failureCond.Exists() {
 			return failureCond.ToMap()
 		}
-		e2e.Logf("Failure condition not found, conditions are %s", kc.GetOrFail(`{.status.conditions}`))
+		logger.Infof("Failure condition not found, conditions are %s", kc.GetOrFail(`{.status.conditions}`))
 		return nil
 	},
 		timeout, "2s").Should(o.SatisfyAll(o.HaveKeyWithValue("status", "False"), o.HaveKeyWithValue("message", o.ContainSubstring(expectedMsg))),

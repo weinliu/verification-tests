@@ -2,13 +2,14 @@ package mco
 
 import (
 	"fmt"
-	"github.com/onsi/gomega/types"
 	"sort"
 	"time"
 
+	"github.com/onsi/gomega/types"
+
 	g "github.com/onsi/ginkgo"
+	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 // Event struct is used to handle Event resources in OCP
@@ -62,7 +63,7 @@ func (el EventList) GetAllSince(since time.Time) ([]Event, error) {
 
 	allEvents, lerr := el.GetAll()
 	if lerr != nil {
-		e2e.Logf("Error getting events %s", lerr)
+		logger.Errorf("Error getting events %s", lerr)
 		return nil, lerr
 	}
 
@@ -71,7 +72,7 @@ func (el EventList) GetAllSince(since time.Time) ([]Event, error) {
 		creationTime := event.GetOrFail(`{.metadata.creationTimestamp}`)
 		parsedCreation, perr := time.Parse(time.RFC3339, creationTime)
 		if perr != nil {
-			e2e.Logf("Error parsing event '%s' -n '%s' creation time: %s", event.GetName(), event.GetNamespace(), perr)
+			logger.Errorf("Error parsing event '%s' -n '%s' creation time: %s", event.GetName(), event.GetNamespace(), perr)
 			return nil, perr
 
 		}
@@ -122,7 +123,7 @@ type haveEventsSequenceMatcher struct {
 }
 
 func (matcher *haveEventsSequenceMatcher) Match(actual interface{}) (success bool, err error) {
-	e2e.Logf("Start verifying events sequence: %s", matcher.sequence)
+	logger.Infof("Start verifying events sequence: %s", matcher.sequence)
 	events, ok := actual.([]Event)
 	if !ok {
 		return false, fmt.Errorf("HaveSequence matcher expects a slice of Events in test case %v", g.CurrentGinkgoTestDescription().TestText)
@@ -159,7 +160,7 @@ func (matcher *haveEventsSequenceMatcher) Match(actual interface{}) (success boo
 		for _, event := range tmpEvents {
 			if seqReason == event.reason &&
 				(lastEventTime.Before(event.creationTimestamp) || lastEventTime.Equal(event.creationTimestamp)) {
-				e2e.Logf("Found! %s event in time %s", seqReason, event.creationTimestamp)
+				logger.Infof("Found! %s event in time %s", seqReason, event.creationTimestamp)
 
 				lastEventTime = event.creationTimestamp
 				found = true
@@ -169,7 +170,7 @@ func (matcher *haveEventsSequenceMatcher) Match(actual interface{}) (success boo
 
 		// Could not find an event with the sequence's reason. We fail the match
 		if !found {
-			e2e.Logf("%s event NOT Found after time %s", seqReason, lastEventTime)
+			logger.Errorf("%s event NOT Found after time %s", seqReason, lastEventTime)
 			return false, nil
 		}
 	}

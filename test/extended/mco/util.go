@@ -22,6 +22,7 @@ import (
 	o "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -79,11 +80,11 @@ func (mc *MachineConfig) create(oc *exutil.CLI) {
 	pollerr := wait.Poll(5*time.Second, 1*time.Minute, func() (bool, error) {
 		stdout, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mc/"+mc.name, "-o", "jsonpath='{.metadata.name}'").Output()
 		if err != nil {
-			e2e.Logf("the err:%v, and try next round", err)
+			logger.Errorf("the err:%v, and try next round", err)
 			return false, nil
 		}
 		if strings.Contains(stdout, mc.name) {
-			e2e.Logf("mc %s is created successfully", mc.name)
+			logger.Infof("mc %s is created successfully", mc.name)
 			return true, nil
 		}
 		return false, nil
@@ -105,12 +106,12 @@ func (mc *MachineConfig) delete(oc *exutil.CLI) {
 }
 
 func (pdb *PodDisruptionBudget) create(oc *exutil.CLI) {
-	e2e.Logf("Creating pod disruption budget: %s", pdb.name)
+	logger.Infof("Creating pod disruption budget: %s", pdb.name)
 	exutil.CreateNsResourceFromTemplate(oc, pdb.namespace, "--ignore-unknown-parameters=true", "-f", pdb.template, "-p", "NAME="+pdb.name)
 }
 
 func (pdb *PodDisruptionBudget) delete(oc *exutil.CLI) {
-	e2e.Logf("Deleting pod disruption budget: %s", pdb.name)
+	logger.Infof("Deleting pod disruption budget: %s", pdb.name)
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pdb", pdb.name, "-n", pdb.namespace, "--ignore-not-found=true").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
@@ -124,7 +125,7 @@ func (icsp *ImageContentSourcePolicy) create(oc *exutil.CLI) {
 }
 
 func (icsp *ImageContentSourcePolicy) delete(oc *exutil.CLI) {
-	e2e.Logf("deleting icsp config: %s", icsp.name)
+	logger.Infof("deleting icsp config: %s", icsp.name)
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("imagecontentsourcepolicy", icsp.name, "--ignore-not-found=true").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
@@ -139,53 +140,53 @@ func (mcp *MachineConfigPool) create() {
 }
 
 func (mcp *MachineConfigPool) delete() {
-	e2e.Logf("deleting custom mcp: %s", mcp.name)
+	logger.Infof("deleting custom mcp: %s", mcp.name)
 	err := mcp.oc.AsAdmin().WithoutNamespace().Run("delete").Args("mcp", mcp.name, "--ignore-not-found=true").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func (mcp *MachineConfigPool) pause(enable bool) {
-	e2e.Logf("patch mcp %v, change spec.paused to %v", mcp.name, enable)
+	logger.Infof("patch mcp %v, change spec.paused to %v", mcp.name, enable)
 	err := mcp.Patch("merge", `{"spec":{"paused": `+strconv.FormatBool(enable)+`}}`)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // SetMaxUnavailable sets the value for maxUnavailable
 func (mcp *MachineConfigPool) SetMaxUnavailable(maxUnavailable int) {
-	e2e.Logf("patch mcp %v, change spec.maxUnavailable to %d", mcp.name, maxUnavailable)
+	logger.Infof("patch mcp %v, change spec.maxUnavailable to %d", mcp.name, maxUnavailable)
 	err := mcp.Patch("merge", fmt.Sprintf(`{"spec":{"maxUnavailable": %d}}`, maxUnavailable))
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // RemoveMaxUnavailable removes spec.maxUnavailable attribute from the pool config
 func (mcp *MachineConfigPool) RemoveMaxUnavailable() {
-	e2e.Logf("patch mcp %v, removing spec.maxUnavailable")
+	logger.Infof("patch mcp %v, removing spec.maxUnavailable", mcp.name)
 	err := mcp.Patch("json", `[{ "op": "remove", "path": "/spec/maxUnavailable" }]`)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func (mcp *MachineConfigPool) getConfigNameOfSpec() (string, error) {
 	output, err := mcp.Get(`{.spec.configuration.name}`)
-	e2e.Logf("spec.configuration.name of mcp/%v is %v", mcp.name, output)
+	logger.Infof("spec.configuration.name of mcp/%v is %v", mcp.name, output)
 	return output, err
 }
 
 func (mcp *MachineConfigPool) getConfigNameOfStatus() (string, error) {
 	output, err := mcp.Get(`{.status.configuration.name}`)
-	e2e.Logf("status.configuration.name of mcp/%v is %v", mcp.name, output)
+	logger.Infof("status.configuration.name of mcp/%v is %v", mcp.name, output)
 	return output, err
 }
 
 func (mcp *MachineConfigPool) getMachineCount() (int, error) {
 	machineCountStr, ocErr := mcp.Get(`{.status.machineCount}`)
 	if ocErr != nil {
-		e2e.Logf("Error getting machineCount: %s", ocErr)
+		logger.Infof("Error getting machineCount: %s", ocErr)
 		return -1, ocErr
 	}
 	machineCount, convErr := strconv.Atoi(machineCountStr)
 
 	if convErr != nil {
-		e2e.Logf("Error converting machineCount to integer: %s", ocErr)
+		logger.Errorf("Error converting machineCount to integer: %s", ocErr)
 		return -1, convErr
 	}
 
@@ -195,13 +196,13 @@ func (mcp *MachineConfigPool) getMachineCount() (int, error) {
 func (mcp *MachineConfigPool) getDegradedMachineCount() (int, error) {
 	dmachineCountStr, ocErr := mcp.Get(`{.status.degradedMachineCount}`)
 	if ocErr != nil {
-		e2e.Logf("Error getting degradedmachineCount: %s", ocErr)
+		logger.Errorf("Error getting degradedmachineCount: %s", ocErr)
 		return -1, ocErr
 	}
 	dmachineCount, convErr := strconv.Atoi(dmachineCountStr)
 
 	if convErr != nil {
-		e2e.Logf("Error converting degradedmachineCount to integer: %s", ocErr)
+		logger.Errorf("Error converting degradedmachineCount to integer: %s", ocErr)
 		return -1, convErr
 	}
 
@@ -288,7 +289,7 @@ func (mcp *MachineConfigPool) GetSortedNodes() ([]Node, error) {
 //	If maxUnavailable>0, then the function will fail if more that maxUpdatingNodes are being updated at the same time
 func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []Node {
 	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
-	e2e.Logf("Waiting %s in pool %s for all nodes to start updating.", timeToWait, mcp.name)
+	logger.Infof("Waiting %s in pool %s for all nodes to start updating.", timeToWait, mcp.name)
 
 	poolNodes, errget := mcp.GetNodes()
 	o.Expect(errget).NotTo(o.HaveOccurred(), fmt.Sprintf("Cannot get nodes in pool %s", mcp.GetName()))
@@ -299,7 +300,7 @@ func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []Node {
 		// If there are degraded machines, stop polling, directly fail
 		degradedstdout, degradederr := mcp.getDegradedMachineCount()
 		if degradederr != nil {
-			e2e.Logf("the err:%v, and try next round", degradederr)
+			logger.Errorf("the err:%v, and try next round", degradederr)
 			return false, nil
 		}
 
@@ -323,7 +324,7 @@ func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []Node {
 		remainingNodes := []Node{}
 		for _, node := range pendingNodes {
 			if node.IsUpdating() {
-				e2e.Logf("Node %s is UPDATING", node.GetName())
+				logger.Infof("Node %s is UPDATING", node.GetName())
 				updatedNodes = append(updatedNodes, node)
 			} else {
 				remainingNodes = append(remainingNodes, node)
@@ -331,11 +332,11 @@ func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []Node {
 		}
 
 		if len(remainingNodes) == 0 {
-			e2e.Logf("All nodes have started to be updated on mcp %s", mcp.name)
+			logger.Infof("All nodes have started to be updated on mcp %s", mcp.name)
 			return true, nil
 
 		}
-		e2e.Logf(" %d remaining nodes", len(remainingNodes))
+		logger.Infof(" %d remaining nodes", len(remainingNodes))
 		pendingNodes = remainingNodes
 		return false, nil
 	})
@@ -347,23 +348,23 @@ func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []Node {
 // WaitForNotDegradedStatus waits until MCP is not degraded, if the condition times out the returned error is != nil
 func (mcp MachineConfigPool) WaitForNotDegradedStatus() error {
 	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
-	e2e.Logf("Waiting %s for MCP %s status to be not degraded.", timeToWait, mcp.name)
+	logger.Infof("Waiting %s for MCP %s status to be not degraded.", timeToWait, mcp.name)
 
 	err := wait.Poll(1*time.Minute, timeToWait, func() (bool, error) {
 		stdout, err := mcp.GetDegradedStatus()
 		if err != nil {
-			e2e.Logf("the err:%v, and try next round", err)
+			logger.Errorf("the err:%v, and try next round", err)
 			return false, nil
 		}
 		if strings.Contains(stdout, "False") {
-			e2e.Logf("MCP degraded status is False %s", mcp.name)
+			logger.Infof("MCP degraded status is False %s", mcp.name)
 			return true, nil
 		}
 		return false, nil
 	})
 
 	if err != nil {
-		e2e.Logf("MCP: %s .Error waiting for not degraded status: %s", mcp.GetName(), err)
+		logger.Errorf("MCP: %s .Error waiting for not degraded status: %s", mcp.GetName(), err)
 	}
 
 	return err
@@ -372,23 +373,23 @@ func (mcp MachineConfigPool) WaitForNotDegradedStatus() error {
 // WaitForUpdatedStatus waits until MCP is rerpoting updated status, if the condition times out the returned error is != nil
 func (mcp MachineConfigPool) WaitForUpdatedStatus() error {
 	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
-	e2e.Logf("Waiting %s for MCP %s status to be updated.", timeToWait, mcp.name)
+	logger.Infof("Waiting %s for MCP %s status to be updated.", timeToWait, mcp.name)
 
 	err := wait.Poll(1*time.Minute, timeToWait, func() (bool, error) {
 		stdout, err := mcp.GetUpdatedStatus()
 		if err != nil {
-			e2e.Logf("the err:%v, and try next round", err)
+			logger.Errorf("the err:%v, and try next round", err)
 			return false, nil
 		}
 		if strings.Contains(stdout, "True") {
-			e2e.Logf("MCP Updated status is True %s", mcp.name)
+			logger.Infof("MCP Updated status is True %s", mcp.name)
 			return true, nil
 		}
 		return false, nil
 	})
 
 	if err != nil {
-		e2e.Logf("MCP: %s .Error waiting for updated status: %s", mcp.GetName(), err)
+		logger.Errorf("MCP: %s .Error waiting for updated status: %s", mcp.GetName(), err)
 	}
 
 	return err
@@ -396,13 +397,13 @@ func (mcp MachineConfigPool) WaitForUpdatedStatus() error {
 
 func (mcp *MachineConfigPool) waitForComplete() {
 	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
-	e2e.Logf("Waiting %s for MCP %s to be completed.", timeToWait, mcp.name)
+	logger.Infof("Waiting %s for MCP %s to be completed.", timeToWait, mcp.name)
 
 	err := wait.Poll(1*time.Minute, timeToWait, func() (bool, error) {
 		// If there are degraded machines, stop polling, directly fail
 		degradedstdout, degradederr := mcp.getDegradedMachineCount()
 		if degradederr != nil {
-			e2e.Logf("the err:%v, and try next round", degradederr)
+			logger.Errorf("the err:%v, and try next round", degradederr)
 			return false, nil
 		}
 
@@ -412,12 +413,12 @@ func (mcp *MachineConfigPool) waitForComplete() {
 
 		stdout, err := mcp.Get(`{.status.conditions[?(@.type=="Updated")].status}`)
 		if err != nil {
-			e2e.Logf("the err:%v, and try next round", err)
+			logger.Errorf("the err:%v, and try next round", err)
 			return false, nil
 		}
 		if strings.Contains(stdout, "True") {
 			// i.e. mcp updated=true, mc is applied successfully
-			e2e.Logf("mc operation is completed on mcp %s", mcp.name)
+			logger.Infof("mc operation is completed on mcp %s", mcp.name)
 			return true, nil
 		}
 		return false, nil
@@ -490,7 +491,7 @@ func getStatusCondition(oc *exutil.CLI, resource string, ctype string) (map[stri
 	if ocerr != nil {
 		return nil, ocerr
 	}
-	e2e.Logf("condition info of %v-%v : %v", resource, ctype, jsonstr)
+	logger.Infof("condition info of %v-%v : %v", resource, ctype, jsonstr)
 	jsonstr = strings.Trim(jsonstr, "'")
 	jsonbytes := []byte(jsonstr)
 	var datamap map[string]interface{}
@@ -498,7 +499,7 @@ func getStatusCondition(oc *exutil.CLI, resource string, ctype string) (map[stri
 	if jsonerr != nil {
 		return nil, jsonerr
 	}
-	e2e.Logf("umarshalled json: %v", datamap)
+	logger.Infof("umarshalled json: %v", datamap)
 	return datamap, jsonerr
 }
 
@@ -523,13 +524,13 @@ func generateTemplateAbsolutePath(fileName string) string {
 	mcoDirName := "mco"
 	mcoBaseDir := ""
 	if mcoBaseDir = fixturePathCache[mcoDirName]; len(mcoBaseDir) == 0 {
-		e2e.Logf("mco fixture dir is not initialized, start to create")
+		logger.Infof("mco fixture dir is not initialized, start to create")
 		mcoBaseDir = exutil.FixturePath("testdata", mcoDirName)
 		fixturePathCache[mcoDirName] = mcoBaseDir
-		e2e.Logf("mco fixture dir is initialized: %s", mcoBaseDir)
+		logger.Infof("mco fixture dir is initialized: %s", mcoBaseDir)
 	} else {
 		mcoBaseDir = fixturePathCache[mcoDirName]
-		e2e.Logf("mco fixture dir found in cache: %s", mcoBaseDir)
+		logger.Infof("mco fixture dir found in cache: %s", mcoBaseDir)
 	}
 	return filepath.Join(mcoBaseDir, fileName)
 }
@@ -561,10 +562,10 @@ func getPrometheusQueryResults(oc *exutil.CLI, query string) string {
 	headers := fmt.Sprintf("Authorization: Bearer %s", token)
 
 	curlCmd := fmt.Sprintf("curl -ks -H '%s' %s", headers, url)
-	e2e.Logf("curl cmd:\n %s", curlCmd)
+	logger.Infof("curl cmd:\n %s", curlCmd)
 
 	curlOutput, cmdErr := exec.Command("bash", "-c", curlCmd).Output()
-	e2e.Logf("curl output:\n%s", curlOutput)
+	logger.Infof("curl output:\n%s", curlOutput)
 	o.Expect(cmdErr).NotTo(o.HaveOccurred())
 
 	return string(curlOutput)
@@ -681,7 +682,7 @@ func AddToAllMachineSets(oc *exutil.CLI, delta int) error {
 	}
 
 	if addErr != nil {
-		e2e.Logf("Error reconfiguring MachineSets. Restoring original replicas.")
+		logger.Infof("Error reconfiguring MachineSets. Restoring original replicas.")
 		for _, ms := range modifiedMSs {
 			_ = ms.AddToScale(-1 * delta)
 		}
@@ -693,7 +694,7 @@ func AddToAllMachineSets(oc *exutil.CLI, delta int) error {
 	for _, ms := range allMs {
 		waitErr = wait.PollImmediate(30*time.Second, 8*time.Minute, func() (bool, error) { return ms.PollIsReady()(), nil })
 		if waitErr != nil {
-			e2e.Logf("MachineSet %s is not ready. Restoring original replicas.", ms.GetName())
+			logger.Errorf("MachineSet %s is not ready. Restoring original replicas.", ms.GetName())
 			for _, ms := range modifiedMSs {
 				_ = ms.AddToScale(-1 * delta)
 			}
@@ -761,7 +762,7 @@ func getMachineConfigControllerPod(oc *exutil.CLI) (string, error) {
 		for _, pod := range pods {
 			if strings.HasPrefix(pod, "machine-config-controller") {
 				ctrlerPod = pod
-				e2e.Logf("machine config controller pod name is %s", ctrlerPod)
+				logger.Infof("machine config controller pod name is %s", ctrlerPod)
 				break
 			}
 		}
@@ -786,7 +787,7 @@ func getAlertsByName(oc *exutil.CLI, alertName string) ([]JSONData, error) {
 		return nil, allAlertErr
 	}
 
-	e2e.Logf("get all alerts: %s\n", allAerts)
+	logger.Infof("get all alerts: %s\n", allAerts)
 
 	jsonObj := JSON(allAerts)
 	filteredAlerts, filteredAlertErr := jsonObj.GetJSONPath(fmt.Sprintf(`{.data.alerts[?(@.labels.alertname=="%s")]}`, alertName))
@@ -796,7 +797,7 @@ func getAlertsByName(oc *exutil.CLI, alertName string) ([]JSONData, error) {
 	}
 
 	for _, alert := range filteredAlerts {
-		e2e.Logf("filtered alert %s\n", alert.String())
+		logger.Infof("filtered alert %s\n", alert.String())
 	}
 
 	return filteredAlerts, nil

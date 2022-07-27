@@ -8,6 +8,7 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
+	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -135,7 +136,7 @@ func (r *Resource) Delete() error {
 
 	_, err := r.oc.WithoutNamespace().Run("delete").Args(params...).Output()
 	if err != nil {
-		e2e.Logf("%v", err)
+		logger.Errorf("%v", err)
 	}
 
 	return err
@@ -169,7 +170,7 @@ func (r *Resource) Patch(patchType string, patch string) error {
 
 	_, err := r.oc.WithoutNamespace().Run("patch").Args(params...).Output()
 	if err != nil {
-		e2e.Logf("%v", err)
+		logger.Errorf("%v", err)
 	}
 
 	return err

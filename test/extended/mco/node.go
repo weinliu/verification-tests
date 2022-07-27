@@ -2,11 +2,12 @@ package mco
 
 import (
 	"fmt"
+	"time"
+
 	o "github.com/onsi/gomega"
+	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
-	"time"
 )
 
 // Node is used to handle node OCP resources
@@ -57,30 +58,30 @@ func (n *Node) AddLabel(label string, value string) (string, error) {
 
 // DeleteLabel removes the given label from the node
 func (n *Node) DeleteLabel(label string) (string, error) {
-	e2e.Logf("Delete label %s from node %s", label, n.GetName())
+	logger.Infof("Delete label %s from node %s", label, n.GetName())
 	return exutil.DeleteLabelFromNode(n.oc, n.name, label)
 }
 
 // WaitForLabelRemoved waits until the given label is not present in the node.
 func (n *Node) WaitForLabelRemoved(label string) error {
-	e2e.Logf("Waiting for label %s to be removed from node %s", label, n.GetName())
+	logger.Infof("Waiting for label %s to be removed from node %s", label, n.GetName())
 	waitErr := wait.Poll(1*time.Minute, 10*time.Minute, func() (bool, error) {
 		labels, err := n.Get(`{.metadata.labels}`)
 		if err != nil {
-			e2e.Logf("Error waiting for labels to be removed:%v, and try next round", err)
+			logger.Infof("Error waiting for labels to be removed:%v, and try next round", err)
 			return false, nil
 		}
 		labelsMap := JSON(labels)
 		label, err := labelsMap.GetSafe(label)
 		if err == nil && !label.Exists() {
-			e2e.Logf("Label %s has been removed from node %s", label, n.GetName())
+			logger.Infof("Label %s has been removed from node %s", label, n.GetName())
 			return true, nil
 		}
 		return false, nil
 	})
 
 	if waitErr != nil {
-		e2e.Logf("Timeout while waiting for label %s to be delete from node %s. Error: %s",
+		logger.Errorf("Timeout while waiting for label %s to be delete from node %s. Error: %s",
 			label,
 			n.GetName(),
 			waitErr)
@@ -104,7 +105,7 @@ func (n *Node) GetNodeHostname() (string, error) {
 // ForceReapplyConfiguration create the file `/run/machine-config-daemon-force` in the node
 //  in order to force MCO to reapply the current configuration
 func (n *Node) ForceReapplyConfiguration() error {
-	e2e.Logf("Forcing reapply configuration in node %s", n.GetName())
+	logger.Infof("Forcing reapply configuration in node %s", n.GetName())
 	_, err := n.DebugNodeWithChroot("touch", "/run/machine-config-daemon-force")
 
 	return err
@@ -219,7 +220,7 @@ func (n Node) CaptureMCDaemonLogsUntilRestartWithTimeout(timeout string) (string
 	go func() {
 		logs, err := n.oc.WithoutNamespace().Run("logs").Args("-n", MCONamespace, machineConfigDaemon, "-c", "machine-config-daemon", "-f").Output()
 		if err != nil {
-			e2e.Logf("Error getting %s logs: %s", machineConfigDaemon, err)
+			logger.Errorf("Error getting %s logs: %s", machineConfigDaemon, err)
 		}
 		c <- logs
 	}()
@@ -230,7 +231,7 @@ func (n Node) CaptureMCDaemonLogsUntilRestartWithTimeout(timeout string) (string
 	case <-time.After(duration):
 		errMsg := fmt.Sprintf(`Node "%s". Timeout while waiting for the daemon pod "%s" -n  "%s" to be restarted`,
 			n.GetName(), machineConfigDaemon, MCONamespace)
-		e2e.Logf(errMsg)
+		logger.Infof(errMsg)
 		return "", fmt.Errorf(errMsg)
 	}
 
@@ -240,15 +241,15 @@ func (n Node) CaptureMCDaemonLogsUntilRestartWithTimeout(timeout string) (string
 func (n Node) GetDate() (time.Time, error) {
 	date, _, err := n.oc.Run("debug").Args(`node/`+n.GetName(), `--`, `chroot`, `/host`, `date`, `+%Y-%m-%dT%H:%M:%SZ`).Outputs()
 
-	e2e.Logf("node %s. DATE: %s", n.GetName(), date)
+	logger.Infof("node %s. DATE: %s", n.GetName(), date)
 	if err != nil {
-		e2e.Logf("Error trying to get date in node %s: %s", n.GetName(), err)
+		logger.Errorf("Error trying to get date in node %s: %s", n.GetName(), err)
 		return time.Time{}, err
 	}
 	layout := "2006-01-02T15:04:05Z"
 	returnTime, perr := time.Parse(layout, date)
 	if perr != nil {
-		e2e.Logf("Error trying to parsing date %s in node %s: %s", date, n.GetName(), perr)
+		logger.Errorf("Error trying to parsing date %s in node %s: %s", date, n.GetName(), perr)
 		return time.Time{}, perr
 	}
 
@@ -259,15 +260,15 @@ func (n Node) GetDate() (time.Time, error) {
 func (n Node) GetUptime() (time.Time, error) {
 	uptime, _, err := n.oc.Run("debug").Args(`node/`+n.GetName(), `--`, `chroot`, `/host`, `uptime`, `-s`).Outputs()
 
-	e2e.Logf("node %s. UPTIME: %s", n.GetName(), uptime)
+	logger.Infof("node %s. UPTIME: %s", n.GetName(), uptime)
 	if err != nil {
-		e2e.Logf("Error trying to get uptime in node %s: %s", n.GetName(), err)
+		logger.Errorf("Error trying to get uptime in node %s: %s", n.GetName(), err)
 		return time.Time{}, err
 	}
 	layout := "2006-01-02 15:04:05"
 	returnTime, perr := time.Parse(layout, uptime)
 	if perr != nil {
-		e2e.Logf("Error trying to parsing uptime %s in node %s: %s", uptime, n.GetName(), perr)
+		logger.Errorf("Error trying to parsing uptime %s in node %s: %s", uptime, n.GetName(), perr)
 		return time.Time{}, perr
 	}
 
@@ -299,7 +300,7 @@ func (n Node) GetDateWithDelta(delta string) (time.Time, error) {
 
 	timeDuration, terr := time.ParseDuration(delta)
 	if terr != nil {
-		e2e.Logf("Error getting delta time %s", terr)
+		logger.Errorf("Error getting delta time %s", terr)
 		return time.Time{}, terr
 	}
 

@@ -2,10 +2,11 @@ package mco
 
 import (
 	"fmt"
-	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 	"regexp"
 	"strings"
+
+	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
 const (
@@ -38,7 +39,7 @@ func (mcc *Controller) GetCachedPodName() (string, error) {
 	if mcc.podName == "" {
 		podName, err := mcc.GetPodName()
 		if err != nil {
-			e2e.Logf("Error trying to get the machine-config-controller pod name. Error: %s", err)
+			logger.Infof("Error trying to get the machine-config-controller pod name. Error: %s", err)
 			return "", err
 		}
 
@@ -90,12 +91,12 @@ func (mcc Controller) GetLogs() (string, error) {
 	}
 	if cachedPodName == "" {
 		err := fmt.Errorf("Cannot get controller pod name. Failed getting MCO controller logs")
-		e2e.Logf("Error getting controller pod name. Error: %s", err)
+		logger.Errorf("Error getting controller pod name. Error: %s", err)
 		return "", err
 	}
 	podAllLogs, err := exutil.GetSpecificPodLogs(mcc.oc, MCONamespace, ControllerContainer, cachedPodName, "")
 	if err != nil {
-		e2e.Logf("Error getting log lines. Error: %s", err)
+		logger.Errorf("Error getting log lines. Error: %s", err)
 		return "", err
 	}
 	// Remove the logs before the check point
@@ -123,7 +124,7 @@ func (mcc Controller) GetFilteredLogsAsList(regex string) ([]string, error) {
 	for _, line := range logs {
 		match, err := regexp.MatchString(regex, line)
 		if err != nil {
-			e2e.Logf("Error filtering log lines. Error: %s", err)
+			logger.Errorf("Error filtering log lines. Error: %s", err)
 			return nil, err
 		}
 
