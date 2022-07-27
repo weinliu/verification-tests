@@ -4,12 +4,13 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
@@ -63,7 +64,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	g.It("Author:rioliu-Longduration-Critical-42361-add chrony systemd config [Disruptive]", func() {
 		g.By("create new mc to apply chrony config on worker nodes")
-		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
+		workerNode := NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()[0]
 		mcName := "change-workers-chrony-configuration"
 		mcTemplate := generateTemplateAbsolutePath("change-workers-chrony-configuration.yaml")
 		mc := MachineConfig{name: mcName, template: mcTemplate, pool: "worker"}
@@ -308,6 +309,12 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42369-add container runtime config [Disruptive]", func() {
+
+		allRhelOs := NewNodeList(oc).GetAllRhelWokerNodesOrFail()
+		if len(allRhelOs) > 0 {
+			g.Skip("ctrcfg test cannot be executed on rhel node")
+		}
+
 		g.By("Create container runtime config")
 		crName := "change-ctr-cr-config"
 		crTemplate := generateTemplateAbsolutePath(crName + ".yaml")
@@ -873,7 +880,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(mccPlatformStatus).To(o.Equal(infraPlatformStatus))
 	})
 
-	g.It("Author:mhanss-NonPreRelease-high-42680-change pull secret in the openshift-config namespace [Serial]", func() {
+	g.It("Author:mhanss-NonPreRelease-High-42680-change pull secret in the openshift-config namespace [Serial]", func() {
 		g.By("Add a dummy credential in pull secret")
 		secretFile, err := getPullSecret(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
