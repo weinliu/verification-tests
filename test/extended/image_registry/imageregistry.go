@@ -2037,7 +2037,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "is50925-1", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.Run("import-image").Args("is50925-2:latest", "--from", "registry.access.redhat.com/rhel7", "--confirm", "-n", oc.Namespace()).Execute()
+		err = oc.Run("import-image").Args("is50925-2:latest", "--from", "quay.io/openshifttest/ruby-27@sha256:cdb6a13032184468b1e0607f36cfb8834c97dbeffeeff800e9e6834323bed8fc", "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "is50925-2", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2396,7 +2396,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-Medium-22596-ImageRegistry Create app with template eap74-basic-s2i with jbosseap rhel7 image", func() {
+	g.It("ConnectedOnly-Author:jitli-Medium-22596-ImageRegistry Create app with template eap74-basic-s2i with jbosseap rhel7 image", func() {
 
 		//Check if openshift-sample operator installed
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/openshift-samples").Output()
