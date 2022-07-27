@@ -66,6 +66,7 @@ class SummaryClient:
         self.releaseVersion = args.version
         self.cluster = args.cluster
         self.silence = args.silence
+        self.upgrade = args.upgrade
         self.ignore_investigated = args.ignore_investigated
         self.additional_message = args.additional_message
         self.number = 0
@@ -84,7 +85,11 @@ class SummaryClient:
             raise BaseException("ERROR: subteam name is invalid")
     def getLaunchIdWithLaunchName(self, launchID):
         launchs=dict()
-        filter_url = self.launch_url + '?&filter.has.compositeAttribute=version:{0}'.format(self.releaseVersion)
+        filterVersion = "version:"+self.releaseVersion
+        if self.upgrade:
+            filterVersion = "to:"+self.releaseVersion
+
+        filter_url = self.launch_url + '?&filter.has.compositeAttribute={0}&filter.btw.startTime=-1440;1440;-0000&page.size=2000'.format(filterVersion)
         if self.launchID:
             filter_url = self.launch_url + "/"+self.launchID
         #print("filter_url is "+filter_url)
@@ -99,6 +104,7 @@ class SummaryClient:
                     raise Exception("no launch found by name: {0}".format(launchID))
                 for ret in r.json()["content"]:
                     idOutput = ret["id"]
+                    print("check testrun: "+str(idOutput))
                     launchs[idOutput] = dict()
                     launchs[idOutput]["name"] = ret["name"]
                     launchs[idOutput]["description"] = ret["description"]
@@ -126,8 +132,9 @@ class SummaryClient:
             if (r.status_code != 200):
                 raise Exception("get item case error: {0}".format(r.text))
             caseidList = []
+            FailedCase = dict()
             if len(r.json()["content"]) == 0:
-                return "No fail case"
+                return FailedCase
             #print(json.dumps(r.json(), indent=4, sort_keys=True))
             FailedCase = dict()
             for ret in r.json()["content"]:
@@ -227,6 +234,7 @@ if __name__ == "__main__":
     parser.add_argument("-w","--webhook_url", default="", help="the webhook url used to send message")
     parser.add_argument("-g","--group_channel", default="", help="the channel name which will be send result to")
     parser.add_argument("-a","--additional_message", default="", help="additional message")
+    parser.add_argument("--upgrade", default=False, action='store_true', help="upgrade test runs")
     parser.add_argument("--ignore_investigated", dest='ignore_investigated', default=False, action='store_true', help="ignore investigated cases")
     parser.add_argument("--silence", dest='silence', default=False, action='store_true', help="the flag to request debug")
     args=parser.parse_args()
