@@ -2,6 +2,7 @@ package networking
 
 import (
 	"fmt"
+	"net"
 	"path/filepath"
 	"strings"
 
@@ -676,5 +677,90 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-6", pod4ns1IPv4, pod4ns1IPv6)
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-6", pod5ns1IPv4, pod5ns1IPv6)
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-6", pod6ns1IPv4, pod6ns1IPv6)
+	})
+
+	// author: weliang@redhat.com
+	g.It("NonPreRelease-Author:weliang-Medium-41607-Multinetworkpolicy filter-with-tcpport [Serial]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking/multinetworkpolicy")
+		patchInfo := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":true}}")
+		patchSResource := "networks.operator.openshift.io/cluster"
+		tcpportPod := filepath.Join(buildPruningBaseDir, "tcpport-pod.yaml")
+		netAttachDefFile := filepath.Join(buildPruningBaseDir, "MultiNetworkPolicy-NAD1.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "MultiNetworkPolicy-pod-template.yaml")
+		policyFile := filepath.Join(buildPruningBaseDir, "policy-tcpport.yaml")
+
+		g.By("1. Enable MacvlanNetworkpolicy in the cluster")
+		patchResourceAsAdmin(oc, patchSResource, patchInfo)
+		defer func() {
+			policyErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args(patchSResource, "-p", `[{"op": "remove", "path": "/spec/useMultiNetworkPolicy"}]`, "--type=json").Execute()
+			o.Expect(policyErr).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("2. Create a namespace")
+		originalCtx, contextErr := oc.Run("config").Args("current-context").Output()
+		o.Expect(contextErr).NotTo(o.HaveOccurred())
+		defer func() {
+			rollbackCtxErr := oc.Run("config").Args("set", "current-context", originalCtx).Execute()
+			o.Expect(rollbackCtxErr).NotTo(o.HaveOccurred())
+		}()
+		ns := "project41607"
+		nsErr := oc.Run("new-project").Args(ns).Execute()
+		o.Expect(nsErr).NotTo(o.HaveOccurred())
+		defer func() {
+			proErr := oc.AsAdmin().Run("delete").Args("project", ns, "--ignore-not-found").Execute()
+			o.Expect(proErr).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("3. Create MultiNetworkPolicy-NAD in ns1")
+		policyErr := oc.AsAdmin().Run("create").Args("-f", netAttachDefFile, "-n", ns).Execute()
+		o.Expect(policyErr).NotTo(o.HaveOccurred())
+		nadOutput, nadErr := oc.Run("get").Args("net-attach-def", "-n", ns).Output()
+		o.Expect(nadErr).NotTo(o.HaveOccurred())
+		o.Expect(nadOutput).To(o.ContainSubstring("macvlan-nad1"))
+
+		g.By("4. Create a tcpport pods for ingress tcp port testing")
+		createResourceFromFile(oc, ns, tcpportPod)
+		podErr := waitForPodWithLabelReady(oc, ns, "name=tcp-port-pod")
+		exutil.AssertWaitPollNoErr(podErr, "tcpportPod is not running")
+		podIPv4, _ := getPodMultiNetwork(oc, ns, "tcp-port-pod")
+
+		g.By("5. Create a test pods for ingress tcp port testing")
+		pod1ns1 := testPodMultinetwork{
+			name:      "blue-pod-1",
+			namespace: ns,
+			nodename:  "worker-1",
+			nadname:   "macvlan-nad1",
+			labelname: "blue-openshift",
+			template:  pingPodTemplate,
+		}
+		pod1ns1.createTestPodMultinetwork(oc)
+		waitPodReady(oc, pod1ns1.namespace, pod1ns1.name)
+
+		g.By("6. curl should pass before applying policy")
+		_, curl1Err := e2e.RunHostCmd(ns, "blue-pod-1", "curl --connect-timeout 5 -s "+net.JoinHostPort(podIPv4, "8888"))
+		o.Expect(curl1Err).NotTo(o.HaveOccurred())
+
+		g.By("7. Create tcpport policy in ns1")
+		policyCreateErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", policyFile, "-n", ns).Execute()
+		o.Expect(policyCreateErr).NotTo(o.HaveOccurred())
+		policyCreOutput, policyCreErr := oc.AsAdmin().Run("get").Args("multi-networkpolicy", "-n", ns).Output()
+		o.Expect(policyCreErr).NotTo(o.HaveOccurred())
+		o.Expect(policyCreOutput).To(o.ContainSubstring("tcp-port"))
+
+		g.By("8. One curl should fail before applying policy")
+		_, curl2Err := e2e.RunHostCmd(ns, "blue-pod-1", "curl --connect-timeout 5 -s "+net.JoinHostPort(podIPv4, "8888"))
+		o.Expect(curl2Err).To(o.HaveOccurred())
+
+		g.By("9. Delete tcp-port policy in ns1")
+		policyDeleteErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "multi-networkpolicy", "tcp-port").Execute()
+		o.Expect(policyDeleteErr).NotTo(o.HaveOccurred())
+		policyDelOutput, policyDelErr := oc.AsAdmin().Run("get").Args("multi-networkpolicy", "-n", ns).Output()
+		o.Expect(policyDelErr).NotTo(o.HaveOccurred())
+		o.Expect(policyDelOutput).NotTo(o.ContainSubstring("tcp-port"))
+
+		g.By("10. curl should pass after deleting policy")
+		_, curl3Err := e2e.RunHostCmd(ns, "blue-pod-1", "curl --connect-timeout 5 -s "+net.JoinHostPort(podIPv4, "8888"))
+		o.Expect(curl3Err).NotTo(o.HaveOccurred())
+
 	})
 })

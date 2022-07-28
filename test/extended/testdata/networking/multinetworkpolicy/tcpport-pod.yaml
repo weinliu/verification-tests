@@ -1,0 +1,26 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: tcp-port-pod
+  labels:
+    name: tcp-port-pod
+  annotations:
+    k8s.v1.cni.cncf.io/networks: macvlan-nad1
+spec:
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+  - name: tcp-port-pod-container
+    image: quay.io/openshifttest/hello-sdn@sha256:d5785550cf77b7932b090fcd1a2625472912fb3189d5973f177a5a2c347a1f95
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+    env:
+    - name: RESPONSE
+      value: Hello TCP POD
+    ports:
+    - containerPort: 8888
+      protocol: TCP
