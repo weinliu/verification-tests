@@ -1,15 +1,14 @@
 package imageregistry
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	container "github.com/openshift/openshift-tests-private/test/extended/util/container"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -21,36 +20,35 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	)
 	// author: wewang@redhat.com
 	g.It("Author:wewang-VMonly-ConnectedOnly-High-36291-OCI image is supported by API server and image registry", func() {
+		var containerCLI = container.NewPodmanCLI()
 		oc.SetupProject()
 		g.By("Import an OCI image to internal registry")
-		err := oc.Run("import-image").Args("myimage", "--from", "docker.io/wzheng/busyboxoci", "--confirm", "--reference-policy=local").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("myimage", "--from", "docker.io/wzheng/busyboxoci", "--confirm", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.WithoutNamespace().Run("create").Args("serviceaccount", "registry", "-n", oc.Namespace()).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "admin", "-z", "registry", "-n", oc.Namespace()).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "admin", "-z", "registry", "-n", oc.Namespace()).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Get internal registry token")
-		token, err := getSAToken(oc, "registry", oc.Namespace())
+
+		g.By("Expose route of internal registry")
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(oc, regRoute)
+
+		g.By("Save the external registry auth with the specific token")
+		authFile, err := saveImageRegistryAuth(oc, "builder", regRoute, oc.Namespace())
+		defer os.RemoveAll(authFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Get worker nodes")
-		workerNodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: `node-role.kubernetes.io/worker`})
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Discovered %d worker nodes.", len(workerNodes.Items))
-		o.Expect(workerNodes.Items).NotTo(o.HaveLen(0))
-		worker := workerNodes.Items[0]
-		g.By("Login registry in the node and inspect image")
-		commandsOnNode := fmt.Sprintf("podman login image-registry.openshift-image-registry.svc:5000 -u registry -p %q ;podman pull image-registry.openshift-image-registry.svc:5000/%q/myimage;podman inspect image-registry.openshift-image-registry.svc:5000/%q/myimage", token, oc.Namespace(), oc.Namespace())
-		out, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+worker.Name, "--", "chroot", "/host", "/bin/bash", "-euxo", "pipefail", "-c", fmt.Sprintf("%s", commandsOnNode)).Output()
+		imageInfo := regRoute + "/" + oc.Namespace() + "/myimage:latest"
+		_, err = containerCLI.Run("pull").Args(imageInfo, "--authfile="+authFile, "--tls-verify=false").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Display oci image info")
-		e2e.Logf(out)
-		o.Expect(out).To(o.ContainSubstring(manifestType))
+		output, err := containerCLI.Run("inspect").Args(imageInfo).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, manifestType) {
+			e2e.Failf("The internal registry image is not oci image")
+		}
 	})
 })
 
@@ -71,6 +69,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(oc, regRoute)
 		oc.SetupProject()
 
 		g.By("Save the external registry auth with the specific token")
@@ -119,16 +118,17 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 
 		g.By("Tag the image to internal registry")
 		oc.SetupProject()
-		err := oc.Run("tag").Args("--source=docker", ociImage, "35998-image:latest").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("--source=docker", ociImage, "35998-image:latest", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Check if new imagestreamtag created")
-		out := getResource(oc, true, withoutNamespace, "istag", "-n", oc.Namespace())
-		o.Expect(out).To(o.ContainSubstring("35998-image:latest"))
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "35998-image", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Log into the default route")
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(oc, regRoute)
 
 		g.By("Save the external registry auth with the specific token")
 		authFile, err := saveImageRegistryAuth(oc, "builder", regRoute, oc.Namespace())

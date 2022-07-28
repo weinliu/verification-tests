@@ -591,6 +591,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		userroute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(oc, userroute)
 
 		g.By("Get token from secret")
 		oc.SetupProject()
@@ -1384,6 +1385,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		host := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(oc, host)
 
 		g.By("Grant public access to the openshift namespace")
 		defer oc.AsAdmin().WithoutNamespace().Run("policy").Args("remove-role-from-group", "system:image-puller", "system:unauthenticated", "--namespace", "openshift").Execute()
@@ -1704,6 +1706,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(oc, regRoute)
 
 		g.By("push image to registry")
 		oc.SetupProject()
@@ -2094,6 +2097,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(oc, regRoute)
 
 		g.By("Push a image to the project")
 		checkRegistryFunctionFine(oc, "test-10904", oc.Namespace())
@@ -2165,7 +2169,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Check whether the image can be pulled")
 		expectInfo = `Failed to pull image "is24160-3-lookup"`
-		pollErr := wait.Poll(3*time.Second, 6*time.Second, func() (bool, error) {
+		pollErr := wait.Poll(3*time.Second, 20*time.Second, func() (bool, error) {
 			output, describeErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", "-l", "app=deploy-lookup", "-n", oc.Namespace()).Output()
 			o.Expect(describeErr).NotTo(o.HaveOccurred())
 			if strings.Contains(output, expectInfo) {
@@ -2187,7 +2191,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Check whether the image can be pulled again")
 		expectInfo = `Successfully pulled image`
-		pollErr = wait.Poll(3*time.Second, 6*time.Second, func() (bool, error) {
+		pollErr = wait.Poll(3*time.Second, 20*time.Second, func() (bool, error) {
 			output, describeErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", "-l", "app=deploy-lookup", "-n", oc.Namespace()).Output()
 			o.Expect(describeErr).NotTo(o.HaveOccurred())
 			if strings.Contains(output, expectInfo) {
@@ -2213,6 +2217,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(oc, regRoute)
 
 		g.By("Push a image to the project")
 		checkRegistryFunctionFine(oc, "test-11314", oc.Namespace())
@@ -2487,11 +2492,13 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(oc, regRoute)
 
 		g.By("Save the external registry auth with the specific token")
 		authFile, err := saveImageRegistryAuth(oc, "builder", regRoute, oc.Namespace())
 		defer os.RemoveAll(authFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
+
 		err = exutil.WaitForAnImageStreamTag(oc, "openshift", "cli", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -2521,6 +2528,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(oc, regRoute)
 
 		g.By("Save the external registry auth with the specific token")
 		authFile, err := saveImageRegistryAuth(oc, "builder", regRoute, oc.Namespace())

@@ -775,8 +775,7 @@ func exposeRouteFromSVC(oc *exutil.CLI, rType, ns, route, service string) string
 
 func listRepositories(oc *exutil.CLI, regRoute, expect string) {
 	curlCmd := fmt.Sprintf("curl -k  https://%s/v2/_catalog | grep %s", regRoute, expect)
-	result, err := exec.Command("bash", "-c", curlCmd).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	result, _ := exec.Command("bash", "-c", curlCmd).Output()
 	o.Expect(string(result)).To(o.ContainSubstring(expect))
 }
 
@@ -1121,4 +1120,17 @@ type limitSource struct {
 func (limitsrc *limitSource) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", limitsrc.template, "-p", "NAME="+limitsrc.name, "NAMESPACE="+limitsrc.namespace, "SIZE="+limitsrc.size)
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func waitRouteReady(oc *exutil.CLI, route string) {
+	curlCmd := "curl -k https://" + route
+	pollErr := wait.Poll(5*time.Second, 1*time.Minute, func() (bool, error) {
+		_, curlErr := exec.Command("bash", "-c", curlCmd).Output()
+		if curlErr != nil {
+			e2e.Logf("the route is not ready, go to next round")
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(pollErr, "The route can't be used")
 }
