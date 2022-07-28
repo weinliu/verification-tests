@@ -1,4 +1,3 @@
-import { checkErrors } from '../upstream/support';
 import { detailsPage } from '../upstream/views/details-page';
 import { listPage  } from '../upstream/views/list-page';
 import { logsPage } from '../views/logs';

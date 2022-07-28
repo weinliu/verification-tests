@@ -1,0 +1,44 @@
+{
+  "apiVersion": "apps.openshift.io/v1",
+  "kind": "DeploymentConfig",
+  "metadata": {
+    "name": "example-dc"
+  },
+  "spec": {
+    "selector": {
+      "app": "hello-openshift"
+    },
+    "replicas": 1,
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "hello-openshift"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "hello-openshift",
+            "image": "aosqe/hello-openshift-centos",
+            "ports": [
+              {
+                "containerPort": 8080
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: testsecret
+type: kubernetes.io/tls
+data:
+  tls.crt: >-
+    AAA
+  tls.key: >-
+    BBB

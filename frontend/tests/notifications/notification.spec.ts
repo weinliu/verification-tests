@@ -1,4 +1,3 @@
-import { checkErrors } from '../../upstream/support';
 import { Overview } from '../../views/overview';
 import { preferNotifications } from '../../views/user-preferences';
 import testConfigMap from '../../fixtures/cluster-monitoring-config.json';

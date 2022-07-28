@@ -1,4 +1,3 @@
-import { checkErrors } from '../../upstream/support';
 import { Overview } from '../../views/overview';
 import { Insights } from '../../views/insights';
 describe('Insights check', () => {

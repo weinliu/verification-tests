@@ -1,4 +1,3 @@
-import {checkErrors} from "../upstream/support";
 import {podsPage} from "../views/pods";
 import {namespaceDropdown} from "../views/namespace-dropdown";
 

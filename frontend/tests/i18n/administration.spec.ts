@@ -1,4 +1,3 @@
-import { checkErrors } from '../../upstream/support';
 import { DetailsPageSelector } from '../../upstream/views/details-page';
 import { listPage, ListPageSelector } from '../../upstream/views/list-page';
 

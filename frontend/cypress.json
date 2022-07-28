@@ -18,7 +18,7 @@
   "defaultCommandTimeout": 300000,
   "pageLoadTimeout": 300000,
   "retries": {
-    "runMode": 1,
+    "runMode": 0,
     "openMode": 0
   },
   "viewportWidth": 1440,

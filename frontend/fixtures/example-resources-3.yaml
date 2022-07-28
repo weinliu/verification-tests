@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-configmap-2
+data:
+  data1: test text 1
+  data2: test text 2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: example-deployment
+  annotations: {}
+spec:
+  selector:
+    matchLabels:
+      app: example-deployment
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: example-deployment
+    spec:
+      containers:
+        - name: container
+          image: quay.io/openshifttest/hello-openshift
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env: []
+      imagePullSecrets: []
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+  paused: false
+

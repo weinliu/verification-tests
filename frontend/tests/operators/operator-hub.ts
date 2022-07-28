@@ -1,4 +1,3 @@
-import { checkErrors } from '../../upstream/support';
 import {operatorHubPage, OperatorHubSelector} from "../../views/operator-hub-page";
 import customCatalog from '../../fixtures/custom-catalog-source.json'
 

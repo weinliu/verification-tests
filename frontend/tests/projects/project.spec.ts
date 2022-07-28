@@ -1,4 +1,3 @@
-import { checkErrors } from '../../upstream/support';
 import { listPage } from '../../upstream/views/list-page';
 import { projectsPage } from '../../views/projects';
 describe('Projects', () => {

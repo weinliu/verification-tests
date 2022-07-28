@@ -1,4 +1,3 @@
-import { checkErrors } from '../../upstream/support';
 import { nwpolicyPage, nwpolicyPageSelectors } from '../../views/nwpolicy-page';
 import { OverviewSelectors } from '../../views/overview';
 import { OCCreds, OCCli } from '../../views/cluster-cliops';
