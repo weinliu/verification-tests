@@ -495,9 +495,19 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		g.By("check the help info for the registry config locations")
 		clusterImage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.desired.image}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		out, err := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", clusterImage).Output()
-		o.Expect(err).Should(o.HaveOccurred())
-		o.Expect(out).To(o.ContainSubstring("unauthorized: authentication required"))
+		dockerCred := checkDockerCred()
+		if dockerCred {
+			e2e.Logf("there are default docker cred in the prow")
+			err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", clusterImage).Execute()
+			o.Expect(err).Should(o.HaveOccurred())
+		}
+
+		podmanCred := checkPodmanCred()
+		if podmanCred {
+			e2e.Logf("there are default podman cred in the prow")
+			err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", clusterImage).Execute()
+			o.Expect(err).Should(o.HaveOccurred())
+		}
 
 		g.By("Set podman registry config")
 		dirname := "/tmp/case44061"

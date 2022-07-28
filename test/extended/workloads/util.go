@@ -911,3 +911,21 @@ func checkNetworkType(oc *exutil.CLI) string {
 	output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("network.operator", "cluster", "-o=jsonpath={.spec.defaultNetwork.type}").Output()
 	return strings.ToLower(output)
 }
+
+func checkDockerCred() bool {
+	homePath := os.Getenv("HOME")
+	_, err := os.Stat(homePath + "/.docker/config.json")
+	if os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
+
+func checkPodmanCred() bool {
+	currentRuntime := os.Getenv("XDG_RUNTIME_DIR")
+	_, err := os.Stat(currentRuntime + "containers/auth.json")
+	if os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
