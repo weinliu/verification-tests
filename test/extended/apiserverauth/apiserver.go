@@ -2384,8 +2384,8 @@ spec:
 
 		g.By("7) On all master nodes, check kas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
 		format = `[0-9TZm.:]{2,}|namespace="([a-zA-Z0-9]|\-)*"|name="([a-zA-Z0-9]|\-)*"`
-		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)"
-		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/kube-apiserver/audit*.log | jq -r '.requestURI + .responseStatus.status + .responseStatus.message + .responseStatus.reason + .user.username' | grep -Ev '%s' | sort > /tmp/OCP-39601-audit-errors.log
+		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)|ocp4-kubelet-enable-protect-kernel-sysctl-kernel-panic|ocp4-kubelet-enable-protect-kernel-sysctl-vm-panic-on-oom"
+		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/kube-apiserver/audit*.log | jq -r '.requestURI + " - " + .responseStatus.status + " - " + .responseStatus.message + " - " + .responseStatus.reason + " - " + .user.username' | grep -Ev '%s' | sort > /tmp/OCP-39601-audit-errors.log
 		sed -E 's/((%s)( )*){1,}/.*/g' /tmp/OCP-39601-audit-errors.log | grep -v '^[[:space:]]*$' | sort | uniq | head -10 > /tmp/OCP-39601-audit-uniq-errors.log
 		echo '%s'
 		while read line; do
