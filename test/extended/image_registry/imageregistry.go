@@ -2444,6 +2444,43 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring(`Invalid value: "test": spec.rolloutStrategy in body should match '^(RollingUpdate|Recreate)$'`))
 	})
 
+	// author: jitli@redhat.com
+	g.It("Author:jitli-Critical-24100-ImageRegistry Registry OpenStack Storage [Disruptive]", func() {
+
+		storagetype, _ := getRegistryStorageConfig(oc)
+		if storagetype != "swift" {
+			g.Skip("Skip for non-supported platform")
+		}
+		podNum := getImageRegistryPodNumber(oc)
+
+		g.By("Check the storage swift info")
+		swiftPasswd, getErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.template.spec.containers[0].env[?(@.name==\"REGISTRY_STORAGE_SWIFT_PASSWORD\")].valueFrom}").Output()
+		o.Expect(getErr).NotTo(o.HaveOccurred())
+		o.Expect(swiftPasswd).NotTo(o.BeEmpty())
+		swiftName, getErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.template.spec.containers[0].env[?(@.name==\"REGISTRY_STORAGE_SWIFT_USERNAME\")].valueFrom}").Output()
+		o.Expect(getErr).NotTo(o.HaveOccurred())
+		o.Expect(swiftName).NotTo(o.BeEmpty())
+
+		status, getErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.status.conditions}").Output()
+		o.Expect(getErr).NotTo(o.HaveOccurred())
+		o.Expect(status).To(o.ContainSubstring("Swift container Exists"))
+
+		oldContainer, getErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.storage.swift.container}").Output()
+		o.Expect(getErr).NotTo(o.HaveOccurred())
+
+		g.By("Reset swift storage")
+		patchErr := oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"storage":{"swift":{"container":null}}}}`, "--type=merge").Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		g.By("Check the storage swift info after reset")
+		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
+		newContainer, getErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.storage.swift.container}").Output()
+		o.Expect(getErr).NotTo(o.HaveOccurred())
+		o.Expect(newContainer).NotTo(o.Equal(oldContainer))
+
+	})
+
+	//author: xiuwang@redhat.com
 	g.It("Author:xiuwang-Low-18994-Copy internal image to another tag via 'oc image mirror'", func() {
 
 		g.By("Get external registry host")
@@ -2467,6 +2504,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	})
 
+	//author: xiuwang@redhat.com
 	g.It("Author:xiuwang-Medium-18998-Mirror multiple images to another registry", func() {
 
 		g.By("Check the cluster using architecture")
