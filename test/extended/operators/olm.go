@@ -4565,6 +4565,8 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			for _, ip := range ipList {
 				name := strings.Fields(ip)[0]
 				CSVs := getResource(oc, asAdmin, withoutNamespace, "installplan", name, "-n", sub.namespace, "-o=jsonpath={.spec.clusterServiceVersionNames}")
+				e2e.Logf("CSVs is \n%s", CSVs)
+				e2e.Logf("sub.installedCSV is \n%s", sub.installedCSV)
 				if strings.Contains(CSVs, sub.installedCSV) {
 					count++
 				}
