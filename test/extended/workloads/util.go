@@ -929,3 +929,18 @@ func checkPodmanCred() bool {
 	}
 	return true
 }
+
+func getPullSecret(oc *exutil.CLI) (string, error) {
+	return oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/pull-secret", "-n", "openshift-config", `--template={{index .data ".dockerconfigjson" | base64decode}}`).OutputToFile("auth.dockerconfigjson")
+}
+
+func getHostFromRoute(oc *exutil.CLI, routeName string, routeNamespace string) string {
+	stdout, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", routeName, "-n", routeNamespace, "-o", "jsonpath='{.spec.host}'").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	return stdout
+}
+func createEdgeRoute(oc *exutil.CLI, serviceName string, namespace string, routeName string) {
+	err := oc.Run("create").Args("route", "edge", routeName, "--service", serviceName, "-n", namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}

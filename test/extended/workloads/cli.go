@@ -581,6 +581,40 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		}
 
 	})
+	// author: yinzhou@redhat.com
+	g.It("ConnectedOnly-Author:yinzhou-Critical-51009-High-51017-oc adm release new support manifest list", func() {
+		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+		if !strings.Contains(output, "AWS") {
+			g.Skip("Skip for non-supported platform")
+		}
+		workloadsBaseDir := exutil.FixturePath("testdata", "workloads")
+		manifestlistImagestream := filepath.Join(workloadsBaseDir, "12708358_4.11.0-0.nightly-multi-2022-04-18-120932-release-imagestream.yaml")
+		ns := oc.Namespace()
+
+		g.By("Trying to launch a registry app")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry:multiarch",
+			namespace:   ns,
+		}
+		defer registry.deleteregistry(oc)
+		_ = registry.createregistry(oc)
+
+		createEdgeRoute(oc, "registry", ns, "registry")
+
+		registryHost := strings.ReplaceAll(getHostFromRoute(oc, "registry", ns), "'", "")
+		e2e.Logf("registry route is %v", registryHost)
+
+		secretFile, err := getPullSecret(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "new", "--registry-config="+secretFile, "--reference-mode=source", "--keep-manifest-list", "-f", manifestlistImagestream, "--name", "4.11.0-0.nightly", "--to-image="+registryHost+"/ocp-release:4.11.0-0.nightly", "--insecure").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", registryHost+"/ocp-release:4.11.0-0.nightly", "--insecure").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		out, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "info", registryHost+"/ocp-release:4.11.0-0.nightly", "--filter-by-os", "linux/s390x", "--insecure").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("linux/s390x"))
+	})
 })
 
 // ClientVersion ...
