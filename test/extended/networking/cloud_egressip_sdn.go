@@ -1467,6 +1467,244 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(CurlErr).To(o.HaveOccurred())
 	})
 
+	// author: jechen@redhat.com
+	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-47055-Should be able to access to the service's externalIP with egressIP [Disruptive]", func() {
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		externalIPServiceTemplate := filepath.Join(buildPruningBaseDir, "externalip_service1-template.yaml")
+		externalIPPodTemplate := filepath.Join(buildPruningBaseDir, "externalip_pod-template.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+
+		g.By("1. Get list of nodes, choose first node as egressNode, get 2 unused IP from the node")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("Not enough node available, need at least one node for the test, skip the case!!")
+		}
+		egressNode := nodeList.Items[0].Name
+		sub := getIfaddrFromNode(egressNode, oc)
+
+		// Find 2 unused IP from the egress node, first one is used as externalIP, second one is used as egressIP
+		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode, sub, 2)
+
+		g.By("2. In first namespace, create externalIP service and pod")
+		ns1 := oc.Namespace()
+		service := externalIPService{
+			name:       "service-unsecure",
+			namespace:  ns1,
+			externalIP: freeIPs[0],
+			template:   externalIPServiceTemplate,
+		}
+
+		pod1 := externalIPPod{
+			name:      "externalip-pod",
+			namespace: ns1,
+			template:  externalIPPodTemplate,
+		}
+
+		defer patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[]}}}}")
+		patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[\""+sub+"\"]}}}}")
+
+		defer removeResource(oc, true, true, "service", service.name, "-n", service.namespace)
+		parameters := []string{"--ignore-unknown-parameters=true", "-f", service.template, "-p", "NAME=" + service.name, "EXTERNALIP=" + service.externalIP}
+		exutil.ApplyNsResourceFromTemplate(oc, service.namespace, parameters...)
+
+		pod1.createExternalIPPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		g.By("3. Patch egressIP to the egressIP node")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[\""+freeIPs[1]+"\"]}")
+
+		g.By("4. Create a second namespace, patch the first egressIP to the namespace, create a test pod in it")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		pod2 := pingPodResource{
+			name:      "hello-pod2",
+			namespace: ns2,
+			template:  pingPodTemplate,
+		}
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns2, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns2, "{\"egressIPs\":[\""+freeIPs[1]+"\"]}")
+
+		pod2.createPingPod(oc)
+		waitPodReady(oc, pod2.namespace, pod2.name)
+
+		g.By("5. Curl the externalIP service from test pod of 2nd namespace")
+		curlURL := freeIPs[0] + ":27017"
+		output, CurlErr := e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s "+curlURL+" --connect-timeout 5")
+		o.Expect(CurlErr).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`Hello OpenShift!`))
+
+		g.By("6. Create a third namespace with no egressIP patched, create a test pod in it")
+		oc.SetupProject()
+		ns3 := oc.Namespace()
+
+		pod3 := pingPodResource{
+			name:      "hello-pod3",
+			namespace: ns3,
+			template:  pingPodTemplate,
+		}
+
+		pod3.createPingPod(oc)
+		waitPodReady(oc, pod3.namespace, pod3.name)
+
+		g.By("7. Curl the externalIP service from test pod of 3rd namespace")
+		output, CurlErr = e2e.RunHostCmd(pod3.namespace, pod3.name, "curl -s "+curlURL+" --connect-timeout 5")
+		o.Expect(CurlErr).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`Hello OpenShift!`))
+	})
+
+	// author: jechen@redhat.com
+	g.It("ConnectedOnly-Author:jechen-High-47057-NodePort works when configuring an egressIP address [Disruptive]", func() {
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		nodeServiceTemplate := filepath.Join(buildPruningBaseDir, "nodeservice-template.yaml")
+
+		g.By("1. Get list of worker nodes, choose first node as egressNode, get 1 unused IP from the node")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("Not enough node available, need at least one node for the test, skip the case!!")
+		}
+
+		egressNode := nodeList.Items[0].Name
+		sub := getIfaddrFromNode(egressNode, oc)
+		// Find 1 unused IP from the egress node
+		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode, sub, 1)
+
+		g.By("2. Choose a second worker node, create nodeport service on it")
+		nonEgressNode := nodeList.Items[1].Name
+		nonEgressNodeHostIP := checkParameter(oc, "default", "hostsubnet", nonEgressNode, "-o=jsonpath={.hostIP}")
+		e2e.Logf("nonEgressNodeHostIP is: %v ", nonEgressNodeHostIP)
+
+		g.By("3. create a namespace, create nodeport service on the nonEgress node")
+		ns1 := oc.Namespace()
+		service := nodePortService{
+			name:      "hello-pod",
+			namespace: ns1,
+			nodeName:  nonEgressNode,
+			template:  nodeServiceTemplate,
+		}
+
+		defer removeResource(oc, true, true, "service", service.name, "-n", service.namespace)
+		parameters := []string{"--ignore-unknown-parameters=true", "-f", service.template, "-p", "NAME=" + service.name, "NODENAME=" + service.nodeName}
+		exutil.ApplyNsResourceFromTemplate(oc, service.namespace, parameters...)
+		waitPodReady(oc, ns1, "hello-pod")
+
+		g.By("4. Patch egressIP to the egressIP node and the namespace")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
+
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns1, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns1, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
+
+		g.By("5. Access the nodeport service from a master node")
+		result := checkParameter(oc, ns1, "service", "hello-pod", "-o=jsonpath={.spec.type}")
+
+		// get first master node that is available
+		firstMasterNode, masterErr := exutil.GetFirstMasterNode(oc)
+		o.Expect(masterErr).NotTo(o.HaveOccurred())
+		e2e.Logf("First master node is: %v ", firstMasterNode)
+
+		if strings.Contains(result, "NodePort") {
+			curlURL := nonEgressNodeHostIP + ":30012"
+			curlCommand := "curl -s " + curlURL + " --connect-timeout 5"
+			curlErr := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+				output, err := exutil.DebugNodeWithChroot(oc, firstMasterNode, "bash", "-c", curlCommand)
+				if !strings.Contains(output, "Hello OpenShift!") || err != nil {
+					e2e.Logf("\n Output when accesing the nodeport service: ---->%v<----, or got the error: %v\n", output, err)
+					return false, nil
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(curlErr, fmt.Sprintf("Failed to access nodeport service:%s", curlErr))
+
+		} else {
+			g.Fail("Did not find NodePort service")
+		}
+	})
+
+	// author: jechen@redhat.com
+	g.It("ConnectedOnly-Author:jechen-High-47462-EgressNetworkPolicy should work well with egressIP [Disruptive]", func() {
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressPolicyTemplate := filepath.Join(buildPruningBaseDir, "egress-limit-policy-template.yaml")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+
+		g.By("1. Get list of nodes, choose first node as egressNode, get 1 unused IP from the node that will be used as egressIP")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("Not enough node available, need at least one node for the test, skip the case!!")
+		}
+
+		egressNode := nodeList.Items[0].Name
+		sub := getIfaddrFromNode(egressNode, oc)
+
+		// Find 1 unused IP from the egress node
+		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode, sub, 1)
+
+		// set the cidrSelector for the network policy to be the internalIP of the int-svc instance
+		internalIP := strings.Split(ipEchoURL, ":")[0]
+		cidrSelector := internalIP + "/32"
+		e2e.Logf("\n cideSelector: %v \n", cidrSelector)
+
+		g.By("2. create an egress network policy to deny ipecho service's IP which is the internalIP of the int-svc")
+		ns := oc.Namespace()
+		policy := egressPolicy{
+			name:         "policy1",
+			namespace:    ns,
+			cidrSelector: cidrSelector,
+			template:     egressPolicyTemplate,
+		}
+
+		defer removeResource(oc, true, true, "egressnetworkpolicy", policy.name, "-n", policy.namespace)
+		parameters := []string{"--ignore-unknown-parameters=true", "-f", policy.template, "-p", "NAME=" + policy.name, "CIDRSELECTOR=" + policy.cidrSelector}
+		exutil.ApplyNsResourceFromTemplate(oc, policy.namespace, parameters...)
+
+		//check if deny policy is in place
+		result := checkParameter(oc, ns, "egressnetworkpolicy", policy.name, "-o=jsonpath={.spec.egress[0].type}")
+		if !strings.Contains(result, "Deny") {
+			g.Fail("No deny network policy is in place as expected, fail the test now")
+		}
+
+		g.By("3. Patch egressIP to the egressIP node and the namespace")
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
+
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
+
+		pod := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+
+		pod.createPingPod(oc)
+		waitPodReady(oc, pod.namespace, pod.name)
+
+		g.By("4. Curl from the test pod should not succeed, error is expected as there is deny network policy in place")
+		_, err = e2e.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+		o.Expect(err).To(o.HaveOccurred())
+
+		g.By("5. Patch change the network policy to allow the ipecho service IP address (which is internalIP of the int-svc)")
+		change := "[{\"op\":\"replace\", \"path\":\"/spec/egress/0/type\", \"value\":\"Allow\"}]"
+		patchReplaceResourceAsAdmin(oc, oc.Namespace(), "egressnetworkpolicy", policy.name, change)
+
+		g.By("6. Curl external after network policy is changed to allow the IP, verify sourceIP is the egressIP")
+		result = checkParameter(oc, ns, "egressnetworkpolicy", policy.name, "-o=jsonpath={.spec.egress[0].type}")
+		if strings.Contains(result, "Allow") {
+			sourceIP, CurlErr := e2e.RunHostCmd(pod.namespace, pod.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
+			e2e.Logf("\n Get sourceIP as %v \n", sourceIP)
+			o.Expect(CurlErr).NotTo(o.HaveOccurred())
+			o.Expect(sourceIP).Should(o.Equal(freeIPs[0]))
+		} else {
+			g.Fail("Network policy was not changed to allow the ip")
+		}
+	})
 })
 
 var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {

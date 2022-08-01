@@ -142,6 +142,33 @@ type testPodMultinetwork struct {
 	template  string
 }
 
+type externalIPService struct {
+	name       string
+	namespace  string
+	externalIP string
+	template   string
+}
+
+type externalIPPod struct {
+	name      string
+	namespace string
+	template  string
+}
+
+type nodePortService struct {
+	name      string
+	namespace string
+	nodeName  string
+	template  string
+}
+
+type egressPolicy struct {
+	name         string
+	namespace    string
+	cidrSelector string
+	template     string
+}
+
 func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace)
@@ -1617,4 +1644,27 @@ func findUnUsedIPsOnNodeOrFail(oc *exutil.CLI, nodeName, cidr string, expectedNu
 	freeIPs := findUnUsedIPsOnNode(oc, nodeName, cidr, expectedNum)
 	o.Expect(len(freeIPs) == expectedNum).Should(o.BeTrue())
 	return freeIPs
+}
+
+func (pod *externalIPPod) createExternalIPPod(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create the externalIP pod %v", pod.name))
+}
+
+func checkParameter(oc *exutil.CLI, namespace string, kind string, kindName string, parameter string) string {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, kind, kindName, parameter).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return output
+}
+
+func patchReplaceResourceAsAdmin(oc *exutil.CLI, ns, resource, rsname, patch string) {
+	err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resource, rsname, "--type=json", "-p", patch, "-n", ns).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }

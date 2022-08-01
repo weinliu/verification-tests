@@ -1,0 +1,39 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: nodeservice-template 
+objects: 
+- kind: Pod
+  apiVersion: v1
+  metadata:
+    name: hello-pod
+    labels:
+      name: hello-pod
+  spec:
+    containers:
+      - name: hello-pod
+        image: >-
+          quay.io/openshifttest/pod-for-ping@sha256:f61ca8fd1dd7dfb8d403b66df549ed5a94fc4626d3b19e2530af48aefa75e5ea
+        ports:
+          - containerPort: 8080
+    nodeName: "${NODENAME}"
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: hello-pod
+    labels:
+      name: hello-pod
+  spec:
+    externalTrafficPolicy: Local
+    ports:
+      - name: http
+        protocol: TCP
+        port: 27017
+        nodePort: 30012
+        targetPort: 8080
+    type: NodePort
+    selector:
+      name: hello-pod
+parameters:
+- name: NAME
+- name: NODENAME

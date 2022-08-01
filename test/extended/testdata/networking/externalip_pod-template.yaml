@@ -1,0 +1,22 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: externalip-pod-template
+objects:
+- kind: Pod
+  apiVersion: v1
+  metadata:
+    name: "${NAME}" 
+    namespace: "${NAMESPACE}"
+    labels:
+      name: externalip-pod
+  spec:
+    containers:
+    - name: externalip-container
+      image: "quay.io/openshifttest/hello-sdn@sha256:2af5b5ec480f05fda7e9b278023ba04724a3dd53a296afcd8c13f220dec52197"
+      ports:
+      - containerPort: 8080
+      - containerPort: 8443
+parameters:
+- name: NAME
+- name: NAMESPACE
