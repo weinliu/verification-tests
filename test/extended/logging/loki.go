@@ -31,7 +31,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		cloNS := "openshift-logging"
 		loNS := "openshift-operators-redhat"
 		CLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, CatalogSourceObjects{}}
-		LO := SubscriptionObjects{lo, loNS, AllNamespaceOG, subTemplate, loPackageName, CatalogSourceObjects{"candidate", "", ""}}
+		LO := SubscriptionObjects{lo, loNS, AllNamespaceOG, subTemplate, loPackageName, CatalogSourceObjects{}}
 		g.BeforeEach(func() {
 			g.By("deploy CLO and LO")
 			CLO.SubscribeOperator(oc)
