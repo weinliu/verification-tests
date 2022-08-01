@@ -253,6 +253,8 @@ type prometheusQueryResult struct {
 				Name                 string `json:"__name__"`
 				ClusterpoolName      string `json:"clusterpool_name"`
 				ClusterpoolNamespace string `json:"clusterpool_namespace"`
+				ClusterDeployment    string `json:"cluster_deployment"`
+				ExportedNamespace    string `json:"exported_namespace"`
 				Condition            string `json:"condition"`
 				Reason               string `json:"reason"`
 				Endpoint             string `json:"endpoint"`
@@ -916,23 +918,36 @@ func checkMetricExist(oc *exutil.CLI, expect bool, token string, url string, que
 
 }
 
-func checkClusterPoolMetricValue(oc *exutil.CLI, poolName, poolNamespace string, expectedResult string, token string, url string, query string) {
+func checkResourcesMetricValue(oc *exutil.CLI, resourceName, resourceNamespace string, expectedResult string, token string, url string, query string) {
 	err := wait.Poll(1*time.Minute, (ClusterResumeTimeout/60)*time.Minute, func() (bool, error) {
 		data := doPrometheusQuery(oc, token, url, query)
 		for _, v := range data.Data.Result {
-			if v.Metric.ClusterpoolName == poolName && v.Metric.ClusterpoolNamespace == poolNamespace {
-				e2e.Logf("Found metric for pool %s in namespace %s", poolName, poolNamespace)
-				if v.Value[1].(string) == expectedResult {
-					e2e.Logf("The metric Value %s matches expected %s", v.Value[1].(string), expectedResult)
-					return true, nil
+			switch query {
+			case "hive_clusterclaim_assignment_delay_seconds_count":
+				if v.Metric.ClusterpoolName == resourceName && v.Metric.ClusterpoolNamespace == resourceNamespace {
+					e2e.Logf("Found metric for pool %s in namespace %s", resourceName, resourceNamespace)
+					if v.Value[1].(string) == expectedResult {
+						e2e.Logf("The metric Value %s matches expected %s", v.Value[1].(string), expectedResult)
+						return true, nil
+					}
+					e2e.Logf("The metric Value %s didn't match expected %s, try next round", v.Value[1].(string), expectedResult)
+					return false, nil
 				}
-				e2e.Logf("The metric Value %s didn't match expected %s, try next round", v.Value[1].(string), expectedResult)
-				return false, nil
+			case "hive_cluster_deployment_provision_underway_install_restarts":
+				if v.Metric.ClusterDeployment == resourceName && v.Metric.ExportedNamespace == resourceNamespace {
+					e2e.Logf("Found metric for ClusterDeployment %s in namespace %s", resourceName, resourceNamespace)
+					if v.Value[1].(string) == expectedResult {
+						e2e.Logf("The metric Value %s matches expected %s", v.Value[1].(string), expectedResult)
+						return true, nil
+					}
+					e2e.Logf("The metric Value %s didn't match expected %s, try next round", v.Value[1].(string), expectedResult)
+					return false, nil
+				}
 			}
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, "\"checkClusterPoolMetricValue\" fail, can not get expected result")
+	exutil.AssertWaitPollNoErr(err, "\"checkResourcesMetricValue\" fail, can not get expected result")
 }
 
 func checkHiveConfigMetric(oc *exutil.CLI, field string, expectedResult string, token string, url string, query string) {

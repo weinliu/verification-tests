@@ -2606,7 +2606,7 @@ spec:
 		g.By("Check hive metrics for clusterclaim exist")
 		checkMetricExist(oc, ok, token, prometheusURL, query)
 		e2e.Logf("Check metric %s Value is 1", query2)
-		checkClusterPoolMetricValue(oc, poolName, oc.Namespace(), "1", token, prometheusURL, query2)
+		checkResourcesMetricValue(oc, poolName, oc.Namespace(), "1", token, prometheusURL, query2)
 
 		g.By("Create another ClusterClaim...")
 		claimName2 := poolName + "-claim-2"
@@ -2621,6 +2621,84 @@ spec:
 		e2e.Logf("Check if ClusterClaim %s created successfully", claimName2)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, claimName2, ok, DefaultTimeout, []string{"ClusterClaim", "-n", oc.Namespace(), "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		e2e.Logf("Check metric %s Value change to 2", query2)
-		checkClusterPoolMetricValue(oc, poolName, oc.Namespace(), "2", token, prometheusURL, query2)
+		checkResourcesMetricValue(oc, poolName, oc.Namespace(), "2", token, prometheusURL, query2)
+	})
+
+	//author: lwan@redhat.com
+	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//For simplicity, replace --simulate-bootstrap-failure with give an invalid root secret to make install failed
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "23289"|./bin/extended-platform-tests run --timeout 15m -f -
+	g.It("NonPreRelease-ConnectedOnly-Author:lwan-High-23289-Medium-39813-Test hive reports install restarts in CD and Metric[Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 23289|39813 is for AWS - skipping test ...")
+		}
+		testCaseID := "23289"
+		cdName := "cluster-" + testCaseID
+		imageSetName := cdName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: testOCPImage,
+			template:     imageSetTemp,
+		}
+
+		g.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		oc.SetupProject()
+		e2e.Logf("Create a invalid aws creds make install failed.")
+		e2e.Logf("Modify aws creds to invalid")
+		err := oc.Run("create").Args("secret", "generic", AWSCreds, "--from-literal=aws_access_key_id=test", "--from-literal=aws_secret_access_key=test", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Create Install-Config Secret...")
+		installConfigTemp := filepath.Join(testDataDir, "aws-install-config.yaml")
+		installConfigSecretName := cdName + "-install-config"
+		installConfigSecret := installConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   installConfigTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
+		installConfigSecret.create(oc)
+
+		g.By("Create ClusterDeployment with installAttemptsLimit=3...")
+		clusterTemp := filepath.Join(testDataDir, "clusterdeployment.yaml")
+		cluster := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          imageSetName,
+			installConfigSecret:  installConfigSecretName,
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 3,
+			template:             clusterTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
+		cluster.create(oc)
+
+		g.By("OCP-23289: Check hive reports current number of install job retries in cluster deployment status...")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "3", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.installRestarts}"}).check(oc)
+		o.Expect(checkResourceNumber(oc, cdName, []string{"pods", "-A"})).To(o.Equal(3))
+
+		g.By("OCP-39813: CHeck provision metric reporting number of install restarts...")
+		token, err := exutil.GetSAToken(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(token).NotTo(o.BeEmpty())
+		query := "hive_cluster_deployment_provision_underway_install_restarts"
+		checkResourcesMetricValue(oc, cdName, oc.Namespace(), "3", token, prometheusURL, query)
+
 	})
 })
