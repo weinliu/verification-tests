@@ -421,7 +421,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		g.By("Scale up the MachineSet")
 		e2e.Logf("Scalling up the Windows node to 3")
 		windowsMachineSetName := getWindowsMachineSetName(oc)
-		scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 3, false)
+		scaleWindowsMachineSet(oc, windowsMachineSetName, 15, 3, false)
 		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2, false)
 		waitWindowsNodesReady(oc, getWindowsHostNames(oc), 10*time.Second, 1200*time.Second)
 		// Testing the Windows server is reachable via Linux pod
@@ -692,7 +692,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 3, true)
 		g.By("Scale up WMCO")
 		scaleDeployment(oc, "wmco", 1, namespace)
-		waitForMachinesetReady(oc, windowsMachineSetName, 10, 3)
+		waitForMachinesetReady(oc, windowsMachineSetName, 15, 3)
 
 		g.By("Check Windows machines created before WMCO starts are successfully reconciling and Windows nodes added")
 		waitWindowsNodesReady(oc, getWindowsHostNames(oc), 10*time.Second, 1200*time.Second)

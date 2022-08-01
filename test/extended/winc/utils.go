@@ -270,11 +270,11 @@ func getFileContent(baseDir string, name string) (fileContent string) {
 func scaleDeployment(oc *exutil.CLI, os string, replicas int, namespace string) error {
 	deploymentName := getWorkloadName(os)
 	_, err := oc.WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), "deployment", deploymentName, "-n", namespace).Output()
-	poolErr := wait.Poll(60*time.Second, 300*time.Second, func() (bool, error) {
+	poolErr := wait.Poll(60*time.Second, 10*time.Minute, func() (bool, error) {
 		return checkWorkloadCreated(oc, deploymentName, namespace, replicas), nil
 	})
 	if poolErr != nil {
-		e2e.Failf("Workload did not scale after waiting up to 5 minutes ...")
+		e2e.Failf("Workload did not scale after waiting up to 10 minutes ...")
 	}
 	return err
 }
