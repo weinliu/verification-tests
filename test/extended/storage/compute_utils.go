@@ -173,6 +173,12 @@ func drainSpecificNode(oc *exutil.CLI, nodeName string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+func drainNodeWithPodLabel(oc *exutil.CLI, nodeName string, podLabel string) {
+	e2e.Logf("oc adm drain nodes/" + nodeName + " --pod-selector" + podLabel + " --ignore-daemonsets --delete-emptydir-data --force --timeout=600s")
+	err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("drain", "nodes/"+nodeName, "--pod-selector", "app="+podLabel, "--ignore-daemonsets", "--delete-emptydir-data", "--force", "--timeout=600s").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 // Uncordon specified node
 func uncordonSpecificNode(oc *exutil.CLI, nodeName string) error {
 	e2e.Logf("oc adm uncordon nodes/" + nodeName)

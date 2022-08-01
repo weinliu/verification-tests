@@ -82,7 +82,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("#. Run drain cmd to drain the node on which the deployment's pod is located")
 		originNodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
 		volName := pvc.getVolumeName(oc)
-		drainSpecificNode(oc, originNodeName)
+		//drainSpecificNode(oc, originNodeName)
+		drainNodeWithPodLabel(oc, originNodeName, dep.applabel)
 		defer uncordonSpecificNode(oc, originNodeName)
 
 		g.By("#. Wait for the deployment become ready again")
