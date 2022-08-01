@@ -19,7 +19,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	)
 
 	// author: huliu@redhat.com
-	g.It("Author:huliu-Medium-45420-Cluster Machine Approver should use leader election", func() {
+	g.It("Author:huliu-Medium-45420-Cluster Machine Approver should use leader election [Disruptive]", func() {
 		attemptAcquireLeaderLeaseStr := "attempting to acquire leader lease openshift-cluster-machine-approver/cluster-machine-approver-leader..."
 		acquiredLeaseStr := "successfully acquired lease openshift-cluster-machine-approver/cluster-machine-approver-leader"
 
@@ -34,45 +34,33 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(logsOfPod).To(o.ContainSubstring(attemptAcquireLeaderLeaseStr))
 		o.Expect(logsOfPod).To(o.ContainSubstring(acquiredLeaseStr))
 
-		defer oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment", "machine-approver", "--replicas=1", "-n", "openshift-cluster-machine-approver").Execute()
-
-		g.By("Scale the replica of ClusterMachineApprover to 2")
-		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment", "machine-approver", "--replicas=2", "-n", "openshift-cluster-machine-approver").Execute()
+		g.By("Delete the default pod")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", podName, "-n", "openshift-cluster-machine-approver").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Wait for ClusterMachineApprover to scale")
-		err = wait.Poll(3*time.Second, 90*time.Second, func() (bool, error) {
+		g.By("Wait for new pod ready")
+		err = wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
 			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "machine-approver", "-o=jsonpath={.status.availableReplicas}", "-n", "openshift-cluster-machine-approver").Output()
 			readyReplicas, _ := strconv.Atoi(output)
-			if readyReplicas != 2 {
-				e2e.Logf("The scaled pod is not ready yet and waiting up to 3 seconds ...")
+			if readyReplicas != 1 {
+				e2e.Logf("The new pod is not ready yet and waiting up to 3 seconds ...")
 				return false, nil
 			}
-			e2e.Logf("The deployment machine-approver is successfully scaled")
+			e2e.Logf("The new pod is ready")
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "Check pod failed")
+		exutil.AssertWaitPollNoErr(err, "The new pod is not ready after 1 minute")
 
-		podNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-cluster-machine-approver").Output()
+		g.By("Check new pod is leader")
+		mewPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-cluster-machine-approver").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		podNameList := strings.Split(podNames, " ")
-
-		var logsOfPod1, logsOfPod2 string
-
-		g.By("Wait both pods are attempting to acquire leader lease")
-		err = wait.Poll(5*time.Second, 90*time.Second, func() (bool, error) {
-			logsOfPod1, _ = oc.AsAdmin().WithoutNamespace().Run("logs").Args(podNameList[0], "-n", "openshift-cluster-machine-approver", "-c", "machine-approver-controller").Output()
-			logsOfPod2, _ = oc.AsAdmin().WithoutNamespace().Run("logs").Args(podNameList[1], "-n", "openshift-cluster-machine-approver", "-c", "machine-approver-controller").Output()
-			if !strings.Contains(logsOfPod1, attemptAcquireLeaderLeaseStr) || !strings.Contains(logsOfPod2, attemptAcquireLeaderLeaseStr) {
-				e2e.Logf("At least one pod is not attempting to acquire leader lease and waiting up to 5 seconds ...")
-				return false, nil
-			}
-			e2e.Logf("Both pods are attempting to acquire leader lease")
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Check pod attempting to acquire leader lease failed")
-
-		g.By("Check only one pod is leader")
-		o.Expect((strings.Contains(logsOfPod1, acquiredLeaseStr) && !strings.Contains(logsOfPod2, acquiredLeaseStr)) || (!strings.Contains(logsOfPod1, acquiredLeaseStr) && strings.Contains(logsOfPod2, acquiredLeaseStr))).To(o.BeTrue())
+		logsOfPod, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args(mewPodName, "-n", "openshift-cluster-machine-approver", "-c", "machine-approver-controller").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(logsOfPod, attemptAcquireLeaderLeaseStr) {
+			e2e.Failf("fail with no expect %v", attemptAcquireLeaderLeaseStr)
+		}
+		if !strings.Contains(logsOfPod, acquiredLeaseStr) {
+			e2e.Failf("fail with no expect %v", acquiredLeaseStr)
+		}
 	})
 })
