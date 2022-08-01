@@ -181,6 +181,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+
 		// Set up a specified project share for all the phases
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
@@ -1559,6 +1560,15 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
+			mo := newMonitor(oc.AsAdmin())
+			vcenterVersion, err := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			// Snapshot feature on vSphere needs both vCenter version and Esxi version at least 7.0.3
+			if !versionIsAbove(vcenterVersion, "7.0.2") {
+				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
+			}
+		}
 
 		// Set the resource template for the scenario
 		var (
@@ -1631,6 +1641,15 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
+			mo := newMonitor(oc.AsAdmin())
+			vcenterVersion, err := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			// Snapshot feature on vSphere needs both vCenter version and Esxi version at least 7.0.3
+			if !versionIsAbove(vcenterVersion, "7.0.2") {
+				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
+			}
 		}
 
 		// Set the resource template for the scenario
@@ -1722,6 +1741,15 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
+			mo := newMonitor(oc.AsAdmin())
+			vcenterVersion, err := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			// Snapshot feature on vSphere needs both vCenter version and Esxi version at least 7.0.3
+			if !versionIsAbove(vcenterVersion, "7.0.2") {
+				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
+			}
+		}
 
 		// Set the resource template for the scenario
 		var (
@@ -1811,6 +1839,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
+			mo := newMonitor(oc.AsAdmin())
+			vcenterVersion, err := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			// Snapshot feature on vSphere needs both vCenter version and Esxi version at least 7.0.3
+			if !versionIsAbove(vcenterVersion, "7.0.2") {
+				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
+			}
+		}
+
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
@@ -2346,6 +2384,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
+			mo := newMonitor(oc.AsAdmin())
+			vcenterVersion, err := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			// Snapshot feature on vSphere needs both vCenter version and Esxi version at least 7.0.3
+			if !versionIsAbove(vcenterVersion, "7.0.2") {
+				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
+			}
+		}
+
 		var (
 			storageTeamBaseDir          = exutil.FixturePath("testdata", "storage")
 			pvcTemplate                 = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -2609,6 +2657,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
+			mo := newMonitor(oc.AsAdmin())
+			vcenterVersion, err := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			// Snapshot feature on vSphere needs both vCenter version and Esxi version at least 7.0.3
+			if !versionIsAbove(vcenterVersion, "7.0.2") {
+				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
+			}
+		}
+
 		var (
 			storageTeamBaseDir            = exutil.FixturePath("testdata", "storage")
 			pvcTemplate                   = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -3004,7 +3062,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-50398 - [CSI Driver] [Daemonset] [Filesystem default] could provide RWX access mode volume
 	g.It("Author:ropatil-High-50398-[CSI Driver] [Daemonset] [Filesystem default] could provide RWX access mode volume", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"efs.csi.aws.com"}
+		scenarioSupportProvisioners := []string{"efs.csi.aws.com", "csi.vsphere.vmware.com"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
 
 		// Set the resource template for the scenario
@@ -3016,9 +3074,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
+			vcenterInfo, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-cluster-csi-drivers", "secret/vmware-vsphere-cloud-credentials", "-o=jsonpath={.data}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			// Currently only ibmcloud vsphere clsuters enable vSAN fileshare service which vSphere CSI Driver RWX feature needed
+			// Temp solution, we could check the vCenter vSAN info by call vcenter sdk later for enchancement
+			if !strings.Contains(vcenterInfo, "ibmvcenter.vmc-ci") {
+				g.Skip("Skip for the test cluster vCenter not enable vSAN fileshare service!!!")
+			}
+		}
 
 		// Set up a specified project share for all the phases
-		g.By("0. Create new project for the scenario")
+		g.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
@@ -3034,18 +3101,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimAccessmode("ReadWriteMany"))
 			ds := newDaemonSet(setDsTemplate(dsTemplate))
 
-			g.By("Create a pvc with the csi storageclass")
+			g.By("# Create a pvc with the csi storageclass")
 			pvc.scname = scName
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
 
-			g.By("Create daemonset pod with the created pvc and wait for the pod ready")
+			g.By("# Create daemonset pod with the created pvc and wait for the pod ready")
 			ds.pvcname = pvc.name
 			ds.create(oc)
 			defer ds.deleteAsAdmin(oc)
 			ds.waitReady(oc)
 
-			g.By("Check the volume mounted on the pod located node")
+			g.By("# Check the volume mounted on the pod located node")
 			volName := pvc.getVolumeName(oc)
 			for _, podInstance := range ds.getPodsList(oc) {
 				nodeName := getNodeNameByPod(oc, ds.namespace, podInstance)
@@ -3090,6 +3157,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 		for _, provisioner := range supportProvisioners {
@@ -3118,9 +3186,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer ds.deleteAsAdmin(oc)
 			ds.waitReady(oc)
 
-			//add step to make sure pv is deleted after testing
-			//defer deleteSpecifiedResource(oc.AsAdmin(), "pv", pvc.getVolumeName(oc), "")
-
 			g.By("# Check the pods can write data inside volume")
 			ds.checkPodMountedVolumeCouldWrite(oc)
 
@@ -3143,6 +3208,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				sizeString, err := execCommandInSpecificPod(oc, ds.namespace, podName, "df -BG | grep "+ds.mpath+"|awk '{print $2}'")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				sizeInt64, err := strconv.ParseInt(strings.TrimSuffix(sizeString, "G"), 10, 64)
+				o.Expect(err).NotTo(o.HaveOccurred())
 				o.Expect(expandSizeInt64).To(o.Equal(sizeInt64))
 			}
 

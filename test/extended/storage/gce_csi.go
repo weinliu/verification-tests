@@ -204,7 +204,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	}
 
 	// author: chaoyang@redhat.com
-	g.It("Author:chaoyang-Critical-51995-[GCE-PD-CSI][snapshot]Provision image disk snapshot and restore successfully", func() {
+	g.It("Author:chaoyang-Critical-51995-[GCE-PD-CSI] [Snapshot] Provision image disk snapshot and restore successfully", func() {
 		var (
 			volumeSnapshotClassTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshotclass-template.yaml")
 			volumesnapshotTemplate      = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
