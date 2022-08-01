@@ -86,6 +86,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// author: mjoseph@redhat.com
 	g.It("Author:mjoseph-High-49802-HTTPS redirect happens even if there is a more specific http-only", func() {
+		//curling through defualt controller will not work for proxy cluster.
+		if checkProxy(oc) {
+			g.Skip("This is proxy cluster, skip the test.")
+		}
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
@@ -98,35 +102,35 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("create project and a pod")
 		baseDomain := getBaseDomain(oc)
-		oc.SetupProject()
-		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=hello-pod, Ready status not met")
-		podName := getPodName(oc, oc.Namespace(), "name=web-server-rc")
+		podName := getPodName(oc, project1, "name=web-server-rc")
 		defaultContPod := getRouterPod(oc, "default")
 
 		g.By("create routes and get the details")
-		rut.namespace = oc.Namespace()
+		rut.namespace = project1
 		rut.create(oc)
-		getRoutes(oc, oc.Namespace())
+		getRoutes(oc, project1)
 
 		g.By("check the reachability of the secure route with redirection")
-		waitForCurl(oc, podName[0], baseDomain, "hello-pod-"+oc.Namespace()+".apps.", "HTTP/1.1 302 Found", "")
-		waitForCurl(oc, podName[0], baseDomain, "hello-pod-"+oc.Namespace()+".apps.", `location: https://hello-pod-`, "")
+		waitForCurl(oc, podName[0], baseDomain, "hello-pod-"+project1+".apps.", "HTTP/1.1 302 Found", "")
+		waitForCurl(oc, podName[0], baseDomain, "hello-pod-"+project1+".apps.", `location: https://hello-pod-`, "")
 
 		g.By("check the reachability of the insecure routes")
-		waitForCurl(oc, podName[0], baseDomain+"/test/", "hello-pod-http-"+oc.Namespace()+".apps.", "HTTP/1.1 200 OK", "")
+		waitForCurl(oc, podName[0], baseDomain+"/test/", "hello-pod-http-"+project1+".apps.", "HTTP/1.1 200 OK", "")
 
 		g.By("check the reachability of the secure route")
-		curlCmd := fmt.Sprintf("curl -I -k https://hello-pod-%s.apps.%s", oc.Namespace(), baseDomain)
-		statsOut, err := exutil.RemoteShPod(oc, oc.Namespace(), podName[0], "sh", "-c", curlCmd)
+		curlCmd := fmt.Sprintf("curl -I -k https://hello-pod-%s.apps.%s", project1, baseDomain)
+		statsOut, err := exutil.RemoteShPod(oc, project1, podName[0], "sh", "-c", curlCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(statsOut).Should(o.ContainSubstring("HTTP/1.1 200 OK"))
 
 		g.By("check the router pod and ensure the routes are loaded in haproxy.config")
 		searchOutput := readRouterPodData(oc, defaultContPod, "cat haproxy.config", "hello-pod")
-		o.Expect(searchOutput).To(o.ContainSubstring("backend be_edge_http:" + oc.Namespace() + ":hello-pod"))
+		o.Expect(searchOutput).To(o.ContainSubstring("backend be_edge_http:" + project1 + ":hello-pod"))
 		searchOutput1 := readRouterPodData(oc, defaultContPod, "cat haproxy.config", "hello-pod-http")
-		o.Expect(searchOutput1).To(o.ContainSubstring("backend be_http:" + oc.Namespace() + ":hello-pod-http"))
+		o.Expect(searchOutput1).To(o.ContainSubstring("backend be_http:" + project1 + ":hello-pod-http"))
 	})
 })

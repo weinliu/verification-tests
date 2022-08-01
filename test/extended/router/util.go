@@ -907,3 +907,15 @@ func getResourceName(oc *exutil.CLI, namespace, resourceName string) []string {
 	e2e.Logf("The resource '%s' names are  %v ", resourceName, resourceList)
 	return resourceList
 }
+
+//  this function is used to check whether proxy is configured or not
+func checkProxy(oc *exutil.CLI) bool {
+	httpProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	httpsProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpsProxy}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if httpProxy != "" || httpsProxy != "" {
+		return true
+	}
+	return false
+}
