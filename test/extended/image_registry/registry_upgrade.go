@@ -28,8 +28,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		insecuredImage := insecuredRoute + "/" + ns + "/insecuredimage:latest"
 
 		g.By("Push images to two registries")
+		waitRouteReady(oc, blockedImage)
 		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", blockedImage, "--insecure", "--keep-manifest-list=true", "--filter-by-os=.*").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		waitRouteReady(oc, insecuredImage)
 		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", insecuredImage, "--insecure", "--keep-manifest-list=true", "--filter-by-os=.*").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
