@@ -2598,6 +2598,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if architecture != "amd64" && architecture != "arm64" {
 			g.Skip("Do not support " + architecture)
 		}
+		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
+		dataPath := filepath.Join(buildPruningBaseDir, "ocp-52814-data")
 		tmpBasePath := "/tmp/ocp-52814-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-52814")
 		imageTag := "quay.io/olmqe/memcached-operator:52814-" + getRandomString()
@@ -2622,7 +2624,6 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(output).To(o.ContainSubstring("make manifests"))
 
 		g.By("step: modify files to get the quay.io/olmqe images.")
-		dataPath := "test/extended/util/operatorsdk/ocp-52814-data/"
 		// copy api/v1/memcached52814_types.go
 		err = copy(filepath.Join(dataPath, "memcached52814_types.go"), filepath.Join(tmpPath, "api", "v1", "memcached52814_types.go"))
 		o.Expect(err).NotTo(o.HaveOccurred())
