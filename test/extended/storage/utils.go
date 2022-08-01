@@ -604,14 +604,20 @@ func checkCSIDriverInstalled(oc *exutil.CLI, supportProvisioners []string) bool 
 	return true
 }
 
-//Get the Resource Group id value
+// Get the Resource Group id value
+// https://bugzilla.redhat.com/show_bug.cgi?id=2110899
+// If skip/empty value it will create in default resource group id
+// Currently adding other than default rgid value to check if it really works other than default rgid
 func getResourceGroupID(oc *exutil.CLI) string {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "cluster-config-v1", "-n", "kube-system", "-o=jsonpath={.data.install-config}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	jsonOutput, err := yaml.YAMLToJSON([]byte(output))
 	o.Expect(err).NotTo(o.HaveOccurred())
 	rgid := gjson.Get(string(jsonOutput), `platform.`+cloudProvider+`.resourceGroupID`).String()
-	o.Expect(rgid).NotTo(o.BeEmpty())
+	//o.Expect(rgid).NotTo(o.BeEmpty())
+	if rgid == "" {
+		return "rg-aek2u7zroz6ggyy"
+	}
 	return rgid
 }
 
