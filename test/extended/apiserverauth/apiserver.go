@@ -1758,7 +1758,7 @@ spec:
 			badMutatingWebhook         = getTestDataFilePath("MutatingWebhookConfigurationTemplate.yaml")
 			badCrdWebhook              = getTestDataFilePath("CRDWebhookConfigurationTemplate.yaml")
 			kubeApiserverCoStatus      = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
-			webHookErrorConditionTypes = []string{`ValidatingAdmissionWebhookConfigurationError`, `MutatingAdmissionWebhookConfigurationError`, `CRDConversionWebhookConfigurationError`, `VirtualResourceAdmissionError`}
+			webHookErrorConditionTypes = []string{`ValidatingAdmissionWebhookConfigurationError`, `MutatingAdmissionWebhookConfigurationError`, `CRDConversionWebhookConfigurationError`}
 			reason                     = "WebhookServiceNotFound"
 			status                     = "True"
 		)
@@ -1827,18 +1827,8 @@ spec:
 		CheckIfResourceAvailable(oc, "crd", []string{badCrdWebhookName}, "")
 
 		g.By("5) Check for information error message on kube-apiserver cluster w.r.t bad resource reference for admission webhooks")
-		for _, webHookErrorConditionType := range webHookErrorConditionTypes {
-			webhookError, err := oc.Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath='{.status.conditions[?(@.type=="`+webHookErrorConditionType+`")]}'`).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("kube-apiserver reports the admission webhook errors as \n %s ", string(webhookError))
-			if strings.Contains(webhookError, "VirtualResourceAdmissionError") {
-				reason = "AdmissionWebhookMatchesVirtualResource"
-			}
-			o.Expect(webhookError).Should(o.And(
-				o.MatchRegexp(`"reason":"%s"`, reason),
-				o.MatchRegexp(`"status":"%s"`, status),
-				o.MatchRegexp(`"type":"%s"`, webHookErrorConditionType)), "Mismatch in admission errors reported")
-		}
+		compareAPIServerWebhookConditions(oc, reason, status, webHookErrorConditionTypes)
+		compareAPIServerWebhookConditions(oc, "AdmissionWebhookMatchesVirtualResource", status, []string{`VirtualResourceAdmissionError`})
 
 		e2e.Logf("Step 5 has passed")
 		g.By("6) Check for kube-apiserver operator status after bad validating webhook added.")
