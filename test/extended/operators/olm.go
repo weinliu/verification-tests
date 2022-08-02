@@ -4512,8 +4512,8 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// author: bandrade@redhat.com
-	g.It("ConnectedOnly-Author:bandrade-Critical-41026-OCS should only one installplan generated when creating subscription", func() {
-		exutil.SkipARM64(oc)
+	g.It("Author:bandrade-Critical-41026-OCS should only one installplan generated when creating subscription", func() {
+
 		var (
 			itName              = g.CurrentGinkgoTestDescription().TestText
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -4525,21 +4525,18 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				template:  ogSingleTemplate,
 			}
 			sub = subscriptionDescription{
-				subName:                "ocs-operator",
-				namespace:              "",
-				ipApproval:             "Automatic",
-				operatorPackage:        "ocs-operator",
-				catalogSourceName:      "redhat-operators",
+				subName:                "sub-24917",
+				namespace:              oc.Namespace(),
+				catalogSourceName:      "qe-app-registry",
 				catalogSourceNamespace: "openshift-marketplace",
-				startingCSV:            "",
-				currentCSV:             "",
-				installedCSV:           "",
-				template:               subTemplate,
+				ipApproval:             "Automatic",
+				channel:                "beta",
+				operatorPackage:        "learn",
 				singleNamespace:        true,
+				template:               subTemplate,
 			}
 		)
 		//project and its resource are deleted automatically when out of It, so no need defer or AfterEach
-		// but, sometimes, the namespaces are failed to remove, so, add some defer funcs.
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
@@ -4555,8 +4552,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		newCheck("expect", asAdmin, withNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 		g.By("Check there is only one ip")
-		// Dec 14 22:53:22.080: INFO: $oc get [installplan -n e2e-test-olm-a-c938kxop-j6cjz --no-headers],
-		// the returned resource:install-s4zjq   mcg-operator.v4.9.0   Automatic   true
 		// waiting for the InstallPlan updated
 		err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
 			ips := getResource(oc, asAdmin, withoutNamespace, "installplan", "-n", sub.namespace, "--no-headers")
