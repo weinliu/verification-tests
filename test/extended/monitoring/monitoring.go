@@ -54,7 +54,37 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		g.By("check federate route")
 		checkRoute(oc, "openshift-monitoring", "prometheus-k8s-federate", token, "match[]=cluster_version", "cluster_version{endpoint", platformLoadTime)
+	})
 
+	// author: juzhao@redhat.com
+	g.It("Author:juzhao-Medium-49172-Enable validating webhook for AlertmanagerConfig customer resource", func() {
+		var (
+			err                       error
+			output                    string
+			namespace                 string
+			invalidAlertmanagerConfig = filepath.Join(monitoringBaseDir, "invalid-alertmanagerconfig.yaml")
+			validAlertmanagerConfig   = filepath.Join(monitoringBaseDir, "valid-alertmanagerconfig.yaml")
+		)
+
+		g.By("Get prometheus-operator-admission-webhook deployment")
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "prometheus-operator-admission-webhook", "-n", "openshift-monitoring").Execute()
+		if err != nil {
+			e2e.Logf("Unable to get deployment prometheus-operator-admission-webhook.")
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		oc.SetupProject()
+		namespace = oc.Namespace()
+
+		g.By("Create invalid AlertmanagerConfig, should throw out error")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", invalidAlertmanagerConfig, "-n", namespace).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("The AlertmanagerConfig \"invalid-test-config\" is invalid"))
+
+		g.By("Create valid AlertmanagerConfig, should not have error")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", validAlertmanagerConfig, "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("valid-test-config created"))
 	})
 
 	g.Context("user workload monitoring", func() {
