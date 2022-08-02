@@ -1004,6 +1004,13 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	g.It("Author:jiajliu-Medium-47198-Techpreview operator will not be installed on a fresh installed", func() {
 		tpOperatorNamespace := "openshift-cluster-api"
 		tpOperatorName := "cluster-api"
+
+		featuregate, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Featuregate:%s", featuregate)
+		if featuregate != "{}" && strings.Contains(featuregate, "TechPreviewNoUpgrade") {
+			g.Skip("This case is only suitable for non-techpreview cluster!")
+		}
 		g.By("Check annotation release.openshift.io/feature-gate=TechPreviewNoUpgrade in manifests are correct.")
 		tempDataDir, err := extractManifest(oc)
 		defer os.RemoveAll(tempDataDir)
