@@ -69,8 +69,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 		var itName string
 
 		g.BeforeEach(func() {
-			g.By("Skip test for arm64 !!!")
-			exutil.SkipARM64(oc)
+			g.By("Skip test when precondition not meet !!!")
+			SkipMissingCatalogsource(oc)
+			SkipARM64AndHetegenous(oc)
+			SkipMissingDefaultSC(oc)
 
 			oc.SetupProject()
 			ogD.namespace = oc.Namespace()

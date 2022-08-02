@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -427,4 +428,30 @@ func taintNode(oc *exutil.CLI, parameters ...string) {
 func labelTaintNode(oc *exutil.CLI, parameters ...string) {
 	_, err := doAction(oc, "label", asAdmin, withoutNamespace, parameters...)
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+//SkipMissingCatalogsource mean to skip test when catalogsource/qe-app-registry not available
+func SkipMissingCatalogsource(oc *exutil.CLI) {
+	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
+	if strings.Contains(output, "NotFound") {
+		g.Skip("Skip since catalogsource/qe-app-registry not available")
+	}
+}
+
+//SkipARM64AndHetegenous mean to skip test for RAM64 or Hetegenous as not supported
+func SkipARM64AndHetegenous(oc *exutil.CLI) {
+	nodeArchs, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-o=jsonpath={.items[0].status.nodeInfo.architecture}", "-n", oc.Namespace()).Output()
+	if strings.Contains(nodeArchs, "arm64") {
+		g.Skip("Skip since ARM64 or Hetegenous not supported")
+	}
+}
+
+//SkipMissingDefaultSC mean to skip test when default storageclass is not available
+func SkipMissingDefaultSC(oc *exutil.CLI) {
+	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "-o=jsonpath={.items[?(@.metadata.annotations.storageclass\\.kubernetes\\.io/is-default-class==\"true\")].metadata.name}", "-n", oc.Namespace()).Output()
+	if output == "" {
+		g.Skip("Skip since default storageclass not available")
+	} else {
+		e2e.Logf("This default sc is: %s", output)
+	}
 }
