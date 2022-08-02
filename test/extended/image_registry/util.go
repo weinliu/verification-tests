@@ -785,6 +785,7 @@ func setSecureRegistryWithoutAuth(oc *exutil.CLI, ns, regName, image, port strin
 	checkPodsRunningWithLabel(oc, ns, "app="+regName, 1)
 	exposeService(oc, ns, "deploy/"+regName, regName, port)
 	regRoute := exposeRouteFromSVC(oc, "edge", ns, regName, regName)
+	waitRouteReady(oc, regRoute)
 	listRepositories(oc, regRoute, "repositories")
 	return regRoute
 }

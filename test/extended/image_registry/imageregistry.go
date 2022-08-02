@@ -318,7 +318,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("Author:xiuwang-Medium-43664-Check ServiceMonitor of registry which will not hotloop CVO", func() {
+	g.It("NonPreRelease-Longduration-Author:xiuwang-Medium-43664-Check ServiceMonitor of registry which will not hotloop CVO", func() {
 		g.By("Check the servicemonitor of openshift-image-registry")
 		out := getResource(oc, asAdmin, withoutNamespace, "servicemonitor", "-n", "openshift-image-registry", "-o=jsonpath={.items[1].spec.selector.matchLabels.name}")
 		o.Expect(out).To(o.ContainSubstring("image-registry-operator"))
@@ -1772,7 +1772,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		expectInfo := "Failed to pull image"
 		createSimpleRunPod(oc, "test-51055:latest", expectInfo)
-		output, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args("deploy/image-registry", "--since=30s", "-n", "openshift-image-registry").Output()
+		output, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args("deploy/image-registry", "--since=1m", "-n", "openshift-image-registry").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(output, "err.code=toomanyrequests") && !strings.Contains(output, "got 429 Too Many Requests") {
 			e2e.Failf("Image registry doesn't respect 429 error")
