@@ -110,6 +110,7 @@ type clusterDeployment struct {
 type machinepool struct {
 	clusterName string
 	namespace   string
+	iops        int
 	template    string
 }
 
@@ -448,7 +449,7 @@ func (cluster *clusterDeployment) create(oc *exutil.CLI) {
 }
 
 func (machine *machinepool) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", machine.template, "-p", "CLUSTERNAME="+machine.clusterName, "NAMESPACE="+machine.namespace)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", machine.template, "-p", "CLUSTERNAME="+machine.clusterName, "NAMESPACE="+machine.namespace, "IOPS="+strconv.Itoa(machine.iops))
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

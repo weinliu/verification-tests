@@ -1810,6 +1810,78 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Unreachable")].status}`}).check(oc)
 	})
 
+	//author: mihuang@redhat.com
+	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "49471"|./bin/extended-platform-tests run --timeout 70m -f -
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-49471-[aws]Change EC2RootVolume: make IOPS optional [Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 49471 is for AWS - skipping test ...")
+		}
+		testCaseID := "49471"
+		cdName := "cluster-" + testCaseID
+		oc.SetupProject()
+
+		g.By("Config Install-Config Secret with iops=1...")
+		installConfigSecret := installConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+
+		g.By("Config ClusterDeployment...")
+		cluster := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+			installAttemptsLimit: 3,
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		g.By("Create worker and infra MachinePool with IOPS optional ...")
+		workermachinepoolAWSTemp := filepath.Join(testDataDir, "machinepool-worker-aws.yaml")
+		workermp := machinepool{
+			namespace:   oc.Namespace(),
+			clusterName: cdName,
+			iops:        2,
+			template:    workermachinepoolAWSTemp,
+		}
+
+		defer cleanupObjects(oc, objectTableRef{"MachinePool", oc.Namespace(), cdName + "-worker"})
+		workermp.create(oc)
+
+		inframachinepoolAWSTemp := filepath.Join(testDataDir, "machinepool-infra-aws.yaml")
+		inframp := machinepool{
+			namespace:   oc.Namespace(),
+			clusterName: cdName,
+			iops:        1,
+			template:    inframachinepoolAWSTemp,
+		}
+
+		defer cleanupObjects(oc, objectTableRef{"MachinePool", oc.Namespace(), cdName + "-infra"})
+		inframp.create(oc)
+
+		g.By("Check if ClusterDeployment created successfully and become Provisioned")
+		//newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+		e2e.Logf("Check worker machinepool .spec.platform.aws.rootVolume.iops = 2")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "-o=jsonpath={.spec.platform.aws.rootVolume.iops}"}).check(oc)
+		e2e.Logf("Check infra machinepool .spec.platform.aws.rootVolume.iops = 1")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "-o=jsonpath={.spec.platform.aws.rootVolume.iops}"}).check(oc)
+	})
+
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "22381"|./bin/extended-platform-tests run --timeout 60m -f -

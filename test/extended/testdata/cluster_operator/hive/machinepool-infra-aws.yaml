@@ -19,7 +19,7 @@ objects:
     platform:
       aws:
         rootVolume:
-          iops: 100
+          iops: ${{IOPS}}
           size: 22
           type: gp3
         type: m4.xlarge
@@ -31,4 +31,7 @@ objects:
 parameters:
 - name: CLUSTERNAME
 - name: NAMESPACE
+- name: IOPS
+  value: "100"
+
 
