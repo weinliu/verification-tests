@@ -3452,8 +3452,8 @@ func resizeOnlineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep 
 	g.By("#. Apply the patch to Resize the pvc volume")
 	capacityInt64, err := strconv.ParseInt(strings.TrimRight(pvc.capacity, "Gi"), 10, 64)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	capacityInt64 = capacityInt64 + getRandomNum(1, 10)
-	expandedCapactiy := strconv.FormatInt(capacityInt64, 10) + "Gi"
+	expandedCapactiyInt64 := capacityInt64 + getRandomNum(5, 10)
+	expandedCapactiy := strconv.FormatInt(expandedCapactiyInt64, 10) + "Gi"
 	o.Expect(applyVolumeResizePatch(oc, pvc.name, pvc.namespace, expandedCapactiy)).To(o.ContainSubstring("patched"))
 	pvc.capacity = expandedCapactiy
 
@@ -3464,12 +3464,12 @@ func resizeOnlineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep 
 	g.By("#. Check origin data intact and write new data in pod")
 	if dep.typepath == "mountPath" {
 		dep.checkPodMountedVolumeDataExist(oc, true)
-		// After volume expand write 80% data of the new capacity should succeed
-		msg, err := execCommandInSpecificPod(oc, pvc.namespace, dep.getPodList(oc)[0], "fallocate -l "+fmt.Sprintf("%.2f", float64(capacityInt64)*0.8)+"G "+dep.mpath+"/"+getRandomString()+" ||true")
+		// After volume expand write data more than the old capacity should succeed
+		msg, err := execCommandInSpecificPod(oc, pvc.namespace, dep.getPodList(oc)[0], "fallocate -l "+strconv.FormatInt(capacityInt64+1, 10)+"G "+dep.mpath+"/"+getRandomString()+" ||true")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).NotTo(o.ContainSubstring("No space left on device"))
-		// Continue write 30% data of the new capacity should fail of "No space left on device"
-		msg, err = execCommandInSpecificPod(oc, pvc.namespace, dep.getPodList(oc)[0], "fallocate -l "+fmt.Sprintf("%.2f", float64(capacityInt64)*0.3)+"G "+dep.mpath+"/"+getRandomString()+" ||true")
+		// Continue write data more than new capacity should fail of "No space left on device"
+		msg, err = execCommandInSpecificPod(oc, pvc.namespace, dep.getPodList(oc)[0], "fallocate -l "+strconv.FormatInt(expandedCapactiyInt64-capacityInt64, 10)+"G "+dep.mpath+"/"+getRandomString()+" ||true")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("No space left on device"))
 	} else {
@@ -3515,8 +3515,8 @@ func resizeOfflineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep
 	g.By("#. Apply the patch to Resize the pvc volume")
 	capacityInt64, err := strconv.ParseInt(strings.TrimRight(pvc.capacity, "Gi"), 10, 64)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	capacityInt64 = capacityInt64 + getRandomNum(1, 10)
-	expandedCapactiy := strconv.FormatInt(capacityInt64, 10) + "Gi"
+	expandedCapactiyInt64 := capacityInt64 + getRandomNum(5, 10)
+	expandedCapactiy := strconv.FormatInt(expandedCapactiyInt64, 10) + "Gi"
 	o.Expect(applyVolumeResizePatch(oc, pvc.name, pvc.namespace, expandedCapactiy)).To(o.ContainSubstring("patched"))
 	pvc.capacity = expandedCapactiy
 
@@ -3540,12 +3540,12 @@ func resizeOfflineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep
 	g.By("#. Check origin data intact and write new data in pod")
 	if dep.typepath == "mountPath" {
 		dep.checkPodMountedVolumeDataExist(oc, true)
-		// After volume expand write 80% data of the new capacity should succeed
-		msg, err := execCommandInSpecificPod(oc, pvc.namespace, dep.getPodList(oc)[0], "fallocate -l "+fmt.Sprintf("%.2f", float64(capacityInt64)*0.8)+"G "+dep.mpath+"/"+getRandomString()+" ||true")
+		// After volume expand write data more than the old capacity should succeed
+		msg, err := execCommandInSpecificPod(oc, pvc.namespace, dep.getPodList(oc)[0], "fallocate -l "+strconv.FormatInt(capacityInt64+1, 10)+"G "+dep.mpath+"/"+getRandomString()+" ||true")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).NotTo(o.ContainSubstring("No space left on device"))
-		// Continue write 30% data of the new capacity should fail of "No space left on device"
-		msg, err = execCommandInSpecificPod(oc, pvc.namespace, dep.getPodList(oc)[0], "fallocate -l "+fmt.Sprintf("%.2f", float64(capacityInt64)*0.3)+"G "+dep.mpath+"/"+getRandomString()+" ||true")
+		// Continue write data more than new capacity should fail of "No space left on device"
+		msg, err = execCommandInSpecificPod(oc, pvc.namespace, dep.getPodList(oc)[0], "fallocate -l "+strconv.FormatInt(expandedCapactiyInt64-capacityInt64, 10)+"G "+dep.mpath+"/"+getRandomString()+" ||true")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("No space left on device"))
 	} else {

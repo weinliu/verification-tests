@@ -334,7 +334,6 @@ func (pod *pod) getPodMountFsVolumeSize(oc *exutil.CLI) int64 {
 //  Get the phase, status of specified pod
 func getPodStatus(oc *exutil.CLI, namespace string, podName string) (string, error) {
 	podStatus, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.phase}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The pod  %s status in namespace %s is %q", podName, namespace, podStatus)
 	return podStatus, err
 }
@@ -748,31 +747,24 @@ func (dep *deployment) scaleReplicas(oc *exutil.CLI, replicasno string) {
 }
 
 // Restart the Deployment by scale down to '0' and then scale up to origin number
-func (dep *deployment) restart(oc *exutil.CLI) error {
-	originReplicasNum := dep.replicasno
-	dep.scaleReplicas(oc, "0")
-	// VSphereProblemDetectorController will automated recover the dector replicas number
-	if dep == &detectorOperator {
-		dep.replicasno = originReplicasNum
-		dep.waitReady(oc)
-		e2e.Logf("deployment/%s in namespace %s restart successfully", dep.name, dep.namespace)
-		return nil
-	}
-	dep.waitReady(oc)
-	dep.scaleReplicas(oc, originReplicasNum)
+func (dep *deployment) restart(oc *exutil.CLI) {
+	err := oc.WithoutNamespace().Run("rollout").Args("-n", dep.namespace, "restart", "deployment", dep.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 	dep.waitReady(oc)
 	e2e.Logf("deployment/%s in namespace %s restart successfully", dep.name, dep.namespace)
-	return nil
 }
 
 // Check the deployment ready
 func (dep *deployment) checkReady(oc *exutil.CLI) (bool, error) {
+	dep.replicasno = dep.getReplicasNum(oc)
 	readyReplicas, err := oc.WithoutNamespace().Run("get").Args("deployment", dep.name, "-n", dep.namespace, "-o", "jsonpath={.status.availableReplicas}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if err != nil {
+		return false, err
+	}
 	if dep.replicasno == "0" && readyReplicas == "" {
 		readyReplicas = "0"
 	}
-	return strings.EqualFold(dep.replicasno, readyReplicas), err
+	return strings.EqualFold(dep.replicasno, readyReplicas), nil
 }
 
 // Describe the deployment
@@ -1085,6 +1077,13 @@ func (sts *statefulset) deleteAsAdmin(oc *exutil.CLI) {
 
 }
 
+// Get ReplicasNum of the Statefulset
+func (sts *statefulset) getReplicasNum(oc *exutil.CLI) string {
+	replicasNum, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sts", sts.name, "-n", sts.namespace, "-o", "jsonpath={.spec.replicas}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return replicasNum
+}
+
 //  Describe Statefulset
 func (sts *statefulset) describeSTS(oc *exutil.CLI) {
 	output, err := oc.WithoutNamespace().Run("describe").Args("sts", "-n", sts.namespace, sts.name).Output()
@@ -1102,13 +1101,13 @@ func (sts *statefulset) waitReady(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		stsReady, err := sts.checkReady(oc)
 		if err != nil {
-			return stsReady, err
+			return false, err
 		}
 		if !stsReady {
-			return stsReady, nil
+			return false, nil
 		}
 		e2e.Logf(sts.name + " availableReplicas is as expected")
-		return stsReady, nil
+		return true, nil
 	})
 
 	if err != nil {
@@ -1118,7 +1117,7 @@ func (sts *statefulset) waitReady(oc *exutil.CLI) {
 		for _, podName := range podsList {
 			podstatus, err := oc.WithoutNamespace().Run("get").Args("pod", podName, "-n", sts.namespace, "-o=jsonpath={.status.phase}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if matched, _ := regexp.MatchString("Running", podstatus); !matched {
+			if !strings.Contains(podstatus, "Running") {
 				e2e.Logf("$ oc describe pod %s:\n%s", podName, describePod(oc, sts.namespace, podName))
 				describePersistentVolumeClaim(oc, sts.namespace, getPvcNameFromPod(oc, podName, sts.namespace))
 			}
@@ -1129,12 +1128,27 @@ func (sts *statefulset) waitReady(oc *exutil.CLI) {
 
 // Check the Statefulset ready
 func (sts *statefulset) checkReady(oc *exutil.CLI) (bool, error) {
-	readyReplicas, err := oc.WithoutNamespace().Run("get").Args("sts", sts.name, "-n", sts.namespace, "-o", "jsonpath={.status.availableReplicas}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	sts.replicasno = sts.getReplicasNum(oc)
+	// As the status.availableReplicas is a beta field yet use readyReplicas instead
+	// https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#minimum-ready-seconds
+	// $ oc explain sts.status.availableReplicas
+	// KIND:     StatefulSet
+	// VERSION:  apps/v1
+
+	// FIELD:    availableReplicas <integer>
+
+	// DESCRIPTION:
+	//      Total number of available pods (ready for at least minReadySeconds)
+	//      targeted by this statefulset. This is a beta field and enabled/disabled by
+	//      StatefulSetMinReadySeconds feature gate.
+	readyReplicas, err := oc.WithoutNamespace().Run("get").Args("sts", sts.name, "-n", sts.namespace, "-o", "jsonpath={.status.readyReplicas}").Output()
+	if err != nil {
+		return false, err
+	}
 	if sts.replicasno == "0" && readyReplicas == "" {
 		readyReplicas = "0"
 	}
-	return strings.EqualFold(sts.replicasno, readyReplicas), err
+	return strings.EqualFold(sts.replicasno, readyReplicas), nil
 }
 
 //  Check the pod mounted volume could read and write
@@ -1326,15 +1340,13 @@ func (ds *daemonset) getPodsList(oc *exutil.CLI) []string {
 
 // Check the Daemonset ready
 func (ds *daemonset) checkReady(oc *exutil.CLI) (bool, error) {
-
-	dsReady, err := oc.WithoutNamespace().Run("get").Args("daemonset", ds.name, "-n", ds.namespace, "-o", "jsonpath={.status.numberAvailable}").Output()
-	dsNoScheduled, err := oc.WithoutNamespace().Run("get").Args("daemonset", ds.name, "-n", ds.namespace, "-o", "jsonpath={.status.desiredNumberScheduled}").Output()
-
-	e2e.Logf("Available no of daemonsets: %s and Desired no of scheduled daemonsets: %s ", dsReady, dsNoScheduled)
-	if dsReady == dsNoScheduled {
-		return true, err
+	dsAvailableNumber, err1 := oc.WithoutNamespace().Run("get").Args("daemonset", ds.name, "-n", ds.namespace, "-o", "jsonpath={.status.numberAvailable}").Output()
+	dsDesiredScheduledNumber, err2 := oc.WithoutNamespace().Run("get").Args("daemonset", ds.name, "-n", ds.namespace, "-o", "jsonpath={.status.desiredNumberScheduled}").Output()
+	e2e.Logf("Available number of daemonsets: %s, Desired number of scheduled daemonsets: %s ", dsAvailableNumber, dsDesiredScheduledNumber)
+	if err1 != nil || err2 != nil {
+		return false, fmt.Errorf("get dsAvailableNumber errinfo:\"%v\";\nget dsDesiredScheduledNumber errinfo:\"%v\";", err1, err2)
 	}
-	return false, err
+	return strings.EqualFold(dsAvailableNumber, dsDesiredScheduledNumber), nil
 }
 
 // Check the daemonset mounted volume could write
@@ -1376,7 +1388,7 @@ func (ds *daemonset) waitReady(oc *exutil.CLI) {
 		podsList, _ := getPodsListByLabel(oc, ds.namespace, "app="+ds.applabel)
 		for _, podName := range podsList {
 			podstatus, _ := oc.WithoutNamespace().Run("get").Args("pod", podName, "-n", ds.namespace, "-o=jsonpath={.status.phase}").Output()
-			if matched, _ := regexp.MatchString("Running", podstatus); !matched {
+			if !strings.Contains(podstatus, "Running") {
 				e2e.Logf("$ oc describe pod %s:\n%s", podName, describePod(oc, ds.namespace, podName))
 				describePersistentVolumeClaim(oc, ds.namespace, getPvcNameFromPod(oc, podName, ds.namespace))
 			}
