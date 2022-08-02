@@ -70,6 +70,10 @@ class SummaryClient:
         self.ignore_investigated = args.ignore_investigated
         self.additional_message = args.additional_message
         self.number = 0
+        self.days = 1
+        if args.days:
+            self.days = int(args.days)
+
 
     def checkSubteam(self):
         invalid_marker = False
@@ -89,7 +93,7 @@ class SummaryClient:
         if self.upgrade:
             filterVersion = "to:"+self.releaseVersion
 
-        filter_url = self.launch_url + '?&filter.has.compositeAttribute={0}&filter.btw.startTime=-1440;1440;-0000&page.size=2000'.format(filterVersion)
+        filter_url = self.launch_url + '?&filter.has.compositeAttribute={0}&filter.btw.startTime=-{1};1440;-0000&page.size=2000'.format(filterVersion, str(1440*self.days))
         if self.launchID:
             filter_url = self.launch_url + "/"+self.launchID
         #print("filter_url is "+filter_url)
@@ -148,12 +152,16 @@ class SummaryClient:
                             FailedCase[subteamOut] = []
                         caseids = re.findall(r'OCP-\d{4,}', ret["name"])
                         if len(caseids) > 0:
-                            caseAuthor = ret["name"].split(":")[1]
+                            if ":" in ret["name"]:
+                                caseAuthor = ret["name"].split(":")[1]
+                            else:
+                                caseAuthor = ""
                             FailedCase[subteamOut].append(caseids[0][4:]+"-"+caseAuthor+"-defectsType:"+";".join(defectsType))
             #print(FailedCase)
             return FailedCase
         except BaseException as e:
             print(e)
+            return dict()
 
     def collectResult(self, launchID):
         result = self.getLaunchIdWithLaunchName(launchID)
@@ -234,6 +242,7 @@ if __name__ == "__main__":
     parser.add_argument("-w","--webhook_url", default="", help="the webhook url used to send message")
     parser.add_argument("-g","--group_channel", default="", help="the channel name which will be send result to")
     parser.add_argument("-a","--additional_message", default="", help="additional message")
+    parser.add_argument("-d","--days", default="", help="the number of days to collect result")
     parser.add_argument("--upgrade", default=False, action='store_true', help="upgrade test runs")
     parser.add_argument("--ignore_investigated", dest='ignore_investigated', default=False, action='store_true', help="ignore investigated cases")
     parser.add_argument("--silence", dest='silence', default=False, action='store_true', help="the flag to request debug")
