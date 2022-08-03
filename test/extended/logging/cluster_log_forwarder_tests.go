@@ -352,18 +352,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 			WaitForECKPodsToBeReady(oc, cloNS)
 
-			g.By("check logs in rsyslog server")
-			rsyslog.checkData(oc, true, "app-container.log")
-
 			g.By("check logs in internal ES")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app")
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "infra")
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "audit")
-
 			waitForProjectLogsAppear(cloNS, podList.Items[0].Name, appProj1, "app")
 			waitForProjectLogsAppear(cloNS, podList.Items[0].Name, appProj2, "app")
+
+			g.By("check logs in rsyslog server")
+			rsyslog.checkData(oc, true, "app-container.log")
 		})
 
 		// author qitang@redhat.com

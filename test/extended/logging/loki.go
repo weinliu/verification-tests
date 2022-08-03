@@ -101,7 +101,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Critical-49364-Forward logs to LokiStack with gateway using fluentd as the collector[Serial]", func() {
+		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Critical-49364-Forward logs to LokiStack with gateway using fluentd as the collector-CLF[Serial]", func() {
 			if !validateInfraAndResourcesForLoki(oc, []string{"aws", "gcp", "azure"}, "10Gi", "6") {
 				g.Skip("Current platform not supported/resources not available for this test!")
 			}
@@ -122,6 +122,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			ls.waitForLokiStackToBeReady(oc)
 
+			g.By("create clusterlogforwarder/instance")
+			lokiGatewaySVC := ls.name + "-gateway-http." + ls.namespace + ".svc:8080"
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "lokistack_gateway_https_no_secret.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "GATEWAY_SVC="+lokiGatewaySVC)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
 			// deploy collector pods
 			g.By("deploy collector pods")
 			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
@@ -131,31 +139,20 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			resource{"serviceaccount", "logcollector", cl.namespace}.WaitForResourceToAppear(oc)
 			defer removeLokiStackPermissionFromSA(oc, "lokistack-dev-tenant-logs")
 			grantLokiPermissionsToSA(oc, "lokistack-dev-tenant-logs", "logcollector", cloNS)
-			bearerToken := getSAToken(oc, "logcollector", cloNS)
-
-			g.By("create CLF to forward logs to loki")
-			lokiSecret := resource{"secret", "lokistack-gateway", cloNS}
-			defer lokiSecret.clear(oc)
-			ls.createPipelineSecretForCollector(oc, lokiSecret.name, lokiSecret.namespace, bearerToken)
-			lokiGatewaySVC := ls.name + "-gateway-http." + ls.namespace + ".svc:8080"
-			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "49364.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRET="+lokiSecret.name, "-p", "GATEWAY_SVC="+lokiGatewaySVC)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			resource{"daemonset", "collector", cl.namespace}.WaitForResourceToAppear(oc)
-			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			collector := resource{"daemonset", "collector", cl.namespace}
+			collector.WaitForResourceToAppear(oc)
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, collector.name)
 
 			//check logs in loki stack
 			g.By("check logs in loki")
+			bearerToken := getSAToken(oc, "logcollector", cloNS)
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure"} {
 				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
 					res, err := lc.queryRange(logType, "{log_type=\""+logType+"\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
 					if err != nil {
-						fmt.Printf("\n\n\ngot err when getting %s logs: %v\n\n\n", logType, err)
+						e2e.Logf("\ngot err when getting %s logs: %v\n", logType, err)
 						return false, err
 					}
 					if len(res.Data.Result) > 0 {
@@ -163,11 +160,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 					}
 					return false, nil
 				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not founded", logType))
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
 			}
 
-			//sa/logcollector can't view audit logs
-			//create a new sa, and check audit logs
+			// sa/logcollector can't view audit logs
+			// create a new sa, and check audit logs
 			sa := resource{"serviceaccount", "loki-viewer-" + getRandomString(), cloNS}
 			defer sa.clear(oc)
 			_ = oc.AsAdmin().WithoutNamespace().Run("create").Args("sa", sa.name, "-n", sa.namespace).Execute()
@@ -179,7 +176,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
 				res, err := lcAudit.queryRange("audit", "{log_type=\"audit\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
 				if err != nil {
-					fmt.Printf("\n\n\ngot err when getting audit logs: %v\n\n\n", err)
+					e2e.Logf("\ngot err when getting audit logs: %v\n", err)
 					return false, err
 				}
 				if len(res.Data.Result) > 0 {
@@ -187,7 +184,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, "audit logs are not founded")
+			exutil.AssertWaitPollNoErr(err, "audit logs are not found")
 
 			appLog, err := lc.queryRange("application", "{kubernetes_namespace_name=\""+appProj+"\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
 			o.Expect(err).NotTo(o.HaveOccurred())

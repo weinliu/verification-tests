@@ -542,7 +542,7 @@ func (l lokiStack) removeLokiStack(oc *exutil.CLI) {
 	}
 }
 
-func (l lokiStack) createPipelineSecretForCollector(oc *exutil.CLI, name, namespace, token string) {
+func (l lokiStack) createPipelineSecret(oc *exutil.CLI, name, namespace, token string) {
 	dirname := "/tmp/" + oc.Namespace() + getRandomString()
 	defer os.RemoveAll(dirname)
 	err := os.MkdirAll(dirname, 0777)
@@ -551,8 +551,13 @@ func (l lokiStack) createPipelineSecretForCollector(oc *exutil.CLI, name, namesp
 	err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/"+l.name+"-ca-bundle", "-n", l.namespace, "--keys=service-ca.crt", "--confirm", "--to="+dirname).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "secret", "generic", name, "--from-literal=token="+token, "--from-file=ca-bundle.crt="+dirname+"/service-ca.crt").Execute()
+	if token != "" {
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", name, "-n", namespace, "--from-file=ca-bundle.crt="+dirname+"/service-ca.crt", "--from-literal=token="+token).Execute()
+	} else {
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", name, "-n", namespace, "--from-file=ca-bundle.crt="+dirname+"/service-ca.crt").Execute()
+	}
 	o.Expect(err).NotTo(o.HaveOccurred())
+
 }
 
 func grantLokiPermissionsToSA(oc *exutil.CLI, rbacName, sa, ns string) {
@@ -803,6 +808,61 @@ func (c *lokiClient) searchByKey(logType, key, value string) (*lokiQueryResponse
 func (c *lokiClient) searchByNamespace(logType, projectName string) (*lokiQueryResponse, error) {
 	res, err := c.searchByKey(logType, "kubernetes_namespace_name", projectName)
 	return res, err
+}
+
+// listLabelValues uses the /api/v1/label endpoint to list label values
+func (c *lokiClient) listLabelValues(logType, name string, start, end time.Time) (*labelResponse, error) {
+	lpath := fmt.Sprintf(labelValuesPath, url.PathEscape(name))
+	var labelResponse labelResponse
+	params := newQueryStringBuilder()
+	params.setInt("start", start.UnixNano())
+	params.setInt("end", end.UnixNano())
+
+	path := ""
+	if len(logType) > 0 {
+		path = apiPath + logType + lpath
+	} else {
+		path = lpath
+	}
+
+	if err := c.doRequest(path, params.encode(), c.quiet, &labelResponse); err != nil {
+		return nil, err
+	}
+	return &labelResponse, nil
+}
+
+// listLabelNames uses the /api/v1/label endpoint to list label names
+func (c *lokiClient) listLabelNames(logType string, start, end time.Time) (*labelResponse, error) {
+	var labelResponse labelResponse
+	params := newQueryStringBuilder()
+	params.setInt("start", start.UnixNano())
+	params.setInt("end", end.UnixNano())
+	path := ""
+	if len(logType) > 0 {
+		path = apiPath + logType + labelsPath
+	} else {
+		path = labelsPath
+	}
+
+	if err := c.doRequest(path, params.encode(), c.quiet, &labelResponse); err != nil {
+		return nil, err
+	}
+	return &labelResponse, nil
+}
+
+// listLabels gets the label names or values
+func (c *lokiClient) listLabels(logType, labelName string, start, end time.Time) []string {
+	var labelResponse *labelResponse
+	var err error
+	if len(labelName) > 0 {
+		labelResponse, err = c.listLabelValues(logType, labelName, start, end)
+	} else {
+		labelResponse, err = c.listLabelNames(logType, start, end)
+	}
+	if err != nil {
+		e2e.Failf("Error doing request: %+v", err)
+	}
+	return labelResponse.Data
 }
 
 // buildURL concats a url `http://foo/bar` with a path `/buzz`.

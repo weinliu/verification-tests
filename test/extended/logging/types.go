@@ -592,14 +592,14 @@ type lokiQueryResponse struct {
 	} `json:"data"`
 }
 
-//LokiSearch result example
+//labelResponse result example
 /*
  {
 	"status": "success",
 	"data": ["__name__", "fluentd_thread", "kubernetes_container_name", "kubernetes_host", "kubernetes_namespace_name", "kubernetes_pod_name", "log_type", "tag"]
 }
 */
-type LokiSearch struct {
+type labelResponse struct {
 	SearchStatus string   `json:"status"`
 	Data         []string `json:"data"`
 }
