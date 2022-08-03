@@ -944,3 +944,59 @@ func createEdgeRoute(oc *exutil.CLI, serviceName string, namespace string, route
 	err := oc.Run("create").Args("route", "edge", routeName, "--service", serviceName, "-n", namespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
+
+func createDir(dirname string) {
+	err := os.MkdirAll(dirname, 0755)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func createSpecialRegistry(oc *exutil.CLI, namespace string, ssldir string, dockerConfig string) string {
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("deploy", "mydauth", "-n", namespace, "--image=cesanta/docker_auth", "--port=5001").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	err = oc.AsAdmin().WithoutNamespace().Run("expose").Args("deploy", "mydauth", "-n", namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("route", "passthrough", "r1", "--service=mydauth", "-n", namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	hostD, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "r1", "-n", namespace, "-o=jsonpath={.spec.host}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	caSubj := "/C=GB/CN=foo  -addext \"subjectAltName = DNS:" + hostD + "\""
+	opensslCmd := fmt.Sprintf(`openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout  %s/server.key  -out  %s/server.pem -subj %s`, ssldir, ssldir, caSubj)
+	e2e.Logf("opensslcmd is :%v", opensslCmd)
+	_, err = exec.Command("bash", "-c", opensslCmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "dockerauthssl", "--from-file="+ssldir, "-n", namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = oc.AsAdmin().WithoutNamespace().Run("set").Args("volume", "deploy", "mydauth", "--add", "--name=v2", "--type=secret", "--secret-name=dockerauthssl", "--mount-path=/ssl", "-n", namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "dockerautoconfig", "--from-file="+dockerConfig, "-n", namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = oc.AsAdmin().WithoutNamespace().Run("set").Args("volume", "deploy", "mydauth", "--add", "--name=v1", "--type=secret", "--secret-name=dockerautoconfig", "--mount-path=/config", "-n", namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Check the docker_auth pod should running")
+	if ok := waitForAvailableRsRunning(oc, "deployment", "mydauth", namespace, "1"); ok {
+		e2e.Logf("All pods are runnnig now\n")
+	} else {
+		e2e.Failf("docker_auth pod is not running even afer waiting for about 3 minutes")
+	}
+
+	registryAuthToken := "https://" + hostD + "/auth"
+	registryPara := fmt.Sprintf(`REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/tmp/registry REGISTRY_AUTH=token REGISTRY_AUTH_TOKEN_REALM=%s REGISTRY_AUTH_TOKEN_SERVICE="Docker registry" REGISTRY_AUTH_TOKEN_ISSUER="Acme auth server" REGISTRY_AUTH_TOKEN_ROOTCERTBUNDLE=/ssl/server.pem `, registryAuthToken)
+	err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--name=myregistry", fmt.Sprintf("%s", registryPara), "-n", namespace, "--image=quay.io/openshifttest/registry:multiarch").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = oc.AsAdmin().WithoutNamespace().Run("set").Args("volume", "deploy", "myregistry", "--add", "--name=v2", "--type=secret", "--secret-name=dockerauthssl", "--mount-path=/ssl", "-n", namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("route", "edge", "r2", "--service=myregistry", "-n", namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	registryHost, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "r2", "-n", namespace, "-o=jsonpath={.spec.host}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Check the registry pod should running")
+	if ok := waitForAvailableRsRunning(oc, "deployment", "myregistry", namespace, "1"); ok {
+		e2e.Logf("All pods are runnnig now\n")
+	} else {
+		e2e.Failf("private registry pod is not running even afer waiting for about 3 minutes")
+	}
+	return registryHost
+}

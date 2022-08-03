@@ -615,6 +615,32 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.ContainSubstring("linux/s390x"))
 	})
+	// author: yinzhou@redhat.com
+	g.It("ConnectedOnly-Author:yinzhou-Medium-44928-oc image mirror support registry which authorization server's url is different from registry url", func() {
+		dockerauthBaseDir := exutil.FixturePath("testdata", "workloads")
+		dockerConfigDir := filepath.Join(dockerauthBaseDir, "config")
+		dockerauthfile := filepath.Join(dockerauthBaseDir, "auth.json")
+		ns := "p44928"
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ssldir := "/tmp/case44982/ssl"
+		defer os.RemoveAll(ssldir)
+		createDir(ssldir)
+		registryHost := createSpecialRegistry(oc, ns, ssldir, dockerConfigDir)
+		exec.Command("bash", "-c", fmt.Sprintf("sed -i 's/testroute/%s/g' %s", registryHost, dockerauthfile)).Output()
+
+		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			_, err1 := oc.WithoutNamespace().Run("image").Args("mirror", "--insecure", "-a", dockerauthfile, "quay.io/openshifttest/busybox:latest", registryHost+"/test/busybox:latest").Output()
+			if err1 != nil {
+				e2e.Logf("the err:%v, and try next round", err1)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "oc image mirror fails")
+
+	})
 })
 
 // ClientVersion ...
