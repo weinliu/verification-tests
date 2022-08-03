@@ -6,8 +6,8 @@ import (
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
-
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
@@ -96,47 +96,52 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		)
 
 		g.By("create project and a pod")
-		oc.SetupProject()
-		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
-		podName := getPodName(oc, oc.Namespace(), "name=web-server-rc")
+		podName := getPodName(oc, project1, "name=web-server-rc")
 		baseDomain := getBaseDomain(oc)
 		rut.domain = "apps" + "." + baseDomain
-		rut.namespace = oc.Namespace()
+		rut.namespace = project1
 
 		g.By("create routes and get the details")
 		rut.create(oc)
 		// to show the route details
-		getRoutes(oc, oc.Namespace())
+		getRoutes(oc, project1)
 
 		g.By("check the domain name is present in 'foo-unsecure1' route details")
-		output := fetchJSONPathValue(oc, oc.Namespace(), "route/foo-unsecure1", ".spec")
+		output := fetchJSONPathValue(oc, project1, "route/foo-unsecure1", ".spec")
 		o.Expect(output).Should(o.ContainSubstring(`"subdomain":"foo"`))
 
 		g.By("check the domain name is not present in 'foo-unsecure2' route details")
-		output = fetchJSONPathValue(oc, oc.Namespace(), "route/foo-unsecure2", ".spec")
+		output = fetchJSONPathValue(oc, project1, "route/foo-unsecure2", ".spec")
 		o.Expect(output).NotTo(o.ContainSubstring("subdomain"))
 
 		g.By("check the domain name is present in 'foo-unsecure3' route details")
-		output = fetchJSONPathValue(oc, oc.Namespace(), "route/foo-unsecure3", ".spec")
+		output = fetchJSONPathValue(oc, project1, "route/foo-unsecure3", ".spec")
 		o.Expect(output).Should(o.ContainSubstring(`"subdomain":"foo"`))
 
 		g.By("check the domain name is not present in 'foo-unsecure4' route details")
-		output = fetchJSONPathValue(oc, oc.Namespace(), "route/foo-unsecure4", ".spec")
+		output = fetchJSONPathValue(oc, project1, "route/foo-unsecure4", ".spec")
 		o.Expect(output).NotTo(o.ContainSubstring("subdomain"))
 
-		g.By("check the reachability of the 'foo-unsecure1' host")
-		waitForCurl(oc, podName[0], baseDomain, "foo.apps.", "Hello-OpenShift", "")
+		//curling through defualt controller will not work for proxy cluster.
+		if checkProxy(oc) {
+			e2e.Logf("This is proxy cluster, skiping the curling part.")
+		} else {
+			g.By("check the reachability of the 'foo-unsecure1' host")
+			waitForCurl(oc, podName[0], baseDomain, "foo.apps.", "Hello-OpenShift", "")
 
-		g.By("check the reachability of the 'foo-unsecure2' host")
-		waitForCurl(oc, podName[0], baseDomain, "foo-unsecure2-"+oc.Namespace()+".apps.", "Hello-OpenShift", "")
+			g.By("check the reachability of the 'foo-unsecure2' host")
+			waitForCurl(oc, podName[0], baseDomain, "foo-unsecure2-"+project1+".apps.", "Hello-OpenShift", "")
 
-		g.By("check the reachability of the 'foo-unsecure3' host")
-		waitForCurl(oc, podName[0], baseDomain, "man-"+oc.Namespace()+".apps.", "Hello-OpenShift", "")
+			g.By("check the reachability of the 'foo-unsecure3' host")
+			waitForCurl(oc, podName[0], baseDomain, "man-"+project1+".apps.", "Hello-OpenShift", "")
 
-		g.By("check the reachability of the 'foo-unsecure4' host")
-		waitForCurl(oc, podName[0], baseDomain, "bar-"+oc.Namespace()+".apps.", "Hello-OpenShift", "")
+			g.By("check the reachability of the 'foo-unsecure4' host")
+			waitForCurl(oc, podName[0], baseDomain, "bar-"+project1+".apps.", "Hello-OpenShift", "")
+		}
 	})
 
 	// author: mjoseph@redhat.com
@@ -162,13 +167,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("create project and a pod")
 		baseDomain := getBaseDomain(oc)
-		oc.SetupProject()
-		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		project2 := oc.Namespace()
+		createResourceFromFile(oc, project2, testPodSvc)
+		err := waitForPodWithLabelReady(oc, project2, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
-		podName := getPodName(oc, oc.Namespace(), "name=web-server-rc")
+		podName := getPodName(oc, project2, "name=web-server-rc")
 		rut.domain = "apps" + "." + baseDomain
-		rut.namespace = oc.Namespace()
+		rut.namespace = project2
 
 		g.By("Create a custom ingresscontroller")
 		ingctrl.domain = ingctrl.name + "." + baseDomain
@@ -181,27 +186,33 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("create routes and get the details")
 		rut.create(oc)
-		getRoutes(oc, oc.Namespace())
+		getRoutes(oc, project2)
 
 		g.By("check whether required host is present in 'foobar-unsecure' route details")
-		output := fetchJSONPathValue(oc, oc.Namespace(), "route/foobar-unsecure", ".status.ingress")
+		output := fetchJSONPathValue(oc, project2, "route/foobar-unsecure", ".status.ingress")
 		o.Expect(output).Should(o.ContainSubstring(`"host":"foobar.apps.%s"`, baseDomain))
 		o.Expect(output).Should(o.ContainSubstring(`"host":"foobar.ocp51429.%s"`, baseDomain))
 
 		g.By("check the router pod and ensure the routes are loaded in haproxy.config in default controller")
 		searchOutput1 := readRouterPodData(oc, defaultContPod, "cat haproxy.config", "foobar-unsecure")
-		o.Expect(searchOutput1).To(o.ContainSubstring("backend be_http:" + oc.Namespace() + ":foobar-unsecure"))
+		o.Expect(searchOutput1).To(o.ContainSubstring("backend be_http:" + project2 + ":foobar-unsecure"))
 
 		g.By("check the router pod and ensure the routes are loaded in haproxy.config of custom controller")
 		searchOutput2 := readRouterPodData(oc, custContPod, "cat haproxy.config", "foobar-unsecure")
-		o.Expect(searchOutput2).To(o.ContainSubstring("backend be_http:" + oc.Namespace() + ":foobar-unsecure"))
+		o.Expect(searchOutput2).To(o.ContainSubstring("backend be_http:" + project2 + ":foobar-unsecure"))
 
-		g.By("check the reachability of the 'foobar-unsecure' host in default controller")
-		waitForCurl(oc, podName[0], baseDomain, "foobar.apps.", "Hello-OpenShift", "")
+		//curling through defualt controller will not work for proxy cluster.
+		if checkProxy(oc) {
+			e2e.Logf("This is proxy cluster, skiping the curling part through default controller.")
+		} else {
+			g.By("check the reachability of the 'foobar-unsecure' host in default controller")
+			waitForCurl(oc, podName[0], baseDomain, "foobar.apps.", "Hello-OpenShift", "")
+		}
 
 		g.By("check the reachability of the 'foobar-unsecure' host in custom controller")
 		custContIP := getPodv4Address(oc, custContPod, "openshift-ingress")
 		waitForCurl(oc, podName[0], baseDomain, "foobar.ocp51429.", "Hello-OpenShift", custContIP)
+
 	})
 
 	// author: mjoseph@redhat.com
@@ -235,13 +246,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("create project and a pod")
 		baseDomain := getBaseDomain(oc)
-		oc.SetupProject()
-		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		project3 := oc.Namespace()
+		createResourceFromFile(oc, project3, testPodSvc)
+		err := waitForPodWithLabelReady(oc, project3, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
-		podName := getPodName(oc, oc.Namespace(), "name=web-server-rc")
+		podName := getPodName(oc, project3, "name=web-server-rc")
 		rut.domain = "apps" + "." + baseDomain
-		rut.namespace = oc.Namespace()
+		rut.namespace = project3
 
 		g.By("Create first shard ingresscontroller")
 		ingctrl1.domain = ingctrl1.name + "." + baseDomain
@@ -261,36 +272,41 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("create routes and get the details")
 		rut.create(oc)
-		getRoutes(oc, oc.Namespace())
+		getRoutes(oc, project3)
 
 		g.By("check whether required host is present in alpha ingress controller domain")
-		output := fetchJSONPathValue(oc, oc.Namespace(), "route/bar-unsecure", ".status.ingress")
+		output := fetchJSONPathValue(oc, project3, "route/bar-unsecure", ".status.ingress")
 		o.Expect(output).Should(o.ContainSubstring(`"host":"bar.apps.%s"`, baseDomain))
 		o.Expect(output).Should(o.ContainSubstring(`"host":"bar.alpha-alpha-ocp51437.%s"`, baseDomain))
 
 		g.By("check the router pod and ensure the routes are loaded in haproxy.config of alpha controller")
 		searchOutput1 := readRouterPodData(oc, custContPod1, "cat haproxy.config", "bar-unsecure")
-		o.Expect(searchOutput1).To(o.ContainSubstring("backend be_http:" + oc.Namespace() + ":bar-unsecure"))
+		o.Expect(searchOutput1).To(o.ContainSubstring("backend be_http:" + project3 + ":bar-unsecure"))
 
-		g.By("check the reachability of the 'bar-unsecure' host in default controller")
-		waitForCurl(oc, podName[0], baseDomain, "bar.apps.", "Hello-OpenShift", "")
+		//curling through defualt controller will not work for proxy cluster.
+		if checkProxy(oc) {
+			e2e.Logf("This is proxy cluster, skiping the curling part through default controller.")
+		} else {
+			g.By("check the reachability of the 'bar-unsecure' host in default controller")
+			waitForCurl(oc, podName[0], baseDomain, "bar.apps.", "Hello-OpenShift", "")
+		}
 
 		g.By("check the reachability of the 'bar-unsecure' host in 'alpha shard' controller")
 		custContIP := getPodv4Address(oc, custContPod1, "openshift-ingress")
 		waitForCurl(oc, podName[0], baseDomain, "bar.alpha-alpha-ocp51437.", "Hello-OpenShift", custContIP)
 
 		g.By("Overwrite route with beta shard")
-		output, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("routes/bar-unsecure", "--overwrite", "shard=beta", "-n", oc.Namespace()).Output()
+		output, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("routes/bar-unsecure", "--overwrite", "shard=beta", "-n", project3).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("check whether required host is present in beta ingress controller domain")
-		output = fetchJSONPathValue(oc, oc.Namespace(), "route/bar-unsecure", ".status.ingress")
+		output = fetchJSONPathValue(oc, project3, "route/bar-unsecure", ".status.ingress")
 		o.Expect(output).Should(o.ContainSubstring(`"host":"bar.apps.%s"`, baseDomain))
 		o.Expect(output).Should(o.ContainSubstring(`"host":"bar.beta-beta-ocp51437.%s"`, baseDomain))
 
 		g.By("check the router pod and ensure the routes are loaded in haproxy.config of beta controller")
 		searchOutput2 := readRouterPodData(oc, custContPod2, "cat haproxy.config", "bar-unsecure")
-		o.Expect(searchOutput2).To(o.ContainSubstring("backend be_http:" + oc.Namespace() + ":bar-unsecure"))
+		o.Expect(searchOutput2).To(o.ContainSubstring("backend be_http:" + project3 + ":bar-unsecure"))
 
 		g.By("check the reachability of the 'bar-unsecure' host in 'beta shard' controller")
 		custContIP2 := getPodv4Address(oc, custContPod2, "openshift-ingress")
