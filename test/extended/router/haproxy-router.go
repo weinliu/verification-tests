@@ -6,8 +6,7 @@ import (
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
-
-	//e2e "k8s.io/kubernetes/test/e2e/framework"
+	"github.com/tidwall/gjson"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
@@ -906,4 +905,36 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	})
 
+	g.It("Author:aiyengar-High-41187-The Power of two balancing  honours the per route balancing algorithm defined via haproxy.router.openshift.io/balance annotation", func() {
+		var (
+			defaultPod = getRouterPod(oc, "default")
+		)
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+
+		g.By("Deploy project with pods and service resources")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
+		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "project resource creation failed!")
+
+		g.By("Expose a route from the project and set route LB annotation")
+		exposeRoute(oc, project1, "svc/service-unsecure1")
+		output, err := oc.Run("get").Args("route").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("service-unsecure1"))
+		setAnnotation(oc, oc.Namespace(), "route/service-unsecure1", "haproxy.router.openshift.io/balance=leastconn")
+		findAnnotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "service-unsecure1", "-n", project1, "-o=jsonpath={.metadata.annotations}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		getAlgoValue := gjson.Get(string(findAnnotation), "haproxy\\.router\\.openshift\\.io/balance").String()
+		o.Expect(getAlgoValue).To(o.ContainSubstring("leastconn"))
+
+		g.By("Check the default loadbalance algorithm inside proxy pod and check the default LB variable to confirm power-of-two is active")
+		insecBackend := "be_http:" + project1 + ":service-unsecure1"
+		rtrParamCheck := readPodEnv(oc, defaultPod, "openshift-ingress", "ROUTER_LOAD_BALANCE_ALGORITHM")
+		o.Expect(rtrParamCheck).To(o.ContainSubstring("random"))
+		lbCheck := readHaproxyConfig(oc, defaultPod, insecBackend, "-A5", "balance")
+		o.Expect(lbCheck).To(o.ContainSubstring("leastconn"))
+
+	})
 })
