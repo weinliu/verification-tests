@@ -100,15 +100,26 @@ func assertIfTunedProfileApplied(oc *exutil.CLI, namespace string, tunedPodName 
 // assertIfNodeSchedulingDisabled checks all nodes in a cluster to see if 'SchedulingDisabled' status is present on any node
 func assertIfNodeSchedulingDisabled(oc *exutil.CLI) string {
 	var nodeNames []string
+	var nodeNameList []string
 	err := wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
 		nodeCheck, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		isNodeSchedulingDisabled := strings.Contains(nodeCheck, "SchedulingDisabled")
-		if isNodeSchedulingDisabled {
-			e2e.Logf("'SchedulingDisabled' status found!")
-			nodeNameReg := regexp.MustCompile(".*SchedulingDisabled.*")
-			nodeNameList := nodeNameReg.FindAllString(nodeCheck, -1)
+		isNodeNotReady := strings.Contains(nodeCheck, "NotReady")
+		if isNodeSchedulingDisabled || isNodeNotReady {
+			e2e.Logf("'SchedulingDisabled' or 'NotReady' status found!")
+			if isNodeNotReady {
+				e2e.Logf("'NotReady' status found!")
+				nodeNameReg := regexp.MustCompile(".*NotReady.*")
+				nodeNameList = nodeNameReg.FindAllString(nodeCheck, -1)
+			} else if isNodeSchedulingDisabled {
+				nodeNameReg := regexp.MustCompile(".*SchedulingDisabled.*")
+				nodeNameList = nodeNameReg.FindAllString(nodeCheck, -1)
+			} else {
+				e2e.Logf("'SchedulingDisabled' or 'NotReady' isn't found!")
+			}
+
 			nodeNamestr := nodeNameList[0]
 			nodeNames = strings.Split(nodeNamestr, " ")
 			e2e.Logf("Node Names is %v", nodeNames)
