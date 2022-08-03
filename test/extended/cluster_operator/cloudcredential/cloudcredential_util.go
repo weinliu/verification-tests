@@ -14,7 +14,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-type PrometheusQueryResult struct {
+type prometheusQueryResult struct {
 	Data struct {
 		Result []struct {
 			Metric struct {
@@ -35,18 +35,18 @@ type PrometheusQueryResult struct {
 	Status string `json:"status"`
 }
 
-func GetCloudCredentialMode(oc *exutil.CLI) (string, error) {
+func getCloudCredentialMode(oc *exutil.CLI) (string, error) {
 	var (
 		mode           string
 		iaasPlatform   string
 		rootSecretName string
 		err            error
 	)
-	iaasPlatform, err = GetIaasPlatform(oc)
+	iaasPlatform, err = getIaasPlatform(oc)
 	if err != nil {
 		return "", err
 	}
-	rootSecretName, err = GetRootSecretName(oc)
+	rootSecretName, err = getRootSecretName(oc)
 	if err != nil {
 		return "", err
 	}
@@ -75,7 +75,7 @@ func GetCloudCredentialMode(oc *exutil.CLI) (string, error) {
 		return mode, nil
 	}
 	if iaasPlatform == "aws" {
-		if IsSTSMode(oc) {
+		if isSTSMode(oc) {
 			mode = "manualpodidentity"
 			return mode, nil
 		}
@@ -84,10 +84,10 @@ func GetCloudCredentialMode(oc *exutil.CLI) (string, error) {
 	return mode, nil
 }
 
-func GetRootSecretName(oc *exutil.CLI) (string, error) {
+func getRootSecretName(oc *exutil.CLI) (string, error) {
 	var rootSecretName string
 
-	iaasPlatform, err := GetIaasPlatform(oc)
+	iaasPlatform, err := getIaasPlatform(oc)
 	if err != nil {
 		return "", err
 	}
@@ -112,13 +112,13 @@ func GetRootSecretName(oc *exutil.CLI) (string, error) {
 	return rootSecretName, nil
 }
 
-func IsSTSMode(oc *exutil.CLI) bool {
+func isSTSMode(oc *exutil.CLI) bool {
 	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "installer-cloud-credentials", "-n=openshift-image-registry", "-o=jsonpath={.data.credentials}").Output()
 	credentials, _ := base64.StdEncoding.DecodeString(output)
 	return strings.Contains(string(credentials), "web_identity_token_file")
 }
 
-func GetIaasPlatform(oc *exutil.CLI) (string, error) {
+func getIaasPlatform(oc *exutil.CLI) (string, error) {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 	if err != nil {
 		return "", err
@@ -127,14 +127,11 @@ func GetIaasPlatform(oc *exutil.CLI) (string, error) {
 	return iaasPlatform, nil
 }
 
-func CheckModeInMetric(oc *exutil.CLI, mode string) error {
+func checkModeInMetric(oc *exutil.CLI, token string, mode string) error {
 	var (
-		data         PrometheusQueryResult
+		data         prometheusQueryResult
 		modeInMetric string
 	)
-	token, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(token).NotTo(o.BeEmpty())
 	return wait.Poll(10*time.Second, 3*time.Minute, func() (bool, error) {
 		msg, _, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", token), "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=cco_credentials_mode").Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -148,4 +145,19 @@ func CheckModeInMetric(oc *exutil.CLI, mode string) error {
 		}
 		return true, nil
 	})
+}
+
+func checkSTSStyle(oc *exutil.CLI, mode string) bool {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "installer-cloud-credentials", "-n", "openshift-image-registry", "-o=jsonpath={.data.credentials}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(output).NotTo(o.BeEmpty())
+	credentials, _ := base64.StdEncoding.DecodeString(output)
+	credConfig := strings.Split(string(credentials), "\n")
+	if len(credConfig) != 3 {
+		return false
+	}
+	if mode == "manualpodidentity" {
+		return strings.Contains(credConfig[0], "[default]") && strings.Contains(credConfig[1], "role_arn") && strings.Contains(credConfig[2], "web_identity_token_file")
+	}
+	return strings.Contains(credConfig[0], "[default]") && strings.Contains(credConfig[1], "aws_access_key_id") && strings.Contains(credConfig[2], "aws_secret_access_key")
 }

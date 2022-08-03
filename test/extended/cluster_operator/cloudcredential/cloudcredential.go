@@ -30,18 +30,21 @@ var _ = g.Describe("[sig-cco] Cluster_Operator CCO should", func() {
 	// so adding [Slow]
 	g.It("Author:lwan-High-31768-Report the mode of cloud-credential operation as a metric [Slow][Disruptive]", func() {
 		g.By("Check if the current platform is a supported platform")
-		rootSecretName, err := GetRootSecretName(oc)
+		rootSecretName, err := getRootSecretName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if rootSecretName == "" {
 			e2e.Logf("unsupported platform, there is no root credential in kube-system namespace,  will pass the test")
 		} else {
 			g.By("Check if cco mode in metric is the same as cco mode in cluster resources")
 			g.By("Get cco mode from Cluster Resource")
-			modeInCR, err := GetCloudCredentialMode(oc)
+			modeInCR, err := getCloudCredentialMode(oc)
 			e2e.Logf("cco mode in cluster CR is %v", modeInCR)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			g.By("Check if cco mode in Metric is correct")
-			err = CheckModeInMetric(oc, modeInCR)
+			token, err := exutil.GetSAToken(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(token).NotTo(o.BeEmpty())
+			err = checkModeInMetric(oc, token, modeInCR)
 			if err != nil {
 				e2e.Failf("Failed to check cco mode metric after waiting up to 3 minutes, cco mode should be %v, but is %v in metric", modeInCR, modeInMetric)
 			}
@@ -60,24 +63,24 @@ spec:
 				defer func() {
 					err := oc.AsAdmin().Run("patch").Args("cloudcredential/cluster", "-p", patchYaml, "--type=merge").Execute()
 					o.Expect(err).NotTo(o.HaveOccurred())
-					err = CheckModeInMetric(oc, modeInCR)
+					err = checkModeInMetric(oc, token, modeInCR)
 					if err != nil {
 						e2e.Failf("Failed to check cco mode metric after waiting up to 3 minutes, cco mode should be %v, but is %v in metric", modeInCR, modeInMetric)
 					}
 				}()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				g.By("Get cco mode from cluster CR")
-				modeInCR, err := GetCloudCredentialMode(oc)
+				modeInCR, err := getCloudCredentialMode(oc)
 				e2e.Logf("cco mode in cluster CR is %v", modeInCR)
 				o.Expect(err).NotTo(o.HaveOccurred())
 				g.By("Check if cco mode in Metric is correct")
-				err = CheckModeInMetric(oc, modeInCR)
+				err = checkModeInMetric(oc, token, modeInCR)
 				if err != nil {
 					e2e.Failf("Failed to check cco mode metric after waiting up to 3 minutes, cco mode should be %v, but is %v in metric", modeInCR, modeInMetric)
 				}
 				g.By("Check cco mode when root credential is removed when cco is not in manual mode")
 				e2e.Logf("remove root creds")
-				rootSecretName, err := GetRootSecretName(oc)
+				rootSecretName, err := getRootSecretName(oc)
 				rootSecretYaml, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", rootSecretName, "-n=kube-system", "-o=yaml").OutputToFile("root-secret.yaml")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", rootSecretName, "-n=kube-system").Execute()
@@ -87,11 +90,11 @@ spec:
 				}()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				g.By("Get cco mode from cluster CR")
-				modeInCR, err = GetCloudCredentialMode(oc)
+				modeInCR, err = getCloudCredentialMode(oc)
 				e2e.Logf("cco mode in cluster CR is %v", modeInCR)
 				o.Expect(err).NotTo(o.HaveOccurred())
 				g.By("Get cco mode from Metric")
-				err = CheckModeInMetric(oc, modeInCR)
+				err = checkModeInMetric(oc, token, modeInCR)
 				if err != nil {
 					e2e.Failf("Failed to check cco mode metric after waiting up to 3 minutes, cco mode should be %v, but is %v in metric", modeInCR, modeInMetric)
 				}
@@ -191,5 +194,23 @@ data:
 		credsTXT, err = base64.StdEncoding.DecodeString(output)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(credsTXT).To(o.ContainSubstring("cacert: /etc/kubernetes/static-pod-resources/configmaps/cloud-config/ca-bundle.pem"))
+	})
+
+	g.It("Author:jshu-High-36498-CCO credentials secret change to STS-style", func() {
+		//Check IAAS platform type
+		iaasPlatform := exutil.CheckPlatform(oc)
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 36498 is for AWS - skipping test ...")
+		}
+		//Check CCO mode
+		mode, err := getCloudCredentialMode(oc)
+		e2e.Logf("cco mode in cluster is %v", mode)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if mode == "manual" {
+			g.Skip(" Test case 36498 is not for cco mode=manual - skipping test ...")
+		}
+		if !checkSTSStyle(oc, mode) {
+			g.Fail("The secret format didn't pass STS style check.")
+		}
 	})
 })
