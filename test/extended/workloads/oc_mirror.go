@@ -3,12 +3,13 @@ package workloads
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	//e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-cli] Workloads", func() {
@@ -144,6 +145,27 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			o.Expect(out).To(o.ContainSubstring(v))
 		}
 		_, err = os.Stat("/tmp/case46523/oc-mirror-workspace/mapping.txt")
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+	g.It("ConnectedOnly-Author:yinzhou-Medium-46770-Low-46520-Local backend support for oc-mirror", func() {
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		operatorS := filepath.Join(ocmirrorBaseDir, "ocmirror-localbackend.yaml")
+
+		dirname := "/tmp/46770test"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		out, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--config", operatorS, "file:///tmp/46770test", "-v", "3").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(out, "Using local backend at location") {
+			e2e.Failf("Do not expect the backend setting")
+		}
+		_, err = os.Stat("/tmp/46770test/publish/.metadata.json")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("describe", "/tmp/46770test/mirror_seq1_000000.tar").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 

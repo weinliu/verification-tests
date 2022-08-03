@@ -1,0 +1,12 @@
+apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+storageConfig:
+  local:
+    path: /tmp/46770test
+mirror:
+  operators:
+    - catalog: quay.io/olmqe/cockroachdb-index:5.0.4-30206
+      packages:
+        - name: cockroachdb
+          channels:
+          - name: alpha
