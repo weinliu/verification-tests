@@ -171,9 +171,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		if !strings.Contains(httpProxy, "http") {
 			g.Skip("Skip for non-proxy platform")
 		}
-		e2e.Logf("httpProxy is %s", httpProxy)
-		e2e.Logf("httpsProxy is %s", httpsProxy)
-		e2e.Logf("noProxy is %s", noProxy)
 
 		g.By("Check if registry operator degraded")
 		registryDegrade := checkRegistryDegraded(oc)

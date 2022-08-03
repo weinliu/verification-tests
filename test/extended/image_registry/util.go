@@ -574,15 +574,16 @@ func checkRegistryFunctionFine(oc *exutil.CLI, bcname string, namespace string) 
 	imagename := "image-registry.openshift-image-registry.svc:5000/" + namespace + "/" + bcname + ":latest"
 	err = oc.AsAdmin().WithoutNamespace().Run("run").Args(bcname, "--image", imagename, "-n", namespace, "--command", "--", "/bin/sleep", "120").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	err = wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", bcname, "-n", namespace).Output()
+	var output string
+	errWait := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+		output, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", bcname, "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(output, `Successfully pulled image "image-registry.openshift-image-registry.svc:5000`) {
+		if strings.Contains(output, `Successfully pulled image`) {
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, "Image registry is broken, can't pull image")
+	exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("Image registry is broken, can't pull image. the log:\n %v", output))
 }
 
 func checkRegistryDegraded(oc *exutil.CLI) bool {

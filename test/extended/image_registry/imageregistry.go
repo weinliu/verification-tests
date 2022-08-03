@@ -1683,6 +1683,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			g.Skip("Skip disableRedirect test for fs volume")
 		}
 
+		credentials, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/image-registry-private-configuration", "-n", "openshift-image-registry", "-o=jsonpath={.data.REGISTRY_STORAGE_GCS_KEYFILE}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		sDec, err := base64.StdEncoding.DecodeString(credentials)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(string(sDec), "external_account") {
+			g.Skip("Skip disableRedirect test on gcp sts test, bz2111311")
+		}
+
 		g.By("Set object storage client accordingly")
 		var storageclient string
 		switch storagetype {
@@ -1770,13 +1778,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Create pod with the imagestream")
 		err = oc.Run("set").Args("image-lookup", "test-51055", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		expectInfo := "Failed to pull image"
+		expectInfo := "got 429 Too Many Requests"
 		createSimpleRunPod(oc, "test-51055:latest", expectInfo)
-		output, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args("deploy/image-registry", "--since=1m", "-n", "openshift-image-registry").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(output, "err.code=toomanyrequests") && !strings.Contains(output, "got 429 Too Many Requests") {
-			e2e.Failf("Image registry doesn't respect 429 error")
-		}
+
 	})
 
 	// author: jitli@redhat.com
