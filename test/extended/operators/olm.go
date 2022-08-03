@@ -3867,8 +3867,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		dr := make(describerResrouce)
 		itName := g.CurrentGinkgoTestDescription().TestText
 		dr.addIr(itName)
-		cs.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", cs.name, "-n", "openshift-marketplace", "-o=jsonpath={.status..lastObservedState}"}).check(oc)
+		cs.createWithCheck(oc, itName, dr)
 
 		g.By("2) check status of marketplace operator")
 		catalogstrings := map[string]string{"certified-operators": "Certified Operators",

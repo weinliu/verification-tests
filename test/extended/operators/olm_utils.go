@@ -483,8 +483,7 @@ func (catsrc *catalogSourceDescription) createWithCheck(oc *exutil.CLI, itName s
 	if err != nil {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "-o=jsonpath={.status}").Output()
 		e2e.Logf(output)
-		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", catsrc.namespace).Output()
-		e2e.Logf(output)
+		logDebugInfo(oc, catsrc.namespace, "pod", "events")
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("catsrc %s lastObservedState is not READY", catsrc.name))
 	e2e.Logf("catsrc %s lastObservedState is READY", catsrc.name)
@@ -1380,4 +1379,35 @@ func getSAToken(oc *exutil.CLI, sa, ns string) (string, error) {
 		}
 	}
 	return token, err
+}
+
+func notInList(target string, strArray []string) bool {
+	for _, element := range strArray {
+		if target == element {
+			return false
+		}
+	}
+	return true
+}
+
+func logDebugInfo(oc *exutil.CLI, ns string, resource ...string) {
+	for _, resourceIndex := range resource {
+		e2e.Logf("oc get %s:", resourceIndex)
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(resourceIndex, "-n", ns).Output()
+		if strings.Contains(resourceIndex, "event") {
+			var warningEventList []string
+			lines := strings.Split(output, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "Warning") {
+					warningStr := strings.Split(line, "Warning")[1]
+					if notInList(warningStr, warningEventList) {
+						warningEventList = append(warningEventList, "Warning"+warningStr)
+					}
+				}
+			}
+			e2e.Logf(strings.Join(warningEventList, "\n"))
+		} else {
+			e2e.Logf(output)
+		}
+	}
 }
