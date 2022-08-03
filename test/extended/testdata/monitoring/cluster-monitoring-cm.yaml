@@ -14,6 +14,8 @@ objects:
       prometheusK8s:
         retentionSize: 10GiB
         retention: 45d
+      alertmanagerMain:
+        logLevel: debug
 parameters:
 - name: NAME
 - name: NAMESPACE
