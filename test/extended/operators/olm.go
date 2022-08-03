@@ -1823,7 +1823,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		sub.createWithoutCheck(oc, itName, dr)
 
 		g.By("6) The install plan is Failed")
-		installPlan := getResourceNoEmpty(oc, asAdmin, withoutNamespace, "installplan", "-n", sub.namespace, "-o=jsonpath={.items..metadata.name}")
+		installPlan := sub.getIP(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "InstallComponentFailed", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.conditions..reason}"}).check(oc)
 
 		g.By("7) Grant the proper permissions to the service account")
@@ -1959,7 +1959,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		sub.createWithoutCheck(oc, itName, dr)
 
 		g.By("6) The install plan is Failed")
-		installPlan := getResourceNoEmpty(oc, asAdmin, withoutNamespace, "installplan", "-n", sub.namespace, "-o=jsonpath={.items..metadata.name}")
+		installPlan := sub.getIP(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Failed", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 		g.By("7) Grant the proper permissions to the service account")
