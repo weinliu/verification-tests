@@ -2869,4 +2869,171 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 		exutil.AssertWaitPollNoErr(waitErr, "the status of deployment/memcached44550-sample-ansiblehttp is wrong")
 	})
+
+	// author: jfan@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:jfan-High-44551-SDK-support helm type operator for http_proxy env", func() {
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture != "amd64" && architecture != "arm64" {
+			g.Skip("Do not support " + architecture)
+		}
+		tmpBasePath := "/tmp/ocp-44551-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-44551")
+		err := os.MkdirAll(tmpPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
+		nsOperator := "memcached-operator-44551-system"
+		imageTag := "quay.io/olmqe/memcached-operator:44551-" + getRandomString()
+		dataPath := "test/extended/testdata/operatorsdk/ocp-44551-data/"
+		crFilePath := filepath.Join(dataPath, "kakademo_v1_nginx.yaml")
+		quayCLI := container.NewQuayCLI()
+		defer quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
+
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", crFilePath, "-n", nsOperator).Output()
+			g.By("step: undeploy")
+			_, err = makeCLI.Run("undeploy").Args().Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("step: init Helm Based Operator")
+		output, err := operatorsdkCLI.Run("init").Args("--plugins=helm", "--domain=httpproxy.com", "--group=kakademo", "--version=v1", "--kind=Nginx").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Created helm-charts"))
+
+		g.By("step: modify files to generate the quay.io/olmqe images.")
+		// update the Dockerfile
+		dockerFile := filepath.Join(tmpPath, "Dockerfile")
+		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-helm-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-operator:v"+ocpversion)
+		// update the rbac file
+		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		// update the Makefile
+		makefileFilePath := filepath.Join(tmpPath, "Makefile")
+		replaceContent(makefileFilePath, "controller:latest", imageTag)
+		replaceContent(makefileFilePath, "build config/default | kubectl apply -f -", "build config/default | CLUSTER_PROXY=$(shell kubectl get proxies.config.openshift.io cluster  -o json | jq '.spec.httpProxy') envsubst | kubectl apply -f -")
+		// copy watches.yaml
+		err = copy(filepath.Join(dataPath, "watches.yaml"), filepath.Join(tmpPath, "watches.yaml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// copy helm-charts/nginx/values.yaml
+		err = copy(filepath.Join(dataPath, "values.yaml"), filepath.Join(tmpPath, "helm-charts", "nginx", "values.yaml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// copy helm-charts/nginx/templates/deployment.yaml
+		err = copy(filepath.Join(dataPath, "deployment.yaml"), filepath.Join(tmpPath, "helm-charts", "nginx", "templates", "deployment.yaml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// copy config/manager/manager.yaml
+		err = copy(filepath.Join(dataPath, "manager.yaml"), filepath.Join(tmpPath, "config", "manager", "manager.yaml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step: Build and push the operator image")
+		tokenDir := "/tmp/ocp-44551" + getRandomString()
+		err = os.MkdirAll(tokenDir, os.ModePerm)
+		defer os.RemoveAll(tokenDir)
+		if err != nil {
+			e2e.Failf("fail to create the token folder:%s", tokenDir)
+		}
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", tokenDir), "--confirm").Output()
+		if err != nil {
+			e2e.Failf("Fail to get the cluster auth %v", err)
+		}
+		switch architecture {
+		case "amd64":
+			podmanCLI := container.NewPodmanCLI()
+			podmanCLI.ExecCommandPath = tmpPath
+			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "amd64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("Successfully"))
+			output, err = podmanCLI.Run("push").Args(imageTag).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+		case "arm64":
+			podmanCLI := container.NewPodmanCLI()
+			podmanCLI.ExecCommandPath = tmpPath
+			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "arm64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("Successfully"))
+			output, err = podmanCLI.Run("push").Args(imageTag).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+		}
+
+		g.By("step: Install the CRD")
+		output, err = makeCLI.Run("install").Args().Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("kakademo"))
+
+		g.By("step: Deploy the operator")
+		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("deployment.apps/memcached-operator-44551-controller-manager"))
+
+		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lines := strings.Split(podList, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "memcached-operator-44551-controller-manager") {
+					e2e.Logf("found pod memcached-operator-44551-controller-manager")
+					if strings.Contains(line, "Running") {
+						e2e.Logf("the status of pod memcached-operator-44551-controller-manager is Running")
+						return true, nil
+					}
+					e2e.Logf("the status of pod memcached-operator-44551-controller-manager is not Running")
+					return false, nil
+				}
+			}
+			return false, nil
+		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached-operator-44551-controller-manager in project %s", nsOperator))
+		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/memcached-operator-44551-controller-manager", "-c", "manager", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(msg, "Starting workers") {
+				e2e.Logf("Starting workers successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "container manager doesn't work")
+
+		g.By("step: Create the resource")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-user", "anyuid", fmt.Sprintf("system:serviceaccount:%s:nginx-sample", nsOperator)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", nsOperator).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(msg, "nginx-sample") {
+				e2e.Logf("found pod nginx-sample")
+				return true, nil
+			}
+			return false, nil
+		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached44551-sample in project %s", nsOperator))
+
+		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			proxyMsg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxies.config.openshift.io", "cluster", "-o=jsonpath={.spec.httpProxy}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/nginx-sample", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(msg).To(o.ContainSubstring("HTTP_PROXY:  " + proxyMsg))
+			if strings.Contains(msg, "HTTP_PROXY:  "+proxyMsg) {
+				e2e.Logf("deployment/nginx-sample is created successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events")
+		}
+		exutil.AssertWaitPollNoErr(waitErr, "the status of deployment/memcached44551-sample-ansiblehttp is wrong")
+	})
 })
