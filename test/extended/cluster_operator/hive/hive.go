@@ -1289,7 +1289,7 @@ spec:
 	//author: liangli@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "44475"|./bin/extended-platform-tests run --timeout 90m -f -
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:liangli-Medium-44475-[gcp]Hive Change BaseDomain field right after creating pool and all clusters finish install firstly then recreated [Serial]", func() {
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:liangli-Medium-44475-Medium-45158-[gcp]Hive Change BaseDomain field right after creating pool and all clusters finish install firstly then recreated [Serial]", func() {
 		if iaasPlatform != "gcp" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 44475 is for GCP - skipping test ...")
 		}
@@ -1339,22 +1339,38 @@ spec:
 		}
 		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
 		pool.create(oc)
-		g.By("Check if GCP ClusterPool created successfully and become ready")
-		//runningCount is 0 so pool status should be standby: 1, ready: 0
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
-
-		g.By("test OCP-44475")
+		e2e.Logf("Check ClusterDeployment in pool created")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, poolName, ok, DefaultTimeout, []string{"ClusterDeployment", "-A", "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		e2e.Logf("get old ClusterDeployment Name")
 		cdListStr := getCDlistfromPool(oc, poolName)
 		oldClusterDeploymentName := strings.Split(strings.TrimSpace(cdListStr), "\n")
 		o.Expect(len(oldClusterDeploymentName) > 0).Should(o.BeTrue())
 		e2e.Logf("old cd name:" + oldClusterDeploymentName[0])
 
+		g.By("OCP-45158: Check Provisioned condition")
+		e2e.Logf("Check ClusterDeployment is provisioning")
+		expectedResult := "message:Cluster is provisioning,reason:Provisioning,status:False"
+		jsonPath := "-o=jsonpath={\"message:\"}{.status.conditions[?(@.type==\"Provisioned\")].message}{\",reason:\"}{.status.conditions[?(@.type==\"Provisioned\")].reason}{\",status:\"}{.status.conditions[?(@.type==\"Provisioned\")].status}"
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, expectedResult, ok, DefaultTimeout, []string{"ClusterDeployment", oldClusterDeploymentName[0], "-n", oldClusterDeploymentName[0], jsonPath}).check(oc)
+		e2e.Logf("Check ClusterDeployment Provisioned finish")
+		expectedResult = "message:Cluster is provisioned,reason:Provisioned,status:True"
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, expectedResult, ok, ClusterInstallTimeout, []string{"ClusterDeployment", oldClusterDeploymentName[0], "-n", oldClusterDeploymentName[0], jsonPath}).check(oc)
+
+		g.By("Check if GCP ClusterPool created successfully and become ready")
+		//runningCount is 0 so pool status should be standby: 1, ready: 0
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
+
+		g.By("test OCP-44475")
 		e2e.Logf("oc patch ClusterPool 'spec.baseDomain'")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterPool", poolName, "-n", oc.Namespace(), "-p", `{"spec":{"baseDomain":"`+GCPBaseDomain2+`"}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Check if ClusterPool finished to re-create the CD")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
+		e2e.Logf("Check ClusterDeployment is Deprovisioning")
+		expectedResult = "message:Cluster is deprovisioning,reason:Deprovisioning,status:False"
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, expectedResult, ok, DefaultTimeout, []string{"ClusterDeployment", oldClusterDeploymentName[0], "-n", oldClusterDeploymentName[0], jsonPath}).check(oc)
+		e2e.Logf("Check ClusterDeployment is Deprovisioned")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, oldClusterDeploymentName[0], nok, ClusterUninstallTimeout, []string{"ClusterDeployment", "-A", "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		e2e.Logf("Check if ClusterPool re-create the CD")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, poolName, ok, DefaultTimeout, []string{"ClusterDeployment", "-A", "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		e2e.Logf("get new ClusterDeployment name")
 		cdListStr = getCDlistfromPool(oc, poolName)
@@ -1362,7 +1378,6 @@ spec:
 		o.Expect(len(newClusterDeploymentName) > 0).Should(o.BeTrue())
 		e2e.Logf("new cd name:" + newClusterDeploymentName[0])
 
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterInstallTimeout, []string{"ClusterDeployment", newClusterDeploymentName[0], "-n", newClusterDeploymentName[0], "-o=jsonpath={.status.powerState}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, GCPBaseDomain2, ok, DefaultTimeout, []string{"ClusterDeployment", newClusterDeploymentName[0], "-n", newClusterDeploymentName[0], "-o=jsonpath={.spec.baseDomain}"}).check(oc)
 		o.Expect(strings.Compare(oldClusterDeploymentName[0], newClusterDeploymentName[0]) != 0).Should(o.BeTrue())
 	})
