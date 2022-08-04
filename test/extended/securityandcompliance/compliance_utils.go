@@ -367,7 +367,7 @@ func (subD *subscriptionDescription) complianceScanResult(oc *exutil.CLI, expect
 }
 
 func (subD *subscriptionDescription) getScanExitCodeFromConfigmap(oc *exutil.CLI, expected string) {
-	podName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", subD.namespace, "pods", "--selector=workload=scanner", "-o=jsonpath={.items[*].metadata.name}").Output()
+	podName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", subD.namespace, "pods", "--selector=workload=scanner", "--sort-by=.metadata.creationTimestamp", "-o=jsonpath={.items[-1:].metadata.name}").Output()
 	lines := strings.Fields(podName)
 	for _, line := range lines {
 		cmCode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", line, "-n", subD.namespace, "-o=jsonpath={.data.exit-code}").Output()
