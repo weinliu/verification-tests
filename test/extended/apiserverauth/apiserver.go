@@ -2263,7 +2263,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("Author:zxiao-High-39601-Examine abnormal errors in openshift-kube-apiserver pod logs and audit logs", func() {
+	g.It("Author:zxiao-High-39601-Examine critical errors in openshift-kube-apiserver related log files", func() {
 		g.By("1) Create log arrays.")
 		podAbnormalLogs := make([]string, 0)
 		masterNodeAbnormalLogs := make([]string, 0)
@@ -2284,7 +2284,7 @@ spec:
 		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
 		o.Expect(masterNodes).NotTo(o.BeEmpty())
 
-		g.By("4) Check kas pod logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs, expect none.")
+		g.By("4) Check KAS operator pod logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs, expect none.")
 		clusterOperator := "openshift-kube-apiserver-operator"
 		keywords := "panic|fatal|SHOULD NOT HAPPEN"
 		format := `(.*)\.go:[0-9]{1,}]|namespace="([a-zA-Z0-9]|\-)*"|name="([a-zA-Z0-9]|\-)*"`
@@ -2316,9 +2316,10 @@ spec:
 		e2e.Logf("Pod Abnormal Logs:\n%s", strings.Join(podAbnormalLogs, "\n"))
 		totalAbnormalLogCount += len(podAbnormalLogs)
 
-		g.By("5) On all master nodes, check kas log files for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs, expect none.")
+		g.By("5) On all master nodes, check KAS log files for abnormal (fatal/SHOULD NOT HAPPEN) logs, expect none.")
 		format = `(\/.*)\.go:[0-9]{1,}]|namespace="([a-zA-Z0-9]|\-)*"|name="([a-zA-Z0-9]|\-)*"`
-		exceptions := "(SHOULD NOT HAPPEN|Should not happen).*(Kind=CertificateSigningRequest|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|non-fatal"
+		keywords = "fatal|SHOULD NOT HAPPEN"
+		exceptions := "(SHOULD NOT HAPPEN|Should not happen).*(Kind=CertificateSigningRequest|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|-panic-|non-fatal"
 		cmd = fmt.Sprintf(`grep -irE '(%s)' /var/log/pods/openshift-kube-apiserver_kube-apiserver* | grep -Ev '%s' | sort > /tmp/OCP-39601-kas-errors.log
 		sed -E 's/((%s)( )*){1,}/.*/g' /tmp/OCP-39601-kas-errors.log | grep -v '^[[:space:]]*$' | sort | uniq | head -10 > /tmp/OCP-39601-kas-uniq-errors.log
 		echo '%s'
@@ -2344,7 +2345,7 @@ spec:
 		e2e.Logf("Master Node Abnormal Logs:\n%s", strings.Join(masterNodeAbnormalLogs, "\n"))
 		totalAbnormalLogCount += len(masterNodeAbnormalLogs)
 
-		g.By("6) On all master nodes, check external panic logs.")
+		g.By("6) On all master nodes, check KAS log files for panic error.")
 		cmd = fmt.Sprintf(`RETAG="[EWI][0-9]{4}\s[0-9]{2}:[0-9]{2}"
 		PANIC="${RETAG}.*panic"
 		panic_logfiles=$(grep -riE "${PANIC}" /var/log/pods/openshift-kube-apiserver_kube-apiserver* | grep -Ev '%s' | cut -d ':' -f1 | head -10 | uniq)
@@ -2369,12 +2370,12 @@ spec:
 				}
 			}
 		}
-		e2e.Logf("External Panic Logs:\n%s", strings.Join(externalPanicLogs, "\n"))
+		e2e.Logf("KAS log Panic Logs:\n%s", strings.Join(externalPanicLogs, "\n"))
 		totalAbnormalLogCount += len(externalPanicLogs)
 
 		g.By("7) On all master nodes, check kas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
 		format = `[0-9TZm.:]{2,}|namespace="([a-zA-Z0-9]|\-)*"|name="([a-zA-Z0-9]|\-)*"`
-		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)|ocp4-kubelet-enable-protect-kernel-sysctl-kernel-panic|ocp4-kubelet-enable-protect-kernel-sysctl-vm-panic-on-oom"
+		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)|panicked: false|-panic-"
 		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/kube-apiserver/audit*.log | jq -r '.requestURI + " - " + .responseStatus.status + " - " + .responseStatus.message + " - " + .responseStatus.reason + " - " + .user.username' | grep -Ev '%s' | sort > /tmp/OCP-39601-audit-errors.log
 		sed -E 's/((%s)( )*){1,}/.*/g' /tmp/OCP-39601-audit-errors.log | grep -v '^[[:space:]]*$' | sort | uniq | head -10 > /tmp/OCP-39601-audit-uniq-errors.log
 		echo '%s'
