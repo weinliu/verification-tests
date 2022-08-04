@@ -93,6 +93,15 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		exutil.WaitAndGetSpecificPodLogs(oc, "openshift-monitoring", "alertmanager", "alertmanager-main-0", "level=debug")
 	})
 
+	// author: juzhao@redhat.com
+	g.It("Author:juzhao-Medium-43748-Ensure label namespace exists on all alerts", func() {
+		g.By("Get token of SA prometheus-k8s")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+		g.By("check alerts, should have label namespace exists on all alerts")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="Watchdog"}'`, token, `"namespace":"openshift-monitoring"`, 2*platformLoadTime)
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
