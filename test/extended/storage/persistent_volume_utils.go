@@ -220,6 +220,20 @@ func (pv *persistentVolume) create(oc *exutil.CLI) {
 			"jsonPath": `items.0.spec.`,
 			"iscsi":    iscsiParameters,
 		}
+		// ali cloud max_sectors_kb feature
+	case "ali-max_sectors_kb":
+		volumeAttributes := map[string]string{
+			"sysConfig": "/queue/max_sectors_kb=128",
+		}
+		csiParameter := map[string]interface{}{
+			"driver":           pv.driver,
+			"volumeHandle":     pv.volumeHandle,
+			"volumeAttributes": volumeAttributes,
+		}
+		pvExtraParameters = map[string]interface{}{
+			"jsonPath": `items.0.spec.`,
+			"csi":      csiParameter,
+		}
 	// csi kind PersistentVolume
 	default:
 		csiParameter := map[string]string{

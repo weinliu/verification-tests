@@ -3,6 +3,7 @@ package storage
 import (
 	"path/filepath"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
@@ -16,6 +17,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		oc                   = exutil.NewCLI("storage-alibaba-csi", exutil.KubeConfigPath())
 		storageTeamBaseDir   string
 		storageClassTemplate string
+		pvTemplate           string
 		pvcTemplate          string
 		depTemplate          string
 	)
@@ -28,6 +30,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
 		storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+		pvTemplate = filepath.Join(storageTeamBaseDir, "csi-pv-template.yaml")
 		pvcTemplate = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 		depTemplate = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
 
@@ -38,6 +41,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("Author:ropatil-Medium-47918-[Alibaba-CSI-Driver] [Dynamic PV] should have diskTags attribute for volume mode: file system [ext4/ext3/xfs]", func() {
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
+
 		//Define the test scenario support fsTypes
 		fsTypes := []string{"ext4", "ext3", "xfs"}
 		for _, fsType := range fsTypes {
@@ -216,9 +220,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: ropatil@redhat.com
 	// [Alibaba-CSI-Driver] [Dynamic PV] with resource group id and allow volumes to store data
 	g.It("Author:ropatil-Medium-49498-[Alibaba-CSI-Driver] [Dynamic PV] with resource group id and allow volumes to store data", func() {
-		g.By("Create new project for the scenario")
-		oc.SetupProject() //create new project
-
 		g.By("Get the resource group id for the cluster")
 		rgid := getResourceGroupID(oc)
 
@@ -347,4 +348,108 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("****** Alibaba test phase finished ******")
 		})
 	}
+
+	// author: ropatil@redhat.com
+	// [Alibaba-CSI-Driver] [Dynamic PV] with invalid resource group id
+	g.It("Author:ropatil-Medium-50271-[Alibaba-CSI-Driver] [Dynamic PV] with invalid resource group id", func() {
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		// Set the resource template and definition for the scenario
+		var (
+			storageClass           = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("diskplugin.csi.alibabacloud.com"), setStorageClassVolumeBindingMode("Immediate"))
+			pvc                    = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			storageClassParameters = map[string]string{
+				"resourceGroupId": "rg-" + getRandomString(),
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+
+		g.By("****** Alibaba test phase start ******")
+
+		g.By("# Create csi storageclass")
+		storageClass.createWithExtraParameters(oc, extraParameters)
+		defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+		g.By("# Create a pvc with the csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("# Wait for the pvc reach to Pending")
+		o.Consistently(func() string {
+			pvcState, _ := pvc.getStatus(oc)
+			return pvcState
+		}, 60*time.Second, 5*time.Second).Should(o.Equal("Pending"))
+
+		output, err := describePersistentVolumeClaim(oc, pvc.namespace, pvc.name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("ErrorCode: InvalidResourceGroup"))
+
+		g.By("****** Alibaba test phase finished ******")
+	})
+
+	// author: ropatil@redhat.com
+	// [Alibaba-CSI-Driver][Dynamic PV][max_sectors_kb][Static PV] should allow volumes to store data
+	// https://github.com/kubernetes-sigs/alibaba-cloud-csi-driver/blob/master/examples/disk/sysconfig/pv.yaml
+	g.It("Author:ropatil-Medium-49497-[Alibaba-CSI-Driver][Dynamic PV][max_sectors_kb][Static PV] should allow volumes to store data", func() {
+
+		// Set up a specified project share for all the phases
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		// Set the resource template and definition for the scenario
+		var (
+			storageClass = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("diskplugin.csi.alibabacloud.com"), setStorageClassVolumeBindingMode("Immediate"))
+			pvc          = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			pv           = newPersistentVolume(setPersistentVolumeTemplate(pvTemplate), setPersistentVolumeCapacity(pvc.capacity), setPersistentVolumeDriver("diskplugin.csi.alibabacloud.com"), setPersistentVolumeKind("ali-max_sectors_kb"))
+			newpvc       = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity(pvc.capacity))
+			dep          = newDeployment(setDeploymentTemplate(depTemplate), setDeploymentPVCName(newpvc.name))
+		)
+
+		g.By("****** Alibaba test phase start ******")
+
+		g.By("# Create csi storageclass")
+		storageClass.create(oc)
+		defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+		g.By("# Create a pvc with the csi storageclass and wait for Bound status")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+		pvc.waitStatusAsExpected(oc, "Bound")
+
+		g.By("# Create pv using Volume handle")
+		pv.scname = "pv-sc-" + getRandomString()
+		pv.volumeHandle = pvc.getVolumeID(oc)
+		pv.create(oc)
+		defer pv.deleteAsAdmin(oc)
+
+		g.By("# Create new pvc using pv storageclass name")
+		newpvc.scname = pv.scname
+		newpvc.create(oc)
+		defer newpvc.deleteAsAdmin(oc)
+
+		g.By("# Create deployment with the created new pvc and wait ready")
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+		dep.waitReady(oc)
+
+		g.By("# Check the volume mounted on the pod located node")
+		volName := newpvc.getVolumeName(oc)
+		nodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
+		checkVolumeMountOnNode(oc, volName, nodeName)
+
+		g.By("# Check volume have the max_sectore_kb value")
+		o.Expect(checkVolumeCsiContainAttributes(oc, volName, "/queue/max_sectors_kb=128")).To(o.BeTrue())
+
+		g.By("# Check the deployment pod mounted volume can be read and write")
+		dep.checkPodMountedVolumeCouldRW(oc)
+
+		g.By("# Check the deployment pod mounted volume have the exec right")
+		dep.checkPodMountedVolumeHaveExecRight(oc)
+
+		g.By("****** Alibaba test phase finished ******")
+	})
 })
