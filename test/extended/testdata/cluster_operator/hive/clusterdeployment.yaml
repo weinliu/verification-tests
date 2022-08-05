@@ -17,6 +17,7 @@ objects:
     controlPlaneConfig:
       servingCertificates: {}
     installed: false
+    manageDNS: "${{MANAGEDNS}}"
     platform:
       "${PLATFORMTYPE}":
         credentialsSecretRef:
@@ -35,6 +36,7 @@ parameters:
 - name: NAME
 - name: NAMESPACE
 - name: BASEDOMAIN
+- name: MANAGEDNS
 - name: CLUSTERNAME
 - name: PLATFORMTYPE
 - name: CREDREF
