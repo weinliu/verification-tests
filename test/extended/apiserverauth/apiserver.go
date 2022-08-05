@@ -2319,8 +2319,9 @@ spec:
 		g.By("5) On all master nodes, check KAS log files for abnormal (fatal/SHOULD NOT HAPPEN) logs, expect none.")
 		format = `(\/.*)\.go:[0-9]{1,}]|namespace="([a-zA-Z0-9]|\-)*"|name="([a-zA-Z0-9]|\-)*"`
 		keywords = "fatal|SHOULD NOT HAPPEN"
-		exceptions := "(SHOULD NOT HAPPEN|Should not happen).*(Kind=CertificateSigningRequest|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|-panic-|non-fatal"
-		cmd = fmt.Sprintf(`grep -irE '(%s)' /var/log/pods/openshift-kube-apiserver_kube-apiserver* | grep -Ev '%s' | sort > /tmp/OCP-39601-kas-errors.log
+		// Add one temporary exception 'Should not happen: OpenAPI V3 merge'，after related bug 2115634 is fixed, will remove it.
+		exceptions := "SHOULD NOT HAPPEN.*Kind=CertificateSigningRequest|Should not happen: OpenAPI V3 merge|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|e2e-test.*-panic|non-fatal"
+		cmd = fmt.Sprintf(`grep -irE '(%s)' /var/log/pods/openshift-kube-apiserver_kube-apiserver* | grep -Ev "%s" | sort > /tmp/OCP-39601-kas-errors.log
 		sed -E 's/((%s)( )*){1,}/.*/g' /tmp/OCP-39601-kas-errors.log | grep -v '^[[:space:]]*$' | sort | uniq | head -10 > /tmp/OCP-39601-kas-uniq-errors.log
 		echo '%s'
 		while read line; do
@@ -2346,15 +2347,17 @@ spec:
 		totalAbnormalLogCount += len(masterNodeAbnormalLogs)
 
 		g.By("6) On all master nodes, check KAS log files for panic error.")
-		cmd = fmt.Sprintf(`RETAG="[EWI][0-9]{4}\s[0-9]{2}:[0-9]{2}"
+		cmd = fmt.Sprintf(`RETAG="[EW][0-9]{4}\s[0-9]{2}:[0-9]{2}"
 		PANIC="${RETAG}.*panic"
-		panic_logfiles=$(grep -riE "${PANIC}" /var/log/pods/openshift-kube-apiserver_kube-apiserver* | grep -Ev '%s' | cut -d ':' -f1 | head -10 | uniq)
+		panic_logfiles=$(grep -riE "${PANIC}" /var/log/pods/openshift-kube-apiserver_kube-apiserver* | grep -Ev "%s" | cut -d ':' -f1 | head -10 | uniq)
 		echo '%s'
 		for f in ${panic_logfiles}; do
 			echo ">>> Panic log file: ${f}"
-			sed -nE "/${PANIC}/I,/${RETAG}/p" $f | sed -E '%s' | head -30
+			line=$(grep -inE "${PANIC}" "${f}" | grep -m 1 -Ev "%s"  | cut -d ':' -f1)
+			endline=$(( line + 20 ))
+			sed -n "${line},${endline}p" "${f}" 
 		done
-		echo '%s'`, exceptions, startTag, removeTimestamp, endTag)
+		echo '%s'`, exceptions, startTag, exceptions, endTag)
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("6.%d -> step 1) Get log file from %s", i+1, masterNode))
@@ -2375,7 +2378,7 @@ spec:
 
 		g.By("7) On all master nodes, check kas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
 		format = `[0-9TZm.:]{2,}|namespace="([a-zA-Z0-9]|\-)*"|name="([a-zA-Z0-9]|\-)*"`
-		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)|panicked: false|-panic-"
+		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)|panicked: false|e2e-test.*-panic"
 		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/kube-apiserver/audit*.log | jq -r '.requestURI + " - " + .responseStatus.status + " - " + .responseStatus.message + " - " + .responseStatus.reason + " - " + .user.username' | grep -Ev '%s' | sort > /tmp/OCP-39601-audit-errors.log
 		sed -E 's/((%s)( )*){1,}/.*/g' /tmp/OCP-39601-audit-errors.log | grep -v '^[[:space:]]*$' | sort | uniq | head -10 > /tmp/OCP-39601-audit-uniq-errors.log
 		echo '%s'
