@@ -367,6 +367,11 @@ func getRegistryStorageConfig(oc *exutil.CLI) (string, string) {
 			storagetype = "emptyDir"
 			storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.emptyDir}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
+			if storageinfo == "" {
+				storagetype = "s3"
+				storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.s3.bucket}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
 		}
 	default:
 		e2e.Logf("Image Registry is using unknown storage type")

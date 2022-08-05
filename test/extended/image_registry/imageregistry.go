@@ -46,11 +46,17 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	)
 
 	g.BeforeEach(func() {
-		registryDegrade := checkRegistryDegraded(oc)
-		if registryDegrade {
-			message, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].message}").Output()
-			e2e.Failf("Image registry is degraded with info %s", message)
-		}
+		var message string
+		waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
+			registryDegrade := checkRegistryDegraded(oc)
+			if registryDegrade {
+				return true, nil
+			}
+			message, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].message}").Output()
+			e2e.Logf("Wait for image-registry coming ready")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprint("Image registry is not ready with info %s", message))
 	})
 
 	// author: wewang@redhat.com
