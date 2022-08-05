@@ -924,7 +924,7 @@ func checkResourcesMetricValue(oc *exutil.CLI, resourceName, resourceNamespace s
 		data := doPrometheusQuery(oc, token, url, query)
 		for _, v := range data.Data.Result {
 			switch query {
-			case "hive_clusterclaim_assignment_delay_seconds_count":
+			case "hive_clusterclaim_assignment_delay_seconds_count", "hive_clusterpool_stale_clusterdeployments_deleted":
 				if v.Metric.ClusterpoolName == resourceName && v.Metric.ClusterpoolNamespace == resourceNamespace {
 					e2e.Logf("Found metric for pool %s in namespace %s", resourceName, resourceNamespace)
 					if v.Value[1].(string) == expectedResult {

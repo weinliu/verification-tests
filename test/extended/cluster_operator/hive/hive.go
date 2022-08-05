@@ -2860,6 +2860,138 @@ spec:
 
 		g.By("Check if ClusterDeployment created successfully")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+	})
 
+	//author: lwan@redhat.com
+	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "44477"|./bin/extended-platform-tests run --timeout 30m -f -
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:lwan-Medium-44477-Medium-44474-Medium-44476-[AWS]Change fields of a steady pool, all unclaimed clusters will be recreated[Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 44477 is for aws - skipping test ...")
+		}
+		testCaseID := "44477"
+		poolName := "pool-" + testCaseID
+		imageSetName := poolName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: testOCPImage,
+			template:     imageSetTemp,
+		}
+		imageSetName2 := poolName + "-imageset-2"
+		imageSet2 := clusterImageSet{
+			name:         imageSetName2,
+			releaseImage: testOCPImage,
+			template:     imageSetTemp,
+		}
+
+		g.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName2})
+		imageSet2.create(oc)
+
+		g.By("Check if ClusterImageSet was created successfully")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet", "-A", "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName2, ok, DefaultTimeout, []string{"ClusterImageSet", "-A", "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		oc.SetupProject()
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and gcp-credentials to target namespace for the clusterdeployment
+		g.By("Copy AWS platform credentials...")
+		createAWSCreds(oc, oc.Namespace())
+
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Create Install-Config template Secret...")
+		installConfigTemp := filepath.Join(testDataDir, "aws-install-config.yaml")
+		installConfigSecretName := poolName + "-install-config-template"
+		installConfigSecret := installConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: AWSBaseDomain,
+			name2:      poolName,
+			region:     AWSRegion,
+			template:   installConfigTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
+		installConfigSecret.create(oc)
+
+		g.By("Create ClusterPool...")
+		poolTemp := filepath.Join(testDataDir, "clusterpool.yaml")
+		pool := clusterPool{
+			name:           poolName,
+			namespace:      oc.Namespace(),
+			fake:           "true",
+			baseDomain:     AWSBaseDomain,
+			imageSetRef:    imageSetName,
+			platformType:   "aws",
+			credRef:        AWSCreds,
+			region:         AWSRegion,
+			pullSecretRef:  PullSecret,
+			size:           2,
+			maxSize:        2,
+			runningCount:   0,
+			maxConcurrent:  1,
+			hibernateAfter: "10m",
+			template:       poolTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
+		pool.create(oc)
+
+		g.By("Check if ClusterPool created successfully and become ready")
+		//runningCount is 0 so pool status should be standby: 3, ready: 0
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, 2*DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
+		e2e.Logf("Check ClusterPool Condition \"AllClustersCurrent\"")
+		jsonPath := "-o=jsonpath={\"reason:\"}{.status.conditions[?(@.type==\"AllClustersCurrent\")].reason}{\",status:\"}{.status.conditions[?(@.type==\"AllClustersCurrent\")].status}"
+		expectedResult := "reason:ClusterDeploymentsCurrent,status:True"
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, expectedResult, ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), jsonPath}).check(oc)
+		field := []string{"imageSetRef", "userTags", "InstallConfigSecretTemplateRef"}
+		var (
+			caseID             string
+			patchYaml          string
+			jsonPathTemp       string
+			expectedResultTemp string
+		)
+		for _, v := range field {
+			switch v {
+			case "imageSetRef":
+				caseID = "OCP-44476"
+				patchYaml = `{"spec":{"imageSetRef":{"name":"` + imageSetName2 + `"}}}`
+				jsonPathTemp = `-o=jsonpath={.items[?(@.spec.clusterPoolRef.poolName=="` + poolName + `")].spec.provisioning.imageSetRef.name}`
+				expectedResultTemp = imageSetName2 + " " + imageSetName2
+			case "userTags":
+				caseID = "OCP-44474"
+				patchYaml = `{"spec":{"platform":{"aws":{"userTags":{"cluster_desc":"` + poolName + `"}}}}}`
+				//jsonPathTemp = `-o=jsonpath={.items[?(@.spec.clusterPoolRef.poolName=="` + poolName + `")].spec.platform.aws.userTags.cluster_desc}`
+				//expectedResultTemp = poolName + " " + poolName
+			case "InstallConfigSecretTemplateRef":
+				caseID = "OCP-44477"
+				patchYaml = `{"spec":{"installConfigSecretTemplateRef":{"name":"` + installConfigSecretName + `"}}}`
+			default:
+				g.Fail("Given field" + v + " are not supported")
+			}
+			g.By(caseID + ": Change " + v + " field of a steady pool, all unclaimed clusters will be recreated")
+			e2e.Logf("oc patch ClusterPool field %s", v)
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterPool", poolName, "-n", oc.Namespace(), "-p", patchYaml, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("Check ClusterPool Condition \"AllClustersCurrent\"")
+			expectedResult = "reason:SomeClusterDeploymentsStale,status:False"
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, expectedResult, ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), jsonPath}).check(oc)
+			e2e.Logf("Check ClusterPool Condition \"AllClustersCurrent\"")
+			expectedResult = "reason:ClusterDeploymentsCurrent,status:True"
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, expectedResult, ok, 2*DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), jsonPath}).check(oc)
+			if v == "imageSetRef" {
+				newCheck("expect", "get", asAdmin, withoutNamespace, contain, expectedResultTemp, ok, DefaultTimeout, []string{"ClusterDeployment", "-A", jsonPathTemp}).check(oc)
+			}
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
+		}
+		g.By("Check Metrics for ClusterPool...")
+		token, err := exutil.GetSAToken(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(token).NotTo(o.BeEmpty())
+		query := "hive_clusterpool_stale_clusterdeployments_deleted"
+		e2e.Logf("Check metric %s Value equal to 6", query)
+		checkResourcesMetricValue(oc, poolName, oc.Namespace(), "6", token, prometheusURL, query)
 	})
 })
