@@ -4333,5 +4333,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			checkNodeContents(oc, masterNodeName, contList4, "ls", "-l", "/var/log/kube-apiserver", "audit.log")
 			checkNodeContents(oc, masterNodeName, contList4, "ls", "-l", "/var/log/oauth-apiserver", "audit.log")
 		})
+
+		// author: xiyuan@redhat.com
+		g.It("Author:xiyuan-Medium-47162-Check if the XCCDF variable values are getting render in the compliance rules", func() {
+			keywordsInstr := "min-request-timeout.*3600"
+			keywordsAnnot := "compliance.openshift.io/rule-variable.*var-api-min-request-timeout"
+			keywordsVariableValue := "3600"
+			assertKeywordsExists(oc, keywordsInstr, "rule", "ocp4-api-server-request-timeout", "-o=jsonpath={.description}", "-n", subD.namespace)
+			assertKeywordsExists(oc, keywordsAnnot, "rule", "ocp4-api-server-request-timeout", "-o=jsonpath={.metadata.annotations}", "-n", subD.namespace)
+			assertKeywordsExists(oc, keywordsVariableValue, "variables", "ocp4-var-api-min-request-timeout", "-o=jsonpath={.value}", "-n", subD.namespace)
+		})
 	})
 })

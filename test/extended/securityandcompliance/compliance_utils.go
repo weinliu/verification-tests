@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -951,4 +952,16 @@ func verifyTailoredProfile(oc *exutil.CLI, errmsgs []string, namespace string, f
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "The tailoredprofile requires title and description to create")
+}
+
+func assertKeywordsExists(oc *exutil.CLI, keywords string, parameters ...string) {
+	errWait := wait.Poll(5*time.Second, 10*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(parameters...).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString(keywords, string(output)); matched {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("The keywords %s not exists", keywords))
 }
