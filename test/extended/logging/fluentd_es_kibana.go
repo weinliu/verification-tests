@@ -112,6 +112,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			appProj := oc.Namespace()
 			cerr := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(cerr).NotTo(o.HaveOccurred())
+			waitForPodReadyWithLabel(oc, appProj, "run=centos-logtest")
 
 			g.By("Make sure the logtest app has generated logs")
 			appPodList, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(metav1.ListOptions{LabelSelector: "run=centos-logtest"})
@@ -251,7 +252,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			pl.checkLogsFromRs(oc, "exceeds maximum available size", "collector")
 
 			g.By("Set totalLimitSize to 3 GB")
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogging/instance", "-n", "openshift-logging", "-p", "{\"spec\":{\"forwarder\":{\"fluentd\":{\"buffer\":{\"totalLimitSize\":\"3G\"}}}}}", "--type=merge").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogging/instance", "-n", "openshift-logging", "-p", "{\"spec\":{\"collector\":{\"fluentd\":{\"buffer\":{\"totalLimitSize\":\"3G\"}}}}}", "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Wait for 30 seconds for the config to be effective")

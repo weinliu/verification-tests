@@ -56,8 +56,21 @@ func getAWSClusterRegion(oc *exutil.CLI) (string, error) {
 func getAWSCredentialFromCluster(oc *exutil.CLI) awsCredential {
 	region, err := getAWSClusterRegion(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	accessKeyID, secureKey := getAWSKey(oc)
-	cred := awsCredential{Region: region, AccessKeyID: string(accessKeyID), SecretAccessKey: string(secureKey)}
+
+	dirname := "/tmp/" + oc.Namespace() + "-creds"
+	defer os.RemoveAll(dirname)
+	err = os.MkdirAll(dirname, 0777)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/aws-creds", "-n", "kube-system", "--confirm", "--to="+dirname).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	accessKeyID, err := os.ReadFile(dirname + "/aws_access_key_id")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	secretAccessKey, err := os.ReadFile(dirname + "/aws_secret_access_key")
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	cred := awsCredential{Region: region, AccessKeyID: string(accessKeyID), SecretAccessKey: string(secretAccessKey)}
 	return cred
 }
 
@@ -107,15 +120,13 @@ func deleteAWSS3Bucket(client *s3.Client, bucketName string) {
 func emptyAWSS3Bucket(client *s3.Client, bucketName string) error {
 	// list objects in the bucket
 	objects, err := client.ListObjects(context.TODO(), &s3.ListObjectsInput{Bucket: &bucketName})
+	o.Expect(err).NotTo(o.HaveOccurred())
 	// remove objects in the bucket
-	if len(objects.Contents) != 0 {
-		newObjects := []types.ObjectIdentifier{}
-		for _, object := range objects.Contents {
-			newObjects = append(newObjects, types.ObjectIdentifier{Key: object.Key})
-		}
-		_, err = client.DeleteObjects(context.TODO(), &s3.DeleteObjectsInput{Bucket: &bucketName, Delete: &types.Delete{Quiet: true, Objects: newObjects}})
-		return err
+	newObjects := []types.ObjectIdentifier{}
+	for _, object := range objects.Contents {
+		newObjects = append(newObjects, types.ObjectIdentifier{Key: object.Key})
 	}
+	_, err = client.DeleteObjects(context.TODO(), &s3.DeleteObjectsInput{Bucket: &bucketName, Delete: &types.Delete{Quiet: true, Objects: newObjects}})
 	return err
 }
 
@@ -229,7 +240,7 @@ func listObjestsInGCSBucket(client storage.Client, bucket string) ([]string, err
 	return files, nil
 }
 
-// deleteFilesInGCSBucket removes all the objexts in the bucket
+// deleteFilesInGCSBucket removes the object in the bucket
 func deleteFilesInGCSBucket(client storage.Client, object, bucket string) error {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
@@ -252,14 +263,14 @@ func deleteFilesInGCSBucket(client storage.Client, object, bucket string) error 
 	return nil
 }
 
+// emptyGCSBucket removes all the objects in the bucket
 func emptyGCSBucket(client storage.Client, bucket string) {
 	objects, err := listObjestsInGCSBucket(client, bucket)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if len(objects) > 0 {
-		for _, object := range objects {
-			err = deleteFilesInGCSBucket(client, object, bucket)
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
+
+	for _, object := range objects {
+		err = deleteFilesInGCSBucket(client, object, bucket)
+		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 }
 
@@ -293,9 +304,15 @@ func createSecretForGCSBucket(oc *exutil.CLI, bucketName, secretName, ns string)
 	err := os.MkdirAll(dirname, 0777)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
+	// for GCP STS clusters, get gcp-credentials from env var GOOGLE_APPLICATION_CREDENTIALS
+	// TODO: support using STS token to create the secret
+	_, err = oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get("gcp-credentials", metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		gcsCred := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+		return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "-n", ns, "--from-literal=bucketname="+bucketName, "--from-file=key.json="+gcsCred).Execute()
+	}
 	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/gcp-credentials", "-n", "kube-system", "--confirm", "--to="+dirname).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-
 	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "-n", ns, "--from-literal=bucketname="+bucketName, "--from-file=key.json="+dirname+"/service_account.json").Execute()
 }
 
@@ -367,7 +384,7 @@ func listBlobsInAzureContainer(container azblob.ContainerURL) []string {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
 	defer cancel()
 
-	var blobNames []string
+	blobNames := []string{}
 	for marker := (azblob.Marker{}); marker.NotDone(); { // The parens around Marker{} are required to avoid compiler error.
 		// Get a result segment starting with the blob indicated by the current Marker.
 		listBlob, err := container.ListBlobsFlatSegment(ctx, marker, azblob.ListBlobsSegmentOptions{})
@@ -397,10 +414,8 @@ func deleteAzureBlob(container azblob.ContainerURL, blobName string) {
 
 func emptyAzureBlobContainer(container azblob.ContainerURL) {
 	blobNames := listBlobsInAzureContainer(container)
-	if len(blobNames) > 0 {
-		for _, blob := range blobNames {
-			deleteAzureBlob(container, blob)
-		}
+	for _, blob := range blobNames {
+		deleteAzureBlob(container, blob)
 	}
 }
 

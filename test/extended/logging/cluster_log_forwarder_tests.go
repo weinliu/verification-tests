@@ -9,6 +9,7 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -89,6 +90,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			// check data in ES for QA namespace
 			g.By("check logs in ES pod for QA namespace in CLF")
 			count1, err := getDocCountByQuery(cloNS, podList.Items[0].Name, "app", "{\"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+appProjQa+"\"}}}")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(count1 > 0).Should(o.BeTrue())
 
 			//check that no data exists for the other Dev namespace - Negative test
@@ -451,6 +453,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Searching for Audit Logs in Loki")
 			auditLogs, err := lc.searchLogsInLoki("", "{log_type=\"audit\"}")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(auditLogs.Status).Should(o.Equal("success"))
 			o.Expect(auditLogs.Data.Result[0].Stream.LogType).Should(o.Equal("audit"))
 			o.Expect(auditLogs.Data.Stats.Summary.BytesProcessedPerSecond).ShouldNot(o.BeZero())
@@ -458,6 +461,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Searching for Infra Logs in Loki")
 			infraLogs, err := lc.searchLogsInLoki("", "{log_type=\"infrastructure\"}")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(infraLogs.Status).Should(o.Equal("success"))
 			o.Expect(infraLogs.Data.Result[0].Stream.LogType).Should(o.Equal("infrastructure"))
 			o.Expect(infraLogs.Data.Stats.Summary.BytesProcessedPerSecond).ShouldNot(o.BeZero())
@@ -682,21 +686,27 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		var cw cloudwatchSpec
 
 		g.BeforeEach(func() {
+			platform := exutil.CheckPlatform(oc)
+			if platform != "aws" {
+				g.Skip("Skip for non-supported platform, the support platform is AWS!!!")
+			}
+			_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get("aws-creds", metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				g.Skip("Can not find secret/aws-creds. Maybe that is an aws STS cluster.")
+			}
+
 			g.By("deploy CLO")
 			CLO.SubscribeOperator(oc)
 			oc.SetupProject()
 			g.By("init Cloudwatch test spec")
 			cw = cw.init(oc)
 		})
+
 		g.AfterEach(func() {
 			cw.deleteGroups()
 		})
 
 		g.It("CPaasrunOnly-Author:anli-Critical-43443-Fluentd Forward logs to Cloudwatch by logtype [Serial][Slow]", func() {
-			platform := exutil.CheckPlatform(oc)
-			if platform != "aws" {
-				g.Skip("Skip for non-supported platform, the support platform is AWS!!!")
-			}
 			cw.awsKeyID, cw.awsKey = getAWSKey(oc)
 
 			g.By("create log producer")
@@ -727,10 +737,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:anli-High-43839-Fluentd logs to Cloudwatch group by namespaceName and groupPrefix [Serial][Slow]", func() {
-			platform := exutil.CheckPlatform(oc)
-			if platform != "aws" {
-				g.Skip("Skip for non-supported platform, the support platform is AWS!!!")
-			}
 			cw.awsKeyID, cw.awsKey = getAWSKey(oc)
 			cw.groupPrefix = "qeauto" + getInfrastructureName(oc)
 			cw.groupType = "namespaceName"
@@ -765,10 +771,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:anli-High-43840-Forward logs to Cloudwatch group by namespaceUUID and groupPrefix [Serial][Slow]", func() {
-			platform := exutil.CheckPlatform(oc)
-			if platform != "aws" {
-				g.Skip("Skip for non-supported platform, the support platform is AWS!!!")
-			}
 			cw.awsKeyID, cw.awsKey = getAWSKey(oc)
 			cw.groupPrefix = "qeauto" + getInfrastructureName(oc)
 			cw.groupType = "namespaceUUID"

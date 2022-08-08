@@ -34,11 +34,9 @@ objects:
         replicas: 1
     collection:
       type: "fluentd"
-    forwarder:
       fluentd:
         buffer:
           totalLimitSize: ${TOTAL_LIMIT_SIZE}
-
 parameters:
   - name: NAME
     value: "instance"

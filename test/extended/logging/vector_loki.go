@@ -84,6 +84,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Searching for Audit Logs in Loki")
 			auditLogs, err := lc.searchLogsInLoki("", "{log_type=\"audit\"}")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(auditLogs.Status).Should(o.Equal("success"))
 			o.Expect(auditLogs.Data.Result[0].Stream.LogType).Should(o.Equal("audit"))
 			o.Expect(auditLogs.Data.Stats.Summary.BytesProcessedPerSecond).ShouldNot(o.BeZero())
@@ -91,6 +92,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Searching for Infra Logs in Loki")
 			infraLogs, err := lc.searchLogsInLoki("", "{log_type=\"infrastructure\"}")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(infraLogs.Status).Should(o.Equal("success"))
 			o.Expect(infraLogs.Data.Result[0].Stream.LogType).Should(o.Equal("infrastructure"))
 			o.Expect(infraLogs.Data.Stats.Summary.BytesProcessedPerSecond).ShouldNot(o.BeZero())

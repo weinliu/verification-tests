@@ -21,6 +21,7 @@ objects:
           maxAge: ${AUDIT_LOG_MAX_AGE}
       elasticsearch:
         nodeCount: ${{ES_NODE_COUNT}}
+        tolerations: ${{TOLERATIONS}}
         resources:
           requests:
             memory: 1Gi
@@ -31,12 +32,13 @@ objects:
     visualization:
       type: "kibana"
       kibana:
+        tolerations: ${{TOLERATIONS}}
         replicas: 1
     collection:
-      type: "fluentd"
-      fluentd:
-        buffer:
-          retryTimeout: ${FLUENTD_BUFFER_RETRYTIMEOUT}
+      logs:
+        type: ${COLLECTOR}
+        fluentd:
+          tolerations: ${{TOLERATIONS}}
 parameters:
   - name: NAME
     value: "instance"
@@ -56,5 +58,7 @@ parameters:
     value: "3h"
   - name: AUDIT_LOG_MAX_AGE
     value: "3h"
-  - name: FLUENTD_BUFFER_RETRYTIMEOUT
-    value: "1m"
+  - name: TOLERATIONS
+    value: "[]"
+  - name: COLLECTOR
+    value: fluentd

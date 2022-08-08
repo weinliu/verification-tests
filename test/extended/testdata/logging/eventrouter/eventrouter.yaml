@@ -6,12 +6,12 @@ metadata:
     description: "A pod forwarding kubernetes events to OpenShift Logging stack."
     tags: "events,EFK,logging,cluster-logging"
 objects:
-  - kind: ServiceAccount 
+  - kind: ServiceAccount
     apiVersion: v1
     metadata:
       name: eventrouter
       namespace: ${NAMESPACE}
-  - kind: ClusterRole 
+  - kind: ClusterRole
     apiVersion: v1
     metadata:
       name: event-reader
@@ -19,7 +19,7 @@ objects:
     - apiGroups: [""]
       resources: ["events"]
       verbs: ["get", "watch", "list"]
-  - kind: ClusterRoleBinding  
+  - kind: ClusterRoleBinding
     apiVersion: v1
     metadata:
       name: event-reader-binding
@@ -30,7 +30,7 @@ objects:
     roleRef:
       kind: ClusterRole
       name: event-reader
-  - kind: ConfigMap 
+  - kind: ConfigMap
     apiVersion: v1
     metadata:
       name: eventrouter
@@ -40,7 +40,7 @@ objects:
         {
           "sink": "stdout"
         }
-  - kind: Deployment 
+  - kind: Deployment
     apiVersion: apps/v1
     metadata:
       name: ${EVENT_ROUTER_NAME}
@@ -81,13 +81,13 @@ objects:
               configMap:
                 name: eventrouter
 parameters:
-  - name: IMAGE 
+  - name: IMAGE
     displayName: Image
     value: "registry.redhat.io/openshift-logging/eventrouter-rhel8:v0.3"
-  - name: CPU  
+  - name: CPU
     displayName: CPU
     value: "100m"
-  - name: MEMORY 
+  - name: MEMORY
     displayName: Memory
     value: "128Mi"
   - name: NAMESPACE

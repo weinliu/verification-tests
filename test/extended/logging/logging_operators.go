@@ -75,7 +75,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 			if err != nil {
 				return false, err
 			}
-			return (strings.Contains(output, "Error reconciling clusterlogging instance") && strings.Contains(output, "Error reconciling clusterlogging instance") && strings.Contains(output, "Error reconciling clusterlogging instance")), nil
+			return (strings.Contains(output, "Error reconciling clusterlogging instance") && strings.Contains(output, "No valid inputs found in ClusterLogForwarder")), nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Expected logs are not found in CLO")
 		_, err = oc.AdminKubeClient().CoreV1().ConfigMaps(cloNS).Get("collector", metav1.GetOptions{})
@@ -95,7 +95,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 		cl := resource{"clusterlogging", "instance", cloNS}
 		defer cl.deleteClusterLogging(oc)
 		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-		patch := "{\"spec\": {\"forwarder\": {\"fluentd\": {\"inFile\": {\"readLinesLimit\": 50}}}}}"
+		patch := "{\"spec\": {\"collection\": {\"fluentd\": {\"inFile\": {\"readLinesLimit\": 50}}}}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", cloNS, "cl/instance", "-p", patch, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		WaitForECKPodsToBeReady(oc, cloNS)
@@ -542,7 +542,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		g.By("Deploy clusterlogging")
 		sc, err := getStorageClassName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")
+		// TODO: use cl-storage-template.yaml when 5.6 is out
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "40508.yaml")
 		cl := resource{"clusterlogging", "instance", preCLO.Namespace}
 		defer cl.deleteClusterLogging(oc)
 		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "ES_NODE_COUNT=3", "-p", "REDUNDANCY_POLICY=SingleRedundancy")
@@ -623,7 +624,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		g.By("Deploy clusterlogging")
 		sc, err := getStorageClassName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")
+		// TODO: use cl-storage-template.yaml when 5.6 is out
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "40508.yaml")
 		cl := resource{"clusterlogging", "instance", preCLO.Namespace}
 		defer cl.deleteClusterLogging(oc)
 		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "ES_NODE_COUNT=3", "-p", "REDUNDANCY_POLICY=SingleRedundancy")

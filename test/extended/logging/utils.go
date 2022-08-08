@@ -17,7 +17,6 @@ import (
 	"strings"
 	"time"
 
-	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 
@@ -94,57 +93,62 @@ func processTemplate(oc *exutil.CLI, parameters ...string) (string, error) {
 	return configFile, err
 }
 
-func (so *SubscriptionObjects) getChannelName(oc *exutil.CLI) string {
-	var channelName string
-	if so.CatalogSource.Channel != "" {
-		channelName = so.CatalogSource.Channel
+// waitForPackagemanifestAppear waits for the packagemanifest to appear in the cluster
+// chSource: bool value, true means the packagemanifests' source name must match the so.CatalogSource.SourceName, e.g.: oc get packagemanifests xxxx -l catalog=$source-name
+func (so *SubscriptionObjects) waitForPackagemanifestAppear(oc *exutil.CLI, chSource bool) {
+	args := []string{"-n", so.CatalogSource.SourceNamespace, "packagemanifests"}
+	if chSource {
+		args = append(args, "-l", "catalog="+so.CatalogSource.SourceName)
 	} else {
-		/*
-			clusterVersion, err := oc.AsAdmin().AdminConfigClient().ConfigV1().ClusterVersions().Get("version", metav1.GetOptions{})
-			if err != nil {
-				return "", err
-			}
-			e2e.Logf("clusterversion is: %v\n", clusterVersion.Status.Desired.Version)
-			channelName = strings.Join(strings.Split(clusterVersion.Status.Desired.Version, ".")[0:2], ".")
-		*/
-		channelName = "stable"
+		args = append(args, so.PackageName)
 	}
-	e2e.Logf("the channel name is: %v\n", channelName)
-	return channelName
-}
-
-func (so *SubscriptionObjects) getSourceNamespace(oc *exutil.CLI) string {
-	var catsrcNamespaceName string
-	if so.CatalogSource.SourceNamespace != "" {
-		catsrcNamespaceName = so.CatalogSource.SourceNamespace
-	} else {
-		catsrcNamespaceName = "openshift-marketplace"
-	}
-	e2e.Logf("The source namespace name is: %v\n", catsrcNamespaceName)
-	return catsrcNamespaceName
-}
-
-func (so *SubscriptionObjects) getCatalogSourceName(oc *exutil.CLI) string {
-	var catsrcName, catsrcNamespaceName string
-	catsrcNamespaceName = so.getSourceNamespace(oc)
-	catsrc, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", "-n", catsrcNamespaceName, "qe-app-registry").Output()
-
-	err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", catsrcNamespaceName, "packagemanifests", so.PackageName).Execute()
-	if err != nil {
-		e2e.Logf("Can't check the packagemanifest %s existence: %v", so.PackageName, err)
-	}
-	if so.CatalogSource.SourceName != "" {
-		catsrcName = so.CatalogSource.SourceName
-	} else if catsrc != "" && !(strings.Contains(catsrc, "NotFound")) {
-		catsrcName = "qe-app-registry"
-	} else {
-		catsrcName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifests", so.PackageName, "-o", "jsonpath={.status.catalogSource}").Output()
+	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
+		packages, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(args...).Output()
 		if err != nil {
-			e2e.Logf("error getting catalog source name: %v", err)
+			msg := fmt.Sprintf("%v", err)
+			if strings.Contains(msg, "No resources found") || strings.Contains(msg, "NotFound") {
+				return false, nil
+			}
+			return false, err
+		}
+		if strings.Contains(packages, so.PackageName) {
+			return true, nil
+		}
+		e2e.Logf("Waiting for packagemanifest/%s to appear", so.PackageName)
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Packagemanifest %s is not availabile", so.PackageName))
+}
+
+// setCatalogSourceObjects set the default values of channel, source namespace and source name if they're not specified
+func (so *SubscriptionObjects) setCatalogSourceObjects(oc *exutil.CLI) {
+	// set channel
+	if so.CatalogSource.Channel == "" {
+		so.CatalogSource.Channel = "stable"
+	}
+
+	// set source namespace
+	if so.CatalogSource.SourceNamespace == "" {
+		so.CatalogSource.SourceNamespace = "openshift-marketplace"
+	}
+
+	// set source and check if the packagemanifest exists or not
+	if so.CatalogSource.SourceName != "" {
+		so.waitForPackagemanifestAppear(oc, true)
+	} else {
+		catsrc, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", "-n", so.CatalogSource.SourceNamespace, "qe-app-registry").Output()
+		if catsrc != "" && !(strings.Contains(catsrc, "NotFound")) {
+			so.CatalogSource.SourceName = "qe-app-registry"
+			so.waitForPackagemanifestAppear(oc, true)
+		} else {
+			so.waitForPackagemanifestAppear(oc, false)
+			source, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifests", so.PackageName, "-o", "jsonpath={.status.catalogSource}").Output()
+			if err != nil {
+				e2e.Logf("error getting catalog source name: %v", err)
+			}
+			so.CatalogSource.SourceName = source
 		}
 	}
-	e2e.Logf("The catalog source name of %s is: %v\n", so.PackageName, catsrcName)
-	return catsrcName
 }
 
 // SubscribeOperator is used to subcribe the CLO and EO
@@ -197,14 +201,9 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 	if err != nil {
 		msg := fmt.Sprint("v%", sub)
 		if strings.Contains(msg, "NotFound") {
-			catsrcNamespaceName := so.getSourceNamespace(oc)
-			catsrcName := so.getCatalogSourceName(oc)
-			channelName := so.getChannelName(oc)
-			//check if the packagemanifest is exists in the source namespace or not
-			packages, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", catsrcNamespaceName, "packagemanifests", "-l", "catalog="+catsrcName, "-o", "name").Output()
-			o.Expect(packages).Should(o.ContainSubstring(so.PackageName))
+			so.setCatalogSourceObjects(oc)
 			//create subscription object
-			subscriptionFile, err := processTemplate(oc, "-n", so.Namespace, "-f", so.Subscription, "-p", "PACKAGE_NAME="+so.PackageName, "NAMESPACE="+so.Namespace, "CHANNEL="+channelName, "SOURCE="+catsrcName, "SOURCE_NAMESPACE="+catsrcNamespaceName)
+			subscriptionFile, err := processTemplate(oc, "-n", so.Namespace, "-f", so.Subscription, "-p", "PACKAGE_NAME="+so.PackageName, "NAMESPACE="+so.Namespace, "CHANNEL="+so.CatalogSource.Channel, "SOURCE="+so.CatalogSource.SourceName, "SOURCE_NAMESPACE="+so.CatalogSource.SourceNamespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = wait.Poll(5*time.Second, 60*time.Second, func() (done bool, err error) {
 				output, err := oc.AsAdmin().Run("apply").Args("-f", subscriptionFile, "-n", so.Namespace).Output()
@@ -224,8 +223,10 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 }
 
 func (so *SubscriptionObjects) uninstallOperator(oc *exutil.CLI) {
+	//csv, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", so.Namespace, "sub/"+so.PackageName, "-ojsonpath={.status.installedCSV}").Output()
 	resource{"subscription", so.PackageName, so.Namespace}.clear(oc)
-	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", so.Namespace, "csv", "--all").Execute()
+	//_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", so.Namespace, "csv", csv).Execute()
+	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", so.Namespace, "csv", "-l", "operators.coreos.com/"+so.PackageName+"."+so.Namespace+"=").Execute()
 	// do not remove namespace openshift-logging and openshift-operators-redhat, and preserve the operatorgroup as there may have several operators deployed in one namespace
 	// for example: loki-operator and elasticsearch-operator
 	if so.Namespace != "openshift-logging" && so.Namespace != "openshift-operators-redhat" && !strings.HasPrefix(so.Namespace, "e2e-test-") {
@@ -257,6 +258,10 @@ func WaitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name strin
 		e2e.Logf("Waiting for full availability of %s deployment (%d/%d)\n", name, deployment.Status.AvailableReplicas, *deployment.Spec.Replicas)
 		return false, nil
 	})
+	if err != nil {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy/"+name, "-n", namespace, "-ojsonpath={.status}").Output()
+		e2e.Logf("%s", output)
+	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment %s is not availabile", name))
 }
 
@@ -297,6 +302,10 @@ func WaitForDaemonsetPodsToBeReady(oc *exutil.CLI, ns string, name string) {
 		e2e.Logf("Waiting for full availability of %s daemonset (%d/%d)\n", name, daemonset.Status.NumberReady, daemonset.Status.DesiredNumberScheduled)
 		return false, nil
 	})
+	if err != nil {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds/"+name, "-n", ns, "-ojsonpath={.status}").Output()
+		e2e.Logf("%s", output)
+	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Daemonset %s is not availabile", name))
 	e2e.Logf("Daemonset %s is available\n", name)
 }
@@ -325,6 +334,10 @@ func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 		}
 		return ready, nil
 	})
+	if err != nil {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", label, "-n", ns, "-ojsonpath={.items[*].status}").Output()
+		e2e.Logf("%s", output)
+	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The pod with label %s is not availabile", label))
 }
 
@@ -1166,10 +1179,6 @@ func (cw cloudwatchSpec) init(oc *exutil.CLI) cloudwatchSpec {
 // Get the AWS key from cluster
 func getAWSKey(oc *exutil.CLI) (string, string) {
 	credential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system", "-o", "json").Output()
-	if err != nil {
-		g.Skip("Can not get secret/aws-creds. Maybe that is an aws STS cluster.")
-		//ToDo: support sts secret from 5.5
-	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	accessKeyIDBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).Str, gjson.Get(credential, `data.aws_secret_access_key`).Str
 	accessKeyID, err1 := base64.StdEncoding.DecodeString(accessKeyIDBase64)
