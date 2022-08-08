@@ -12,8 +12,22 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+func getHWoffloadPF(oc *exutil.CLI, nodename string) string {
+	pfName := "ens1f0"
+	nmConnection, err := oc.AsAdmin().Run("debug").Args(`node/`+fmt.Sprintf("%s", nodename), "--", "chroot", "/host", "cat", "/etc/NetworkManager/system-connections/ovs-if-phys0.nmconnection").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if !strings.Contains(nmConnection, "No such file or directory") {
+		re := regexp.MustCompile(`interface-name=(\w+)`)
+		match := re.FindStringSubmatch(nmConnection)
+		e2e.Logf("The match result is %v", match)
+		pfName = match[1]
+		e2e.Logf("The PF of Offload worker nodes is %v", pfName)
+	}
+	return pfName
+}
+
 func getOvsHWOffloadWokerNodes(oc *exutil.CLI) []string {
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/offload", "-o=jsonpath={.items[*].metadata.name}").Output()
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/sriov", "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	nodeNameList := strings.Fields(output)
 	return nodeNameList

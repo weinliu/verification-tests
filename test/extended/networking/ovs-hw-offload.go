@@ -39,8 +39,9 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 			sriovBaseDir       = filepath.Join(networkBaseDir, "sriov")
 			sriovNetPolicyName = "sriovoffloadpolicy"
 			sriovNetDeviceName = "sriovoffloadnetattchdef"
-			pfName             = "ens2f0"
-			workerNodeList     = getOvsHWOffloadWokerNodes(oc)
+			//pfName             = "ens1f0"
+			workerNodeList = getOvsHWOffloadWokerNodes(oc)
+			pfName         = getHWoffloadPF(oc, workerNodeList[0])
 		)
 
 		oc.SetupProject()
@@ -93,10 +94,10 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		//create iperf server pod with ovs hwoffload vf on worker0
 		iperfServerPod.create(oc, "PODNAME="+iperfServerPod.name, "NAMESPACE="+iperfServerPod.namespace, "NETNAME="+defaultOffloadNet, "NETTYPE="+offloadNetType, "NODENAME="+workerNodeList[0])
 		defer iperfServerPod.delete(oc)
-		err_podRdy1 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-server")
-		exutil.AssertWaitPollNoErr(err_podRdy1, fmt.Sprintf("iperf server pod isn't ready"))
+		errPodRdy1 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-server")
+		exutil.AssertWaitPollNoErr(errPodRdy1, fmt.Sprintf("iperf server pod isn't ready"))
 
-		iperfServerIp := getPodIPv4(oc, oc.Namespace(), iperfServerPod.name)
+		iperfServerIP := getPodIPv4(oc, oc.Namespace(), iperfServerPod.name)
 
 		iperfClientTmp := filepath.Join(sriovBaseDir, "iperf-rc-template.json")
 		iperfClientPod := sriovNetResource{
@@ -112,8 +113,8 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		iperfClientPod.name = iperfClientName
 		defer iperfClientPod.delete(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err_podRdy2 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-rc")
-		exutil.AssertWaitPollNoErr(err_podRdy2, fmt.Sprintf("iperf client pod isn't ready"))
+		errPodRdy2 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-rc")
+		exutil.AssertWaitPollNoErr(errPodRdy2, fmt.Sprintf("iperf client pod isn't ready"))
 
 		g.By("5) ########### Create iperf Pods with normal default interface ##########")
 		iperfServerPod1 := sriovNetResource{
@@ -125,10 +126,10 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		//create iperf server pod with normal default interface on worker0
 		iperfServerPod1.create(oc, "PODNAME="+iperfServerPod1.name, "NAMESPACE="+iperfServerPod1.namespace, "NETNAME="+defaultNormalNet, "NETTYPE="+normalNetType, "NODENAME="+workerNodeList[0])
 		defer iperfServerPod1.delete(oc)
-		err_podRdy3 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-server-normal")
-		exutil.AssertWaitPollNoErr(err_podRdy3, fmt.Sprintf("iperf server pod isn't ready"))
+		errPodRdy3 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-server-normal")
+		exutil.AssertWaitPollNoErr(errPodRdy3, fmt.Sprintf("iperf server pod isn't ready"))
 
-		iperfServerIp1 := getPodIPv4(oc, oc.Namespace(), iperfServerPod1.name)
+		iperfServerIP1 := getPodIPv4(oc, oc.Namespace(), iperfServerPod1.name)
 
 		iperfClientPod1 := sriovNetResource{
 			name:      "iperf-rc-normal",
@@ -144,16 +145,16 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		iperfClientPod1.name = iperfClientName1
 
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err_podRdy4 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-rc-normal")
-		exutil.AssertWaitPollNoErr(err_podRdy4, fmt.Sprintf("iperf client pod isn't ready"))
+		errPodRdy4 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-rc-normal")
+		exutil.AssertWaitPollNoErr(errPodRdy4, fmt.Sprintf("iperf client pod isn't ready"))
 
 		g.By("6) ########### Check Bandwidth between iperf client and iperf server pods ##########")
 		// enable hardware offload should improve the performance
 		// get throughput on pods which attached hardware offload enabled VF
-		bandWithStr := startIperfTraffic(oc, iperfClientPod.namespace, iperfClientPod.name, iperfServerIp, "60s")
+		bandWithStr := startIperfTraffic(oc, iperfClientPod.namespace, iperfClientPod.name, iperfServerIP, "60s")
 		bandWidth, _ := strconv.ParseFloat(bandWithStr, 32)
 		// get throughput on pods with normal default interface
-		bandWithStr1 := startIperfTraffic(oc, iperfClientPod1.namespace, iperfClientPod1.name, iperfServerIp1, "60s")
+		bandWithStr1 := startIperfTraffic(oc, iperfClientPod1.namespace, iperfClientPod1.name, iperfServerIP1, "60s")
 		bandWidth1, _ := strconv.ParseFloat(bandWithStr1, 32)
 
 		o.Expect(float64(bandWidth)).Should(o.BeNumerically(">", float64(bandWidth1)))
@@ -168,9 +169,10 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 			sriovNetPolicyName = "sriovoffloadpolicy"
 			sriovNetDeviceName = "sriovoffloadnetattchdef"
 			sriovOpNs          = "openshift-sriov-network-operator"
-			pfName             = "ens2f0"
-			workerNodeList     = getOvsHWOffloadWokerNodes(oc)
-			hostnwPod0_Name    = "hostnw-pod-45388-worker0"
+			//pfName             = "ens1f0"
+			workerNodeList = getOvsHWOffloadWokerNodes(oc)
+			hostnwPod0Name = "hostnw-pod-45388-worker0"
+			pfName         = getHWoffloadPF(oc, workerNodeList[0])
 		)
 
 		oc.SetupProject()
@@ -222,10 +224,10 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		//create iperf server pod on worker0
 		iperfServerPod.create(oc, "PODNAME="+iperfServerPod.name, "NAMESPACE="+iperfServerPod.namespace, "NETNAME="+defaultOffloadNet, "NETTYPE="+offloadNetType, "NODENAME="+workerNodeList[0])
 		defer iperfServerPod.delete(oc)
-		err_podRdy1 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-server")
-		exutil.AssertWaitPollNoErr(err_podRdy1, fmt.Sprintf("iperf server pod isn't ready"))
+		errPodRdy1 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-server")
+		exutil.AssertWaitPollNoErr(errPodRdy1, fmt.Sprintf("iperf server pod isn't ready"))
 
-		iperfServerIp := getPodIPv4(oc, oc.Namespace(), iperfServerPod.name)
+		iperfServerIP := getPodIPv4(oc, oc.Namespace(), iperfServerPod.name)
 		iperfServerVF := getPodVFPresentor(oc, iperfServerPod.namespace, iperfServerPod.name)
 
 		iperfClientTmp := filepath.Join(sriovBaseDir, "iperf-rc-template.json")
@@ -243,17 +245,17 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		iperfClientPod.name = iperfClientName
 
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err_podRdy2 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-rc")
-		exutil.AssertWaitPollNoErr(err_podRdy2, fmt.Sprintf("iperf client pod isn't ready"))
+		errPodRdy2 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-rc")
+		exutil.AssertWaitPollNoErr(errPodRdy2, fmt.Sprintf("iperf client pod isn't ready"))
 
-		iperfClientIp := getPodIPv4(oc, oc.Namespace(), iperfClientPod.name)
+		iperfClientIP := getPodIPv4(oc, oc.Namespace(), iperfClientPod.name)
 		iperfClientVF := getPodVFPresentor(oc, iperfClientPod.namespace, iperfClientPod.name)
 
 		g.By("5) ########### Create hostnetwork Pods to capture packets ##########")
 
 		hostnwPodTmp := filepath.Join(sriovBaseDir, "net-admin-cap-pod-template.yaml")
 		hostnwPod0 := sriovNetResource{
-			name:      hostnwPod0_Name,
+			name:      hostnwPod0Name,
 			namespace: oc.Namespace(),
 			tempfile:  hostnwPodTmp,
 			kind:      "pod",
@@ -261,22 +263,22 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		//create hostnetwork pod on worker0 to capture packets
 		hostnwPod0.create(oc, "PODNAME="+hostnwPod0.name, "NODENAME="+workerNodeList[0])
 		defer hostnwPod0.delete(oc)
-		err_podRdy3 := waitForPodWithLabelReady(oc, oc.Namespace(), "name="+hostnwPod0.name)
-		exutil.AssertWaitPollNoErr(err_podRdy3, fmt.Sprintf("hostnetwork pod isn't ready"))
+		errPodRdy3 := waitForPodWithLabelReady(oc, oc.Namespace(), "name="+hostnwPod0.name)
+		exutil.AssertWaitPollNoErr(errPodRdy3, fmt.Sprintf("hostnetwork pod isn't ready"))
 
 		g.By("6) ########### Check Bandwidth between iperf client and iperf server pods ##########")
-		bandWithStr := startIperfTraffic(oc, iperfClientPod.namespace, iperfClientPod.name, iperfServerIp, "20s")
+		bandWithStr := startIperfTraffic(oc, iperfClientPod.namespace, iperfClientPod.name, iperfServerIP, "20s")
 		bandWidth, _ := strconv.ParseFloat(bandWithStr, 32)
 		o.Expect(float64(bandWidth)).Should(o.BeNumerically(">", 0.0))
 
 		g.By("7) ########### Capture packtes on hostnetwork pod ##########")
 		//send traffic and capture traffic on iperf VF presentor on worker node and iperf server pod
-		startIperfTrafficBackground(oc, iperfClientPod.namespace, iperfClientPod.name, iperfServerIp, "150s")
+		startIperfTrafficBackground(oc, iperfClientPod.namespace, iperfClientPod.name, iperfServerIP, "150s")
 		// VF presentors should not be able to capture packets after hardware offload take effect（the begining packts can be captured.
-		chkCapturePacketsOnIntf(oc, hostnwPod0.namespace, hostnwPod0.name, iperfClientVF, iperfClientIp, "0")
-		chkCapturePacketsOnIntf(oc, hostnwPod0.namespace, hostnwPod0.name, iperfServerVF, iperfClientIp, "0")
+		chkCapturePacketsOnIntf(oc, hostnwPod0.namespace, hostnwPod0.name, iperfClientVF, iperfClientIP, "0")
+		chkCapturePacketsOnIntf(oc, hostnwPod0.namespace, hostnwPod0.name, iperfServerVF, iperfClientIP, "0")
 		// iperf server pod should be able to capture packtes
-		chkCapturePacketsOnIntf(oc, iperfServerPod.namespace, iperfServerPod.name, "eth0", iperfClientIp, "10")
+		chkCapturePacketsOnIntf(oc, iperfServerPod.namespace, iperfServerPod.name, "eth0", iperfClientIP, "10")
 
 	})
 
@@ -288,10 +290,11 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 			sriovNetPolicyName = "sriovoffloadpolicy"
 			sriovNetDeviceName = "sriovoffloadnetattchdef"
 			sriovOpNs          = "openshift-sriov-network-operator"
-			pfName             = "ens2f0"
-			workerNodeList     = getOvsHWOffloadWokerNodes(oc)
-			hostnwPod0_Name    = "hostnw-pod-45396-worker0"
-			hostnwPod1_Name    = "hostnw-pod-45396-worker1"
+			//pfName             = "ens1f0"
+			workerNodeList = getOvsHWOffloadWokerNodes(oc)
+			hostnwPod0Name = "hostnw-pod-45396-worker0"
+			hostnwPod1Name = "hostnw-pod-45396-worker1"
+			pfName         = getHWoffloadPF(oc, workerNodeList[0])
 		)
 
 		oc.SetupProject()
@@ -354,10 +357,10 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		defer iperfSvcPod.delete(oc)
 		iperfSvc.create(oc, "SVCTYPE="+"ClusterIP", "SVCNAME="+iperfSvc.name, "PODNAME="+iperfSvcPod.name, "NAMESPACE="+iperfSvc.namespace)
 		defer iperfSvc.delete(oc)
-		err_podRdy1 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-server")
-		exutil.AssertWaitPollNoErr(err_podRdy1, fmt.Sprintf("iperf server pod isn't ready"))
+		errPodRdy1 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-server")
+		exutil.AssertWaitPollNoErr(errPodRdy1, fmt.Sprintf("iperf server pod isn't ready"))
 
-		iperfSvcIp := getSvcIPv4(oc, oc.Namespace(), iperfSvc.name)
+		iperfSvcIP := getSvcIPv4(oc, oc.Namespace(), iperfSvc.name)
 		iperfServerVF := getPodVFPresentor(oc, iperfSvcPod.namespace, iperfSvcPod.name)
 
 		iperfClientTmp := filepath.Join(sriovBaseDir, "iperf-rc-template.json")
@@ -374,11 +377,11 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		iperfClientPod.name = iperfClientName
 		defer iperfClientPod.delete(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err_podRdy2 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-rc")
-		exutil.AssertWaitPollNoErr(err_podRdy2, fmt.Sprintf("iperf client pod isn't ready"))
+		errPodRdy2 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-rc")
+		exutil.AssertWaitPollNoErr(errPodRdy2, fmt.Sprintf("iperf client pod isn't ready"))
 
 		iperfClientVF := getPodVFPresentor(oc, iperfClientPod.namespace, iperfClientPod.name)
-		iperfClientIp := getPodIPv4(oc, oc.Namespace(), iperfClientPod.name)
+		iperfClientIP := getPodIPv4(oc, oc.Namespace(), iperfClientPod.name)
 
 		g.By("5) ########### Create iperf clusterip service and iperf client pod with normal default interface ##########")
 		iperfSvc1 := sriovNetResource{
@@ -398,10 +401,10 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		defer iperfSvcPod.delete(oc)
 		iperfSvc1.create(oc, "SVCTYPE="+"ClusterIP", "SVCNAME="+iperfSvc1.name, "PODNAME="+iperfSvcPod1.name, "NAMESPACE="+iperfSvc1.namespace)
 		defer iperfSvc1.delete(oc)
-		err_podRdy3 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-server-normal")
-		exutil.AssertWaitPollNoErr(err_podRdy3, fmt.Sprintf("iperf server pod isn't ready"))
+		errPodRdy3 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-server-normal")
+		exutil.AssertWaitPollNoErr(errPodRdy3, fmt.Sprintf("iperf server pod isn't ready"))
 
-		iperfSvcIp1 := getSvcIPv4(oc, oc.Namespace(), iperfSvc1.name)
+		iperfSvcIP1 := getSvcIPv4(oc, oc.Namespace(), iperfSvc1.name)
 
 		iperfClientPod1 := sriovNetResource{
 			name:      "iperf-rc-normal",
@@ -417,16 +420,16 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		iperfClientPod1.name = iperfClientName1
 
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err_podRdy4 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-rc-normal")
-		exutil.AssertWaitPollNoErr(err_podRdy4, fmt.Sprintf("iperf client pod isn't ready"))
+		errPodRdy4 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-rc-normal")
+		exutil.AssertWaitPollNoErr(errPodRdy4, fmt.Sprintf("iperf client pod isn't ready"))
 
 		g.By("6) ########### Check Bandwidth between iperf client and iperf clusterip service ##########")
 		// enable hardware offload should improve the performance
 		// get bandwidth on iperf client which attached hardware offload enabled VF
-		bandWithStr := startIperfTraffic(oc, iperfClientPod.namespace, iperfClientPod.name, iperfSvcIp, "60s")
+		bandWithStr := startIperfTraffic(oc, iperfClientPod.namespace, iperfClientPod.name, iperfSvcIP, "60s")
 		bandWidth, _ := strconv.ParseFloat(bandWithStr, 32)
 		// get bandwidth on iperf client with normal default interface
-		bandWithStr1 := startIperfTraffic(oc, iperfClientPod1.namespace, iperfClientPod1.name, iperfSvcIp1, "60s")
+		bandWithStr1 := startIperfTraffic(oc, iperfClientPod1.namespace, iperfClientPod1.name, iperfSvcIP1, "60s")
 		bandWidth1, _ := strconv.ParseFloat(bandWithStr1, 32)
 
 		o.Expect(float64(bandWidth)).Should(o.BeNumerically(">", float64(bandWidth1)))
@@ -435,13 +438,13 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 
 		hostnwPodTmp := filepath.Join(sriovBaseDir, "net-admin-cap-pod-template.yaml")
 		hostnwPod0 := sriovNetResource{
-			name:      hostnwPod0_Name,
+			name:      hostnwPod0Name,
 			namespace: oc.Namespace(),
 			tempfile:  hostnwPodTmp,
 			kind:      "pod",
 		}
 		hostnwPod1 := sriovNetResource{
-			name:      hostnwPod1_Name,
+			name:      hostnwPod1Name,
 			namespace: oc.Namespace(),
 			tempfile:  hostnwPodTmp,
 			kind:      "pod",
@@ -451,19 +454,19 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		defer hostnwPod0.delete(oc)
 		hostnwPod1.create(oc, "PODNAME="+hostnwPod1.name, "NODENAME="+workerNodeList[1])
 		defer hostnwPod1.delete(oc)
-		err_podRdy5 := waitForPodWithLabelReady(oc, oc.Namespace(), "name="+hostnwPod0.name)
-		exutil.AssertWaitPollNoErr(err_podRdy5, fmt.Sprintf("hostnetwork pod isn't ready"))
-		err_podRdy6 := waitForPodWithLabelReady(oc, oc.Namespace(), "name="+hostnwPod1.name)
-		exutil.AssertWaitPollNoErr(err_podRdy6, fmt.Sprintf("hostnetwork pod isn't ready"))
+		errPodRdy5 := waitForPodWithLabelReady(oc, oc.Namespace(), "name="+hostnwPod0.name)
+		exutil.AssertWaitPollNoErr(errPodRdy5, fmt.Sprintf("hostnetwork pod isn't ready"))
+		errPodRdy6 := waitForPodWithLabelReady(oc, oc.Namespace(), "name="+hostnwPod1.name)
+		exutil.AssertWaitPollNoErr(errPodRdy6, fmt.Sprintf("hostnetwork pod isn't ready"))
 
 		g.By("8) ########### Capture packtes on hostnetwork pod ##########")
 		//send traffic and capture traffic on iperf VF presentor on worker node and iperf server pod
-		startIperfTrafficBackground(oc, iperfClientPod.namespace, iperfClientPod.name, iperfSvcIp, "150s")
+		startIperfTrafficBackground(oc, iperfClientPod.namespace, iperfClientPod.name, iperfSvcIP, "150s")
 		// VF presentors should not be able to capture packets after hardware offload take effect（the begining packts can be captured.
-		chkCapturePacketsOnIntf(oc, hostnwPod1.namespace, hostnwPod1.name, iperfClientVF, iperfClientIp, "0")
-		chkCapturePacketsOnIntf(oc, hostnwPod0.namespace, hostnwPod0.name, iperfServerVF, iperfClientIp, "0")
+		chkCapturePacketsOnIntf(oc, hostnwPod1.namespace, hostnwPod1.name, iperfClientVF, iperfClientIP, "0")
+		chkCapturePacketsOnIntf(oc, hostnwPod0.namespace, hostnwPod0.name, iperfServerVF, iperfClientIP, "0")
 		// iperf server pod should be able to capture packtes
-		chkCapturePacketsOnIntf(oc, iperfSvcPod.namespace, iperfSvcPod.name, "eth0", iperfClientIp, "10")
+		chkCapturePacketsOnIntf(oc, iperfSvcPod.namespace, iperfSvcPod.name, "eth0", iperfClientIP, "10")
 
 	})
 
@@ -475,9 +478,10 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 			sriovNetPolicyName = "sriovoffloadpolicy"
 			sriovNetDeviceName = "sriovoffloadnetattchdef"
 			sriovOpNs          = "openshift-sriov-network-operator"
-			pfName             = "ens2f0"
-			workerNodeList     = getOvsHWOffloadWokerNodes(oc)
-			hostnwPod0_Name    = "hostnw-pod-45388-worker0"
+			//pfName             = "ens1f0"
+			workerNodeList = getOvsHWOffloadWokerNodes(oc)
+			hostnwPod0Name = "hostnw-pod-45388-worker0"
+			pfName         = getHWoffloadPF(oc, workerNodeList[0])
 		)
 
 		oc.SetupProject()
@@ -538,10 +542,10 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		defer iperfSvcPod.delete(oc)
 		iperfSvc.create(oc, "SVCTYPE="+"ClusterIP", "SVCNAME="+iperfSvc.name, "PODNAME="+iperfSvcPod.name, "NAMESPACE="+iperfSvc.namespace)
 		defer iperfSvc.delete(oc)
-		err_podRdy1 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-server")
-		exutil.AssertWaitPollNoErr(err_podRdy1, fmt.Sprintf("iperf server pod isn't ready"))
+		errPodRdy1 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-server")
+		exutil.AssertWaitPollNoErr(errPodRdy1, fmt.Sprintf("iperf server pod isn't ready"))
 
-		iperfSvcIp := getSvcIPv4(oc, oc.Namespace(), iperfSvc.name)
+		iperfSvcIP := getSvcIPv4(oc, oc.Namespace(), iperfSvc.name)
 		iperfServerVF := getPodVFPresentor(oc, iperfSvcPod.namespace, iperfSvcPod.name)
 
 		iperfClientTmp := filepath.Join(sriovBaseDir, "iperf-rc-template.json")
@@ -559,17 +563,17 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		iperfClientPod.name = iperfClientName
 
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err_podRdy2 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-rc")
-		exutil.AssertWaitPollNoErr(err_podRdy2, fmt.Sprintf("iperf client pod isn't ready"))
+		errPodRdy2 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-rc")
+		exutil.AssertWaitPollNoErr(errPodRdy2, fmt.Sprintf("iperf client pod isn't ready"))
 
-		iperfClientIp := getPodIPv4(oc, oc.Namespace(), iperfClientPod.name)
+		iperfClientIP := getPodIPv4(oc, oc.Namespace(), iperfClientPod.name)
 		iperfClientVF := getPodVFPresentor(oc, iperfClientPod.namespace, iperfClientPod.name)
 
 		g.By("5) ########### Create hostnetwork Pods to capture packets ##########")
 
 		hostnwPodTmp := filepath.Join(sriovBaseDir, "net-admin-cap-pod-template.yaml")
 		hostnwPod0 := sriovNetResource{
-			name:      hostnwPod0_Name,
+			name:      hostnwPod0Name,
 			namespace: oc.Namespace(),
 			tempfile:  hostnwPodTmp,
 			kind:      "pod",
@@ -577,22 +581,22 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		//create hostnetwork pod on worker0
 		hostnwPod0.create(oc, "PODNAME="+hostnwPod0.name, "NODENAME="+workerNodeList[0])
 		defer hostnwPod0.delete(oc)
-		err_podRdy3 := waitForPodWithLabelReady(oc, oc.Namespace(), "name="+hostnwPod0.name)
-		exutil.AssertWaitPollNoErr(err_podRdy3, fmt.Sprintf("hostnetwork pod isn't ready"))
+		errPodRdy3 := waitForPodWithLabelReady(oc, oc.Namespace(), "name="+hostnwPod0.name)
+		exutil.AssertWaitPollNoErr(errPodRdy3, fmt.Sprintf("hostnetwork pod isn't ready"))
 
 		g.By("6) ########### Check Bandwidth between iperf client and iperf server pods ##########")
-		bandWithStr := startIperfTraffic(oc, iperfClientPod.namespace, iperfClientPod.name, iperfSvcIp, "20s")
+		bandWithStr := startIperfTraffic(oc, iperfClientPod.namespace, iperfClientPod.name, iperfSvcIP, "20s")
 		bandWidth, _ := strconv.ParseFloat(bandWithStr, 32)
 		o.Expect(float64(bandWidth)).Should(o.BeNumerically(">", 0.0))
 
 		g.By("7) ########### Capture packtes on hostnetwork pod ##########")
 		//send traffic and capture traffic on iperf VF presentor on worker node and iperf server pod
-		startIperfTrafficBackground(oc, iperfClientPod.namespace, iperfClientPod.name, iperfSvcIp, "150s")
+		startIperfTrafficBackground(oc, iperfClientPod.namespace, iperfClientPod.name, iperfSvcIP, "150s")
 		// VF presentors should not be able to capture packets after hardware offload take effect（the begining packts can be captured.
-		chkCapturePacketsOnIntf(oc, hostnwPod0.namespace, hostnwPod0.name, iperfClientVF, iperfClientIp, "0")
-		chkCapturePacketsOnIntf(oc, hostnwPod0.namespace, hostnwPod0.name, iperfServerVF, iperfClientIp, "0")
+		chkCapturePacketsOnIntf(oc, hostnwPod0.namespace, hostnwPod0.name, iperfClientVF, iperfClientIP, "0")
+		chkCapturePacketsOnIntf(oc, hostnwPod0.namespace, hostnwPod0.name, iperfServerVF, iperfClientIP, "0")
 		// iperf server pod should be able to capture packtes
-		chkCapturePacketsOnIntf(oc, iperfSvcPod.namespace, iperfSvcPod.name, "eth0", iperfClientIp, "10")
+		chkCapturePacketsOnIntf(oc, iperfSvcPod.namespace, iperfSvcPod.name, "eth0", iperfClientIP, "10")
 
 	})
 
@@ -604,8 +608,9 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 			sriovNetPolicyName = "sriovoffloadpolicy"
 			sriovNetDeviceName = "sriovoffloadnetattchdef"
 			sriovOpNs          = "openshift-sriov-network-operator"
-			pfName             = "ens2f0"
-			workerNodeList     = getOvsHWOffloadWokerNodes(oc)
+			//pfName             = "ens1f0"
+			workerNodeList = getOvsHWOffloadWokerNodes(oc)
+			pfName         = getHWoffloadPF(oc, workerNodeList[0])
 		)
 
 		oc.SetupProject()
@@ -666,10 +671,10 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		defer iperfSvcPod.delete(oc)
 		iperfSvc.create(oc, "SVCTYPE="+"NodePort", "SVCNAME="+iperfSvc.name, "PODNAME="+iperfSvcPod.name, "NAMESPACE="+iperfSvc.namespace)
 		defer iperfSvc.delete(oc)
-		err_podRdy1 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-server")
-		exutil.AssertWaitPollNoErr(err_podRdy1, fmt.Sprintf("iperf server pod isn't ready"))
+		errPodRdy1 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-server")
+		exutil.AssertWaitPollNoErr(errPodRdy1, fmt.Sprintf("iperf server pod isn't ready"))
 
-		iperfSvcIp := getSvcIPv4(oc, oc.Namespace(), iperfSvc.name)
+		iperfSvcIP := getSvcIPv4(oc, oc.Namespace(), iperfSvc.name)
 
 		iperfClientTmp := filepath.Join(sriovBaseDir, "iperf-rc-template.json")
 		iperfClientPod1 := sriovNetResource{
@@ -700,19 +705,19 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		iperfClientPod2.name = iperfClientName2
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		err_podRdy2 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-rc-1")
-		exutil.AssertWaitPollNoErr(err_podRdy2, fmt.Sprintf("iperf client pod isn't ready"))
+		errPodRdy2 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-rc-1")
+		exutil.AssertWaitPollNoErr(errPodRdy2, fmt.Sprintf("iperf client pod isn't ready"))
 
-		err_podRdy3 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-rc-2")
-		exutil.AssertWaitPollNoErr(err_podRdy3, fmt.Sprintf("iperf client pod isn't ready"))
+		errPodRdy3 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-rc-2")
+		exutil.AssertWaitPollNoErr(errPodRdy3, fmt.Sprintf("iperf client pod isn't ready"))
 
 		g.By("5) ########### Check Bandwidth between iperf client and iperf server pods ##########")
 		//traffic should pass
-		bandWithStr1 := startIperfTraffic(oc, iperfClientPod1.namespace, iperfClientPod1.name, iperfSvcIp, "20s")
+		bandWithStr1 := startIperfTraffic(oc, iperfClientPod1.namespace, iperfClientPod1.name, iperfSvcIP, "20s")
 		bandWidth1, _ := strconv.ParseFloat(bandWithStr1, 32)
 		o.Expect(float64(bandWidth1)).Should(o.BeNumerically(">", 0.0))
 		//traffic should pass
-		bandWithStr2 := startIperfTraffic(oc, iperfClientPod2.namespace, iperfClientPod2.name, iperfSvcIp, "20s")
+		bandWithStr2 := startIperfTraffic(oc, iperfClientPod2.namespace, iperfClientPod2.name, iperfSvcIP, "20s")
 		bandWidth2, _ := strconv.ParseFloat(bandWithStr2, 32)
 		o.Expect(float64(bandWidth2)).Should(o.BeNumerically(">", 0.0))
 
