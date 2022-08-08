@@ -7,6 +7,7 @@ kubeadmin-password
 /frontend/cypress-a11y-report.json
 /frontend/upstream
 /frontend/yarn.lock
+/frontend/combined.xml
 /.vscode
 /.idea
 .DS_Store

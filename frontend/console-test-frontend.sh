@@ -75,3 +75,4 @@ ls -ltr
 echo "triggering tests"
 set -x
 yarn run test-cypress-console-headless
+yarn merge-reports
