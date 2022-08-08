@@ -49,7 +49,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		var message string
 		waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
 			registryDegrade := checkRegistryDegraded(oc)
-			if registryDegrade {
+			if !registryDegrade {
 				return true, nil
 			}
 			message, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].message}").Output()
