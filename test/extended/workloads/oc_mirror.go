@@ -94,7 +94,6 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			"openshift-pipelines-operator-rh",
 			"openshift-secondary-scheduler-operator",
 			"opentelemetry-product",
-			"poison-pill-manager",
 			"quay-bridge-operator",
 			"quay-operator",
 			"red-hat-camel-k",
