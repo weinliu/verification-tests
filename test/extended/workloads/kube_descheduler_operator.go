@@ -169,6 +169,20 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 			checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 		}()
 
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "descheduler", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
+			if err != nil {
+				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("3", output); matched {
+				e2e.Logf("deploy is up:\n%s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("observed Generation is not expected"))
+
 		g.By("Check the kubedescheduler run well")
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
@@ -392,6 +406,20 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 			g.By("Check the kubedescheduler run well")
 			checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 		}()
+
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "descheduler", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
+			if err != nil {
+				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("3", output); matched {
+				e2e.Logf("deploy is up:\n%s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("observed Generation is not expected"))
 
 		g.By("Check the kubedescheduler run well")
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
@@ -1131,6 +1159,20 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		patchYamlTraceAll := `[{"op": "replace", "path": "/spec/mode", "value":"Automatic"}]`
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlTraceAll).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "descheduler", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
+			if err != nil {
+				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("2", output); matched {
+				e2e.Logf("deploy is up:\n%s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "observed Generation is not expected")
 
 		g.By("Check the kubedescheduler run well")
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
