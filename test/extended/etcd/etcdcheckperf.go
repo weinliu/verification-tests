@@ -18,16 +18,16 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 	// author: jgeorge@redhat.com
 	g.It("Author:jgeorge-High-44199-run etcd benchmark [Exclusive]", func() {
 		var platform = exutil.CheckPlatform(oc)
-		rtt_th := map[string]string{
+		rttTh := map[string]string{
 			"aws": "0.03",
 			"gcp": "0.06",
 		}
-		wall_fsync_th := map[string]string{
+		wallFsyncTh := map[string]string{
 			"aws": "0.04",
 			"gcp": "0.06",
 		}
 
-		if _, exists := rtt_th[platform]; !exists {
+		if _, exists := rttTh[platform]; !exists {
 			g.Skip(fmt.Sprintf("Skip for non-supported platform: %s", platform))
 		}
 
@@ -75,26 +75,25 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		o.Expect(duration.Seconds()).Should(o.BeNumerically("<", expected), "Failed to run benchmark in under %d seconds", expected)
 
 		// Check prometheus metrics
-		prometheus_url := "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
+		prometheusURL := "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
 
 		// Get the monitoring token
-		token, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", "prometheus-k8s", "-n",
-			"openshift-monitoring").Output()
+		token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", "-n", "openshift-monitoring", "prometheus-k8s").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Network RTT metric
-		query := fmt.Sprintf("histogram_quantile(0.99,(irate(etcd_network_peer_round_trip_time_seconds_bucket[1m])))>%s", rtt_th[platform])
-		data := doPrometheusQuery(oc, token, prometheus_url, query)
+		query := fmt.Sprintf("histogram_quantile(0.99,(irate(etcd_network_peer_round_trip_time_seconds_bucket[1m])))>%s", rttTh[platform])
+		data := doPrometheusQuery(oc, token, prometheusURL, query)
 		o.Expect(len(data.Data.Result)).To(o.Equal(0))
 
 		// Disk commit duration
 		query = "histogram_quantile(0.99, irate(etcd_disk_backend_commit_duration_seconds_bucket[1m]))>0.03"
-		data = doPrometheusQuery(oc, token, prometheus_url, query)
+		data = doPrometheusQuery(oc, token, prometheusURL, query)
 		o.Expect(len(data.Data.Result)).To(o.Equal(0))
 
 		// WAL fsync duration
-		query = fmt.Sprintf("histogram_quantile(0.999,(irate(etcd_disk_wal_fsync_duration_seconds_bucket[1m])))>%s", wall_fsync_th[platform])
-		data = doPrometheusQuery(oc, token, prometheus_url, query)
+		query = fmt.Sprintf("histogram_quantile(0.999,(irate(etcd_disk_wal_fsync_duration_seconds_bucket[1m])))>%s", wallFsyncTh[platform])
+		data = doPrometheusQuery(oc, token, prometheusURL, query)
 		o.Expect(len(data.Data.Result)).To(o.Equal(0))
 	})
 })

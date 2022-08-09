@@ -65,23 +65,21 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		o.Expect(duration.Seconds()).Should(o.BeNumerically("<", expected), "Failed to run benchmark in under %d seconds", expected)
 
 		// Check prometheus metrics
-		prometheus_url := "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
+		prometheusURL := "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
 
 		// Get the monitoring token
-		token, err := oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", "prometheus-k8s", "-n",
-			"openshift-monitoring").Output()
+		token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", "-n", "openshift-monitoring", "prometheus-k8s").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Allow etcd datastore to reach full size of ~1GB
 		g.By("Query etcd datastore size to ensure it grows over 1GB")
 		query := "avg(etcd_mvcc_db_total_size_in_use_in_bytes)<1000000000"
 		err = wait.Poll(60*time.Second, 120*time.Second, func() (bool, error) {
-			data := doPrometheusQuery(oc, token, prometheus_url, query)
+			data := doPrometheusQuery(oc, token, prometheusURL, query)
 			if len(data.Data.Result) == 0 {
 				return true, nil
-			} else {
-				return false, nil
 			}
+			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "etcd datastore did not grow over 1GB in 2 minutes")
 
@@ -89,12 +87,11 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		//Check for datastore to go below 100MB in size
 		query = "avg(etcd_mvcc_db_total_size_in_use_in_bytes)>100000000"
 		err = wait.Poll(60*time.Second, 1200*time.Second, func() (bool, error) {
-			data := doPrometheusQuery(oc, token, prometheus_url, query)
+			data := doPrometheusQuery(oc, token, prometheusURL, query)
 			if len(data.Data.Result) == 0 {
 				return true, nil
-			} else {
-				return false, nil
 			}
+			return false, nil
 		})
 
 		exutil.AssertWaitPollNoErr(err, "Compaction did not occur within 20 minutes")
