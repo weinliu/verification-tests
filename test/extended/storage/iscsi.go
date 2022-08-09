@@ -187,6 +187,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: rdeore@redhat.com
 	// OCP-52835 [ISCSI] ISCSI with CHAP Authentication
 	g.It("Author:rdeore-High-52835-[ISCSI] ISCSI with CHAP Authentication", func() {
+		if checkFips(oc) {
+			g.Skip("iSCSI CHAP Authentication is not supported in FIPS enabled env, skip test execution!!!")
+		}
 		//Set the resource objects definition for the scenario
 		var (
 			scName             = "iscsi-sc-" + getRandomString()
