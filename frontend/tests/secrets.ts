@@ -1,5 +1,4 @@
 import { testName } from "../upstream/support";
-import { tlssecret } from "../fixtures/ocp47010";
 import { Secrets } from "../views/secrect";
 import { listPage } from "../upstream/views/list-page";
 import { detailsPage } from "../upstream/views/details-page";
@@ -11,11 +10,11 @@ describe('Workload Secrets test', () => {
     guidedTour.close();
     cy.switchPerspective('Administrator');
     cy.createProject(testName);
-    cy.exec(`echo '${JSON.stringify(tlssecret)}' | oc create -f - -n ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);   
+    cy.exec(`oc create -f ./fixtures/secret-tls.yaml -n ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);   
   });
 
   after(() => {
-    cy.deleteProject(testName);
+    cy.exec(`oc delete project ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     cy.logout();
   });
 
