@@ -161,3 +161,8 @@ func checkSTSStyle(oc *exutil.CLI, mode string) bool {
 	}
 	return strings.Contains(credConfig[0], "[default]") && strings.Contains(credConfig[1], "aws_access_key_id") && strings.Contains(credConfig[2], "aws_secret_access_key")
 }
+
+func patchResourceAsAdmin(oc *exutil.CLI, ns, resource, rsname, patch string) {
+	err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resource, rsname, "--type=json", "-p", patch, "-n", ns).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
