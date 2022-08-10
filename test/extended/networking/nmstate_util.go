@@ -29,6 +29,18 @@ type ifacePolicyResource struct {
 	template   string
 }
 
+type bondPolicyResource struct {
+	name       string
+	nodelabel  string
+	labelvalue string
+	ifacename  string
+	descr      string
+	state      string
+	port1      string
+	port2      string
+	template   string
+}
+
 func generateTemplateAbsolutePath(fileName string) string {
 	testDataDir := exutil.FixturePath("testdata", "networking/nmstate")
 	return filepath.Join(testDataDir, fileName)
@@ -77,6 +89,15 @@ func configIface(oc *exutil.CLI, ifacepolicy ifacePolicyResource) (bool, error) 
 	return true, nil
 }
 
+func configBond(oc *exutil.CLI, bondpolicy bondPolicyResource) error {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", bondpolicy.template, "-p", "NAME="+bondpolicy.name, "NODELABEL="+bondpolicy.nodelabel, "LABELVALUE="+bondpolicy.labelvalue, "IFACENAME="+bondpolicy.ifacename, "DESCR="+bondpolicy.descr, "STATE="+bondpolicy.state, "PORT1="+bondpolicy.port1, "PORT2="+bondpolicy.port2)
+	if err != nil {
+		e2e.Logf("Error configure bond %v", err)
+		return err
+	}
+	return nil
+}
+
 func checkNNCPStatus(oc *exutil.CLI, policyName string, expectedStatus string) error {
 	return wait.Poll(10*time.Second, 3*time.Minute, func() (bool, error) {
 		e2e.Logf("Checking status of nncp %s", policyName)
@@ -112,5 +133,7 @@ func checkNNCEStatus(oc *exutil.CLI, nnceName string, expectedStatus string) err
 func deleteNNCP(oc *exutil.CLI, name string) {
 	e2e.Logf("delete nncp %s", name)
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("nncp", name, "--ignore-not-found=true").Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if err != nil {
+		e2e.Logf("Failed to delete nncp %s, error:%s", name, err)
+	}
 }

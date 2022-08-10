@@ -201,4 +201,106 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 		e2e.Logf("SUCCESS - interface is removed from the node")
 	})
 
+	g.It("Author:qiowang-Medium-46329-Configure bond on node [Disruptive]", func() {
+
+		g.By("1. Create NMState CR")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		result, crErr := createNMStateCR(oc, nmstateCR, opNamespace)
+		exutil.AssertWaitPollNoErr(crErr, "create nmstate cr failed")
+		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("SUCCESS - NMState CR Created")
+
+		g.By("2. Creating bond on node")
+		g.By("2.1 Configure NNCP for creating bond")
+		policyName := "bond-policy-46329"
+		nodeList, getNodeErr := exutil.GetClusterNodesBy(oc, "worker")
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		nodeName := nodeList[0]
+		bondPolicyTemplate := generateTemplateAbsolutePath("bond-policy-template.yaml")
+		bondPolicy := bondPolicyResource{
+			name:       policyName,
+			nodelabel:  "kubernetes.io/hostname",
+			labelvalue: nodeName,
+			ifacename:  "bond01",
+			descr:      "create bond",
+			port1:      "dummy1",
+			port2:      "dummy2",
+			state:      "up",
+			template:   bondPolicyTemplate,
+		}
+		defer deleteNNCP(oc, policyName)
+		configErr1 := configBond(oc, bondPolicy)
+		o.Expect(configErr1).NotTo(o.HaveOccurred())
+
+		g.By("2.2 Verify the policy is applied")
+		nncpErr1 := checkNNCPStatus(oc, policyName, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+		e2e.Logf("SUCCESS - policy is applied")
+
+		g.By("2.3 Verify the status of enactments is updated")
+		nnceName := nodeName + "." + policyName
+		nnceErr1 := checkNNCEStatus(oc, nnceName, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr1, "status of enactments updated failed")
+		e2e.Logf("SUCCESS - status of enactments is updated")
+
+		g.By("2.4 Verify the created bond found in node network state")
+		ifaceState, nnsErr1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.interfaces[?(@.name=="bond01")].state}`).Output()
+		o.Expect(nnsErr1).NotTo(o.HaveOccurred())
+		o.Expect(ifaceState).Should(o.ContainSubstring("up"))
+		e2e.Logf("SUCCESS - the created bond found in node network state")
+
+		g.By("2.5 Verify the bond is up and active on the node")
+		ifaceList1, ifaceErr1 := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+		o.Expect(ifaceErr1).NotTo(o.HaveOccurred())
+		matched, matchErr1 := regexp.MatchString("bond\\s+bond01", ifaceList1)
+		o.Expect(matchErr1).NotTo(o.HaveOccurred())
+		o.Expect(matched).To(o.BeTrue())
+		e2e.Logf("SUCCESS - bond is up and active on the node")
+
+		g.By("3. Remove bond on node")
+		g.By("3.1 Configure NNCP for removing bond")
+		bondPolicy = bondPolicyResource{
+			name:       policyName,
+			nodelabel:  "kubernetes.io/hostname",
+			labelvalue: nodeName,
+			ifacename:  "bond01",
+			descr:      "remove bond",
+			port1:      "dummy1",
+			port2:      "dummy2",
+			state:      "absent",
+			template:   bondPolicyTemplate,
+		}
+		configErr2 := configBond(oc, bondPolicy)
+		o.Expect(configErr2).NotTo(o.HaveOccurred())
+
+		g.By("3.2 Verify the policy is applied")
+		nncpErr2 := checkNNCPStatus(oc, policyName, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr2, "policy applied failed")
+		e2e.Logf("SUCCESS - policy is applied")
+
+		g.By("3.3 Verify the status of enactments is updated")
+		nnceErr2 := checkNNCEStatus(oc, nnceName, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr2, "status of enactments updated failed")
+		e2e.Logf("SUCCESS - status of enactments is updated")
+
+		g.By("3.4 Verify no removed bond found in node network state")
+		ifaceName1, nnsErr2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, "-ojsonpath={.status.currentState.interfaces[*].name}").Output()
+		o.Expect(nnsErr2).NotTo(o.HaveOccurred())
+		o.Expect(ifaceName1).ShouldNot(o.ContainSubstring("bond01"))
+		e2e.Logf("SUCCESS - no removed bond found in node network state")
+
+		g.By("3.5 Verify the bond is removed from the node")
+		ifaceList2, ifaceErr2 := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+		o.Expect(ifaceErr2).NotTo(o.HaveOccurred())
+		matched, matchErr2 := regexp.MatchString("bond01", ifaceList2)
+		o.Expect(matchErr2).NotTo(o.HaveOccurred())
+		o.Expect(matched).To(o.BeFalse())
+		e2e.Logf("SUCCESS - bond is removed from the node")
+	})
+
 })
