@@ -3,6 +3,7 @@ package networking
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1915,4 +1916,50 @@ var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
 		ipReturned = describeCheckEgressIPByKind(oc, "netnamespace", ns)
 		o.Expect(ipReturned == "<none>").Should(o.BeTrue())
 	})
+
+	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-47570-EgressIP capacity test. [Disruptive]", func() {
+		g.By("1. Get list of nodes, use the first node as egressIP node, patch egressCIDRs to the egressNode")
+		nodeList, getNodeErr := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("Not enough nodes for the test, need at least 1 nodes, skip the case!!")
+		}
+
+		egressNode := nodeList.Items[0].Name
+		sub := getIfaddrFromNode(egressNode, oc)
+
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressCIDRs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressCIDRs\":[\""+sub+"\"]}")
+
+		g.By("2 Get IP capacity of the node, find exceedNum (ipCap+1) number of unused IPs from the egress node. \n")
+		ipCapacity := getIPv4Capacity(oc, egressNode)
+		o.Expect(ipCapacity != "").Should(o.BeTrue())
+		ipCap, _ := strconv.Atoi(ipCapacity)
+		e2e.Logf("\n The egressIP capacity for this cloud provider is found as %v \n", ipCap)
+		if ipCap > 14 {
+			g.Skip("This is not the general IP capacity, will skip it.")
+		}
+
+		exceedNum := ipCap + 1
+		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode, sub, exceedNum)
+
+		g.By("3. Create up to exceedNum number of namespaces, patch one egressIP to each namespace.")
+		var ns = make([]string, exceedNum)
+		for i := 0; i < exceedNum; i++ {
+			oc.SetupProject()
+			ns[i] = oc.Namespace()
+			defer patchResourceAsAdmin(oc, "netnamespace/"+ns[i], "{\"egressIPs\":[]}")
+			patchResourceAsAdmin(oc, "netnamespace/"+ns[i], "{\"egressIPs\":[\""+freeIPs[i]+"\"]}")
+		}
+
+		g.By("4. Verify only ipCap number of egressIP are allowed to the hostsubnet.")
+		ipReturned, checkErr := getEgressIPByKind(oc, "hostsubnet", nodeList.Items[0].Name, ipCap)
+		o.Expect(checkErr).NotTo(o.HaveOccurred())
+		o.Expect(len(ipReturned) == ipCap).Should(o.BeTrue())
+
+		// Note: Due to bug with JIRA ticket OCPBUGS-69, currently, we only check if the number of egressIP assigned to hostsubnet is equal to capacity limit, it does not exceeds capacity limit.
+		// Will add a check to verify event log for warning message after OCPBUGS-69 is fixed
+
+	})
+
 })

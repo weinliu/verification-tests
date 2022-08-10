@@ -1668,3 +1668,22 @@ func patchReplaceResourceAsAdmin(oc *exutil.CLI, ns, resource, rsname, patch str
 	err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resource, rsname, "--type=json", "-p", patch, "-n", ns).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
+
+func getIPv4Capacity(oc *exutil.CLI, nodeName string) string {
+	ipv4Capacity := ""
+	egressIPConfig, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.metadata.annotations.cloud\\.network\\.openshift\\.io/egress-ipconfig}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The egressipconfig is %v \n", egressIPConfig)
+	switch exutil.CheckPlatform(oc) {
+	case "aws":
+		ipv4Capacity = strings.Split(strings.Split(egressIPConfig, ":")[5], ",")[0]
+	case "gcp":
+		ipv4Capacity = strings.Split(egressIPConfig, ":")[5]
+		ipv4Capacity = ipv4Capacity[:len(ipv4Capacity)-3]
+	default:
+		e2e.Logf("Not support cloud provider for auto egressip cases for now.")
+		g.Skip("Not support cloud provider for auto egressip cases for now.")
+	}
+
+	return ipv4Capacity
+}
