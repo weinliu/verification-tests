@@ -945,7 +945,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		defer mcp.pause(false)
 		mcp.pause(true)
 
-		g.By("Calculate number of existing KubeleteConfigs")
+		g.By("Calculate number of existing KubeletConfigs")
 		kcList := NewKubeletConfigList(oc.AsAdmin())
 		kcs, kclErr := kcList.GetAll()
 		o.Expect(kclErr).ShouldNot(o.HaveOccurred(), "Error getting existing KubeletConfig resources")
@@ -2113,6 +2113,168 @@ nulla pariatur.`
 
 		o.Expect(mdropinFile.GetTextContent()).Should(o.Equal(expectedDropinContent))
 
+	})
+	g.It("Author:sregidor-NonPreRelease-High-52822-Create new config resources with 2.2.0 ignition boot image nodes [Disruptive]", func() {
+
+		// Skip if not AWS
+		platform := exutil.CheckPlatform(oc)
+		if platform != "aws" {
+			g.Skip(fmt.Sprintf("Current platform is %s. AWS platform is required to execute this test case!.", platform))
+		}
+
+		// Skip if not east-2 zone
+		infra := NewResource(oc.AsAdmin(), "infrastructure", "cluster")
+		zone := infra.GetOrFail(`{.status.platformStatus.aws.region}`)
+		if zone != "us-east-2" {
+			g.Skip(fmt.Sprintf(`Current AWS zone is '%s'. AWS 'us-east-2' zone is required to execute this test case!.`, zone))
+		}
+
+		// Test execution
+		newSecretName := "worker-user-data-modified-tc-52822"
+		newMsName := "copied-machineset-modified-tc-52822"
+		kcName := "change-maxpods-kubelet-config"
+		kcTemplate := generateTemplateAbsolutePath(kcName + ".yaml")
+		crName := "change-ctr-cr-config"
+		crTemplate := generateTemplateAbsolutePath(crName + ".yaml")
+		mcName := "generic-config-file-test-52822"
+		mcpWorker := NewMachineConfigPool(oc.AsAdmin(), "worker")
+
+		defer func() {
+			logger.Infof("Start TC defer block")
+			newMs := NewMachineSet(oc.AsAdmin(), MachineAPINamespace, newMsName)
+			if newMs.Exists() {
+				logger.Infof("Scaling %s machineset to zero", newMsName)
+				_ = newMs.ScaleTo(0)
+
+				logger.Infof("Waiting %s machineset for being ready", newMsName)
+				_ = newMs.WaitUntilReady("15m")
+
+				logger.Infof("Removing %s machineset", newMsName)
+				_ = newMs.Delete()
+			}
+
+			newSecret := NewNamespacedResource(oc.AsAdmin(), "Secret", MachineAPINamespace, newSecretName)
+			if newSecret.Exists() {
+				logger.Infof("Removing %s secret", newSecretName)
+				_ = newSecret.Delete()
+			}
+
+			cr := NewContainerRuntimeConfig(oc.AsAdmin(), crName, crTemplate)
+			if cr.Exists() {
+				logger.Infof("Removing ContainerRuntimeConfig %s", cr.GetName())
+				_ = cr.Delete()
+			}
+			kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
+			if kc.Exists() {
+				logger.Infof("Removing KubeletConfig %s", kc.GetName())
+				_ = kc.Delete()
+			}
+
+			// MachineConfig struct has not been refactored to compose the "Resource" struct
+			// so there is no "Exists" method available. Use it after refactoring MachineConfig
+			mc := MachineConfig{name: mcName, pool: "worker"}
+			logger.Infof("Removing machineconfig %s", mcName)
+			mc.delete(oc.AsAdmin())
+
+			logger.Infof("Waiting for worker pool to be updated")
+			mcpWorker.waitForComplete()
+
+			logger.Infof("End TC defer block")
+		}()
+
+		// Duplicate an existing MachineSet
+		g.By("Duplicate a MachineSet resource")
+		allMs, err := NewMachineSetList(oc, MachineAPINamespace).GetAll()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting a list of MachineSet resources")
+		ms := allMs[0]
+		newMs, dErr := ms.Duplicate(newMsName)
+		o.Expect(dErr).NotTo(o.HaveOccurred(), "Error duplicating MachineSet %s -n %s", ms.GetName(), ms.GetNamespace())
+
+		// Get current secret used by the MachineSet
+		currentSecret := ms.GetOrFail(`{.spec.template.spec.providerSpec.value.userDataSecret.name}`)
+		logger.Infof("Currently used secret: %s", currentSecret)
+
+		// Create a new secret using "append" and "2.2.0" Ignition version
+		g.By("Create a new secret with 2.2.0 ignition version and 'append' configuration")
+		logger.Infof("Duplicating secret %s with new name %s", currentSecret, newSecretName)
+		changes := msDuplicatedSecretChanges{Name: newSecretName, IgnitionVersion: "2.2.0", IgnitionConfigAction: "append"}
+		_, sErr := duplicateMachinesetSecret(oc, currentSecret, changes)
+		o.Expect(sErr).NotTo(o.HaveOccurred(), "Error duplicating machine-api secret")
+
+		// Set the 4.5 boot image ami for east-2 zone.
+		// the right ami should be selected from here https://github.com/openshift/installer/blob/release-4.5/data/data/rhcos.json
+		g.By("Configure the duplicated MachineSet to use the 4.5 boot image")
+		err = newMs.Patch("json", `[{ "op": "replace", "path": "/spec/template/spec/providerSpec/value/ami/id", "value": "ami-0ba8d5168e13bbcce" }]`)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error patching MachineSet %s to use the new 4.5 boot image", newMs.GetName())
+
+		// Use new secret
+		g.By("Configure the duplicated MachineSet to use the new secret")
+		err = newMs.Patch("json", `[{ "op": "replace", "path": "/spec/template/spec/providerSpec/value/userDataSecret/name", "value": "`+newSecretName+`" }]`)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error patching MachineSet %s to use the new secret %s", newMs.GetName(), newSecretName)
+
+		// KubeletConfig
+		g.By("Create KubeletConfig")
+		kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
+		kc.create()
+		kc.waitUntilSuccess("10s")
+
+		// ContainterRuntimeConfig
+		g.By("Create ContainterRuntimeConfig")
+		cr := NewContainerRuntimeConfig(oc.AsAdmin(), crName, crTemplate)
+		cr.create()
+		cr.waitUntilSuccess("10s")
+
+		// Generic machineconfig
+		g.By("Create generic config file")
+		genericConfigFilePath := "/etc/test-52822"
+		genericConfig := "config content for test case 52822"
+
+		fileConfig := getURLEncodedFileConfig(genericConfigFilePath, genericConfig, "420")
+		template := NewMCOTemplate(oc, "generic-machine-config-template.yml")
+		errCreate := template.Create("-p", "NAME="+mcName, "-p", "POOL=worker", "-p", fmt.Sprintf("FILES=[%s]", fileConfig))
+		o.Expect(errCreate).NotTo(o.HaveOccurred(), "Error creating MachineConfig %s", mcName)
+
+		// Wait for all pools to apply the configs
+		g.By("Wait for worker MCP to be updated")
+		mcpWorker.waitForComplete()
+
+		// Scale up the MachineSet
+		g.By("Scale MachineSet up")
+		logger.Infof("Scaling up machineset %s", newMs.GetName())
+		scaleErr := newMs.ScaleTo(1)
+		o.Expect(scaleErr).NotTo(o.HaveOccurred(), "Error scaling up MachineSet %s", newMs.GetName())
+
+		logger.Infof("Waiting %s machineset for being ready", newMsName)
+		o.Eventually(newMs.PollIsReady(), "15m", "30s").Should(o.BeTrue(), "MachineSet %s is not ready", newMs.GetName())
+
+		// Verify that the scaled nodes has been configured properly
+		g.By("Check config in the new node")
+		newNodes, nErr := newMs.GetNodes()
+		o.Expect(nErr).NotTo(o.HaveOccurred(), "Error getting the nodes created by MachineSet %s", newMs.GetName())
+		o.Expect(newNodes).To(o.HaveLen(1), "Only one node should have been created by MachineSet %s", newMs.GetName())
+		newNode := newNodes[0]
+		logger.Infof("New node: %s", newNode.GetName())
+
+		g.By("Check kubelet config")
+		kcFile := NewRemoteFile(*newNode, "/etc/kubernetes/kubelet.conf")
+		kcrErr := kcFile.Fetch()
+		o.Expect(kcrErr).NotTo(o.HaveOccurred(), "Error reading kubelet config in node %s", newNode.GetName())
+		o.Expect(kcFile.GetTextContent()).Should(o.ContainSubstring("\"maxPods\": 500"),
+			"File /etc/kubernetes/kubelet.conf has not the expected content")
+
+		g.By("Check container runtime config")
+		crFile := NewRemoteFile(*newNode, "/etc/containers/storage.conf")
+		crrErr := crFile.Fetch()
+		o.Expect(crrErr).NotTo(o.HaveOccurred(), "Error reading container runtime config in node %s", newNode.GetName())
+		o.Expect(crFile.GetTextContent()).Should(o.ContainSubstring("size = \"8G\""),
+			"File /etc/containers/storage.conf has not the expected content")
+
+		g.By("Check generic machine config")
+		cFile := NewRemoteFile(*newNode, genericConfigFilePath)
+		crErr := cFile.Fetch()
+		o.Expect(crErr).NotTo(o.HaveOccurred(), "Error reading generic config file in node %s", newNode.GetName())
+		o.Expect(cFile.GetTextContent()).Should(o.Equal(genericConfig),
+			"File %s has not the expected content", genericConfigFilePath)
 	})
 })
 

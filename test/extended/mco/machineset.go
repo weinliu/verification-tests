@@ -3,13 +3,24 @@ package mco
 import (
 	"fmt"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
+	"os"
 	"strconv"
+	"time"
 )
 
+const (
+	// MachineAPINamespace is the namespace where openshift machinesets are created
+	MachineAPINamespace = "openshift-machine-api"
+)
+
+// MachineSet struct to handle MachineSet resources
 type MachineSet struct {
 	Resource
 }
 
+// MachineSetList struct to handle lists of MachineSet resources
 type MachineSetList struct {
 	ResourceList
 }
@@ -67,6 +78,130 @@ func (ms MachineSet) PollIsReady() func() bool {
 	}
 }
 
+// GetMachines returns a slice with the machines created for this MachineSet
+func (ms MachineSet) GetMachines() ([]Machine, error) {
+	ml := NewMachineList(ms.oc, ms.GetNamespace())
+	ml.ByLabel("machine.openshift.io/cluster-api-machineset=" + ms.GetName())
+	return ml.GetAll()
+}
+
+// GetNodes returns a slice with all nodes that have been created for this MachineSet
+func (ms MachineSet) GetNodes() ([]*Node, error) {
+	machines, mErr := ms.GetMachines()
+	if mErr != nil {
+		return nil, mErr
+	}
+
+	nodes := []*Node{}
+	for _, m := range machines {
+		n, nErr := m.GetNode()
+		if nErr != nil {
+			return nil, nErr
+		}
+
+		nodes = append(nodes, n)
+	}
+	return nodes, nil
+}
+
+// WaitUntilReady waits untill the MachineSet reports a Ready status
+func (ms MachineSet) WaitUntilReady(duration string) error {
+	pDuration, err := time.ParseDuration(duration)
+	if err != nil {
+		e2e.Logf("Error parsing duration %s. Errot: %s", duration, err)
+		return err
+	}
+	pollerr := wait.Poll(20*time.Second, pDuration, func() (bool, error) {
+		return ms.PollIsReady()(), nil
+	})
+
+	return pollerr
+}
+
+// Duplicate creates a new MachineSet by ducplicating the MachineSet information but using a new name, the new duplicated Machineset has 0 replicas
+// If you need to further modify the new machineset, patch it, and scale it up
+// For example, to duplicate a machineset and use a new secret in the duplicated machineset:
+// 	newMs := ms.Duplicate("newname")
+// 	err = newMs.Patch("json", `[{ "op": "replace", "path": "/spec/template/spec/providerSpec/value/userDataSecret/name", "value": "newSecretName" }]`)
+// 	newMs.ScaleTo(1)
+func (ms MachineSet) Duplicate(newName string) (*MachineSet, error) {
+	jMachineset := JSON(ms.GetOrFail(`{}`))
+
+	jAPIVersion := jMachineset.Get(`apiVersion`)
+	if !jAPIVersion.Exists() {
+		return nil, fmt.Errorf(".apiVersion does not exist in  machineset %s. Definition: %s", ms.GetName(), jMachineset)
+	}
+
+	jSpec := jMachineset.Get(`spec`)
+	if !jSpec.Exists() {
+		return nil, fmt.Errorf(".spec does not exist in  machineset %s. Definition: %s", ms.GetName(), jMachineset)
+	}
+
+	rErr := jSpec.PutSafe("replicas", 0)
+	if rErr != nil {
+		return nil, rErr
+	}
+
+	jMatchLabels := jSpec.Get("selector").Get("matchLabels")
+	if !jMatchLabels.Exists() {
+		return nil, fmt.Errorf(".spec.selector.matchLabels does not exist in  machineset %s spec: %s", ms.GetName(), jSpec)
+	}
+
+	// Remove old matchlabel
+	dErr := jMatchLabels.DeleteSafe("machine.openshift.io/cluster-api-machineset")
+	if dErr != nil {
+		return nil, dErr
+	}
+
+	// Add new matchlabel
+	pErr := jMatchLabels.PutSafe("machine.openshift.io/cluster-api-machineset", newName)
+	if pErr != nil {
+		return nil, pErr
+	}
+
+	tplLabels := jSpec.Get("template").Get("metadata").Get("labels")
+	if !tplLabels.Exists() {
+		return nil, fmt.Errorf(".template.metadata.labels does not exist in  machineset %s spec: %s", ms.GetName(), jSpec)
+	}
+
+	// Remove old machine label
+	tdErr := tplLabels.DeleteSafe("machine.openshift.io/cluster-api-machineset")
+	if tdErr != nil {
+		return nil, tdErr
+	}
+
+	// Add new machine label
+	tpErr := tplLabels.PutSafe("machine.openshift.io/cluster-api-machineset", newName)
+	if tpErr != nil {
+		return nil, tpErr
+	}
+
+	specAsJSONString, jsErr := jSpec.AsJSONString()
+	if jsErr != nil {
+		return nil, jsErr
+	}
+
+	newMsAsJSONString := fmt.Sprintf(`{"kind": "%s", "apiVersion": "%s", "metadata": {"name":"%s", "namespace": "%s"}, "spec": %s}`,
+		ms.GetKind(), jAPIVersion.ToString(), newName, ms.GetNamespace(), specAsJSONString)
+
+	tmpFile := generateTmpFile(ms.oc, "machineset-"+newName+".yml")
+
+	wErr := os.WriteFile(tmpFile, []byte(newMsAsJSONString), 0644)
+	if wErr != nil {
+		return nil, wErr
+	}
+
+	e2e.Logf("New machinset created using definition file %s", tmpFile)
+
+	_, cErr := ms.oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", tmpFile).Output()
+
+	if cErr != nil {
+		return nil, cErr
+	}
+
+	return NewMachineSet(ms.oc, ms.GetNamespace(), newName), nil
+}
+
 //GetAll returns a []node list with all existing nodes
 func (msl *MachineSetList) GetAll() ([]MachineSet, error) {
 	allMSResources, err := msl.ResourceList.GetAll()
@@ -98,4 +233,83 @@ func (msl MachineSetList) PollAllMachineSetsReady() func() bool {
 
 		return true
 	}
+}
+
+// msDuplicatedSecretChanges struct with all values that will be changed in a duplicated machinset secret
+type msDuplicatedSecretChanges struct {
+	Name                 string
+	IgnitionVersion      string
+	IgnitionConfigAction string
+}
+
+func duplicateMachinesetSecret(oc *exutil.CLI, secretName string, changes msDuplicatedSecretChanges) (*Resource, error) {
+
+	userData, udErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", secretName, "-n", MachineAPINamespace,
+		"--template", `{{index .data "userData" | base64decode}}`).Output()
+
+	if udErr != nil {
+		e2e.Logf("Error getting userData info from secret %s -n %s.\n%s", secretName, MachineAPINamespace, udErr)
+		return nil, udErr
+	}
+
+	disableTemplating, dtErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", secretName, "-n", MachineAPINamespace, "--template", `{{index .data "disableTemplating" | base64decode}}`).Output()
+
+	if dtErr != nil {
+		e2e.Logf("Error getting disableTemplating info from secret %s -n %s.\n%s", secretName, MachineAPINamespace, dtErr)
+		return nil, dtErr
+	}
+
+	// if necessary, replace the ignition config action and the ignition version
+	if changes.IgnitionVersion != "" || changes.IgnitionConfigAction != "" {
+
+		jUserData := JSON(userData)
+
+		jIgnition := jUserData.Get("ignition")
+		if !jIgnition.Exists() {
+			return nil, fmt.Errorf("No 'ignition' key in userData: %s", userData)
+		}
+
+		if changes.IgnitionVersion != "" {
+
+			jpErr := jIgnition.PutSafe("version", changes.IgnitionVersion)
+			if jpErr != nil {
+				return nil, jpErr
+			}
+		}
+
+		if changes.IgnitionConfigAction != "" {
+			jConfig := jIgnition.Get("config")
+			if !jConfig.Exists() {
+				return nil, fmt.Errorf("No 'config' key in userData.ignition: %s", userData)
+			}
+
+			jMerge := jConfig.Get("merge")
+			if !jMerge.Exists() {
+				return nil, fmt.Errorf("No 'merge' key in userData.ignition.config: %s", userData)
+			}
+
+			cpErr := jConfig.PutSafe("append", jMerge.ToInterface())
+			if cpErr != nil {
+				return nil, cpErr
+			}
+
+			dErr := jConfig.DeleteSafe("merge")
+			if dErr != nil {
+				return nil, dErr
+			}
+		}
+		var mErr error
+		userData, mErr = jUserData.AsJSONString()
+		if mErr != nil {
+			e2e.Logf("Error marshaling userData info from secret %s -n %s.UserData: %s \n \n%s", secretName, MachineAPINamespace, jUserData, mErr)
+			return nil, mErr
+		}
+
+	}
+
+	_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", changes.Name, "-n", MachineAPINamespace,
+		"--from-literal", fmt.Sprintf("userData=%s", userData),
+		"--from-literal", fmt.Sprintf("disableTemplating=%s", disableTemplating)).Output()
+
+	return NewNamespacedResource(oc.AsAdmin(), "Secret", MachineAPINamespace, changes.Name), err
 }

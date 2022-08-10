@@ -82,6 +82,55 @@ func (jd *JSONData) String() string {
 	return result
 }
 
+// DeleteSafe deletes a key in a map json node
+func (jd *JSONData) DeleteSafe(key string) error {
+	if jd.data == nil {
+		return fmt.Errorf("Data does not exist. It is empty: %v", jd.data)
+	}
+
+	mapData, ok := jd.data.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("Data is not a map: %v", jd.data)
+	}
+
+	delete(mapData, key)
+
+	return nil
+}
+
+// Delete deletes the a key in a map json node
+func (jd *JSONData) Delete(key string) {
+	err := jd.DeleteSafe(key)
+	if err != nil {
+		e2e.Failf("Could not DELETE key [%s] from json data [%s]. Error: %v", key, jd.data, err)
+	}
+}
+
+// PutSafe set the value of a key in a map json node
+func (jd *JSONData) PutSafe(key string, value interface{}) error {
+	if jd.data == nil {
+		return fmt.Errorf("Data does not exist. It is empty: %v", jd.data)
+	}
+
+	mapData, ok := jd.data.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("Data is not a map: %v", jd.data)
+	}
+
+	mapData[key] = value
+
+	return nil
+}
+
+// Put sets the value of a key in a map json node
+func (jd *JSONData) Put(key string, value string) {
+	err := jd.PutSafe(key, value)
+	if err != nil {
+		e2e.Failf("Could not PUT key [%s] value [%s] in json data [%s]. Error: %v", key, value, jd.data, err)
+	}
+
+}
+
 // GetSafe returns the value of a key in the data and an error
 func (jd JSONData) GetSafe(key string) (*JSONData, error) {
 	if jd.data == nil {

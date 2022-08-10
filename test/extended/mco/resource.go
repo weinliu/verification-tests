@@ -238,16 +238,17 @@ func (t *Template) Create(parameters ...string) error {
 type ResourceList struct {
 	ocGetter
 	extraParams []string
+	itemsFilter string
 }
 
 // NewResourceList constructs a ResourceList struct for not-namespaced resources
 func NewResourceList(oc *exutil.CLI, kind string) *ResourceList {
-	return &ResourceList{ocGetter{oc.AsAdmin(), kind, "", ""}, []string{}}
+	return &ResourceList{ocGetter{oc.AsAdmin(), kind, "", ""}, []string{}, ""}
 }
 
 // NewNamespacedResourceList constructs a ResourceList struct for namespaced resources
 func NewNamespacedResourceList(oc *exutil.CLI, kind string, namespace string) *ResourceList {
-	return &ResourceList{ocGetter{oc.AsAdmin(), kind, namespace, ""}, []string{}}
+	return &ResourceList{ocGetter{oc.AsAdmin(), kind, namespace, ""}, []string{}, ""}
 }
 
 // CleanParams removes the extraparams added by methods like "ByLabel" or "SorBy..."
@@ -275,9 +276,18 @@ func (l *ResourceList) ByFieldSelector(fieldSelector string) {
 	l.extraParams = append(l.extraParams, fmt.Sprintf("--field-selector=%s", fieldSelector))
 }
 
+// SetItemsFilter sets the filter used by jsonpath expression when getting all resources "{.items["+ itemsFilter + "].metadata.name}"
+// an example of a valid filter is: `?(@.metadata.annotations.machine\.openshift\.io/machine=="openshift-machine-api/mymachinesetname-rc2-g5wx5-worker-us-east-2a-t9hw2")`
+func (l *ResourceList) SetItemsFilter(filter string) {
+	l.itemsFilter = filter
+}
+
 // GetAll returns a list of Resource structs with the resources found in this list
 func (l ResourceList) GetAll() ([]Resource, error) {
-	allItemsNames, err := l.Get("{.items[*].metadata.name}", l.extraParams...)
+	if l.itemsFilter == "" {
+		l.itemsFilter = "*"
+	}
+	allItemsNames, err := l.Get("{.items["+l.itemsFilter+"].metadata.name}", l.extraParams...)
 	if err != nil {
 		return nil, err
 	}
