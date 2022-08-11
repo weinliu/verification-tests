@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/tidwall/gjson"
+	"golang.org/x/crypto/ssh"
 
 	"net"
 
@@ -213,7 +214,7 @@ func installIPEchoServiceOnGCP(oc *exutil.CLI, infraID string, host string) (str
 	if user == "" {
 		user = "core"
 	}
-	//o.Expect(sshRunCmd(host, user, runIPEcho)).NotTo(o.HaveOccurred())
+
 	err = sshRunCmd(host, user, runIPEcho)
 	if err != nil {
 		e2e.Logf("Failed to run %v: %v", runIPEcho, err)
@@ -274,6 +275,29 @@ func stopInstanceOnGcp(oc *exutil.CLI, nodeName string, zone string) error {
 	return err
 }
 
+// Run timeout ssh connection test from GCP int-svc instance
+func accessEgressNodeFromIntSvcInstanceOnGCP(host string, IPaddr string) (string, error) {
+	user := os.Getenv("SSH_CLOUD_PRIV_GCP_USER")
+	if user == "" {
+		user = "core"
+	}
+	cmd := fmt.Sprintf(`timeout 5 bash -c "</dev/tcp/%v/22"`, IPaddr)
+	err := sshRunCmd(host, user, cmd)
+
+	if err != nil {
+		e2e.Logf("Failed to run %v: %v", cmd, err)
+
+		// Extract the return code from the err1 variable
+		if returnedErr, ok := err.(*ssh.ExitError); ok {
+			return fmt.Sprintf("%d", returnedErr.ExitStatus()), err
+		}
+		// IO problems, the return code was not sent back
+		return "", err
+	}
+
+	return "0", nil
+}
+
 //start one AWS instance
 func startInstanceOnAWS(a *exutil.AwsClient, hostname string) {
 	instanceID, err := a.GetAwsInstanceIDFromHostname(hostname)
@@ -323,6 +347,42 @@ func stopInstanceOnAWS(a *exutil.AwsClient, hostname string) {
 
 	})
 	exutil.AssertWaitPollNoErr(stateErr, fmt.Sprintf("The instance  is not in a state from which it can be stopped."))
+}
+
+// Run timeout ssh connection test from AWS int-svc instance
+func accessEgressNodeFromIntSvcInstanceOnAWS(a *exutil.AwsClient, oc *exutil.CLI, IPaddr string) (string, error) {
+	user := os.Getenv("SSH_CLOUD_PRIV_AWS_USER")
+	if user == "" {
+		user = "core"
+	}
+
+	sshkey := os.Getenv("SSH_CLOUD_PRIV_KEY")
+	if sshkey == "" {
+		sshkey = "../internal/config/keys/openshift-qe.pem"
+	}
+
+	ips := getAwsIntSvcIPs(a, oc)
+	publicIP, ok := ips["publicIP"]
+	if !ok {
+		return "", fmt.Errorf("no public IP found for Int Svc instance")
+	}
+
+	cmd1 := fmt.Sprintf(`timeout 5 bash -c "</dev/tcp/%v/22"`, IPaddr)
+	sshClient := exutil.SshClient{User: user, Host: publicIP, Port: 22, PrivateKey: sshkey}
+	err1 := sshClient.Run(cmd1)
+	if err1 != nil {
+		e2e.Logf("Failed to run %v: %v", cmd1, err1)
+		return "", err1
+	}
+	cmd2 := fmt.Sprintf(`echo $?`)
+	output, err2 := sshClient.RunOutput(cmd2)
+	if err2 != nil {
+		e2e.Logf("Failed to run %v: %v", cmd2, err2)
+		return "", err2
+	}
+	output = strings.TrimSuffix(output, "\n") // to remove newline at end of the string
+	return output, nil
+
 }
 
 func findIP(input string) []string {

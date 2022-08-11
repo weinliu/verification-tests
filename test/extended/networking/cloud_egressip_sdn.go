@@ -1706,6 +1706,68 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Fail("Network policy was not changed to allow the ip")
 		}
 	})
+
+	// author: jechen@redhat.com
+	g.It("ConnectedOnly-Author:jechen-Medium-47461-Should not be able to access the node via the egressIP [Disruptive]", func() {
+
+		g.By("1. Get list of nodes, choose first node as egressNode, get 1 unused IP from the node that will be used as egressIP")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("Not enough node available, need at least one node for the test, skip the case!!")
+		}
+
+		g.By("2. Find 1 unused IP from the egressNode as egressIP, patch egressIP to the egressIP node and the namespace")
+		ns := oc.Namespace()
+		egressNode := nodeList.Items[0].Name
+
+		// get subnet and unused IP from the egressNode
+		sub := getIfaddrFromNode(egressNode, oc)
+		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode, sub, 1)
+
+		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
+
+		defer patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
+		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\""+freeIPs[0]+"\"]}")
+
+		g.By("2. timeout test from the int-svc instance to egressNode through egressIP")
+		nodeIP := getNodeIPv4(oc, ns, egressNode)
+		e2e.Logf("\n\n NodeIP: -->%v<--, or error: %v \n\n", nodeIP)
+		switch exutil.CheckPlatform(oc) {
+		case "aws":
+			// timeout test to egressNode through nodeIP is expected to succeed
+			result, timeoutTestErr := accessEgressNodeFromIntSvcInstanceOnAWS(a, oc, nodeIP)
+			e2e.Logf("\n\n timeout test ssh connection to node through nodeIP, got result as -->%v<--, or error: %v \n\n", result, timeoutTestErr)
+			o.Expect(timeoutTestErr).NotTo(o.HaveOccurred())
+			o.Expect(result).To(o.Equal("0"))
+
+			// timeout test to egressNode through egressIP is expected to fail
+			result, timeoutTestErr = accessEgressNodeFromIntSvcInstanceOnAWS(a, oc, freeIPs[0])
+			e2e.Logf("\n\n timeout test ssh connection to node through egressIP, got result as -->%v<--, or error: %v \n\n", result, timeoutTestErr)
+			o.Expect(timeoutTestErr).To(o.HaveOccurred())
+			o.Expect(result).NotTo(o.Equal("0"))
+		case "gcp":
+			infraID, err := exutil.GetInfraID(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			host, err := getIntSvcExternalIPFromGcp(oc, infraID)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			// timeout test to egressNode through nodeIP is expected to succeed
+			result, timeoutTestErr := accessEgressNodeFromIntSvcInstanceOnGCP(host, nodeIP)
+			e2e.Logf("\n\n timeout test ssh connection to node through nodeIP, got result as -->%v<--, or error: %v \n\n", result, timeoutTestErr)
+			o.Expect(timeoutTestErr).NotTo(o.HaveOccurred())
+			o.Expect(result).To(o.Equal("0"))
+
+			// timeout test to egressNode through egressIP is expected to fail
+			result, timeoutTestErr = accessEgressNodeFromIntSvcInstanceOnGCP(host, freeIPs[0])
+			e2e.Logf("\n\n timeout test ssh connection to node through egressIP, got result as -->%v<--, or error: %v \n\n", result, timeoutTestErr)
+			o.Expect(timeoutTestErr).To(o.HaveOccurred())
+			o.Expect(result).NotTo(o.Equal("0"))
+		default:
+			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
+			g.Skip("Not support cloud provider for auto egressip cases for now.")
+		}
+	})
 })
 
 var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
