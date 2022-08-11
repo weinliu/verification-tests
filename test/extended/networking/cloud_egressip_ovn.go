@@ -3,6 +3,7 @@ package networking
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1110,6 +1111,194 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		g.By("9. Check EgressIP assigned in the object.\n")
 		egressIPMaps1 = getAssignedEIPInEIPObject(oc, egressip1.name)
 		o.Expect(len(egressIPMaps1) == 1).Should(o.BeTrue())
+
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-High-47021-lr-policy-list and snat should be updated correctly after remove pods. [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressIP1Template := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
+		testPodFile := filepath.Join(buildPruningBaseDir, "testpod.yaml")
+
+		g.By("1 Get list of nodes \n")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		egressNode := nodeList.Items[0].Name
+
+		g.By("2 Apply EgressLabel Key to one node. \n")
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
+
+		g.By("3. create new namespace\n")
+		ns1 := oc.Namespace()
+
+		g.By("4. Apply label to namespace\n")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("5. Create test pods and scale test pods to 10 \n")
+		createResourceFromFile(oc, ns1, testPodFile)
+		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas=10", "-n", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+
+		g.By("6. Create an egressip object\n")
+		sub1 := getIfaddrFromNode(egressNode, oc)
+		freeIPs := findUnUsedIPsOnNode(oc, egressNode, sub1, 2)
+		o.Expect(len(freeIPs) == 2).Should(o.BeTrue())
+		egressip1 := egressIPResource1{
+			name:      "egressip-47021",
+			template:  egressIP1Template,
+			egressIP1: freeIPs[0],
+			egressIP2: freeIPs[1],
+		}
+		defer egressip1.deleteEgressIPObject1(oc)
+		egressip1.createEgressIPObject1(oc)
+		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps1) == 1).Should(o.BeTrue())
+
+		g.By("7.Scale down CNO to 0 \n")
+		defer oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment", "network-operator", "--replicas=1", "-n", "openshift-network-operator").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment", "network-operator", "--replicas=0", "-n", "openshift-network-operator").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("8.Delete ovnkube-master pods \n")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", "-l", "app=ovnkube-master", "-n", "openshift-ovn-kubernetes").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("9. Scale test pods to 1 \n")
+		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas=1", "-n", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		podsErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			podsOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns1).Output()
+			e2e.Logf(podsOutput)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Count(podsOutput, "test") == 1 {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(podsErr, fmt.Sprintf("The pods were not scaled to the expected number!"))
+		testPodName := getPodName(oc, ns1, "name=test-pods")
+		_, testPodIPv4 := getPodIP(oc, ns1, testPodName[0])
+
+		g.By("10. Scale up CNO to 1 \n")
+		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment", "network-operator", "--replicas=1", "-n", "openshift-network-operator").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
+		exutil.AssertWaitPollNoErr(err, "ovnkube-master pods are not ready")
+
+		g.By("11. Check lr-policy-list and snat in northdb. \n")
+		ovnPod := getOVNLeaderPod(oc, "north")
+		o.Expect(ovnPod != "").Should(o.BeTrue())
+		lspCmd := "ovn-nbctl lr-policy-list ovn_cluster_router | grep -v inport"
+		checkLspErr := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+			lspOutput, lspErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, lspCmd)
+			if lspErr != nil {
+				e2e.Logf("%v,Waiting for lr-policy-list to be synced, try next ...,", lspErr)
+				return false, nil
+			}
+			e2e.Logf(lspOutput)
+			if strings.Contains(lspOutput, testPodIPv4) && strings.Count(lspOutput, "100 ") == 1 {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(checkLspErr, fmt.Sprintf("lr-policy-list was not synced correctly!"))
+
+		snatCmd := "ovn-nbctl --format=csv --no-heading find nat external_ids:name=" + egressip1.name
+		checkSnatErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			snatOutput, snatErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, snatCmd)
+			if snatErr != nil {
+				e2e.Logf("%v,Waiting for snat to be synced, try next ...,", snatErr)
+				return false, nil
+			}
+			e2e.Logf(snatOutput)
+			if strings.Contains(snatOutput, testPodIPv4) && strings.Count(snatOutput, egressip1.name) == 1 {
+				e2e.Logf("The snat for egressip is as expected!")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(checkSnatErr, fmt.Sprintf("snat was not synced correctly!"))
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-Longduration-NonPreRelease-Medium-47208-The configured EgressIPs exceeds IP capacity. [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+
+		g.By("1 Get list of nodes \n")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		egressNode := nodeList.Items[0].Name
+
+		g.By("2 Apply EgressLabel Key to one node. \n")
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
+
+		g.By("3 Get IP capacity of the node. \n")
+		ipCapacity := getIPv4Capacity(oc, egressNode)
+		o.Expect(ipCapacity != "").Should(o.BeTrue())
+		ipCap, _ := strconv.Atoi(ipCapacity)
+		if ipCap > 14 {
+			g.Skip("This is not the general IP capacity, will skip it.")
+		}
+		exceedNum := ipCap + 1
+
+		g.By("4 Create egressip objects \n")
+		sub1 := getIfaddrFromNode(egressNode, oc)
+		freeIPs := findUnUsedIPsOnNode(oc, egressNode, sub1, exceedNum)
+		o.Expect(len(freeIPs) == exceedNum).Should(o.BeTrue())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("egressip", "--all").Execute()
+		egressIPConfig := make([]egressIPResource1, exceedNum)
+		for i := 0; i <= ipCap; i++ {
+			iVar := strconv.Itoa(i)
+			egressIPConfig[i] = egressIPResource1{
+				name:          "egressip-47208-" + iVar,
+				template:      egressIP2Template,
+				egressIP1:     freeIPs[i],
+				nsLabelKey:    "org",
+				nsLabelValue:  "qe",
+				podLabelKey:   "color",
+				podLabelValue: "pink",
+			}
+			egressIPConfig[i].createEgressIPObject2(oc)
+		}
+
+		g.By("5 Check ipCapacity+1 number egressIP created,but one is not assigned egress node \n")
+		egressIPErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			egressIPOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressip").Output()
+			e2e.Logf(egressIPOutput)
+			if err != nil {
+				e2e.Logf("Wait for egressip assigned.%v", err)
+				return false, nil
+			}
+			if strings.Count(egressIPOutput, "egressip-47208") == exceedNum {
+				e2e.Logf("The %v number egressIP object created.", exceedNum)
+				if strings.Count(egressIPOutput, egressNode) == ipCap {
+					e2e.Logf("The %v number egressIPs were assigned.", ipCap)
+					return true, nil
+				}
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(egressIPErr, fmt.Sprintf(" Error at getting EgressIPs or EgressIPs were not assigned corrently."))
+
+		g.By("6. Check warning event. \n")
+		warnErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			warningEvent, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", "default").Output()
+			if err != nil {
+				e2e.Logf("Wait for warning event generated.%v", err)
+				return false, nil
+			}
+			if !strings.Contains(warningEvent, "NoMatchingNodeFound") {
+				e2e.Logf("Expected warning message is not found, try again ")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(warnErr, fmt.Sprintf("Warning event doesn't conclude: NoMatchingNodeFound."))
 
 	})
 

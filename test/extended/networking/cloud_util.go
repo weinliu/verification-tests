@@ -128,17 +128,23 @@ func findUnUsedIPsOnNode(oc *exutil.CLI, nodeName, cidr string, number int) []st
 	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(ipRange), func(i, j int) { ipRange[i], ipRange[j] = ipRange[j], ipRange[i] })
 	networkType := checkNetworkType(oc)
-	var msg string
 	var err error
+	var podName string
+	var ns string
+	if strings.Contains(networkType, "ovn") {
+		podName, err = exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ns = "openshift-ovn-kubernetes"
+	}
+	if strings.Contains(networkType, "sdn") {
+		podName, err = exutil.GetPodName(oc, "openshift-sdn", "app=sdn", nodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ns = "openshift-sdn"
+	}
 	for _, ip := range ipRange {
 		if len(ipUnused) < number {
 			pingCmd := "ping -c4 -t1 " + ip
-			if strings.Contains(networkType, "ovn") {
-				msg, err = execCommandInOVNPodOnNode(oc, nodeName, pingCmd)
-			}
-			if strings.Contains(networkType, "sdn") {
-				msg, err = execCommandInSDNPodOnNode(oc, nodeName, pingCmd)
-			}
+			msg, err := exutil.RemoteShPodWithBash(oc, ns, podName, pingCmd)
 			if err != nil && (strings.Contains(msg, "Destination Host Unreachable") || strings.Contains(msg, "100% packet loss")) {
 				e2e.Logf("%s is not used!\n", ip)
 				ipUnused = append(ipUnused, ip)

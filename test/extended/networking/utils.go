@@ -1687,3 +1687,35 @@ func getIPv4Capacity(oc *exutil.CLI, nodeName string) string {
 
 	return ipv4Capacity
 }
+
+// Return the ovnkube-master northdb or sourthdb leader pod
+// ovndb parameter better to be "south" or "north"
+// getOVNLeaderPod ...
+func getOVNLeaderPod(oc *exutil.CLI, ovndb string) string {
+	var ovsappctlCmd string
+	var ovnMasterPod string
+	if ovndb == "south" {
+		ovsappctlCmd = "ovn-appctl -t /var/run/ovn/ovnsb_db.ctl --timeout=3 cluster/status OVN_Southbound"
+	} else {
+		ovsappctlCmd = "ovn-appctl -t /var/run/ovn/ovnnb_db.ctl --timeout=3 cluster/status OVN_Northbound"
+	}
+
+	e2e.Logf("The ovsappctl_cmd is %s ", ovsappctlCmd)
+	ovnMasterPodName := getPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
+	for _, ovnPod := range ovnMasterPodName {
+		output, err := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, ovsappctlCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if output == "" {
+			output, err = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, ovsappctlCmd)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		if strings.Contains(output, "Leader: self") {
+			ovnMasterPod = ovnPod
+			e2e.Logf("The leader ovn master pod is %s", ovnMasterPod)
+			break
+		}
+
+	}
+
+	return ovnMasterPod
+}
