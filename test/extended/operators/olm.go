@@ -3726,7 +3726,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("NonPreRelease-PreChkUpgrade-Author:jiazha-High-22615-prepare to check the OLM status", func() {
+	g.It("NonPreRelease-PreChkUpgrade-Author:xzha-High-22615-prepare to check the OLM status", func() {
 		g.By("1) check version of the OLM related resource")
 		olmRelatedResource := []string{"operator-lifecycle-manager", "operator-lifecycle-manager-catalog", "operator-lifecycle-manager-packageserver"}
 		clusterversion := getResource(oc, asAdmin, withoutNamespace, "clusterversion", "version", "-o=jsonpath={.status.desired.version}")
@@ -3793,7 +3793,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	})
 	// author: jiazha@redhat.com
-	g.It("NonPreRelease-PstChkUpgrade-Author:jiazha-High-22615-Post check the OLM status", func() {
+	g.It("NonPreRelease-PstChkUpgrade-Author:xzha-High-22615-Post check the OLM status", func() {
 		g.By("1) check version of the OLM related resource")
 		olmRelatedResource := []string{"operator-lifecycle-manager", "operator-lifecycle-manager-catalog", "operator-lifecycle-manager-packageserver"}
 		clusterversion := getResource(oc, asAdmin, withoutNamespace, "clusterversion", "version", "-o=jsonpath={.status.desired.version}")
