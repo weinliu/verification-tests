@@ -39,7 +39,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Config Bucket")
-		bucketName := "hypershift-" + caseID
+		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
 		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir}
 		installHelper.newAWSS3Client()
 		defer installHelper.deleteAWSS3Bucket()
@@ -54,7 +54,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		g.By("create HostedClusters")
 		createCluster := installHelper.createClusterAWSCommonBuilder().
 			withName("cluster-" + caseID).
-			withNamespace(oc.Namespace()).
 			withNodePoolReplicas(2)
 		defer installHelper.destroyAWSHostedClusters(createCluster)
 		installHelper.createAWSHostedClusters(createCluster)
@@ -68,5 +67,61 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			}
 			return strings.Count(value, "True")
 		}, DefaultTimeout, DefaultTimeout/10).Should(o.Equal(2), "hostedClusters node ready error")
+	})
+
+	// author: liangli@redhat.com
+	g.It("NonPreRelease-Author:liangli-Critical-42866-[HyperShiftINSTALL] Create HostedCluster infrastructure on AWS by using Hypershift CLI [Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 42866 is for AWS - skipping test ...")
+		}
+		caseID := "42866"
+		dir := "/tmp/hypershift" + caseID
+		clusterName := "cluster-" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Config Bucket")
+		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
+		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir}
+		installHelper.newAWSS3Client()
+		defer installHelper.deleteAWSS3Bucket()
+		installHelper.createAWSS3Bucket()
+
+		g.By("install HyperShift operator")
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+		g.By("extract secret/pull-secret")
+		installHelper.extractPullSecret()
+
+		g.By("Create the AWS infrastructure")
+		infraFile := installHelper.dir + "/" + clusterName + "-infra.json"
+		infra := installHelper.createInfraCommonBuilder().
+			withInfraID(exutil.RandStrCustomize("123456789", 4)).
+			withOutputFile(infraFile)
+		defer installHelper.destroyAWSInfra(infra)
+		installHelper.createAWSInfra(infra)
+
+		g.By("Create AWS IAM resources")
+		iamFile := installHelper.dir + "/" + clusterName + "-iam.json"
+		iam := installHelper.createIamCommonBuilder(infraFile).
+			withInfraID(infra.InfraID).
+			withOutputFile(iamFile)
+		defer installHelper.destroyAWSIam(iam)
+		installHelper.createAWSIam(iam)
+
+		g.By("create aws HostedClusters")
+		createCluster := installHelper.createClusterAWSCommonBuilder().
+			withName(clusterName).
+			withInfraJSON(infraFile).
+			withIamJSON(iamFile)
+		defer installHelper.destroyAWSHostedClusters(createCluster)
+		installHelper.createAWSHostedClusters(createCluster)
+
+		g.By("check vpc is as expected")
+		vpcID, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("awsclusters", "-n", createCluster.Namespace+"-"+createCluster.Name, createCluster.Name, `-ojsonpath='{.spec.network.vpc.id}'`).Output()
+		o.Expect(vpcID).NotTo(o.BeEmpty())
+		vpc, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", "-n", createCluster.Namespace, createCluster.Name, `-ojsonpath='{.spec.platform.aws.cloudProviderConfig.vpc}'`).Output()
+		o.Expect(strings.Compare(vpcID, vpc) == 0).Should(o.BeTrue())
 	})
 })

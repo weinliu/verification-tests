@@ -175,6 +175,18 @@ func getClusterRegion(oc *exutil.CLI) (string, error) {
 	return oc.AsAdmin().WithoutNamespace().Run("get").Args("node", `-ojsonpath={.items[].metadata.labels.topology\.kubernetes\.io/region}`).Output()
 }
 
+func getBaseDomain(oc *exutil.CLI) (string, error) {
+	str, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns/cluster", `-ojsonpath={.spec.baseDomain}`).Output()
+	if err != nil {
+		return "", err
+	}
+	index := strings.Index(str, ".")
+	if index == -1 {
+		return "", fmt.Errorf("can not parse baseDomain because not finding '.'")
+	}
+	return str[index+1:], nil
+}
+
 func getAWSKey(oc *exutil.CLI) (string, string, error) {
 	accessKeyID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system", "-o", `template={{index .data "aws_access_key_id"|base64decode}}`).Output()
 	if err != nil {
