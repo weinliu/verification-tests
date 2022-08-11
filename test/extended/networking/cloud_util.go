@@ -367,22 +367,21 @@ func accessEgressNodeFromIntSvcInstanceOnAWS(a *exutil.AwsClient, oc *exutil.CLI
 		return "", fmt.Errorf("no public IP found for Int Svc instance")
 	}
 
-	cmd1 := fmt.Sprintf(`timeout 5 bash -c "</dev/tcp/%v/22"`, IPaddr)
+	cmd := fmt.Sprintf(`timeout 5 bash -c "</dev/tcp/%v/22"`, IPaddr)
 	sshClient := exutil.SshClient{User: user, Host: publicIP, Port: 22, PrivateKey: sshkey}
-	err1 := sshClient.Run(cmd1)
-	if err1 != nil {
-		e2e.Logf("Failed to run %v: %v", cmd1, err1)
-		return "", err1
-	}
-	cmd2 := fmt.Sprintf(`echo $?`)
-	output, err2 := sshClient.RunOutput(cmd2)
-	if err2 != nil {
-		e2e.Logf("Failed to run %v: %v", cmd2, err2)
-		return "", err2
-	}
-	output = strings.TrimSuffix(output, "\n") // to remove newline at end of the string
-	return output, nil
+	err := sshClient.Run(cmd)
+	if err != nil {
+		e2e.Logf("Failed to run %v: %v", cmd, err)
 
+		// Extract the return code from the err1 variable
+		if returnedErr, ok := err.(*ssh.ExitError); ok {
+			return fmt.Sprintf("%d", returnedErr.ExitStatus()), err
+		}
+		// IO problems, the return code was not sent back
+		return "", err
+	}
+
+	return "0", nil
 }
 
 func findIP(input string) []string {
