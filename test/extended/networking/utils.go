@@ -80,15 +80,21 @@ type ipBlockIngressDual struct {
 }
 
 type ipBlockEgressDual struct {
-	name      string
-	namespace string
-	cidrIpv4  string
-	cidrIpv6  string
-	cidr2Ipv4 string
-	cidr2Ipv6 string
-	cidr3Ipv4 string
-	cidr3Ipv6 string
-	template  string
+	name            string
+	namespace       string
+	cidrIpv4        string
+	cidrIpv4Except  string
+	cidrIpv6        string
+	cidrIpv6Except  string
+	cidr2Ipv4       string
+	cidr2Ipv4Except string
+	cidr2Ipv6       string
+	cidr2Ipv6Except string
+	cidr3Ipv4       string
+	cidr3Ipv4Except string
+	cidr3Ipv6       string
+	cidr3Ipv6Except string
+	template        string
 }
 
 type ipBlockIngressSingle struct {
@@ -104,8 +110,11 @@ type ipBlockEgressSingle struct {
 	name      string
 	namespace string
 	cidr      string
+	except    string
 	cidr2     string
+	except2   string
 	cidr3     string
+	except3   string
 	template  string
 }
 
@@ -302,13 +311,24 @@ func (ipBlock_ingress_policy *ipBlockIngressDual) createipBlockIngressObjectDual
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create network policy %v", ipBlock_ingress_policy.name))
 }
 
-func (ipBlock_egress_policy *ipBlockEgressDual) createipBlockEgressObjectDual(oc *exutil.CLI) {
+func (ipBlock_egress_policy *ipBlockEgressDual) createipBlockEgressObjectDual(oc *exutil.CLI, except bool) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		policyApplyError := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipBlock_egress_policy.template, "-p", "NAME="+ipBlock_egress_policy.name, "NAMESPACE="+ipBlock_egress_policy.namespace, "cidrIpv6="+ipBlock_egress_policy.cidrIpv6, "cidrIpv4="+ipBlock_egress_policy.cidrIpv4)
-		if policyApplyError != nil {
-			e2e.Logf("the err:%v, and try next round", policyApplyError)
-			return false, nil
+
+		if except == false {
+			policyApplyError := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipBlock_egress_policy.template, "-p", "NAME="+ipBlock_egress_policy.name, "NAMESPACE="+ipBlock_egress_policy.namespace, "cidrIpv6="+ipBlock_egress_policy.cidrIpv6, "cidrIpv4="+ipBlock_egress_policy.cidrIpv4)
+			if policyApplyError != nil {
+				e2e.Logf("the err:%v, and try next round", policyApplyError)
+				return false, nil
+			}
+		} else {
+			policyApplyError := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipBlock_egress_policy.template, "-p", "NAME="+ipBlock_egress_policy.name, "NAMESPACE="+ipBlock_egress_policy.namespace, "CIDR_IPv6="+ipBlock_egress_policy.cidrIpv6, "EXCEPT_IPv6="+ipBlock_egress_policy.cidrIpv6Except, "CIDR_IPv4="+ipBlock_egress_policy.cidrIpv4, "EXCEPT_IPv4="+ipBlock_egress_policy.cidrIpv4Except)
+			if policyApplyError != nil {
+				e2e.Logf("the err:%v, and try next round", policyApplyError)
+				return false, nil
+			}
+
 		}
+
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create network policy %v", ipBlock_egress_policy.name))
@@ -326,12 +346,21 @@ func (ipBlock_ingress_policy *ipBlockIngressSingle) createipBlockIngressObjectSi
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create network policy %v", ipBlock_ingress_policy.name))
 }
 
-func (ipBlock_egress_policy *ipBlockEgressSingle) createipBlockEgressObjectSingle(oc *exutil.CLI) {
+func (ipBlock_egress_policy *ipBlockEgressSingle) createipBlockEgressObjectSingle(oc *exutil.CLI, except bool) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		policyApplyError := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipBlock_egress_policy.template, "-p", "NAME="+ipBlock_egress_policy.name, "NAMESPACE="+ipBlock_egress_policy.namespace, "CIDR="+ipBlock_egress_policy.cidr)
-		if policyApplyError != nil {
-			e2e.Logf("the err:%v, and try next round", policyApplyError)
-			return false, nil
+		if except == false {
+			policyApplyError := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipBlock_egress_policy.template, "-p", "NAME="+ipBlock_egress_policy.name, "NAMESPACE="+ipBlock_egress_policy.namespace, "CIDR="+ipBlock_egress_policy.cidr)
+			if policyApplyError != nil {
+				e2e.Logf("the err:%v, and try next round", policyApplyError)
+				return false, nil
+			}
+		} else {
+			policyApplyError := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipBlock_egress_policy.template, "-p", "NAME="+ipBlock_egress_policy.name, "NAMESPACE="+ipBlock_egress_policy.namespace, "CIDR="+ipBlock_egress_policy.cidr, "EXCEPT="+ipBlock_egress_policy.except)
+			if policyApplyError != nil {
+				e2e.Logf("the err:%v, and try next round", policyApplyError)
+				return false, nil
+			}
+
 		}
 		return true, nil
 	})
@@ -1667,6 +1696,45 @@ func checkParameter(oc *exutil.CLI, namespace string, kind string, kindName stri
 func patchReplaceResourceAsAdmin(oc *exutil.CLI, ns, resource, rsname, patch string) {
 	err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resource, rsname, "--type=json", "-p", patch, "-n", ns).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+//For SingleStack function returns IPv6 or IPv4 hostsubnet in case OVN
+//For SDN plugin returns only IPv4 hostsubnet
+//Dual stack not supported on openshiftSDN
+//IPv6 single stack not supported on openshiftSDN
+func getNodeSubnet(oc *exutil.CLI, nodeName string) string {
+
+	networkType := checkNetworkType(oc)
+
+	if networkType == "ovnkubernetes" {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.metadata.annotations.k8s\\.ovn\\.org/node-subnets}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		var data map[string]interface{}
+		json.Unmarshal([]byte(output), &data)
+		hostSubnets := data["default"].(interface{})
+		hostSubnet := hostSubnets.(string)
+		return hostSubnet
+	}
+	nodeSubnet, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostsubnet", nodeName, "-o=jsonpath={.subnet}").Output()
+	o.Expect(nodeSubnet).NotTo(o.BeEmpty())
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	return nodeSubnet
+
+}
+
+func getNodeSubnetDualStack(oc *exutil.CLI, nodeName string) (string, string) {
+
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.metadata.annotations.k8s\\.ovn\\.org/node-subnets}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	var data map[string]interface{}
+	json.Unmarshal([]byte(output), &data)
+	hostSubnets := data["default"].([]interface{})
+	hostSubnetIPv4 := hostSubnets[0].(string)
+	hostSubnetIPv6 := hostSubnets[1].(string)
+
+	e2e.Logf("Host subnet is %v and %v", hostSubnetIPv4, hostSubnetIPv6)
+
+	return hostSubnetIPv4, hostSubnetIPv6
 }
 
 func getIPv4Capacity(oc *exutil.CLI, nodeName string) string {
