@@ -32,8 +32,8 @@ var fixturePathCache = make(map[string]string)
 
 // MachineConfig struct is used to handle MachineConfig resources in OCP
 type MachineConfig struct {
-	name           string
-	template       string
+	name string
+	Template
 	pool           string
 	parameters     []string
 	skipWaitForMcp bool
@@ -73,9 +73,9 @@ func NewMachineConfigPool(oc *exutil.CLI, name string) *MachineConfigPool {
 
 func (mc *MachineConfig) create(oc *exutil.CLI) {
 	mc.name = mc.name + "-" + exutil.GetRandomString()
-	params := []string{"--ignore-unknown-parameters=true", "-f", mc.template, "-p", "NAME=" + mc.name, "POOL=" + mc.pool}
+	params := []string{"-p", "NAME=" + mc.name, "POOL=" + mc.pool}
 	params = append(params, mc.parameters...)
-	exutil.CreateClusterResourceFromTemplate(oc, params...)
+	mc.Create(params...)
 
 	pollerr := wait.Poll(5*time.Second, 1*time.Minute, func() (bool, error) {
 		stdout, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mc/"+mc.name, "-o", "jsonpath='{.metadata.name}'").Output()

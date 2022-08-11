@@ -65,8 +65,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		g.By("create new mc to apply chrony config on worker nodes")
 		workerNode := NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()[0]
 		mcName := "change-workers-chrony-configuration"
-		mcTemplate := generateTemplateAbsolutePath("change-workers-chrony-configuration.yaml")
-		mc := MachineConfig{name: mcName, template: mcTemplate, pool: "worker"}
+		mcTemplate := "change-workers-chrony-configuration.yaml"
+		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker"}
 		defer mc.delete(oc)
 
 		startTime, _ := workerNode.GetDate()
@@ -95,8 +95,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	g.It("Author:rioliu-Longduration-NonPreRelease-High-42520-retrieve mc with large size from mcs [Disruptive]", func() {
 		g.By("create new mc to add 100+ dummy files to /var/log")
 		mcName := "bz1866117-add-dummy-files"
-		mcTemplate := generateTemplateAbsolutePath("bz1866117-add-dummy-files.yaml")
-		mc := MachineConfig{name: mcName, template: mcTemplate, pool: "worker"}
+		mcTemplate := "bz1866117-add-dummy-files.yaml"
+		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker"}
 		defer mc.delete(oc)
 		mc.create(oc)
 
@@ -233,8 +233,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		g.By("Create new MC to add the kernel arguments, kernel type and extension")
 		mcName := "change-worker-karg-ktype-extension"
-		mcTemplate := generateTemplateAbsolutePath(mcName + ".yaml")
-		mc := MachineConfig{name: mcName, template: mcTemplate, pool: "worker"}
+		mcTemplate := mcName + ".yaml"
+		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker"}
 		defer mc.delete(oc)
 		mc.create(oc)
 
@@ -358,9 +358,9 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		conf := string(encodedConf)
 		jcName := "change-worker-jrnl-configuration"
-		jcTemplate := generateTemplateAbsolutePath(jcName + ".yaml")
+		jcTemplate := jcName + ".yaml"
 		journaldConf := []string{"CONFIGURATION=" + conf}
-		jc := MachineConfig{name: jcName, template: jcTemplate, pool: "worker", parameters: journaldConf}
+		jc := MachineConfig{name: jcName, Template: *NewMCOTemplate(oc, jcTemplate), pool: "worker", parameters: journaldConf}
 		defer jc.delete(oc)
 		jc.create(oc)
 		logger.Infof("Journald systemd config is created successfully!")
@@ -448,8 +448,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		workerNode := skipTestIfOsIsNotCoreOs(oc)
 		g.By("Create new machine config with new authorized key")
 		mcName := "change-worker-add-ssh-authorized-key"
-		mcTemplate := generateTemplateAbsolutePath(mcName + ".yaml")
-		mc := MachineConfig{name: mcName, template: mcTemplate, pool: "worker"}
+		mcTemplate := mcName + ".yaml"
+		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker"}
 		defer mc.delete(oc)
 		mc.create(oc)
 
@@ -465,8 +465,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		g.By("Create new machine config with new authorized key")
 		mcName := "change-worker-add-ssh-authorized-key"
-		mcTemplate := generateTemplateAbsolutePath(mcName + ".yaml")
-		mc := MachineConfig{name: mcName, template: mcTemplate, pool: "worker"}
+		mcTemplate := mcName + ".yaml"
+		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker"}
 		defer mc.delete(oc)
 		mc.create(oc)
 
@@ -482,8 +482,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		g.By("Create new machine config with new authorized key")
 		mcName := "change-worker-add-ssh-authorized-key"
-		mcTemplate := generateTemplateAbsolutePath(mcName + ".yaml")
-		mc := MachineConfig{name: mcName, template: mcTemplate, pool: "worker"}
+		mcTemplate := mcName + ".yaml"
+		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker"}
 		defer mc.delete(oc)
 		mc.create(oc)
 
@@ -506,8 +506,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	g.It("Author:mhanss-NonPreRelease-Medium-43084-shutdown machine config daemon with SIGTERM [Disruptive]", func() {
 		g.By("Create new machine config to add additional ssh key")
 		mcName := "add-additional-ssh-authorized-key"
-		mcTemplate := generateTemplateAbsolutePath(mcName + ".yaml")
-		mc := MachineConfig{name: mcName, template: mcTemplate, pool: "worker"}
+		mcTemplate := mcName + ".yaml"
+		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker"}
 		defer mc.delete(oc)
 		mc.create(oc)
 
@@ -617,8 +617,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		g.By("create new mc")
 		mcName := "change-workers-chrony-configuration"
-		mcTemplate := generateTemplateAbsolutePath("change-workers-chrony-configuration.yaml")
-		mc := MachineConfig{name: mcName, template: mcTemplate, pool: "worker", skipWaitForMcp: true}
+		mcTemplate := "change-workers-chrony-configuration.yaml"
+		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker", skipWaitForMcp: true}
 		defer mc.delete(oc)
 		mc.create(oc)
 
@@ -749,8 +749,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		g.By("Create new mc to add new file on the node and trigger node drain")
 		mcName := "test-file"
-		mcTemplate := generateTemplateAbsolutePath("add-mc-to-trigger-node-drain.yaml")
-		mc := MachineConfig{name: mcName, template: mcTemplate, pool: "worker", skipWaitForMcp: true}
+		mcTemplate := "add-mc-to-trigger-node-drain.yaml"
+		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker", skipWaitForMcp: true}
 		defer mc.delete(oc)
 		defer func() { o.Expect(pod.Delete(oc)).NotTo(o.HaveOccurred()) }()
 		mc.create(oc)
@@ -1274,8 +1274,8 @@ nulla pariatur.`
 
 		g.By("create new machine config with base64 encoded gpg public key")
 		mcName := "add-gpg-pub-key"
-		mcTemplate := generateTemplateAbsolutePath("add-gpg-pub-key.yaml")
-		mc := MachineConfig{name: mcName, pool: "worker", template: mcTemplate}
+		mcTemplate := "add-gpg-pub-key.yaml"
+		mc := MachineConfig{name: mcName, pool: "worker", Template: *NewMCOTemplate(oc, mcTemplate)}
 		defer mc.delete(oc)
 		mc.create(oc)
 
@@ -1299,8 +1299,8 @@ nulla pariatur.`
 
 		g.By("create new machine config to change /etc/containers/policy.json")
 		mcName := "change-policy-json"
-		mcTemplate := generateTemplateAbsolutePath("change-policy-json.yaml")
-		mc := MachineConfig{name: mcName, pool: "worker", template: mcTemplate}
+		mcTemplate := "change-policy-json.yaml"
+		mc := MachineConfig{name: mcName, pool: "worker", Template: *NewMCOTemplate(oc, mcTemplate)}
 		defer mc.delete(oc)
 		mc.create(oc)
 
@@ -2280,8 +2280,8 @@ nulla pariatur.`
 
 func createMcAndVerifyMCValue(oc *exutil.CLI, stepText string, mcName string, workerNode Node, textToVerify TextToVerify, cmd ...string) {
 	g.By(fmt.Sprintf("Create new MC to add the %s", stepText))
-	mcTemplate := generateTemplateAbsolutePath(mcName + ".yaml")
-	mc := MachineConfig{name: mcName, template: mcTemplate, pool: "worker"}
+	mcTemplate := mcName + ".yaml"
+	mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker"}
 	defer mc.delete(oc)
 	mc.create(oc)
 	logger.Infof("Machine config is created successfully!")
@@ -2337,8 +2337,8 @@ func skipTestIfOsIsNotRhelOs(oc *exutil.CLI) Node {
 
 func createMcAndVerifyIgnitionVersion(oc *exutil.CLI, stepText string, mcName string, ignitionVersion string) {
 	g.By(fmt.Sprintf("Create machine config with %s", stepText))
-	mcTemplate := generateTemplateAbsolutePath("change-worker-ign-version.yaml")
-	mc := MachineConfig{name: mcName, template: mcTemplate, pool: "worker", parameters: []string{"IGNITION_VERSION=" + ignitionVersion}}
+	mcTemplate := "change-worker-ign-version.yaml"
+	mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker", parameters: []string{"IGNITION_VERSION=" + ignitionVersion}}
 	defer mc.delete(oc)
 	mc.create(oc)
 
