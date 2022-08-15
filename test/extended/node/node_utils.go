@@ -83,7 +83,7 @@ type podInitConDescription struct {
 
 type podUserNSDescription struct {
 	name      string
-	namespace string 
+	namespace string
 	template  string
 }
 
@@ -343,6 +343,7 @@ func volStatus(oc *exutil.CLI) error {
 	})
 }
 
+// ContainerSccStatus get scc status of container
 func ContainerSccStatus(oc *exutil.CLI) error {
 	return wait.Poll(1*time.Second, 1*time.Second, func() (bool, error) {
 		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "hello-pod", "-o=jsonpath={.spec.securityContext.seLinuxOptions.*}", "-n", oc.Namespace()).Output()
@@ -429,10 +430,9 @@ func (podTermination *podTerminationDescription) getTerminationGrace(oc *exutil.
 			if strings.Contains(string(terminationGrace), "TimeoutStopUSec=1min 30s") {
 				e2e.Logf("\nTERMINATION GRACE PERIOD IS SET CORRECTLY")
 				return true, nil
-			} else {
-				e2e.Logf("\ntermination grace is NOT Updated")
-				return false, nil
 			}
+			e2e.Logf("\ntermination grace is NOT Updated")
+			return false, nil
 		}
 		return false, nil
 	})
@@ -446,10 +446,8 @@ func (podOOM *podOOMDescription) podOOMStatus(oc *exutil.CLI) error {
 		if strings.Contains(string(podstatus), "OOMKilled") {
 			e2e.Logf("\nPOD TERMINATED WITH OOM KILLED SITUATION")
 			return true, nil
-		} else {
-			e2e.Logf("\nWaiting for status....")
-			return false, nil
 		}
+		e2e.Logf("\nWaiting for status....")
 		return false, nil
 	})
 }
@@ -462,10 +460,8 @@ func (podInitCon *podInitConDescription) containerExit(oc *exutil.CLI) error {
 		if strings.Contains(string(initConStatus), "Completed") {
 			e2e.Logf("The initContainer exit normally")
 			return true, nil
-		} else {
-			e2e.Logf("The initContainer not exit!")
-			return false, nil
 		}
+		e2e.Logf("The initContainer not exit!")
 		return false, nil
 	})
 }
@@ -605,10 +601,10 @@ func (podUserNS *podUserNSDescription) crioWorkloadConfigExist(oc *exutil.CLI) e
 	return wait.Poll(1*time.Second, 3*time.Second, func() (bool, error) {
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		nodename := nodeList.Items[0].Name	
+		nodename := nodeList.Items[0].Name
 		workloadString, err := oc.AsAdmin().Run("debug").Args(`node/`+nodename, "--", "chroot", "/host", "cat", "/etc/crio/crio.conf.d/00-default").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(string(workloadString), "crio.runtime.workloads.openshift-builder") && strings.Contains(string(workloadString), "io.kubernetes.cri-o.userns-mode") && strings.Contains(string(workloadString), "io.kubernetes.cri-o.Devices"){
+		if strings.Contains(string(workloadString), "crio.runtime.workloads.openshift-builder") && strings.Contains(string(workloadString), "io.kubernetes.cri-o.userns-mode") && strings.Contains(string(workloadString), "io.kubernetes.cri-o.Devices") {
 			e2e.Logf("the crio workload exist in /etc/crio/crio.conf.d/00-default")
 		} else {
 			e2e.Logf("the crio workload not exist in /etc/crio/crio.conf.d/00-default")
@@ -627,7 +623,7 @@ func (podUserNS *podUserNSDescription) userContainersExistForNS(oc *exutil.CLI) 
 		o.Expect(err).NotTo(o.HaveOccurred())
 		groupContainers, err := oc.AsAdmin().Run("debug").Args(`node/`+nodename, "--", "chroot", "/host", "cat", "/etc/subgid").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(string(userContainers), "containers") && strings.Contains(string(groupContainers), "containers"){
+		if strings.Contains(string(userContainers), "containers") && strings.Contains(string(groupContainers), "containers") {
 			e2e.Logf("the user containers exist in /etc/subuid and /etc/subgid")
 		} else {
 			e2e.Logf("the user containers not exist in /etc/subuid and /etc/subgid")
@@ -643,36 +639,30 @@ func (podUserNS *podUserNSDescription) podRunInUserNS(oc *exutil.CLI) error {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		idString, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", podUserNS.namespace, podName, "id").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(string(idString), "uid=0(root) gid=0(root) groups=0(root)"){
+		if strings.Contains(string(idString), "uid=0(root) gid=0(root) groups=0(root)") {
 			e2e.Logf("the user id in pod is root")
 			podUserNSstr, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", podUserNS.namespace, podName, "lsns", "-o", "NS", "-t", "user").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("string(podUserNS) is : %s", string(podUserNSstr))
 			podNS := strings.Fields(string(podUserNSstr))
-			e2e.Logf("pod user namespace : %s",podNS[1])
+			e2e.Logf("pod user namespace : %s", podNS[1])
 
 			nodename, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].spec.nodeName}", "-n", podUserNS.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			nodeUserNS, err := oc.AsAdmin().Run("debug").Args(`node/`+string(nodename), "--", "chroot", "/host", "lsns", "-t", "user").Output() 
+			nodeUserNS, err := oc.AsAdmin().Run("debug").Args(`node/`+string(nodename), "--", "chroot", "/host", "/bin/bash", "-c", "lsns -t user | grep /usr/lib/systemd/systemd").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("host user ns string : %v", nodeUserNS)
 			nodeNSstr := strings.Split(string(nodeUserNS), "\n")
-			e2e.Logf("host ns string : %s",nodeNSstr[3])
-			if strings.Contains(nodeNSstr[3], "/usr/lib/systemd/systemd") {
-				nodeNS := strings.Fields(nodeNSstr[3])
-				e2e.Logf("host user namespace : %s",nodeNS[0])
-				if nodeNS[0] == podNS[1] {
-					e2e.Logf("pod run in the same user namespace with host")
-					return false, nil
-				}
-			} else {
-				e2e.Logf("root user not found from cmd 'lsns -t user' on host")
+			nodeNS := strings.Fields(nodeNSstr[len(nodeNSstr)-3])
+			e2e.Logf("host user namespace : %s", nodeNS[0])
+			if nodeNS[0] == podNS[1] {
+				e2e.Logf("pod run in the same user namespace with host")
 				return false, nil
 			}
 			e2e.Logf("pod run in different user namespace with host")
 			return true, nil
-		} else {
-			e2e.Logf("the user id in pod is not root")
-			return false, nil
 		}
+		e2e.Logf("the user id in pod is not root")
+		return false, nil
 	})
 }
