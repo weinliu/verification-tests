@@ -61,7 +61,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	})
 
-	g.It("Author:rioliu-Longduration-Critical-42361-add chrony systemd config [Disruptive]", func() {
+	g.It("Author:rioliu-Longduration-NonPreRelease-Critical-42361-add chrony systemd config [Disruptive]", func() {
 		g.By("create new mc to apply chrony config on worker nodes")
 		workerNode := NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()[0]
 		mcName := "change-workers-chrony-configuration"

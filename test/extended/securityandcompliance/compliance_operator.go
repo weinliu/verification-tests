@@ -908,7 +908,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-High-33609-Verify the tolerations could work for compliancesuite [Exclusive]", func() {
+		g.It("NonPreRelease-ConnectedOnly-Author:pdhamdhe-High-33609-Verify the tolerations could work for compliancesuite [Exclusive]", func() {
 
 			var (
 				csuiteD = complianceSuiteDescription{
