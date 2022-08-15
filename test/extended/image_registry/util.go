@@ -580,7 +580,7 @@ func checkRegistryFunctionFine(oc *exutil.CLI, bcname string, namespace string) 
 	err = oc.AsAdmin().WithoutNamespace().Run("run").Args(bcname, "--image", imagename, "-n", namespace, "--command", "--", "/bin/sleep", "120").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	var output string
-	errWait := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+	errWait := wait.Poll(10*time.Second, 3*time.Minute, func() (bool, error) {
 		output, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", bcname, "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(output, `Successfully pulled image`) {
