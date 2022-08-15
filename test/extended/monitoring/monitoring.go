@@ -193,6 +193,19 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				g.By("Check labelmy is in the alert")
 				checkMetric(oc, "https://alertmanager-main.openshift-monitoring.svc:9094/api/v1/alerts", token, "labelmy", 2*uwmLoadTime)
 			})
+
+			// author: tagao@redhat.com
+			g.It("Author:tagao-Medium-42825-Expose EnforcedTargetLimit in the CMO configuration for UWM", func() {
+				g.By("check user metrics")
+				token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version{namespace=\""+ns+"\"}'", token, "prometheus-example-app", uwmLoadTime)
+
+				g.By("scale deployment replicas to 2")
+				oc.WithoutNamespace().Run("scale").Args("deployment", "prometheus-example-app", "--replicas=2", "-n", ns).Execute()
+
+				g.By("check user metrics again, the user metrics can't be found from thanos-querier")
+				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version{namespace=\""+ns+"\"}'", token, "\"result\":[]", uwmLoadTime)
+			})
 		})
 
 		// author: hongyli@redhat.com

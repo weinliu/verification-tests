@@ -6,6 +6,7 @@ metadata:
 data:
   config.yaml: |
     prometheus:
+      enforcedTargetLimit: 1
       externalLabels:
         labelmy: test
       retentionSize: 5GiB
