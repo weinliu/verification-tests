@@ -104,6 +104,17 @@ func createAWSS3Bucket(oc *exutil.CLI, client *s3.Client, bucketName string) err
 	if exist {
 		return emptyAWSS3Bucket(client, bucketName)
 	}
+
+	/*
+		Per https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateBucket.html#API_CreateBucket_RequestBody,
+		us-east-1 is the default region and it's not a valid value of LocationConstraint,
+		using `LocationConstraint: types.BucketLocationConstraint("us-east-1")` gets error `InvalidLocationConstraint`.
+		Here remove the configration when the region is us-east-1
+	*/
+	if region == "us-east-1" {
+		_, err = client.CreateBucket(context.TODO(), &s3.CreateBucketInput{Bucket: &bucketName})
+		return err
+	}
 	_, err = client.CreateBucket(context.TODO(), &s3.CreateBucketInput{Bucket: &bucketName, CreateBucketConfiguration: &types.CreateBucketConfiguration{LocationConstraint: types.BucketLocationConstraint(region)}})
 	return err
 

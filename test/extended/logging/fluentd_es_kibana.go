@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -252,7 +253,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			pl.checkLogsFromRs(oc, "exceeds maximum available size", "collector")
 
 			g.By("Set totalLimitSize to 3 GB")
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogging/instance", "-n", "openshift-logging", "-p", "{\"spec\":{\"collector\":{\"fluentd\":{\"buffer\":{\"totalLimitSize\":\"3G\"}}}}}", "--type=merge").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogging/instance", "-n", "openshift-logging", "-p", "{\"spec\":{\"collection\":{\"fluentd\":{\"buffer\":{\"totalLimitSize\":\"3G\"}}}}}", "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Wait for 30 seconds for the config to be effective")
@@ -542,11 +543,19 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Fluentd should
 
 		g.By("check metrics")
 		for _, metric := range []string{"log_logged_bytes_total", "log_collected_bytes_total"} {
-			result, err := queryPrometheus(oc, "", "/api/v1/query?", metric, "GET")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			value, _ := strconv.Atoi(result.Data.Result[0].Value[1].(string))
-			o.Expect(value > 0).To(o.BeTrue())
-			o.Expect(len(result.Data.Result) > 0).To(o.BeTrue())
+			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+				result, err := queryPrometheus(oc, "", "/api/v1/query?", metric, "GET")
+				if err != nil {
+					return false, err
+				}
+				if len(result.Data.Result) > 0 {
+					value, _ := strconv.Atoi(result.Data.Result[0].Value[1].(string))
+					return (value > 0) && (len(result.Data.Result) > 0), nil
+				}
+				return false, nil
+
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can't find metric %s", metric))
 		}
 	})
 
