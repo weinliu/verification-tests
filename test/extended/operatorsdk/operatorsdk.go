@@ -3036,4 +3036,42 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 		exutil.AssertWaitPollNoErr(waitErr, "the status of deployment/memcached44551-sample-ansiblehttp is wrong")
 	})
+
+	// author: jitli@redhat.com
+	g.It("NonPreRelease-Longduration-VMonly-ConnectedOnly-Author:jitli-High-50065-SDK-Add file-based catalog support to run bundle", func() {
+
+		operatorsdkCLI.showInfo = true
+		g.By("Run bundle without index")
+		defer operatorsdkCLI.Run("cleanup").Args("k8sevent", "-n", oc.Namespace()).Output()
+		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/k8sevent-bundle:v"+ocpversion, "-n", oc.Namespace(), "--timeout", "5m").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Generated a valid File-Based Catalog"))
+		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
+
+		g.By("Run bundle with FBC index")
+		defer operatorsdkCLI.Run("cleanup").Args("blacklist", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/blacklist-bundle:v"+ocpversion, "--index-image", "quay.io/olmqe/nginxolm-operator-index:v1", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`Creating a File-Based Catalog of the bundle \"quay.io/olmqe/blacklist-bundle`))
+		o.Expect(output).To(o.ContainSubstring(`Rendering a File-Based Catalog of the Index Image \"quay.io/olmqe/nginxolm-operator-index:v1\"`))
+		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
+
+		g.By("Run bundle with SQLite index")
+		defer operatorsdkCLI.Run("cleanup").Args("k8sstatus", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/k8sstatus-bundle:v"+ocpversion, "--index-image", "quay.io/olmqe/ditto-index:50065", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("SQLite based index images are being deprecated and will be removed in a future release"))
+		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
+
+		g.By("Run bundle with index that contains the bundle message")
+		defer operatorsdkCLI.Run("cleanup").Args("upgradeindex", "-n", oc.Namespace()).Output()
+		_, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeindex-bundle:v0.1", "--index-image", "quay.io/olmqe/upgradeindex-index:v0.1", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", oc.Namespace(), "quay-io-olmqe-upgradeindex-bundle-v0-1").Output()
+		if !strings.Contains(output, "Bundle quay.io/olmqe/upgradeindex-bundle:v0.1 already exists, Bundle already added that provides package and csv") {
+			e2e.Failf("Cannot get log Bundle quay.io/olmqe/upgradeindex-bundle:v0.1 already exists, Bundle already added that provides package and csv")
+		}
+
+	})
+
 })
