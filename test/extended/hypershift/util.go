@@ -1,8 +1,12 @@
 package hypershift
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/tidwall/gjson"
+	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -259,4 +263,22 @@ func parse(obj interface{}) ([]string, error) {
 		}
 	}
 	return params, nil
+}
+
+func getSha256ByFile(file string) string {
+	ha := sha256.New()
+	f, err := os.Open(file)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	defer f.Close()
+	_, err = io.Copy(ha, f)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return fmt.Sprintf("%X", ha.Sum(nil))
+}
+
+func getJSONByFile(filePath string, path string) gjson.Result {
+	file, err := os.Open(filePath)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	defer file.Close()
+	con, err := ioutil.ReadAll(file)
+	return gjson.Get(string(con), path)
 }

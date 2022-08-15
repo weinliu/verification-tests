@@ -34,6 +34,7 @@ type createCluster struct {
 	Region           string `param:"region"`
 	InfraJSON        string `param:"infra-json"`
 	IamJSON          string `param:"iam-json"`
+	InfraID          string `param:"infra-id"`
 }
 
 type infra struct {
@@ -86,6 +87,11 @@ func (i *infra) withOutputFile(OutputFile string) *infra {
 	return i
 }
 
+func (i *infra) withName(Name string) *infra {
+	i.Name = Name
+	return i
+}
+
 func (i *iam) withInfraID(InfraID string) *iam {
 	i.InfraID = InfraID
 	return i
@@ -111,7 +117,7 @@ func (receiver *installHelper) createClusterAWSCommonBuilder() *createCluster {
 	}
 }
 
-func (receiver installHelper) createInfraCommonBuilder() *infra {
+func (receiver *installHelper) createInfraCommonBuilder() *infra {
 	baseDomain, err := getBaseDomain(receiver.oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("current baseDomain %s", baseDomain)
@@ -122,7 +128,7 @@ func (receiver installHelper) createInfraCommonBuilder() *infra {
 	}
 }
 
-func (receiver installHelper) createIamCommonBuilder(infraFile string) *iam {
+func (receiver *installHelper) createIamCommonBuilder(infraFile string) *iam {
 	file, err := os.Open(infraFile)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	defer file.Close()
@@ -217,7 +223,7 @@ func (receiver *installHelper) extractPullSecret() {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func (receiver *installHelper) createAWSHostedClusters(createCluster *createCluster) {
+func (receiver *installHelper) createAWSHostedClusters(createCluster *createCluster) *hostedCluster {
 	vars, err := parse(createCluster)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	var bashClient = NewCmdClient().WithShowInfo(true)
@@ -235,6 +241,11 @@ func (receiver *installHelper) createAWSHostedClusters(createCluster *createClus
 	}, ClusterInstallTimeout, ClusterInstallTimeout/10).Should(o.ContainSubstring("True"), "AWS HostedClusters install error")
 	os.Remove(createCluster.InfraJSON)
 	os.Remove(createCluster.IamJSON)
+	cluster := newHostedCluster(receiver.oc, createCluster.Namespace, createCluster.Name)
+	infraID, err := cluster.getInfraID()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	createCluster.InfraID = infraID
+	return cluster
 }
 
 func (receiver *installHelper) destroyAWSHostedClusters(createCluster *createCluster) {
@@ -243,22 +254,26 @@ func (receiver *installHelper) destroyAWSHostedClusters(createCluster *createClu
 	_, err := bashClient.Run(cmd).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	e2e.Logf("check destroy AWS HostedClusters")
-	o.Eventually(func() string {
-		value, er := receiver.oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedclusters", "-n", createCluster.Namespace).Output()
-		if er != nil {
-			e2e.Logf("error occurred: %v, try next round", er)
-			return ""
-		}
-		return value
-	}, ShortTimeout, ShortTimeout/10).ShouldNot(o.ContainSubstring(createCluster.Name), "destroy AWS HostedClusters error")
+	o.Eventually(pollGetHostedClusters(receiver.oc, receiver.oc.Namespace()), ShortTimeout, ShortTimeout/10).ShouldNot(o.ContainSubstring(createCluster.Name), "destroy AWS HostedClusters error")
 }
 
-func (receiver *installHelper) createHostedClusterKubeconfig(createCluster *createCluster) string {
+func (receiver *installHelper) deleteHostedClustersManual(createCluster *createCluster) {
+	hostedClustersNames, err := getHostedClusters(receiver.oc, receiver.oc.Namespace())
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	if strings.Contains(hostedClustersNames, createCluster.Name) {
+		err = receiver.oc.AsAdmin().WithoutNamespace().Run("delete").Args("hostedcluster", "-n", receiver.oc.Namespace(), createCluster.Name).Execute()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+	}
+	receiver.destroyAWSIam(&iam{AWSCreds: createCluster.AWSCreds, Region: createCluster.Region, InfraID: createCluster.InfraID})
+	receiver.destroyAWSInfra(&infra{AWSCreds: createCluster.AWSCreds, Region: createCluster.Region, InfraID: createCluster.InfraID, BaseDomain: createCluster.BaseDomain})
+}
+
+func (receiver *installHelper) createHostedClusterKubeconfig(createCluster *createCluster, cluster *hostedCluster) {
 	var bashClient = NewCmdClient().WithShowInfo(true)
-	hostedClustersKubeconfigFile := receiver.dir + "/guestcluster-kubeconfig"
+	hostedClustersKubeconfigFile := receiver.dir + "/guestcluster-kubeconfig-" + createCluster.Name
 	_, err := bashClient.Run(fmt.Sprintf("hypershift create kubeconfig --namespace %s --name %s > %s", createCluster.Namespace, createCluster.Name, hostedClustersKubeconfigFile)).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
-	return hostedClustersKubeconfigFile
+	cluster.hostedClustersKubeconfigFile = hostedClustersKubeconfigFile
 }
 
 func (receiver *installHelper) createAWSInfra(infra *infra) {
@@ -270,7 +285,7 @@ func (receiver *installHelper) createAWSInfra(infra *infra) {
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 }
 
-func (receiver installHelper) destroyAWSInfra(infra *infra) {
+func (receiver *installHelper) destroyAWSInfra(infra *infra) {
 	e2e.Logf("destroy AWS infrastructure")
 	var bashClient = NewCmdClient().WithShowInfo(true)
 	cmd := fmt.Sprintf("hypershift destroy infra aws --infra-id %s --aws-creds %s --base-domain %s --region %s", infra.InfraID, infra.AWSCreds, infra.BaseDomain, infra.Region)
@@ -287,10 +302,15 @@ func (receiver *installHelper) createAWSIam(iam *iam) {
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 }
 
-func (receiver installHelper) destroyAWSIam(iam *iam) {
+func (receiver *installHelper) destroyAWSIam(iam *iam) {
 	e2e.Logf("destroy AWS iam")
 	var bashClient = NewCmdClient().WithShowInfo(true)
 	cmd := fmt.Sprintf("hypershift destroy iam aws --infra-id %s --aws-creds %s --region %s", iam.InfraID, iam.AWSCreds, iam.Region)
 	_, err := bashClient.Run(cmd).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
+}
+
+func (receiver *installHelper) deleteHostedClustersCRAllBackground() {
+	_, _, _, err := receiver.oc.AsAdmin().WithoutNamespace().Run("delete").Args("hostedcluster", "--all", "-n", receiver.oc.Namespace()).Background()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
