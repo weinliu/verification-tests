@@ -16,6 +16,8 @@ const (
 	mapiMachineset           = "machinesets.machine.openshift.io"
 	mapiMachine              = "machines.machine.openshift.io"
 	mapiMHC                  = "machinehealthchecks.machine.openshift.io"
+	capiMachineset           = "machinesets.cluster.x-k8s.io"
+	capiMachine              = "machines.cluster.x-k8s.io"
 )
 
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {

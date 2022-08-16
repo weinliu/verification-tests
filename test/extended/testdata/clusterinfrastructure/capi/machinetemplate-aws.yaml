@@ -1,0 +1,39 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: machinetemplate-aws
+objects:
+  - apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: AWSMachineTemplate
+    metadata:
+      name: ${NAME}
+      namespace: ${NAMESPACE}
+    spec:
+      template:
+        spec:
+          uncompressedUserData: true
+          iamInstanceProfile: ${PROFILE}
+          instanceType: m5.large
+          failureDomain: ${ZONE}
+          cloudInit:
+            insecureSkipSecretsManager: true
+          ami:
+            id: ${AMI}
+          subnet:
+            filters:
+            - name: tag:Name
+              values:
+              - ${SUBNETNAME}
+          additionalSecurityGroups:
+          - filters:
+            - name: tag:Name
+              values:
+              - ${SGNAME}
+parameters:
+- name: NAME
+- name: NAMESPACE
+- name: PROFILE
+- name: ZONE
+- name: AMI
+- name: SUBNETNAME
+- name: SGNAME
