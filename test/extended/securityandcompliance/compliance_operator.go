@@ -148,7 +148,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("Author:pdhamdhe-Critical-34378-Install the Compliance Operator through olm using CatalogSource and Subscription", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:pdhamdhe-Critical-34378-Install the Compliance Operator through olm using CatalogSource and Subscription", func() {
 		g.By("Skip test when precondition not meet !!!")
 		SkipMissingCatalogsource(oc)
 		SkipARM64AndHetegenous(oc)
@@ -258,7 +258,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-Critical-27649-The ComplianceSuite reports the scan result as Compliant or Non-Compliant [Slow]", func() {
+		g.It("ARO-ConnectedOnly-Author:pdhamdhe-Critical-27649-The ComplianceSuite reports the scan result as Compliant or Non-Compliant [Slow]", func() {
 			var (
 				csuiteD = complianceSuiteDescription{
 					name:         "worker-compliancesuite",
@@ -369,7 +369,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})*/
 
 		// author: pdhamdhe@redhat.com
-		g.It("Author:pdhamdhe-High-33398-The Compliance Operator supports to variables in tailored profile [Slow]", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-33398-The Compliance Operator supports to variables in tailored profile [Slow]", func() {
 			var (
 				tprofileD = tailoredProfileDescription{
 					name:         "rhcos-tailoredprofile",
@@ -409,7 +409,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("Author:pdhamdhe-High-32840-The ComplianceSuite generates through ScanSetting CR [Slow]", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-32840-The ComplianceSuite generates through ScanSetting CR [Slow]", func() {
 			var (
 				tprofileD = tailoredProfileDescription{
 					name:         "rhcos-tp",
@@ -490,7 +490,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-Medium-33381-Verify the ComplianceSuite could be generated from Tailored profiles [Slow]", func() {
+		g.It("ARO-ConnectedOnly-Author:pdhamdhe-Medium-33381-Verify the ComplianceSuite could be generated from Tailored profiles [Slow]", func() {
 			var (
 				tprofileD = tailoredProfileDescription{
 					name:         "rhcos-e8-tp",
@@ -552,7 +552,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 		})
 		// author: xiyuan@redhat.com
-		g.It("ConnectedOnly-Author:xiyuan-Medium-33611-Verify the tolerations could work for compliancescan when there is more than one taint on node [Exclusive]", func() {
+		g.It("ARO-ConnectedOnly-Author:xiyuan-Medium-33611-Verify the tolerations could work for compliancescan when there is more than one taint on node [Exclusive]", func() {
 			var (
 				cscanD = complianceScanDescription{
 					name:         "example-compliancescan3",
@@ -610,7 +610,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: xiyuan@redhat.com
-		g.It("Author:xiyuan-High-37121-The ComplianceSuite generates through ScanSettingBinding CR with cis profile and default scansetting [Slow]", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:xiyuan-High-37121-The ComplianceSuite generates through ScanSettingBinding CR with cis profile and default scansetting [Slow]", func() {
 			var (
 				ssb = scanSettingBindingDescription{
 					name:            "cis-test",
@@ -648,7 +648,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-Medium-33713-The ComplianceSuite reports the scan result as Error", func() {
+		g.It("ARO-ConnectedOnly-Author:pdhamdhe-Medium-33713-The ComplianceSuite reports the scan result as Error", func() {
 
 			var (
 				csuiteD = complianceSuiteDescription{
@@ -690,7 +690,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-Critical-27705-The ComplianceScan reports the scan result Compliant or Non-Compliant", func() {
+		g.It("ARO-ConnectedOnly-Author:pdhamdhe-Critical-27705-The ComplianceScan reports the scan result Compliant or Non-Compliant", func() {
 
 			var (
 				cscanD = complianceScanDescription{
@@ -758,7 +758,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-Medium-27762-The ComplianceScan reports the scan result Error", func() {
+		g.It("ARO-ConnectedOnly-Author:pdhamdhe-Medium-27762-The ComplianceScan reports the scan result Error", func() {
 
 			var (
 				cscanD = complianceScanDescription{
@@ -831,7 +831,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-High-33230-The compliance-operator raw result storage size is configurable", func() {
+		g.It("ARO-ConnectedOnly-Author:pdhamdhe-High-33230-The compliance-operator raw result storage size is configurable", func() {
 
 			var (
 				csuiteD = complianceSuiteDescription{
@@ -908,8 +908,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("NonPreRelease-ConnectedOnly-Author:pdhamdhe-High-33609-Verify the tolerations could work for compliancesuite [Exclusive]", func() {
-
+		g.It("ARO-NonPreRelease-ConnectedOnly-Author:pdhamdhe-High-33609-Verify the tolerations could work for compliancesuite [Exclusive]", func() {
 			var (
 				csuiteD = complianceSuiteDescription{
 					name:         "worker-compliancesuite",
@@ -1125,7 +1124,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-Critical-28949-The complianceSuite and ComplianeScan perform scan using Platform scan type", func() {
+		g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-28949-The complianceSuite and ComplianeScan perform scan using Platform scan type", func() {
 
 			var (
 				csuiteD = complianceSuiteDescription{
@@ -1193,7 +1192,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-Critical-36988-The ComplianceScan could be triggered for cis profile for platform scanType", func() {
+		g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-36988-The ComplianceScan could be triggered for cis profile for platform scanType", func() {
 
 			var (
 				cscanMD = complianceScanDescription{
@@ -1233,7 +1232,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-Critical-36990-The ComplianceSuite could be triggered for cis profiles for platform scanType", func() {
+		g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-36990-The ComplianceSuite could be triggered for cis profiles for platform scanType", func() {
 
 			var (
 				csuiteD = complianceSuiteDescription{
@@ -1276,7 +1275,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-Critical-37063-The ComplianceSuite could be triggered for cis profiles for node scanType", func() {
+		g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-37063-The ComplianceSuite could be triggered for cis profiles for node scanType", func() {
 
 			var (
 				csuiteD = complianceSuiteDescription{
@@ -1388,7 +1387,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-NonPreRelease-Longduration-High-32120-The ComplianceSuite performs schedule scan for Platform scan type [Slow]", func() {
+		g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-NonPreRelease-Longduration-High-32120-The ComplianceSuite performs schedule scan for Platform scan type [Slow]", func() {
 			var (
 				csuiteD = complianceSuiteDescription{
 					name:         "platform-compliancesuite",
@@ -1446,7 +1445,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-High-33418-Medium-44062-The ComplianceSuite performs the schedule scan through cron job and also verify the suitererunner resources are doubled [Slow]", func() {
+		g.It("ARO-ConnectedOnly-Author:pdhamdhe-High-33418-Medium-44062-The ComplianceSuite performs the schedule scan through cron job and also verify the suitererunner resources are doubled [Slow]", func() {
 			var (
 				csuiteD = complianceSuiteDescription{
 					name:         "worker-compliancesuite",
@@ -1515,7 +1514,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: xiyuan@redhat.com
-		g.It("ConnectedOnly-Author:xiyuan-NonPreRelease-Longduration-Medium-33456-The Compliance-Operator edits the scheduled cron job to scan from ComplianceSuite [Slow]", func() {
+		g.It("ARO-ConnectedOnly-Author:xiyuan-NonPreRelease-Longduration-Medium-33456-The Compliance-Operator edits the scheduled cron job to scan from ComplianceSuite [Slow]", func() {
 			var (
 				csuiteD = complianceSuiteDescription{
 					name:         "example-compliancesuite1",
@@ -1578,7 +1577,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-NonPreRelease-Longduration-High-33453-The Compliance Operator rotates the raw scan results [Slow]", func() {
+		g.It("ARO-ConnectedOnly-Author:pdhamdhe-NonPreRelease-Longduration-High-33453-The Compliance Operator rotates the raw scan results [Slow]", func() {
 			var (
 				csuiteD = complianceSuiteDescription{
 					name:         "worker-compliancesuite",
@@ -1665,7 +1664,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-High-33660-Verify the differences in nodes from the same role could be handled [Serial]", func() {
+		g.It("ARO-ConnectedOnly-Author:pdhamdhe-High-33660-Verify the differences in nodes from the same role could be handled [Serial]", func() {
 
 			var (
 				csuiteD = complianceSuiteDescription{
@@ -1722,7 +1721,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("Author:pdhamdhe-Medium-32814-High-45729-The compliance operator by default creates ProfileBundles and profiles", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:pdhamdhe-Medium-32814-High-45729-The compliance operator by default creates ProfileBundles and profiles", func() {
 			g.By("Check default profilebundles name and status.. !!!\n")
 			subD.getProfileBundleNameandStatus(oc, "ocp4", "VALID")
 			subD.getProfileBundleNameandStatus(oc, "rhcos4", "VALID")
@@ -1745,7 +1744,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-Medium-33431-Verify compliance check result shows in ComplianceCheckResult label for compliancesuite", func() {
+		g.It("ARO-ConnectedOnly-Author:pdhamdhe-Medium-33431-Verify compliance check result shows in ComplianceCheckResult label for compliancesuite", func() {
 
 			var (
 				csuiteD = complianceSuiteDescription{
@@ -1796,7 +1795,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-Medium-33435-Verify the compliance scan result shows in ComplianceCheckResult label for compliancescan", func() {
+		g.It("ARO-ConnectedOnly-Author:pdhamdhe-Medium-33435-Verify the compliance scan result shows in ComplianceCheckResult label for compliancescan", func() {
 
 			var (
 				cscanD = complianceScanDescription{
@@ -1845,7 +1844,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-Medium-33449-The compliance-operator raw results store in ARF format on a PVC", func() {
+		g.It("ARO-ConnectedOnly-Author:pdhamdhe-Medium-33449-The compliance-operator raw results store in ARF format on a PVC", func() {
 
 			var (
 				csuiteD = complianceSuiteDescription{
@@ -1894,7 +1893,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: xiyuan@redhat.com
-		g.It("Author:xiyuan-Medium-37171-Check compliancesuite status when there are multiple rhcos4 profiles added in scansettingbinding object [Slow]", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-37171-Check compliancesuite status when there are multiple rhcos4 profiles added in scansettingbinding object [Slow]", func() {
 			var (
 				ssb = scanSettingBindingDescription{
 					name:            "rhcos4",
@@ -1932,7 +1931,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: xiyuan@redhat.com
-		g.It("Author:xiyuan-High-37084-The ComplianceSuite generates through ScanSettingBinding CR with tailored cis profile", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:xiyuan-High-37084-The ComplianceSuite generates through ScanSettingBinding CR with tailored cis profile", func() {
 			var (
 				tp = tailoredProfileWithoutVarDescription{
 					name:         "ocp4-cis-custom",
@@ -2014,7 +2013,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-High-34928-Storage class and access modes are configurable through ComplianceSuite and ComplianceScan", func() {
+		g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-High-34928-Storage class and access modes are configurable through ComplianceSuite and ComplianceScan", func() {
 
 			var (
 				csuiteD = complianceSuiteDescription{
@@ -2095,7 +2094,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: xiyuan@redhat.com
-		g.It("ConnectedOnly-Author:xiyuan-Medium-40372-Use a separate SA for resultserver", func() {
+		g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-Medium-40372-Use a separate SA for resultserver", func() {
 			var csuiteMD = complianceSuiteDescription{
 				name:         "master-compliancesuite",
 				namespace:    "",
@@ -2130,7 +2129,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: xiyuan@redhat.com
-		g.It("Author:xiyuan-Medium-40280-The infrastructure feature should show the Compliance operator when the disconnected filter gets applied", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-40280-The infrastructure feature should show the Compliance operator when the disconnected filter gets applied", func() {
 			g.By("check the infrastructure-features for csv!!!\n")
 			csvName := getResource(oc, asAdmin, withoutNamespace, "csv", "-n", oc.Namespace(), "-o=jsonpath={.items[0].metadata.name}")
 			newCheck("expect", asAdmin, withoutNamespace, contain, "[\"disconnected\", \"fips\", \"proxy-aware\"]", ok, []string{"csv",
@@ -2138,7 +2137,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: xiyuan@redhat.com
-		g.It("ConnectedOnly-Author:xiyuan-Medium-41769-The compliance operator could get HTTP_PROXY and HTTPS_PROXY environment from OpenShift has global proxy settings	", func() {
+		g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-Medium-41769-The compliance operator could get HTTP_PROXY and HTTPS_PROXY environment from OpenShift has global proxy settings	", func() {
 			g.By("Get the httpPoxy and httpsProxy info!!!\n")
 			httpProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-n", oc.Namespace(), "-o=jsonpath={.spec.httpProxy}")
 			httpsProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-n", oc.Namespace(), "-o=jsonpath={.spec.httpsProxy}")
@@ -2178,7 +2177,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: xiyuan@redhat.com
-		g.It("Author:xiyuan-High-33859-Verify if the profileparser enables to get content updates when the image digest updated [Slow]", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:xiyuan-High-33859-Verify if the profileparser enables to get content updates when the image digest updated [Slow]", func() {
 			var (
 				pb = profileBundleDescription{
 					name:         "test1",
@@ -2259,7 +2258,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: xiyuan@redhat.com
-		g.It("Author:xiyuan-Medium-33578-Verify if the profileparser enables to get content updates when add a new ProfileBundle [Slow]", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-33578-Verify if the profileparser enables to get content updates when add a new ProfileBundle [Slow]", func() {
 			var (
 				pb = profileBundleDescription{
 					name:         "test1",
@@ -2347,7 +2346,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: xiyuan@redhat.com
-		g.It("ConnectedOnly-Author:xiyuan-High-33429-The Compliance Operator performs scan successfully on taint node without tolerations [Exclusive] [Slow]", func() {
+		g.It("ARO-ConnectedOnly-Author:xiyuan-High-33429-The Compliance Operator performs scan successfully on taint node without tolerations [Exclusive] [Slow]", func() {
 
 			var (
 				csuiteD = complianceSuiteDescription{
@@ -2432,7 +2431,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})*/
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-High-41861-Verify fips mode checking rules are working as expected [Slow]", func() {
+		g.It("ARO-ConnectedOnly-Author:pdhamdhe-High-41861-Verify fips mode checking rules are working as expected [Slow]", func() {
 
 			var (
 				csuiteD = complianceSuiteDescription{
@@ -2505,7 +2504,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("Author:pdhamdhe-High-41093-Medium-44944-The instructions should be available for all rules in cis profiles and The nodeName shows in target and fact:identifier elements of complianceScan XCCDF format result [Slow]", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-41093-Medium-44944-The instructions should be available for all rules in cis profiles and The nodeName shows in target and fact:identifier elements of complianceScan XCCDF format result [Slow]", func() {
 			var (
 				ssb = scanSettingBindingDescription{
 					name:            "cis-instruction",
@@ -2542,7 +2541,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("Author:pdhamdhe-High-47044-Verify the ocp4 moderate profiles perform scan as expected with default scanSettings [Slow]", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-47044-Verify the ocp4 moderate profiles perform scan as expected with default scanSettings [Slow]", func() {
 			var (
 				ssb = scanSettingBindingDescription{
 					name:            "moderate-test",
@@ -2580,7 +2579,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("Author:pdhamdhe-Low-42695-Verify the manual remediation for rule ocp4-moderate-compliancesuite-exists works as expected [Slow]", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:pdhamdhe-Low-42695-Verify the manual remediation for rule ocp4-moderate-compliancesuite-exists works as expected [Slow]", func() {
 
 			var (
 				ssb = scanSettingBindingDescription{
@@ -2727,7 +2726,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("Author:pdhamdhe-Low-42960-Low-43098-Check that TokenMaxAge and TokenInactivityTimeout are configurable for oauthclient objects [Disruptive][Slow]", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:pdhamdhe-Low-42960-Low-43098-Check that TokenMaxAge and TokenInactivityTimeout are configurable for oauthclient objects [Disruptive][Slow]", func() {
 
 			var (
 				ssb = scanSettingBindingDescription{
@@ -2821,7 +2820,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("Author:pdhamdhe-Low-42685-Low-46927-check the manual remediation for rules file-integrity-exists and file-integrity-notification-enabled working as expected [Slow]", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:pdhamdhe-Low-42685-Low-46927-check the manual remediation for rules file-integrity-exists and file-integrity-notification-enabled working as expected [Slow]", func() {
 			var (
 				ssb = scanSettingBindingDescription{
 					name:            "moderate-test",
@@ -3277,7 +3276,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("Author:pdhamdhe-High-41153-There are OpenSCAP checks created to verify that the cluster is compliant  for the section 5 of the Kubernetes CIS profile [Slow]", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-41153-There are OpenSCAP checks created to verify that the cluster is compliant  for the section 5 of the Kubernetes CIS profile [Slow]", func() {
 			var (
 				ssb = scanSettingBindingDescription{
 					name:            "cis-test",
@@ -3634,7 +3633,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("Author:pdhamdhe-High-46991-Check the PCI DSS compliance profiles perform scan as expected with default scanSettings [Slow]", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-46991-Check the PCI DSS compliance profiles perform scan as expected with default scanSettings [Slow]", func() {
 			var (
 				ssb = scanSettingBindingDescription{
 					name:            "pci-dss-test",
@@ -3672,7 +3671,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("Author:pdhamdhe-High-43066-check the metrics and alerts are available for Compliance Operator [Slow]", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-43066-check the metrics and alerts are available for Compliance Operator [Slow]", func() {
 			var (
 				ssb = scanSettingBindingDescription{
 					name:            "cis-test",
@@ -3719,7 +3718,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("ConnectedOnly-Author:pdhamdhe-Low-43072-check the metrics and alerts are available for compliance_operator_compliance_scan_error_total [Slow]", func() {
+		g.It("ARO-ConnectedOnly-Author:pdhamdhe-Low-43072-check the metrics and alerts are available for compliance_operator_compliance_scan_error_total [Slow]", func() {
 			var (
 				csuiteD = complianceSuiteDescription{
 					name:         "worker-compliancesuite",
@@ -4101,7 +4100,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("Author:pdhamdhe-Medium-47173-Verify the rule that check for API Server audit error alerts [Slow]", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:pdhamdhe-Medium-47173-Verify the rule that check for API Server audit error alerts [Slow]", func() {
 			var (
 				ssb = scanSettingBindingDescription{
 					name:            "ocp4-moderate-test",
@@ -4164,7 +4163,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("Author:pdhamdhe-Medium-47373-Low-47371-Enable TailoredProfiles without extending a Profile and also validate that title and description [Slow]", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:pdhamdhe-Medium-47373-Low-47371-Enable TailoredProfiles without extending a Profile and also validate that title and description [Slow]", func() {
 			var (
 				tprofileDN = tailoredProfileWithoutVarDescription{
 					name:         "new-profile-node",
@@ -4287,7 +4286,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("Author:pdhamdhe-Medium-47148-Check file and directory permissions for apiserver audit logs [Slow]", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:pdhamdhe-Medium-47148-Check file and directory permissions for apiserver audit logs [Slow]", func() {
 			var (
 				ssb = scanSettingBindingDescription{
 					name:            "ocp4-moderate-test",
@@ -4335,7 +4334,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		})
 
 		// author: xiyuan@redhat.com
-		g.It("Author:xiyuan-Medium-47162-Check if the XCCDF variable values are getting render in the compliance rules", func() {
+		g.It("ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-47162-Check if the XCCDF variable values are getting render in the compliance rules", func() {
 			keywordsInstr := "min-request-timeout.*3600"
 			keywordsAnnot := "compliance.openshift.io/rule-variable.*var-api-min-request-timeout"
 			keywordsVariableValue := "3600"
