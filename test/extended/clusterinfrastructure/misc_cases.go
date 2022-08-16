@@ -1,6 +1,8 @@
 package clusterinfrastructure
 
 import (
+	"path/filepath"
+	"regexp"
 	"strings"
 
 	g "github.com/onsi/ginkgo"
@@ -38,6 +40,39 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			} else if strings.Compare(envMapi, "HTTP_PROXY") != 0 {
 				g.By("machine-api does not uses cluster proxy")
 				e2e.Failf("For more details refer - BZ 1896704")
+			}
+		}
+	})
+
+	// author: huliu@redhat.com
+	g.It("Author:huliu-Low-34718-Node labels and Affinity definition in PV should match", func() {
+		miscBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "misc")
+		pvcTemplate := filepath.Join(miscBaseDir, "pvc34718.yaml")
+		podTemplate := filepath.Join(miscBaseDir, "pod34718.yaml")
+		pvc := pvcDescription{
+			storageSize: "1Gi",
+			template:    pvcTemplate,
+		}
+		podName := "task-pv-pod"
+		pod := exutil.Pod{Name: podName, Namespace: "openshift-machine-api", Template: podTemplate, Parameters: []string{}}
+
+		g.By("Create pvc")
+		defer pvc.deletePvc(oc)
+		pvc.createPvc(oc)
+		g.By("Create pod")
+		defer pod.Delete(oc)
+		pod.Create(oc)
+
+		nodeName, _ := exutil.GetPodNodeName(oc, "openshift-machine-api", podName)
+		getNodeLabels, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.metadata.labels}", "-n", "openshift-machine-api").Output()
+		desribePv, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pv", "-n", "openshift-machine-api").Output()
+		if strings.Contains(getNodeLabels, `region":"`) && strings.Contains(desribePv, "region in ") {
+			g.By("Check region info")
+			compileRegex := regexp.MustCompile(`region":"(.*?)"`)
+			matchArr := compileRegex.FindStringSubmatch(getNodeLabels)
+			region := matchArr[len(matchArr)-1]
+			if !strings.Contains(desribePv, "region in ["+region+"]") {
+				e2e.Failf("Cannot get log region in [" + region + "]")
 			}
 		}
 	})
