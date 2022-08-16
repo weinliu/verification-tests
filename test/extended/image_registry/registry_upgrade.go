@@ -7,6 +7,8 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -191,7 +193,27 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "Image registry is degraded")
 		oc.SetupProject()
-		checkRegistryFunctionFine(oc, "prepare-24345", oc.Namespace())
+		err = oc.AsAdmin().WithoutNamespace().Run("new-build").Args("-D", "FROM quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "--to=prepare-24345", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForABuild(oc.BuildClient().BuildV1().Builds(oc.Namespace()), "prepare-24345-1", nil, nil, nil)
+		exutil.AssertWaitPollNoErr(err, "build is not complete")
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "prepare-24345", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		imagename := "image-registry.openshift-image-registry.svc:5000/" + oc.Namespace() + "/prepare-24345:latest"
+		err = oc.AsAdmin().WithoutNamespace().Run("run").Args("prepare-24345", "--image", imagename, "-n", oc.Namespace(), "--command", "--", "/bin/sleep", "120").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		errWait := wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
+			podList, _ := oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).List(metav1.ListOptions{LabelSelector: "run=prepare-24345"})
+			for _, pod := range podList.Items {
+				if pod.Status.Phase != corev1.PodRunning {
+					e2e.Logf("Continue to next round")
+					return false, nil
+				}
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "Pod can't be running")
 	})
 
 	// author: xiuwang@redhat.com
