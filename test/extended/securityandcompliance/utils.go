@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -30,6 +31,140 @@ type podModify struct {
 	nodeName  string
 	args      string
 	template  string
+}
+
+type seccompProfile struct {
+	name      string
+	namespace string
+	template  string
+}
+
+func createSecurityProfileOperator(oc *exutil.CLI, subD subscriptionDescription, ogD operatorGroupDescription) {
+	g.By("Create namespace security-profiles-operator !!!")
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", subD.namespace).Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", subD.namespace, "openshift.io/cluster-monitoring=true", "--overwrite").Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", subD.namespace, "pod-security.kubernetes.io/enforce=privileged", "--overwrite").Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", subD.namespace, "pod-security.kubernetes.io/audit=privileged", "--overwrite").Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", subD.namespace, "pod-security.kubernetes.io/warn=privileged", "--overwrite").Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+
+	g.By("Create operatorGroup !!!")
+	ogFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ogD.template, "-p", "NAME="+ogD.name, "NAMESPACE="+ogD.namespace, "-n", ogD.namespace).OutputToFile(getRandomString() + "og.json")
+	e2e.Logf("Created the operator-group yaml %s, %v", ogFile, err)
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", ogFile).Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+
+	g.By("Create subscription for above catalogsource !!!")
+	subFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", subD.template, "-p", "SUBNAME="+subD.subName, "SUBNAMESPACE="+subD.namespace, "CHANNEL="+subD.channel, "APPROVAL="+subD.ipApproval,
+		"OPERATORNAME="+subD.operatorPackage, "SOURCENAME="+subD.catalogSourceName, "SOURCENAMESPACE="+subD.catalogSourceNamespace, "STARTINGCSV="+subD.startingCSV, "-n", subD.namespace).OutputToFile(getRandomString() + "sub.json")
+	e2e.Logf("Created the subscription yaml %s, %v", subFile, err)
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subFile).Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+
+	msg, err = subscriptionIsFinished(oc, subD)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	g.By("Check Security Profile Operator &webhook &spod pods are in running state !!!")
+	workerCount := getWorkerCount(oc)
+	nodeCount := getNodeCount(oc)
+	checkReadyPodCountOfDeployment(oc, "security-profiles-operator", subD.namespace, workerCount)
+	checkReadyPodCountOfDeployment(oc, "security-profiles-operator-webhook", subD.namespace, workerCount)
+	checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+
+	g.By("Security Profiles Operator sucessfully installed !!! ")
+}
+
+func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg string, err error) {
+	var (
+		csvName string
+	)
+
+	g.By("Check the operator is AtLatestKnown !!!")
+	errCheck := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}").Output()
+		e2e.Logf("operator state %v, err %v", msg, err)
+		if strings.Compare(msg, "AtLatestKnown") == 0 {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("subscription %v is not correct status in ns %v", sub.subName, sub.namespace))
+
+	g.By("Get csvName to check its finish !!!")
+	csvName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installedCSV}").Output()
+	e2e.Logf("csvName %v, err %v", csvName, err)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	g.By("Check the csv '" + csvName + "' has finished !!!")
+	errCheck = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", sub.namespace, "-o=jsonpath={.status.phase}{.status.reason}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Compare(msg, "SucceededInstallSucceeded") == 0 {
+			return true, nil
+		}
+		return false, nil
+	})
+	e2e.Logf("csv %v status :  %v, err %v", csvName, msg, err)
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status in ns %v: %v %v", csvName, sub.namespace, msg, err))
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "--no-headers").Output()
+	return msg, err
+}
+
+func deleteNamespace(oc *exutil.CLI, namespace string) {
+	e2e.Logf("Start to delete namespace : %s", namespace)
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", namespace, "--ignore-not-found").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func getWorkerCount(oc *exutil.CLI) int {
+	workerNodeDetails, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	nodeCount := int(strings.Count(workerNodeDetails, "Ready")) + int(strings.Count(workerNodeDetails, "NotReady"))
+	e2e.Logf("Worker node details are: %v", workerNodeDetails)
+	e2e.Logf("Worker node count is: %d", nodeCount)
+	return nodeCount
+}
+
+func getNodeCount(oc *exutil.CLI) int {
+	RhcosNodeDetails, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node.openshift.io/os_id=rhcos").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	rhcosCount := int(strings.Count(RhcosNodeDetails, "Ready")) + int(strings.Count(RhcosNodeDetails, "NotReady"))
+	e2e.Logf("rhcos node details are: %v", RhcosNodeDetails)
+	e2e.Logf("rhcos node count is: %d", rhcosCount)
+	return rhcosCount
+}
+
+func checkReadyPodCountOfDeployment(oc *exutil.CLI, name string, namespace string, readyCount int) {
+	err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		rCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", name, "-n", namespace, "-o=jsonpath={.status.availableReplicas}").Output()
+		e2e.Logf("the availableReplicas of deployment %s : %v", name, rCount)
+		if strings.Compare(strconv.Itoa(readyCount), rCount) == 0 {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Check failed: the ready pod count is not expected count [ %d ]", readyCount))
+}
+
+func checkReadyPodCountOfDaemonset(oc *exutil.CLI, name string, namespace string, readyCount int) {
+	err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		rCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", name, "-n", namespace, "-o=jsonpath={.status.numberReady}").Output()
+		e2e.Logf("the numberReady of daemonset %s : %v", name, rCount)
+		if strings.Compare(strconv.Itoa(readyCount), rCount) == 0 {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Check failed: the ready pod count is not expected count [%d] ", readyCount))
+}
+
+func (secProfile *seccompProfile) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", secProfile.template, "-p", "NAME="+secProfile.name, "NAMESPACE="+secProfile.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func (fi1 *fileintegrity) checkFileintegrityStatus(oc *exutil.CLI, expected string) {
