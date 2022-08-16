@@ -29,11 +29,12 @@ type ingctrlNodePortDescription struct {
 }
 
 type ipfailoverDescription struct {
-	name      string
-	namespace string
-	image     string
-	vip       string
-	template  string
+	name        string
+	namespace   string
+	image       string
+	vip         string
+	HAInterface string
+	template    string
 }
 
 type routeDescription struct {
@@ -314,7 +315,7 @@ func (ipf *ipfailoverDescription) create(oc *exutil.CLI, ns string) {
 	_, err = oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "ipfailover").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	// create the ipfailover deployment
-	err = createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ipf.template, "-p", "NAME="+ipf.name, "NAMESPACE="+ipf.namespace, "IMAGE="+ipf.image)
+	err = createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ipf.template, "-p", "NAME="+ipf.name, "NAMESPACE="+ipf.namespace, "IMAGE="+ipf.image, "HAINTERFACE="+ipf.HAInterface)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -918,4 +919,22 @@ func checkProxy(oc *exutil.CLI) bool {
 		return true
 	}
 	return false
+}
+
+// this function will advertise unicast peers for Nutanix
+func unicastIPFailover(oc *exutil.CLI, ns, failoverName string) {
+	platformtype := exutil.CheckPlatform(oc)
+
+	if platformtype == "nutanix" {
+		workerIPAddress, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-ojsonpath={.items[*].status.addresses[0].address}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		modifiedIPList := strings.Split(workerIPAddress, " ")
+		if len(modifiedIPList) < 2 {
+			e2e.Failf("There is not enough IP addresses to add as unicast peer")
+		}
+		ipList := strings.Join(modifiedIPList, ",")
+		cmd := fmt.Sprintf("OPENSHIFT_HA_UNICAST_PEERS=%v", ipList)
+		setEnvVariable(oc, ns, "deploy/"+failoverName, "OPENSHIFT_HA_USE_UNICAST=true")
+		setEnvVariable(oc, ns, "deploy/"+failoverName, cmd)
+	}
 }

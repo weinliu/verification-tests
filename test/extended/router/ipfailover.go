@@ -2,6 +2,7 @@ package router
 
 import (
 	"path/filepath"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo"
@@ -14,19 +15,29 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("router-ipfailover", exutil.KubeConfigPath())
+	var HAInterfaces = "br-ex"
 
 	g.BeforeEach(func() {
 		g.By("Check platforms")
-		platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		platformtype := exutil.CheckPlatform(oc)
 		platforms := map[string]bool{
-			// 'None' for Baremetal
-			"None":      true,
-			"VSphere":   true,
-			"OpenStack": true,
+			// 'None' also for Baremetal
+			"none":      true,
+			"baremetal": true,
+			"vsphere":   true,
+			"openstack": true,
+			"nutanix":   true,
 		}
 		if !platforms[platformtype] {
 			g.Skip("Skip for non-supported platform")
+		}
+	})
+
+	g.JustBeforeEach(func() {
+		g.By("Check network type")
+		networkType := exutil.CheckNetworkType(oc)
+		if strings.Contains(networkType, "openshiftsdn") {
+			HAInterfaces = "ens3"
 		}
 	})
 
@@ -37,19 +48,20 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		customTemp := filepath.Join(buildPruningBaseDir, "ipfailover.yaml")
 		var (
 			ipf = ipfailoverDescription{
-				name:      "ipf-41025",
-				namespace: "",
-				image:     "",
-				template:  customTemp,
+				name:        "ipf-41025",
+				namespace:   "",
+				image:       "",
+				HAInterface: HAInterfaces,
+				template:    customTemp,
 			}
 		)
 
 		g.By("get pull spec of ipfailover image from payload")
-		oc.SetupProject()
 		ipf.image = getImagePullSpecFromPayload(oc, "keepalived-ipfailover")
 		ipf.namespace = oc.Namespace()
 		g.By("create ipfailover deployment and ensure one of pod enter MASTER state")
 		ipf.create(oc, oc.Namespace())
+		unicastIPFailover(oc, oc.Namespace(), ipf.name)
 		err := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		exutil.AssertWaitPollNoErr(err, "the pod with ipfailover=hello-openshift Ready status not met")
 		ensureIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
@@ -62,32 +74,32 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		customTemp := filepath.Join(buildPruningBaseDir, "ipfailover.yaml")
 		var (
 			ipf = ipfailoverDescription{
-				name:      "ipf-41028",
-				namespace: "",
-				image:     "",
-				template:  customTemp,
+				name:        "ipf-41028",
+				namespace:   "",
+				image:       "",
+				HAInterface: HAInterfaces,
+				template:    customTemp,
 			}
 		)
 
 		g.By("get pull spec of ipfailover image from payload")
-		oc.SetupProject()
 		ipf.image = getImagePullSpecFromPayload(oc, "keepalived-ipfailover")
 		ipf.namespace = oc.Namespace()
 		g.By("create ipfailover deployment and ensure one of pod enter MASTER state")
 		ipf.create(oc, oc.Namespace())
+		unicastIPFailover(oc, oc.Namespace(), ipf.name)
 		err := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		exutil.AssertWaitPollNoErr(err, "the pod with ipfailover=hello-openshift Ready status not met")
 
 		g.By("set the HA virtual IP for the failover group")
 		podName := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
-		ipv4Address := getPodv4Address(oc, oc.Namespace(), podName[0])
+		ipv4Address := getPodv4Address(oc, podName[0], oc.Namespace())
 		virtualIP := replaceIPOctet(ipv4Address, 3, "100")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_VIRTUAL_IPS="+virtualIP)
 
 		g.By("set other ipfailover env varibales")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_CONFIG_NAME=IPFailover")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_VIP_GROUPS=4")
-		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_NETWORK_INTERFACE=ens1")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_MONITOR_PORT=30061")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_VRRP_ID_OFFSET=2")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_REPLICA_COUNT=3")
@@ -110,7 +122,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		result := describePod(oc, oc.Namespace(), newPodName[0])
 		o.Expect(result).To(o.ContainSubstring("OPENSHIFT_HA_VIP_GROUPS:         4"))
 		o.Expect(result).To(o.ContainSubstring("OPENSHIFT_HA_CONFIG_NAME:        IPFailover"))
-		o.Expect(result).To(o.ContainSubstring("OPENSHIFT_HA_NETWORK_INTERFACE:  ens1"))
 		o.Expect(result).To(o.ContainSubstring("OPENSHIFT_HA_MONITOR_PORT:       30061"))
 		o.Expect(result).To(o.ContainSubstring("OPENSHIFT_HA_VRRP_ID_OFFSET:     2"))
 		o.Expect(result).To(o.ContainSubstring("OPENSHIFT_HA_REPLICA_COUNT:      3"))
@@ -126,23 +137,27 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	// author: mjoseph@redhat.com
 	// might conflict with other ipfailover cases so set it as Serial
 	g.It("Author:mjoseph-ConnectedOnly-Medium-41029-ipfailover can support up to a maximum of 255 VIPs for the entire cluster [Serial]", func() {
+		if exutil.CheckPlatform(oc) == "nutanix" {
+			g.Skip("This test will not works for Nutanix")
+		}
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ipfailover.yaml")
 		var (
 			ipf = ipfailoverDescription{
-				name:      "ipf-41029",
-				namespace: "",
-				image:     "",
-				template:  customTemp,
+				name:        "ipf-41029",
+				namespace:   "",
+				image:       "",
+				HAInterface: HAInterfaces,
+				template:    customTemp,
 			}
 		)
 
 		g.By("get pull spec of ipfailover image from payload")
-		oc.SetupProject()
 		ipf.image = getImagePullSpecFromPayload(oc, "keepalived-ipfailover")
 		ipf.namespace = oc.Namespace()
 		g.By("create ipfailover deployment and ensure one of pod enter MASTER state")
 		ipf.create(oc, oc.Namespace())
+		unicastIPFailover(oc, oc.Namespace(), ipf.name)
 		err := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		exutil.AssertWaitPollNoErr(err, "the pod with ipfailover=hello-openshift Ready status not met")
 
@@ -167,25 +182,26 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		customTemp := filepath.Join(buildPruningBaseDir, "ipfailover.yaml")
 		var (
 			ipf = ipfailoverDescription{
-				name:      "ipf-41027",
-				namespace: "",
-				image:     "",
-				template:  customTemp,
+				name:        "ipf-41027",
+				namespace:   "",
+				image:       "",
+				HAInterface: HAInterfaces,
+				template:    customTemp,
 			}
 		)
 		g.By("get pull spec of ipfailover image from payload")
-		oc.SetupProject()
 		ipf.image = getImagePullSpecFromPayload(oc, "keepalived-ipfailover")
 		ipf.namespace = oc.Namespace()
 		g.By("create ipfailover deployment and ensure one of pod enter MASTER state")
 		ipf.create(oc, oc.Namespace())
+		unicastIPFailover(oc, oc.Namespace(), ipf.name)
 		err := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		exutil.AssertWaitPollNoErr(err, "the pod with ipfailover=hello-openshift Ready status not met")
 		ensureIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
 
 		g.By("set the HA virtual IP for the failover group")
 		podNames := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
-		ipv4Address := getPodv4Address(oc, oc.Namespace(), podNames[0])
+		ipv4Address := getPodv4Address(oc, podNames[0], oc.Namespace())
 		virtualIP := replaceIPOctet(ipv4Address, 3, "100")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_VIRTUAL_IPS="+virtualIP)
 
@@ -215,25 +231,26 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		customTemp := filepath.Join(buildPruningBaseDir, "ipfailover.yaml")
 		var (
 			ipf = ipfailoverDescription{
-				name:      "ipf-41030",
-				namespace: "",
-				image:     "",
-				template:  customTemp,
+				name:        "ipf-41030",
+				namespace:   "",
+				image:       "",
+				HAInterface: HAInterfaces,
+				template:    customTemp,
 			}
 		)
 		g.By("get pull spec of ipfailover image from payload")
-		oc.SetupProject()
 		ipf.image = getImagePullSpecFromPayload(oc, "keepalived-ipfailover")
 		ipf.namespace = oc.Namespace()
 		g.By("create ipfailover deployment and ensure one of pod enter MASTER state")
 		ipf.create(oc, oc.Namespace())
+		unicastIPFailover(oc, oc.Namespace(), ipf.name)
 		err := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		exutil.AssertWaitPollNoErr(err, "the pod with ipfailover=hello-openshift Ready status not met")
 		ensureIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
 
 		g.By("set the HA virtual IP for the failover group")
 		podNames := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
-		ipv4Address := getPodv4Address(oc, oc.Namespace(), podNames[0])
+		ipv4Address := getPodv4Address(oc, podNames[0], oc.Namespace())
 		virtualIP := replaceIPOctet(ipv4Address, 3, "100")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_VIRTUAL_IPS="+virtualIP)
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `OPENSHIFT_HA_PREEMPTION=preempt_delay 60`)
@@ -274,19 +291,20 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		customTemp := filepath.Join(buildPruningBaseDir, "ipfailover.yaml")
 		var (
 			ipf = ipfailoverDescription{
-				name:      "ipf-49214",
-				namespace: "",
-				image:     "",
-				template:  customTemp,
+				name:        "ipf-49214",
+				namespace:   "",
+				image:       "",
+				HAInterface: HAInterfaces,
+				template:    customTemp,
 			}
 		)
 
 		g.By("get pull spec of ipfailover image from payload")
-		oc.SetupProject()
 		ipf.image = getImagePullSpecFromPayload(oc, "keepalived-ipfailover")
 		ipf.namespace = oc.Namespace()
 		g.By("create ipfailover deployment and ensure one of pod enter MASTER state")
 		ipf.create(oc, oc.Namespace())
+		unicastIPFailover(oc, oc.Namespace(), ipf.name)
 		err := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		exutil.AssertWaitPollNoErr(err, "the pod with ipfailover=hello-openshift Ready status not met")
 

@@ -53,7 +53,7 @@ objects:
           - name: OPENSHIFT_HA_VIP_GROUPS
             value: "10"
           - name: OPENSHIFT_HA_NETWORK_INTERFACE
-            value: "eth0"
+            value: ${HAINTERFACE}
           - name: OPENSHIFT_HA_MONITOR_PORT
             value: ${MONITORPORT}
           - name: OPENSHIFT_HA_VRRP_ID_OFFSET
@@ -90,3 +90,4 @@ parameters:
   value: "192.168.123.123"
 - name: MONITORPORT
   value: "22"
+- name: HAINTERFACE
