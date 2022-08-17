@@ -29,7 +29,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: liangli@redhat.com
-	g.It("NonPreRelease-Author:liangli-Critical-42718-[HyperShiftINSTALL] Create a hosted cluster on aws using hypershift tool [Serial]", func() {
+	g.It("Longduration-NonPreRelease-Author:liangli-Critical-42718-[HyperShiftINSTALL] Create a hosted cluster on aws using hypershift tool [Serial]", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 42718 is for AWS - skipping test ...")
 		}
@@ -54,7 +54,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		g.By("create HostedClusters")
 		createCluster := installHelper.createClusterAWSCommonBuilder().
-			withName("cluster-" + caseID).
+			withName("hypershift-" + caseID).
 			withNodePoolReplicas(2)
 		defer installHelper.destroyAWSHostedClusters(createCluster)
 		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
@@ -65,13 +65,13 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: liangli@redhat.com
-	g.It("NonPreRelease-Author:liangli-Critical-42866-[HyperShiftINSTALL] Create HostedCluster infrastructure on AWS by using Hypershift CLI [Serial]", func() {
+	g.It("Longduration-NonPreRelease-Author:liangli-Critical-42866-[HyperShiftINSTALL] Create HostedCluster infrastructure on AWS by using Hypershift CLI [Serial]", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 42866 is for AWS - skipping test ...")
 		}
 		caseID := "42866"
 		dir := "/tmp/hypershift" + caseID
-		clusterName := "cluster-" + caseID
+		clusterName := "hypershift-" + caseID
 		defer os.RemoveAll(dir)
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -121,13 +121,13 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: liangli@redhat.com
-	g.It("NonPreRelease-Author:liangli-Critical-42867-[HyperShiftINSTALL] Create iam and infrastructure repeatedly with the same infra-id on aws [Serial]", func() {
+	g.It("Longduration-NonPreRelease-Author:liangli-Critical-42867-[HyperShiftINSTALL] Create iam and infrastructure repeatedly with the same infra-id on aws [Serial]", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 42867 is for AWS - skipping test ...")
 		}
 		caseID := "42867"
 		dir := "/tmp/hypershift" + caseID
-		clusterName := "cluster-" + caseID
+		clusterName := "hypershift-" + caseID
 		defer os.RemoveAll(dir)
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -209,13 +209,13 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		g.By("create aws HostedClusters 1")
 		createCluster1 := installHelper.createClusterAWSCommonBuilder().
-			withName("cluster-" + caseID + "-1").
+			withName("hypershift-" + caseID + "-1").
 			withNodePoolReplicas(1)
 		defer installHelper.deleteHostedClustersManual(createCluster1)
 		hostedCluster1 := installHelper.createAWSHostedClusters(createCluster1)
 		g.By("create aws HostedClusters 2")
 		createCluster2 := installHelper.createClusterAWSCommonBuilder().
-			withName("cluster-" + caseID + "-2").
+			withName("hypershift-" + caseID + "-2").
 			withNodePoolReplicas(1)
 		defer installHelper.deleteHostedClustersManual(createCluster2)
 		hostedCluster2 := installHelper.createAWSHostedClusters(createCluster2)
@@ -232,5 +232,57 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			e2e.Logf("deletionTimestamp1:%s, deletionTimestamp2:%s", deletionTimestamp1, deletionTimestamp2)
 			return strings.Compare(deletionTimestamp1, deletionTimestamp2)
 		}, ShortTimeout, ShortTimeout/10).Should(o.Equal(0), "destroy AWS HostedClusters asynchronously error")
+	})
+
+	// author: liangli@redhat.com
+	g.It("Longduration-NonPreRelease-Author:liangli-Critical-44924-[HyperShiftINSTALL] Test multi-zonal control plane components spread with HA mode enabled [Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 44924 is for AWS - skipping test ...")
+		}
+		caseID := "44924"
+		dir := "/tmp/hypershift" + caseID
+		clusterName := "hypershift-" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Config Bucket")
+		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
+		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir}
+		installHelper.newAWSS3Client()
+		defer installHelper.deleteAWSS3Bucket()
+		installHelper.createAWSS3Bucket()
+
+		g.By("install HyperShift operator")
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+		g.By("extract secret/pull-secret")
+		installHelper.extractPullSecret()
+
+		g.By("create HostedClusters")
+		createCluster := installHelper.createClusterAWSCommonBuilder().
+			withName(clusterName).
+			withNodePoolReplicas(2)
+		defer installHelper.deleteHostedClustersManual(createCluster)
+		hostedCluster := installHelper.createAWSHostedClustersRender(createCluster, func(filename string) error {
+			g.By("Set HighlyAvailable mode")
+			return replaceInFile(filename, "SingleReplica", "HighlyAvailable")
+		})
+
+		g.By("Check if pods of multi-zonal control plane components spread across multi-zone")
+		deploymentNames, err := hostedCluster.getHostedClustersHACPWorkloadNames("deployment")
+		for _, name := range deploymentNames {
+			value, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", hostedCluster.namespace+"-"+hostedCluster.name, name, `-ojsonpath={.spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[*].topologyKey}}`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf(fmt.Sprintf("deployment: %s: %s", name, value))
+			o.Expect(value).Should(o.ContainSubstring("topology.kubernetes.io/zone"), fmt.Sprintf("deployment: %s lack of anti-affinity of zone", name))
+		}
+		statefulSetNames, err := hostedCluster.getHostedClustersHACPWorkloadNames("statefulset")
+		for _, name := range statefulSetNames {
+			value, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("statefulset", "-n", hostedCluster.namespace+"-"+hostedCluster.name, name, `-ojsonpath={.spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[*].topologyKey}`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf(fmt.Sprintf("statefulSetNames: %s: %s", name, value))
+			o.Expect(value).Should(o.ContainSubstring("topology.kubernetes.io/zone"), fmt.Sprintf("statefulset: %s lack of anti-affinity of zone", name))
+		}
 	})
 })

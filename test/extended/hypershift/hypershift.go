@@ -666,62 +666,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Author:heli-Critical-44924-Test multi-zonal control plane components spread with HA mode enabled", func() {
-		g.By("hypershift OCP-44924-Test multi-zonal control plane components spread with HA mode enabled")
-
-		controlplaneMode := doOcpReq(oc, OcpGet, true, []string{"hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.spec.controllerAvailabilityPolicy}"})
-		e2e.Logf("get hostedcluster %s controllerAvailabilityPolicy: %s ", guestClusterName, controlplaneMode)
-		if controlplaneMode != "HighlyAvailable" {
-			g.Skip("this is for guest cluster HA mode testrun, skip...")
-		}
-
-		//deployment
-		controlplaneComponents := []string{
-			"kube-apiserver",
-			"oauth-openshift",
-			"openshift-oauth-apiserver",
-			"openshift-apiserver",
-			"capi-provider",
-			"cluster-api",
-			"cluster-policy-controller",
-			"ignition-server",
-			"kube-controller-manager",
-			"kube-scheduler",
-			"openshift-controller-manager",
-			"konnectivity-agent",
-			"packageserver",
-			//"certified-operators-catalog",
-			//"cluster-version-operator",
-			//"cluster-autoscaler",
-			//"control-plane-operator",
-			//"olm-operator",
-			//"etcd-operator",
-			//"konnectivity-server",
-			//"catalog-operator",
-			//"community-operators-catalog",
-			//"redhat-marketplace-catalog",
-			//"redhat-operators-catalog",
-			//"hosted-cluster-config-operator",
-		}
-
-		antiAffinityJSONPath := ".spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution"
-		topologyKeyJSONPath := antiAffinityJSONPath + "[*].topologyKey"
-		desiredTopogyKey := "topology.kubernetes.io/zone"
-
-		for _, c := range controlplaneComponents {
-			doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "deploy", c, "-ojsonpath={" + antiAffinityJSONPath + "}"})
-			res := doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "deploy", c, "-ojsonpath={" + topologyKeyJSONPath + "}"})
-			o.Expect(res).To(o.ContainSubstring(desiredTopogyKey))
-		}
-
-		//check etcd
-		etcdSts := "etcd"
-		doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "statefulset", etcdSts, "-ojsonpath={" + antiAffinityJSONPath + "}"})
-		res := doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "statefulset", etcdSts, "-ojsonpath={" + topologyKeyJSONPath + "}"})
-		o.Expect(res).To(o.ContainSubstring(desiredTopogyKey))
-	})
-
-	// author: heli@redhat.com
 	g.It("Author:heli-Critical-48025-Test EBS allocation for nodepool[Disruptive]", func() {
 		g.By("hypershift OCP-48025-Test EBS allocation for nodepool")
 

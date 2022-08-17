@@ -1,6 +1,7 @@
 package hypershift
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -281,4 +282,14 @@ func getJSONByFile(filePath string, path string) gjson.Result {
 	defer file.Close()
 	con, err := ioutil.ReadAll(file)
 	return gjson.Get(string(con), path)
+}
+
+func replaceInFile(file string, old string, new string) error {
+	input, err := ioutil.ReadFile(file)
+	if err != nil {
+		return err
+	}
+	output := bytes.Replace(input, []byte(old), []byte(new), -1)
+	err = ioutil.WriteFile(file, output, 0666)
+	return err
 }

@@ -230,18 +230,33 @@ func (receiver *installHelper) createAWSHostedClusters(createCluster *createClus
 	cmd := fmt.Sprintf("hypershift create cluster aws %s", strings.Join(vars, " "))
 	_, err = bashClient.Run(cmd).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
-	e2e.Logf("check AWS HostedClusters")
-	o.Eventually(func() string {
-		value, er := receiver.oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedclusters", "-n", createCluster.Namespace, "--ignore-not-found", createCluster.Name, `-ojsonpath='{.status.conditions[?(@.type=="Available")].status}'`).Output()
-		if er != nil {
-			e2e.Logf("error occurred: %v, try next round", er)
-			return ""
-		}
-		return value
-	}, ClusterInstallTimeout, ClusterInstallTimeout/10).Should(o.ContainSubstring("True"), "AWS HostedClusters install error")
-	os.Remove(createCluster.InfraJSON)
-	os.Remove(createCluster.IamJSON)
+	e2e.Logf("check AWS HostedClusters ready")
 	cluster := newHostedCluster(receiver.oc, createCluster.Namespace, createCluster.Name)
+	o.Eventually(cluster.pollHostedClustersReady(), ClusterInstallTimeout, ClusterInstallTimeout/10).Should(o.BeTrue(), "AWS HostedClusters install error")
+	infraID, err := cluster.getInfraID()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	createCluster.InfraID = infraID
+	return cluster
+}
+
+func (receiver *installHelper) createAWSHostedClustersRender(createCluster *createCluster, exec func(filename string) error) *hostedCluster {
+	vars, err := parse(createCluster)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	var bashClient = NewCmdClient().WithShowInfo(true)
+
+	yamlFile := fmt.Sprintf("%s/%s.yaml", receiver.dir, createCluster.Name)
+	_, err = bashClient.Run(fmt.Sprintf("hypershift create cluster aws %s --render > %s", strings.Join(vars, " "), yamlFile)).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	e2e.Logf("exec call-back func")
+	err = exec(yamlFile)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	e2e.Logf("apply -f Render...")
+	err = receiver.oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", yamlFile).Execute()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+
+	e2e.Logf("check AWS HostedClusters ready")
+	cluster := newHostedCluster(receiver.oc, createCluster.Namespace, createCluster.Name)
+	o.Eventually(cluster.pollHostedClustersReady(), ClusterInstallTimeout, ClusterInstallTimeout/10).Should(o.BeTrue(), "AWS HostedClusters install error")
 	infraID, err := cluster.getInfraID()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	createCluster.InfraID = infraID

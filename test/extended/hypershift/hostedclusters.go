@@ -51,6 +51,34 @@ func (h *hostedCluster) getClustersDeletionTimestamp() (string, error) {
 	return value, nil
 }
 
+func (h *hostedCluster) hostedClustersReady() (bool, error) {
+	value, er := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedclusters", "-n", h.namespace, "--ignore-not-found", h.name, `-ojsonpath='{.status.conditions[?(@.type=="Available")].status}'`).Output()
+	if er != nil {
+		e2e.Logf("error occurred: %v, try next round", er)
+		return false, er
+	}
+	if strings.Contains(value, "True") {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (h *hostedCluster) pollHostedClustersReady() func() bool {
+	return func() bool {
+		value, _ := h.hostedClustersReady()
+		return value
+	}
+}
+
+func (h *hostedCluster) getHostedClustersHACPWorkloadNames(workloadType string) ([]string, error) {
+	value, er := h.oc.AsAdmin().WithoutNamespace().Run("get").Args(workloadType, "-n", h.namespace+"-"+h.name, `-ojsonpath={.items[?(@.spec.replicas>1)].metadata.name}`).Output()
+	if er != nil {
+		e2e.Logf("get HA HostedClusters Workload Names, error occurred: %v", er)
+		return nil, er
+	}
+	return strings.Split(value, " "), nil
+}
+
 func getHostedClusters(oc *exutil.CLI, namespace string) (string, error) {
 	value, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedclusters", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 	if er != nil {
