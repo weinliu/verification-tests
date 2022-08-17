@@ -244,6 +244,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-Medium-48363-Machine providerID should be consistent with node providerID", func() {
 		g.By("Check machine providerID and node providerID are consistent")
+		exutil.SkipConditionally(oc)
 		machineList := exutil.ListAllMachineNames(oc)
 		for _, machineName := range machineList {
 			nodeName := exutil.GetNodeNameFromMachine(oc, machineName)
