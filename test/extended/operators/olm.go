@@ -1149,9 +1149,8 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			displayName: "OLM QE Operators",
 			publisher:   "Jian",
 			sourceType:  "grpc",
-			// use the digest in case wrong updates. quay.io/openshifttest/etcd-index:0.9.4-sa
-			address:  "quay.io/openshifttest/etcd-index@sha256:ba18c1d454c45ae470ed1e21b92b979ce85af845e95a0bf4390ee03017fb5768",
-			template: csImageTemplate,
+			address:     "quay.io/olmqe/etcd-index:33450",
+			template:    csImageTemplate,
 		}
 		dr := make(describerResrouce)
 		itName := g.CurrentGinkgoTestDescription().TestText
