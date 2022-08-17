@@ -43,7 +43,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-15413 [ISCSI] drain a node that is filled with iscsi volume mounts
-	g.It("Author:rdeore-High-15413-[ISCSI] drain a node that is filled with iscsi volume mounts [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-High-15413-[ISCSI] drain a node that is filled with iscsi volume mounts [Disruptive]", func() {
 		//Set the resource objects definition for the scenario
 		var (
 			scName = "iscsi-sc-" + getRandomString()
@@ -107,7 +107,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-52770 [ISCSI] Check iscsi multipath working
-	g.It("Author:rdeore-High-52770-[ISCSI] Check iscsi multipath working", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-High-52770-[ISCSI] Check iscsi multipath working", func() {
 		//Set the resource objects definition for the scenario
 		var (
 			scName      = "iscsi-sc-" + getRandomString()
@@ -186,7 +186,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-52835 [ISCSI] ISCSI with CHAP Authentication
-	g.It("Author:rdeore-High-52835-[ISCSI] ISCSI with CHAP Authentication", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-High-52835-[ISCSI] ISCSI with CHAP Authentication", func() {
 		if checkFips(oc) {
 			g.Skip("iSCSI CHAP Authentication is not supported in FIPS enabled env, skip test execution!!!")
 		}

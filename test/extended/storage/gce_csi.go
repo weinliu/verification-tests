@@ -38,7 +38,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: chaoyang@redhat.com
 	// [GKE-PD-CSI] [Dynamic Regional PV] regional pv should store data and sync in different avaiable zones
-	g.It("Author:chaoyang-Critical-37490-[GKE-PD-CSI] regional pv should store data and sync in different avaiable zones", func() {
+	g.It("OSD_CCS-Author:chaoyang-Critical-37490-[GKE-PD-CSI] regional pv should store data and sync in different avaiable zones", func() {
 		var (
 			storageClass = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("pd.csi.storage.gke.io"))
 			// Regional diskDisk size minim size is 200 GB
@@ -100,7 +100,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: chaoyang@redhat.com
 	// [GKE-PD-CSI] [Dynamic Regional PV]Provision region pv with allowedTopologies
-	g.It("Author:chaoyang-High-37514-[GKE-PD-CSI] Check provisioned region pv with allowedTopologies", func() {
+	g.It("OSD_CCS-Author:chaoyang-High-37514-[GKE-PD-CSI] Check provisioned region pv with allowedTopologies", func() {
 		zones := getZonesFromWorker(oc)
 		if len(zones) < 2 {
 			g.Skip("Have less than 2 zones - skipping test ... ")
@@ -166,7 +166,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	caseIds := []string{"51150", "51151", "51152", "51153"}
 	for i := 0; i < len(caseIds); i++ {
 		volumeType := gcpPDvolTypeTestSuit[caseIds[i]]
-		g.It("Author:chaoyang-High-"+caseIds[i]+"-[GCP-PD-CSI] [VOLUME-TYPES] dynamic "+volumeType+" type pd volume should store data and allow exec of files", func() {
+		g.It("OSD_CCS-Author:chaoyang-High-"+caseIds[i]+"-[GCP-PD-CSI] [VOLUME-TYPES] dynamic "+volumeType+" type pd volume should store data and allow exec of files", func() {
 			var (
 				storageClassParameters = map[string]string{
 					"replication-type": "none",
@@ -204,7 +204,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	}
 
 	// author: chaoyang@redhat.com
-	g.It("Author:chaoyang-Critical-51995-[GCE-PD-CSI] [Snapshot] Provision image disk snapshot and restore successfully", func() {
+	g.It("OSD_CCS-Author:chaoyang-Critical-51995-[GCE-PD-CSI] [Snapshot] Provision image disk snapshot and restore successfully", func() {
 		var (
 			volumeSnapshotClassTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshotclass-template.yaml")
 			volumesnapshotTemplate      = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")

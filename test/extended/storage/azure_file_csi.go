@@ -41,7 +41,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-50377-[Azure-File-CSI-Driver] support using resource group in storageclass
-	g.It("Author:wduan-High-50377-[Azure-File-CSI-Driver] support using resource group in storageclass", func() {
+	g.It("ARO-Author:wduan-High-50377-[Azure-File-CSI-Driver] support using resource group in storageclass", func() {
 		// Set up a specified project share for all the phases
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
@@ -87,7 +87,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-50360 - [Azure-File-CSI-Driver] support using storageAccount in storageclass
-	g.It("Author:wduan-High-50360-[Azure-File-CSI-Driver] support using storageAccount in storageclass", func() {
+	g.It("ARO-Author:wduan-High-50360-[Azure-File-CSI-Driver] support using storageAccount in storageclass", func() {
 		// Set up a specified project share for all the phases
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
@@ -133,7 +133,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-50471 - [Azure-File-CSI-Driver] support using sharename in storageclass
-	g.It("Author:wduan-High-50471-[Azure-File-CSI-Driver] support using sharename in storageclass", func() {
+	g.It("ARO-Author:wduan-High-50471-[Azure-File-CSI-Driver] support using sharename in storageclass", func() {
 		// Set up a specified project share for all the phases
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
@@ -195,7 +195,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	for i := 0; i < len(caseIds); i++ {
 		skuName := azureSkuNamesCaseIDMap[caseIds[i]]
 
-		g.It("Author:rdeore-High-"+caseIds[i]+"-[Azure-File-CSI-Driver] [SKU-NAMES] support different skuName in storageclass with "+skuName, func() {
+		g.It("ARO-Author:rdeore-High-"+caseIds[i]+"-[Azure-File-CSI-Driver] [SKU-NAMES] support different skuName in storageclass with "+skuName, func() {
 			region := getClusterRegion(oc)
 			supportRegions := []string{"westus2", "westeurope", "northeurope", "francecentral"}
 			if strings.Contains(skuName, "ZRS") && !contains(supportRegions, region) {
@@ -254,7 +254,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-50634 -[Azure-File-CSI-Driver] fail to provision Block volumeMode
-	g.It("Author:rdeore-High-50634-[Azure-File-CSI-Driver] fail to provision Block volumeMode", func() {
+	g.It("ARO-Author:rdeore-High-50634-[Azure-File-CSI-Driver] fail to provision Block volumeMode", func() {
 		// Set the resource template for the scenario
 		var (
 			provisioner = "file.csi.azure.com"
@@ -287,7 +287,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-50732 - [Azure-File-CSI-Driver] specify shareNamePrefix in storageclass
-	g.It("Author:wduan-Medium-50732-[Azure-File-CSI-Driver] specify shareNamePrefix in storageclass", func() {
+	g.It("ARO-Author:wduan-Medium-50732-[Azure-File-CSI-Driver] specify shareNamePrefix in storageclass", func() {
 		// Set up a specified project share for all the phases
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
@@ -334,7 +334,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-50919 - [Azure-File-CSI-Driver] support smb file share protocol
-	g.It("Author:wduan-High-50919-[Azure-File-CSI-Driver] support smb file share protocol", func() {
+	g.It("ARO-Author:wduan-High-50919-[Azure-File-CSI-Driver] support smb file share protocol", func() {
 		// Set up a specified project share for all the phases
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
@@ -379,7 +379,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-50918 - [Azure-File-CSI-Driver] support nfs file share protocol
-	g.It("Author:wduan-High-50918-[Azure-File-CSI-Driver] support nfs file share protocol", func() {
+	g.It("ARO-Author:wduan-High-50918-[Azure-File-CSI-Driver] support nfs file share protocol", func() {
 		// Set up a specified project share for all the phases
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
