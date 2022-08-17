@@ -4884,7 +4884,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 29723 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-api:v2",
+				address:     "quay.io/olmqe/olm-api:v4",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -4955,7 +4955,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 30762 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-api:v2",
+				address:     "quay.io/olmqe/olm-api:v4",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -5012,7 +5012,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 27683 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/mta-index:v0.0.5",
+				address:     "quay.io/olmqe/mta-index:v0.0.6",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -5082,7 +5082,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 24513 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-dep:v1-crdarg",
+				address:     "quay.io/olmqe/olm-dep:v2-crdarg",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -5228,7 +5228,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 25760 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-dep:vchannel-crdv1",
+				address:     "quay.io/olmqe/olm-dep:vchannel-crdv2",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -5292,7 +5292,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 35895 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-dep:vmtaduprol",
+				address:     "quay.io/olmqe/olm-dep:vmtaduprol2",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -5428,7 +5428,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "OLM 1933 v8 Operator Catalog",
 				publisher:   "QE",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-dep:v9",
+				address:     "quay.io/olmqe/olm-dep:v11",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -5487,7 +5487,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "OLM 1860185 Catalog",
 				publisher:   "QE",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-dep:v1860185-v1",
+				address:     "quay.io/olmqe/olm-dep:v1860185-v2",
 				template:    catsrcImageTemplate,
 			}
 			subStrimzi = subscriptionDescription{
@@ -5614,7 +5614,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 33176 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-api:v3",
+				address:     "quay.io/olmqe/olm-api:v5",
 				template:    catsrcImageTemplate,
 			}
 			subEtcd = subscriptionDescription{
@@ -5796,7 +5796,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 39897 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/mta-index:v0.0.5",
+				address:     "quay.io/olmqe/mta-index:v0.0.6",
 				template:    catsrcImageTemplate,
 			}
 			subMta = subscriptionDescription{
@@ -9379,7 +9379,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 				displayName: "OLM 21532 Catalog",
 				publisher:   "QE",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-dep:vcompos-v1",
+				address:     "quay.io/olmqe/olm-dep:vcompos-v2",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -9482,7 +9482,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 				displayName: "Test Catsrc 33241 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-api:v2",
+				address:     "quay.io/olmqe/olm-api:v4",
 				template:    catsrcImageTemplate,
 			}
 			subCockroachdb = subscriptionDescription{
