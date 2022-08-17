@@ -556,7 +556,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Check registry configs get updated")
 		masterNode, _ := exutil.GetFirstMasterNode(oc)
 		err := wait.Poll(25*time.Second, 2*time.Minute, func() (bool, error) {
-			output, err := exutil.DebugNodeWithChroot(oc, masterNode, "bash", "-c", "cat /etc/containers/registries.conf | grep fake.rhcloud.com")
+			output, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--to-namespace=default"}, "cat /etc/containers/registries.conf | grep fake.rhcloud.com")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if !strings.Contains(output, "fake.rhcloud.com") {
 				e2e.Logf("Continue to next round")
@@ -643,7 +643,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		masterNode, _ := exutil.GetFirstMasterNode(oc)
 		defer func() {
 			err := wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
-				regStatus, _ := exutil.DebugNodeWithChroot(oc, masterNode, "bash", "-c", "cat /etc/containers/registries.conf | grep \"docker.io\"")
+				regStatus, _ := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--to-namespace=default"}, "cat /etc/containers/registries.conf | grep \"docker.io\"")
 				if !strings.Contains(regStatus, "location = \"docker.io\"") {
 					e2e.Logf("registries.conf updated")
 					return true, nil
@@ -687,7 +687,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("registries.conf gets updated")
 		err = wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
-			registriesstatus, _ := exutil.DebugNodeWithChroot(oc, masterNode, "bash", "-c", "cat /etc/containers/registries.conf | grep default-route-openshift-image-registry.apps")
+			registriesstatus, _ := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--to-namespace=default"}, "cat /etc/containers/registries.conf | grep default-route-openshift-image-registry.apps")
 			if strings.Contains(registriesstatus, "default-route-openshift-image-registry.apps") {
 				e2e.Logf("registries.conf updated")
 				return true, nil
@@ -710,7 +710,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("registries.conf gets updated")
 		err = wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
-			registriesstatus, _ := exutil.DebugNodeWithChroot(oc, masterNode, "bash", "-c", "cat /etc/containers/registries.conf | grep \"docker.io\"")
+			registriesstatus, _ := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--to-namespace=default"}, "cat /etc/containers/registries.conf | grep \"docker.io\"")
 			if strings.Contains(registriesstatus, "location = \"docker.io\"") {
 				e2e.Logf("registries.conf updated")
 				return true, nil
@@ -1822,7 +1822,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(workerNodeErr).NotTo(o.HaveOccurred())
 		o.Expect(workerNode).NotTo(o.BeEmpty())
 		err := wait.Poll(10*time.Second, 3*time.Minute, func() (bool, error) {
-			selinuxStatus, statusErr := exutil.DebugNodeWithChroot(oc, workerNode, "cat", "/etc/crio/crio.conf.d/01-runtime-selinux.conf")
+			selinuxStatus, statusErr := exutil.DebugNodeWithOptionsAndChroot(oc, workerNode, []string{"--to-namespace=default"}, "cat", "/etc/crio/crio.conf.d/01-runtime-selinux.conf")
 			if statusErr == nil {
 				if strings.Contains(selinuxStatus, "io.kubernetes.cri-o.TrySkipVolumeSELinuxLabel") {
 					e2e.Logf("runtime-selinux.conf updated")
@@ -2536,7 +2536,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		// https://issues.redhat.com/browse/IR-192
 		//Since internal registry still not supports fat manifest, so skip test except x86_64
 		masterNode, _ := exutil.GetFirstMasterNode(oc)
-		output, archErr := exutil.DebugNodeWithChroot(oc, masterNode, "uname", "-m")
+		output, archErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--to-namespace=default"}, "uname", "-m")
 		o.Expect(archErr).NotTo(o.HaveOccurred())
 		if !strings.Contains(output, "x86_64") {
 			g.Skip("Skip test for non x86_64 arch image")
