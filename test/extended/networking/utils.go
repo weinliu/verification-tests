@@ -177,6 +177,10 @@ type egressPolicy struct {
 	cidrSelector string
 	template     string
 }
+type aclSettings struct {
+	DenySetting  string `json:"deny"`
+	AllowSetting string `json:"allow"`
+}
 
 func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
@@ -1786,4 +1790,10 @@ func getOVNLeaderPod(oc *exutil.CLI, ovndb string) string {
 	}
 
 	return ovnMasterPod
+}
+
+func (aclSettings *aclSettings) getJSONString() string {
+	jsonACLSetting, _ := json.Marshal(aclSettings)
+	annotationString := "k8s.ovn.org/acl-logging=" + string(jsonACLSetting)
+	return annotationString
 }

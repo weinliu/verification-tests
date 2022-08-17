@@ -1,8 +1,10 @@
 package networking
 
 import (
+	"fmt"
 	"net"
 	"path/filepath"
+	"strings"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
@@ -886,6 +888,142 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("Checking connectivity from pod3 to pod4")
 		CurlPod2PodPass(oc, ns1, "hello-pod3", ns1, "hello-pod4")
+
+	})
+
+	// author: asood@redhat.com
+	g.It("Author:asood-Medium-41082-Check ACL audit logs can be extracted", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			allowFromSameNS     = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-from-same-namespace.yaml")
+			ingressTypeFile     = filepath.Join(buildPruningBaseDir, "networkpolicy/default-deny-ingress.yaml")
+			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		)
+
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+		networkType := checkNetworkType(oc)
+		o.Expect(networkType).NotTo(o.BeEmpty())
+		if networkType != "ovnkubernetes" {
+			g.Skip("Network policy ACL auditing enabled on OVN network plugin")
+		}
+
+		g.By("Obtain the namespace")
+		ns1 := oc.Namespace()
+
+		g.By("Enable ACL looging on the namespace ns1")
+		aclSettings := aclSettings{DenySetting: "alert", AllowSetting: "alert"}
+		err1 := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("ns", ns1, aclSettings.getJSONString()).Execute()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+
+		g.By("create default deny ingress networkpolicy in ns1")
+		createResourceFromFile(oc, ns1, ingressTypeFile)
+
+		g.By("create allow same namespace networkpolicy in ns1")
+		createResourceFromFile(oc, ns1, allowFromSameNS)
+
+		g.By("create 1st hello pod in ns1")
+		pod1ns1 := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns1,
+			nodename:  nodeList.Items[0].Name,
+			template:  pingPodNodeTemplate,
+		}
+		pod1ns1.createPingPodNode(oc)
+		waitPodReady(oc, pod1ns1.namespace, pod1ns1.name)
+
+		g.By("create 2nd hello pod in ns1")
+		pod2ns1 := pingPodResourceNode{
+			name:      "hello-pod2",
+			namespace: ns1,
+			nodename:  nodeList.Items[1].Name,
+			template:  pingPodNodeTemplate,
+		}
+
+		pod2ns1.createPingPodNode(oc)
+		waitPodReady(oc, pod2ns1.namespace, pod2ns1.name)
+
+		g.By("Checking connectivity from pod2 to pod1 to generate messages")
+		CurlPod2PodPass(oc, ns1, "hello-pod2", ns1, "hello-pod1")
+
+		output, err2 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn/acl-audit-log.log").Output()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "verdict=allow")).To(o.BeTrue())
+
+	})
+	// author: asood@redhat.com
+	g.It("Author:asood-Medium-41407-Check networkpolicy ACL audit message is logged with correct policy name", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			allowFromSameNS     = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-from-same-namespace.yaml")
+			ingressTypeFile     = filepath.Join(buildPruningBaseDir, "networkpolicy/default-deny-ingress.yaml")
+			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		)
+
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+		networkType := checkNetworkType(oc)
+		o.Expect(networkType).NotTo(o.BeEmpty())
+		if networkType != "ovnkubernetes" {
+			g.Skip("Network policy ACL auditing enabled on OVN network plugin")
+		}
+
+		var namespaces [2]string
+		for i := 0; i < 2; i++ {
+
+			g.By("Obtain and create the namespace")
+			oc.SetupProject()
+			ns := oc.Namespace()
+			namespaces[i] = ns
+
+			g.By(fmt.Sprintf("Enable ACL looging on the namespace %s", namespaces[i]))
+			aclSettings := aclSettings{DenySetting: "alert", AllowSetting: "alert"}
+			err1 := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("ns", namespaces[i], aclSettings.getJSONString()).Execute()
+			o.Expect(err1).NotTo(o.HaveOccurred())
+
+			g.By(fmt.Sprintf("create default deny ingress networkpolicy in %s", namespaces[i]))
+			createResourceFromFile(oc, namespaces[i], ingressTypeFile)
+
+			g.By(fmt.Sprintf("create allow same namespace networkpolicy in %s", namespaces[i]))
+			createResourceFromFile(oc, namespaces[i], allowFromSameNS)
+
+			g.By(fmt.Sprintf("create 1st hello pod in %s", namespaces[i]))
+			pod1ns := pingPodResourceNode{
+				name:      "hello-pod1",
+				namespace: namespaces[i],
+				nodename:  nodeList.Items[0].Name,
+				template:  pingPodNodeTemplate,
+			}
+			pod1ns.createPingPodNode(oc)
+			waitPodReady(oc, pod1ns.namespace, pod1ns.name)
+
+			g.By(fmt.Sprintf("create 2nd hello pod in %s", namespaces[i]))
+			pod2ns := pingPodResourceNode{
+				name:      "hello-pod2",
+				namespace: namespaces[i],
+				nodename:  nodeList.Items[1].Name,
+				template:  pingPodNodeTemplate,
+			}
+			pod2ns.createPingPodNode(oc)
+			waitPodReady(oc, pod2ns.namespace, pod2ns.name)
+
+			g.By(fmt.Sprintf("Checking connectivity from pod2 to pod1 to generate messages in %s", namespaces[i]))
+			CurlPod2PodPass(oc, namespaces[i], "hello-pod2", namespaces[i], "hello-pod1")
+		}
+
+		output, err3 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", nodeList.Items[0].Name, "--path=ovn/acl-audit-log.log").Output()
+		o.Expect(err3).NotTo(o.HaveOccurred())
+		for i := 0; i < len(namespaces); i++ {
+			o.Expect(strings.Contains(output, "verdict=allow")).To(o.BeTrue())
+			o.Expect(strings.Contains(output, namespaces[i])).To(o.BeTrue())
+
+		}
 
 	})
 
