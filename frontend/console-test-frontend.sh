@@ -10,6 +10,7 @@ SCREENSHOTS_DIR=gui_test_screenshots
 function copyArtifacts {
   if [ -d "$ARTIFACT_DIR" ] && [ -d "$SCREENSHOTS_DIR" ]; then
     echo "Copying artifacts from $(pwd)..."
+    cp console-cypress.xml "$SCREENSHOTS_DIR"
     cp -r "$SCREENSHOTS_DIR" "${ARTIFACT_DIR}/gui_test_screenshots"
   fi
 }
@@ -74,5 +75,5 @@ export LOGIN_UP_PAIR=$users
 ls -ltr
 echo "triggering tests"
 set -x
-yarn run test-cypress-console-headless
-yarn merge-reports
+yarn run test-cypress-console-headless || yarn merge-reports
+python3 parse-xml.py
