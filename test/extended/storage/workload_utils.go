@@ -162,14 +162,11 @@ func (pod *pod) createWithSecurity(oc *exutil.CLI) {
 	seLevel := map[string]string{
 		"level": "s0:c13,c2",
 	}
-	securityContext := map[string]interface{}{
+	extraParameters := map[string]interface{}{
+		"jsonPath":       `items.0.spec.securityContext.`,
 		"seLinuxOptions": seLevel,
 		"fsGroup":        24680,
 		"runAsUser":      1000160000,
-	}
-	extraParameters := map[string]interface{}{
-		"jsonPath":        `items.0.spec.`,
-		"securityContext": securityContext,
 	}
 	if pod.namespace == "" {
 		pod.namespace = oc.Namespace()

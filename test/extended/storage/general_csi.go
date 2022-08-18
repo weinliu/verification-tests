@@ -1499,12 +1499,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
 			podA := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
-			securityContext := map[string]interface{}{
-				"fsGroup": 10000,
-			}
 			extraParameters := map[string]interface{}{
-				"jsonPath":        `items.0.spec.`,
-				"securityContext": securityContext,
+				"jsonPath":  `items.0.spec.securityContext.`,
+				"fsGroup":   10000,
+				"runAsUser": 1000,
 			}
 
 			g.By("Create a pvc with the preset storageclass")
@@ -1526,12 +1524,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("Delete the podA")
 			podA.delete(oc)
 
-			securityContext = map[string]interface{}{
-				"fsGroup": 20000,
-			}
 			extraParameters = map[string]interface{}{
-				"jsonPath":        `items.0.spec.`,
-				"securityContext": securityContext,
+				"jsonPath":  `items.0.spec.securityContext.`,
+				"fsGroup":   20000,
+				"runAsUser": 1000,
 			}
 
 			g.By("Create podB with the same pvc and wait pod ready")
