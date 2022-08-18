@@ -773,6 +773,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 				return false, nil
 			}
 			o.Expect(alertDegraded["labels"].(map[string]interface{})["severity"].(string)).To(o.Equal("warning"))
+			o.Expect(alertDegraded["labels"].(map[string]interface{})["namespace"].(string)).To(o.Equal("openshift-cluster-version"))
 			o.Expect(alertDegraded["annotations"].(map[string]interface{})["summary"].(string)).
 				To(o.ContainSubstring("Cluster operator has been degraded for 30 minutes."))
 			o.Expect(alertDegraded["annotations"].(map[string]interface{})["description"].(string)).
@@ -888,6 +889,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 				return false, nil
 			}
 			o.Expect(alertDown["labels"].(map[string]interface{})["severity"].(string)).To(o.Equal("critical"))
+			o.Expect(alertDown["labels"].(map[string]interface{})["namespace"].(string)).To(o.Equal("openshift-cluster-version"))
 			o.Expect(alertDown["annotations"].(map[string]interface{})["summary"].(string)).
 				To(o.ContainSubstring("Cluster operator has not been available for 10 minutes."))
 			o.Expect(alertDown["annotations"].(map[string]interface{})["description"].(string)).
