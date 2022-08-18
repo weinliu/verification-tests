@@ -3074,4 +3074,21 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	})
 
+	// author: jitli@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:jitli-High-52364-SDK-Run bundle support large FBC index", func() {
+
+		operatorsdkCLI.showInfo = true
+		g.By("Run bundle with large FBC index (size >3M)")
+		defer operatorsdkCLI.Run("cleanup").Args("upgradefbc", "-n", oc.Namespace()).Output()
+		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradefbc-bundle:v0.1", "--index-image", "quay.io/operatorhubio/catalog:latest", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
+
+		g.By("Run bundle with large FBC index (size >3M) that contains the bundle message")
+		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradefbc-bundle:v0.1", "--index-image", "quay.io/olmqe/largefbcindexwithupgradefbc:v4.11", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`bundle \"upgradefbc.v0.0.1\" already exists in the index image`))
+
+	})
+
 })
