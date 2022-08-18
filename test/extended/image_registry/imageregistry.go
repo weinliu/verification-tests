@@ -2687,4 +2687,42 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	})
 
+	//author: xiuwang@redhat.com
+	g.It("Author:xiuwang-High-12958-Read and write image signatures with registry endpoint", func() {
+		g.By("Create signature file")
+		var signFile = `'{"schemaVersion": 2,"type":"atomic","name":"digestid","content": "MjIK"}'`
+		err := oc.AsAdmin().Run("tag").Args("quay.io/openshifttest/hello-openshift@sha256:eb47fdebd0f2cc0c130228ca972f15eb2858b425a3df15f10f7bb519f60f0c96", "ho12958:latest", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "ho12958", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		manifest := saveImageMetadataName(oc, "openshifttest/hello-openshift")
+		o.Expect(manifest).NotTo(o.BeEmpty())
+		signContent := strings.ReplaceAll(signFile, "digestid", manifest+"@imagesignature12958test")
+
+		g.By("Get external registry host")
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(oc, regRoute)
+
+		g.By("Add signer role")
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "system:image-signer", "-z", "builder", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "system:image-signer", "-z", "builder", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		token, err := getSAToken(oc, "builder", oc.Namespace())
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(token).NotTo(o.BeEmpty())
+
+		g.By("Write signuture to image")
+		pushURL := "curl -Lkv -u \"" + oc.Username() + ":" + token + "\" -H  \"Content-Type: application/json\" -XPUT --data " + signContent + " https://" + regRoute + "/extensions/v2/" + oc.Namespace() + "/ho12958/signatures/" + manifest
+		curlOutput, err := exec.Command("bash", "-c", pushURL).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Read signuture to image")
+		getURL := "curl -Lkv -u \"" + oc.Username() + ":" + token + "\" https://" + regRoute + "/extensions/v2/" + oc.Namespace() + "/ho12958/signatures/" + manifest
+		curlOutput, err = exec.Command("bash", "-c", getURL).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(curlOutput).To(o.ContainSubstring("imagesignature12958test"))
+
+	})
 })
