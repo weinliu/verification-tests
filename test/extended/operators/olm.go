@@ -3770,7 +3770,22 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		// keep the resource so that checking it after upgrading
 		// defer sub.delete(itName, dr)
-		sub.create(oc, itName, dr)
+		sub.createWithoutCheck(oc, itName, dr)
+		err = wait.Poll(10*time.Second, 360*time.Second, func() (bool, error) {
+			state := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}")
+			if strings.Compare(state, "AtLatestKnown") == 0 {
+				return true, nil
+			}
+			e2e.Logf("sub %s state is %s, not AtLatestKnown", sub.subName, state)
+			return false, nil
+		})
+		if err != nil {
+			getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath-as-json={.status}")
+			getResource(oc, asAdmin, withoutNamespace, "pod", "-n", sub.catalogSourceNamespace)
+			logDebugInfo(oc, sub.namespace, "pod", "ip", "csv", "events")
+		}
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("sub %s stat is not AtLatestKnown", sub.subName))
+
 		// keep the resource so that checking it after upgrading
 		// defer sub.deleteCSV(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", "olm-upgrade-22615", "-o=jsonpath={.status.phase}"}).check(oc)
@@ -3787,7 +3802,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		for _, resource := range olmRelatedResource {
 			newCheck("expect", asAdmin, withoutNamespace, compare, "TrueFalseFalse", ok, []string{"clusteroperator", resource, "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"}).check(oc)
 			upgradeableStatus := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", resource, "-o=jsonpath={.status.conditions[?(@.type==\"Upgradeable\")].status}")
-			o.Expect(upgradeableStatus).To(o.Equal("True"))
+			if strings.Compare(upgradeableStatus, "True") != 0 {
+				getResource(oc, asAdmin, withoutNamespace, "clusteroperator", resource, "-o=jsonpath-as-json={.status.conditions}")
+				o.Expect(upgradeableStatus).To(o.Equal("True"))
+			}
 		}
 
 	})
@@ -3805,7 +3823,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		for _, resource := range olmRelatedResource {
 			newCheck("expect", asAdmin, withoutNamespace, compare, "TrueFalseFalse", ok, []string{"clusteroperator", resource, "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"}).check(oc)
 			upgradeableStatus := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", resource, "-o=jsonpath={.status.conditions[?(@.type==\"Upgradeable\")].status}")
-			o.Expect(upgradeableStatus).To(o.Equal("True"))
+			if strings.Compare(upgradeableStatus, "True") != 0 {
+				getResource(oc, asAdmin, withoutNamespace, "clusteroperator", resource, "-o=jsonpath-as-json={.status.conditions}")
+				o.Expect(upgradeableStatus).To(o.Equal("True"))
+			}
 		}
 		g.By("3) Check the installed operator status")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", "olm-upgrade-22615", "-o=jsonpath={.status.phase}"}).check(oc)
