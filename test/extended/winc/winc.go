@@ -246,6 +246,43 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		}
 	})
 
+	// author: rrasouli@redhat.com
+	g.It("Author:rrasouli-NonPreRelease-Longduration-Medium-42047-Cluster autoscaling with Windows nodes [Slow][Disruptive]", func() {
+		namespace := "winc-42047"
+		defer deleteProject(oc, namespace)
+		createProject(oc, namespace)
+
+		machinesetName := "winc"
+		if iaasPlatform == "aws" {
+			infrastructureID, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			zone := "us-east-2a"
+			machinesetName = infrastructureID + "-" + machinesetName + "-worker-" + zone
+		}
+		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", "openshift-machine-api").Output()
+
+		g.By("Creating Windows machineset with 1")
+		setMachineset(oc, iaasPlatform, machinesetName)
+
+		g.By("Creating cluster and machine autoscaller")
+		defer destroyWindowsAutoscaller(oc)
+		createWindowsAutoscaller(oc, machinesetName, namespace)
+
+		g.By("Creating Windows workloads")
+		createWindowsWorkload(oc, namespace, "windows_web_server_scaler.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")})
+
+		g.By("Scalling up the Windows workload to 2")
+		scaleDeployment(oc, "windows", 2, namespace)
+
+		// now we need to test check whether the machines auto scalled to 2
+		g.By("Waiting for Windows nodes to auto scale to 2")
+		waitForMachinesetReady(oc, machinesetName, 15, 2)
+
+		g.By("Scalling down the Windows workload to 1")
+		scaleDeployment(oc, "windows", 1, namespace)
+		waitForMachinesetReady(oc, machinesetName, 10, 1)
+	})
+
 	// author rrasouli@redhat.com
 	g.It("Smokerun-Longduration-Author:rrasouli-NonPreRelease-High-37096-Schedule Windows workloads with cluster running multiple Windows OS variants [Slow][Disruptive]", func() {
 		if iaasPlatform != "azure" {
@@ -706,6 +743,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		goVersion, _ := exec.Command("bash", "-c", getCMD).Output()
 		s := string(goVersion)
 		tVersion := truncatedVersion(s)
+		e2e.Logf("Golang version is: %s", s)
+		e2e.Logf("Golang version truncated is: %s", tVersion)
 		g.By("Compare fetched version with WMCO log version")
 		msg, err := oc.WithoutNamespace().Run("logs").Args("deployment.apps/windows-machine-config-operator", "-n", "openshift-windows-machine-config-operator").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

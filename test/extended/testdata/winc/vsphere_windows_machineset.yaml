@@ -24,6 +24,7 @@ spec:
       metadata:
         labels:
           node-role.kubernetes.io/worker: ""
+          type: "winc"
       providerSpec:
         value:
           apiVersion: vsphereprovider.openshift.io/v1beta1

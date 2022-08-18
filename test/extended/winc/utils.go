@@ -270,11 +270,11 @@ func getFileContent(baseDir string, name string) (fileContent string) {
 func scaleDeployment(oc *exutil.CLI, os string, replicas int, namespace string) error {
 	deploymentName := getWorkloadName(os)
 	_, err := oc.WithoutNamespace().Run("scale").Args("--replicas="+strconv.Itoa(replicas), "deployment", deploymentName, "-n", namespace).Output()
-	poolErr := wait.Poll(60*time.Second, 10*time.Minute, func() (bool, error) {
+	poolErr := wait.Poll(20*time.Second, 30*time.Minute, func() (bool, error) {
 		return checkWorkloadCreated(oc, deploymentName, namespace, replicas), nil
 	})
 	if poolErr != nil {
-		e2e.Failf("Workload did not scale after waiting up to 10 minutes ...")
+		e2e.Failf("Workload did not scale after waiting up to 30 minutes ...")
 	}
 	return err
 }
@@ -612,4 +612,31 @@ func setBYOH(oc *exutil.CLI, iaasPlatform string, addressType string, machineset
 	setConfigmap(oc, addressesArray[0], user, "config-map.yaml")
 	waitForMachinesetReady(oc, machinesetName, 15, 1)
 	return addressesArray
+}
+
+func setMachineset(oc *exutil.CLI, iaasPlatform string, machinesetName string) {
+	machinesetFileName := iaasPlatform + "_windows_machineset.yaml"
+	MSFileName, err := getMachinesetFileName(oc, iaasPlatform, winVersion, "winc", machinesetFileName, "primary")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	defer os.Remove(MSFileName)
+	err = createMachineset(oc, MSFileName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	waitForMachinesetReady(oc, machinesetName, 25, 1)
+}
+
+func createWindowsAutoscaller(oc *exutil.CLI, machineSetName, namespace string) {
+	clusterAutoScaller := filepath.Join(exutil.FixturePath("testdata", "winc"), "cluster_autoscaler.yaml")
+	_, err := oc.WithoutNamespace().Run("create").Args("-f", clusterAutoScaller).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	defer os.Remove("machine-autoscaler.yaml")
+	machineAutoscaller := getFileContent("winc", "machine-autoscaler.yaml")
+	machineAutoscaller = strings.ReplaceAll(machineAutoscaller, "<windows_machineset_name>", machineSetName)
+	ioutil.WriteFile("machine-autoscaler.yaml", []byte(machineAutoscaller), 0644)
+	_, err = oc.WithoutNamespace().Run("create").Args("-f", "machine-autoscaler.yaml", "-n", "openshift-machine-api").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func destroyWindowsAutoscaller(oc *exutil.CLI) {
+	oc.WithoutNamespace().Run("delete").Args("machineautoscaler", "winc-default-machineautoscaler", "-n", "openshift-machine-api").Output()
+	oc.WithoutNamespace().Run("delete").Args("clusterautoscalers.autoscaling.openshift.io", "default").Output()
 }

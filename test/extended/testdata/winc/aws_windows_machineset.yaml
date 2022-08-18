@@ -23,6 +23,7 @@ spec:
       metadata:
         labels:
           node-role.kubernetes.io/worker: ""
+          type: "winc"
       providerSpec:
         value:
           ami:
