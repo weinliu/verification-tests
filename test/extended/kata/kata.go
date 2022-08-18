@@ -659,4 +659,24 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("SUCCESS")
 	})
 
+	// author: tbuskey@redhat.com
+	g.It("Longduration-Author:tbuskey-High-53583-upgrade osc operator [Disruptive][Serial]", func() {
+
+		// declare the starting values
+		var (
+			testrunUpgrade testrunConfigmap
+		)
+
+		g.By("Start")
+		testrunUpgrade, msg, err := getTestRunInput(oc, subscription, kcMonitorImageName, mustGatherImage, "default", "osc-config-upgrade")
+		if testrunUpgrade.exists {
+			e2e.Logf("Upgrade with testrun should be performed: %v", testrunUpgrade)
+		} else {
+			e2e.Logf("Upgrade will not be done: %v\n%v %v", testrunUpgrade, msg, err)
+		}
+
+		g.By("SUCCESS")
+
+	})
+
 })

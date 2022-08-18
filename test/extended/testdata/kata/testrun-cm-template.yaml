@@ -1,0 +1,47 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: testrun-cm-template
+objects:
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: "${NAME}"
+      namespace: "${NAMESPACE}"
+    data:
+      exists: "${EXISTS}"
+      iscpneeded: "${ICSPNEEDED}"
+      catalogsourcename: "${CATSOURCENAME}"
+      channel: "${OSCCHANNEL}"
+      katamonitormage: "${KATAMONITORIMAGE}"
+      mustgatherimage: "${MUSTGATHERIMAGE}"
+
+parameters:
+  - name: NAME
+    value: "osc-config"
+  - name: NAMESPACE
+    value: "default"
+  - name: CATSOURCENAME
+    value: "redhat-operators"
+  - name: ICSPNEEDED
+    value: "false"
+  - name: OSCCHANNEL
+    value: "stable-1.2"
+  - name: KATAMONITORIMAGE
+    value: "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:1.2.0"
+  - name: MUSTGATHERIMAGE
+    value: "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.2.0"
+  - name: EXISTS
+    value: "true"
+# oc process --ignore-unknown-parameters=true -f configmap-input-template.yaml -p [name]=[value] > cm-name.yaml...
+# oc apply -f cm-name.yaml
+# This is for Jenkins/end user to create a configmap and apply it to your cluster
+# The catalog source for pre GA brew images would also be created by jenkins/end user
+#
+# getTestRunInput will read the configmap and its values
+#  subscription
+#  kata-monitor image
+#  mustgather image
+#  these can be used to alter the intial values in BeforeEach or to upgrade an existing subscription
+#
+

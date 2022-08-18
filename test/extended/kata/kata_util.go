@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,6 +25,15 @@ type subscriptionDescription struct {
 	catalogSourceName      string `json:"source"`
 	catalogSourceNamespace string `json:"sourceNamespace"`
 	template               string
+}
+
+type testrunConfigmap struct {
+	exists            bool
+	catalogsourceName string
+	channel           string
+	icspNeeded        bool
+	mustgatherImage   string
+	katamonitorImage  string
 }
 
 var (
@@ -353,4 +363,58 @@ func waitForDeployment(oc *exutil.CLI, podNs, deployName string) (msg string, er
 	}
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Deployment has %v replicas, not %v %v", replicas, msg, err))
 	return msg, err
+}
+
+func getTestRunInput(oc *exutil.CLI, subscription subscriptionDescription, katamonitorImage, mustgatherImage, cmNs, cmName string) (testrun testrunConfigmap, msg string, err error) {
+	testrun = testrunConfigmap{
+		exists:            false,
+		catalogsourceName: subscription.catalogSourceName,
+		channel:           subscription.channel,
+		icspNeeded:        false,
+		mustgatherImage:   mustgatherImage,
+		katamonitorImage:  katamonitorImage,
+	}
+
+	// is it there?
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs, cmName).Output()
+	if err != nil {
+		e2e.Logf("STEP Configmap is not found: msg %v err: %v", msg, err)
+		testrun.exists = false
+	} else {
+		testrun.exists = true
+
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs, cmName, "-o=jsonpath={.data}").Output()
+		e2e.Logf("STEP .data from %v: %v %v", cmName, msg, err)
+
+		// look at all the items for a value.  If they are not empty, change the defaults
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.catalogsourcename}", "-n", cmNs).Output()
+		if err == nil {
+			e2e.Logf("STEP testrun catalogsourcename %v, err %v", msg, err)
+			testrun.catalogsourceName = msg
+		}
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.channel}", "-n", cmNs).Output()
+		if err == nil {
+			e2e.Logf("STEP testrun channel %v, err %v", msg, err)
+			testrun.channel = msg
+		}
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.icspneeded}", "-n", cmNs).Output()
+		if err == nil {
+			e2e.Logf("STEP testrun icspneeded %v, err %v", msg, err)
+			testrun.icspNeeded, err = strconv.ParseBool(msg)
+			if err != nil {
+				e2e.Failf("Error in %v config map.  icspneeded must be a golang true or false string", cmName)
+			}
+		}
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.katamonitormage}", "-n", cmNs).Output()
+		if err == nil {
+			e2e.Logf("STEP testrun katamonitormage %v, err %v", msg, err)
+			testrun.katamonitorImage = msg
+		}
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.mustgatherimage}", "-n", cmNs).Output()
+		if err == nil {
+			e2e.Logf("STEP testrun mustgatherimage %v, err %v", msg, err)
+			testrun.mustgatherImage = msg
+		}
+	}
+	return testrun, msg, err
 }
