@@ -1,0 +1,43 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  name: mock-operator2
+spec:
+  displayName: Mock Operator
+  install:
+    strategy: deployment
+    spec:
+      permissions: []
+      deployments:
+        - name: test-operator
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                name: test-operator-alm-owned
+            template:
+              metadata:
+                name: test-operator-alm-owned
+                labels:
+                  name: test-operator-alm-owned
+              spec:
+                serviceAccountName: test-operator
+                containers:
+                  - name: test-operator
+                    image: nginx
+  customresourcedefinitions:
+    owned:
+      - name: mock-resources.test.tectonic.com
+        version: v1
+        kind: MockResource
+        displayName: Mock Resource
+        resources: []
+        statusDescriptors:
+          - displayName: Other Custom Conditions
+            path: customConditions
+          - displayName: Conditions
+            path: conditions
+          - displayName: Custom Conditions
+            path: otherCustomConditions
+            x-descriptors:
+              - 'urn:alm:descriptor:io.kubernetes.conditions'

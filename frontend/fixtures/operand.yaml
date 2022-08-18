@@ -1,0 +1,40 @@
+apiVersion: test.tectonic.com/v1
+kind: MockResource
+metadata:
+  name: mock-resource-instance
+spec:
+  foo: 'bar'
+status:
+  conditions:
+    - type: Available
+      status: "True"
+      lastUpdateTime: "2021-12-01T23:27:55Z"
+      lastTransitionTime: "2021-12-01T23:27:55Z"
+      reason: AppReady
+      message: App is ready.
+  customConditions:
+    - type: Available
+      status: "True"
+      lastUpdateTime: "2021-12-01T23:27:55Z"
+      lastTransitionTime: "2021-12-01T23:27:55Z"
+      reason: AppReady
+      message: App is ready.
+    - type: Test
+      status: "True"
+      lastUpdateTime: "2021-12-01T23:27:55Z"
+      lastTransitionTime: "2021-12-01T23:27:55Z"
+      reason: Testing123
+      message: This is a test.
+  otherCustomConditions:
+    - type: Available
+      status: "True"
+      lastUpdateTime: "2021-12-01T23:27:55Z"
+      lastTransitionTime: "2021-12-01T23:27:55Z"
+      reason: AppReady
+      message: App is ready.
+    - type: Test
+      status: "True"
+      lastUpdateTime: "2021-12-01T23:27:55Z"
+      lastTransitionTime: "2021-12-01T23:27:55Z"
+      reason: Testing123
+      message: This is a test. 
