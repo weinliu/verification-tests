@@ -3426,6 +3426,75 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		dep.waitReady(oc)
 		dep.checkPodMountedVolumeDataExist(oc, true)
 	})
+	// author: chaoyang@redhat.com
+	// OCP-53309 - [CSI Driver] [CSI Clone] Clone volume support different storage class
+	g.It("ARO-Author:chaoyang-Low-53309-[CSI Driver] [CSI Clone] [Filesystem] Clone volume support different storage class", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org"}
+
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate          = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			supportProvisioners  = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("1Gi"))
+			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
+
+			g.By("Create a pvc with the preset csi storageclass")
+			pvcOri.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			e2e.Logf("%s", pvcOri.scname)
+			pvcOri.create(oc)
+			defer pvcOri.deleteAsAdmin(oc)
+
+			g.By("Create pod with the created pvc and wait for the pod ready")
+			podOri.create(oc)
+			defer podOri.deleteAsAdmin(oc)
+			podOri.waitReady(oc)
+
+			g.By("Write file to volume")
+			podOri.checkMountedVolumeCouldRW(oc)
+			podOri.execCommand(oc, "sync")
+
+			// Set the resource definition for the clone
+			scClone := newStorageClass(setStorageClassTemplate(storageClassTemplate))
+			scClone.provisioner = provisioner
+			scClone.create(oc)
+			defer scClone.deleteAsAdmin(oc)
+			pvcClone := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scClone.name), setPersistentVolumeClaimDataSourceName(pvcOri.name))
+			podClone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcClone.name))
+
+			g.By("Create a clone pvc with the new csi storageclass")
+			oricapacityInt64, err := strconv.ParseInt(strings.TrimRight(pvcOri.capacity, "Gi"), 10, 64)
+			o.Expect(err).To(o.Not(o.HaveOccurred()))
+			clonecapacityInt64 := oricapacityInt64 + getRandomNum(1, 8)
+			pvcClone.capacity = strconv.FormatInt(clonecapacityInt64, 10) + "Gi"
+			pvcClone.createWithCloneDataSource(oc)
+			defer pvcClone.deleteAsAdmin(oc)
+
+			g.By("Create pod with the cloned pvc and wait for the pod ready")
+			podClone.create(oc)
+			defer podClone.deleteAsAdmin(oc)
+			podClone.waitReady(oc)
+
+			g.By("Check the file exist in cloned volume")
+			podClone.checkMountedVolumeDataExist(oc, true)
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+
+		}
+	})
 })
 
 // Performing test steps for Online Volume Resizing
