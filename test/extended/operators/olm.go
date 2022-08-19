@@ -32,6 +32,76 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: jiazha@redhat.com
+	g.It("Author:jiazha-Medium-53759-Opeatorhub status shows errors after disabling default catalogSources [Disruptive]", func() {
+		g.By("1, check if the marketplace enabled")
+		cap, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.enabledCapabilities}").Output()
+		if err != nil {
+			e2e.Failf("Fail to get the cluster capabilities: %s, error:%v", cap, err)
+		}
+		if !strings.Contains(cap, "marketplace") {
+			g.Skip("marketplace is disabled, skip...")
+		}
+		g.By("2, Disable the OperatorHub")
+		// make sure the operatorhub enabled after this test
+		defer func() {
+			_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("operatorhub", "cluster", "-p", "{\"spec\": {\"disableAllDefaultSources\": false}}", "--type=merge").Output()
+			if err != nil {
+				e2e.Failf("Fail to re-enable operatorhub, error:%v", err)
+			}
+		}()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("operatorhub", "cluster", "-p", "{\"spec\": {\"disableAllDefaultSources\": true}}", "--type=merge").Output()
+		if err != nil {
+			e2e.Failf("Fail to disable operatorhub, error:%v", err)
+		}
+		g.By("3, Check the OperatorHub status")
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhub", "cluster", "-o=jsonpath={.status.sources}").Output()
+		if err != nil {
+			e2e.Failf("Fail to get operatorhub status, error:%v", err)
+		}
+		if strings.Contains(status, "Error") {
+			e2e.Failf("the operatorhub status(%s) is incorrect!", status)
+		}
+		log, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deploy/marketplace-operator", "--tail", "3").Output()
+		if strings.Contains(log, "Error processing CatalogSource") {
+			e2e.Failf("marketplace-operator is handling operatorhub wrongly: %s", log)
+		}
+	})
+
+	// author: jiazha@redhat.com
+	g.It("Author:jiazha-High-53758-OLM failed to recreate SA for the CatalogSource that without poll Interval", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		dr := make(describerResrouce)
+		itName := g.CurrentGinkgoTestDescription().TestText
+		dr.addIr(itName)
+
+		g.By("1, Create a CatalogSource that in a random project")
+		oc.SetupProject()
+		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-without-interval.yaml")
+		cs := catalogSourceDescription{
+			name:        "cs-53758",
+			namespace:   oc.Namespace(),
+			displayName: "QE Operators",
+			publisher:   "QE",
+			sourceType:  "grpc",
+			address:     "quay.io/openshift-qe-optional-operators/ocp4-index:latest",
+			template:    csImageTemplate,
+		}
+		defer cs.delete(itName, dr)
+		cs.createWithCheck(oc, itName, dr)
+
+		g.By("2, delete this CatalogSource's SA")
+		_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("serviceaccount", cs.name, "-n", cs.namespace).Output()
+		if err != nil {
+			e2e.Failf("fail to delete the catalogsource SA:%s", cs.name)
+		}
+		g.By("3, check if SA is recreated")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("serviceaccount", cs.name, "-n", cs.namespace).Output()
+		if err != nil {
+			e2e.Failf("fail to recreate the catalogsource SA:%s", cs.name)
+		}
+	})
+
+	// author: jiazha@redhat.com
 	g.It("Author:jiazha-Medium-53740-CatalogSource incorrect parsing validation", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		dr := make(describerResrouce)
@@ -87,7 +157,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			e2e.Failf("Fail to get the cluster capabilities: %s, error:%v", cap, err)
 		}
 		if strings.Contains(cap, "marketplace") {
-			e2e.Logf("marketplace is enabled, skip...")
+			g.Skip("marketplace is enabled, skip...")
 		} else {
 			e2e.Logf("marketplace is disabled")
 			g.By("2, check marketplace namespace")
