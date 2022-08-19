@@ -112,7 +112,7 @@ func RemoteShPodWithBash(oc *CLI, namespace string, podName string, cmd ...strin
 
 // RemoteShPodWithBashSpecifyContainer creates a remote shell of the pod with bash specifying container name
 func RemoteShPodWithBashSpecifyContainer(oc *CLI, namespace string, podName string, containerName string, cmd ...string) (string, error) {
-        return remoteShPod(oc, namespace, podName, true, false, containerName, cmd...)
+	return remoteShPod(oc, namespace, podName, true, false, containerName, cmd...)
 }
 
 // WaitAndGetSpecificPodLogs wait and return the pod logs by the specific filter
@@ -161,6 +161,7 @@ func (pod *Pod) Delete(oc *CLI) error {
 
 }
 
+// AssertPodToBeReady poll pod status to determine it is ready
 func AssertPodToBeReady(oc *CLI, podName string, namespace string) {
 	err := wait.Poll(10*time.Second, 3*time.Minute, func() (bool, error) {
 		stdout, err := oc.AsAdmin().Run("get").Args("pod", podName, "-n", namespace, "-o", "jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}'").Output()
@@ -222,14 +223,16 @@ func LabelPod(oc *CLI, namespace string, podName string, label string) error {
 	return oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", namespace, "pod", podName, label).Execute()
 }
 
-// get array of all pods for a given namespace and label
+// GetAllPodsWithLabel get array of all pods for a given namespace and label
 func GetAllPodsWithLabel(oc *CLI, namespace string, label string) ([]string, error) {
 	pods, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-l", label).Template("{{range .items}}{{.metadata.name}}{{\" \"}}{{end}}").Output()
-
+	if len(pods) == 0 {
+		return []string{}, err
+	}
 	return strings.Split(pods, " "), err
 }
 
-// assert all pods in NS are in ready state until timeout in a given namespace
+// AssertAllPodsToBeReady assert all pods in NS are in ready state until timeout in a given namespace
 func AssertAllPodsToBeReady(oc *CLI, namespace string) {
 	err := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
 
