@@ -114,8 +114,8 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		defer oc.Run("delete").Args("secret/my-secret", "-n", oc.Namespace()).Execute()
 
 		imageSouceS := "--from=quay.io/openshift-release-dev/ocp-release:4.5.8-x86_64"
-		imageToS := "--to=" + serInfo.serviceURL + "/zhouytest/test-release"
-		imageToReleaseS := "--to-release-image=" + serInfo.serviceURL + "/zhouytest/ocptest-release:4.5.8-x86_64"
+		imageToS := "--to=" + serInfo.serviceName + "/zhouytest/test-release"
+		imageToReleaseS := "--to-release-image=" + serInfo.serviceName + "/zhouytest/ocptest-release:4.5.8-x86_64"
 		imagePullSecretS := "-a " + "/etc/foo/" + ".dockerconfigjson"
 
 		pod43032 := podMirror{
@@ -224,7 +224,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err1).NotTo(o.HaveOccurred())
 
 		imageSouceS := "--from=quay.io/openshift-release-dev/ocp-release:4.5.5-x86_64"
-		imageToS := "--to=" + serInfo.serviceURL + "/zhouytest/test-release"
+		imageToS := "--to=" + serInfo.serviceName + "/zhouytest/test-release"
 		imageToReleaseS := "--apply-release-image-signature"
 		imagePullSecretS := "-a " + "/etc/foo/" + ".dockerconfigjson"
 

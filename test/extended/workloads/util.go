@@ -536,16 +536,19 @@ func (registry *registry) createregistry(oc *exutil.CLI) serviceInfo {
 	e2e.Logf("Get the service info of the registry")
 	regSvcIP, err := oc.AsAdmin().Run("get").Args("svc", "registry", "-n", registry.namespace, "-o=jsonpath={.spec.clusterIP}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	_, err = oc.AsAdmin().Run("create").Args("route", "edge", "my-route", "--service=registry", "-n", registry.namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
 	regSvcPort, err := oc.AsAdmin().Run("get").Args("svc", "registry", "-n", registry.namespace, "-o=jsonpath={.spec.ports[0].port}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	regRoute, err := oc.AsAdmin().Run("get").Args("route", "my-route", "-n", registry.namespace, "-o=jsonpath={.spec.host}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
 	regSvcURL := regSvcIP + ":" + regSvcPort
-	regName := "registry"
 	svc := serviceInfo{
 		serviceIP:   regSvcIP,
 		namespace:   registry.namespace,
 		servicePort: regSvcPort,
 		serviceURL:  regSvcURL,
-		serviceName: regName,
+		serviceName: regRoute,
 	}
 	return svc
 
