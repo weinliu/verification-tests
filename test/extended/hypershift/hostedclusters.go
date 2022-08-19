@@ -79,6 +79,29 @@ func (h *hostedCluster) getHostedClustersHACPWorkloadNames(workloadType string) 
 	return strings.Split(value, " "), nil
 }
 
+func (h *hostedCluster) isCPPodOnlyRunningOnOneNode(nodeName string) (bool, error) {
+	value, err := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", h.namespace+"-"+h.name, `-ojsonpath={.items[?(@.spec.nodeName!="`+nodeName+`")].metadata.name}`).Output()
+	if err != nil {
+		e2e.Logf("check HostedClusters CP PodOnly One Node, error occurred: %v", err)
+		return false, err
+	}
+	if len(value) == 0 {
+		return true, nil
+	}
+	e2e.Logf("not on %s node pod name:%s", nodeName, value)
+	if len(strings.Split(value, " ")) == 1 && strings.Contains(value, "ovnkube") {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (h *hostedCluster) pollIsCPPodOnlyRunningOnOneNode(nodeName string) func() bool {
+	return func() bool {
+		value, _ := h.isCPPodOnlyRunningOnOneNode(nodeName)
+		return value
+	}
+}
+
 func getHostedClusters(oc *exutil.CLI, namespace string) (string, error) {
 	value, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedclusters", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 	if er != nil {

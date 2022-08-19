@@ -285,4 +285,64 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			o.Expect(value).Should(o.ContainSubstring("topology.kubernetes.io/zone"), fmt.Sprintf("statefulset: %s lack of anti-affinity of zone", name))
 		}
 	})
+
+	// author: liangli@redhat.com
+	g.It("Longduration-NonPreRelease-Author:liangli-Critical-44981-[HyperShiftINSTALL] Test built-in control plane pod tolerations [Serial] [Disruptive]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 44981 is for AWS - skipping test ...")
+		}
+		nodeAction := newNodeAction(oc)
+		nodes, err := exutil.GetClusterNodesBy(oc, "worker")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodes) < 2 {
+			g.Skip("work node should >= 2 - skipping test ...")
+		}
+
+		caseID := "44981"
+		dir := "/tmp/hypershift" + caseID
+		clusterName := "hypershift-" + caseID
+		defer os.RemoveAll(dir)
+		err = os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Config Bucket")
+		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir}
+		installHelper.newAWSS3Client()
+		defer installHelper.deleteAWSS3Bucket()
+		installHelper.createAWSS3Bucket()
+
+		g.By("install HyperShift operator")
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+		g.By("extract secret/pull-secret")
+		installHelper.extractPullSecret()
+
+		g.By("update taint and label, taint and label use key 'hypershift.openshift.io/cluster'")
+		defer nodeAction.taintNode(nodes[0], "hypershift.openshift.io/cluster="+oc.Namespace()+"-"+clusterName+":NoSchedule-")
+		nodeAction.taintNode(nodes[0], "hypershift.openshift.io/cluster="+oc.Namespace()+"-"+clusterName+":NoSchedule")
+		defer nodeAction.labelNode(nodes[0], "hypershift.openshift.io/cluster-")
+		nodeAction.labelNode(nodes[0], "hypershift.openshift.io/cluster="+oc.Namespace()+"-"+clusterName)
+
+		g.By("create HostedClusters")
+		createCluster := installHelper.createClusterAWSCommonBuilder().withName(clusterName).withNodePoolReplicas(0)
+		defer installHelper.destroyAWSHostedClusters(createCluster)
+		hostedCluster := installHelper.createAWSHostedClusters(createCluster)
+
+		g.By("Check if control plane pods in HostedClusters are on " + nodes[0])
+		o.Eventually(hostedCluster.pollIsCPPodOnlyRunningOnOneNode(nodes[0]), DefaultTimeout, DefaultTimeout/10).Should(o.BeTrue(), "Check if control plane pods in HostedClusters error")
+
+		g.By("update taint and label, taint and label use key 'hypershift.openshift.io/control-plane'")
+		defer nodeAction.taintNode(nodes[1], "hypershift.openshift.io/control-plane=true:NoSchedule-")
+		nodeAction.taintNode(nodes[1], "hypershift.openshift.io/control-plane=true:NoSchedule")
+		defer nodeAction.labelNode(nodes[1], "hypershift.openshift.io/control-plane-")
+		nodeAction.labelNode(nodes[1], "hypershift.openshift.io/control-plane=true")
+
+		g.By("create HostedClusters 2")
+		createCluster2 := installHelper.createClusterAWSCommonBuilder().withName(clusterName + "-2").withNodePoolReplicas(0)
+		defer installHelper.destroyAWSHostedClusters(createCluster2)
+		hostedCluster2 := installHelper.createAWSHostedClusters(createCluster2)
+
+		g.By("Check if control plane pods in HostedClusters are on " + nodes[1])
+		o.Eventually(hostedCluster2.pollIsCPPodOnlyRunningOnOneNode(nodes[1]), DefaultTimeout, DefaultTimeout/10).Should(o.BeTrue(), "Check if control plane pods in HostedClusters error")
+	})
 })
