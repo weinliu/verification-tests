@@ -10,6 +10,7 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -793,5 +794,117 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			volState, _ := getPersistentVolumeStatus(oc, pvName)
 			return volState
 		}, 60*time.Second, 5*time.Second).ShouldNot(o.Equal("Terminating"))
+	})
+
+	// author: pewang@redhat.com
+	// OCP-24498 - [LSO] Install operator and create CRs using the CLI
+	// OCP-32972 - [LSO] LocalVolumeDiscovery is created successfully
+	// OCP-32976 - [LSO] New device is discovered if node is added to LocalVolumeDiscovery
+	// OCP-32981 - [LSO] CR localvolumeset and localvolume not using same device
+	g.It("ROSA-OSD_CCS-Longduration-Author:pewang-Medium-24498-High-32972-Medium-32976-High-32981-[LSO] All kinds of CR lifecycle should work well [Serial]", func() {
+		// Set the resource definition for the scenario
+		var (
+			lvTemplate  = filepath.Join(lsoBaseDir, "/lso/localvolume-template.yaml")
+			lvsTemplate = filepath.Join(lsoBaseDir, "/lso/localvolumeset-template.yaml")
+			lvdTemplate = filepath.Join(lsoBaseDir, "/lso/localvolumediscovery-template.yaml")
+			mylv        = newLocalVolume(setLvNamespace(myLso.namespace), setLvTemplate(lvTemplate), setLvFstype("ext4"))
+			mylvs       = newLocalVolumeSet(setLvsNamespace(myLso.namespace), setLvsTemplate(lvsTemplate), setLvsFstype("ext4"))
+			mylvd       = newlocalVolumeDiscovery(setLvdNamespace(myLso.namespace), setLvdTemplate(lvdTemplate))
+		)
+
+		g.By("# Create a new project for the scenario")
+		oc.SetupProject() //create new project
+
+		g.By("# Create 2 different aws ebs volume and attach the volume to the same schedulable worker node")
+		allSchedulableLinuxWorkers := getSchedulableLinuxWorkers(allNodes)
+		if len(allSchedulableLinuxWorkers) == 0 {
+			g.Skip("Skip for there's no schedulable Linux workers in the test cluster")
+		}
+		myWorker := allSchedulableLinuxWorkers[0]
+		myVolumeA := newEbsVolume(setVolAz(myWorker.avaiableZone), setVolClusterIDTagKey(clusterIDTagKey))
+		myVolumeB := newEbsVolume(setVolAz(myWorker.avaiableZone), setVolClusterIDTagKey(clusterIDTagKey))
+		defer myVolumeA.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
+		myVolumeA.create(ac)
+		defer myVolumeB.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
+		myVolumeB.create(ac)
+		myVolumeA.waitStateAsExpected(ac, "available")
+		myVolumeB.waitStateAsExpected(ac, "available")
+
+		// Attach the volumes to a schedulable linux worker node
+		defer myVolumeA.detachSucceed(ac)
+		myVolumeA.attachToInstanceSucceed(ac, oc, myWorker)
+		defer myVolumeB.detachSucceed(ac)
+		myVolumeB.attachToInstanceSucceed(ac, oc, myWorker)
+
+		g.By("# Create a localvolumeDiscovery cr and wait for localvolumeDiscoveryResults generated")
+		mylvd.discoverNodes = []string{myWorker.name}
+		mylvd.create(oc)
+		defer mylvd.deleteAsAdmin(oc)
+		mylvd.waitDiscoveryResultsGenerated(oc)
+
+		g.By("# Check the localvolumeDiscoveryResults should contains the myVolumeA and myVolumeB info")
+		o.Expect(mylvd.discoveryResults[myWorker.name]).Should(o.And(
+			o.ContainSubstring(myVolumeA.DeviceByID),
+			o.ContainSubstring(myVolumeB.DeviceByID),
+		))
+		// Check the localvolumeDiscoveryResults devices (myVolumeA and myVolumeB) should available to use
+		o.Expect(gjson.Get(mylvd.discoveryResults[myWorker.name], `status.discoveredDevices.#(deviceID==`+myVolumeA.DeviceByID+`)#.status.state`).String()).Should(o.ContainSubstring("Available"))
+		o.Expect(gjson.Get(mylvd.discoveryResults[myWorker.name], `status.discoveredDevices.#(deviceID==`+myVolumeB.DeviceByID+`)#.status.state`).String()).Should(o.ContainSubstring("Available"))
+
+		if len(allSchedulableLinuxWorkers) > 1 {
+			// Check new LocalVolumeDiscoveryResults record is generated if new node is added to LocalVolumeDiscovery
+			g.By("# Add new node to the localvolumeDiscovery should generate new node's localvolumeDiscoveryResults")
+			nodeB := allSchedulableLinuxWorkers[1]
+			mylvd.discoverNodes = append(mylvd.discoverNodes, nodeB.name)
+			mylvd.ApplyWithSpecificNodes(oc, `kubernetes.io/hostname`, "In", mylvd.discoverNodes)
+			mylvd.syncDiscoveryResults(oc)
+			o.Expect(mylvd.discoveryResults[nodeB.name]).ShouldNot(o.BeEmpty())
+		}
+
+		g.By("# Create a localvolume cr associate myVolumeA")
+		mylv.deviceID = myVolumeA.DeviceByID
+		mylv.create(oc)
+		defer mylv.deleteAsAdmin(oc)
+
+		g.By("# Wait for the localvolume cr provisioned volume and check the pv should be myVolumeA")
+		var lvPvs = make([]string, 0, 5)
+		mylv.waitAvailable(oc)
+		o.Eventually(func() string {
+			lvPvs, _ = getPvNamesOfSpecifiedSc(oc, mylv.scname)
+			return lvPvs[0]
+		}, 180*time.Second, 5*time.Second).ShouldNot(o.BeEmpty())
+		pvLocalPath, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", lvPvs[0], "-o=jsonpath={.spec.local.path}").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		o.Expect(pvLocalPath).Should(o.ContainSubstring(strings.TrimPrefix(myVolumeA.volumeID, "vol-")))
+		pvStatus, getPvStatusError := getPersistentVolumeStatus(oc, lvPvs[0])
+		o.Expect(getPvStatusError).ShouldNot(o.HaveOccurred())
+		o.Expect(pvStatus).Should(o.ContainSubstring("Available"))
+
+		g.By("# Create a localvolumeSet cr and wait for device provisioned")
+		mylvs.create(oc)
+		defer mylvs.deleteAsAdmin(oc)
+		mylvs.waitDeviceProvisioned(oc)
+
+		// Check CR localvolumeset and localvolume not using same device
+		g.By("# Check the provisioned device should only myVolumeB")
+		o.Consistently(func() int64 {
+			provisionedDeviceCount, _ := mylvs.getTotalProvisionedDeviceCount(oc)
+			return provisionedDeviceCount
+		}, 60*time.Second, 5*time.Second).ShouldNot(o.Equal(1))
+		lvsPvs, err := getPvNamesOfSpecifiedSc(oc, mylvs.scname)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		pvLocalPath, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", lvsPvs[0], "-o=jsonpath={.spec.local.path}").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		o.Expect(pvLocalPath).Should(o.ContainSubstring(strings.TrimPrefix(myVolumeB.volumeID, "vol-")))
+		pvStatus, getPvStatusError = getPersistentVolumeStatus(oc, lvsPvs[0])
+		o.Expect(getPvStatusError).ShouldNot(o.HaveOccurred())
+		o.Expect(pvStatus).Should(o.ContainSubstring("Available"))
+
+		g.By("# Delete the localVolume/localVolumeSet/localVolumeDiscovery CR should not stuck")
+		deleteSpecifiedResource(oc.AsAdmin(), "localVolume", mylv.name, mylv.namespace)
+		deleteSpecifiedResource(oc.AsAdmin(), "localVolumeSet", mylvs.name, mylvs.namespace)
+		deleteSpecifiedResource(oc.AsAdmin(), "localVolumeDiscovery", mylvd.name, mylvd.namespace)
+		deleteSpecifiedResource(oc.AsAdmin(), "pv", lvPvs[0], "")
+		deleteSpecifiedResource(oc.AsAdmin(), "pv", lvsPvs[0], "")
 	})
 })

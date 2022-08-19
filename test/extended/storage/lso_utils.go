@@ -289,6 +289,9 @@ func newLocalVolume(opts ...localVolumeOption) localVolume {
 
 // Create localVolume CR
 func (lv *localVolume) create(oc *exutil.CLI) {
+	if lv.namespace == "" {
+		lv.namespace = oc.Namespace()
+	}
 	var deletePaths = make([]string, 0, 5)
 	if lv.volumeMode == "Block" {
 		deletePaths = []string{`items.0.spec.storageClassDevices.0.fsType`}
@@ -300,6 +303,9 @@ func (lv *localVolume) create(oc *exutil.CLI) {
 
 // Create localVolume CR with extra parameters
 func (lv *localVolume) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
+	if lv.namespace == "" {
+		lv.namespace = oc.Namespace()
+	}
 	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", lv.template, "-p", "NAME="+lv.name, "NAMESPACE="+lv.namespace, "DEVICEID="+lv.deviceID,
 		"FSTYPE="+lv.fsType, "SCNAME="+lv.scname, "VOLUMEMODE="+lv.volumeMode)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -325,6 +331,30 @@ func (lv *localVolume) deleteAsAdmin(oc *exutil.CLI) {
 	for _, worker := range workers {
 		execCommandInSpecificNode(oc, worker, command)
 	}
+}
+
+// Waiting for the localVolume CR become "Available"
+func (lv *localVolume) waitAvailable(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+		avaiableFlag, errinfo := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", lv.namespace, "localvolume/"+lv.name, "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}").Output()
+		if errinfo != nil {
+			e2e.Logf("Failed to get LV status: %v, wait for next round to get.", errinfo)
+			return false, nil
+		}
+		if avaiableFlag == "True" {
+			e2e.Logf("The localVolume \"%s\" have already become avaiable to use", lv.name)
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", lv.namespace, "localvolume/"+lv.name).Output()
+		debugLogf("***$ oc describe localVolume/%s\n***%s", lv.name, output)
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", lv.namespace, "-l", "app=diskmaker-manager", "-c", "diskmaker-manager", "--tail=100").Output()
+		e2e.Logf("***$ oc logs -l app=diskmaker-manager -c diskmaker-manager --tail=100\n***%s", output)
+		e2e.Logf("**************************************************************************")
+	}
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for the localVolume \"%s\" become avaiable to use timeout", lv.name))
 }
 
 // Define LocalVolumeSet CR
@@ -409,6 +439,9 @@ func newLocalVolumeSet(opts ...localVolumeSetOption) localVolumeSet {
 
 // Create localVolumeSet CR
 func (lvs *localVolumeSet) create(oc *exutil.CLI) {
+	if lvs.namespace == "" {
+		lvs.namespace = oc.Namespace()
+	}
 	var deletePaths = make([]string, 0, 5)
 	if lvs.volumeMode == "Block" {
 		deletePaths = []string{`items.0.spec.storageClassDevices.0.fsType`}
@@ -420,6 +453,9 @@ func (lvs *localVolumeSet) create(oc *exutil.CLI) {
 
 // Create localVolumeSet CR with extra parameters
 func (lvs *localVolumeSet) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
+	if lvs.namespace == "" {
+		lvs.namespace = oc.Namespace()
+	}
 	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", lvs.template, "-p", "NAME="+lvs.name, "NAMESPACE="+lvs.namespace,
 		"FSTYPE="+lvs.fsType, "MAXDEVICECOUNT="+strconv.FormatInt(lvs.maxDeviceCount, 10), "SCNAME="+lvs.scname, "VOLUMEMODE="+lvs.volumeMode)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -473,10 +509,162 @@ func (lvs *localVolumeSet) waitDeviceProvisioned(oc *exutil.CLI) {
 	})
 	if err != nil {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", lvs.namespace, "localvolumeSet/"+lvs.name).Output()
-		e2e.Logf("***$ oc describe localVolumeSet/%s\n***%s", lvs.name, output)
-		output, _ = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", lvs.namespace, "-l", "app=diskmaker-manager", "-c", "diskmaker-manager", "--since=2m").Output()
-		e2e.Logf("***$ oc logs -l app=diskmaker-manager -c diskmaker-manager --since=2m\n***%s", output)
+		debugLogf("***$ oc describe localVolumeSet/%s\n***%s", lvs.name, output)
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", lvs.namespace, "-l", "app=diskmaker-manager", "-c", "diskmaker-manager", "--tail=100").Output()
+		e2e.Logf("***$ oc logs -l app=diskmaker-manager -c diskmaker-manager --tail=100\n***%s", output)
 		e2e.Logf("**************************************************************************")
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for the localVolumeSet \"%s\" have already provisioned Device timeout", lvs.name))
+}
+
+// Define the localVolumeDiscovery struct
+type localVolumeDiscovery struct {
+	name             string
+	namespace        string
+	template         string
+	discoverNodes    []string
+	discoveryResults map[string]string
+}
+
+// function option mode to change the default values of localVolumeDiscovery attributes
+type localVolumeDiscoveryOption func(*localVolumeDiscovery)
+
+// Replace the default value of localVolumeDiscovery name
+func setLvdName(name string) localVolumeDiscoveryOption {
+	return func(lvd *localVolumeDiscovery) {
+		lvd.name = name
+	}
+}
+
+// Replace the default value of localVolumeDiscovery namespace
+func setLvdNamespace(namespace string) localVolumeDiscoveryOption {
+	return func(lvd *localVolumeDiscovery) {
+		lvd.namespace = namespace
+	}
+}
+
+// Replace the default value of localVolumeDiscovery discoverNodes
+func setLvdDiscoverNodes(discoverNodes []string) localVolumeDiscoveryOption {
+	return func(lvd *localVolumeDiscovery) {
+		lvd.discoverNodes = discoverNodes
+	}
+}
+
+// Replace the default value of localVolumeDiscovery template
+func setLvdTemplate(template string) localVolumeDiscoveryOption {
+	return func(lvd *localVolumeDiscovery) {
+		lvd.template = template
+	}
+}
+
+//  Create a new customized localVolumeDiscovery object
+func newlocalVolumeDiscovery(opts ...localVolumeDiscoveryOption) localVolumeDiscovery {
+	initDiscoverResults := make(map[string]string, 10)
+	defaultlocalVolumeDiscovery := localVolumeDiscovery{
+		// The LocalVolumeDiscovery "autodetect-a" is invalid: metadata.name: Unsupported value: "autodetect-a": supported values: "auto-discover-devices"
+		// TODO: Seems CR name must be "auto-discover-devices" will double check the code later
+		name:             "auto-discover-devices",
+		namespace:        "",
+		discoverNodes:    []string{},
+		discoveryResults: initDiscoverResults,
+		template:         "/lso/localvolumediscovery-template.yaml",
+	}
+	for _, o := range opts {
+		o(&defaultlocalVolumeDiscovery)
+	}
+	return defaultlocalVolumeDiscovery
+}
+
+// Create localVolumeDiscovery CR
+func (lvd *localVolumeDiscovery) create(oc *exutil.CLI) {
+	if lvd.namespace == "" {
+		lvd.namespace = oc.Namespace()
+	}
+	if len(lvd.discoverNodes) > 0 {
+		lvd.ApplyWithSpecificNodes(oc, `kubernetes.io/hostname`, "In", lvd.discoverNodes)
+	} else {
+		err := applyResourceFromTemplateAsAdmin(oc, "--ignore-unknown-parameters=true", "-f", lvd.template, "-p", "NAME="+lvd.name, "NAMESPACE="+lvd.namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+
+// Create localVolumeDiscovery CR with extra parameters
+func (lvd *localVolumeDiscovery) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
+	if lvd.namespace == "" {
+		lvd.namespace = oc.Namespace()
+	}
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", lvd.template, "-p", "NAME="+lvd.name, "NAMESPACE="+lvd.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Create localVolumeDiscovery CR with specific nodes
+func (lvd *localVolumeDiscovery) ApplyWithSpecificNodes(oc *exutil.CLI, filterKey string, filterOperator string, filterValues []string) {
+	if lvd.namespace == "" {
+		lvd.namespace = oc.Namespace()
+	}
+	extraParameters := map[string]interface{}{
+		"jsonPath": `items.0.spec.nodeSelector.nodeSelectorTerms.0.matchExpressions.0.`,
+		"key":      filterKey,
+		"operator": filterOperator,
+		"values":   filterValues,
+	}
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", lvd.template, "-p", "NAME="+lvd.name, "NAMESPACE="+lvd.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Delete localVolumeDiscovery CR
+func (lvd *localVolumeDiscovery) deleteAsAdmin(oc *exutil.CLI) {
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("localVolumeDiscovery/"+lvd.name, "-n", lvd.namespace).Execute()
+}
+
+func (lvd *localVolumeDiscovery) waitDiscoveryAvaiable(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		lvdAvaiableStatus, getLvdStatusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", lvd.namespace, "localVolumeDiscovery/"+lvd.name, "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}").Output()
+		if getLvdStatusErr != nil {
+			e2e.Logf("Failed to get localvolumediscovery: %v", getLvdStatusErr)
+			return false, getLvdStatusErr
+		}
+		if lvdAvaiableStatus == "True" {
+			e2e.Logf("Localvolumediscovery is Avaiable now")
+			return true, nil
+		}
+		e2e.Logf("Localvolumediscovery status is still \"%s\" try the next round", lvdAvaiableStatus)
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "Wait Localvolumediscovery become Avaiable timeout")
+}
+
+// Create localVolumeDiscovery CR with specific nodes
+func (lvd *localVolumeDiscovery) waitDiscoveryResultsGenerated(oc *exutil.CLI) {
+	lvd.waitDiscoveryAvaiable(oc)
+	lvd.syncDiscoveryResults(oc)
+}
+
+// Get localVolumeDiscoveryResults from specific node
+func (lvd *localVolumeDiscovery) getSpecificNodeDiscoveryResults(oc *exutil.CLI, nodeName string) (nodeVolumeDiscoveryResults string) {
+	var getDiscoveryResultsErr error
+	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		nodeVolumeDiscoveryResults, getDiscoveryResultsErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", lvd.namespace, "localVolumeDiscoveryResults/discovery-result-"+nodeName, "-o", "json", "--ignore-not-found").Output()
+		if getDiscoveryResultsErr != nil {
+			e2e.Logf("Failed to get node \"%s\" volume discoveryResults: %v", nodeName, getDiscoveryResultsErr)
+			return false, getDiscoveryResultsErr
+		}
+		if nodeVolumeDiscoveryResults != "" {
+			e2e.Logf("Get Node \"%s\" volume discoveryResults succeed", nodeName)
+			debugLogf("The node/%s volume discoveryResults is\n %s", nodeName, nodeVolumeDiscoveryResults)
+			return true, nil
+		}
+		e2e.Logf("Get node \"%s\" volume discoveryResults is empty try the next round", nodeName)
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Get node \"%s\" volume discoveryResults timeout", nodeName))
+	return nodeVolumeDiscoveryResults
+}
+
+// Create localVolumeDiscovery CR with specific nodes
+func (lvd *localVolumeDiscovery) syncDiscoveryResults(oc *exutil.CLI) {
+	for _, discoverNode := range lvd.discoverNodes {
+		lvd.discoveryResults[discoverNode] = lvd.getSpecificNodeDiscoveryResults(oc, discoverNode)
+	}
+	e2e.Logf("DiscoveryResults Sync Succeed")
 }
