@@ -505,4 +505,72 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(err2).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Invalid value: \"string\": spec.tuningOptions.maxConnections in body must be of type integer"))
 	})
+
+	// author: shudili@redhat.com
+	g.It("Author:shudili-NonPreRelease-High-53605-Expose a Configurable Reload Interval in HAproxy", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			ingctrl             = ingctrlNodePortDescription{
+				name:      "ocp53605",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		g.By("Create an custom ingresscontroller for testing router reload interval")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("Patch tuningOptions/reloadInterval 15s to the ingress-controller")
+		reloadInterval := "15s"
+		ingctrlResource := "ingresscontrollers/" + ingctrl.name
+		podname := getRouterPod(oc, ingctrl.name)
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \""+reloadInterval+"\"}}}")
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+
+		g.By("Check RELOAD_INTERVAL env in a route pod which should be " + reloadInterval)
+		podname = getRouterPod(oc, ingctrl.name)
+		riSearch := readRouterPodEnv(oc, podname, "RELOAD_INTERVAL")
+		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=" + reloadInterval))
+
+		g.By("Patch tuningOptions/reloadInterval with max 120s to the ingress-controller")
+		reloadInterval = "120s"
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \""+reloadInterval+"\"}}}")
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+
+		g.By("Check RELOAD_INTERVAL env in a route pod which should be 2m")
+		podname = getRouterPod(oc, ingctrl.name)
+		riSearch = readRouterPodEnv(oc, podname, "RELOAD_INTERVAL")
+		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=2m"))
+
+		g.By("Patch tuningOptions/reloadInterval with other valid unit m, for exmpale 1m to the ingress-controller")
+		reloadInterval = "1m"
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \""+reloadInterval+"\"}}}")
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+
+		g.By("Check RELOAD_INTERVAL env in a route pod which should be " + reloadInterval)
+		podname = getRouterPod(oc, ingctrl.name)
+		riSearch = readRouterPodEnv(oc, podname, "RELOAD_INTERVAL")
+		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=" + reloadInterval))
+
+		g.By("Patch tuningOptions/reloadInterval with 0s to the ingress-controller, expect to set it to default 5s")
+		reloadInterval = "0s"
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \""+reloadInterval+"\"}}}")
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+
+		g.By("Try to find the RELOAD_INTERVAL env in a route pod which is the default 5s")
+		podname = getRouterPod(oc, ingctrl.name)
+		riSearch = readRouterPodEnv(oc, podname, "RELOAD_INTERVAL")
+		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=5s"))
+	})
 })
