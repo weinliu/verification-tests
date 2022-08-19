@@ -278,7 +278,9 @@ const (
 	HiveNamespace           = "hive" //Hive Namespace
 	OCP49ReleaseImage       = "quay.io/openshift-release-dev/ocp-release:4.9.0-rc.6-x86_64"
 	OCP410ReleaseImage      = "quay.io/openshift-release-dev/ocp-release:4.10.20-x86_64"
+	OCP411ReleaseImage      = "quay.io/openshift-release-dev/ocp-release:4.11.0-x86_64"
 	PullSecret              = "pull-secret"
+	PrometheusURL           = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
 	ClusterInstallTimeout   = 3600
 	DefaultTimeout          = 120
 	ClusterResumeTimeout    = 600
@@ -1065,4 +1067,60 @@ func cleanCD(oc *exutil.CLI, clusterImageSetName string, ns string, secretName s
 	defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", clusterImageSetName})
 	defer cleanupObjects(oc, objectTableRef{"secret", ns, secretName})
 	defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", ns, cdName})
+}
+
+//Install Hive Operator if not
+func installHiveOperator(oc *exutil.CLI, ns *hiveNameSpace, og *operatorGroup, sub *subscription, hc *hiveconfig, testDataDir string) {
+	nsTemp := filepath.Join(testDataDir, "namespace.yaml")
+	ogTemp := filepath.Join(testDataDir, "operatorgroup.yaml")
+	subTemp := filepath.Join(testDataDir, "subscription.yaml")
+	hcTemp := filepath.Join(testDataDir, "hiveconfig.yaml")
+
+	*ns = hiveNameSpace{
+		name:     HiveNamespace,
+		template: nsTemp,
+	}
+
+	*og = operatorGroup{
+		name:      "hive-og",
+		namespace: HiveNamespace,
+		template:  ogTemp,
+	}
+
+	*sub = subscription{
+		name:            "hive-sub",
+		namespace:       HiveNamespace,
+		channel:         "alpha",
+		approval:        "Automatic",
+		operatorName:    "hive-operator",
+		sourceName:      "community-operators",
+		sourceNamespace: "openshift-marketplace",
+		startingCSV:     "",
+		currentCSV:      "",
+		installedCSV:    "",
+		template:        subTemp,
+	}
+
+	*hc = hiveconfig{
+		logLevel:        "debug",
+		targetNamespace: HiveNamespace,
+		template:        hcTemp,
+	}
+	//Create Hive Resources if not exist
+	ns.createIfNotExist(oc)
+	og.createIfNotExist(oc)
+	sub.createIfNotExist(oc)
+	hc.createIfNotExist(oc)
+}
+
+//Get OCP Image for Hive testing
+func getTestOCPImage() string {
+	//get the latest 4-stable image for Hive testing
+	testOCPImage, err := exutil.GetLatest4StableImage()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if testOCPImage == "" {
+		e2e.Logf("Can't get the latest 4-stable image, use 4.11.0 for testing")
+		testOCPImage = OCP411ReleaseImage
+	}
+	return testOCPImage
 }

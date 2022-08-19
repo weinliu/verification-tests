@@ -1,0 +1,447 @@
+package hive
+
+import (
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strings"
+
+	g "github.com/onsi/ginkgo"
+	o "github.com/onsi/gomega"
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
+)
+
+//
+// Hive test case suite for Azure
+//
+
+var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc           = exutil.NewCLI("hive-"+getRandomString(), exutil.KubeConfigPath())
+		ns           hiveNameSpace
+		og           operatorGroup
+		sub          subscription
+		hc           hiveconfig
+		testDataDir  string
+		iaasPlatform string
+		testOCPImage string
+	)
+	g.BeforeEach(func() {
+		//Install Hive operator if not
+		testDataDir = exutil.FixturePath("testdata", "cluster_operator/hive")
+		installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)
+
+		//Enable hive Metric
+		exportMetric(oc, enable)
+
+		// get IaaS platform
+		iaasPlatform = exutil.CheckPlatform(oc)
+		if iaasPlatform != "azure" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while the case is for Azure - skipping test ...")
+		}
+
+		//Get OCP Image for Hive testing
+		testOCPImage = getTestOCPImage()
+	})
+
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-High-25447-High-28657-Hive API support for Azure[Serial]", func() {
+		testCaseID := "25447"
+		cdName := "cluster-" + testCaseID
+		oc.SetupProject()
+
+		g.By("Config Azure Install-Config Secret...")
+		installConfigSecret := azureInstallConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AzureBaseDomain,
+			name2:      cdName,
+			region:     AzureRegion,
+			resGroup:   AzureRESGroup,
+			azureType:  AzurePublic,
+			template:   filepath.Join(testDataDir, "azure-install-config.yaml"),
+		}
+		g.By("Config Azure ClusterDeployment...")
+		cluster := azureClusterDeployment{
+			fake:                "false",
+			name:                cdName,
+			namespace:           oc.Namespace(),
+			baseDomain:          AzureBaseDomain,
+			clusterName:         cdName,
+			platformType:        "azure",
+			credRef:             AzureCreds,
+			region:              AzureRegion,
+			resGroup:            AzureRESGroup,
+			azureType:           AzurePublic,
+			imageSetRef:         cdName + "-imageset",
+			installConfigSecret: cdName + "-install-config",
+			pullSecretRef:       PullSecret,
+			template:            filepath.Join(testDataDir, "clusterdeployment-azure.yaml"),
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		g.By("Create worker and infra MachinePool ...")
+		workermachinepoolAzureTemp := filepath.Join(testDataDir, "machinepool-worker-azure.yaml")
+		inframachinepoolAzureTemp := filepath.Join(testDataDir, "machinepool-infra-azure.yaml")
+		workermp := machinepool{
+			namespace:   oc.Namespace(),
+			clusterName: cdName,
+			template:    workermachinepoolAzureTemp,
+		}
+		inframp := machinepool{
+			namespace:   oc.Namespace(),
+			clusterName: cdName,
+			template:    inframachinepoolAzureTemp,
+		}
+
+		defer cleanupObjects(oc,
+			objectTableRef{"MachinePool", oc.Namespace(), cdName + "-worker"},
+			objectTableRef{"MachinePool", oc.Namespace(), cdName + "-infra"},
+		)
+		workermp.create(oc)
+		inframp.create(oc)
+
+		g.By("Check Azure ClusterDeployment installed flag is true")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		g.By("OCP-28657: Hive supports remote Machine Set Management for Azure")
+		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
+		err := os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpDir)
+		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
+		kubeconfig := tmpDir + "/kubeconfig"
+		e2e.Logf("Check worker machinepool .status.replicas = 3")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "3", ok, DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+		e2e.Logf("Check infra machinepool .status.replicas = 1 ")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+		machinesetsname := getResource(oc, asAdmin, withoutNamespace, "MachinePool", cdName+"-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.machineSets[?(@.replicas==1)].name}")
+		o.Expect(machinesetsname).NotTo(o.BeEmpty())
+		e2e.Logf("Remote cluster machineset list: %s", machinesetsname)
+		e2e.Logf("Check machineset %s created on remote cluster", machinesetsname)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, machinesetsname, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].metadata.name}"}).check(oc)
+		e2e.Logf("Check only 1 machineset up")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1", ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].status.availableReplicas}"}).check(oc)
+		e2e.Logf("Check only one machines in Running status")
+		// Can't filter by infra label because of bug https://issues.redhat.com/browse/HIVE-1922
+		//newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=infra", "-o=jsonpath={.items[*].status.phase}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-o=jsonpath={.items[?(@.spec.metadata.labels.node-role\\.kubernetes\\.io==\"infra\")].status.phase}"}).check(oc)
+		e2e.Logf("Patch infra machinepool .spec.replicas to 3")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"replicas": 3}}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "3", ok, 5*DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+		machinesetsname = getResource(oc, asAdmin, withoutNamespace, "MachinePool", cdName+"-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.machineSets[?(@.replicas==1)].name}")
+		o.Expect(machinesetsname).NotTo(o.BeEmpty())
+		e2e.Logf("Remote cluster machineset list: %s", machinesetsname)
+		e2e.Logf("Check machineset %s created on remote cluster", machinesetsname)
+		machinesetsArray := strings.Fields(machinesetsname)
+		o.Expect(len(machinesetsArray) == 3).Should(o.BeTrue())
+		for _, machinesetName := range machinesetsArray {
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, machinesetName, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].metadata.name}"}).check(oc)
+		}
+		e2e.Logf("Check machinesets scale up to 3")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1 1 1", ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].status.availableReplicas}"}).check(oc)
+		e2e.Logf("Check 3 machines in Running status")
+		// Can't filter by infra label because of bug https://issues.redhat.com/browse/HIVE-1922
+		//newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=infra", "-o=jsonpath={.items[*].status.phase}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-o=jsonpath={.items[?(@.spec.metadata.labels.node-role\\.kubernetes\\.io==\"infra\")].status.phase}"}).check(oc)
+		e2e.Logf("Patch infra machinepool .spec.replicas to 2")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"replicas": 2}}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, 5*DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+		machinesetsname = getResource(oc, asAdmin, withoutNamespace, "MachinePool", cdName+"-infra", "-n", oc.Namespace(), "-o=jsonpath={.status.machineSets[?(@.replicas==1)].name}")
+		o.Expect(machinesetsname).NotTo(o.BeEmpty())
+		e2e.Logf("Remote cluster machineset list: %s", machinesetsname)
+		e2e.Logf("Check machineset %s created on remote cluster", machinesetsname)
+		machinesetsArray = strings.Fields(machinesetsname)
+		o.Expect(len(machinesetsArray) == 2).Should(o.BeTrue())
+		for _, machinesetName := range machinesetsArray {
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, machinesetName, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].metadata.name}"}).check(oc)
+		}
+		e2e.Logf("Check machinesets scale down to 2")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1 1", ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[?(@.spec.replicas==1)].status.availableReplicas}"}).check(oc)
+		e2e.Logf("Check 2 machines in Running status")
+		// Can't filter by infra label because of bug https://issues.redhat.com/browse/HIVE-1922
+		//newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=infra", "-o=jsonpath={.items[*].status.phase}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-o=jsonpath={.items[?(@.spec.metadata.labels.node-role\\.kubernetes\\.io==\"infra\")].status.phase}"}).check(oc)
+	})
+
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-33854-Hive supports Azure ClusterPool [Serial]", func() {
+		testCaseID := "33854"
+		poolName := "pool-" + testCaseID
+		imageSetName := poolName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: testOCPImage,
+			template:     imageSetTemp,
+		}
+
+		g.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		g.By("Check if ClusterImageSet was created successfully")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
+
+		oc.SetupProject()
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and azure-credentials to target namespace for the cluster
+		g.By("Copy Azure platform credentials...")
+		createAzureCreds(oc, oc.Namespace())
+
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Create ClusterPool...")
+		poolTemp := filepath.Join(testDataDir, "clusterpool-azure.yaml")
+		pool := azureClusterPool{
+			name:           poolName,
+			namespace:      oc.Namespace(),
+			fake:           "false",
+			baseDomain:     AzureBaseDomain,
+			imageSetRef:    imageSetName,
+			platformType:   "azure",
+			credRef:        AzureCreds,
+			region:         AzureRegion,
+			resGroup:       AzureRESGroup,
+			pullSecretRef:  PullSecret,
+			size:           1,
+			maxSize:        1,
+			runningCount:   0,
+			maxConcurrent:  1,
+			hibernateAfter: "360m",
+			template:       poolTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
+		pool.create(oc)
+		g.By("Check if Azure ClusterPool created successfully and become ready")
+		//runningCount is 0 so pool status should be standby: 1, ready: 0
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
+
+		g.By("Check if CD is Hibernating")
+		cdListStr := getCDlistfromPool(oc, poolName)
+		var cdArray []string
+		cdArray = strings.Split(strings.TrimSpace(cdListStr), "\n")
+		for i := range cdArray {
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i]}).check(oc)
+		}
+
+		g.By("Patch pool.spec.lables.test=test...")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"labels":{"test":"test"}}}`}).check(oc)
+
+		g.By("The existing CD in the pool has no test label")
+		for i := range cdArray {
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "test", nok, DefaultTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i], "-o=jsonpath={.metadata.labels}"}).check(oc)
+		}
+
+		g.By("The new CD in the pool should have the test label")
+		e2e.Logf("Delete the old CD in the pool")
+		newCheck("expect", "delete", asAdmin, withoutNamespace, contain, "delete", ok, ClusterUninstallTimeout, []string{"ClusterDeployment", cdArray[0], "-n", cdArray[0]}).check(oc)
+		e2e.Logf("Get the CD list from the pool again.")
+		cdListStr = getCDlistfromPool(oc, poolName)
+		cdArray = strings.Split(strings.TrimSpace(cdListStr), "\n")
+		for i := range cdArray {
+			newCheck("expect", "get", asAdmin, withoutNamespace, contain, "test", ok, DefaultTimeout, []string{"ClusterDeployment", cdArray[i], "-n", cdArray[i], "-o=jsonpath={.metadata.labels}"}).check(oc)
+		}
+	})
+
+	//author: mihuang@redhat.com
+	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "35297"|./bin/extended-platform-tests run --timeout 90m -f -
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-35297-Hive supports cluster hibernation[Serial]", func() {
+		testCaseID := "35297"
+		cdName := "cluster-" + testCaseID
+		oc.SetupProject()
+
+		g.By("Config Azure Install-Config Secret...")
+		installConfigSecret := azureInstallConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AzureBaseDomain,
+			name2:      cdName,
+			region:     AzureRegion,
+			resGroup:   AzureRESGroup,
+			azureType:  AzurePublic,
+			template:   filepath.Join(testDataDir, "azure-install-config.yaml"),
+		}
+		g.By("Config Azure ClusterDeployment...")
+		cluster := azureClusterDeployment{
+			fake:                "false",
+			name:                cdName,
+			namespace:           oc.Namespace(),
+			baseDomain:          AzureBaseDomain,
+			clusterName:         cdName,
+			platformType:        "azure",
+			credRef:             AzureCreds,
+			region:              AzureRegion,
+			resGroup:            AzureRESGroup,
+			azureType:           AzurePublic,
+			imageSetRef:         cdName + "-imageset",
+			installConfigSecret: cdName + "-install-config",
+			pullSecretRef:       PullSecret,
+			template:            filepath.Join(testDataDir, "clusterdeployment-azure.yaml"),
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		g.By("Check Azure ClusterDeployment installed flag is true")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		g.By("Check CD has Hibernating condition")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
+
+		g.By("patch the CD to Hibernating...")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"powerState": "Hibernating"}}`}).check(oc)
+		e2e.Logf("Wait for CD to be Hibernating")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.powerState}"}).check(oc)
+		e2e.Logf("Check cd's condition")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "True", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Unreachable")].status}`}).check(oc)
+
+		g.By("patch the CD to Running...")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"powerState": "Running"}}`}).check(oc)
+		e2e.Logf("Wait for CD to be Running")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.powerState}"}).check(oc)
+		e2e.Logf("Check cd's condition")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "True", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Unreachable")].status}`}).check(oc)
+	})
+
+	//author: lwan@redhat.com
+	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "52415"|./bin/extended-platform-tests run --timeout 60m -f -
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:lwan-Medium-52415-[Azure]Hive Machinepool test for autoscale [Serial]", func() {
+		testCaseID := "52415"
+		cdName := "cluster-" + testCaseID
+		oc.SetupProject()
+
+		g.By("Config Azure Install-Config Secret...")
+		installConfigSecret := azureInstallConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: AzureBaseDomain,
+			name2:      cdName,
+			region:     AzureRegion,
+			resGroup:   AzureRESGroup,
+			azureType:  AzurePublic,
+			template:   filepath.Join(testDataDir, "azure-install-config.yaml"),
+		}
+		g.By("Config Azure ClusterDeployment...")
+		cluster := azureClusterDeployment{
+			fake:                "false",
+			name:                cdName,
+			namespace:           oc.Namespace(),
+			baseDomain:          AzureBaseDomain,
+			clusterName:         cdName,
+			platformType:        "azure",
+			credRef:             AzureCreds,
+			region:              AzureRegion,
+			resGroup:            AzureRESGroup,
+			azureType:           AzurePublic,
+			imageSetRef:         cdName + "-imageset",
+			installConfigSecret: cdName + "-install-config",
+			pullSecretRef:       PullSecret,
+			template:            filepath.Join(testDataDir, "clusterdeployment-azure.yaml"),
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		g.By("Create infra MachinePool ...")
+		inframachinepoolAzureTemp := filepath.Join(testDataDir, "machinepool-infra-azure.yaml")
+		inframp := machinepool{
+			namespace:   oc.Namespace(),
+			clusterName: cdName,
+			template:    inframachinepoolAzureTemp,
+		}
+
+		defer cleanupObjects(oc, objectTableRef{"MachinePool", oc.Namespace(), cdName + "-infra"})
+		inframp.create(oc)
+
+		g.By("Check if ClusterDeployment created successfully and become Provisioned")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
+		err := os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpDir)
+		getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
+		kubeconfig := tmpDir + "/kubeconfig"
+		e2e.Logf("Patch static replicas to autoscaler")
+
+		g.By("OCP-52415: [Azure]Allow minReplicas autoscaling of MachinePools to be 0")
+		e2e.Logf("Check hive allow set minReplicas=0 without zone setting")
+		autoScalingMax := "3"
+		autoScalingMin := "0"
+		removeConfig := "[{\"op\": \"remove\", \"path\": \"/spec/replicas\"}]"
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "--type", "json", "-p", removeConfig}).check(oc)
+		autoscalConfig := fmt.Sprintf("{\"spec\": {\"autoscaling\": {\"maxReplicas\": %s, \"minReplicas\": %s}}}", autoScalingMax, autoScalingMin)
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "--type", "merge", "-p", autoscalConfig}).check(oc)
+		e2e.Logf("Check replicas is 0")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "0 0 0", ok, 2*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
+		e2e.Logf("Check hive allow set minReplicas=0 within zone setting")
+		cleanupObjects(oc, objectTableRef{"MachinePool", oc.Namespace(), cdName + "-infra"})
+		infra2MachinepoolYaml := `
+apiVersion: hive.openshift.io/v1
+kind: MachinePool
+metadata:
+  name: ` + cdName + `-infra2
+  namespace: ` + oc.Namespace() + `
+spec:
+  autoscaling:
+    maxReplicas: 3
+    minReplicas: 0
+  clusterDeploymentRef:
+    name: ` + cdName + `
+  labels:
+    node-role.kubernetes.io: infra2
+    node-role.kubernetes.io/infra2: ""
+  name: infra2
+  platform:
+    azure:
+      osDisk:
+        diskSizeGB: 128
+      type: Standard_D2s_v3
+      zones:
+      - "1"
+      - "2"
+      - "3"`
+		var filename = testCaseID + "-machinepool-infra2.yaml"
+		err = ioutil.WriteFile(filename, []byte(infra2MachinepoolYaml), 0644)
+		defer os.Remove(filename)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", filename, "--ignore-not-found").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", filename).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Check replicas is 0")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "0 0 0", ok, 2*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra2", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
+
+		g.By("Check Hive supports autoscale for Azure")
+		patchYaml := `
+spec:
+  scaleDown:
+    enabled: true
+    delayAfterAdd: 10s
+    delayAfterDelete: 10s
+    delayAfterFailure: 10s
+    unneededTime: 10s`
+		e2e.Logf("Add busybox in remote cluster and check machines will scale up to maxReplicas")
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "ClusterAutoscaler", "default", "--type", "merge", "-p", patchYaml}).check(oc)
+		workloadYaml := filepath.Join(testDataDir, "workload.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("--kubeconfig="+kubeconfig, "-f", workloadYaml, "--ignore-not-found").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("--kubeconfig="+kubeconfig, "-f", workloadYaml).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "busybox", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Deployment", "busybox", "-n", "default"}).check(oc)
+		e2e.Logf("Check replicas will scale up to maximum value")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "1 1 1", ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra2", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
+		e2e.Logf("Delete busybox in remote cluster and check machines will scale down to minReplicas")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("--kubeconfig="+kubeconfig, "-f", workloadYaml).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Check replicas will scale down to minimum value")
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "0 0 0", ok, 7*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra2", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
+	})
+
+})
