@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2019-06-01/network"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
@@ -82,4 +83,81 @@ func GetAzureVMPublicIP(sess *AzureSession, rg, vmName string) (string, error) {
 	e2e.Logf("The public IP for vm %s is %s,", vmName, publicIP)
 	return publicIP, nil
 
+}
+
+// StartAzureVM starts the selected VM
+func StartAzureVM(sess *AzureSession, vmName string, resourceGroupName string) (osr autorest.Response, err error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vmClient := compute.NewVirtualMachinesClient(sess.SubscriptionID)
+	vmClient.Authorizer = sess.Authorizer
+	future, vmErr := vmClient.Start(ctx, resourceGroupName, vmName)
+	if err != nil {
+		e2e.Logf("cannot start vm: %v", vmErr)
+		return osr, vmErr
+	}
+
+	err = future.WaitForCompletionRef(ctx, vmClient.Client)
+	if err != nil {
+		e2e.Logf("cannot get the vm start future response: %v", err)
+		return osr, err
+	}
+	return future.Result(vmClient)
+}
+
+// StopAzureVM stops the selected VM
+func StopAzureVM(sess *AzureSession, vmName string, resourceGroupName string) (osr autorest.Response, err error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vmClient := compute.NewVirtualMachinesClient(sess.SubscriptionID)
+	vmClient.Authorizer = sess.Authorizer
+	var skipShutdown bool = true
+	// skipShutdown parameter is optional, we are taking its true value here
+	future, vmErr := vmClient.PowerOff(ctx, resourceGroupName, vmName, &skipShutdown)
+	if err != nil {
+		e2e.Logf("cannot power off vm: %v", vmErr)
+		return osr, vmErr
+	}
+
+	err = future.WaitForCompletionRef(ctx, vmClient.Client)
+	if err != nil {
+		e2e.Logf("cannot get the vm power off future response: %v", err)
+		return osr, err
+	}
+	return future.Result(vmClient)
+}
+
+// GetAzureVMInstance get vm instance
+func GetAzureVMInstance(sess *AzureSession, vmName string, resourceGroupName string) (string, error) {
+	vmClient := compute.NewVirtualMachinesClient(sess.SubscriptionID)
+	vmClient.Authorizer = sess.Authorizer
+	for vm, vmErr := vmClient.ListComplete(context.Background(), resourceGroupName); vm.NotDone(); vmErr = vm.Next() {
+		if vmErr != nil {
+			e2e.Logf("got error while traverising RG list: %v", vmErr)
+			return "", vmErr
+		}
+		instanceName := vm.Value()
+		if *instanceName.Name == vmName {
+			e2e.Logf("Azure instance found :: %s", vmName)
+			break
+		}
+	}
+	return vmName, nil
+}
+
+// GetAzureVMInstanceState get vm instance state
+func GetAzureVMInstanceState(sess *AzureSession, vmName string, resourceGroupName string) (string, error) {
+	var vmErr error
+	vmClient := compute.NewVirtualMachinesClient(sess.SubscriptionID)
+	vmClient.Authorizer = sess.Authorizer
+	vmStatus, vmErr := vmClient.Get(context.Background(), resourceGroupName, vmName, compute.InstanceView)
+	if vmErr != nil {
+		e2e.Logf("Failed to get vm status :: %v", vmErr)
+		return "", vmErr
+	}
+	status1 := *vmStatus.VirtualMachineProperties.InstanceView.Statuses
+	status2 := *status1[1].DisplayStatus
+	newStatus := strings.Split(status2, " ")
+	e2e.Logf("Azure instance status found :: %v", newStatus[1])
+	return string(newStatus[1]), nil
 }
