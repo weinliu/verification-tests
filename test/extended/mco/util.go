@@ -183,6 +183,11 @@ func (mcp *MachineConfigPool) getMachineCount() (int, error) {
 		logger.Infof("Error getting machineCount: %s", ocErr)
 		return -1, ocErr
 	}
+
+	if len(machineCountStr) == 0 {
+		return -1, fmt.Errorf(".status.machineCount value is not already set in MCP %s", mcp.GetName())
+	}
+
 	machineCount, convErr := strconv.Atoi(machineCountStr)
 
 	if convErr != nil {
