@@ -14,16 +14,12 @@ import (
 )
 
 // Execute command in node
-func execCommandInSpecificNode(oc *exutil.CLI, nodeHostName string, command string) (string, error) {
-	var output string
-	debugPodNamespace := oc.Namespace()
-	// Check whether current namespace is Active
-	nsState, err := oc.AsAdmin().Run("get").Args("ns/"+oc.Namespace(), "-o=jsonpath={.status.phase}", "--ignore-not-found").Output()
-	if nsState != "Active" || err != nil {
-		debugPodNamespace = "default"
-	}
-	argsCmd := []string{"-n", debugPodNamespace, "node/" + nodeHostName, "-q", "--", "chroot", "/host", "bin/sh", "-c", command}
-	stdOut, stdErr, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args(argsCmd...).Outputs()
+func execCommandInSpecificNode(oc *exutil.CLI, nodeHostName string, command string) (output string, err error) {
+	// Running oc debug node in normal projects
+	// (normal projects mean projects that are not clusters default projects like: like "default", "openshift-xxx" et al)
+	// need extra configuration on 4.12+ ocp test clusters
+	// https://github.com/openshift/oc/blob/master/pkg/helpers/cmd/errors.go#L24-L29
+	stdOut, stdErr, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, nodeHostName, []string{"-q"}, "bin/sh", "-c", command)
 	debugLogf("Executed \""+command+"\" on node \"%s\":\n*stdErr* :\"%s\"\n*stdOut* :\"%s\".", nodeHostName, stdErr, stdOut)
 	// Adapt Pod Security changed on k8s v1.23+
 	// https://kubernetes.io/docs/tutorials/security/cluster-level-pss/
