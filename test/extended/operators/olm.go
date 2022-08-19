@@ -32,6 +32,54 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: jiazha@redhat.com
+	g.It("Author:jiazha-Medium-53740-CatalogSource incorrect parsing validation", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		dr := make(describerResrouce)
+		itName := g.CurrentGinkgoTestDescription().TestText
+		dr.addIr(itName)
+
+		g.By("1, Create a CatalogSource that in a random project")
+		oc.SetupProject()
+		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+		og := operatorGroupDescription{
+			name:      "og-53740",
+			namespace: oc.Namespace(),
+			template:  ogSingleTemplate,
+		}
+		defer og.delete(itName, dr)
+		og.createwithCheck(oc, itName, dr)
+		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-image-template.yaml")
+		cs := catalogSourceDescription{
+			name:        "cs-53740",
+			namespace:   oc.Namespace(),
+			displayName: "QE Operators",
+			publisher:   "QE",
+			sourceType:  "grpc",
+			address:     "quay.io/openshift-qe-optional-operators/ocp4-index:latest",
+			interval:    "15mError code",
+			template:    csImageTemplate,
+		}
+		defer cs.delete(itName, dr)
+		cs.create(oc, itName, dr)
+		var msg string
+		err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", cs.name, "-n", cs.namespace, "-o=jsonpath={.status.message}").Output()
+			if !strings.Contains(msg, "error parsing") {
+				return false, nil
+			}
+			return true, nil
+		})
+		if err != nil {
+			e2e.Failf("cannot find the parsing error from CatalogSource message: %s", msg)
+		}
+
+		log, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deploy/marketplace-operator", "--tail", "3").Output()
+		if !strings.Contains(log, "time: unknown unit") {
+			e2e.Failf("cannot find the parsing error logs from marketplace-operator: %s", log)
+		}
+	})
+
+	// author: jiazha@redhat.com
 	g.It("Author:jiazha-Medium-49687-Make the marketplace operator optional", func() {
 		g.By("1, check if the marketplace disabled")
 		cap, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.enabledCapabilities}").Output()
