@@ -119,19 +119,21 @@ func (iscsi *iscsiServer) createIscsiNetworkPortal(oc *exutil.CLI, serviceIP str
 	o.Expect(msg).To(o.ContainSubstring("Created network portal " + serviceIP + ":3260"))
 }
 
+// Delete network portal from iSCSI target
+func (iscsi *iscsiServer) deleteIscsiNetworkPortal(oc *exutil.CLI, serviceIP string, iscsiTargetPodName string) {
+	cmd := "targetcli /iscsi/iqn.2016-04.test.com:storage.target00/tpg1/portals delete " + serviceIP + " 3260"
+	execCommandInSpecificPod(oc, iscsi.deploy.namespace, iscsiTargetPodName, cmd)
+}
+
 // Enable or disable iSCSI Target Discovery Authentication on iSCSI target, set flg= true/false for enable/disable
-func (iscsi *iscsiServer) enableTargetDiscoveryAuth(oc *exutil.CLI, flg bool, iscsiTargetPodName string) {
+func (iscsi *iscsiServer) enableTargetDiscoveryAuth(oc *exutil.CLI, flg bool, iscsiTargetPodName string) (string, error) {
 	var (
-		cmd    = "targetcli iscsi/ set discovery_auth enable=1"
-		output = "Parameter enable is now 'True'"
+		cmd = "targetcli iscsi/ set discovery_auth enable=1"
 	)
 	if !flg {
 		cmd = "targetcli iscsi/ set discovery_auth enable=0"
-		output = "Parameter enable is now 'False'"
 	}
-	msg, _err := execCommandInSpecificPod(oc, iscsi.deploy.namespace, iscsiTargetPodName, cmd)
-	o.Expect(_err).NotTo(o.HaveOccurred())
-	o.Expect(msg).To(o.ContainSubstring(output))
+	return execCommandInSpecificPod(oc, iscsi.deploy.namespace, iscsiTargetPodName, cmd)
 }
 
 // Set iSCSI Target Discovery Authentication credentials on iSCSI target

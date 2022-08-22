@@ -496,15 +496,16 @@ func execCommandInSpecificPodWithLabel(oc *exutil.CLI, namespace string, labelNa
 
 // Deployment workload related functions
 type deployment struct {
-	name       string
-	namespace  string
-	replicasno string
-	applabel   string
-	mpath      string
-	pvcname    string
-	template   string
-	volumetype string
-	typepath   string
+	name             string
+	namespace        string
+	replicasno       string
+	applabel         string
+	mpath            string
+	pvcname          string
+	template         string
+	volumetype       string
+	typepath         string
+	maxWaitReadyTime time.Duration
 }
 
 // function option mode to change the default value of deployment parameters,eg. name, replicasno, mpath
@@ -580,18 +581,26 @@ func setDeploymentReplicasNo(replicasno string) deployOption {
 	}
 }
 
+// Replace the default value of Deployment maximum Wait Ready Time
+func setDeploymentMaxWaitReadyTime(maxWaitReadyTime time.Duration) deployOption {
+	return func(this *deployment) {
+		this.maxWaitReadyTime = maxWaitReadyTime
+	}
+}
+
 //  Create a new customized Deployment object
 func newDeployment(opts ...deployOption) deployment {
 	defaultDeployment := deployment{
-		name:       "my-dep-" + getRandomString(),
-		template:   "dep-template.yaml",
-		namespace:  "",
-		replicasno: "1",
-		applabel:   "myapp-" + getRandomString(),
-		mpath:      "/mnt/storage",
-		pvcname:    "",
-		volumetype: "volumeMounts",
-		typepath:   "mountPath",
+		name:             "my-dep-" + getRandomString(),
+		template:         "dep-template.yaml",
+		namespace:        "",
+		replicasno:       "1",
+		applabel:         "myapp-" + getRandomString(),
+		mpath:            "/mnt/storage",
+		pvcname:          "",
+		volumetype:       "volumeMounts",
+		typepath:         "mountPath",
+		maxWaitReadyTime: 180 * time.Second,
 	}
 
 	for _, o := range opts {
@@ -773,7 +782,7 @@ func (dep *deployment) describe(oc *exutil.CLI) string {
 
 // Waiting the deployment become ready
 func (dep *deployment) waitReady(oc *exutil.CLI) {
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	err := wait.Poll(5*time.Second, dep.maxWaitReadyTime, func() (bool, error) {
 		deploymentReady, err := dep.checkReady(oc)
 		if err != nil {
 			return deploymentReady, err

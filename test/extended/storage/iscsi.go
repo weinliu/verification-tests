@@ -59,8 +59,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.Skip("Skip: This test needs at least 2 worker nodes, test cluster has less than 2 schedulable workers!")
 		}
 
-		g.By("#. Create new project for the scenario")
-		oc.SetupProject()
+		//Clean-up: delete network portal from iscsi target server
+		defer svcIscsiServer.deleteIscsiNetworkPortal(oc, svcIscsiServer.svc.clusterIP, svcIscsiServer.deploy.getPodList(oc)[0])
 
 		g.By("#. Create a pv with the storageclass")
 		pv.iscsiServerIP = svcIscsiServer.svc.clusterIP
@@ -107,7 +107,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-52770 [ISCSI] Check iscsi multipath working
-	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-High-52770-[ISCSI] Check iscsi multipath working", func() {
+	g.It("NonPreRelease-ROSA-OSD_CCS-ARO-Author:rdeore-High-52770-[ISCSI] Check iscsi multipath working", func() {
 		//Set the resource objects definition for the scenario
 		var (
 			scName      = "iscsi-sc-" + getRandomString()
@@ -121,6 +121,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			svc = newService(setServiceTemplate(svcTemplate), setServiceName(serviceName), setServiceSelectorLable(svcIscsiServer.deploy.applabel), setServiceNodePort("0"),
 				setServicePort(port), setServiceTargetPort(port), setServiceProtocol("TCP"))
 		)
+		//Clean-up: delete network portal from iscsi target server
+		defer svcIscsiServer.deleteIscsiNetworkPortal(oc, svcIscsiServer.svc.clusterIP, svcIscsiServer.deploy.getPodList(oc)[0])
 
 		g.By("#. Create a new iscsi service")
 		svc.create(oc)
@@ -129,9 +131,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("#. Create a network portal on iscsi-target using new service IP")
 		svcIscsiServer.createIscsiNetworkPortal(oc, svc.clusterIP, svcIscsiServer.deploy.getPodList(oc)[0])
-
-		g.By("#. Create new project for the scenario")
-		oc.SetupProject()
+		defer svcIscsiServer.deleteIscsiNetworkPortal(oc, svc.clusterIP, svcIscsiServer.deploy.getPodList(oc)[0])
 
 		g.By("#. Create a pv with the storageclass")
 		pv.iscsiServerIP = svcIscsiServer.svc.clusterIP
@@ -173,6 +173,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		dep.scaleReplicas(oc, "1")
 
 		g.By("#. Wait for the deployment scale up completed")
+		// Enhance for OVN network type test clusters
+		dep.maxWaitReadyTime = 15 * time.Minute
 		dep.waitReady(oc)
 
 		g.By("#. Check testdata still in the volume and volume has exec right")
@@ -186,7 +188,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-52835 [ISCSI] ISCSI with CHAP Authentication
-	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-High-52835-[ISCSI] ISCSI with CHAP Authentication", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-High-52835-[ISCSI] ISCSI with CHAP Authentication [Serial]", func() {
 		if checkFips(oc) {
 			g.Skip("iSCSI CHAP Authentication is not supported in FIPS enabled env, skip test execution!!!")
 		}
@@ -213,12 +215,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 		)
 
+		//Clean-up: delete network portal from iscsi target server
+		defer svcIscsiServer.deleteIscsiNetworkPortal(oc, svcIscsiServer.svc.clusterIP, svcIscsiServer.deploy.getPodList(oc)[0])
+
 		g.By("#. Create a secret for iscsi chap authentication")
 		sec.createWithExtraParameters(oc, extraParameters)
 		defer sec.deleteAsAdmin(oc)
 
 		g.By("#. Enable iscsi target discovery authentication and set user credentials")
-		svcIscsiServer.enableTargetDiscoveryAuth(oc, true, iscsiTargetPodName)
+		msg, _err := svcIscsiServer.enableTargetDiscoveryAuth(oc, true, iscsiTargetPodName)
+		defer svcIscsiServer.enableTargetDiscoveryAuth(oc, false, iscsiTargetPodName)
+		o.Expect(_err).NotTo(o.HaveOccurred())
+		o.Expect(msg).To(o.ContainSubstring("Parameter enable is now 'True'"))
 		svcIscsiServer.setTargetDiscoveryAuthCreds(oc, "user", "demo", "muser", "mpass", iscsiTargetPodName)
 
 		g.By("#. Create a pv with the storageclass")
@@ -277,7 +285,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		checkResourcesNotExist(oc, "deployment", dep.name, dep.namespace)
 
 		g.By("#. Disable target discovery authentication and reschedule deployment to check pod creation successful")
-		svcIscsiServer.enableTargetDiscoveryAuth(oc, false, iscsiTargetPodName)
+		msg, _err = svcIscsiServer.enableTargetDiscoveryAuth(oc, false, iscsiTargetPodName)
+		o.Expect(_err).NotTo(o.HaveOccurred())
+		o.Expect(msg).To(o.ContainSubstring("Parameter enable is now 'False'"))
 		dep.name = "my-dep-" + getRandomString()
 		dep.create(oc)
 		defer dep.deleteAsAdmin(oc)
