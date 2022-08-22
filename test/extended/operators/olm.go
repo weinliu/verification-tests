@@ -143,7 +143,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			e2e.Failf("cannot find the parsing error from CatalogSource message: %s", msg)
 		}
 
-		log, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deploy/marketplace-operator", "--tail", "3").Output()
+		log, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-marketplace", "deploy/marketplace-operator", "--tail", "3").Output()
 		if !strings.Contains(log, "time: unknown unit") {
 			e2e.Failf("cannot find the parsing error logs from marketplace-operator: %s", log)
 		}
