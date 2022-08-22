@@ -201,7 +201,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		imagename := "image-registry.openshift-image-registry.svc:5000/" + oc.Namespace() + "/prepare-24345:latest"
-		err = oc.AsAdmin().WithoutNamespace().Run("run").Args("prepare-24345", "--image", imagename, "-n", oc.Namespace(), "--command", "--", "/bin/sleep", "120").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("run").Args("prepare-24345", "--image", imagename, `--overrides={"spec":{"securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}}}`, "-n", oc.Namespace(), "--command", "--", "/bin/sleep", "120").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		errWait := wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
 			podList, _ := oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).List(metav1.ListOptions{LabelSelector: "run=prepare-24345"})

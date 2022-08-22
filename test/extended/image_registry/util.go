@@ -885,7 +885,7 @@ func saveGlobalProxy(oc *exutil.CLI) (string, string, string) {
 
 func createSimpleRunPod(oc *exutil.CLI, image, expectInfo string) {
 	podName := getRandomString()
-	err := oc.AsAdmin().WithoutNamespace().Run("run").Args(podName, "--image="+image, "-n", oc.Namespace(), "--image-pull-policy=Always", "--", "sleep", "300").Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("run").Args(podName, "--image="+image, "-n", oc.Namespace(), `--overrides={"spec":{"securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}}}`, "--image-pull-policy=Always", "--", "sleep", "300").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	err = wait.Poll(3*time.Second, 2*time.Minute, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", podName, "-n", oc.Namespace()).Output()

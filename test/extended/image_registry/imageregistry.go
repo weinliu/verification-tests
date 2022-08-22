@@ -159,20 +159,16 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		}()
 		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"proxy":{"http": "http://test:3128","https":"http://test:3128","noProxy":"test.no-proxy.com"}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-
-		waitRegistryDefaultPodsReady(oc)
-		result, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-image-registry", "deployment.apps/image-registry", "env").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(result).To(o.ContainSubstring("HTTP_PROXY=http://test:3128"))
-		o.Expect(result).To(o.ContainSubstring("HTTPS_PROXY=http://test:3128"))
-		g.By("starting  a build again and waiting for failure")
-		br, err := exutil.StartBuildAndWait(oc, buildsrc.name)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		br.AssertFailure()
-		g.By("expecting the build logs to indicate the image was rejected")
-		buildLog, err := br.LogsNoTimestamp()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(buildLog).To(o.MatchRegexp("[Ee]rror.*initializing source docker://image-registry.openshift-image-registry.svc:5000"))
+		err = wait.Poll(25*time.Second, 2*time.Minute, func() (bool, error) {
+			result, err := oc.AsAdmin().WithoutNamespace().Run("set").Args("env", "-n", "openshift-image-registry", "deployment.apps/image-registry", "--list").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(result, "HTTP_PROXY=http://test:3128") && strings.Contains(result, "HTTPS_PROXY=http://test:3128") && strings.Contains(result, "NO_PROXY=test.no-proxy.com") {
+				return true, nil
+			}
+			e2e.Logf("Continue to next round")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "The global proxy is not override")
 	})
 
 	// author: wewang@redhat.com
@@ -2296,7 +2292,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("set").Args("image-lookup", "mysql-29706", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("run").Args("mysql", "--image=mysql-29706:latest", "--env=MYSQL_ROOT_PASSWORD=test", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("run").Args("mysql", "--image=mysql-29706:latest", `--overrides={"spec":{"securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}}}`, "--env=MYSQL_ROOT_PASSWORD=test", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		checkPodsRunningWithLabel(oc, oc.Namespace(), "run=mysql", 1)
 	})
@@ -2560,7 +2556,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Copy multiple images to internal registry")
 		//Using x86_64 images
-		firstImagePair := "quay.io/openshifttest/alpine@sha256:b85ab970ed9d2f6dd270a76897c0dd7de8e2e3beb504a9c3a568ad1c283c58a9=" + regRoute + "/" + oc.Namespace() + "/myimage1:latest"
+		firstImagePair := "quay.io/openshifttest/alpine@sha256:9c7da0f5d0f331d8f61d125c302a07d5eecfd89a346e2f5a119b8befc994d425=" + regRoute + "/" + oc.Namespace() + "/myimage1:latest"
 		secondImagePair := "quay.io/openshifttest/busybox@sha256:0415f56ccc05526f2af5a7ae8654baec97d4a614f24736e8eef41a4591f08019=" + regRoute + "/" + oc.Namespace() + "/myimage2:latest"
 		thirdImagePair := "quay.io/openshifttest/registry@sha256:f4cf1bfd98c39784777f614a5d8a7bd4f2e255e87d7a28a05ff7a3e452506fdb=" + regRoute + "/" + oc.Namespace() + "/myimage3:latest"
 		mirrorErr := oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", firstImagePair, secondImagePair, thirdImagePair, "--insecure", "-a", authFile).Execute()
