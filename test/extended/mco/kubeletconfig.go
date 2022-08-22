@@ -19,7 +19,7 @@ type KubeletConfigList struct {
 }
 
 // NewKubeletConfig create a NewKubeletConfig struct
-func NewKubeletConfig(oc *exutil.CLI, name string, template string) *KubeletConfig {
+func NewKubeletConfig(oc *exutil.CLI, name, template string) *KubeletConfig {
 	return &KubeletConfig{Resource: NewResource(oc, "KubeletConfig", name), template: template}
 }
 

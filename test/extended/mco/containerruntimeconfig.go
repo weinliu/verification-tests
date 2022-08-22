@@ -19,7 +19,7 @@ type ContainerRuntimeConfigList struct {
 }
 
 // NewContainerRuntimeConfig creates a ContainerRuntimeConfig struct
-func NewContainerRuntimeConfig(oc *exutil.CLI, name string, template string) *ContainerRuntimeConfig {
+func NewContainerRuntimeConfig(oc *exutil.CLI, name, template string) *ContainerRuntimeConfig {
 	return &ContainerRuntimeConfig{Resource: NewResource(oc, "ContainerRuntimeConfig", name), template: template}
 }
 
@@ -46,7 +46,7 @@ func (cr ContainerRuntimeConfig) waitUntilSuccess(timeout string) {
 		o.HaveKeyWithValue("message", "Success")))
 }
 
-func (cr ContainerRuntimeConfig) waitUntilFailure(expectedMsg string, timeout string) {
+func (cr ContainerRuntimeConfig) waitUntilFailure(expectedMsg, timeout string) {
 	logger.Infof("wait for %s to report failure", cr.name)
 	o.Eventually(func() map[string]interface{} {
 		failureCond := JSON(cr.GetConditionByType("Failure"))

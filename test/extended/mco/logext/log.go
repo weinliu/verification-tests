@@ -24,7 +24,7 @@ type logWrapper struct {
 	log zerolog.Logger
 }
 
-var logger *logWrapper = newLogger()
+var logger = newLogger()
 
 // NewLogger initialize log wrapper with zerolog logger
 // default log level is INFO, user can enable debug logging by env variable GINKGO_TEST_ENABLE_DEBUG_LOG

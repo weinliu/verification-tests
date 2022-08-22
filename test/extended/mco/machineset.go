@@ -2,12 +2,13 @@ package mco
 
 import (
 	"fmt"
-	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"k8s.io/apimachinery/pkg/util/wait"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 	"os"
 	"strconv"
 	"time"
+
+	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -26,7 +27,7 @@ type MachineSetList struct {
 }
 
 // NewMachineSet constructs a new MachineSet struct
-func NewMachineSet(oc *exutil.CLI, namespace string, name string) *MachineSet {
+func NewMachineSet(oc *exutil.CLI, namespace, name string) *MachineSet {
 	return &MachineSet{*NewNamespacedResource(oc, "MachineSet", namespace, name)}
 }
 
@@ -104,11 +105,11 @@ func (ms MachineSet) GetNodes() ([]*Node, error) {
 	return nodes, nil
 }
 
-// WaitUntilReady waits untill the MachineSet reports a Ready status
+// WaitUntilReady waits until the MachineSet reports a Ready status
 func (ms MachineSet) WaitUntilReady(duration string) error {
 	pDuration, err := time.ParseDuration(duration)
 	if err != nil {
-		e2e.Logf("Error parsing duration %s. Errot: %s", duration, err)
+		logger.Errorf("Error parsing duration %s. Errot: %s", duration, err)
 		return err
 	}
 	pollerr := wait.Poll(20*time.Second, pDuration, func() (bool, error) {
@@ -186,12 +187,12 @@ func (ms MachineSet) Duplicate(newName string) (*MachineSet, error) {
 
 	tmpFile := generateTmpFile(ms.oc, "machineset-"+newName+".yml")
 
-	wErr := os.WriteFile(tmpFile, []byte(newMsAsJSONString), 0644)
+	wErr := os.WriteFile(tmpFile, []byte(newMsAsJSONString), 0o644)
 	if wErr != nil {
 		return nil, wErr
 	}
 
-	e2e.Logf("New machinset created using definition file %s", tmpFile)
+	logger.Infof("New machinset created using definition file %s", tmpFile)
 
 	_, cErr := ms.oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", tmpFile).Output()
 
@@ -202,7 +203,7 @@ func (ms MachineSet) Duplicate(newName string) (*MachineSet, error) {
 	return NewMachineSet(ms.oc, ms.GetNamespace(), newName), nil
 }
 
-//GetAll returns a []node list with all existing nodes
+// GetAll returns a []node list with all existing nodes
 func (msl *MachineSetList) GetAll() ([]MachineSet, error) {
 	allMSResources, err := msl.ResourceList.GetAll()
 	if err != nil {
@@ -248,14 +249,14 @@ func duplicateMachinesetSecret(oc *exutil.CLI, secretName string, changes msDupl
 		"--template", `{{index .data "userData" | base64decode}}`).Output()
 
 	if udErr != nil {
-		e2e.Logf("Error getting userData info from secret %s -n %s.\n%s", secretName, MachineAPINamespace, udErr)
+		logger.Errorf("Error getting userData info from secret %s -n %s.\n%s", secretName, MachineAPINamespace, udErr)
 		return nil, udErr
 	}
 
 	disableTemplating, dtErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", secretName, "-n", MachineAPINamespace, "--template", `{{index .data "disableTemplating" | base64decode}}`).Output()
 
 	if dtErr != nil {
-		e2e.Logf("Error getting disableTemplating info from secret %s -n %s.\n%s", secretName, MachineAPINamespace, dtErr)
+		logger.Errorf("Error getting disableTemplating info from secret %s -n %s.\n%s", secretName, MachineAPINamespace, dtErr)
 		return nil, dtErr
 	}
 
@@ -301,7 +302,7 @@ func duplicateMachinesetSecret(oc *exutil.CLI, secretName string, changes msDupl
 		var mErr error
 		userData, mErr = jUserData.AsJSONString()
 		if mErr != nil {
-			e2e.Logf("Error marshaling userData info from secret %s -n %s.UserData: %s \n \n%s", secretName, MachineAPINamespace, jUserData, mErr)
+			logger.Errorf("Error marshaling userData info from secret %s -n %s.UserData: %s \n \n%s", secretName, MachineAPINamespace, jUserData, mErr)
 			return nil, mErr
 		}
 

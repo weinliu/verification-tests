@@ -9,19 +9,6 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
-const (
-	// ControllerDeployment name of the deployment deploying the machine config controller
-	ControllerDeployment = "machine-config-controller"
-	// ControllerContainer name of the controller container in the controller pod
-	ControllerContainer = "machine-config-controller"
-	// ControllerLabel label used to identify the controller pod
-	ControllerLabel = "k8s-app"
-	// ControllerLabelValue value used to identify the controller pod
-	ControllerLabelValue = "machine-config-controller"
-	// MCONamespace namespace where the MCO controller is deployed
-	MCONamespace = "openshift-machine-config-operator"
-)
-
 // Controller handles the functinalities related to the MCO controller pod
 type Controller struct {
 	oc             *exutil.CLI
@@ -52,7 +39,7 @@ func (mcc *Controller) GetCachedPodName() (string, error) {
 // GetPodName executed a command to get the current pod name of the MCO controller pod. Updateds the cached value of the pod name
 // This function refreshes the pod name cache
 func (mcc *Controller) GetPodName() (string, error) {
-	podName, err := mcc.oc.WithoutNamespace().Run("get").Args("pod", "-n", MCONamespace, "-l", ControllerLabel+"="+ControllerLabelValue, "-o", "jsonpath={.items[0].metadata.name}").Output()
+	podName, err := mcc.oc.WithoutNamespace().Run("get").Args("pod", "-n", MachineConfigNamespace, "-l", ControllerLabel+"="+ControllerLabelValue, "-o", "jsonpath={.items[0].metadata.name}").Output()
 	if err != nil {
 		return "", err
 	}
@@ -94,7 +81,7 @@ func (mcc Controller) GetLogs() (string, error) {
 		logger.Errorf("Error getting controller pod name. Error: %s", err)
 		return "", err
 	}
-	podAllLogs, err := exutil.GetSpecificPodLogs(mcc.oc, MCONamespace, ControllerContainer, cachedPodName, "")
+	podAllLogs, err := exutil.GetSpecificPodLogs(mcc.oc, MachineConfigNamespace, ControllerContainer, cachedPodName, "")
 	if err != nil {
 		logger.Errorf("Error getting log lines. Error: %s", err)
 		return "", err

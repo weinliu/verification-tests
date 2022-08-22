@@ -87,13 +87,14 @@ func (r *ocGetter) Get(jsonPath string, extraParams ...string) (string, error) {
 
 	params = append(params, []string{"-o", fmt.Sprintf("jsonpath=%s", jsonPath)}...)
 
+	logger.Debugf("resource params %v:", params)
 	result, err := r.oc.WithoutNamespace().Run("get").Args(params...).Output()
 
 	return result, err
 }
 
 // GetSafe uses the CLI to retrieve the return value for this jsonpath, if the resource does not exist, it returns the defaut value
-func (r *ocGetter) GetSafe(jsonPath string, defaultValue string, extraParams ...string) string {
+func (r *ocGetter) GetSafe(jsonPath, defaultValue string, extraParams ...string) string {
 	ret, err := r.Get(jsonPath, extraParams...)
 	if err != nil {
 		return defaultValue
@@ -121,12 +122,12 @@ func (r *ocGetter) Poll(jsonPath string) func() string {
 }
 
 // NewResource constructs a Resource struct for a not-namespaced resource
-func NewResource(oc *exutil.CLI, kind string, name string) *Resource {
+func NewResource(oc *exutil.CLI, kind, name string) *Resource {
 	return &Resource{ocGetter: ocGetter{oc, kind, "", name}}
 }
 
 // NewNamespacedResource constructs a Resource struct for a namespaced resource
-func NewNamespacedResource(oc *exutil.CLI, kind string, namespace string, name string) *Resource {
+func NewNamespacedResource(oc *exutil.CLI, kind, namespace, name string) *Resource {
 	return &Resource{ocGetter: ocGetter{oc, kind, namespace, name}}
 }
 
@@ -163,7 +164,7 @@ func (r *Resource) String() string {
 // The following patches are exactly the same patch but using different types, 'merge' and 'json'
 // --type merge -p '{"spec": {"selector": {"app": "frommergepatch"}}}'
 // --type json  -p '[{ "op": "replace", "path": "/spec/selector/app", "value": "fromjsonpatch"}]'
-func (r *Resource) Patch(patchType string, patch string) error {
+func (r *Resource) Patch(patchType, patch string) error {
 	params := r.getCommonParams()
 
 	params = append(params, []string{"--type", patchType, "-p", patch}...)
@@ -178,7 +179,7 @@ func (r *Resource) Patch(patchType string, patch string) error {
 
 // GetAnnotationOrFail returns the value
 func (r *Resource) GetAnnotationOrFail(annotation string) string {
-	scapedAnnotation := strings.Replace(annotation, `.`, `\.`, -1)
+	scapedAnnotation := strings.ReplaceAll(annotation, `.`, `\.`)
 	return r.GetOrFail(fmt.Sprintf(`{.metadata.annotations.%s}`, scapedAnnotation))
 }
 
@@ -247,7 +248,7 @@ func NewResourceList(oc *exutil.CLI, kind string) *ResourceList {
 }
 
 // NewNamespacedResourceList constructs a ResourceList struct for namespaced resources
-func NewNamespacedResourceList(oc *exutil.CLI, kind string, namespace string) *ResourceList {
+func NewNamespacedResourceList(oc *exutil.CLI, kind, namespace string) *ResourceList {
 	return &ResourceList{ocGetter{oc.AsAdmin(), kind, namespace, ""}, []string{}, ""}
 }
 
@@ -287,6 +288,7 @@ func (l ResourceList) GetAll() ([]Resource, error) {
 	if l.itemsFilter == "" {
 		l.itemsFilter = "*"
 	}
+
 	allItemsNames, err := l.Get("{.items["+l.itemsFilter+"].metadata.name}", l.extraParams...)
 	if err != nil {
 		return nil, err

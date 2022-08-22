@@ -184,7 +184,7 @@ func (mcp *MachineConfigPool) getMachineCount() (int, error) {
 		return -1, ocErr
 	}
 
-	if len(machineCountStr) == 0 {
+	if machineCountStr == "" {
 		return -1, fmt.Errorf(".status.machineCount value is not already set in MCP %s", mcp.GetName())
 	}
 
@@ -270,7 +270,7 @@ func (mcp *MachineConfigPool) GetNodes() ([]Node, error) {
 	// Never select windows nodes
 	requiredLabel := "kubernetes.io/os!=windows"
 	for k, v := range labels.ToMap() {
-		requiredLabel = requiredLabel + fmt.Sprintf(",%s=%s", k, v.(string))
+		requiredLabel += fmt.Sprintf(",%s=%s", k, v.(string))
 	}
 	nodeList.ByLabel(requiredLabel)
 
@@ -432,7 +432,7 @@ func (mcp *MachineConfigPool) waitForComplete() {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("mc operation is not completed on mcp %s", mcp.name))
 }
 
-func getTimeDifferenceInMinute(oldTimestamp string, newTimestamp string) float64 {
+func getTimeDifferenceInMinute(oldTimestamp, newTimestamp string) float64 {
 	oldTimeValues := strings.Split(oldTimestamp, ":")
 	oldTimeHour, _ := strconv.Atoi(oldTimeValues[0])
 	oldTimeMinute, _ := strconv.Atoi(oldTimeValues[1])
@@ -469,7 +469,7 @@ func setDataForPullSecret(oc *exutil.CLI, configFile string) (string, error) {
 	return oc.AsAdmin().WithoutNamespace().Run("set").Args("data", "secret/pull-secret", "-n", "openshift-config", "--from-file=.dockerconfigjson="+configFile).Output()
 }
 
-func getCommitID(oc *exutil.CLI, component string, clusterVersion string) (string, error) {
+func getCommitID(oc *exutil.CLI, component, clusterVersion string) (string, error) {
 	secretFile, secretErr := getPullSecret(oc)
 	if secretErr != nil {
 		return "", secretErr
@@ -482,7 +482,7 @@ func getCommitID(oc *exutil.CLI, component string, clusterVersion string) (strin
 	return strings.TrimSuffix(string(commitID), "\n"), cmdErr
 }
 
-func getGoVersion(component string, commitID string) (float64, error) {
+func getGoVersion(component, commitID string) (float64, error) {
 	curlOutput, curlErr := exec.Command("bash", "-c", "curl -Lks https://raw.githubusercontent.com/openshift/"+component+"/"+commitID+"/go.mod | egrep '^go'").Output()
 	if curlErr != nil {
 		return 0, curlErr
@@ -491,7 +491,7 @@ func getGoVersion(component string, commitID string) (float64, error) {
 	return strconv.ParseFloat(strings.TrimSuffix(goVersion, "\n"), 64)
 }
 
-func getStatusCondition(oc *exutil.CLI, resource string, ctype string) (map[string]interface{}, error) {
+func getStatusCondition(oc *exutil.CLI, resource, ctype string) (map[string]interface{}, error) {
 	jsonstr, ocerr := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "-o", "jsonpath='{.status.conditions[?(@.type==\""+ctype+"\")]}'").Output()
 	if ocerr != nil {
 		return nil, ocerr
@@ -528,7 +528,7 @@ func containsMultipleStrings(sourceString string, expectedStrings []string) bool
 func generateTemplateAbsolutePath(fileName string) string {
 	mcoDirName := "mco"
 	mcoBaseDir := ""
-	if mcoBaseDir = fixturePathCache[mcoDirName]; len(mcoBaseDir) == 0 {
+	if mcoBaseDir = fixturePathCache[mcoDirName]; mcoBaseDir == "" {
 		logger.Infof("mco fixture dir is not initialized, start to create")
 		mcoBaseDir = exutil.FixturePath("testdata", mcoDirName)
 		fixturePathCache[mcoDirName] = mcoBaseDir
@@ -540,14 +540,14 @@ func generateTemplateAbsolutePath(fileName string) string {
 	return filepath.Join(mcoBaseDir, fileName)
 }
 
-func getSATokenFromContainer(oc *exutil.CLI, podName string, podNamespace string, container string) string {
+func getSATokenFromContainer(oc *exutil.CLI, podName, podNamespace, container string) string {
 	podOut, err := exutil.RemoteShContainer(oc, podNamespace, podName, container, "cat", "/var/run/secrets/kubernetes.io/serviceaccount/token")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	return podOut
 }
 
-func getHostFromRoute(oc *exutil.CLI, routeName string, routeNamespace string) string {
+func getHostFromRoute(oc *exutil.CLI, routeName, routeNamespace string) string {
 	stdout, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", routeName, "-n", routeNamespace, "-o", "jsonpath='{.spec.host}'").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -588,11 +588,11 @@ func gZipData(data []byte) (compressedData []byte, err error) {
 		return nil, err
 	}
 
-	if err = gz.Flush(); err != nil {
+	if err := gz.Flush(); err != nil {
 		return nil, err
 	}
 
-	if err = gz.Close(); err != nil {
+	if err := gz.Close(); err != nil {
 		return nil, err
 	}
 
@@ -609,19 +609,19 @@ func jsonEncode(s string) string {
 	return string(e)
 }
 
-func getURLEncodedFileConfig(destinationPath string, content string, mode string) string {
+func getURLEncodedFileConfig(destinationPath, content, mode string) string {
 	encodedContent := url.PathEscape(content)
 
 	return getFileConfig(destinationPath, "data:,"+encodedContent, mode)
 }
 
-func getBase64EncodedFileConfig(destinationPath string, content string, mode string) string {
+func getBase64EncodedFileConfig(destinationPath, content, mode string) string {
 	encodedContent := b64.StdEncoding.EncodeToString([]byte(content))
 
 	return getFileConfig(destinationPath, "data:text/plain;charset=utf-8;base64,"+encodedContent, mode)
 }
 
-func getFileConfig(destinationPath string, source string, mode string) string {
+func getFileConfig(destinationPath, source, mode string) string {
 	decimalMode := mode
 	// if octal number we convert it to decimal. Json templates do not accept numbers with a leading zero (octal).
 	// if we don't do this conversion the 'oc process' command will not be able to render the template because {"mode": 0666}
@@ -646,7 +646,7 @@ func getFileConfig(destinationPath string, source string, mode string) string {
 	return fileConfig
 }
 
-func getGzipFileJSONConfig(destinationPath string, fileContent string) string {
+func getGzipFileJSONConfig(destinationPath, fileContent string) string {
 	compressedContent, err := gZipData([]byte(fileContent))
 	o.Expect(err).NotTo(o.HaveOccurred())
 	encodedContent := b64.StdEncoding.EncodeToString(compressedContent)
@@ -658,7 +658,7 @@ func getMaskServiceConfig(name string, mask bool) string {
 	return fmt.Sprintf(`{"name": "%s", "mask": %t}`, name, mask)
 }
 
-func getDropinFileConfig(unitName string, enabled bool, fileName string, fileContent string) string {
+func getDropinFileConfig(unitName string, enabled bool, fileName, fileContent string) string {
 	// Escape not valid characters in json from the file content
 	escapedContent := jsonEncode(fileContent)
 	return fmt.Sprintf(`{"name": "%s", "enabled": %t, "dropins": [{"name": "%s", "contents": %s}]}`, unitName, enabled, fileName, escapedContent)
@@ -675,7 +675,7 @@ func AddToAllMachineSets(oc *exutil.CLI, delta int) error {
 	allMs, err := NewMachineSetList(oc, "openshift-machine-api").GetAll()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	var addErr error = nil
+	var addErr error
 	modifiedMSs := []MachineSet{}
 	for _, ms := range allMs {
 		addErr = ms.AddToScale(delta)
@@ -695,7 +695,7 @@ func AddToAllMachineSets(oc *exutil.CLI, delta int) error {
 		return addErr
 	}
 
-	var waitErr error = nil
+	var waitErr error
 	for _, ms := range allMs {
 		waitErr = wait.PollImmediate(30*time.Second, 8*time.Minute, func() (bool, error) { return ms.PollIsReady()(), nil })
 		if waitErr != nil {

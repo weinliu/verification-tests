@@ -51,7 +51,7 @@ func (n *Node) DebugNode(cmd ...string) (string, error) {
 }
 
 // AddLabel add the given label to the node
-func (n *Node) AddLabel(label string, value string) (string, error) {
+func (n *Node) AddLabel(label, value string) (string, error) {
 	return exutil.AddLabelToNode(n.oc, n.name, label, value)
 
 }
@@ -187,16 +187,16 @@ func (n *Node) IsUpdating() bool {
 // IsReady returns boolean 'true' if the node is ready. Else it retruns 'false'.
 func (n Node) IsReady() bool {
 	readyCondition := JSON(n.GetOrFail(`{.status.conditions[?(@.type=="Ready")]}`))
-	return "True" == readyCondition.Get("status").ToString()
+	return readyCondition.Get("status").ToString() == "True"
 }
 
-// GetMCDaemonLogs retuns the logs of the MachineConfig daemonset pod for this node. The logs will be grepped using the 'filter' parameter
+// GetMCDaemonLogs returns the logs of the MachineConfig daemonset pod for this node. The logs will be grepped using the 'filter' parameter
 func (n Node) GetMCDaemonLogs(filter string) (string, error) {
-	return exutil.GetSpecificPodLogs(n.oc, MCONamespace, "machine-config-daemon", n.GetMachineConfigDaemon(), filter)
+	return exutil.GetSpecificPodLogs(n.oc, MachineConfigNamespace, "machine-config-daemon", n.GetMachineConfigDaemon(), filter)
 }
 
-// PollMCDaemonLogs retuns a function that can be used by gomega Eventually/Consistently functions to poll logs results
-// If ther is an error, it will return empty string, new need to take that into account building our Eventually/Consistently statement
+// PollMCDaemonLogs returns a function that can be used by gomega Eventually/Consistently functions to poll logs results
+// If there is an error, it will return empty string, new need to take that into account building our Eventually/Consistently statement
 func (n Node) PollMCDaemonLogs(filter string) func() string {
 	return func() string {
 		logs, err := n.GetMCDaemonLogs(filter)
@@ -218,7 +218,7 @@ func (n Node) CaptureMCDaemonLogsUntilRestartWithTimeout(timeout string) (string
 	c := make(chan string, 1)
 
 	go func() {
-		logs, err := n.oc.WithoutNamespace().Run("logs").Args("-n", MCONamespace, machineConfigDaemon, "-c", "machine-config-daemon", "-f").Output()
+		logs, err := n.oc.WithoutNamespace().Run("logs").Args("-n", MachineConfigNamespace, machineConfigDaemon, "-c", "machine-config-daemon", "-f").Output()
 		if err != nil {
 			logger.Errorf("Error getting %s logs: %s", machineConfigDaemon, err)
 		}
@@ -230,7 +230,7 @@ func (n Node) CaptureMCDaemonLogsUntilRestartWithTimeout(timeout string) (string
 		return logs, nil
 	case <-time.After(duration):
 		errMsg := fmt.Sprintf(`Node "%s". Timeout while waiting for the daemon pod "%s" -n  "%s" to be restarted`,
-			n.GetName(), machineConfigDaemon, MCONamespace)
+			n.GetName(), machineConfigDaemon, MachineConfigNamespace)
 		logger.Infof(errMsg)
 		return "", fmt.Errorf(errMsg)
 	}
@@ -307,7 +307,7 @@ func (n Node) GetDateWithDelta(delta string) (time.Time, error) {
 	return date.Add(timeDuration), nil
 }
 
-//GetAll returns a []Node list with all existing nodes
+// GetAll returns a []Node list with all existing nodes
 func (nl *NodeList) GetAll() ([]Node, error) {
 	allNodeResources, err := nl.ResourceList.GetAll()
 	if err != nil {

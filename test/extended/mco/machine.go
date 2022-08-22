@@ -2,6 +2,7 @@ package mco
 
 import (
 	"fmt"
+
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
@@ -16,7 +17,7 @@ type MachineList struct {
 }
 
 // NewMachine constructs a new Machine struct
-func NewMachine(oc *exutil.CLI, namespace string, name string) *Machine {
+func NewMachine(oc *exutil.CLI, namespace, name string) *Machine {
 	return &Machine{*NewNamespacedResource(oc, "Machine", namespace, name)}
 }
 
@@ -46,7 +47,7 @@ func NewMachineList(oc *exutil.CLI, namespace string) *MachineList {
 	return &MachineList{*NewNamespacedResourceList(oc, "Machine", namespace)}
 }
 
-//GetAll returns a []Machine slice with all existing nodes
+// GetAll returns a []Machine slice with all existing nodes
 func (ml MachineList) GetAll() ([]Machine, error) {
 	allMResources, err := ml.ResourceList.GetAll()
 	if err != nil {

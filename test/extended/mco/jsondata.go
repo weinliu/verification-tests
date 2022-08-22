@@ -123,7 +123,7 @@ func (jd *JSONData) PutSafe(key string, value interface{}) error {
 }
 
 // Put sets the value of a key in a map json node
-func (jd *JSONData) Put(key string, value string) {
+func (jd *JSONData) Put(key, value string) {
 	err := jd.PutSafe(key, value)
 	if err != nil {
 		e2e.Failf("Could not PUT key [%s] value [%s] in json data [%s]. Error: %v", key, value, jd.data, err)
@@ -240,7 +240,7 @@ func (jd *JSONData) GetJSONPath(jsonPath string) ([]JSONData, error) {
 func flattenResults(allExpresults []interface{}) []JSONData {
 	flatResults := []JSONData{}
 	for i := range allExpresults {
-		var expression []interface{} = allExpresults[i].([]interface{})
+		var expression = allExpresults[i].([]interface{})
 		for _, result := range expression {
 			flatResults = append(flatResults, JSONData{result})
 		}

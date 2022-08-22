@@ -23,7 +23,7 @@ type EventList struct {
 }
 
 // NewEvent create a Event struct
-func NewEvent(oc *exutil.CLI, namespace string, name string) *Event {
+func NewEvent(oc *exutil.CLI, namespace, name string) *Event {
 	return &Event{Resource: NewNamespacedResource(oc, "Event", namespace, name)}
 }
 
@@ -39,7 +39,7 @@ func NewEventList(oc *exutil.CLI, namespace string) *EventList {
 	return &EventList{*NewNamespacedResourceList(oc, "Event", namespace)}
 }
 
-//GetAll returns a []Event list with all existing events sorted by creation time
+// GetAll returns a []Event list with all existing events sorted by creation time
 // the first element will be the most recent one
 func (el *EventList) GetAll() ([]Event, error) {
 	el.ResourceList.SortByTimestamp()
@@ -50,6 +50,10 @@ func (el *EventList) GetAll() ([]Event, error) {
 	allEvents := make([]Event, 0, len(allEventResources))
 
 	for _, eventRes := range allEventResources {
+		// add non-exist check, sometimes event cannot be found from server
+		if !eventRes.Exists() {
+			continue
+		}
 		allEvents = append(allEvents, *NewEvent(el.oc, eventRes.namespace, eventRes.name))
 	}
 	// We want the first element to be the more recent
@@ -188,10 +192,10 @@ func (matcher *haveEventsSequenceMatcher) FailureMessage(actual interface{}) (me
 		output = "No events in the list\n"
 	} else {
 		for _, event := range events {
-			output = output + fmt.Sprintf("-  %s\n", event)
+			output += fmt.Sprintf("-  %s\n", event)
 		}
 	}
-	output = output + fmt.Sprintf("to contain this reason sequence\n\t%s\n", matcher.sequence)
+	output += fmt.Sprintf("to contain this reason sequence\n\t%s\n", matcher.sequence)
 
 	return output
 }
@@ -202,9 +206,9 @@ func (matcher *haveEventsSequenceMatcher) NegatedFailureMessage(actual interface
 
 	output := "Expected events\n"
 	for _, event := range events {
-		output = output + fmt.Sprintf("-  %s\n", event)
+		output += output + fmt.Sprintf("-  %s\n", event)
 	}
-	output = output + fmt.Sprintf("NOT to contain this reason sequence\n\t%s\n", matcher.sequence)
+	output += output + fmt.Sprintf("NOT to contain this reason sequence\n\t%s\n", matcher.sequence)
 
 	return output
 }

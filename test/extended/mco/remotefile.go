@@ -57,7 +57,7 @@ func (rf *RemoteFile) fetchTextContent() error {
 	if err != nil {
 		return err
 	}
-	// Split by first occurence of startCat and last occurence of endCat
+	// Split by first occurrence of startCat and last occurrence of endCat
 	tmpcontent := strings.SplitN(output, startCat, 2)[1]
 	// take into account that "cat" introduces a newline at the end
 	lastIndex := strings.LastIndex(tmpcontent, endCat)
@@ -88,7 +88,7 @@ func (rf *RemoteFile) PushNewTextContent(newTextContent string) error {
 	return nil
 }
 
-// GetTextContent return the content of the text file. If the file contains binary data this method cannot be used to retreive the file's content
+// GetTextContent return the content of the text file. If the file contains binary data this method cannot be used to retrieve the file's content
 func (rf *RemoteFile) GetTextContent() string {
 	return rf.content
 }
