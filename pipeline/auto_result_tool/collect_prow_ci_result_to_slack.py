@@ -13,10 +13,49 @@ import os
 
 class SummaryClient:
     SUBTEAM_OWNER = {
+                "SDN":"@sdn-ovn-qe-team ",
+                "STORAGE":"@storage-qe-team ",
+                "Developer_Experience":"",
+                "User_Interface":"",
+                "PerfScale":"", 
+                "Service_Development_B":"",
+                "NODE":"",
+                "Logging":"@logging-qe-team ",
+                "Workloads":"@workloads-qe-team ",
+                "Metering":"",
+                "Cluster_Observability":"@monitoring-qe-team ",
+                "Quay/Quay.io":"",
+                "Cluster_Infrastructure":"",
+                "Multi-Cluster":"",
+                "Cluster_Operator":"",
+                "Azure":"",
+                "Network_Edge":"@ne-qe-team ",
+                "ETCD":"",
+                "Installer":"",
+                "Portfolio_Integration":"",
+                "Service_Development_A":"",
                 "OLM":"@olm-qe-team ",
                 "Operator_SDK":"@jfan ",
+                "App_Migration":"",
+                "Windows_Containers":"",
+                "Security_and_Compliance":"",
+                "KNI":"",
+                "Openshift_Jenkins":"",
+                "RHV":"",
+                "ISV_Operators":"@psap-qe-team ",
+                "PSAP":"@psap-qe-team ",
+                "Multi-Cluster-Networking":"",
+                "OTA":"",
+                "Kata":"",
+                "Build_API":"",
                 "Image_Registry":"@imageregistry-qe-team ",
-                "MCO":"@rioliu "
+                "Container_Engine_Tools":"",
+                "MCO":"@rioliu ",
+                "API_Server":"@apiserver-qe-team ",
+                "Authentication":"@auth-qe-team ",
+                "Hypershift":"",
+                "Network_Observability":"@no-qe-team ",
+                "DR_Testing":"@geliu"
             }
     def __init__(self, args):
         token = args.token
@@ -61,7 +100,7 @@ class SummaryClient:
         self.launchID = args.launchID
         self.subteam = args.subteam
         if not self.subteam:
-            self.subteam = ":".join(self.SUBTEAM_OWNER.keys())
+            self.subteam = "all"
         self.checkSubteam()
         self.releaseVersion = args.version
         self.cluster = args.cluster
@@ -152,11 +191,15 @@ class SummaryClient:
                             FailedCase[subteamOut] = []
                         caseids = re.findall(r'OCP-\d{4,}', ret["name"])
                         if len(caseids) > 0:
-                            if ":" in ret["name"]:
-                                caseAuthor = ret["name"].split(":")[1]
-                            else:
+                            if "cucushift" in subteamOut:
                                 caseAuthor = ""
-                            FailedCase[subteamOut].append(caseids[0][4:]+"-"+caseAuthor+"-defectsType:"+";".join(defectsType))
+                                FailedCase[subteamOut].append(caseids[0][4:])
+                            else:
+                                if ":" in ret["name"]:
+                                    caseAuthor = ret["name"].split(":")[1]
+                                else:
+                                    caseAuthor = ""
+                                FailedCase[subteamOut].append(caseids[0][4:]+"-"+caseAuthor)
             #print(FailedCase)
             return FailedCase
         except BaseException as e:
@@ -204,12 +247,16 @@ class SummaryClient:
                 notificationSub=[]
                 failedCases = result[testrun]["caseResult"][subteam]
                 if failedCases == "":
-                   continue 
-                if subteam in self.subteam.split(":"):
-                    notificationSub.append("---------- subteam: "+subteam+" -------------")
-                    notificationSub.append("Failed Cases: "+"|".join(result[testrun]["caseResult"][subteam]))
-                    notificationList.append("\n".join(notificationSub))
-                    faildTeamOwner = faildTeamOwner + self.SUBTEAM_OWNER[subteam]
+                   continue
+                if self.subteam.lower() != "all":
+                    if subteam not in self.subteam.split(":"):
+                        continue
+                notificationSub.append("---------- subteam: "+subteam+" -------------")
+                notificationSub.append("Failed Cases: "+"|".join(result[testrun]["caseResult"][subteam]))
+                notificationList.append("\n".join(notificationSub))
+                if subteam.strip("_cucushift") in self.SUBTEAM_OWNER.keys():
+                    if self.SUBTEAM_OWNER[subteam.strip("_cucushift")] not in faildTeamOwner:
+                        faildTeamOwner = faildTeamOwner + self.SUBTEAM_OWNER[subteam.strip("_cucushift")]
             if faildTeamOwner=="":
                 continue 
             notificationEnd = []
