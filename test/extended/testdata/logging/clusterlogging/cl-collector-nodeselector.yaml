@@ -39,6 +39,7 @@ objects:
         requests:
           cpu: ${COLLECTOR_REQUESTS_CPU}
           memory: ${COLLECTOR_REQUESTS_MEMORY}
+      nodeSelector: ${{NODE_LABEL}}
 parameters:
   - name: NAME
     value: "instance"
@@ -64,3 +65,5 @@ parameters:
     value: "100m"
   - name: COLLECTOR_REQUESTS_MEMORY
     value: "736Mi"
+  - name: NODE_LABEL
+    required: true

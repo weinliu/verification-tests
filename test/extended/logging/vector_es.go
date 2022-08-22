@@ -1,13 +1,16 @@
 package logging
 
 import (
+	"fmt"
 	"time"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
@@ -126,6 +129,102 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				return false, nil
 			})
 			exutil.AssertWaitPollNoErr(err, "No Event Router logs found when using vector as log collector.")
+		})
+
+		g.It("CPaasrunOnly-Author:ikanse-Critical-5331-Vector Configure Vector collector with CPU/Memory requests/limits[Serial]", func() {
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "COLLECTOR_LIMITS_MEMORY=750Mi", "-p", "COLLECTOR_LIMITS_CPU=150m", "-p", "COLLECTOR_REQUESTS_CPU=150m", "-p", "COLLECTOR_REQUESTS_MEMORY=750Mi", "-p", "NAMESPACE="+cl.namespace)
+			g.By("Waiting for the Logging pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By("Check collector CPU/memory requests/limits")
+			col := resource{"daemonset", "collector", cloNS}
+			col.assertResourceStatus(oc, "jsonpath={.spec.template.spec.containers[].resources.limits.cpu}", "150m")
+			col.assertResourceStatus(oc, "jsonpath={.spec.template.spec.containers[].resources.requests.cpu}", "150m")
+			col.assertResourceStatus(oc, "jsonpath={.spec.template.spec.containers[].resources.limits.memory}", "750Mi")
+			col.assertResourceStatus(oc, "jsonpath={.spec.template.spec.containers[].resources.requests.memory}", "750Mi")
+		})
+
+		g.It("CPaasrunOnly-Author:ikanse-High-5332-Vector Deploy Vector collector with nodeSelector[Serial]", func() {
+
+			g.By("Set OCP node label to vector: test")
+			err := oc.AsAdmin().WithoutNamespace().Run("label").Args("nodes", "--selector=kubernetes.io/os=linux", "vector=test", "--overwrite").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-collector-nodeselector.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NODE_LABEL={\"vector\": \"deploy\"}", "-p", "NAMESPACE="+cl.namespace)
+
+			g.By("Check Collector daemonset has no running pods")
+			esDeployNames := GetDeploymentsNameByLabel(oc, cloNS, "cluster-name=elasticsearch")
+			for _, name := range esDeployNames {
+				WaitForDeploymentPodsToBeReady(oc, cloNS, name)
+			}
+			WaitForDeploymentPodsToBeReady(oc, cloNS, "kibana")
+			var output string
+			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+				daemonset, err := oc.AdminKubeClient().AppsV1().DaemonSets(cloNS).Get("collector", metav1.GetOptions{})
+				if err != nil {
+					if apierrors.IsNotFound(err) {
+						e2e.Logf("Waiting for availability of daemonset collector")
+						return false, nil
+					}
+					return false, err
+				}
+				if daemonset.Status.NumberReady == 0 {
+					return true, nil
+				}
+				output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("ds/collector", "-n", cloNS, "-ojsonpath={.status}").Output()
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Daemonset collector is not availabile with output:\n %s", output))
+
+			g.By("Set OCP node label to vector: deploy")
+			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("nodes", "--selector=kubernetes.io/os=linux", "vector=deploy", "--overwrite").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Check Collector daemonset pods are running")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By("Set OCP node label to vector: deploy1")
+			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("nodes", "--selector=kubernetes.io/os=linux", "vector=deploy1", "--overwrite").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Check Collector daemonset has no running pods")
+			esDeployNames = GetDeploymentsNameByLabel(oc, cloNS, "cluster-name=elasticsearch")
+			for _, name := range esDeployNames {
+				WaitForDeploymentPodsToBeReady(oc, cloNS, name)
+			}
+			WaitForDeploymentPodsToBeReady(oc, cloNS, "kibana")
+			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+				daemonset, err := oc.AdminKubeClient().AppsV1().DaemonSets(cloNS).Get("collector", metav1.GetOptions{})
+				if err != nil {
+					if apierrors.IsNotFound(err) {
+						e2e.Logf("Waiting for availability of daemonset collector")
+						return false, nil
+					}
+					return false, err
+				}
+				if daemonset.Status.NumberReady == 0 {
+					return true, nil
+				}
+				output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("ds/collector", "-n", cloNS, "-ojsonpath={.status}").Output()
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Daemonset collector is not availabile with output:\n %s", output))
+
+			g.By("Patch Cluster Logging instance to use nodeSelector vector: deploy1")
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogging", "instance", "--type=merge", "-p", "{\"spec\":{\"collection\":{\"nodeSelector\":{\"vector\":\"deploy1\"}}}}", "-n", cloNS).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Check Collector daemonset pods are running")
+			WaitForECKPodsToBeReady(oc, cloNS)
 		})
 
 	})
