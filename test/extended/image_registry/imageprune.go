@@ -3,6 +3,7 @@ package imageregistry
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo"
@@ -267,5 +268,40 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		conflictinfo2, _ := oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "images", "--prune-over-size-limit", "--token="+token, "--registry-url="+regRoute, "-n", oc.Namespace(), "--keep-tag-revisions=1", "--confirm").Output()
 		o.Expect(conflictinfo2).To(o.ContainSubstring("error: --prune-over-size-limit cannot be specified with --keep-tag-revisions nor --keep-younger-than"))
 
+	})
+
+	//author: wewang@redhat.com
+	g.It("Author:wewang-Hign-27576-ImageRegistry CronJob is added to automate image prune [Disruptive]", func() {
+		g.By("Check imagepruner fields")
+		output, checkErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("imagepruner/cluster", "-o", "yaml").Output()
+		o.Expect(checkErr).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("failedJobsHistoryLimit: 3"))
+		o.Expect(output).To(o.ContainSubstring("ignoreInvalidImageReferences: true"))
+		o.Expect(output).To(o.ContainSubstring("keepTagRevisions: 3"))
+		o.Expect(output).To(o.ContainSubstring(`schedule: ""`))
+		o.Expect(output).To(o.ContainSubstring("successfulJobsHistoryLimit: 3"))
+		o.Expect(output).To(o.ContainSubstring("suspend: false"))
+		g.By("Update imagepruner fields")
+		defer oc.AsAdmin().Run("delete").Args("imagepruner/cluster").Execute()
+		err := oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"failedJobsHistoryLimit": 1,"keepTagRevisions": 1,"ignoreInvalidImageReferences": false, "schedule": "* * * * *", "successfulJobsHistoryLimit": 1}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, checkErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("imagepruner/cluster", "-o", "yaml").Output()
+		o.Expect(checkErr).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("failedJobsHistoryLimit: 1"))
+		o.Expect(output).To(o.ContainSubstring("ignoreInvalidImageReferences: false"))
+		o.Expect(output).To(o.ContainSubstring("keepTagRevisions: 1"))
+		o.Expect(output).To(o.ContainSubstring(`schedule: '* * * * *'`))
+		o.Expect(output).To(o.ContainSubstring("successfulJobsHistoryLimit: 1"))
+
+		g.By("Check imagepruner pod is running")
+		errWait := wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-image-registry").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(output, "image-pruner") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "no image-pruner created")
 	})
 })

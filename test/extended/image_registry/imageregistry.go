@@ -2023,6 +2023,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			operationData   prometheusImageregistryOperations
 			storageTypeData prometheusImageregistryStorageType
 		)
+		g.By("Check no PrometheusRule/image-registry-operator-alerts in registry project")
+		out, outErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheusrules", "-n", "openshift-image-registry").Output()
+		o.Expect(outErr).NotTo(o.HaveOccurred())
+		o.Expect(out).NotTo(o.ContainSubstring("image-registry-operator-alerts"))
+
 		g.By("Push 1 images to non-openshift project to image registry")
 		oc.SetupProject()
 		checkRegistryFunctionFine(oc, "test-50925", oc.Namespace())
