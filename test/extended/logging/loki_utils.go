@@ -17,13 +17,22 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/Azure/azure-storage-blob-go/azblob"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/gophercloud/gophercloud"
+	"github.com/gophercloud/gophercloud/openstack"
+	"github.com/gophercloud/gophercloud/openstack/identity/v3/users"
+	"github.com/gophercloud/gophercloud/openstack/objectstorage/v1/containers"
+	"github.com/gophercloud/gophercloud/openstack/objectstorage/v1/objects"
+	"github.com/gophercloud/gophercloud/pagination"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"google.golang.org/api/iterator"
+	yamlv3 "gopkg.in/yaml.v3"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sresource "k8s.io/apimachinery/pkg/api/resource"
@@ -39,13 +48,15 @@ const (
 	labelValuesPath = "/loki/api/v1/label/%s/values"
 	seriesPath      = "/loki/api/v1/series"
 	tailPath        = "/loki/api/v1/tail"
+	minioNS         = "minio-aosqe"
 )
 
-// awsCredential defines the aws credentials
-type awsCredential struct {
+// s3Credential defines the s3 credentials
+type s3Credential struct {
 	Region          string
 	AccessKeyID     string
 	SecretAccessKey string
+	Endpoint        string //the endpoint of s3 service
 }
 
 func getAWSClusterRegion(oc *exutil.CLI) (string, error) {
@@ -53,7 +64,7 @@ func getAWSClusterRegion(oc *exutil.CLI) (string, error) {
 	return region, err
 }
 
-func getAWSCredentialFromCluster(oc *exutil.CLI) awsCredential {
+func getAWSCredentialFromCluster(oc *exutil.CLI) s3Credential {
 	region, err := getAWSClusterRegion(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -70,24 +81,90 @@ func getAWSCredentialFromCluster(oc *exutil.CLI) awsCredential {
 	secretAccessKey, err := os.ReadFile(dirname + "/aws_secret_access_key")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	cred := awsCredential{Region: region, AccessKeyID: string(accessKeyID), SecretAccessKey: string(secretAccessKey)}
+	cred := s3Credential{Region: region, AccessKeyID: string(accessKeyID), SecretAccessKey: string(secretAccessKey)}
 	return cred
+}
+
+func getODFCreds(oc *exutil.CLI) s3Credential {
+	dirname := "/tmp/" + oc.Namespace() + "-creds"
+	defer os.RemoveAll(dirname)
+	err := os.MkdirAll(dirname, 0777)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/noobaa-admin", "-n", "openshift-storage", "--confirm", "--to="+dirname).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	accessKeyID, err := os.ReadFile(dirname + "/AWS_ACCESS_KEY_ID")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	secretAccessKey, err := os.ReadFile(dirname + "/AWS_SECRET_ACCESS_KEY")
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	endpoint := "http://" + getRouteAddress(oc, "openshift-storage", "s3")
+	return s3Credential{Endpoint: endpoint, AccessKeyID: string(accessKeyID), SecretAccessKey: string(secretAccessKey)}
+}
+
+func getMinIOCreds(oc *exutil.CLI, ns string) s3Credential {
+	dirname := "/tmp/" + oc.Namespace() + "-creds"
+	defer os.RemoveAll(dirname)
+	err := os.MkdirAll(dirname, 0777)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/minio-creds", "-n", ns, "--confirm", "--to="+dirname).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	accessKeyID, err := os.ReadFile(dirname + "/access_key_id")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	secretAccessKey, err := os.ReadFile(dirname + "/secret_access_key")
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	endpoint := "http://" + getRouteAddress(oc, ns, "minio")
+	return s3Credential{Endpoint: endpoint, AccessKeyID: string(accessKeyID), SecretAccessKey: string(secretAccessKey)}
 }
 
 // initialize an aws s3 client with aws credential
 // TODO: add an option to initialize a new client with STS
-func newAWSS3Client(oc *exutil.CLI) *s3.Client {
-	cred := getAWSCredentialFromCluster(oc)
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cred.AccessKeyID, cred.SecretAccessKey, "")),
-		config.WithRegion(cred.Region))
+func newAWSS3Client(oc *exutil.CLI, cred s3Credential) *s3.Client {
+	var err error
+	var cfg aws.Config
+	if len(cred.Endpoint) > 0 {
+		customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+			return aws.Endpoint{
+				PartitionID:       "aws",
+				URL:               cred.Endpoint,
+				HostnameImmutable: true,
+			}, nil
+		})
+		// For ODF and Minio, they're deployed in OCP clusters
+		// In some clusters, we can't connect it without proxy, here add proxy settings to s3 client when there has http_proxy or https_proxy in the env var
+		httpClient := awshttp.NewBuildableClient().WithTransportOptions(func(tr *http.Transport) {
+			if os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
+				var proxy string
+				if os.Getenv("http_proxy") != "" {
+					proxy = os.Getenv("http_proxy")
+				} else {
+					proxy = os.Getenv("https_proxy")
+				}
+				proxyURL, err := url.Parse(proxy)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				tr.Proxy = http.ProxyURL(proxyURL)
+			}
+			tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		})
+		cfg, err = config.LoadDefaultConfig(context.TODO(),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cred.AccessKeyID, cred.SecretAccessKey, "")),
+			config.WithEndpointResolverWithOptions(customResolver),
+			config.WithHTTPClient(httpClient))
+	} else {
+		// aws s3
+		cfg, err = config.LoadDefaultConfig(context.TODO(),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cred.AccessKeyID, cred.SecretAccessKey, "")),
+			config.WithRegion(cred.Region))
+	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return s3.NewFromConfig(cfg)
 }
 
-func createAWSS3Bucket(oc *exutil.CLI, client *s3.Client, bucketName string) error {
-	region, err := getAWSClusterRegion(oc)
-	o.Expect(err).NotTo(o.HaveOccurred())
+func createAWSS3Bucket(oc *exutil.CLI, client *s3.Client, bucketName string, cred s3Credential) error {
 	// check if the bucket exists or not
 	// if exists, clear all the objects in the bucket
 	// if not, create the bucket
@@ -111,13 +188,12 @@ func createAWSS3Bucket(oc *exutil.CLI, client *s3.Client, bucketName string) err
 		using `LocationConstraint: types.BucketLocationConstraint("us-east-1")` gets error `InvalidLocationConstraint`.
 		Here remove the configration when the region is us-east-1
 	*/
-	if region == "us-east-1" {
+	if len(cred.Region) == 0 || cred.Region == "us-east-1" {
 		_, err = client.CreateBucket(context.TODO(), &s3.CreateBucketInput{Bucket: &bucketName})
 		return err
 	}
-	_, err = client.CreateBucket(context.TODO(), &s3.CreateBucketInput{Bucket: &bucketName, CreateBucketConfiguration: &types.CreateBucketConfiguration{LocationConstraint: types.BucketLocationConstraint(region)}})
+	_, err = client.CreateBucket(context.TODO(), &s3.CreateBucketInput{Bucket: &bucketName, CreateBucketConfiguration: &types.CreateBucketConfiguration{LocationConstraint: types.BucketLocationConstraint(cred.Region)}})
 	return err
-
 }
 
 func deleteAWSS3Bucket(client *s3.Client, bucketName string) {
@@ -164,6 +240,37 @@ func createSecretForAWSS3Bucket(oc *exutil.CLI, bucketName, secretName, ns strin
 
 	endpoint := "https://s3." + cred.Region + ".amazonaws.com"
 	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "--from-file=access_key_id="+dirname+"/aws_access_key_id", "--from-file=access_key_secret="+dirname+"/aws_secret_access_key", "--from-literal=region="+cred.Region, "--from-literal=bucketnames="+bucketName, "--from-literal=endpoint="+endpoint, "-n", ns).Execute()
+}
+
+func createSecretForODFBucket(oc *exutil.CLI, bucketName, secretName, ns string) error {
+	if len(secretName) == 0 {
+		return fmt.Errorf("secret name shouldn't be empty")
+	}
+	dirname := "/tmp/" + oc.Namespace() + "-creds"
+	err := os.MkdirAll(dirname, 0777)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	defer os.RemoveAll(dirname)
+	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/noobaa-admin", "-n", "openshift-storage", "--confirm", "--to="+dirname).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	endpoint := "http://s3.openshift-storage.svc"
+	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "--from-file=access_key_id="+dirname+"/AWS_ACCESS_KEY_ID", "--from-file=access_key_secret="+dirname+"/AWS_SECRET_ACCESS_KEY", "--from-literal=bucketnames="+bucketName, "--from-literal=endpoint="+endpoint, "-n", ns).Execute()
+}
+
+func createSecretForMinIOBucket(oc *exutil.CLI, bucketName, secretName, ns, minIONS string) error {
+	if len(secretName) == 0 {
+		return fmt.Errorf("secret name shouldn't be empty")
+	}
+	dirname := "/tmp/" + oc.Namespace() + "-creds"
+	defer os.RemoveAll(dirname)
+	err := os.MkdirAll(dirname, 0777)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/minio-creds", "-n", minIONS, "--confirm", "--to="+dirname).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	endpoint := "http://minio." + minIONS + ".svc"
+	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "--from-file=access_key_id="+dirname+"/access_key_id", "--from-file=access_key_secret="+dirname+"/secret_access_key", "--from-literal=bucketnames="+bucketName, "--from-literal=endpoint="+endpoint, "-n", ns).Execute()
 }
 
 func getGCPProjectID(oc *exutil.CLI) string {
@@ -438,6 +545,197 @@ func createSecretForAzureContainer(oc *exutil.CLI, bucketName, secretName, ns st
 	return err
 }
 
+type openstackCredentials struct {
+	Clouds struct {
+		Openstack struct {
+			Auth struct {
+				AuthURL        string `yaml:"auth_url"`
+				Password       string `yaml:"password"`
+				ProjectID      string `yaml:"project_id"`
+				ProjectName    string `yaml:"project_name"`
+				UserDomainName string `yaml:"user_domain_name"`
+				Username       string `yaml:"username"`
+			} `yaml:"auth"`
+			EndpointType       string `yaml:"endpoint_type"`
+			IdentityAPIVersion string `yaml:"identity_api_version"`
+			RegionName         string `yaml:"region_name"`
+			Verify             bool   `yaml:"verify"`
+		} `yaml:"openstack"`
+	} `yaml:"clouds"`
+}
+
+func getOpenStackCredentials(oc *exutil.CLI) (*openstackCredentials, error) {
+	cred := &openstackCredentials{}
+	dirname := "/tmp/" + oc.Namespace() + "-creds"
+	defer os.RemoveAll(dirname)
+	err := os.MkdirAll(dirname, 0777)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/openstack-credentials", "-n", "kube-system", "--confirm", "--to="+dirname).Output()
+	if err != nil {
+		return cred, err
+	}
+
+	confFile, err := ioutil.ReadFile(dirname + "/clouds.yaml")
+	if err == nil {
+		err = yamlv3.Unmarshal(confFile, cred)
+	}
+	return cred, err
+}
+
+// newOpenStackClient initializes an openstack client
+// serviceType the type of the client, currently only supports indentity and object-store
+func newOpenStackClient(cred *openstackCredentials, serviceType string) *gophercloud.ServiceClient {
+	var client *gophercloud.ServiceClient
+	opts := gophercloud.AuthOptions{
+		IdentityEndpoint: cred.Clouds.Openstack.Auth.AuthURL,
+		Username:         cred.Clouds.Openstack.Auth.Username,
+		Password:         cred.Clouds.Openstack.Auth.Password,
+		TenantID:         cred.Clouds.Openstack.Auth.ProjectID,
+		DomainName:       cred.Clouds.Openstack.Auth.UserDomainName,
+	}
+	provider, err := openstack.AuthenticatedClient(opts)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	switch serviceType {
+	case "identity":
+		{
+			client, err = openstack.NewIdentityV3(provider, gophercloud.EndpointOpts{Region: cred.Clouds.Openstack.RegionName})
+		}
+	case "object-store":
+		{
+			client, err = openstack.NewObjectStorageV1(provider, gophercloud.EndpointOpts{Region: cred.Clouds.Openstack.RegionName})
+		}
+	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return client
+}
+
+func getOpenStackUserIDAndDomainID(cred *openstackCredentials) (string, string) {
+	client := newOpenStackClient(cred, "identity")
+	allUserPages, err := users.List(client, users.ListOpts{Name: cred.Clouds.Openstack.Auth.Username}).AllPages()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	allUsers, err := users.ExtractUsers(allUserPages)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return allUsers[0].ID, allUsers[0].DomainID
+}
+
+func createOpenStackContainer(client *gophercloud.ServiceClient, name string) error {
+	pager := containers.List(client, &containers.ListOpts{Full: true, Prefix: name})
+	exist := false
+	// check if the container exists or not
+	err := pager.EachPage(func(page pagination.Page) (bool, error) {
+		containerNames, err := containers.ExtractNames(page)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, n := range containerNames {
+			if n == name {
+				exist = true
+				break
+			}
+		}
+		return true, nil
+	})
+	if err != nil {
+		return err
+	}
+	if exist {
+		err = emptyOpenStackContainer(client, name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	// create the container
+	res := containers.Create(client, name, containers.CreateOpts{})
+	_, err = res.Extract()
+	return err
+}
+
+func deleteOpenStackContainer(client *gophercloud.ServiceClient, name string) error {
+	err := emptyOpenStackContainer(client, name)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	response := containers.Delete(client, name)
+	_, err = response.Extract()
+	return err
+}
+
+func emptyOpenStackContainer(client *gophercloud.ServiceClient, name string) error {
+	objectNames, err := listOpenStackContainerObjects(client, name)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	for _, obj := range objectNames {
+		err = deleteObjectsFromOpenStackContainer(client, name, obj)
+	}
+	return err
+}
+
+func listOpenStackContainerObjects(client *gophercloud.ServiceClient, name string) ([]string, error) {
+	pager := objects.List(client, name, &objects.ListOpts{Full: true})
+	names := []string{}
+	err := pager.EachPage(func(page pagination.Page) (bool, error) {
+		objectNames, err := objects.ExtractNames(page)
+		for _, n := range objectNames {
+			names = append(names, n)
+		}
+		return true, err
+	})
+	return names, err
+}
+
+func deleteObjectsFromOpenStackContainer(client *gophercloud.ServiceClient, containerName, objectName string) error {
+	result := objects.Delete(client, containerName, objectName, objects.DeleteOpts{})
+	_, err := result.Extract()
+	return err
+}
+
+func createSecretForSwiftContainer(oc *exutil.CLI, containerName, secretName, ns string, cred *openstackCredentials) error {
+	userID, domainID := getOpenStackUserIDAndDomainID(cred)
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "-n", ns, secretName,
+		"--from-literal=auth_url="+cred.Clouds.Openstack.Auth.AuthURL,
+		"--from-literal=username="+cred.Clouds.Openstack.Auth.Username,
+		"--from-literal=user_domain_name="+cred.Clouds.Openstack.Auth.UserDomainName,
+		"--from-literal=user_domain_id="+domainID,
+		"--from-literal=user_id="+userID,
+		"--from-literal=password="+cred.Clouds.Openstack.Auth.Password,
+		"--from-literal=domain_id="+domainID,
+		"--from-literal=domain_name="+cred.Clouds.Openstack.Auth.UserDomainName,
+		"--from-literal=container_name="+containerName,
+		"--from-literal=project_id="+cred.Clouds.Openstack.Auth.ProjectID,
+		"--from-literal=project_name="+cred.Clouds.Openstack.Auth.ProjectName,
+		"--from-literal=project_domain_id="+domainID,
+		"--from-literal=project_domain_name="+cred.Clouds.Openstack.Auth.UserDomainName).Execute()
+	return err
+}
+
+//checkODF check if the ODF is installed in the cluster or not
+//here only checks the sc/ocs-storagecluster-ceph-rbd and svc/s3
+func checkODF(oc *exutil.CLI) bool {
+	scFound, svcFound := false, false
+	scs, err := oc.AdminKubeClient().StorageV1().StorageClasses().List(metav1.ListOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred())
+	for _, sc := range scs.Items {
+		if sc.Name == "ocs-storagecluster-ceph-rbd" {
+			scFound = true
+			break
+		}
+	}
+	_, err = oc.AdminKubeClient().CoreV1().Services("openshift-storage").Get("s3", metav1.GetOptions{})
+	if err == nil {
+		svcFound = true
+	}
+	return scFound && svcFound
+}
+
+//checkMinIO
+func checkMinIO(oc *exutil.CLI, ns string) bool {
+	podReady, svcFound := false, false
+	pod, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(metav1.ListOptions{LabelSelector: "app=minio"})
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if len(pod.Items) > 0 && pod.Items[0].Status.Phase == "Running" {
+		podReady = true
+	}
+	_, err = oc.AdminKubeClient().CoreV1().Services(ns).Get("minio", metav1.GetOptions{})
+	if err == nil {
+		svcFound = true
+	}
+	return podReady && svcFound
+}
+
 // return the storage type per different platform
 func getStorageType(oc *exutil.CLI) string {
 	platform := exutil.CheckPlatform(oc)
@@ -460,6 +758,12 @@ func getStorageType(oc *exutil.CLI) string {
 		}
 	default:
 		{
+			if checkODF(oc) {
+				return "odf"
+			}
+			if checkMinIO(oc, minioNS) {
+				return "minio"
+			}
 			return ""
 		}
 	}
@@ -470,7 +774,7 @@ type lokiStack struct {
 	name          string // lokiStack name
 	namespace     string // lokiStack namespace
 	tSize         string // size
-	storageType   string // the backend storage type, currently support s3, gcs and azure
+	storageType   string // the backend storage type, currently support s3, gcs, azure, swift, ODF and minIO
 	storageSecret string // the secret name for loki to use to connect to backend storage
 	storageClass  string // storage class name
 	bucketName    string // the butcket or the container name where loki stores it's data in
@@ -486,40 +790,76 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 	switch l.storageType {
 	case "s3":
 		{
-			client := newAWSS3Client(oc)
-			err1 := createAWSS3Bucket(oc, client, l.bucketName)
-			o.Expect(err1).NotTo(o.HaveOccurred())
+			cred := getAWSCredentialFromCluster(oc)
+			client := newAWSS3Client(oc, cred)
+			err := createAWSS3Bucket(oc, client, l.bucketName, cred)
+			if err != nil {
+				return err
+			}
 			err = createSecretForAWSS3Bucket(oc, l.bucketName, l.storageSecret, l.namespace)
 		}
 	case "azure":
 		{
 			client := newAzureContainerClient(oc, l.bucketName)
-			err1 := createAzureStorageBlobContainer(client)
-			o.Expect(err1).NotTo(o.HaveOccurred())
+			err := createAzureStorageBlobContainer(client)
+			if err != nil {
+				return err
+			}
 			err = createSecretForAzureContainer(oc, l.bucketName, l.storageSecret, l.namespace)
 		}
 	case "gcs":
 		{
-			err1 := createGCSBucket(getGCPProjectID(oc), l.bucketName)
-			o.Expect(err1).NotTo(o.HaveOccurred())
+			err := createGCSBucket(getGCPProjectID(oc), l.bucketName)
+			if err != nil {
+				return err
+			}
 			err = createSecretForGCSBucket(oc, l.bucketName, l.storageSecret, l.namespace)
 		}
 	case "swift":
 		{
-			return fmt.Errorf("deploy loki with %s is under development", l.storageType)
+			cred, err := getOpenStackCredentials(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			client := newOpenStackClient(cred, "object-store")
+			err = createOpenStackContainer(client, l.bucketName)
+			if err != nil {
+				return err
+			}
+			err = createSecretForSwiftContainer(oc, l.bucketName, l.storageSecret, l.namespace, cred)
 		}
-	default:
+	case "odf":
 		{
-			return fmt.Errorf("unsupported storage type %s", l.storageType)
+			cred := getODFCreds(oc)
+			client := newAWSS3Client(oc, cred)
+			err := createAWSS3Bucket(oc, client, l.bucketName, cred)
+			if err != nil {
+				return err
+			}
+			err = createSecretForODFBucket(oc, l.bucketName, l.storageSecret, l.namespace)
+		}
+	case "minio":
+		{
+			cred := getMinIOCreds(oc, minioNS)
+			client := newAWSS3Client(oc, cred)
+			err := createAWSS3Bucket(oc, client, l.bucketName, cred)
+			if err != nil {
+				return err
+			}
+			err = createSecretForMinIOBucket(oc, l.bucketName, l.storageSecret, l.namespace, minioNS)
 		}
 	}
 	return err
 }
 
 // deployLokiStack creates the lokiStack CR with basic settings: name, namespace, size, storage.secret.name, storage.secret.type, storageClassName
-// optionalParameters is designed for adding parameters to deploy lokiStack with different tenants
+// optionalParameters is designed for adding parameters to deploy lokiStack with different tenants or some other settings
 func (l lokiStack) deployLokiStack(oc *exutil.CLI, optionalParameters ...string) error {
-	parameters := []string{"-f", l.template, "-n", l.namespace, "-p", "NAME=" + l.name, "NAMESPACE=" + l.namespace, "SIZE=" + l.tSize, "SECRET_NAME=" + l.storageSecret, "STORAGE_TYPE=" + l.storageType, "STORAGE_CLASS=" + l.storageClass}
+	var storage string
+	if l.storageType == "odf" || l.storageType == "minio" {
+		storage = "s3"
+	} else {
+		storage = l.storageType
+	}
+	parameters := []string{"-f", l.template, "-n", l.namespace, "-p", "NAME=" + l.name, "NAMESPACE=" + l.namespace, "SIZE=" + l.tSize, "SECRET_NAME=" + l.storageSecret, "STORAGE_TYPE=" + storage, "STORAGE_CLASS=" + l.storageClass}
 	if len(optionalParameters) != 0 {
 		parameters = append(parameters, optionalParameters...)
 	}
@@ -547,7 +887,8 @@ func (l lokiStack) removeLokiStack(oc *exutil.CLI) {
 	switch l.storageType {
 	case "s3":
 		{
-			client := newAWSS3Client(oc)
+			cred := getAWSCredentialFromCluster(oc)
+			client := newAWSS3Client(oc, cred)
 			deleteAWSS3Bucket(client, l.bucketName)
 		}
 	case "azure":
@@ -563,7 +904,23 @@ func (l lokiStack) removeLokiStack(oc *exutil.CLI) {
 		}
 	case "swift":
 		{
-			e2e.Logf("Deploy loki with %s is under development", l.storageType)
+			cred, err := getOpenStackCredentials(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			client := newOpenStackClient(cred, "object-store")
+			err = deleteOpenStackContainer(client, l.bucketName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+	case "odf":
+		{
+			cred := getODFCreds(oc)
+			client := newAWSS3Client(oc, cred)
+			deleteAWSS3Bucket(client, l.bucketName)
+		}
+	case "minio":
+		{
+			cred := getMinIOCreds(oc, minioNS)
+			client := newAWSS3Client(oc, cred)
+			deleteAWSS3Bucket(client, l.bucketName)
 		}
 	}
 }
@@ -1059,7 +1416,7 @@ func compareClusterResources(oc *exutil.CLI, cpu, memory string) bool {
 }
 
 // validateInfraAndResourcesForLoki checks cluster remaning resources and platform type
-// supportedPlatforms the platform types which the case can be executed on
+// supportedPlatforms the platform types which the case can be executed on, if it's empty, then skip this check
 func validateInfraAndResourcesForLoki(oc *exutil.CLI, supportedPlatforms []string, reqMemory, reqCPU string) bool {
 	currentPlatform := exutil.CheckPlatform(oc)
 	if currentPlatform == "aws" {
@@ -1069,7 +1426,10 @@ func validateInfraAndResourcesForLoki(oc *exutil.CLI, supportedPlatforms []strin
 			return false
 		}
 	}
-	return contain(supportedPlatforms, currentPlatform) && compareClusterResources(oc, reqCPU, reqMemory)
+	if len(supportedPlatforms) > 0 {
+		return contain(supportedPlatforms, currentPlatform) && compareClusterResources(oc, reqCPU, reqMemory)
+	}
+	return compareClusterResources(oc, reqCPU, reqMemory)
 }
 
 type externalLoki struct {

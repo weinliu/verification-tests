@@ -295,16 +295,19 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		CLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, CatalogSourceObjects{}}
 		LO := SubscriptionObjects{lo, loNS, AllNamespaceOG, subTemplate, loPackageName, CatalogSourceObjects{}}
 		g.BeforeEach(func() {
+			s := getStorageType(oc)
+			if len(s) == 0 {
+				g.Skip("Current cluster doesn't have a proper object storage for this test!")
+			}
 			g.By("deploy CLO and LO")
 			CLO.SubscribeOperator(oc)
 			LO.SubscribeOperator(oc)
 			oc.SetupProject()
-
 		})
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-High-49486-Vector Forward logs to LokiStack using CLF with gateway-CLF[Serial]", func() {
-			if !validateInfraAndResourcesForLoki(oc, []string{"aws", "gcp", "azure"}, "10Gi", "6") {
+			if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
 				g.Skip("Current platform not supported/resources not available for this test!")
 			}
 
@@ -395,7 +398,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		//author qitang@redhat.com
 		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-High-49495-Vector Forward logs to LokiStack without LokiStack gateway-CLF[Serial]", func() {
-			if !validateInfraAndResourcesForLoki(oc, []string{"aws", "gcp", "azure"}, "10Gi", "6") {
+			if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
 				g.Skip("Current platform not supported/resources not available for this test!")
 			}
 

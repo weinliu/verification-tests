@@ -22,6 +22,7 @@ require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-git/go-git/v5 v5.4.2
 	github.com/google/go-github v17.0.0+incompatible
+	github.com/gophercloud/gophercloud v0.1.0
 	github.com/mattn/go-sqlite3 v1.14.6
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/onsi/ginkgo v1.10.1
@@ -46,6 +47,7 @@ require (
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
 	golang.org/x/tools v0.1.4 // indirect
 	google.golang.org/api v0.6.1-0.20190607001116-5213b8090861
+	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
 	k8s.io/api v0.17.1
 	k8s.io/apimachinery v0.17.1
 	k8s.io/apiserver v0.17.1
