@@ -1208,27 +1208,46 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(output).To(o.ContainSubstring("\"worker count\":6"))
 	})
 
-	// author: chuo@redhat.com
-	g.It("VMonly-Author:chuo-Medium-34883-SDK stamp on Operator bundle image", func() {
+	// author: jitli@redhat.com
+	g.It("VMonly-Author:jitli-Medium-34883-SDK stamp on Operator bundle image", func() {
+
 		operatorsdkCLI.showInfo = true
-		exec.Command("bash", "-c", "mkdir -p /tmp/ocp-34883/memcached-operator && cd /tmp/ocp-34883/memcached-operator && operator-sdk init --plugins=ansible --domain example.com").Output()
-		defer exec.Command("bash", "-c", "rm -rf /tmp/ocp-34883").Output()
-		exec.Command("bash", "-c", "cd /tmp/ocp-34883/memcached-operator && operator-sdk create api --group cache --version v1alpha1 --kind Memcached --generate-role").Output()
-		exec.Command("bash", "-c", "cd /tmp/ocp-34883/memcached-operator && mkdir -p /tmp/ocp-34883/memcached-operator/config/manifests/").Output()
-		exec.Command("bash", "-c", "cp -rf test/extended/util/operatorsdk/ocp-34883-data/manifests/bases/ /tmp/ocp-34883/memcached-operator/config/manifests/").Output()
+		tmpBasePath := "/tmp/ocp-34883-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-34883")
+		err := os.MkdirAll(tmpPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
+
+		g.By("Step: init Ansible Based Operator")
+		_, err = operatorsdkCLI.Run("init").Args("--plugins=ansible", "--domain", "example.com").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Step: Create API.")
+		_, err = operatorsdkCLI.Run("create").Args("api", "--group", "cache", "--version", "v1alpha1", "--kind", "Memcached34883", "--generate-role").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Step: make bundle.")
+		manifestsPath := filepath.Join(tmpPath, "config", "manifests")
+		err = os.MkdirAll(manifestsPath, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exec.Command("bash", "-c", fmt.Sprintf("cp -rf test/extended/util/operatorsdk/ocp-34883-data/manifests/bases/ %s", manifestsPath)).Output()
+
 		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
-			msg, err := exec.Command("bash", "-c", "cd /tmp/ocp-34883/memcached-operator && make bundle").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			msg, _ := makeCLI.Run("bundle").Args().Output()
 			if strings.Contains(string(msg), "operator-sdk bundle validate ./bundle") {
 				return true, nil
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("operator-sdk bundle generate failed"))
+		exutil.AssertWaitPollNoErr(waitErr, "operator-sdk bundle generate failed")
 
-		output, err := exec.Command("bash", "-c", "cat /tmp/ocp-34883/memcached-operator/bundle/metadata/annotations.yaml  | grep -E \"operators.operatorframework.io.metrics.builder: operator-sdk\"").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("operators.operatorframework.io.metrics.builder: operator-sdk"))
+		g.By("Step: check annotations")
+		annotationsFile := filepath.Join(tmpPath, "bundle", "metadata", "annotations.yaml")
+		content := getContent(annotationsFile)
+		o.Expect(content).To(o.ContainSubstring("operators.operatorframework.io.metrics.builder: operator-sdk"))
+
 	})
 
 	// author: chuo@redhat.com

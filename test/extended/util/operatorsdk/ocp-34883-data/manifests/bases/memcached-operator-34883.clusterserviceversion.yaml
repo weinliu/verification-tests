@@ -4,13 +4,13 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
-  name: memcached-operator.v0.0.0
+  name: memcached-operator-34883.v0.0.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions: {}
-  description: memcached operator
-  displayName: memcached
+  description: memcached-operator-34883
+  displayName: memcached-operator-34883
   icon:
   - base64data: ""
     mediatype: ""
@@ -28,10 +28,13 @@ spec:
   - supported: true
     type: AllNamespaces
   keywords:
-  - memcached
+  - memcached-operator-34883
   links:
-  - name: Memcached Operator
-    url: https://memcached-operator.domain
+  - name: Memcached Operator 34883
+    url: https://memcached-operator-34883.domain
+  maintainers:
+  - email: email
+    name: test
   maturity: alpha
   provider:
     name: Red Hat
