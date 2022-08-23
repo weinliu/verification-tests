@@ -102,6 +102,15 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="Watchdog"}'`, token, `"namespace":"openshift-monitoring"`, 2*platformLoadTime)
 	})
 
+	//author: tagao@redhat.com
+	g.It("Author:tagao-Medium-47307-Add external label of origin to platform alerts", func() {
+		g.By("Get token of SA prometheus-k8s")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+		g.By("check alerts, could see the `openshift_io_alert_source` field for in-cluster alerts")
+		checkMetric(oc, "https://alertmanager-main.openshift-monitoring.svc:9094/api/v2/alerts", token, `"openshift_io_alert_source":"platform"`, 2*platformLoadTime)
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
@@ -198,13 +207,13 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			g.It("Author:tagao-Medium-42825-Expose EnforcedTargetLimit in the CMO configuration for UWM", func() {
 				g.By("check user metrics")
 				token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
-				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version{namespace=\""+ns+"\"}'", token, "prometheus-example-app", uwmLoadTime)
+				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version{namespace=\""+ns+"\"}'", token, "prometheus-example-app", 2*uwmLoadTime)
 
 				g.By("scale deployment replicas to 2")
 				oc.WithoutNamespace().Run("scale").Args("deployment", "prometheus-example-app", "--replicas=2", "-n", ns).Execute()
 
 				g.By("check user metrics again, the user metrics can't be found from thanos-querier")
-				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version{namespace=\""+ns+"\"}'", token, "\"result\":[]", uwmLoadTime)
+				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version{namespace=\""+ns+"\"}'", token, "\"result\":[]", 2*uwmLoadTime)
 			})
 		})
 
