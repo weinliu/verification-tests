@@ -119,13 +119,13 @@ func RemoteShPodWithBashSpecifyContainer(oc *CLI, namespace string, podName stri
 func WaitAndGetSpecificPodLogs(oc *CLI, namespace string, container string, podName string, filter string) (string, error) {
 	logs, err := GetSpecificPodLogs(oc, namespace, container, podName, filter)
 	if err != nil {
-		waitErr := wait.Poll(20*time.Second, 5*time.Minute, func() (bool, error) {
+		waitErr := wait.Poll(20*time.Second, 10*time.Minute, func() (bool, error) {
 			logs, err = GetSpecificPodLogs(oc, namespace, container, podName, filter)
 			if err != nil {
 				e2e.Logf("the err:%v, and try next round", err)
 				return false, nil
 			}
-			if strings.Contains(logs, filter) {
+			if logs != "" {
 				return true, nil
 			}
 			return false, nil
