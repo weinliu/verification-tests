@@ -28,7 +28,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server", func() {
 	var oc = exutil.NewCLIWithoutNamespace("default")
 
 	// author: kewang@redhat.com
-	g.It("Author:kewang-Medium-32383-bug 1793694 init container setup should have the proper securityContext", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:kewang-Medium-32383-bug 1793694 init container setup should have the proper securityContext", func() {
 		checkItems := []struct {
 			namespace string
 			container string
@@ -72,7 +72,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server", func() {
 	// author: xxia@redhat.com
 	// It is destructive case, will make kube-apiserver roll out, so adding [Disruptive]. One rollout costs about 25mins, so adding [Slow]
 	// If the case duration is greater than 10 minutes and is executed in serial (labelled Serial or Disruptive), add Longduration
-	g.It("Longduration-Author:xxia-Medium-25806-Force encryption key rotation for etcd datastore [Slow][Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-Longduration-Author:xxia-Medium-25806-Force encryption key rotation for etcd datastore [Slow][Disruptive]", func() {
 		// only run this case in Etcd Encryption On cluster
 		g.By("Check if cluster is Etcd Encryption On")
 		output, err := oc.WithoutNamespace().Run("get").Args("apiserver/cluster", "-o=jsonpath={.spec.encryption.type}").Output()
@@ -159,7 +159,7 @@ spec:
 	// author: xxia@redhat.com
 	// It is destructive case, will make kube-apiserver roll out, so adding [Disruptive]. One rollout costs about 25mins, so adding [Slow]
 	// If the case duration is greater than 10 minutes and is executed in serial (labelled Serial or Disruptive), add Longduration
-	g.It("Longduration-NonPreRelease-Author:xxia-Medium-25811-Etcd encrypted cluster could self-recover when related encryption configuration is deleted [Slow][Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:xxia-Medium-25811-Etcd encrypted cluster could self-recover when related encryption configuration is deleted [Slow][Disruptive]", func() {
 		// only run this case in Etcd Encryption On cluster
 		g.By("Check if cluster is Etcd Encryption On")
 		output, err := oc.WithoutNamespace().Run("get").Args("apiserver/cluster", "-o=jsonpath={.spec.encryption.type}").Output()
@@ -246,7 +246,7 @@ spec:
 	// It is destructive case, will make openshift-kube-apiserver and openshift-apiserver namespaces deleted, so adding [Disruptive].
 	// In test the recovery costs about 22mins in max, so adding [Slow]
 	// If the case duration is greater than 10 minutes and is executed in serial (labelled Serial or Disruptive), add Longduration
-	g.It("Longduration-NonPreRelease-Author:xxia-Medium-36801-Etcd encrypted cluster could self-recover when related encryption namespaces are deleted [Slow][Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:xxia-Medium-36801-Etcd encrypted cluster could self-recover when related encryption namespaces are deleted [Slow][Disruptive]", func() {
 		// only run this case in Etcd Encryption On cluster
 		g.By("Check if cluster is Etcd Encryption On")
 		encryptionType, err := oc.WithoutNamespace().Run("get").Args("apiserver/cluster", "-o=jsonpath={.spec.encryption.type}").Output()
@@ -376,7 +376,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonPreRelease-Longduration-Author:rgangwar-Low-25926-Wire cipher config from apiservers/cluster into apiserver and authentication operators [Disruptive] [Slow]", func() {
+	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-Low-25926-Wire cipher config from apiservers/cluster into apiserver and authentication operators [Disruptive] [Slow]", func() {
 		// Check authentication operator cliconfig, openshiftapiservers.operator.openshift.io and kubeapiservers.operator.openshift.io
 		var (
 			cipherToRecover = `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":}]`
@@ -481,7 +481,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonPreRelease-Author:rgangwar-High-41899-Replacing the admin kubeconfig generated at install time [Disruptive] [Slow]", func() {
+	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Author:rgangwar-High-41899-Replacing the admin kubeconfig generated at install time [Disruptive] [Slow]", func() {
 		var (
 			dirname        = "/tmp/-OCP-41899-ca/"
 			name           = dirname + "custom"
@@ -649,8 +649,9 @@ spec:
 		})
 		exutil.AssertWaitPollNoErr(err, "Test failed: Old kubeconfig is working!")
 	})
+
 	// author: rgangwar@redhat.com
-	g.It("Author:rgangwar-Medium-43889-Examine non critical kube-apiserver errors", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:rgangwar-Medium-43889-Examine non critical kube-apiserver errors", func() {
 		var (
 			keywords     = "(error|fail|tcp dial timeout|connect: connection refused|Unable to connect to the server: dial tcp|remote error: tls: bad certificate)"
 			exceptions   = "panic|fatal|SHOULD NOT HAPPEN"
@@ -710,7 +711,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("PreChkUpgrade-NonPreRelease-Author:rgangwar-Critical-40667-Prepare Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
+	g.It("ROSA-ARO-OSD_CCS-PreChkUpgrade-NonPreRelease-Author:rgangwar-Critical-40667-Prepare Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
 		var (
 			dirname    = "/tmp/-OCP-40667/"
 			exceptions = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
@@ -862,7 +863,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("PstChkUpgrade-NonPreRelease-Author:rgangwar-Critical-40667-Post Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
+	g.It("ROSA-ARO-OSD_CCS-PstChkUpgrade-NonPreRelease-Author:rgangwar-Critical-40667-Post Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
 		var (
 			dirname    = "/tmp/-OCP-40667/"
 			exceptions = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
@@ -975,7 +976,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonPreRelease-Author:rgangwar-Critical-40861-[Apiserver] [bug 1912564] cluster works fine wihtout panic under stress with API Priority and Fairness feature [Slow]", func() {
+	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Author:rgangwar-Critical-40861-[Apiserver] [bug 1912564] cluster works fine wihtout panic under stress with API Priority and Fairness feature [Slow]", func() {
 		var (
 			dirname    = "/tmp/-OCP-40861/"
 			exceptions = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
@@ -1131,7 +1132,7 @@ spec:
 	})
 
 	// author: kewang@redhat.com
-	g.It("Longduration-NonPreRelease-Author:kewang-Medium-12308-Customizing template for project creation [Serial][Slow]", func() {
+	g.It("ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:kewang-Medium-12308-Customizing template for project creation [Serial][Slow]", func() {
 		var (
 			caseID           = "ocp-12308"
 			dirname          = "/tmp/-ocp-12308"
@@ -1297,7 +1298,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("Author:zxiao-High-24698-Check the http accessible /readyz for kube-apiserver [Serial]", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-High-24698-Check the http accessible /readyz for kube-apiserver [Serial]", func() {
 		g.By("1) Check if port 6080 is available")
 		err := wait.Poll(10*time.Second, 40*time.Second, func() (bool, error) {
 			checkOutput, _ := exec.Command("bash", "-c", "lsof -i:6080").Output()
@@ -1349,7 +1350,7 @@ spec:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("Author:dpunia-High-41664-Check deprecated APIs to be removed in next release and next EUS release", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:dpunia-High-41664-Check deprecated APIs to be removed in next release and next EUS release", func() {
 		var (
 			ignoreCase  = "system:kube-controller-manager|system:serviceaccount|system:admin"
 			eusReleases = map[float64][]float64{4.8: {1.21, 1.22, 1.23}, 4.10: {1.24, 1.25}}
@@ -1476,7 +1477,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("Author:zxiao-Low-27665-Check if the kube-storage-version-migrator operator related manifests has been loaded", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Low-27665-Check if the kube-storage-version-migrator operator related manifests has been loaded", func() {
 		resource := "customresourcedefinition"
 		resourceNames := []string{"storagestates.migration.k8s.io", "storageversionmigrations.migration.k8s.io", "kubestorageversionmigrators.operator.openshift.io"}
 		g.By("1) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "]")
@@ -1521,7 +1522,7 @@ spec:
 	})
 
 	// author: jmekkatt@redhat.com
-	g.It("Author:jmekkatt-High-50188-An informational error on kube-apiserver in case an admission webhook is installed for a virtual resource [Serial]", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:jmekkatt-High-50188-An informational error on kube-apiserver in case an admission webhook is installed for a virtual resource [Serial]", func() {
 		var (
 			validatingWebhookName = "test-validating-cfg"
 			mutatingWebhookName   = "test-mutating-cfg"
@@ -1607,7 +1608,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("Author:zxiao-Low-21246-Check the exposed prometheus metrics of operators", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Low-21246-Check the exposed prometheus metrics of operators", func() {
 		g.By("1) get serviceaccount token")
 		token, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1647,7 +1648,7 @@ spec:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("Longduration-NonPreRelease-Author:dpunia-High-44596-SNO kube-apiserver can fall back to last good revision well when failing to roll out in SNO env [Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:dpunia-High-44596-SNO kube-apiserver can fall back to last good revision well when failing to roll out in SNO env [Disruptive]", func() {
 		if !isSNOCluster(oc) {
 			g.Skip("This is not a SNO cluster, skip.")
 		}
@@ -1746,7 +1747,7 @@ spec:
 	})
 
 	// author: jmekkatt@redhat.com
-	g.It("PreChkUpgrade-NonPreRelease-Author:jmekkatt-High-50362-Prepare Upgrade checks when cluster has bad admission webhooks [Serial]", func() {
+	g.It("ROSA-ARO-OSD_CCS-PreChkUpgrade-NonPreRelease-Author:jmekkatt-High-50362-Prepare Upgrade checks when cluster has bad admission webhooks [Serial]", func() {
 		var (
 			namespace                  = "ocp-50362"
 			serviceName                = "example-service"
@@ -1838,7 +1839,7 @@ spec:
 	})
 
 	// author: jmekkatt@redhat.com
-	g.It("PstChkUpgrade-NonPreRelease-Author:jmekkatt-High-50362-Post Upgrade checks when cluster has bad admission webhooks [Serial]", func() {
+	g.It("ROSA-ARO-OSD_CCS-PstChkUpgrade-NonPreRelease-Author:jmekkatt-High-50362-Post Upgrade checks when cluster has bad admission webhooks [Serial]", func() {
 
 		var (
 			namespace                  = "ocp-50362"
@@ -1898,7 +1899,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonPreRelease-Author:rgangwar-High-47633-[API-1361] [Apiserver] Update existing alert ExtremelyHighIndividualControlPlaneCPU [Slow] [Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Author:rgangwar-High-47633-[API-1361] [Apiserver] Update existing alert ExtremelyHighIndividualControlPlaneCPU [Slow] [Disruptive]", func() {
 		var (
 			alert             = "ExtremelyHighIndividualControlPlaneCPU"
 			alertBudget       = "KubeAPIErrorBudgetBurn"
@@ -1977,8 +1978,9 @@ spec:
 		})
 		exutil.AssertWaitPollNoErr(errWatcher, fmt.Sprintf("%s with %s is not firing", alert, severity[0]))
 	})
+
 	// author: jmekkatt@redhat.com
-	g.It("Author:jmekkatt-high-50223-Checks on different bad admission webhook errors, status of kube-apiserver [Serial]", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:jmekkatt-high-50223-Checks on different bad admission webhook errors, status of kube-apiserver [Serial]", func() {
 		var (
 			validatingWebhookNameNotFound     = "test-validating-notfound-cfg"
 			mutatingWebhookNameNotFound       = "test-mutating-notfound-cfg"
@@ -2175,7 +2177,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("PstChkUpgrade-Author:zxiao-High-44597-Upgrade SNO clusters given kube-apiserver implements startup-monitor mechanism", func() {
+	g.It("ROSA-ARO-OSD_CCS-PstChkUpgrade-Author:zxiao-High-44597-Upgrade SNO clusters given kube-apiserver implements startup-monitor mechanism", func() {
 		g.By("1) Check if cluster is SNO.")
 		if !isSNOCluster(oc) {
 			g.Skip("This is not a SNO cluster, skip.")
@@ -2210,7 +2212,7 @@ spec:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("Author:dpunia-Medium-15870-APIServer Verify node authorization is enabled", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:dpunia-Medium-15870-APIServer Verify node authorization is enabled", func() {
 		var (
 			podname    = "ocp-15870-openshift"
 			image      = "quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e"
@@ -2263,7 +2265,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("Author:zxiao-High-39601-Examine critical errors in openshift-kube-apiserver related log files", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-High-39601-Examine critical errors in openshift-kube-apiserver related log files", func() {
 		g.By("1) Create log arrays.")
 		podAbnormalLogs := make([]string, 0)
 		masterNodeAbnormalLogs := make([]string, 0)

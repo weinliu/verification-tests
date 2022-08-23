@@ -42,7 +42,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonPreRelease-Author:rgangwar-High-19941-[Apiserver] [failure inject] when 1 master is down the cluster should continue serving well without unavailable more than 30s [Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Author:rgangwar-High-19941-[Apiserver] [failure inject] when 1 master is down the cluster should continue serving well without unavailable more than 30s [Disruptive]", func() {
 		var (
 			dirname          = "/tmp/-OCP-19941/"
 			leaderMasterNode string
