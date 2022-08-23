@@ -289,9 +289,10 @@ const (
 
 //AWS Configurations
 const (
-	AWSBaseDomain = "qe.devcluster.openshift.com" //AWS BaseDomain
-	AWSRegion     = "us-east-2"
-	AWSCreds      = "aws-creds"
+	AWSBaseDomain  = "qe.devcluster.openshift.com" //AWS BaseDomain
+	AWSRegion      = "us-east-2"
+	AWSCreds       = "aws-creds"
+	HiveManagedDNS = "hivemanageddns" //for all manage DNS Domain
 )
 
 //Azure Configurations
@@ -715,25 +716,28 @@ func createAWSCreds(oc *exutil.CLI, namespace string) {
 	err := os.MkdirAll(dirname, 0777)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	defer os.RemoveAll(dirname)
-
 	err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/aws-creds", "-n", "kube-system", "--to="+dirname, "--confirm").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
-
 	err = oc.Run("create").Args("secret", "generic", "aws-creds", "--from-file="+dirname+"/aws_access_key_id", "--from-file="+dirname+"/aws_secret_access_key", "-n", namespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 //Create Route53 AWS credentials in hive namespace
 func createRoute53AWSCreds(oc *exutil.CLI, namespace string) {
-	e2e.Logf("No route53-aws-creds, Create it.")
-	dirname := "/tmp/" + oc.Namespace() + "-route53-creds"
-	err := os.MkdirAll(dirname, 0777)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	defer os.RemoveAll(dirname)
-	err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/aws-creds", "-n", "kube-system", "--to="+dirname, "--confirm").Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "route53-aws-creds", "--from-file="+dirname+"/aws_access_key_id", "--from-file="+dirname+"/aws_secret_access_key", "-n", HiveNamespace).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "route53-aws-creds", "-n", HiveNamespace).Output()
+	if strings.Contains(output, "NotFound") || err != nil {
+		e2e.Logf("No route53-aws-creds, Create it.")
+		dirname := "/tmp/" + oc.Namespace() + "-route53-creds"
+		err = os.MkdirAll(dirname, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/aws-creds", "-n", "kube-system", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "route53-aws-creds", "--from-file="+dirname+"/aws_access_key_id", "--from-file="+dirname+"/aws_secret_access_key", "-n", HiveNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		e2e.Logf("route53-aws-creds already exists.")
+	}
 }
 
 //Create Azure credentials in current project namespace
