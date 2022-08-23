@@ -10,8 +10,7 @@ import (
 
 const (
 	statFormat = `--print=Name: %n\nSize: %s\nKind: %F\nPermissions: %04a/%A\nUID: %u/%U\nGID: %g/%G\nLinks: %h\nSymLink: %N\nSelinux: %C\n`
-	statParser = `.*\n` +
-		`Name: (?P<name>.+)\n` +
+	statParser = `Name: (?P<name>.+)\n` +
 		`Size: (?P<size>\d+)\n` +
 		`Kind: (?P<kind>.*)\n` +
 		`Permissions: (?P<nperm>\d+)/(?P<rwxperm>\S+)\n` +
@@ -19,7 +18,8 @@ const (
 		`GID: (?P<gidnumber>\d+)/(?P<gidname>\S+)\n` +
 		`Links: (?P<links>\d+)\n` +
 		`SymLink: (?P<symlink>.*)\n` +
-		`Selinux: (?P<selinux>.*)\n`
+		`Selinux: (?P<selinux>.*)\n` +
+		`.*\n`
 	startCat = "{{[[!\n"
 	endCat   = "\n!]]}}"
 )
@@ -63,6 +63,8 @@ func (rf *RemoteFile) fetchTextContent() error {
 	lastIndex := strings.LastIndex(tmpcontent, endCat)
 	rf.content = fmt.Sprintf(tmpcontent[:lastIndex])
 
+	logger.Debugf("remote file %s content is:\n%s", rf.fullPath, rf.content)
+
 	return nil
 }
 
@@ -96,9 +98,16 @@ func (rf *RemoteFile) GetTextContent() string {
 // Diggest the output of the 'stat' command using the 'statFormat' format. And stores the parsed information inside the 'statData' map
 // To be able to understand the 'statFormat' format, it uses the 'statParser' regex. Both, 'statFormat' and 'statParser', must be coherent
 func (rf *RemoteFile) digest(statOutput string) error {
+
+	logger.Debugf("stat output: %v", statOutput)
 	rf.statData = make(map[string]string)
 	re := regexp.MustCompile(statParser)
 	match := re.FindStringSubmatch(statOutput)
+	logger.Debugf("matched stat info: %v", match)
+	// check whether matched string found
+	if len(match) == 0 {
+		return fmt.Errorf("no file stat info matched")
+	}
 
 	for i, name := range re.SubexpNames() {
 		if i < 0 {
