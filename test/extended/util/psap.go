@@ -3,6 +3,9 @@ package util
 import (
 	"encoding/base64"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -423,4 +426,95 @@ func BASE64DecodeStr(src string) string {
 		return ""
 	}
 	return string(plaintext)
+}
+
+//CreateMachinesetbyInstanceType used to create a machineset with specified machineset name and instance type
+func CreateMachinesetbyInstanceType(oc *CLI, machinesetName string, instanceType string) {
+	// Get existing machinesets in cluster
+	ocGetMachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, "-n", "openshift-machine-api", "-oname").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(ocGetMachineset).NotTo(o.BeEmpty())
+	e2e.Logf("Existing machinesets:\n%v", ocGetMachineset)
+
+	// Get name of first machineset in existing machineset list
+	firstMachinesetName := GetFirstLinuxMachineSets(oc)
+	o.Expect(firstMachinesetName).NotTo(o.BeEmpty())
+	e2e.Logf("Got %v from machineset list", firstMachinesetName)
+
+	machinesetYamlOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, firstMachinesetName, "-n", "openshift-machine-api", "-oyaml").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(machinesetYamlOutput).NotTo(o.BeEmpty())
+
+	//Create machinset by specifying a machineset name
+	regMachineSet := regexp.MustCompile(firstMachinesetName)
+	newMachinesetYaml := regMachineSet.ReplaceAllString(machinesetYamlOutput, machinesetName)
+
+	//Change instanceType to g4dn.xlarge
+	regInstanceType := regexp.MustCompile(`instanceType:.*`)
+	newInstanceType := "instanceType: " + instanceType
+	newMachinesetYaml = regInstanceType.ReplaceAllString(newMachinesetYaml, newInstanceType)
+
+	//Make sure the replicas is 1
+	regReplicas := regexp.MustCompile(`replicas:.*`)
+	replicasNum := "replicas: 1"
+	newMachinesetYaml = regReplicas.ReplaceAllString(newMachinesetYaml, replicasNum)
+
+	machinesetNewB := []byte(newMachinesetYaml)
+
+	newMachinesetFileName := filepath.Join(e2e.TestContext.OutputDir, oc.Namespace()+"-"+machinesetName+"-new.yaml")
+	defer os.RemoveAll(newMachinesetFileName)
+	err = ioutil.WriteFile(newMachinesetFileName, machinesetNewB, 0644)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	ApplyOperatorResourceByYaml(oc, "openshift-machine-api", newMachinesetFileName)
+}
+
+//IsMachineSetExist check if machineset exist in OCP
+func IsMachineSetExist(oc *CLI) bool {
+
+	haveMachineSet := true
+	Output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", "-n", "openshift-machine-api").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(Output).NotTo(o.BeEmpty())
+	if strings.Contains(Output, "No resources found") {
+		haveMachineSet = false
+	}
+	return haveMachineSet
+}
+
+//GetMachineSetInstanceType used to get first machineset instance type
+func GetMachineSetInstanceType(oc *CLI) string {
+	var (
+		instanceType string
+		err          error
+	)
+	firstMachinesetName := GetFirstLinuxMachineSets(oc)
+	e2e.Logf("Got %v from machineset list", firstMachinesetName)
+	iaasPlatform := CheckPlatform(oc)
+	if iaasPlatform == "aws" {
+		instanceType, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", firstMachinesetName, "-n", "openshift-machine-api", "-ojsonpath={.spec.template.spec.providerSpec.value.instanceType}").Output()
+	} else if iaasPlatform == "azure" {
+		instanceType, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", firstMachinesetName, "-n", "openshift-machine-api", "-ojsonpath={.spec.template.spec.providerSpec.value.vmSize}").Output()
+	} else if iaasPlatform == "gcp" {
+		instanceType, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", firstMachinesetName, "-n", "openshift-machine-api", "-ojsonpath={.spec.template.spec.providerSpec.value.machineType}").Output()
+	} else if iaasPlatform == "ibmcloud" {
+		instanceType, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", firstMachinesetName, "-n", "openshift-machine-api", "-ojsonpath={.spec.template.spec.providerSpec.value.profile}").Output()
+	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(instanceType).NotTo(o.BeEmpty())
+	return instanceType
+}
+
+//GetNodeNameByMachineset used for get node name via machineset name
+func GetNodeNameByMachineset(oc *CLI, machinesetName string) string {
+
+	machinesetLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", machinesetName, "-n", "openshift-machine-api", "-ojsonpath={.spec.selector.matchLabels.machine\\.openshift\\.io/cluster-api-machineset}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(machinesetLabels).NotTo(o.BeEmpty())
+	machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetLabels, "-n", "openshift-machine-api", "-oname").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(machineName).NotTo(o.BeEmpty())
+	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(machineName, "-n", "openshift-machine-api", "-ojsonpath={.status.nodeRef.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(nodeName).NotTo(o.BeEmpty())
+	return nodeName
 }
