@@ -577,7 +577,7 @@ func checkRegistryFunctionFine(oc *exutil.CLI, bcname string, namespace string) 
 
 	//Check if could pull images from image registry
 	imagename := "image-registry.openshift-image-registry.svc:5000/" + namespace + "/" + bcname + ":latest"
-	err = oc.AsAdmin().WithoutNamespace().Run("run").Args(bcname, "--image", imagename, "-n", namespace, "--command", "--", "/bin/sleep", "120").Execute()
+	err = oc.AsAdmin().WithoutNamespace().Run("run").Args(bcname, "--image", imagename, `--overrides={"spec":{"securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}}}`, "-n", namespace, "--command", "--", "/bin/sleep", "120").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	var output string
 	errWait := wait.Poll(10*time.Second, 3*time.Minute, func() (bool, error) {

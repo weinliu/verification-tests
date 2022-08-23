@@ -2716,8 +2716,17 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Write signuture to image")
 		pushURL := "curl -Lkv -u \"" + oc.Username() + ":" + token + "\" -H  \"Content-Type: application/json\" -XPUT --data " + signContent + " https://" + regRoute + "/extensions/v2/" + oc.Namespace() + "/ho12958/signatures/" + manifest
-		curlOutput, err := exec.Command("bash", "-c", pushURL).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		var curlOutput []byte
+		err = wait.Poll(20*time.Second, 2*time.Minute, func() (bool, error) {
+			var errCmd error
+			curlOutput, errCmd = exec.Command("bash", "-c", pushURL).Output()
+			if errCmd != nil {
+				e2e.Logf("The signature cmd executed failed %v", errCmd)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The signature cmd executed failed. the output:\n %s", curlOutput))
 
 		g.By("Read signuture to image")
 		getURL := "curl -Lkv -u \"" + oc.Username() + ":" + token + "\" https://" + regRoute + "/extensions/v2/" + oc.Namespace() + "/ho12958/signatures/" + manifest
