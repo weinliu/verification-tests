@@ -3653,8 +3653,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: scolange@redhat.com
-	g.It("ConnectedOnly-Author:scolange-High-23172-the copied CSV will exist in new created project", func() {
-		exutil.SkipARM64(oc)
+	g.It("Author:scolange-High-23172-the copied CSV will exist in new created project", func() {
 		dr := make(describerResrouce)
 		itName := g.CurrentGinkgoTestDescription().TestText
 		dr.addIr(itName)
@@ -3663,14 +3662,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 
 		sub := subscriptionDescription{
-			subName:                "sub-etcd-23172",
+			subName:                "sub-sample-23172",
 			namespace:              "openshift-operators",
-			catalogSourceName:      "community-operators",
+			catalogSourceName:      "qe-app-registry",
 			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "clusterwide-alpha",
+			channel:                "alpha",
 			ipApproval:             "Automatic",
-			operatorPackage:        "etcd",
-			singleNamespace:        false,
+			operatorPackage:        "sample-operator",
 			template:               subTemplate,
 		}
 
