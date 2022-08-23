@@ -3458,6 +3458,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podOri.create(oc)
 			defer podOri.deleteAsAdmin(oc)
 			podOri.waitReady(oc)
+			nodeName := getNodeNameByPod(oc, podOri.namespace, podOri.name)
 
 			g.By("Write file to volume")
 			podOri.checkMountedVolumeCouldRW(oc)
@@ -3480,7 +3481,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer pvcClone.deleteAsAdmin(oc)
 
 			g.By("Create pod with the cloned pvc and wait for the pod ready")
-			podClone.create(oc)
+			// Clone volume could only provision in the same az with the origin volume
+			podClone.createWithNodeSelector(oc, "kubernetes\\.io/hostname", nodeName)
 			defer podClone.deleteAsAdmin(oc)
 			podClone.waitReady(oc)
 
