@@ -15,7 +15,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	var oc = exutil.NewCLI("networking-alerts", exutil.KubeConfigPath())
 
 	g.It("Author:weliang-Medium-51438-Upgrade NoRunningOvnMaster to critical severity and inclue runbook.", func() {
-		networkType := checkNetworkType(oc)
+		networkType := exutil.CheckNetworkType(oc)
 		if !strings.Contains(networkType, "ovn") {
 			g.Skip("Skip testing on non-ovn cluster!!!")
 		}
@@ -37,7 +37,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	g.It("Author:weliang-Medium-51439-Upgrade NoOvnMasterLeader to critical severity and inclue runbook.", func() {
-		networkType := checkNetworkType(oc)
+		networkType := exutil.CheckNetworkType(oc)
 		if !strings.Contains(networkType, "ovn") {
 			g.Skip("Skip testing on non-ovn cluster!!!")
 		}
@@ -59,7 +59,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	g.It("Author:weliang-Medium-51722-Create runbook and link SOP for SouthboundStale alert", func() {
-		networkType := checkNetworkType(oc)
+		networkType := exutil.CheckNetworkType(oc)
 		if !strings.Contains(networkType, "ovn") {
 			g.Skip("Skip testing on non-ovn cluster!!!")
 		}
@@ -78,5 +78,49 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(runbookErr).NotTo(o.HaveOccurred())
 		e2e.Logf("The alertRunbook is %v", alertRunbook)
 		o.Expect(alertRunbook).To(o.ContainSubstring("https://github.com/openshift/runbooks/blob/master/alerts/cluster-network-operator/SouthboundStaleAlert.md"))
+	})
+
+	g.It("Author:weliang-Medium-51724-Create runbook and link SOP for V4SubnetAllocationThresholdExceeded alert", func() {
+		networkType := exutil.CheckNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+
+		alertName, NameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", "-o=jsonpath={.spec.groups[*].rules[*].alert}").Output()
+		o.Expect(NameErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The alertName is %v", alertName)
+		o.Expect(alertName).To(o.ContainSubstring("V4SubnetAllocationThresholdExceeded"))
+
+		alertSeverity, severityErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", "-o=jsonpath={.spec.groups[*].rules[?(@.alert==\"V4SubnetAllocationThresholdExceeded\")].labels.severity}").Output()
+		o.Expect(severityErr).NotTo(o.HaveOccurred())
+		e2e.Logf("alertSeverity is %v", alertSeverity)
+		o.Expect(alertSeverity).To(o.ContainSubstring("warning"))
+
+		alertRunbook, runbookErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", "-o=jsonpath={.spec.groups[*].rules[?(@.alert==\"V4SubnetAllocationThresholdExceeded\")].annotations.runbook_url}").Output()
+		o.Expect(runbookErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The alertRunbook is %v", alertRunbook)
+		o.Expect(alertRunbook).To(o.ContainSubstring("https://github.com/openshift/runbooks/blob/master/alerts/cluster-network-operator/V4SubnetAllocationThresholdExceeded.md"))
+	})
+
+	g.It("Author:weliang-Medium-51726-Create runbook and link SOP for NodeWithoutOVNKubeNodePodRunning alert", func() {
+		networkType := exutil.CheckNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+
+		alertName, NameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "networking-rules", "-o=jsonpath={.spec.groups[*].rules[*].alert}").Output()
+		o.Expect(NameErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The alertName is %v", alertName)
+		o.Expect(alertName).To(o.ContainSubstring("NodeWithoutOVNKubeNodePodRunning"))
+
+		alertSeverity, severityErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "networking-rules", "-o=jsonpath={.spec.groups[*].rules[?(@.alert==\"NodeWithoutOVNKubeNodePodRunning\")].labels.severity}").Output()
+		o.Expect(severityErr).NotTo(o.HaveOccurred())
+		e2e.Logf("alertSeverity is %v", alertSeverity)
+		o.Expect(alertSeverity).To(o.ContainSubstring("warning"))
+
+		alertRunbook, runbookErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "networking-rules", "-o=jsonpath={.spec.groups[*].rules[?(@.alert==\"NodeWithoutOVNKubeNodePodRunning\")].annotations.runbook_url}").Output()
+		o.Expect(runbookErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The alertRunbook is %v", alertRunbook)
+		o.Expect(alertRunbook).To(o.ContainSubstring("https://github.com/openshift/runbooks/blob/master/alerts/cluster-network-operator/NodeWithoutOVNKubeNodePodRunning.md"))
 	})
 })
