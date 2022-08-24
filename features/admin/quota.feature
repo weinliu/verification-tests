@@ -960,13 +960,19 @@ Feature: Quota related scenarios
     Given a pod becomes ready with labels:
       | name=pod-terminating |
     And I wait up to 70 seconds for the steps to pass:
-    """
-    When I run the :describe client command with:
-      | resource | pod             |
-      | name     | pod-terminating |
+      """
+      When I run the :describe client command with:
+      | resource | pod                        |
+      | name     | pod-besteffort-terminating |
     Then the output should match:
-      | .*DeadlineExceeded.*Pod was active on the node longer than the specified deadline |
-    """
+      | DeadlineExceeded |
+      """
+    #When I run the :describe client command with:
+    #  | resource | pod             |
+    #  | name     | pod-terminating |
+    #Then the output should match:
+    #  | .*DeadlineExceeded.*Pod was active on the node longer than the specified deadline |
+    #"""
     When I run the :describe client command with:
       | resource | quota |
     Then the output by order should match:
@@ -974,8 +980,8 @@ Feature: Quota related scenarios
       | pods\\s+0\\s+10  |
 
   # @author chezhang@redhat.com
+  # @author weinliu@redhat.com
   # @case_id OCP-11348
-  @flaky
   @admin
   @4.12 @4.11 @4.10 @4.9 @4.8 @4.7 @4.6
   @vsphere-ipi @openstack-ipi @gcp-ipi @baremetal-ipi @azure-ipi @aws-ipi
@@ -1063,9 +1069,16 @@ Feature: Quota related scenarios
       | name=pod-besteffort-terminating |
     And I wait up to 70 seconds for the steps to pass:
     """
-    When I get project pods
-    Then the output should match "pod-besteffort-terminating.*DeadlineExceeded"
+      When I run the :describe client command with:
+        | resource | pod                        |
+        | name     | pod-besteffort-terminating |
+       Then the output should match:
+        | DeadlineExceeded |
     """
+   # """
+   # When I get project pods
+   # Then the output should match "pod-besteffort-terminating.*DeadlineExceeded"
+   # """
     When I run the :describe client command with:
       | resource | quota |
     Then the output by order should match:
