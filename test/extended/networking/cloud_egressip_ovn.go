@@ -902,7 +902,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			infraID, err := exutil.GetInfraID(oc)
 			zone, err = getZoneOfInstanceFromGcp(oc, infraID, instance[0])
 			o.Expect(err).NotTo(o.HaveOccurred())
-			defer checkNodeStatus(oc, instance[0], "Ready")
+			defer checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
 			defer startInstanceOnGcp(oc, instance[0], zone)
 			err = stopInstanceOnGcp(oc, instance[0], zone)
 			o.Expect(err).NotTo(o.HaveOccurred())
