@@ -2123,7 +2123,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			csuiteMD.create(oc, itName, dr)
 
 			g.By("check the scc and securityContext for the rs pod")
-			rsPodName := getResourceNameWithKeywordFromResourceList(oc, "pod", "rs")
+			rsPodName := getResourceNameWithKeywordFromResourceList(oc, "pod", "-rs-")
 			//could not use newCheck as rs pod will be deleted soon
 			checkKeyWordsForRspod(oc, rsPodName, [...]string{"restricted", "fsGroup", "resultserver"})
 		})
