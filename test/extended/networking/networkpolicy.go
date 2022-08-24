@@ -905,7 +905,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		if len(nodeList.Items) < 2 {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
 		}
-		networkType := checkNetworkType(oc)
+		networkType := exutil.CheckNetworkType(oc)
 		o.Expect(networkType).NotTo(o.BeEmpty())
 		if networkType != "ovnkubernetes" {
 			g.Skip("Network policy ACL auditing enabled on OVN network plugin")
@@ -968,7 +968,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		if len(nodeList.Items) < 2 {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
 		}
-		networkType := checkNetworkType(oc)
+		networkType := exutil.CheckNetworkType(oc)
 		o.Expect(networkType).NotTo(o.BeEmpty())
 		if networkType != "ovnkubernetes" {
 			g.Skip("Network policy ACL auditing enabled on OVN network plugin")
@@ -1024,6 +1024,79 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(strings.Contains(output, namespaces[i])).To(o.BeTrue())
 
 		}
+
+	})
+	// author: asood@redhat.com
+	g.It("Author:asood-Medium-41080-Check network policy ACL audit messages are logged to journald", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			allowFromSameNS     = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-from-same-namespace.yaml")
+			ingressTypeFile     = filepath.Join(buildPruningBaseDir, "networkpolicy/default-deny-ingress.yaml")
+			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		)
+
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+		networkType := exutil.CheckNetworkType(oc)
+		o.Expect(networkType).NotTo(o.BeEmpty())
+		if networkType != "ovnkubernetes" {
+			g.Skip("Network policy ACL auditing enabled on OVN network plugin")
+		}
+
+		g.By("Configure audit message logging destination to journald")
+		patchSResource := "networks.operator.openshift.io/cluster"
+		patchInfo := `{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"policyAuditConfig": {"destination": "libc"}}}}}`
+		undoPatchInfo := `{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"policyAuditConfig": {"destination": ""}}}}}`
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args(patchSResource, "-p", undoPatchInfo, "--type=merge").Output()
+		_, patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args(patchSResource, "-p", patchInfo, "--type=merge").Output()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		g.By("Obtain the namespace")
+		ns1 := oc.Namespace()
+
+		g.By("Enable ACL looging on the namespace ns1")
+		aclSettings := aclSettings{DenySetting: "alert", AllowSetting: "alert"}
+		err1 := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("ns", ns1, aclSettings.getJSONString()).Execute()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+
+		g.By("create default deny ingress networkpolicy in ns1")
+		createResourceFromFile(oc, ns1, ingressTypeFile)
+
+		g.By("create allow same namespace networkpolicy in ns1")
+		createResourceFromFile(oc, ns1, allowFromSameNS)
+
+		g.By("create 1st hello pod in ns1")
+		pod1ns1 := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns1,
+			nodename:  nodeList.Items[0].Name,
+			template:  pingPodNodeTemplate,
+		}
+		pod1ns1.createPingPodNode(oc)
+		waitPodReady(oc, pod1ns1.namespace, pod1ns1.name)
+
+		g.By("create 2nd hello pod in ns1")
+		pod2ns1 := pingPodResourceNode{
+			name:      "hello-pod2",
+			namespace: ns1,
+			nodename:  nodeList.Items[1].Name,
+			template:  pingPodNodeTemplate,
+		}
+
+		pod2ns1.createPingPodNode(oc)
+		waitPodReady(oc, pod2ns1.namespace, pod2ns1.name)
+
+		g.By("Checking connectivity from pod2 to pod1 to generate messages")
+		CurlPod2PodPass(oc, ns1, "hello-pod2", ns1, "hello-pod1")
+
+		g.By("Checking messages are logged to journald")
+		cmd := fmt.Sprintf("journalctl -t ovn-controller --since '10min ago'| grep 'verdict=allow'")
+		output, _, journalctlErr := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, nodeList.Items[0].Name, []string{"-q"}, "bin/sh", "-c", cmd)
+		o.Expect(journalctlErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "verdict=allow")).To(o.BeTrue())
 
 	})
 
