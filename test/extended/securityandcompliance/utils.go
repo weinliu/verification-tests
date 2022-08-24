@@ -45,11 +45,7 @@ func createSecurityProfileOperator(oc *exutil.CLI, subD subscriptionDescription,
 	e2e.Logf("err %v, msg %v", err, msg)
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", subD.namespace, "openshift.io/cluster-monitoring=true", "--overwrite").Output()
 	e2e.Logf("err %v, msg %v", err, msg)
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", subD.namespace, "pod-security.kubernetes.io/enforce=privileged", "--overwrite").Output()
-	e2e.Logf("err %v, msg %v", err, msg)
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", subD.namespace, "pod-security.kubernetes.io/audit=privileged", "--overwrite").Output()
-	e2e.Logf("err %v, msg %v", err, msg)
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", subD.namespace, "pod-security.kubernetes.io/warn=privileged", "--overwrite").Output()
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", subD.namespace, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "pod-security.kubernetes.io/audit=privileged", "pod-security.kubernetes.io/warn=privileged", "--overwrite").Output()
 	e2e.Logf("err %v, msg %v", err, msg)
 
 	g.By("Create operatorGroup !!!")

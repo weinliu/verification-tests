@@ -19,9 +19,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		subSpoTemplate      string
 		secProfileTemplate  string
 
-		ogD      operatorGroupDescription
-		subD     subscriptionDescription
-		seccompP seccompProfile
+		ogD                 operatorGroupDescription
+		subD                subscriptionDescription
+		seccompP, seccompP1 seccompProfile
 	)
 
 	g.BeforeEach(func() {
@@ -58,6 +58,31 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 	})
 
 	// author: minmli@redhat.com
+	g.It("Author:minmli-High-50397-Create two seccompprofiles with the same name in different namespaces", func() {
+		seccompP = seccompProfile{
+			name:      "sleep-sh-pod",
+			namespace: "spo-ns-1",
+			template:  secProfileTemplate,
+		}
+		seccompP1 = seccompProfile{
+			name:      "sleep-sh-pod",
+			namespace: "spo-ns-2",
+			template:  secProfileTemplate,
+		}
+
+		g.By("Create seccompprofiles in different namespaces !!!")
+		seccomps := [2]seccompProfile{seccompP, seccompP1}
+		for _, seccompP := range seccomps {
+			defer deleteNamespace(oc, seccompP.namespace)
+			err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", seccompP.namespace).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("seccompprofiles", seccompP.name, "-n", seccompP.namespace, "--ignore-not-found").Execute()
+			seccompP.create(oc)
+			newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"seccompprofile", "--selector=spo.x-k8s.io/profile-id=SeccompProfile-sleep-sh-pod", "-n", seccompP.namespace, "-o=jsonpath={.status.status}"})
+		}
+	})
+
+	// author: minmli@redhat.com
 	g.It("Author:minmli-High-50397-check security profiles operator could be deleted successfully [Serial]", func() {
 		defer func() {
 			g.By("delete Security Profile Operator !!!")
@@ -81,11 +106,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		g.By("Check the SeccompProfile is created sucessfully !!!")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Installed", ok, []string{"seccompprofile", "--selector=spo.x-k8s.io/profile-id=SeccompProfile-sleep-sh-pod", "-n", seccompP.namespace, "-o=jsonpath={.status.status}"})
 
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("mutatingwebhookconfiguration", "spo-mutating-webhook-configuration", "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("mutatingwebhookconfiguration", "spo-mutating-webhook-configuration", "-n", subD.namespace, "--ignore-not-found").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("seccompprofiles", "--all", "-n", subD.namespace, "--ignore-not-found").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("selinuxprofiles", "--all", "-n", subD.namespace, "--ignore-not-found").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("rawselinuxprofiles", "--all", "-n", subD.namespace, "--ignore-not-found").Execute()
 		g.By("delete seccompprofiles, selinuxprofiles and rawselinuxprofiles !!!")
-
 	})
 })
