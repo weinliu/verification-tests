@@ -304,4 +304,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		})
 		exutil.AssertWaitPollNoErr(errWait, "no image-pruner created")
 	})
+
+	// author: wewang@redhat.com
+	g.It("Author:wewang-High-27577-Explain and check the custom resource definition for the prune", func() {
+		g.By("Check the custom resource definition for the prune")
+		result, explainErr := oc.WithoutNamespace().AsAdmin().Run("explain").Args("imagepruners", "--api-version=imageregistry.operator.openshift.io/v1").Output()
+		o.Expect(explainErr).NotTo(o.HaveOccurred())
+		o.Expect(result).To(o.ContainSubstring("ImagePruner is the configuration object for an image registry pruner"))
+		o.Expect(result).To(o.ContainSubstring("ImagePrunerSpec defines the specs for the running image pruner"))
+		o.Expect(result).To(o.ContainSubstring("ImagePrunerStatus reports image pruner operational status"))
+	})
 })

@@ -2735,4 +2735,23 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(curlOutput).To(o.ContainSubstring("imagesignature12958test"))
 
 	})
+
+	// author: wewang@redhat.com
+	g.It("DisconnectedOnly-Author:wewang-High-21988-Registry can use AdditionalTrustedCA to trust an external secured registry", func() {
+		g.By("Check registry-config")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap/registry-config", "-n", "openshift-config").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("registry-config"))
+		g.By("Import an image from mirror registry")
+		getRegistry, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("imagecontentsourcepolicy/image-policy-aosqe", "-o=jsonpath={.spec.repositoryDigestMirrors[?(@.source==\"quay.io/openshifttest\")].mirrors}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(getRegistry).NotTo(o.BeEmpty())
+		getRegistry = strings.ReplaceAll(getRegistry, `["`, ``)
+		getRegistry = strings.ReplaceAll(getRegistry, `"]`, ``)
+		mirrorImage := "--from=" + getRegistry + "/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f"
+		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("myimage", mirrorImage, "--confirm", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 })
