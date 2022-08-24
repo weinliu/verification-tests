@@ -241,7 +241,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("doesn't get secret test-secret %s", namespace))
-		//oc get secret test-secret -o yaml
+		// oc get secret test-secret -o yaml
 		msg, err := oc.AsAdmin().Run("describe").Args("secret", "test-secret", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("test:  6 bytes"))
@@ -589,10 +589,13 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		defer operatorsdkCLI.Run("cleanup").Args("upgradeindex", "-n", namespace).Output()
 		createCatalog, _ := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", catalogofupgrade, "-p", "NAME=upgradetest", "NAMESPACE="+namespace, "ADDRESS=quay.io/olmqe/upgradeindex-index:v0.1", "DISPLAYNAME=KakaTest").OutputToFile("catalogsource-41497.json")
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createCatalog, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		createOg, _ := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ogofupgrade, "-p", "NAME=kakatest-single", "NAMESPACE="+namespace, "KAKA="+namespace).OutputToFile("createog-41497.json")
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createOg, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		createSub, _ := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", subofupgrade, "-p", "NAME=subofupgrade", "NAMESPACE="+namespace, "SOURCENAME=upgradetest", "OPERATORNAME=upgradeindex", "SOURCENAMESPACE="+namespace, "STARTINGCSV=upgradeindex.v0.0.1").OutputToFile("createsub-41497.json")
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createSub, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "upgradeindex.v0.0.1", "-o=jsonpath={.status.phase}", "-n", namespace).Output()
 			if strings.Contains(msg, "Succeeded") {
@@ -749,7 +752,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer containerCLI.RemoveImage("quay.io/olmqe/catalogtest-operator:v" + ocpversion)
 
-		// ocp-40219
+		// OCP-40219
 		g.By("Generate the bundle image and catalog index image")
 		_, err = exec.Command("bash", "-c", "cd /tmp/ocp-34462/catalogtest && sed -i 's#controller:latest#quay.io/olmqe/catalogtest-operator:v4.10#g' /tmp/ocp-34462/catalogtest/Makefile").Output()
 		_, err = exec.Command("bash", "-c", "cp -rf test/extended/util/operatorsdk/ocp-34462-data/manifests/bases/ /tmp/ocp-34462/catalogtest/config/manifests/").Output()
@@ -929,7 +932,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		tmpBasePath := "/tmp/ocp-34427-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-34427")
-		err := os.MkdirAll(tmpPath, 0755)
+		err := os.MkdirAll(tmpPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpBasePath)
 		operatorsdkCLI.ExecCommandPath = tmpPath
@@ -996,16 +999,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 		switch architecture {
 		case "amd64":
-			podmanCLI := container.NewPodmanCLI()
-			podmanCLI.ExecCommandPath = tmpPath
-			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "amd64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Successfully"))
-			output, err = podmanCLI.Run("push").Args(imageTag).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+			buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
 		case "arm64":
-			e2e.Logf("platfrom is arm64, IMG is " + imageTag)
+			e2e.Logf("platform is arm64, IMG is " + imageTag)
 		}
 
 		g.By("step: Install the CRD")
@@ -1097,7 +1093,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		tmpBasePath := "/tmp/ocp-34366-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-34366")
-		err := os.MkdirAll(tmpPath, 0755)
+		err := os.MkdirAll(tmpPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpBasePath)
 		operatorsdkCLI.ExecCommandPath = tmpPath
@@ -1162,16 +1158,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 		switch architecture {
 		case "amd64":
-			podmanCLI := container.NewPodmanCLI()
-			podmanCLI.ExecCommandPath = tmpPath
-			output, err = podmanCLI.Run("build").Args(tmpPath, "--arch", "amd64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Successfully"))
-			output, err = podmanCLI.Run("push").Args(imageTag).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+			buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
 		case "arm64":
-			e2e.Logf("platfrom is arm64, IMG is " + imageTag)
+			e2e.Logf("platform is arm64, IMG is " + imageTag)
 		}
 
 		g.By("step: Install the CRD")
@@ -1214,7 +1203,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		operatorsdkCLI.showInfo = true
 		tmpBasePath := "/tmp/ocp-34883-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-34883")
-		err := os.MkdirAll(tmpPath, 0755)
+		err := os.MkdirAll(tmpPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpBasePath)
 		operatorsdkCLI.ExecCommandPath = tmpPath
@@ -1230,13 +1219,13 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		g.By("Step: make bundle.")
 		manifestsPath := filepath.Join(tmpPath, "config", "manifests")
-		err = os.MkdirAll(manifestsPath, 0755)
+		err = os.MkdirAll(manifestsPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exec.Command("bash", "-c", fmt.Sprintf("cp -rf test/extended/util/operatorsdk/ocp-34883-data/manifests/bases/ %s", manifestsPath)).Output()
 
 		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
 			msg, _ := makeCLI.Run("bundle").Args().Output()
-			if strings.Contains(string(msg), "operator-sdk bundle validate ./bundle") {
+			if strings.Contains(msg, "operator-sdk bundle validate ./bundle") {
 				return true, nil
 			}
 			return false, nil
@@ -1256,7 +1245,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		oc.SetupProject()
 		tmpBasePath := "/tmp/ocp-45431-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator")
-		err := os.MkdirAll(tmpPath, 0755)
+		err := os.MkdirAll(tmpPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpBasePath)
 		operatorsdkCLI.ExecCommandPath = tmpPath
@@ -1271,14 +1260,14 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		manifestsPath := filepath.Join(tmpPath, "config", "manifests")
-		err = os.MkdirAll(manifestsPath, 0755)
+		err = os.MkdirAll(manifestsPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exec.Command("bash", "-c", fmt.Sprintf("cp -rf test/extended/util/operatorsdk/ocp-43973-data/manifests/bases/ %s", manifestsPath)).Output()
 
 		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
 			msg, err := makeCLI.Run("bundle").Args().Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(string(msg), "operator-sdk bundle validate ./bundle") {
+			if strings.Contains(msg, "operator-sdk bundle validate ./bundle") {
 				return true, nil
 			}
 			return false, nil
@@ -1287,14 +1276,14 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		output, _ := operatorsdkCLI.Run("version").Args("").Output()
 		e2e.Logf("The OperatorSDK version is %s", output)
-		//ocp-43973
+		// OCP-43973
 		g.By("scorecard basic test migration")
 		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=basic-check-spec-test", "-n", oc.Namespace()).Output()
 		e2e.Logf(" scorecard bundle %v", err)
 		o.Expect(output).To(o.ContainSubstring("State: fail"))
 		o.Expect(output).To(o.ContainSubstring("spec missing from [memcached-sample]"))
 
-		//ocp-43976
+		// OCP-43976
 		g.By("migrate OLM tests-bundle validation")
 		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1322,14 +1311,14 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(output).To(o.ContainSubstring("State: fail"))
 		o.Expect(output).To(o.ContainSubstring("memcacheds.cache.example.com does not have a status descriptor"))
 
-		//ocp-48630
+		// OCP-48630
 		g.By("scorecard proxy container port should be configurable")
 		exec.Command("bash", "-c", fmt.Sprintf("sed -i '$a\\proxy-port: 9001' %s/bundle/tests/scorecard/config.yaml", tmpPath)).Output()
 		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("State: pass"))
 
-		//ocp-45428 xunit adjustments - add nested tags and attributes
+		// OCP-45428 xunit adjustments - add nested tags and attributes
 		g.By("migrate OLM tests-bundle validation to generate a pass xunit output")
 		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test", "-o", "xunit", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1343,7 +1332,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(output).To(o.ContainSubstring("<system-out>Loaded ClusterServiceVersion:"))
 		o.Expect(output).To(o.ContainSubstring("failure"))
 
-		// ocp-45431 bring in latest o-f/api to SDK BEFORE 1.13
+		// OCP-45431 bring in latest o-f/api to SDK BEFORE 1.13
 		g.By("use an non-exist service account to run test")
 		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test ", "-s", "testing", "-n", oc.Namespace()).Output()
 		o.Expect(err).To(o.HaveOccurred())
@@ -1361,7 +1350,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		oc.SetupProject()
 		tmpBasePath := "/tmp/ocp-43660-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-43660")
-		err := os.MkdirAll(tmpPath, 0755)
+		err := os.MkdirAll(tmpPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpBasePath)
 		operatorsdkCLI.ExecCommandPath = tmpPath
@@ -1377,14 +1366,14 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		g.By("step: make bundle.")
 		manifestsPath := filepath.Join(tmpPath, "config", "manifests")
-		err = os.MkdirAll(manifestsPath, 0755)
+		err = os.MkdirAll(manifestsPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exec.Command("bash", "-c", fmt.Sprintf("cp -rf test/extended/util/operatorsdk/ocp-43660-data/manifests/bases/ %s", manifestsPath)).Output()
 
 		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
 			msg, err := makeCLI.Run("bundle").Args().Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(string(msg), "operator-sdk bundle validate ./bundle") {
+			if strings.Contains(msg, "operator-sdk bundle validate ./bundle") {
 				return true, nil
 			}
 			return false, nil
@@ -1445,7 +1434,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		tmpBasePath := "/tmp/ocp-34426-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "nginx-operator-34426")
-		err := os.MkdirAll(tmpPath, 0755)
+		err := os.MkdirAll(tmpPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpBasePath)
 		operatorsdkCLI.ExecCommandPath = tmpPath
@@ -1514,26 +1503,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		switch architecture {
-		case "amd64":
-			podmanCLI := container.NewPodmanCLI()
-			podmanCLI.ExecCommandPath = tmpPath
-			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "amd64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Successfully"))
-			output, err = podmanCLI.Run("push").Args(imageTag).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
-		case "arm64":
-			podmanCLI := container.NewPodmanCLI()
-			podmanCLI.ExecCommandPath = tmpPath
-			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "arm64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Successfully"))
-			output, err = podmanCLI.Run("push").Args(imageTag).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
-		}
+		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
 
 		g.By("step: Install the CRD")
 		output, err = makeCLI.Run("install").Args().Output()
@@ -1784,7 +1754,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		nsOperator := "memcached-operator-system-ocp44295" + getRandomString()
 		defer os.RemoveAll(tmpBasePath)
 		defer quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
-		err := os.MkdirAll(tmpPath, 0755)
+		err := os.MkdirAll(tmpPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		operatorsdkCLI.ExecCommandPath = tmpPath
 		makeCLI.ExecCommandPath = tmpPath
@@ -1951,7 +1921,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		operatorsdkCLI.ExecCommandPath = tmpOperatorPath
 		makeCLI.ExecCommandPath = tmpOperatorPath
 		mvnCLI.ExecCommandPath = tmpOperatorPath
-		err := os.MkdirAll(tmpOperatorPath, 0755)
+		err := os.MkdirAll(tmpOperatorPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpBasePath)
 
@@ -2114,7 +2084,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		operatorsdkCLI.ExecCommandPath = tmpOperatorPath
 		makeCLI.ExecCommandPath = tmpOperatorPath
 		mvnCLI.ExecCommandPath = tmpOperatorPath
-		err := os.MkdirAll(tmpOperatorPath, 0755)
+		err := os.MkdirAll(tmpOperatorPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpBasePath)
 
@@ -2261,7 +2231,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		tmpBasePath := "/tmp/ocp-40341-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-40341")
-		err := os.MkdirAll(tmpPath, 0755)
+		err := os.MkdirAll(tmpPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpBasePath)
 		operatorsdkCLI.ExecCommandPath = tmpPath
@@ -2328,16 +2298,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 		switch architecture {
 		case "amd64":
-			podmanCLI := container.NewPodmanCLI()
-			podmanCLI.ExecCommandPath = tmpPath
-			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "amd64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Successfully"))
-			output, err = podmanCLI.Run("push").Args(imageTag).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+			buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
 		case "arm64":
-			e2e.Logf("platfrom is arm64, IMG is " + imageTag)
+			e2e.Logf("platform is arm64, IMG is " + imageTag)
 		}
 
 		g.By("step: Install the CRD")
@@ -2437,7 +2400,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 		tmpBasePath := "/tmp/ocp-48885-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-48885")
-		err := os.MkdirAll(tmpPath, 0755)
+		err := os.MkdirAll(tmpPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpBasePath)
 		operatorsdkCLI.ExecCommandPath = tmpPath
@@ -2472,7 +2435,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		g.By("step: make bundle.")
 		// copy manifests
 		manifestsPath := filepath.Join(tmpPath, "config", "manifests", "bases")
-		err = os.MkdirAll(manifestsPath, 0755)
+		err = os.MkdirAll(manifestsPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		manifestsFile := filepath.Join(manifestsPath, "memcached-operator-48885.clusterserviceversion.yaml")
 		_, err = os.Create(manifestsFile)
@@ -2483,7 +2446,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
 			msg, err := makeCLI.Run("bundle").Args("USE_IMAGE_DIGESTS=true").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(string(msg), "operator-sdk bundle validate ./bundle") {
+			if strings.Contains(msg, "operator-sdk bundle validate ./bundle") {
 				return true, nil
 			}
 			return false, nil
@@ -2508,7 +2471,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		tmpBasePath := "/tmp/ocp-52813-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-52813")
 		imageTag := "quay.io/olmqe/memcached-operator:52813-" + getRandomString()
-		err := os.MkdirAll(tmpPath, 0755)
+		err := os.MkdirAll(tmpPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpBasePath)
 		operatorsdkCLI.ExecCommandPath = tmpPath
@@ -2553,26 +2516,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		switch architecture {
-		case "amd64":
-			podmanCLI := container.NewPodmanCLI()
-			podmanCLI.ExecCommandPath = tmpPath
-			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "amd64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Successfully"))
-			output, err = podmanCLI.Run("push").Args(imageTag).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
-		case "arm64":
-			podmanCLI := container.NewPodmanCLI()
-			podmanCLI.ExecCommandPath = tmpPath
-			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "arm64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Successfully"))
-			output, err = podmanCLI.Run("push").Args(imageTag).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
-		}
+		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+
 		// update the Makefile
 		makefileFilePath := filepath.Join(tmpPath, "Makefile")
 		replaceContent(makefileFilePath, "controller:latest", imageTag)
@@ -2584,7 +2529,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		g.By("step: make bundle.")
 		// copy manifests
 		manifestsPath := filepath.Join(tmpPath, "config", "manifests", "bases")
-		err = os.MkdirAll(manifestsPath, 0755)
+		err = os.MkdirAll(manifestsPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		manifestsFile := filepath.Join(manifestsPath, "memcached-operator-52813.clusterserviceversion.yaml")
 		_, err = os.Create(manifestsFile)
@@ -2595,7 +2540,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
 			msg, err := makeCLI.Run("bundle").Args("USE_IMAGE_DIGESTS=true").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(string(msg), "operator-sdk bundle validate ./bundle") {
+			if strings.Contains(msg, "operator-sdk bundle validate ./bundle") {
 				return true, nil
 			}
 			return false, nil
@@ -2622,7 +2567,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		tmpBasePath := "/tmp/ocp-52814-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-52814")
 		imageTag := "quay.io/olmqe/memcached-operator:52814-" + getRandomString()
-		err := os.MkdirAll(tmpPath, 0755)
+		err := os.MkdirAll(tmpPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpBasePath)
 		operatorsdkCLI.ExecCommandPath = tmpPath
@@ -2667,26 +2612,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		switch architecture {
-		case "amd64":
-			podmanCLI := container.NewPodmanCLI()
-			podmanCLI.ExecCommandPath = tmpPath
-			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "amd64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Successfully"))
-			output, err = podmanCLI.Run("push").Args(imageTag).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
-		case "arm64":
-			podmanCLI := container.NewPodmanCLI()
-			podmanCLI.ExecCommandPath = tmpPath
-			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "arm64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Successfully"))
-			output, err = podmanCLI.Run("push").Args(imageTag).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
-		}
+		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+
 		// update the Makefile
 		makefileFilePath := filepath.Join(tmpPath, "Makefile")
 		replaceContent(makefileFilePath, "controller:latest", imageTag)
@@ -2702,7 +2629,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		g.By("step: make bundle.")
 		// copy manifests
 		manifestsPath := filepath.Join(tmpPath, "config", "manifests", "bases")
-		err = os.MkdirAll(manifestsPath, 0755)
+		err = os.MkdirAll(manifestsPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		manifestsFile := filepath.Join(manifestsPath, "memcached-operator-52814.clusterserviceversion.yaml")
 		_, err = os.Create(manifestsFile)
@@ -2713,7 +2640,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
 			msg, err := makeCLI.Run("bundle").Args("USE_IMAGE_DIGESTS=true").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(string(msg), "operator-sdk bundle validate ./bundle") {
+			if strings.Contains(msg, "operator-sdk bundle validate ./bundle") {
 				return true, nil
 			}
 			return false, nil
@@ -2737,7 +2664,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 		tmpBasePath := "/tmp/ocp-44550-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-44550")
-		err := os.MkdirAll(tmpPath, 0755)
+		err := os.MkdirAll(tmpPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpBasePath)
 		operatorsdkCLI.ExecCommandPath = tmpPath
@@ -2796,26 +2723,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		switch architecture {
-		case "amd64":
-			podmanCLI := container.NewPodmanCLI()
-			podmanCLI.ExecCommandPath = tmpPath
-			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "amd64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Successfully"))
-			output, err = podmanCLI.Run("push").Args(imageTag).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
-		case "arm64":
-			podmanCLI := container.NewPodmanCLI()
-			podmanCLI.ExecCommandPath = tmpPath
-			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "arm64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Successfully"))
-			output, err = podmanCLI.Run("push").Args(imageTag).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
-		}
+		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
 
 		g.By("step: Install the CRD")
 		output, err = makeCLI.Run("install").Args().Output()
@@ -2897,7 +2805,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 		tmpBasePath := "/tmp/ocp-44551-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-44551")
-		err := os.MkdirAll(tmpPath, 0755)
+		err := os.MkdirAll(tmpPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpBasePath)
 		operatorsdkCLI.ExecCommandPath = tmpPath
@@ -2956,26 +2864,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("Fail to get the cluster auth %v", err)
 		}
-		switch architecture {
-		case "amd64":
-			podmanCLI := container.NewPodmanCLI()
-			podmanCLI.ExecCommandPath = tmpPath
-			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "amd64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Successfully"))
-			output, err = podmanCLI.Run("push").Args(imageTag).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
-		case "arm64":
-			podmanCLI := container.NewPodmanCLI()
-			podmanCLI.ExecCommandPath = tmpPath
-			output, err := podmanCLI.Run("build").Args(tmpPath, "--arch", "arm64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Successfully"))
-			output, err = podmanCLI.Run("push").Args(imageTag).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).To(o.ContainSubstring("Storing signatures"))
-		}
+		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
 
 		g.By("step: Install the CRD")
 		output, err = makeCLI.Run("install").Args().Output()
@@ -3118,7 +3007,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 		tmpBasePath := "/tmp/ocp-44553-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-44553")
-		err := os.MkdirAll(tmpPath, 0755)
+		err := os.MkdirAll(tmpPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpBasePath)
 		operatorsdkCLI.ExecCommandPath = tmpPath

@@ -37,7 +37,7 @@ type CLI struct {
 	env             []string
 }
 
-// NewOperatorSDKCLI intialize the SDK framework
+// NewOperatorSDKCLI initialize the SDK framework
 func NewOperatorSDKCLI() *CLI {
 	client := &CLI{}
 	client.username = "admin"
@@ -46,7 +46,7 @@ func NewOperatorSDKCLI() *CLI {
 	return client
 }
 
-// NewMakeCLI intialize the make framework
+// NewMakeCLI initialize the make framework
 func NewMakeCLI() *CLI {
 	client := &CLI{}
 	client.username = "admin"
@@ -55,7 +55,7 @@ func NewMakeCLI() *CLI {
 	return client
 }
 
-// NewMVNCLI intialize the make framework
+// NewMVNCLI initialize the make framework
 func NewMVNCLI() *CLI {
 	client := &CLI{}
 	client.username = "admin"
@@ -135,13 +135,13 @@ func (c *CLI) Output() (string, error) {
 	}
 	out, err := cmd.CombinedOutput()
 	trimmed := strings.TrimSpace(string(out))
-	switch err.(type) {
+	switch err := err.(type) {
 	case nil:
 		c.stdout = bytes.NewBuffer(out)
 		return trimmed, nil
 	case *exec.ExitError:
 		e2e.Logf("Error running %v:\n%s", cmd, trimmed)
-		return trimmed, &ExitError{ExitError: err.(*exec.ExitError), Cmd: c.execPath + " " + strings.Join(c.finalArgs, " "), StdErr: trimmed}
+		return trimmed, &ExitError{ExitError: err, Cmd: c.execPath + " " + strings.Join(c.finalArgs, " "), StdErr: trimmed}
 	default:
 		FatalErr(fmt.Errorf("unable to execute %q: %v", c.execPath, err))
 		// unreachable code
@@ -149,7 +149,7 @@ func (c *CLI) Output() (string, error) {
 	}
 }
 
-//the method is to get random string with length 8.
+// The method is to get random string with length 8.
 func getRandomString() string {
 	chars := "abcdefghijklmnopqrstuvwxyz0123456789"
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -160,13 +160,13 @@ func getRandomString() string {
 	return string(buffer)
 }
 
-func replaceContent(filePath string, src string, target string) {
+func replaceContent(filePath, src, target string) {
 	input, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		FatalErr(fmt.Errorf("read file %s failed: %v", filePath, err))
 	}
 	output := bytes.Replace(input, []byte(src), []byte(target), -1)
-	if err = ioutil.WriteFile(filePath, output, 0755); err != nil {
+	if err = ioutil.WriteFile(filePath, output, 0o755); err != nil {
 		FatalErr(fmt.Errorf("write file %s failed: %v", filePath, err))
 	}
 }
@@ -177,7 +177,7 @@ func getContent(filePath string) string {
 	return string(content)
 }
 
-func insertContent(filePath string, src string, insertStr string) {
+func insertContent(filePath, src, insertStr string) {
 	input, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		FatalErr(fmt.Errorf("read file %s failed: %v", filePath, err))
@@ -192,18 +192,18 @@ func insertContent(filePath string, src string, insertStr string) {
 		}
 	}
 	output := []byte(strings.Join(newLines, "\n"))
-	if err = ioutil.WriteFile(filePath, output, 0755); err != nil {
+	if err = ioutil.WriteFile(filePath, output, 0o755); err != nil {
 		FatalErr(fmt.Errorf("write file %s failed: %v", filePath, err))
 	}
 }
 
-func copy(src string, target string) error {
+func copy(src, target string) error {
 	bytesRead, err := ioutil.ReadFile(src)
 	if err != nil {
 		return err
 	}
 
-	err = ioutil.WriteFile(target, bytesRead, 0755)
+	err = ioutil.WriteFile(target, bytesRead, 0o755)
 	if err != nil {
 		return err
 	}
@@ -241,7 +241,7 @@ func logDebugInfo(oc *exutil.CLI, ns string, resource ...string) {
 	}
 }
 
-//the method is to create one resource with template
+// The method is to create one resource with template
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 	var configFile string
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
@@ -266,7 +266,7 @@ type clusterrolebindingDescription struct {
 	template  string
 }
 
-//the method is to create role with template
+// The method is to create role with template
 func (clusterrolebinding *clusterrolebindingDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", clusterrolebinding.template,
 		"-p", "NAME="+clusterrolebinding.name, "NAMESPACE="+clusterrolebinding.namespace, "SA_NAME="+clusterrolebinding.saname)
