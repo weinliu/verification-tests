@@ -709,6 +709,124 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).To(o.ContainSubstring("Custom error page:The requested application is not available"))
 	})
 
+	// author: shudili@redhat.com
+	g.It("NonPreRelease-Author:shudili-Medium-43292-User can delete configmap and update configmap with new custom error page", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			srvrcInfo           = "web-server-rc"
+			srvName             = "service-unsecure"
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+			http404page         = filepath.Join(buildPruningBaseDir, "error-page-404.http")
+			http503page         = filepath.Join(buildPruningBaseDir, "error-page-503.http")
+			http404page2        = filepath.Join(buildPruningBaseDir, "error-page2-404.http")
+			http503page2        = filepath.Join(buildPruningBaseDir, "error-page2-503.http")
+			cmName              = "my-custom-error-code-pages-43292"
+			patchHTTPErrorPage  = "{\"spec\": {\"httpErrorCodePages\": {\"name\": \"" + cmName + "\"}}}"
+			rmHTTPErrorPage     = "{\"spec\": {\"httpErrorCodePages\": {\"name\": \"\"}}}"
+			ingctrl             = ingctrlNodePortDescription{
+				name:      "ocp43292",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+			ingctrlResource = "ingresscontrollers/" + ingctrl.name
+		)
+
+		g.By("Create a ConfigMap with custom 404 and 503 error pages")
+		defer deleteConfigMap(oc, "openshift-config", cmName)
+		cmCrtErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", cmName, "--from-file="+http404page, "--from-file="+http503page, "-n", "openshift-config").Execute()
+		o.Expect(cmCrtErr).NotTo(o.HaveOccurred())
+		cmOutput, cmErr := oc.WithoutNamespace().AsAdmin().Run("get").Args("configmap", cmName, "-o=jsonpath={.data}", "-n", "openshift-config").Output()
+		o.Expect(cmErr).NotTo(o.HaveOccurred())
+		o.Expect(cmOutput).Should(o.And(
+			o.ContainSubstring("error-page-404.http"),
+			o.ContainSubstring("Custom error page:The requested document was not found"),
+			o.ContainSubstring("error-page-503.http"),
+			o.ContainSubstring("Custom error page:The requested application is not available")))
+
+		g.By("Create one custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("patch the custom ingresscontroller with the http error code pages")
+		podname := getRouterPod(oc, ingctrl.name)
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchHTTPErrorPage)
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+		err = waitForPodWithLabelReady(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, "new router pod failed to be ready state within allowed time!")
+
+		g.By("get one custom ingress-controller router pod's IP")
+		podname = getRouterPod(oc, ingctrl.name)
+		podIP := getPodv4Address(oc, podname, "openshift-ingress")
+
+		g.By("Deploy a project with a client pod, a backend pod and its service resources")
+		project1 := oc.Namespace()
+		g.By("create a client pod")
+		createResourceFromFile(oc, project1, clientPod)
+		err = waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+		g.By("create an unsecure service and its backend pod")
+		createResourceFromFile(oc, project1, testPodSvc)
+		err = waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
+
+		g.By("Expose an route with the unsecure service inside the project")
+		routehost := srvName + "-" + project1 + "." + ingctrl.domain
+		output, SrvErr := oc.Run("expose").Args("service", srvName, "--hostname="+routehost).Output()
+		o.Expect(SrvErr).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(srvName))
+
+		g.By("curl a non-existing route, expect to get custom http 404 Not Found error")
+		notExistRoute := "notexistroute" + "-" + project1 + "." + ingctrl.domain
+		toDst := notExistRoute + ":80:" + podIP
+		output, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-v", "http://"+notExistRoute, "--resolve", toDst).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.And(
+			o.ContainSubstring("404 Not Found"),
+			o.ContainSubstring("Custom error page:The requested document was not found")))
+
+		g.By("remove the custom error page from the ingress-controller")
+		podname = getRouterPod(oc, ingctrl.name)
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, rmHTTPErrorPage)
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+		err = waitForPodWithLabelReady(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, "new router pod failed to be ready state within allowed time!")
+
+		g.By("delete the configmap")
+		cmDltErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", cmName, "-n", "openshift-config").Execute()
+		o.Expect(cmDltErr).NotTo(o.HaveOccurred())
+
+		g.By("Create the ConfigMap with another 404 and 503 error pages")
+		cmCrtErr = oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", cmName, "--from-file="+http404page2, "--from-file="+http503page2, "-n", "openshift-config").Execute()
+		o.Expect(cmCrtErr).NotTo(o.HaveOccurred())
+		cmOutput, cmErr = oc.WithoutNamespace().AsAdmin().Run("get").Args("configmap", cmName, "-o=jsonpath={.data}", "-n", "openshift-config").Output()
+		o.Expect(cmErr).NotTo(o.HaveOccurred())
+		o.Expect(cmOutput).Should(o.And(
+			o.ContainSubstring("error-page2-404.http"),
+			o.ContainSubstring("Custom error page:THE REQUESTED DOCUMENT WAS NOT FOUND YET!"),
+			o.ContainSubstring("error-page2-503.http"),
+			o.ContainSubstring("Custom error page:THE REQUESTED APPLICATION IS NOT AVAILABLE YET!")))
+
+		//the following test step will be added after bug 1990020 is fixed(https://bugzilla.redhat.com/show_bug.cgi?id=1990020)
+		//g.By("curl the non-existing route, expect to get the new custom http 404 Not Found error")
+		//output, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-v", "http://"+notExistRoute, "--resolve", toDst).Output()
+		//o.Expect(err).NotTo(o.HaveOccurred())
+		//o.Expect(output).Should(o.And(
+		//o.ContainSubstring("404 Not Found"),
+		//o.ContainSubstring("Custom error page:Custom error page:THE REQUESTED DOCUMENT WAS NOT FOUND YET!")))
+
+	})
+
 	g.It("Author:aiyengar-Critical-41186-The Power-of-two balancing features switches to roundrobin mode for REEN/Edge/insecure/passthrough routes with multiple backends configured with weights", func() {
 		var (
 			baseDomain = getBaseDomain(oc)
