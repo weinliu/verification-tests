@@ -1198,7 +1198,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("VMonly-Author:jitli-Medium-34883-SDK stamp on Operator bundle image", func() {
+	g.It("VMonly-ConnectedOnly-Author:jitli-Medium-34883-SDK stamp on Operator bundle image [Slow]", func() {
 
 		operatorsdkCLI.showInfo = true
 		tmpBasePath := "/tmp/ocp-34883-" + getRandomString()
