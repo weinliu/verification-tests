@@ -2692,11 +2692,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	g.It("Author:xiuwang-High-12958-Read and write image signatures with registry endpoint", func() {
 		g.By("Create signature file")
 		var signFile = `'{"schemaVersion": 2,"type":"atomic","name":"digestid","content": "MjIK"}'`
-		err := oc.AsAdmin().Run("tag").Args("quay.io/openshifttest/hello-openshift@sha256:eb47fdebd0f2cc0c130228ca972f15eb2858b425a3df15f10f7bb519f60f0c96", "ho12958:latest", "-n", oc.Namespace()).Execute()
+		err := oc.AsAdmin().Run("tag").Args("quay.io/openshifttest/skopeo@sha256:426196e376cf045012289d53fec986554241496ed7f38e347fc56505aa8ad322", "ho12958:latest", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "ho12958", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		manifest := saveImageMetadataName(oc, "openshifttest/hello-openshift")
+		manifest := saveImageMetadataName(oc, "openshifttest/skopeo")
 		o.Expect(manifest).NotTo(o.BeEmpty())
 		signContent := strings.ReplaceAll(signFile, "digestid", manifest+"@imagesignature12958test")
 
@@ -2753,5 +2753,38 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	//author: xiuwang@redhat.com
+	g.It("Author:xiuwang-Medium-10788-Medium-12059-Could import image and pull from private registry", func() {
+		g.By("Setup a private registry")
+		var regUser, regPass = "testuser", getRandomString()
+		authFile := filepath.Join("/tmp/", fmt.Sprintf("ir-auth-%s", getRandomString()))
+		defer os.RemoveAll(authFile)
+		htpasswdFile, err := generateHtpasswdFile("/tmp/", regUser, regPass)
+		defer os.RemoveAll(htpasswdFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		regRoute := setSecureRegistryEnableAuth(oc, oc.Namespace(), "myregistry", htpasswdFile, "quay.io/openshifttest/registry@sha256:01493571d994fd021da18c1f87aba1091482df3fc20825f443b4e60b3416c820")
+
+		g.By("Push image to private registry")
+		err = oc.AsAdmin().WithoutNamespace().Run("registry").Args("login", "--registry="+regRoute, "--auth-basic="+regUser+":"+regPass, "--to="+authFile, "--insecure", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		myimage := regRoute + "/" + oc.Namespace() + "/myimage:latest"
+		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", myimage, "--insecure", "-a", authFile, "--keep-manifest-list=true", "--filter-by-os=.*").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create secret for private image under project")
+		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("secret", "docker-registry", "mysecret", "--docker-server="+regRoute, "--docker-username="+regUser, "--docker-password="+regPass, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Make sure the image can be pulled after add auth")
+		err = oc.AsAdmin().Run("tag").Args(myimage, "authis:latest", "--reference-policy=local", "--insecure", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "authis", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("set").Args("image-lookup", "authis", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		expectInfo := `Successfully pulled image "image-registry.openshift-image-registry.svc:5000/` + oc.Namespace()
+		createSimpleRunPod(oc, "authis:latest", expectInfo)
 	})
 })
