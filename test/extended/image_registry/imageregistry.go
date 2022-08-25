@@ -56,7 +56,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			e2e.Logf("Wait for image-registry coming ready")
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprint("Image registry is not ready with info %s", message))
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("Image registry is not ready with info %s\n", message))
 	})
 
 	// author: wewang@redhat.com
@@ -83,7 +83,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Check installer-cloud-credentials secret")
 		credentials, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/installer-cloud-credentials", "-n", "openshift-image-registry", "-o=jsonpath={.data.credentials}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		fmt.Sprintf("credentials is %s", credentials)
 		sDec, err := base64.StdEncoding.DecodeString(credentials)
 		if err != nil {
 			fmt.Printf("Error decoding string: %s ", err.Error())
@@ -265,7 +264,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().Run("tag").Args("openshift/tools:latest", "mytools:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "mytools", "latest")
+		exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "mytools", "latest")
 
 		g.By("Check the imagestream imported with digest id using pullthrough policy")
 		err = oc.Run("set").Args("image-lookup", "mytools", "-n", oc.Namespace()).Execute()
@@ -623,7 +622,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		curlOutput, err := exec.Command("bash", "-c", getURL).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(curlOutput)).To(o.ContainSubstring("404 Not Found"))
-		podsOfImageRegistry := []corev1.Pod{}
+		var podsOfImageRegistry []corev1.Pod
 		podsOfImageRegistry = listPodStartingWith("image-registry", oc, "openshift-image-registry")
 		if len(podsOfImageRegistry) == 0 {
 			e2e.Failf("Error retrieving logs")
@@ -821,7 +820,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitRegistryDefaultPodsReady(oc)
 		}()
-		output, err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"oss":{"endpointAccessibility":"Public"}}}}`, "--type=merge").Output()
+		_, err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"oss":{"endpointAccessibility":"Public"}}}}`, "--type=merge").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = wait.PollImmediate(10*time.Second, 2*time.Minute, func() (bool, error) {
 			registryDegrade := checkRegistryDegraded(oc)
@@ -1000,7 +999,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Collect metrics at start")
 		for _, query = range metrics {
 			prometheusURLQuery = fmt.Sprintf("%v/query?query=%v", prometheusURL, query)
-			msg, _, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "-i", "--", "curl", "-k", "-H", authHeader, prometheusURLQuery).Outputs()
+			msg, _, _ = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "-i", "--", "curl", "-k", "-H", authHeader, prometheusURLQuery).Outputs()
 			o.Expect(msg).NotTo(o.BeEmpty())
 			json.Unmarshal([]byte(msg), &data)
 			l = len(data.Data.Result) - 1
@@ -1023,7 +1022,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("results")
 		for _, query = range metrics {
-			msg = "."
 			if before[query] > after[query] {
 				fails++
 				failItems = fmt.Sprintf("%v%v ", failItems, query)

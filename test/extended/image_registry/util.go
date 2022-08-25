@@ -21,7 +21,6 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	container "github.com/openshift/openshift-tests-private/test/extended/util/container"
 	"github.com/prometheus/common/model"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -123,10 +122,7 @@ func runQuery(queryURL, ns, execPodName, bearerToken string) (*prometheusRespons
 func metricReportStatus(queryURL, ns, execPodName, bearerToken string, value model.SampleValue) bool {
 	result, err := runQuery(queryURL, ns, execPodName, bearerToken)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if result.Data.Result[0].Value == value {
-		return true
-	}
-	return false
+	return result.Data.Result[0].Value == value
 }
 
 type bcSource struct {
@@ -236,7 +232,7 @@ func imagePruneLog(oc *exutil.CLI, matchLogs, notMatchLogs string) {
 	podsOfImagePrune := []corev1.Pod{}
 	err := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
 		podsOfImagePrune = listPodStartingWith("image-pruner", oc, "openshift-image-registry")
-		if podsOfImagePrune == nil || len(podsOfImagePrune) == 0 {
+		if len(podsOfImagePrune) == 0 {
 			e2e.Logf("Can't get pruner pods, go to next round")
 			return false, nil
 		}
@@ -377,40 +373,6 @@ func getRegistryStorageConfig(oc *exutil.CLI) (string, string) {
 		e2e.Logf("Image Registry is using unknown storage type")
 	}
 	return storagetype, storageinfo
-}
-
-func loginRegistryDefaultRoute(oc *exutil.CLI, defroute string, ns string) {
-	var podmanCLI = container.NewPodmanCLI()
-	containerCLI := podmanCLI
-
-	g.By("Trust ca for default registry route on your client platform")
-	crt, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("secret", "-n", "openshift-ingress", "router-certs-default", "-o", `go-template={{index .data "tls.crt"}}`).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	sDec, err := base64.StdEncoding.DecodeString(crt)
-	if err != nil {
-		e2e.Logf("Error decoding string: %s ", err.Error())
-	}
-	fileName := "/etc/pki/ca-trust/source/anchors/" + defroute + ".crt"
-	sDecode := string(sDec)
-	cmd := " echo \"" + sDecode + "\"|sudo tee " + fileName + "> /dev/null"
-	_, err = exec.Command("bash", "-c", cmd).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	caCmd := "sudo update-ca-trust enable"
-	_, err = exec.Command("bash", "-c", caCmd).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	g.By("Get admin permission to push image to your project")
-	err = oc.Run("create").Args("serviceaccount", "registry", "-n", ns).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	err = oc.WithoutNamespace().AsAdmin().Run("adm").Args("policy", "add-cluster-role-to-user", "admin", "-z", "registry", "-n", ns).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	g.By("Login to route")
-	token, err := getSAToken(oc, "registry", ns)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if output, err := containerCLI.Run("login").Args(defroute, "-u", "registry", "-p", token).Output(); err != nil {
-		e2e.Logf(output)
-	}
 }
 
 func waitRegistryDefaultPodsReady(oc *exutil.CLI) {
@@ -595,10 +557,7 @@ func checkRegistryDegraded(oc *exutil.CLI) bool {
 	status := "TrueFalseFalse"
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if strings.Contains(output, status) {
-		return false
-	}
-	return true
+	return !strings.Contains(output, status)
 }
 
 func getCreditFromCluster(oc *exutil.CLI) (string, string, string) {
@@ -709,10 +668,7 @@ func isPresentResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, pres
 		}
 		return false, nil
 	})
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 //the method is to check one resource's attribution is expected or not.

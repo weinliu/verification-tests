@@ -59,7 +59,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Prometheus query results report image pruner not installed")
 		err = wait.PollImmediate(30*time.Second, 1*time.Minute, func() (bool, error) {
 			foundValue = metricReportStatus(queryImagePruner, monitoringns, promPod, token, 1)
-			if foundValue != true {
+			if !foundValue {
 				e2e.Logf("wait for next round")
 				return false, nil
 			}
@@ -237,7 +237,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/registry@sha256:01493571d994fd021da18c1f87aba1091482df3fc20825f443b4e60b3416c820", "registry:bigger", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "registry", "bigger")
+		exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "registry", "bigger")
 
 		g.By("Create project limit for image")
 		limitsrc.namespace = oc.Namespace()
