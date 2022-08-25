@@ -1094,7 +1094,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("Checking messages are logged to journald")
 		cmd := fmt.Sprintf("journalctl -t ovn-controller --since '10min ago'| grep 'verdict=allow'")
-		output, _, journalctlErr := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, nodeList.Items[0].Name, []string{"-q"}, "bin/sh", "-c", cmd)
+		output, journalctlErr := exutil.DebugNodeWithOptionsAndChroot(oc, nodeList.Items[0].Name, []string{"-q"}, "bin/sh", "-c", cmd)
 		o.Expect(journalctlErr).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(output, "verdict=allow")).To(o.BeTrue())
 
