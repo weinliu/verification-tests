@@ -133,4 +133,63 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		searchOutput1 := readRouterPodData(oc, defaultContPod, "cat haproxy.config", "hello-pod-http")
 		o.Expect(searchOutput1).To(o.ContainSubstring("backend be_http:" + project1 + ":hello-pod-http"))
 	})
+
+	// author: mjoseph@redhat.com
+	g.It("Longduration-Author:mjoseph-Critical-53696-Route status should updates accordingly when ingress routes cleaned up [Disruptive]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			ingctrl             = ingctrlNodePortDescription{
+				name:      "ocp53696",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		g.By("check the intial canary route status")
+		routerpods := getResourceName(oc, "openshift-ingress", "pods")
+		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "default", false)
+
+		g.By("shard the default ingress controller")
+		defer patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":{\"matchLabels\":{\"type\":null}}}}")
+		patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":{\"matchLabels\":{\"type\":\"shard\"}}}}")
+		waitForRangeOfResourceToDisappear(oc, "openshift-ingress", routerpods)
+		newrouterpods := getResourceName(oc, "openshift-ingress", "pods")
+
+		g.By("check whether canary's, oauth-openshift's and console's route status are cleared")
+		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status", "default", true)
+		getNamespaceRouteDetails(oc, "openshift-authentication", "oauth-openshift", ".status", "default", true)
+		getNamespaceRouteDetails(oc, "openshift-console", "console", ".status", "default", true)
+
+		g.By("patch the controller back to default check the canary route status")
+		patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":{\"matchLabels\":{\"type\":null}}}}")
+		waitForRangeOfResourceToDisappear(oc, "openshift-ingress", newrouterpods)
+		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "default", false)
+
+		g.By("Create a shard ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = "shard." + baseDomain
+		ingctrlResource := "ingresscontrollers/" + ingctrl.name
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		crouterpod := getRouterPod(oc, ingctrl.name)
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"nodePlacement\":{\"nodeSelector\":{\"matchLabels\":{\"node-role.kubernetes.io/worker\":\"\"}}}}}")
+		err2 := waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+crouterpod)
+		exutil.AssertWaitPollNoErr(err2, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+crouterpod))
+		custContPod := getRouterPod(oc, ingctrl.name)
+
+		g.By("check the canary route status with shard controller")
+		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "default", false)
+		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "ocp53696", false)
+
+		g.By("delete the shard and check the status")
+		ingctrl.delete(oc)
+		err3 := waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+custContPod)
+		exutil.AssertWaitPollNoErr(err3, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+custContPod))
+		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "default", false)
+		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "ocp53696", true)
+	})
 })

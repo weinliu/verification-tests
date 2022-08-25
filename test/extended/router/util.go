@@ -550,9 +550,14 @@ func delAllDNSPods(oc *exutil.CLI) {
 	podList := getAllDNSPodsNames(oc)
 	o.Expect(podList).NotTo(o.BeEmpty())
 	oc.AsAdmin().Run("delete").Args("pods", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-n", "openshift-dns").Execute()
+	waitForRangeOfResourceToDisappear(oc, "openshift-dns", podList)
+}
+
+//this function is to check whether the given resource pod's are deleted or not
+func waitForRangeOfResourceToDisappear(oc *exutil.CLI, resource string, podList []string) {
 	for _, podName := range podList {
-		err := waitForResourceToDisappear(oc, "openshift-dns", "pod/"+podName)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("dns pod %s is NOT deleted", podName))
+		err := waitForResourceToDisappear(oc, resource, "pod/"+podName)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s pod %s is NOT deleted", resource, podName))
 	}
 }
 
@@ -937,4 +942,30 @@ func unicastIPFailover(oc *exutil.CLI, ns, failoverName string) {
 		setEnvVariable(oc, ns, "deploy/"+failoverName, "OPENSHIFT_HA_USE_UNICAST=true")
 		setEnvVariable(oc, ns, "deploy/"+failoverName, cmd)
 	}
+}
+
+// this function is to obtain the route details based on namespaces
+func getNamespaceRouteDetails(oc *exutil.CLI, namespace, resourceName, jsonSearchString, matchString string, noMatchIfPresent bool) {
+	e2e.Logf("polling for route details")
+	waitErr := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+		resourceNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "-n", namespace, resourceName,
+			"-ojsonpath={"+jsonSearchString+"}").Output()
+		if err != nil || resourceNames == "" {
+			e2e.Logf("failed to get logs: %v, retrying...", err)
+			return false, nil
+		}
+		if noMatchIfPresent == true {
+			if strings.Contains(resourceNames, matchString) {
+				e2e.Logf("the matched string is still in the logs, retrying...")
+				return false, nil
+			}
+		} else {
+			if !strings.Contains(resourceNames, matchString) {
+				e2e.Logf("cannot find the matched string in the logs, retrying...")
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the route details are not reachable"))
 }
