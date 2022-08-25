@@ -3,6 +3,7 @@ package networking
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,6 +39,29 @@ type bondPolicyResource struct {
 	state      string
 	port1      string
 	port2      string
+	template   string
+}
+
+type vlanPolicyResource struct {
+	name       string
+	nodelabel  string
+	labelvalue string
+	ifacename  string
+	descr      string
+	state      string
+	baseiface  string
+	vlanid     int
+	template   string
+}
+
+type bridgevlanPolicyResource struct {
+	name       string
+	nodelabel  string
+	labelvalue string
+	ifacename  string
+	descr      string
+	state      string
+	port       string
 	template   string
 }
 
@@ -93,6 +117,24 @@ func configBond(oc *exutil.CLI, bondpolicy bondPolicyResource) error {
 	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", bondpolicy.template, "-p", "NAME="+bondpolicy.name, "NODELABEL="+bondpolicy.nodelabel, "LABELVALUE="+bondpolicy.labelvalue, "IFACENAME="+bondpolicy.ifacename, "DESCR="+bondpolicy.descr, "STATE="+bondpolicy.state, "PORT1="+bondpolicy.port1, "PORT2="+bondpolicy.port2)
 	if err != nil {
 		e2e.Logf("Error configure bond %v", err)
+		return err
+	}
+	return nil
+}
+
+func (vpr *vlanPolicyResource) configNNCP(oc *exutil.CLI) error {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", vpr.template, "-p", "NAME="+vpr.name, "NODELABEL="+vpr.nodelabel, "LABELVALUE="+vpr.labelvalue, "IFACENAME="+vpr.ifacename, "DESCR="+vpr.descr, "STATE="+vpr.state, "BASEIFACE="+vpr.baseiface, "VLANID="+strconv.Itoa(vpr.vlanid))
+	if err != nil {
+		e2e.Logf("Error configure vlan %v", err)
+		return err
+	}
+	return nil
+}
+
+func (bvpr *bridgevlanPolicyResource) configNNCP(oc *exutil.CLI) error {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", bvpr.template, "-p", "NAME="+bvpr.name, "NODELABEL="+bvpr.nodelabel, "LABELVALUE="+bvpr.labelvalue, "IFACENAME="+bvpr.ifacename, "DESCR="+bvpr.descr, "STATE="+bvpr.state, "PORT="+bvpr.port)
+	if err != nil {
+		e2e.Logf("Error configure bridge %v", err)
 		return err
 	}
 	return nil

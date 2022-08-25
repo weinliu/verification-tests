@@ -303,4 +303,252 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 		e2e.Logf("SUCCESS - bond is removed from the node")
 	})
 
+	g.It("Author:qiowang-Medium-46383-VLAN [Disruptive]", func() {
+
+		g.By("1. Create NMState CR")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		result, crErr := createNMStateCR(oc, nmstateCR, opNamespace)
+		exutil.AssertWaitPollNoErr(crErr, "create nmstate cr failed")
+		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("SUCCESS - NMState CR Created")
+
+		g.By("2. Creating vlan on node")
+		g.By("2.1 Configure NNCP for creating vlan")
+		policyName := "vlan-policy-46383"
+		nodeList, getNodeErr := exutil.GetClusterNodesBy(oc, "worker")
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		o.Expect(nodeList).NotTo(o.BeEmpty())
+		nodeName := nodeList[0]
+		vlanPolicyTemplate := generateTemplateAbsolutePath("vlan-policy-template.yaml")
+		vlanPolicy := vlanPolicyResource{
+			name:       policyName,
+			nodelabel:  "kubernetes.io/hostname",
+			labelvalue: nodeName,
+			ifacename:  "dummy3.101",
+			descr:      "create vlan",
+			baseiface:  "dummy3",
+			vlanid:     101,
+			state:      "up",
+			template:   vlanPolicyTemplate,
+		}
+		defer deleteNNCP(oc, policyName)
+		configErr1 := vlanPolicy.configNNCP(oc)
+		o.Expect(configErr1).NotTo(o.HaveOccurred())
+
+		g.By("2.2 Verify the policy is applied")
+		nncpErr1 := checkNNCPStatus(oc, policyName, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+		e2e.Logf("SUCCESS - policy is applied")
+
+		g.By("2.3 Verify the status of enactments is updated")
+		nnceName := nodeName + "." + policyName
+		nnceErr1 := checkNNCEStatus(oc, nnceName, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr1, "status of enactments updated failed")
+		e2e.Logf("SUCCESS - status of enactments is updated")
+
+		g.By("2.4 Verify the created vlan found in node network state")
+		ifaceState, nnsErr1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.interfaces[?(@.name=="`+vlanPolicy.ifacename+`")].state}`).Output()
+		o.Expect(nnsErr1).NotTo(o.HaveOccurred())
+		o.Expect(ifaceState).Should(o.ContainSubstring("up"))
+		e2e.Logf("SUCCESS - the created vlan found in node network state")
+
+		g.By("2.5 Verify the vlan is up and active on the node")
+		ifaceList1, ifaceErr1 := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+		o.Expect(ifaceErr1).NotTo(o.HaveOccurred())
+		matched, matchErr1 := regexp.MatchString("vlan\\s+"+vlanPolicy.ifacename, ifaceList1)
+		o.Expect(matchErr1).NotTo(o.HaveOccurred())
+		o.Expect(matched).To(o.BeTrue())
+		e2e.Logf("SUCCESS - vlan is up and active on the node")
+
+		g.By("3. Remove vlan on node")
+		g.By("3.1 Configure NNCP for removing vlan")
+		vlanPolicy = vlanPolicyResource{
+			name:       policyName,
+			nodelabel:  "kubernetes.io/hostname",
+			labelvalue: nodeName,
+			ifacename:  "dummy3.101",
+			descr:      "remove vlan",
+			baseiface:  "dummy3",
+			vlanid:     101,
+			state:      "absent",
+			template:   vlanPolicyTemplate,
+		}
+		configErr2 := vlanPolicy.configNNCP(oc)
+		o.Expect(configErr2).NotTo(o.HaveOccurred())
+
+		g.By("3.2 Verify the policy is applied")
+		nncpErr2 := checkNNCPStatus(oc, policyName, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr2, "policy applied failed")
+		e2e.Logf("SUCCESS - policy is applied")
+
+		g.By("3.3 Verify the status of enactments is updated")
+		nnceErr2 := checkNNCEStatus(oc, nnceName, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr2, "status of enactments updated failed")
+		e2e.Logf("SUCCESS - status of enactments is updated")
+
+		g.By("3.4 Verify no removed vlan found in node network state")
+		ifaceName1, nnsErr2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, "-ojsonpath={.status.currentState.interfaces[*].name}").Output()
+		o.Expect(nnsErr2).NotTo(o.HaveOccurred())
+		o.Expect(ifaceName1).ShouldNot(o.ContainSubstring(vlanPolicy.ifacename))
+		e2e.Logf("SUCCESS - no removed vlan found in node network state")
+
+		g.By("3.5 Verify the vlan is removed from the node")
+		ifaceList2, ifaceErr2 := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+		o.Expect(ifaceErr2).NotTo(o.HaveOccurred())
+		o.Expect(ifaceList2).ShouldNot(o.ContainSubstring(vlanPolicy.ifacename))
+		e2e.Logf("SUCCESS - vlan is removed from the node")
+	})
+
+	g.It("Author:qiowang-Medium-53346-Verify that it is able to reset linux-bridge vlan-filtering with vlan is empty [Disruptive]", func() {
+
+		g.By("1. Create NMState CR")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		result, crErr := createNMStateCR(oc, nmstateCR, opNamespace)
+		exutil.AssertWaitPollNoErr(crErr, "create nmstate cr failed")
+		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("SUCCESS - NMState CR Created")
+
+		g.By("2. Creating linux-bridge with vlan-filtering")
+		g.By("2.1 Configure NNCP for creating linux-bridge")
+		policyName := "bridge-policy-53346"
+		nodeList, getNodeErr := exutil.GetClusterNodesBy(oc, "worker")
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		o.Expect(nodeList).NotTo(o.BeEmpty())
+		nodeName := nodeList[0]
+		bridgePolicyTemplate1 := generateTemplateAbsolutePath("bridge-policy-template.yaml")
+		bridgePolicy := bridgevlanPolicyResource{
+			name:       policyName,
+			nodelabel:  "kubernetes.io/hostname",
+			labelvalue: nodeName,
+			ifacename:  "linux-br0",
+			descr:      "create linux-bridge with vlan-filtering",
+			port:       "dummy4",
+			state:      "up",
+			template:   bridgePolicyTemplate1,
+		}
+		defer deleteNNCP(oc, policyName)
+		configErr1 := bridgePolicy.configNNCP(oc)
+		o.Expect(configErr1).NotTo(o.HaveOccurred())
+
+		g.By("2.2 Verify the policy is applied")
+		nncpErr1 := checkNNCPStatus(oc, policyName, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+		e2e.Logf("SUCCESS - policy is applied")
+
+		g.By("2.3 Verify the status of enactments is updated")
+		nnceName := nodeName + "." + policyName
+		nnceErr1 := checkNNCEStatus(oc, nnceName, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr1, "status of enactments updated failed")
+		e2e.Logf("SUCCESS - status of enactments is updated")
+
+		g.By("2.4 Verify the created bridge found in node network state")
+		ifaceState, nnsErr1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.interfaces[?(@.name=="linux-br0")].state}`).Output()
+		bridgePort1, nnsErr2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.interfaces[?(@.name=="linux-br0")].bridge.port[?(@.name=="dummy4")]}`).Output()
+		o.Expect(nnsErr1).NotTo(o.HaveOccurred())
+		o.Expect(nnsErr2).NotTo(o.HaveOccurred())
+		o.Expect(ifaceState).Should(o.ContainSubstring("up"))
+		o.Expect(bridgePort1).Should(o.ContainSubstring("vlan"))
+		e2e.Logf("SUCCESS - the created bridge found in node network state")
+
+		g.By("2.5 Verify the bridge is up and active, vlan-filtering is enabled")
+		ifaceList1, ifaceErr1 := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+		vlanFilter1, vlanErr1 := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show", bridgePolicy.ifacename, "|", "grep", "vlan-filtering")
+		o.Expect(ifaceErr1).NotTo(o.HaveOccurred())
+		o.Expect(vlanErr1).NotTo(o.HaveOccurred())
+		matched1, matchErr1 := regexp.MatchString("bridge\\s+"+bridgePolicy.ifacename, ifaceList1)
+		o.Expect(matchErr1).NotTo(o.HaveOccurred())
+		o.Expect(matched1).To(o.BeTrue())
+		matched2, matchErr2 := regexp.MatchString("bridge.vlan-filtering:\\s+yes", vlanFilter1)
+		o.Expect(matchErr2).NotTo(o.HaveOccurred())
+		o.Expect(matched2).To(o.BeTrue())
+		e2e.Logf("SUCCESS - bridge is up and active, vlan-filtering is enabled")
+
+		g.By("3. Reset linux-bridge vlan-filtering with vlan: {}")
+		g.By("3.1 Configure NNCP for reset linux-bridge vlan-filtering")
+		bridgePolicyTemplate2 := generateTemplateAbsolutePath("reset-bridge-vlan-policy-template.yaml")
+		bridgePolicy = bridgevlanPolicyResource{
+			name:       policyName,
+			nodelabel:  "kubernetes.io/hostname",
+			labelvalue: nodeName,
+			ifacename:  "linux-br0",
+			descr:      "reset linux-bridge vlan-filtering",
+			port:       "dummy4",
+			state:      "up",
+			template:   bridgePolicyTemplate2,
+		}
+		configErr2 := bridgePolicy.configNNCP(oc)
+		o.Expect(configErr2).NotTo(o.HaveOccurred())
+
+		g.By("3.2 Verify the policy is applied")
+		nncpErr2 := checkNNCPStatus(oc, policyName, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr2, "policy applied failed")
+		e2e.Logf("SUCCESS - policy is applied")
+
+		g.By("3.3 Verify the status of enactments is updated")
+		nnceErr2 := checkNNCEStatus(oc, nnceName, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr2, "status of enactments updated failed")
+		e2e.Logf("SUCCESS - status of enactments is updated")
+
+		g.By("3.4 Verify no linux-bridge vlan-filtering found in node network state")
+		bridgePort2, nnsErr3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.interfaces[?(@.name=="linux-br0")].bridge.port[?(@.name=="dummy4")]}`).Output()
+		o.Expect(nnsErr3).NotTo(o.HaveOccurred())
+		o.Expect(bridgePort2).ShouldNot(o.ContainSubstring("vlan"))
+		e2e.Logf("SUCCESS - no linux-bridge vlan-filtering found in node network state")
+
+		g.By("3.5 Verify the linux-bridge vlan-filtering is disabled")
+		vlanFilter2, vlanErr2 := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show", bridgePolicy.ifacename, "|", "grep", "vlan-filtering")
+		o.Expect(vlanErr2).NotTo(o.HaveOccurred())
+		matched3, matchErr3 := regexp.MatchString("bridge.vlan-filtering:\\s+no", vlanFilter2)
+		o.Expect(matchErr3).NotTo(o.HaveOccurred())
+		o.Expect(matched3).To(o.BeTrue())
+		e2e.Logf("SUCCESS - linux-bridge vlan-filtering is disabled")
+
+		g.By("4. Remove linux-bridge on node")
+		g.By("4.1 Configure NNCP for remove linux-bridge")
+		bridgePolicy = bridgevlanPolicyResource{
+			name:       policyName,
+			nodelabel:  "kubernetes.io/hostname",
+			labelvalue: nodeName,
+			ifacename:  "linux-br0",
+			descr:      "remove linux-bridge",
+			port:       "dummy4",
+			state:      "absent",
+			template:   bridgePolicyTemplate2,
+		}
+		configErr3 := bridgePolicy.configNNCP(oc)
+		o.Expect(configErr3).NotTo(o.HaveOccurred())
+
+		g.By("4.2 Verify the policy is applied")
+		nncpErr3 := checkNNCPStatus(oc, policyName, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr3, "policy applied failed")
+		e2e.Logf("SUCCESS - policy is applied")
+
+		g.By("4.3 Verify the status of enactments is updated")
+		nnceErr3 := checkNNCEStatus(oc, nnceName, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr3, "status of enactments updated failed")
+		e2e.Logf("SUCCESS - status of enactments is updated")
+
+		g.By("4.4 Verify no removed linux-bridge found in node network state")
+		ifaceName2, nnsErr4 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, "-ojsonpath={.status.currentState.interfaces[*].name}").Output()
+		o.Expect(nnsErr4).NotTo(o.HaveOccurred())
+		o.Expect(ifaceName2).ShouldNot(o.ContainSubstring(bridgePolicy.ifacename))
+		e2e.Logf("SUCCESS - no removed linux-bridge found in node network state")
+
+		g.By("4.5 Verify the linux-bridge is removed from the node")
+		ifaceList2, ifaceErr3 := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+		o.Expect(ifaceErr3).NotTo(o.HaveOccurred())
+		o.Expect(ifaceList2).ShouldNot(o.ContainSubstring(bridgePolicy.ifacename))
+		e2e.Logf("SUCCESS - linux-bridge is removed from the node")
+	})
+
 })
