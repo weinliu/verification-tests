@@ -29,7 +29,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	//author: yanyang@redhat.com
 	g.It("Author:yanyang-High-49196-Install cluster without capabilities setting", func() {
-		vCurrent := []string{"baremetal", "marketplace", "openshift-samples"}
+		vCurrent := []string{"Console", "Insights", "Storage", "baremetal", "marketplace", "openshift-samples"}
 		orgCap, err := getCVObyJP(oc, ".spec.capabilities")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -39,7 +39,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		g.By("Check caps in vCurrent are installed")
 		for _, op := range vCurrent {
-			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", op).Output()
+			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", strings.ToLower(op)).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
@@ -86,7 +86,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		capSet := strings.Split(enabledCap, " ")
 		for _, op := range capSet {
-			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", op).Output()
+			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", strings.ToLower(op)).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
@@ -104,7 +104,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(enabledCapPost).To(o.Equal(enabledCap))
 
 		for _, op := range capSet {
-			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", op).Output()
+			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", strings.ToLower(op)).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
@@ -147,12 +147,12 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		g.By("Set invalid baselineCapabilitySet")
 		cmdOut, err := changeCap(oc, true, "Invalid")
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"None\", \"v4.11\", \"vCurrent\""))
+		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"None\", \"v4.11\", \"v4.12\", \"vCurrent\""))
 
 		g.By("Set invalid additionalEnabledCapabilities")
 		cmdOut, err = changeCap(oc, false, []string{"Invalid"})
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"openshift-samples\", \"baremetal\", \"marketplace\""))
+		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"openshift-samples\", \"baremetal\", \"marketplace\", \"Console\", \"Insights\", \"Storage\""))
 	})
 
 	//author: yanyang@redhat.com
@@ -1350,7 +1350,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		for _, op := range orgAddCap {
-			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", op).Output()
+			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", strings.ToLower(op)).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
@@ -1381,7 +1381,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			o.Expect(enabledCapPost).To(o.Equal(enabledCap))
 
 			for _, op := range orgAddCap {
-				_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", op).Output()
+				_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", strings.ToLower(op)).Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
 			}
 
