@@ -954,7 +954,7 @@ func createDir(dirname string) {
 }
 
 func createSpecialRegistry(oc *exutil.CLI, namespace string, ssldir string, dockerConfig string) string {
-	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("deploy", "mydauth", "-n", namespace, "--image=cesanta/docker_auth", "--port=5001").Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("deploy", "mydauth", "-n", namespace, "--image=quay.io/openshifttest/registry-auth-server:multiarch", "--port=5001").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	err = oc.AsAdmin().WithoutNamespace().Run("expose").Args("deploy", "mydauth", "-n", namespace).Execute()
