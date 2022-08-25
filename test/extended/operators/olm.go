@@ -1165,7 +1165,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		// and no longer push changes to OperatorCondition’s status.
 		// $oc patch operatorcondition learn-operator.v0.0.1 -p '{"spec":{"conditions":[{"type":"Upgradeable", "observedCondition":1,"status":"False","reason":"bug","message":"not ready","lastUpdateTime":"2021-06-16T16:56:44Z","lastTransitionTime":"2021-06-16T16:56:44Z"}]}}' --type=merge
 		g.By("4) Patch the spec.conditions[0].Upgradeable to False")
-		patchResource(oc, asAdmin, withoutNamespace, "-n", oc.Namespace(), "operatorcondition", "learn-operator.v0.0.1", "-p", "{\"spec\": {\"conditions\": [{\"type\": \"Upgradeable\", \"status\": \"False\", \"reason\": \"upgradeIsNotSafe\", \"message\": \"Disbale the upgrade\", \"observedCondition\":1, \"lastUpdateTime\":\"2021-06-16T16:56:44Z\",\"lastTransitionTime\":\"2021-06-16T16:56:44Z\"}]}}", "--type=merge")
+		patchResource(oc, asAdmin, withoutNamespace, "-n", oc.Namespace(), "operatorcondition", "learn-operator.v0.0.1", "-p", "{\"spec\": {\"conditions\": [{\"type\": \"Upgradeable\", \"status\": \"False\", \"reason\": \"upgradeIsNotSafe\", \"message\": \"Disable the upgrade\", \"observedCondition\":1, \"lastUpdateTime\":\"2021-06-16T16:56:44Z\",\"lastTransitionTime\":\"2021-06-16T16:56:44Z\"}]}}", "--type=merge")
 
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Upgradeable", ok, []string{"operatorcondition", "learn-operator.v0.0.1", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[0].type}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "False", ok, []string{"operatorcondition", "learn-operator.v0.0.1", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[0].status}"}).check(oc)
@@ -1232,7 +1232,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.1", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
 		g.By("4) Patch the OperatorCondition to set the Upgradeable to False")
-		patchResource(oc, asAdmin, withoutNamespace, "-n", oc.Namespace(), "operatorcondition", "learn-operator.v0.0.1", "-p", "{\"spec\": {\"overrides\": [{\"type\": \"Upgradeable\", \"status\": \"False\", \"reason\": \"upgradeIsNotSafe\", \"message\": \"Disbale the upgrade\"}]}}", "--type=merge")
+		patchResource(oc, asAdmin, withoutNamespace, "-n", oc.Namespace(), "operatorcondition", "learn-operator.v0.0.1", "-p", "{\"spec\": {\"overrides\": [{\"type\": \"Upgradeable\", \"status\": \"False\", \"reason\": \"upgradeIsNotSafe\", \"message\": \"Disable the upgrade\"}]}}", "--type=merge")
 
 		g.By("5) Apprrove this learn-operator.v0.0.2, the corresponding CSV should be in Pending state")
 		sub.approveSpecificIP(oc, itName, dr, "learn-operator.v0.0.2", "Complete")
@@ -1249,7 +1249,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.AssertWaitPollNoErr(err, "learn-operator.v0.0.2 operator is upgradeable")
 
 		g.By("7) Change the Upgradeable of the OperatorCondition to True")
-		patchResource(oc, asAdmin, withoutNamespace, "-n", oc.Namespace(), "operatorcondition", "learn-operator.v0.0.1", "-p", "{\"spec\": {\"overrides\": [{\"type\": \"Upgradeable\", \"status\": \"True\", \"reason\": \"upgradeIsNotSafe\", \"message\": \"Disbale the upgrade\"}]}}", "--type=merge")
+		patchResource(oc, asAdmin, withoutNamespace, "-n", oc.Namespace(), "operatorcondition", "learn-operator.v0.0.1", "-p", "{\"spec\": {\"overrides\": [{\"type\": \"Upgradeable\", \"status\": \"True\", \"reason\": \"upgradeIsNotSafe\", \"message\": \"Disable the upgrade\"}]}}", "--type=merge")
 
 		g.By("8) the learn-operator.v0.0.1 should be upgraded to learn-operator.v0.0.2 successfully")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.2", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
@@ -2598,7 +2598,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			}
 		}
 
-		//destroy the two CatalogSource CRs
+		// destroy the two CatalogSource CRs
 		for _, t := range csTypes {
 			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-marketplace", "catalogsource", t.name).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -2780,7 +2780,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f", csNamespaced).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("4) Checking CatalogSource error statement due to the absense of a default channel")
+		g.By("4) Checking CatalogSource error statement due to the absence of a default channel")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		err = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
@@ -3362,7 +3362,6 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		var buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 		var operatorGroup = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		var pkgServer = filepath.Join(buildPruningBaseDir, "packageserver.yaml")
-		//var operatorWait = 180 * time.Second
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "test40316").Execute()
 
 		g.By("create new namespace")
@@ -3775,7 +3774,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		)
 		dr := make(describerResrouce)
 		dr.addIr(itName)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		sub1.namespace = oc.Namespace()
@@ -3906,7 +3905,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		// defer sub.deleteCSV(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", "olm-upgrade-22615", "-o=jsonpath={.status.phase}"}).check(oc)
 
-		//This step cover a upgrade bug: https://bugzilla.redhat.com/show_bug.cgi?id=2015950
+		// This step cover a upgrade bug: https://bugzilla.redhat.com/show_bug.cgi?id=2015950
 		g.By("3) Create 300 secret in openshift-operator-lifecycle-manager project")
 		for i := 1; i <= 300; i++ {
 			logs, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", fmt.Sprintf("test%d", i), "-n", "openshift-operator-lifecycle-manager").Output()
@@ -4209,7 +4208,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 					return false, nil
 				})
 				exutil.AssertWaitPollNoErr(err, "api not rollout")
-				//According to the case steps, wait for 5 minutes, then check the audit log doesn't contain olm-operator-serviceaccount.
+				// According to the case steps, wait for 5 minutes, then check the audit log doesn't contain olm-operator-serviceaccount.
 				g.By("Wait for 5 minutes, then check the audit log")
 				time.Sleep(5 * time.Minute)
 			}
@@ -4476,7 +4475,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				template:  ogSingleTemplate,
 			}
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og1.namespace = oc.Namespace()
 		og2.namespace = oc.Namespace()
 
@@ -4502,7 +4501,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(labelNs).To(o.ContainSubstring(og2Uid))
 		o.Expect(labelNs).To(o.ContainSubstring(og1Uid))
 
-		//OCP-29277
+		// OCP-29277
 		g.By("Check no label of global operator group ")
 		globalOgUID := getResource(oc, asAdmin, withoutNamespace, "og", "global-operators", "-n", "openshift-operators", "-o=jsonpath={.metadata.uid}")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "olm.operatorgroup.uid/"+globalOgUID, nok,
@@ -4540,7 +4539,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			og  = ogD
 			sub = subD
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
 
@@ -4594,7 +4593,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			og  = ogD
 			sub = subD
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
 
@@ -4645,7 +4644,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			og  = ogD
 			sub = subD
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
 
@@ -4696,7 +4695,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				template:               subTemplate,
 			}
 		)
-		//project and its resource are deleted automatically when out of It, so no need defer or AfterEach
+		// project and its resource are deleted automatically when out of It, so no need defer or AfterEach
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
@@ -4735,7 +4734,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.AssertWaitPollNoErr(err, "the generated InstallPlan != 1")
 
 		g.By("Waiting for install plan Complete")
-		//if installplan status is Installing, csv will be re-created.
+		// if installplan status is Installing, csv will be re-created.
 		installPlan := sub.getIP(oc)
 		o.Expect(installPlan).NotTo(o.BeEmpty())
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Complete", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
@@ -4783,7 +4782,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			og  = ogD
 			sub = subD
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
 
@@ -4853,7 +4852,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			og            = ogD
 			sub           = subD
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
 
@@ -4918,7 +4917,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			og  = ogD
 			sub = subD
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
 
@@ -4972,7 +4971,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			og  = ogD
 			sub = subD
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
 
@@ -5039,7 +5038,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				singleNamespace:        true,
 			}
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
@@ -5110,7 +5109,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				singleNamespace:        true,
 			}
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
@@ -5167,7 +5166,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				singleNamespace:        true,
 			}
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
@@ -5238,7 +5237,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 			opename = "build-operator"
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
@@ -5312,7 +5311,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				template:  etcdCluster,
 			}
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
@@ -5383,7 +5382,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				singleNamespace:        true,
 			}
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
@@ -5447,7 +5446,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				singleNamespace:        true,
 			}
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
@@ -5516,7 +5515,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		// defer crdVpa.delete(oc) //it is not needed in case it already exist
 		if isPresentResource(oc, asAdmin, withoutNamespace, notPresent, "crd", crdVpa.name) {
 
-			oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+			oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 			og.namespace = oc.Namespace()
 			catsrc.namespace = oc.Namespace()
 			sub.namespace = oc.Namespace()
@@ -5584,7 +5583,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 			dependentOperator = "buildv2-operator.v0.3.0"
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
@@ -5670,7 +5669,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				singleNamespace:        true,
 			}
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		subStrimzi.namespace = oc.Namespace()
@@ -5784,7 +5783,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 		)
 
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		subEtcd.namespace = oc.Namespace()
@@ -5955,7 +5954,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 		)
 
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		subMta.namespace = oc.Namespace()
@@ -6027,7 +6026,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 		)
 
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		ns := oc.Namespace()
 		og.namespace = ns
 		ogAll.namespace = ns
@@ -6424,7 +6423,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		g.By("check precondition and prepare env")
 		if isPresentResource(oc, asAdmin, withoutNamespace, present, "crd", "etcdclusters.etcd.database.coreos.com") && isPresentResource(oc, asAdmin, withoutNamespace, present, "EtcdCluster", "-A") {
-			e2e.Logf("It is distruptive case and the resources exists, do not destory it. exit")
+			e2e.Logf("It is distruptive case and the resources exists, do not destroy it. exit")
 			return
 		}
 		var (
@@ -6780,7 +6779,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				startingCSV:            "nginx-operator.v0.0.1",
 			}
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
@@ -6849,7 +6848,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				startingCSV:            "cockroachdb.v5.0.4",
 			}
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
@@ -7945,7 +7944,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				singleNamespace:        true,
 			}
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og1.namespace = oc.Namespace()
 		og2.namespace = oc.Namespace()
 		ogSa.namespace = oc.Namespace()
@@ -8165,7 +8164,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				singleNamespace:        true,
 			}
 		)
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
@@ -9006,7 +9005,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		)
 
 		//oc.TeardownProject()
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		p1.targetNamespace = oc.Namespace()
 		p2.targetNamespace = oc.Namespace()
 		og.namespace = oc.Namespace()
@@ -9093,7 +9092,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		)
 
 		//oc.TeardownProject()
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		cm.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
@@ -9197,7 +9196,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		)
 
 		//oc.TeardownProject()
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		cm.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
@@ -9264,7 +9263,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 		)
 
 		//oc.TeardownProject()
-		oc.SetupProject() //project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
+		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		catsrc.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
@@ -9502,7 +9501,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		dr.rmIr(itName)
 	})
 
-	// It will cover test case: OCP-21484, OCP-21532(acutally it covers OCP-21484), author: kuiwang@redhat.com
+	// It will cover test case: OCP-21484, OCP-21532(actually it covers OCP-21484), author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-21484-High-21532-watch special or all namespace by operator group", func() {
 		exutil.SkipARM64(oc)
 		var (

@@ -14,8 +14,8 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-const DEFAULT_STATUS_QUERY = "-o=jsonpath={.status.conditions[0].type}"
-const DEFAULT_EXPECTED_BEHAVIOR = "Ready"
+const defaultStatusQuery = "-o=jsonpath={.status.conditions[0].type}"
+const defaultExpectedBehavior = "Ready"
 
 var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func() {
 	var oc = exutil.NewCLI("operators", exutil.KubeConfigPath())
@@ -28,10 +28,10 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		kafkaFile := "kafka.yaml"
 		namespace := "amq-streams"
 		defer RemoveNamespace(namespace, oc)
-		currentPackage := CreateSubscriptionSpecificNamespace(kafkaPackageName, oc, true, true, namespace, INSTALLPLAN_AUTOMATIC_MODE)
+		currentPackage := CreateSubscriptionSpecificNamespace(kafkaPackageName, oc, true, true, namespace, InstallPlanAutomaticMode)
 		CheckDeployment(currentPackage, oc)
 		CreateFromYAML(currentPackage, kafkaFile, oc)
-		CheckCR(currentPackage, kafkaCR, kafkaClusterName, DEFAULT_STATUS_QUERY, DEFAULT_EXPECTED_BEHAVIOR, oc)
+		CheckCR(currentPackage, kafkaCR, kafkaClusterName, defaultStatusQuery, defaultExpectedBehavior, oc)
 		RemoveCR(currentPackage, kafkaCR, kafkaClusterName, oc)
 		RemoveOperatorDependencies(currentPackage, oc, false)
 
@@ -49,7 +49,7 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 
 		defer RemoveNamespace(namespace, oc)
 		g.By("install operator")
-		currentPackage := CreateSubscriptionSpecificNamespace(packageName, oc, true, true, namespace, INSTALLPLAN_AUTOMATIC_MODE)
+		currentPackage := CreateSubscriptionSpecificNamespace(packageName, oc, true, true, namespace, InstallPlanAutomaticMode)
 		g.By("check deployment of operator")
 		CheckDeployment(currentPackage, oc)
 		g.By("create CR")
@@ -73,7 +73,7 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		expectedMsg := "Running"
 
 		defer RemoveNamespace(namespace, oc)
-		currentPackage := CreateSubscriptionSpecificNamespace(packageName, oc, true, true, namespace, INSTALLPLAN_AUTOMATIC_MODE)
+		currentPackage := CreateSubscriptionSpecificNamespace(packageName, oc, true, true, namespace, InstallPlanAutomaticMode)
 		CheckDeployment(currentPackage, oc)
 		CreateFromYAML(currentPackage, crFile, oc)
 		CheckCR(currentPackage, crdName, crName, jsonPath, expectedMsg, oc)
@@ -89,7 +89,7 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		jaegerCRClusterName := "jaeger-all-in-one-inmemory"
 		namespace := "openshift-operators"
 
-		currentPackage := CreateSubscriptionSpecificNamespace(jaegerPackageName, oc, false, false, namespace, INSTALLPLAN_AUTOMATIC_MODE)
+		currentPackage := CreateSubscriptionSpecificNamespace(jaegerPackageName, oc, false, false, namespace, InstallPlanAutomaticMode)
 		CheckDeployment(currentPackage, oc)
 		CreateFromYAML(currentPackage, "jaeger.yaml", oc)
 		CheckCR(currentPackage, jaegerCR, jaegerCRClusterName,
@@ -107,7 +107,7 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		keycloakFile := "keycloak-cr.yaml"
 		namespace := "keycloak"
 		defer RemoveNamespace(namespace, oc)
-		currentPackage := CreateSubscriptionSpecificNamespace(keycloakPackageName, oc, true, true, namespace, INSTALLPLAN_AUTOMATIC_MODE)
+		currentPackage := CreateSubscriptionSpecificNamespace(keycloakPackageName, oc, true, true, namespace, InstallPlanAutomaticMode)
 		CheckDeployment(currentPackage, oc)
 		CreateFromYAML(currentPackage, keycloakFile, oc)
 		CheckCR(currentPackage, keycloakCR, keycloakCRName, "-o=jsonpath={.status.ready}", "true", oc)
@@ -127,7 +127,7 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		expectedMsg := "COMPLETE"
 		searchMsg := "Pi is roughly "
 		defer RemoveNamespace(namespace, oc)
-		currentPackage := CreateSubscriptionSpecificNamespace(packageName, oc, true, true, namespace, INSTALLPLAN_AUTOMATIC_MODE)
+		currentPackage := CreateSubscriptionSpecificNamespace(packageName, oc, true, true, namespace, InstallPlanAutomaticMode)
 		CheckDeployment(currentPackage, oc)
 		CreateFromYAML(currentPackage, crFile, oc)
 		CheckCR(currentPackage, sparkgcpCR, sparkgcpName, jsonPath, expectedMsg, oc)
@@ -294,10 +294,10 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		strimziFile := "strimzi-cr.yaml"
 		namespace := "strimzi"
 		defer RemoveNamespace(namespace, oc)
-		currentPackage := CreateSubscriptionSpecificNamespace(strimziPackageName, oc, true, true, namespace, INSTALLPLAN_AUTOMATIC_MODE)
+		currentPackage := CreateSubscriptionSpecificNamespace(strimziPackageName, oc, true, true, namespace, InstallPlanAutomaticMode)
 		CheckDeployment(currentPackage, oc)
 		CreateFromYAML(currentPackage, strimziFile, oc)
-		CheckCR(currentPackage, strimziCR, strimziClusterName, DEFAULT_STATUS_QUERY, DEFAULT_EXPECTED_BEHAVIOR, oc)
+		CheckCR(currentPackage, strimziCR, strimziClusterName, defaultStatusQuery, defaultExpectedBehavior, oc)
 		RemoveCR(currentPackage, strimziCR, strimziClusterName, oc)
 		RemoveOperatorDependencies(currentPackage, oc, false)
 
@@ -315,7 +315,7 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		sa := "resource-locker-test-sa"
 
 		g.By("install operator")
-		currentPackage := CreateSubscription(packageName, oc, INSTALLPLAN_AUTOMATIC_MODE)
+		currentPackage := CreateSubscription(packageName, oc, InstallPlanAutomaticMode)
 		defer RemoveOperatorDependencies(currentPackage, oc, false)
 
 		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("sa", sa, "-n", currentPackage.Namespace).Output()
@@ -363,7 +363,7 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("install operator")
-		currentPackage := CreateSubscriptionSpecificNamespace(packageName, oc, true, true, namespace, INSTALLPLAN_AUTOMATIC_MODE)
+		currentPackage := CreateSubscriptionSpecificNamespace(packageName, oc, true, true, namespace, InstallPlanAutomaticMode)
 		g.By("check deployment of operator")
 		CheckDeployment(currentPackage, oc)
 		g.By("create CR1")
@@ -388,7 +388,7 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		argoFile := "argocd-cr.yaml"
 		namespace := "argocd"
 		defer RemoveNamespace(namespace, oc)
-		currentPackage := CreateSubscriptionSpecificNamespace(argoPackageName, oc, true, true, namespace, INSTALLPLAN_AUTOMATIC_MODE)
+		currentPackage := CreateSubscriptionSpecificNamespace(argoPackageName, oc, true, true, namespace, InstallPlanAutomaticMode)
 		CheckDeployment(currentPackage, oc)
 		CreateFromYAML(currentPackage, argoFile, oc)
 		CheckCR(currentPackage, argoCR, argoCRName, "-o=jsonpath={.status.phase}", "Available", oc)
@@ -406,7 +406,7 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		kialiNamespace := "istio-system"
 		CreateNamespaceWithoutPrefix(kialiNamespace, oc)
 		defer RemoveNamespace(kialiNamespace, oc)
-		currentPackage := CreateSubscriptionSpecificNamespace(kialiPackageName, oc, false, false, namespace, INSTALLPLAN_AUTOMATIC_MODE)
+		currentPackage := CreateSubscriptionSpecificNamespace(kialiPackageName, oc, false, false, namespace, InstallPlanAutomaticMode)
 		CheckDeployment(currentPackage, oc)
 		CreateFromYAML(currentPackage, kialiFile, oc)
 		CheckCR(currentPackage, kialiCR, kialiCRName, "-o=jsonpath={.status.conditions..reason}", "Running", oc)
@@ -421,9 +421,8 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		crunchyPackageName := "crunchy-postgres-operator"
 		crunchyFile := "crunchy-cr.yaml"
 		namespace := "crunchy"
-		//CreateNamespaceWithoutPrefix(namespace, oc)
 		defer RemoveNamespace(namespace, oc)
-		currentPackage := CreateSubscriptionSpecificNamespace(crunchyPackageName, oc, true, true, namespace, INSTALLPLAN_AUTOMATIC_MODE)
+		currentPackage := CreateSubscriptionSpecificNamespace(crunchyPackageName, oc, true, true, namespace, InstallPlanAutomaticMode)
 		CheckDeployment(currentPackage, oc)
 		CreateFromYAML(currentPackage, crunchyFile, oc)
 		CheckCR(currentPackage, crunchyCR, crunchyCRName, "-o=jsonpath={.status.state}", "pgcluster Processed", oc)
@@ -433,7 +432,7 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 	})
 })
 
-//the method is to create CR with yaml file in the namespace of the installed operator
+// CreateFromYAML is the method is to create CR with yaml file in the namespace of the installed operator
 func CreateFromYAML(p Packagemanifest, filename string, oc *exutil.CLI) {
 	buildPruningBaseDir := exutil.FixturePath("testdata", "operators")
 	cr := filepath.Join(buildPruningBaseDir, filename)
@@ -441,7 +440,7 @@ func CreateFromYAML(p Packagemanifest, filename string, oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//the method is to create CR with yaml file in the namespace of the installed operator
+// RemoveFromYAML is the method is to create CR with yaml file in the namespace of the installed operator
 func RemoveFromYAML(p Packagemanifest, filename string, oc *exutil.CLI) {
 	buildPruningBaseDir := exutil.FixturePath("testdata", "operators")
 	cr := filepath.Join(buildPruningBaseDir, filename)
@@ -449,17 +448,17 @@ func RemoveFromYAML(p Packagemanifest, filename string, oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//the method is to delete CR of kind CRName with name instanceName in the namespace of the installed operator
+// RemoveCR is the method is to delete CR of kind CRName with name instanceName in the namespace of the installed operator
 func RemoveCR(p Packagemanifest, CRName string, instanceName string, oc *exutil.CLI) {
 	msg, err := oc.WithoutNamespace().AsAdmin().Run("delete").Args(CRName, instanceName, "-n", p.Namespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(msg).To(o.ContainSubstring("deleted"))
 }
 
-//the method is to check if the CR is expected.
-//the content is got by jsonpath.
-//if it is expected, nothing happen
-//if it is not expected, it will delete CR and the resource of the installed operator, for example sub, csv and possible ns
+// CheckCR is the method is to check if the CR is expected.
+// the content is got by jsonpath.
+// if it is expected, nothing happen
+// if it is not expected, it will delete CR and the resource of the installed operator, for example sub, csv and possible ns
 func CheckCR(p Packagemanifest, CRName string, instanceName string, jsonPath string, expectedMessage string, oc *exutil.CLI) {
 
 	poolErr := wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {

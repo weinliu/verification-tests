@@ -142,7 +142,7 @@ func (sub *subscriptionDescription) createWithoutCheck(oc *exutil.CLI, itName st
 	// for most operator subscription failure, the reason is that there is a left cluster-scoped CSV.
 	// I'd like to print all CSV before create it.
 	// It prints many lines which descrease the exact match for RP, and increase log size.
-	// So, change it to one line with neccessary information csv name and namespace.
+	// So, change it to one line with necessary information csv name and namespace.
 	allCSVs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "--all-namespaces", "-o=jsonpath={range .items[*]}{@.metadata.name}{\",\"}{@.metadata.namespace}{\":\"}{end}").Output()
 	if err != nil {
 		e2e.Failf("!!! Couldn't get all CSVs:%v\n", err)
@@ -728,7 +728,7 @@ func (sa *serviceAccountDescription) reapply(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//the method is to check if what sa can do is expected with expected paramter.
+//the method is to check if what sa can do is expected with expected parameter.
 func (sa *serviceAccountDescription) checkAuth(oc *exutil.CLI, expected string, cr string) {
 	err := wait.Poll(3*time.Second, 150*time.Second, func() (bool, error) {
 		output, _ := doAction(oc, "auth", asAdmin, withNamespace, "--as", fmt.Sprintf("system:serviceaccount:%s:%s", sa.namespace, sa.name), "can-i", "create", cr)
@@ -842,8 +842,8 @@ type checkDescription struct {
 }
 
 //the method is to make newCheck object.
-//the method paramter is expect, it will check something is expceted or not
-//the method paramter is present, it will check something exists or not
+//the method parameter is expect, it will check something is expceted or not
+//the method parameter is present, it will check something exists or not
 //the executor is asAdmin, it will exectue oc with Admin
 //the executor is asUser, it will exectue oc with User
 //the inlineNamespace is withoutNamespace, it will execute oc with WithoutNamespace()
@@ -1161,7 +1161,7 @@ func getResourceNoEmpty(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, par
 	var err error
 	err = wait.Poll(3*time.Second, 150*time.Second, func() (bool, error) {
 		result, err = doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
-		if err != nil || len(strings.TrimSpace(result)) == 0 {
+		if err != nil || strings.TrimSpace(result) == "" {
 			e2e.Logf("output is %v, error is %v, and try next", result, err)
 			return false, nil
 		}
