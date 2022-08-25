@@ -1,8 +1,10 @@
 ---
 operator: 
   branch: "main"
-  tagName: "0.1.1"
-goflowkube:
-  image: "quay.io/netobserv/goflow2-kube:v0.1.1"
+  tagName: "0.1.4"
+flowlogsPipeline:
+  image: "quay.io/netobserv/flowlogs-pipeline:v0.1.3"
 consolePlugin:
-  image: "quay.io/netobserv/network-observability-console-plugin:v0.1.1"
+  image: "quay.io/netobserv/network-observability-console-plugin:v0.1.4"
+ebpf:
+  image: "quay.io/netobserv/netobserv-ebpf-agent:v0.1.2"

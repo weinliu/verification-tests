@@ -18,9 +18,9 @@ type version struct {
 		Branch  string `yaml:"branch"`
 		TagName string `yaml:"tagName"`
 	} `yaml:"operator"`
-	GoflowKube struct {
+	FlowlogsPipeline struct {
 		Image string `yaml:"image"`
-	} `yaml:"goflow-kube"`
+	} `yaml:"flowlogs-pipeline"`
 	ConsolePlugin struct {
 		Image string `yaml:"image"`
 	} `yaml:"consolePlugin"`
@@ -62,20 +62,20 @@ func (versions *version) deployNetobservOperator(action bool, tempdir *string) e
 }
 
 // parses version.yaml and converts to version struct
-func (vers *version) versionMap() error {
+func (versions *version) versionMap() error {
 	componentVersions := "version.yaml"
 	versionsFixture := exutil.FixturePath("testdata", "netobserv", componentVersions)
-	versions, err := os.ReadFile(versionsFixture)
+	vers, err := os.ReadFile(versionsFixture)
 	if err != nil {
 		return err
 	}
 
-	err = yaml.Unmarshal(versions, &vers)
+	err = yaml.Unmarshal(vers, &versions)
 	if err != nil {
 		return err
 	}
 
-	e2e.Logf("versions in versionMap are %s", vers)
+	e2e.Logf("versions in versionMap are %s", versions)
 
 	return nil
 }
@@ -109,7 +109,7 @@ func (versions *version) gitCheckout(tempdir *string) error {
 	if versions.Operator.TagName != "" {
 		e2e.Logf("Deploying tag %s\n", versions.Operator.TagName)
 		err = tree.Checkout(&git.CheckoutOptions{
-			Branch: plumbing.ReferenceName("refs/tags/v" + versions.Operator.TagName),
+			Branch: plumbing.ReferenceName("refs/tags/" + versions.Operator.TagName),
 		})
 
 		if err != nil {

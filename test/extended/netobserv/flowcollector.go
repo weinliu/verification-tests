@@ -12,27 +12,27 @@ import (
 )
 
 type flowcollector struct {
-	Namespace     string
-	GoflowImage   string
-	ConsolePlugin string
-	GoflowKind    string
-	Template      string
+	Namespace             string
+	FlowlogsPipelineImage string
+	ConsolePlugin         string
+	FlowlogsPipelineKind  string
+	Template              string
 }
 
 // create flowcollector CRD for a given manifest file
 func (flow *flowcollector) createFlowcollector(oc *exutil.CLI) {
 	parameters := []string{"--ignore-unknown-parameters=true", "-f", flow.Template, "-p", "NAMESPACE=" + flow.Namespace}
 
-	if flow.GoflowImage != "" {
-		parameters = append(parameters, "GOFLOW_IMAGE="+flow.GoflowImage)
+	if flow.FlowlogsPipelineImage != "" {
+		parameters = append(parameters, "FLOWLOGSPIPELINE_IMAGE="+flow.FlowlogsPipelineImage)
 	}
 
 	if flow.ConsolePlugin != "" {
 		parameters = append(parameters, "CONSOLEPLUGIN_IMAGE="+flow.ConsolePlugin)
 	}
 
-	if flow.GoflowKind != "" {
-		parameters = append(parameters, "KIND="+flow.GoflowKind)
+	if flow.FlowlogsPipelineKind != "" {
+		parameters = append(parameters, "KIND="+flow.FlowlogsPipelineKind)
 	}
 
 	exutil.ApplyNsResourceFromTemplate(oc, flow.Namespace, parameters...)
@@ -45,12 +45,12 @@ func (flow *flowcollector) deleteFlowcollector(oc *exutil.CLI) error {
 
 // get flow collector port
 func getCollectorPort(oc *exutil.CLI) (string, error) {
-	return oc.AsAdmin().WithoutNamespace().Run("get").Args("flowcollector", "cluster", "-n", oc.Namespace()).Template("{{.spec.goflowkube.port}}").Output()
+	return oc.AsAdmin().WithoutNamespace().Run("get").Args("flowcollector", "cluster", "-n", oc.Namespace()).Template("{{.spec.flowlogsPipeline.port}}").Output()
 }
 
-// returns service IP or error for goflow-kube deployment
-func getGoflowServiceIP(oc *exutil.CLI) (string, error) {
-	return oc.AsAdmin().WithoutNamespace().Run("get").Args("svc", "goflow-kube", "-n", oc.Namespace()).Template("{{.spec.clusterIP}}").Output()
+// returns service IP or error for flowlogsPipeline deployment
+func getFlowlogsPipelineServiceIP(oc *exutil.CLI) (string, error) {
+	return oc.AsAdmin().WithoutNamespace().Run("get").Args("svc", "flowlogs-pipeline", "-n", oc.Namespace()).Template("{{.spec.clusterIP}}").Output()
 }
 
 // returns true/false if flow collection is enabled on cluster
@@ -86,14 +86,14 @@ func waitCnoConfigMapUpdate(oc *exutil.CLI, shouldExist bool) {
 }
 
 // returns target configured in ovs-flows-config config map
-func getOVSFlowsConfigTarget(oc *exutil.CLI, goflowDeployedAs string) (string, error) {
+func getOVSFlowsConfigTarget(oc *exutil.CLI, flowlogsPipelineDeployedAs string) (string, error) {
 
 	var template string
-	if goflowDeployedAs == "Deployment" {
+	if flowlogsPipelineDeployedAs == "Deployment" {
 		template = "{{.data.sharedTarget}}"
 	}
 
-	if goflowDeployedAs == "DaemonSet" {
+	if flowlogsPipelineDeployedAs == "DaemonSet" {
 		template = "{{.data.nodePort}}"
 	}
 

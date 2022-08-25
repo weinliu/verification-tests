@@ -13,14 +13,29 @@ objects:
         cacheActiveTimeout: 60s
         cacheMaxFlows: 400
         sampling: 100
-      goflowkube:
-        kind: "${{KIND}}"
-        replicas: 1
-        port: 2055
-        image: "${GOFLOW_IMAGE}"
+      ebpf:
+        image: "${EBPF_IMAGE}"
         imagePullPolicy: IfNotPresent
+        sampling: 0
+        cacheActiveTimeout: 5s
+        cacheMaxFlows: 1000
+        interfaces: []
+        excludeInterfaces: ["lo"]
         logLevel: info
-        printOutput: true
+        privileged: false
+      flowlogsPipeline:
+        kind: "${KIND}"
+        port: 2055
+        image: "${FLOWLOGSPIPELINE_IMAGE}"
+        imagePullPolicy: IfNotPresent
+        logLevel: trace
+        enableKubeProbes: true
+        healthPort: 8080
+        prometheusPort: 9090
+      kafka:
+        enable: false
+        address: "kafka-cluster-kafka-bootstrap.network-observability"
+        topic: "network-flows"
       loki:
         url: 'http://loki.default.svc.cluster.local:3100/'
         batchWait: 1s
@@ -38,15 +53,17 @@ objects:
         namespace: "openshift-network-operator"
 parameters:
   - name: NAMESPACE
-    description: "namespace where you want goflowkube and consoleplugin pods to be deployed"
+    description: "namespace where you want flowlogsPipeline and consoleplugin pods to be deployed"
     value: "network-observability"
   - name: KIND
-    value: "Deployment"
+    value: "DaemonSet"
     required: true
-  - name: GOFLOW_IMAGE
-    value: 'quay.io/netobserv/goflow2-kube:main'
+  - name: FLOWLOGSPIPELINE_IMAGE
+    value: 'quay.io/netobserv/flowlogs-pipeline:main'
     required: true
   - name: CONSOLEPLUGIN_IMAGE
     value: 'quay.io/netobserv/network-observability-console-plugin:main'
     required: true
-    
+  - name: EBPF_IMAGE
+    value: 'quay.io/netobserv/netobserv-ebpf-agent:main'
+    required: true

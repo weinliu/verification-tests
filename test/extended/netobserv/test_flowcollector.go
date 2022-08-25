@@ -45,42 +45,36 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-High-45304-Kube-enricher uses goflow2 as collector for network flow [Disruptive]", func() {
+	g.It("Author:jechen-High-45304-Kube-enricher uses flowlogsPipeline as collector for network flow [Disruptive]", func() {
 		g.By("1. create new namespace")
-		oc.SetupProject()
 		namespace := oc.Namespace()
 		flowcollectorFixture := "flowcollector_v1alpha1_template.yaml"
 		flowFixture := exutil.FixturePath("testdata", "netobserv", flowcollectorFixture)
 
-		goflowkube := flowcollector{
-			Namespace:     namespace,
-			GoflowImage:   versions.GoflowKube.Image,
-			ConsolePlugin: versions.ConsolePlugin.Image,
-			GoflowKind:    "Deployment",
-			Template:      flowFixture,
+		flowlogsPipeline := flowcollector{
+			Namespace:             namespace,
+			FlowlogsPipelineImage: versions.FlowlogsPipeline.Image,
+			ConsolePlugin:         versions.ConsolePlugin.Image,
+			FlowlogsPipelineKind:  "DaemonSet",
+			Template:              flowFixture,
 		}
 
-		g.By("2. Create goflow-kube deployment")
-		goflowkube.createFlowcollector(oc)
-		defer goflowkube.deleteFlowcollector(oc)
+		g.By("2. Create flowlogsPipeline deployment")
+		defer flowlogsPipeline.deleteFlowcollector(oc)
+		flowlogsPipeline.createFlowcollector(oc)
 
-		g.By("3. Enable Network Observability plugin")
-		change := "[{\"op\":\"add\", \"path\":\"/spec/plugins\", \"value\":[\"network-observability-plugin\"]}]"
-		patchResourceAsAdmin(oc, oc.Namespace(), "console.operator.openshift.io", "cluster", change)
-		recovery := "[{\"op\":\"remove\", \"path\":\"/spec/plugins\"}]"
-		defer patchResourceAsAdmin(oc, oc.Namespace(), "console.operator.openshift.io", "cluster", recovery)
-
-		g.By("4. Verify goflow collector is added")
-		output := getGoflowCollector(oc, "flowCollector")
+		g.By("3. Verify flowlogsPipeline collector is added")
+		output := getFlowlogsPipelineCollector(oc, "flowCollector")
 		o.Expect(output).To(o.ContainSubstring("cluster"))
 
-		g.By("5. Wait for goflow-kube pod be in running state")
-		waitPodReady(oc, oc.Namespace(), "goflow-kube")
+		g.By("4. Wait for flowlogs-pipeline pod be in running state")
+		exutil.AssertAllPodsToBeReady(oc, oc.Namespace())
+		//waitPodReady(oc, oc.Namespace(), "flowlogs-pipeline")
 
-		g.By("6. Get goflow pod, check the goflow pod logs and verify that flows are recorded")
-		podname := getGoflowPod(oc, oc.Namespace(), "goflow-kube")
-		podLogs, err := exutil.WaitAndGetSpecificPodLogs(oc, oc.Namespace(), "", podname, "BiFlowDirection")
-		exutil.AssertWaitPollNoErr(err, "Did not get log for the pod with app=goflow-kube label")
+		g.By("5. Get flowlogs-pipeline pod, check the flowlogs-pipeline pod logs and verify that flows are recorded")
+		podname := getFlowlogsPipelinePod(oc, oc.Namespace(), "flowlogs-pipeline")
+		podLogs, err := exutil.WaitAndGetSpecificPodLogs(oc, oc.Namespace(), "", podname, `'{"Bytes":'`)
+		exutil.AssertWaitPollNoErr(err, "Did not get log for the pod with app=flowlogs-pipeline label")
 		verifyFlowRecord(podLogs)
 	})
 
@@ -92,11 +86,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		flowFixture := exutil.FixturePath("testdata", "netobserv", flowcollectorFixture)
 
 		flow := flowcollector{
-			Namespace:     namespace,
-			GoflowImage:   versions.GoflowKube.Image,
-			ConsolePlugin: versions.ConsolePlugin.Image,
-			GoflowKind:    "Deployment",
-			Template:      flowFixture,
+			Namespace:             namespace,
+			FlowlogsPipelineImage: versions.FlowlogsPipeline.Image,
+			ConsolePlugin:         versions.ConsolePlugin.Image,
+			FlowlogsPipelineKind:  "DaemonSet",
+			Template:              flowFixture,
 		}
 		flow.createFlowcollector(oc)
 		defer flow.deleteFlowcollector(oc)
@@ -123,11 +117,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		flowFixture := exutil.FixturePath("testdata", "netobserv", flowcollectorFixture)
 
 		flow := flowcollector{
-			Namespace:     namespace,
-			GoflowImage:   versions.GoflowKube.Image,
-			ConsolePlugin: versions.ConsolePlugin.Image,
-			GoflowKind:    "Deployment",
-			Template:      flowFixture,
+			Namespace:             namespace,
+			FlowlogsPipelineImage: versions.FlowlogsPipeline.Image,
+			ConsolePlugin:         versions.ConsolePlugin.Image,
+			FlowlogsPipelineKind:  "DaemonSet",
+			Template:              flowFixture,
 		}
 		flow.createFlowcollector(oc)
 		defer flow.deleteFlowcollector(oc)
@@ -143,14 +137,14 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			// checks for Deployment and update to be DaemonSet
 			g.By("Getting service IP for flow collector")
 
-			serviceIP, err := getGoflowServiceIP(oc)
+			serviceIP, err := getFlowlogsPipelineServiceIP(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("Found goflow-kube IP address %s", serviceIP)
 		})
 
 		g.Context("When collector is running as Deployment, ensure it has sharedTarget", func() {
 
-			target, err := getOVSFlowsConfigTarget(oc, flow.GoflowKind)
+			target, err := getOVSFlowsConfigTarget(oc, flow.FlowlogsPipelineKind)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			collectorIPs, err := getOVSCollectorIP(oc)
 			o.Expect(err).NotTo(o.HaveOccurred(), "could not find collector IPs")
@@ -160,7 +154,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 			// verify it has shared target.
 			sharedTarget := strings.Split(target, ":")
-			serviceIP, err := getGoflowServiceIP(oc)
+			serviceIP, err := getFlowlogsPipelineServiceIP(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(sharedTarget[0]).To(o.Equal(serviceIP), "unexpected service IP configured in ovs-flows-config")
 			o.Expect(sharedTarget[1]).To(o.Equal(collectorPort), "unexpected port configured in ovs-flows-config")
@@ -173,7 +167,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.Context("When collector runs as DaemonSet, ensure it runs on all nodes", func() {
 			// checks for DaemonSet and update to be Deployment
-			flow.GoflowKind = "DaemonSet"
+			flow.FlowlogsPipelineKind = "DaemonSet"
 			flow.createFlowcollector(oc)
 
 			// ovnkube-nodes goes through restarts whenever flowcollector target changes
@@ -186,20 +180,20 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 			exutil.AssertAllPodsToBeReady(oc, namespace)
 
-			goflowpods, err := exutil.GetAllPodsWithLabel(oc, namespace, "app=goflow-kube")
+			flowlogsPipelinepods, err := exutil.GetAllPodsWithLabel(oc, namespace, "app=flowlogs-pipeline")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("pod names are %v", goflowpods)
+			e2e.Logf("pod names are %v", flowlogsPipelinepods)
 
 			o.Expect(err).NotTo(o.HaveOccurred())
 			nodes, err := exutil.GetAllNodes(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(goflowpods)).To(o.BeNumerically("==", len(nodes)), "number of goflow pods doesn't match number of nodes")
+			o.Expect(len(flowlogsPipelinepods)).To(o.BeNumerically("==", len(nodes)), "number of flowlogsPipeline pods doesn't match number of nodes")
 
 		})
 
 		g.Context("When collector is running as DaemonSet, ensure it has localhost port as target", func() {
 
-			target, err := getOVSFlowsConfigTarget(oc, flow.GoflowKind)
+			target, err := getOVSFlowsConfigTarget(oc, flow.FlowlogsPipelineKind)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			collectorIPs, err := getOVSCollectorIP(oc)
 			o.Expect(err).NotTo(o.HaveOccurred(), "could not find collector IPs")
