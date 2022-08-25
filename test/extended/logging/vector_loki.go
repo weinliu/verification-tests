@@ -340,7 +340,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=fluentd")
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=vector")
 			resource{"serviceaccount", "logcollector", cl.namespace}.WaitForResourceToAppear(oc)
 			defer removeLokiStackPermissionFromSA(oc, "lokistack-dev-tenant-logs")
 			grantLokiPermissionsToSA(oc, "lokistack-dev-tenant-logs", "logcollector", cloNS)
