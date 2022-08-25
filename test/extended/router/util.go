@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,7 +28,17 @@ type ingctrlNodePortDescription struct {
 	replicas    int
 	template    string
 }
-
+type ingctrlHostPortDescription struct {
+	name        string
+	namespace   string
+	defaultCert string
+	domain      string
+	httpport    int
+	httpsport   int
+	statsport   int
+	replicas    int
+	template    string
+}
 type ipfailoverDescription struct {
 	name        string
 	namespace   string
@@ -92,6 +103,17 @@ func (ingctrl *ingctrlNodePortDescription) create(oc *exutil.CLI) {
 }
 
 func (ingctrl *ingctrlNodePortDescription) delete(oc *exutil.CLI) error {
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("--ignore-not-found", "-n", ingctrl.namespace, "ingresscontroller", ingctrl.name).Execute()
+}
+
+// Function to create hostnetwork type ingresscontroller with custom http/https/stat ports
+func (ingctrl *ingctrlHostPortDescription) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ingctrl.template, "-p", "NAME="+ingctrl.name, "NAMESPACE="+ingctrl.namespace, "DOMAIN="+ingctrl.domain, "HTTPPORT="+strconv.Itoa(ingctrl.httpport), "HTTPSPORT="+strconv.Itoa(ingctrl.httpsport), "STATSPORT="+strconv.Itoa(ingctrl.statsport))
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Function to delete hostnetwork type ingresscontroller
+func (ingctrl *ingctrlHostPortDescription) delete(oc *exutil.CLI) error {
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("--ignore-not-found", "-n", ingctrl.namespace, "ingresscontroller", ingctrl.name).Execute()
 }
 
@@ -226,6 +248,24 @@ func fetchJSONPathValue(oc *exutil.CLI, ns, resource, searchline string) string 
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("the searchline has result:%v", searchLine)
 	return searchLine
+}
+
+// For collecting nodename on which the haproxy pod resides:
+func getRouterNodeName(oc *exutil.CLI, icname string) string {
+	podName := getRouterPod(oc, icname)
+	e2e.Logf("The podname   is :%v", podName)
+	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", podName, "-o=jsonpath={.spec.nodeName}", "-n", "openshift-ingress").Output()
+	e2e.Logf("The router residing  node  is :%s", nodeName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return nodeName
+
+}
+
+// Collect pod describe command details:
+func describePodResource(oc *exutil.CLI, podName, namespace string) string {
+	podDescribe, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", podName, "-n", namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return podDescribe
 }
 
 // for collecting a single pod name for general use.

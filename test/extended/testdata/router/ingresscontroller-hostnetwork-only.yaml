@@ -1,0 +1,29 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+objects:
+- apiVersion: operator.openshift.io/v1
+  kind: IngressController
+  metadata:
+    name: ${NAME}
+    namespace: ${NAMESPACE}
+  spec:
+    defaultCertificate:
+      name: ${DEFAULT_CERT}
+    domain: ${DOMAIN}
+    replicas: 1
+    endpointPublishingStrategy:
+      type: HostNetwork
+      hostNetwork:
+        httpPort:  ${{HTTPPORT}}
+        httpsPort: ${{HTTPSPORT}}
+        statsPort: ${{STATSPORT}}
+parameters:
+- name: NAME
+- name: NAMESPACE
+  value: openshift-ingress-operator
+- name: DEFAULT_CERT
+  value: router-certs-default
+- name: DOMAIN
+- name: HTTPPORT
+- name: HTTPSPORT
+- name: STATSPORT

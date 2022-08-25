@@ -1055,4 +1055,71 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(lbCheck).To(o.ContainSubstring("leastconn"))
 
 	})
+
+	g.It("Author:aiyengar-High-50405-Multiple routers with hostnetwork endpoint strategy can be deployed on same worker node with different http/https/stat port numbers", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-hostnetwork-only.yaml")
+		var (
+			ingctrlhp = ingctrlHostPortDescription{
+				name:      "ocp50405",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				httpport:  8080,
+				httpsport: 8443,
+				statsport: 11936,
+				template:  customTemp,
+			}
+		)
+
+		g.By("Pre-flight check for the platform type and number of worker nodes in the environment")
+		platformtype := exutil.CheckPlatform(oc)
+		platforms := map[string]bool{
+			// ‘None’ also for Baremetal
+			"none":      true,
+			"baremetal": true,
+			"vsphere":   true,
+			"openstack": true,
+			"nutanix":   true,
+		}
+		if !platforms[platformtype] {
+			g.Skip("Skip for non-supported platform")
+		}
+		workerNodeCount, _ := exactNodeDetails(oc)
+		if workerNodeCount < 1 {
+			g.Skip("Skipping as we atleast need  one worker node")
+		}
+
+		g.By("Collect  nodename of one of the default haproxy pods")
+		defNodeName := getRouterNodeName(oc, "default")
+
+		g.By("Label the node with a custom value")
+		exutil.AddLabelToNode(oc, defNodeName, "custom", ingctrlhp.name)
+		defer exutil.DeleteLabelFromNode(oc, defNodeName, "custom")
+
+		g.By("Create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrlhp.domain = ingctrlhp.name + "." + baseDomain
+		defer ingctrlhp.delete(oc)
+		ingctrlhp.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrlhp.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrlhp.name))
+
+		g.By("Patch the ingresscontroller with custom label matching the node")
+		patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontroller/"+ingctrlhp.name, "{\"spec\":{\"nodePlacement\":{\"nodeSelector\":{\"matchLabels\":{\"custom\":\""+ingctrlhp.name+"\"}}}}}")
+		err = waitForCustomIngressControllerAvailable(oc, ingctrlhp.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrlhp.name))
+
+		g.By("Check the location of the pod again to verify if it resides on the labelled node")
+		newRouterNodeName := getRouterNodeName(oc, "ocp50405")
+		o.Expect(newRouterNodeName).To(o.ContainSubstring(defNodeName))
+
+		g.By("Verify the http/https/statsport of the custom proxy pod")
+		customRouterPod := getRouterPod(oc, ingctrlhp.name)
+		checkPodEnv := describePodResource(oc, customRouterPod, "openshift-ingress")
+		o.Expect(checkPodEnv).To(o.ContainSubstring("ROUTER_SERVICE_HTTPS_PORT:                 8443"))
+		o.Expect(checkPodEnv).To(o.ContainSubstring("ROUTER_SERVICE_HTTP_PORT:                  8080"))
+		o.Expect(checkPodEnv).To(o.ContainSubstring("STATS_PORT:                                11936"))
+
+	})
+
 })
