@@ -235,7 +235,7 @@ func (vsc *volumeSnapshotClass) createWithExtraParameters(oc *exutil.CLI, extraP
 
 //  Delete the VolumeSnapshotClass
 func (vsc *volumeSnapshotClass) deleteAsAdmin(oc *exutil.CLI) {
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("volumesnapshotclass", vsc.name).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("volumesnapshotclass", vsc.name, "--ignore-not-found").Execute()
 }
 
 type volumeSnapshotContent struct {

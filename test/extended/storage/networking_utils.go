@@ -107,7 +107,7 @@ func (svc *service) create(oc *exutil.CLI) {
 
 // Delete a specified service with kubeadmin user
 func (svc *service) deleteAsAdmin(oc *exutil.CLI) {
-	oc.WithoutNamespace().AsAdmin().Run("delete").Args("-n", svc.namespace, "service", svc.name).Execute()
+	oc.WithoutNamespace().AsAdmin().Run("delete").Args("-n", svc.namespace, "service", svc.name, "--ignore-not-found").Execute()
 }
 
 // Get ClusterIP type service IP address

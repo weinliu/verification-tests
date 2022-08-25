@@ -75,5 +75,5 @@ func (cm *configMap) delete(oc *exutil.CLI) {
 
 //  Delete the configMap use kubeadmin
 func (cm *configMap) deleteAsAdmin(oc *exutil.CLI) {
-	oc.WithoutNamespace().AsAdmin().Run("delete").Args("-n", cm.namespace, "cm", cm.name).Execute()
+	oc.WithoutNamespace().AsAdmin().Run("delete").Args("-n", cm.namespace, "cm", cm.name, "--ignore-not-found").Execute()
 }

@@ -217,7 +217,7 @@ func (pod *pod) forceDelete(oc *exutil.CLI) {
 
 //  Delete the pod use kubeadmin
 func (pod *pod) deleteAsAdmin(oc *exutil.CLI) {
-	oc.WithoutNamespace().AsAdmin().Run("delete").Args("pod", pod.name, "-n", pod.namespace).Execute()
+	oc.WithoutNamespace().AsAdmin().Run("delete").Args("pod", pod.name, "-n", pod.namespace, "--ignore-not-found").Execute()
 }
 
 //  Pod exec the bash CLI
@@ -724,7 +724,7 @@ func (dep *deployment) delete(oc *exutil.CLI) {
 
 // Delete Deployment from the namespace
 func (dep *deployment) deleteAsAdmin(oc *exutil.CLI) {
-	oc.WithoutNamespace().AsAdmin().Run("delete").Args("deployment", dep.name, "-n", dep.namespace).Execute()
+	oc.WithoutNamespace().AsAdmin().Run("delete").Args("deployment", dep.name, "-n", dep.namespace, "--ignore-not-found").Execute()
 }
 
 // Get deployment pod list
@@ -861,6 +861,16 @@ func (dep *deployment) checkDataBlockType(oc *exutil.CLI) {
 	_, err := execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "/bin/dd if="+dep.mpath+" of=/tmp/testfile bs=512 count=1")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat /tmp/testfile | grep 'test data' ")).To(o.ContainSubstring("matches"))
+}
+
+// Get deployment all replicas logs by filter
+func (dep *deployment) getLogs(oc *exutil.CLI, filterArgs ...string) string {
+	finalArgs := append([]string{"-n", dep.namespace, "-l", dep.applabel}, filterArgs...)
+	depLogs, err := oc.WithoutNamespace().Run("logs").Args(finalArgs...).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf(`Get deployment/%s logs with "--selector=%s" successfully, additional options is %v`, dep.name, dep.applabel, filterArgs)
+	debugLogf("Log details are:\n%s", depLogs)
+	return depLogs
 }
 
 //Function to delete the project
@@ -1079,7 +1089,7 @@ func (sts *statefulset) delete(oc *exutil.CLI) {
 
 //  Delete the Statefulset from the namespace
 func (sts *statefulset) deleteAsAdmin(oc *exutil.CLI) {
-	oc.WithoutNamespace().AsAdmin().Run("delete").Args("sts", sts.name, "-n", sts.namespace).Execute()
+	oc.WithoutNamespace().AsAdmin().Run("delete").Args("sts", sts.name, "-n", sts.namespace, "--ignore-not-found").Execute()
 
 }
 
@@ -1323,7 +1333,7 @@ func (ds *daemonset) delete(oc *exutil.CLI) {
 
 // Delete Daemonset from the namespace
 func (ds *daemonset) deleteAsAdmin(oc *exutil.CLI) {
-	oc.WithoutNamespace().AsAdmin().Run("delete").Args("daemonset", ds.name, "-n", ds.namespace).Execute()
+	oc.WithoutNamespace().AsAdmin().Run("delete").Args("daemonset", ds.name, "-n", ds.namespace, "--ignore-not-found").Execute()
 }
 
 //  Describe Daemonset

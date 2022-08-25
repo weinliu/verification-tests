@@ -80,7 +80,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			unsupportedParameters = []string{"csimigration", "datastore-migrationparam", "diskformat-migrationparam", "hostfailurestotolerate-migrationparam",
 				"forceprovisioning-migrationparam", "cachereservation-migrationparam", "diskstripes-migrationparam", "objectspacereservation-migrationparam",
 				"iopslimit-migrationparam"}
-			webhookDeployment  = newDeployment(setDeploymentName("vmware-vsphere-csi-driver-webhook"), setDeploymentNamespace("openshift-cluster-csi-drivers"), setDeploymentApplabel("vmware-vsphere-csi-driver-webhook"))
+			webhookDeployment  = newDeployment(setDeploymentName("vmware-vsphere-csi-driver-webhook"), setDeploymentNamespace("openshift-cluster-csi-drivers"), setDeploymentApplabel("app=vmware-vsphere-csi-driver-webhook"))
 			csiStorageClass    = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("csi.vsphere.vmware.com"))
 			intreeStorageClass = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("kubernetes.io/vsphere-volume"))
 		)
@@ -112,8 +112,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(interfaceToString(err)).Should(o.ContainSubstring("admission webhook \\\"validation.csi.vsphere.vmware.com\\\" denied the request: AllowVolumeExpansion can not be set to true on the in-tree vSphere StorageClass"))
 
 		g.By("# Check csi driver webhook pod log record the failed requests")
-		logRecord, errinfo := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/vmware-vsphere-csi-driver-webhook", "-n", "openshift-cluster-csi-drivers").Output()
-		o.Expect(errinfo).ShouldNot(o.HaveOccurred())
+		logRecord := webhookDeployment.getLogs(oc.AsAdmin(), "--tail=-1", "--since=10m")
 		o.Expect(logRecord).Should(o.And(
 			o.ContainSubstring("validation of StorageClass: \\\""+intreeStorageClass.name+"\\\" Failed"),
 			o.ContainSubstring("validation of StorageClass: \\\""+csiStorageClass.name+"\\\" Failed")))

@@ -68,5 +68,5 @@ func (sec *secret) createWithExtraParameters(oc *exutil.CLI, extraParameters map
 
 // Delete a specified secret with kubeadmin user
 func (sec *secret) deleteAsAdmin(oc *exutil.CLI) {
-	oc.WithoutNamespace().AsAdmin().Run("delete").Args("-n", sec.namespace, "secret", sec.name).Execute()
+	oc.WithoutNamespace().AsAdmin().Run("delete").Args("-n", sec.namespace, "secret", sec.name, "--ignore-not-found").Execute()
 }

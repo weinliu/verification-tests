@@ -257,7 +257,7 @@ func (pv *persistentVolume) createWithExtraParameters(oc *exutil.CLI, extraParam
 
 //  Delete the PersistentVolume use kubeadmin
 func (pv *persistentVolume) deleteAsAdmin(oc *exutil.CLI) {
-	oc.WithoutNamespace().AsAdmin().Run("delete").Args("pv", pv.name).Execute()
+	oc.WithoutNamespace().AsAdmin().Run("delete").Args("pv", pv.name, "--ignore-not-found").Execute()
 }
 
 // Use the bounded persistent volume claim name get the persistent volume name

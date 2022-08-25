@@ -94,7 +94,7 @@ func (sc *storageClass) create(oc *exutil.CLI) {
 
 //  Delete Specified storageclass
 func (sc *storageClass) deleteAsAdmin(oc *exutil.CLI) {
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("sc", sc.name).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("sc", sc.name, "--ignore-not-found").Execute()
 }
 
 //  Create a new customized storageclass with extra parameters

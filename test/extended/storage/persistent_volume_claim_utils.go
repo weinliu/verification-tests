@@ -171,7 +171,7 @@ func (pvc *persistentVolumeClaim) delete(oc *exutil.CLI) {
 
 //  Delete the PersistentVolumeClaim use kubeadmin
 func (pvc *persistentVolumeClaim) deleteAsAdmin(oc *exutil.CLI) {
-	oc.WithoutNamespace().AsAdmin().Run("delete").Args("pvc", pvc.name, "-n", pvc.namespace).Execute()
+	oc.WithoutNamespace().AsAdmin().Run("delete").Args("pvc", pvc.name, "-n", pvc.namespace, "--ignore-not-found").Execute()
 }
 
 //  Get the PersistentVolumeClaim status

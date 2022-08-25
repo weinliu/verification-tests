@@ -318,14 +318,14 @@ func (lv *localVolume) deleteAsAdmin(oc *exutil.CLI) {
 	// Delete the localvolume CR provisioned PVs before delete the CR accually it should do after delete the CR but just for temp avoid the known issue
 	// https://bugzilla.redhat.com/show_bug.cgi?id=2091873
 	for _, pv := range lvPvs {
-		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv/" + pv).Execute()
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv/"+pv, "--ignore-not-found").Execute()
 	}
 	// Delete the localvolume CR
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("localvolume/"+lv.name, "-n", lv.namespace).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("localvolume/"+lv.name, "-n", lv.namespace, "--ignore-not-found").Execute()
 	for _, pv := range lvPvs {
-		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv/" + pv).Execute()
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv/"+pv, "--ignore-not-found").Execute()
 	}
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("sc/" + lv.scname).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("sc/"+lv.scname, "--ignore-not-found").Execute()
 	command := "rm -rf /mnt/local-storage/" + lv.scname
 	workers := getWorkersList(oc)
 	for _, worker := range workers {
@@ -464,11 +464,11 @@ func (lvs *localVolumeSet) createWithExtraParameters(oc *exutil.CLI, extraParame
 // Delete localVolumeSet CR
 func (lvs *localVolumeSet) deleteAsAdmin(oc *exutil.CLI) {
 	lvsPvs, _ := getPvNamesOfSpecifiedSc(oc, lvs.scname)
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("localvolumeSet/"+lvs.name, "-n", lvs.namespace).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("localvolumeSet/"+lvs.name, "-n", lvs.namespace, "--ignore-not-found").Execute()
 	for _, pv := range lvsPvs {
-		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv/" + pv).Execute()
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv/"+pv, "--ignore-not-found").Execute()
 	}
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("sc/" + lvs.scname).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("sc/"+lvs.scname, "--ignore-not-found").Execute()
 	command := "rm -rf /mnt/local-storage/" + lvs.scname
 	workers := getWorkersList(oc)
 	for _, worker := range workers {
@@ -614,7 +614,7 @@ func (lvd *localVolumeDiscovery) ApplyWithSpecificNodes(oc *exutil.CLI, filterKe
 
 // Delete localVolumeDiscovery CR
 func (lvd *localVolumeDiscovery) deleteAsAdmin(oc *exutil.CLI) {
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("localVolumeDiscovery/"+lvd.name, "-n", lvd.namespace).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("localVolumeDiscovery/"+lvd.name, "-n", lvd.namespace, "--ignore-not-found").Execute()
 }
 
 func (lvd *localVolumeDiscovery) waitDiscoveryAvaiable(oc *exutil.CLI) {
