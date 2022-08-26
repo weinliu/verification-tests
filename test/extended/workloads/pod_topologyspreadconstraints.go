@@ -33,7 +33,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		nodeNum := 4
+		nodeNum := 3
 		if len(nodeList.Items) < nodeNum {
 			g.Skip("Not enough worker nodes for this test, skip the case!!")
 		}
@@ -227,7 +227,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		nodeNum := 4
+		nodeNum := 3
 		if len(nodeList.Items) < nodeNum {
 			g.Skip("Not enough worker nodes for this test, skip the case!!")
 		}
@@ -316,7 +316,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		nodeNum := 4
+		nodeNum := 3
 		if len(nodeList.Items) < nodeNum {
 			g.Skip("Not enough worker nodes for this test, skip the case!!")
 		}
@@ -449,7 +449,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		nodeNum := 4
+		nodeNum := 3
 		if len(nodeList.Items) < nodeNum {
 			g.Skip("Not enough worker nodes for this test, skip the case!!")
 		}
@@ -544,7 +544,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		nodeNum := 4
+		nodeNum := 3
 		if len(nodeList.Items) < nodeNum {
 			g.Skip("Not enough worker nodes for this test, skip the case!!")
 		}
