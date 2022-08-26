@@ -131,7 +131,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			exutil.AssertWaitPollNoErr(err, "No Event Router logs found when using vector as log collector.")
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Critical-5331-Vector Configure Vector collector with CPU/Memory requests/limits[Serial]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-Critical-53311-Vector Configure Vector collector with CPU/Memory requests/limits[Serial]", func() {
 
 			g.By("Create ClusterLogging instance with Vector as collector")
 			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
@@ -149,7 +149,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			col.assertResourceStatus(oc, "jsonpath={.spec.template.spec.containers[].resources.requests.memory}", "750Mi")
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-High-5332-Vector Deploy Vector collector with nodeSelector[Serial]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-High-53312-Vector Deploy Vector collector with nodeSelector[Serial]", func() {
 
 			g.By("Set OCP node label to vector: test")
 			err := oc.AsAdmin().WithoutNamespace().Run("label").Args("nodes", "--selector=kubernetes.io/os=linux", "vector=test", "--overwrite").Execute()
