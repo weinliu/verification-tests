@@ -7,7 +7,7 @@
   },
   "spec": {
     "sourceType": "grpc",
-    "image": "quay.io/openshifttest/ui-auto-operators:latest",
+    "image": "quay.io/openshifttest/uiauto-operators-index:multiarch-second",
     "displayName": "Custom-Auto-Source",
     "publisher": "OpenShift UI QE"
   }
