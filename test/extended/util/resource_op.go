@@ -1,26 +1,31 @@
 package util
 
-// DeleteLabelFromSpecificResource delete the custom label from the specific resource
-func DeleteLabelFromSpecificResource(oc *CLI, resourceKindAndName string, resourceNamespace string, labelName string) (string, error) {
+import "strings"
+
+// DeleteLabelsFromSpecificResource deletes the custom labels from the specific resource
+func DeleteLabelsFromSpecificResource(oc *CLI, resourceKindAndName string, resourceNamespace string, labelNames ...string) (string, error) {
 	var cargs []string
 	if resourceNamespace != "" {
 		cargs = append(cargs, "-n", resourceNamespace)
 	}
-	cargs = append(cargs, resourceKindAndName, labelName+"-")
+	cargs = append(cargs, resourceKindAndName)
+	cargs = append(cargs, StringsSliceElementsAddSuffix(labelNames, "-")...)
 	return oc.AsAdmin().WithoutNamespace().Run("label").Args(cargs...).Output()
 }
 
-// AddLabelToSpecificResource add the custom label to the specific resource
-func AddLabelToSpecificResource(oc *CLI, resourceKindAndName string, resourceNamespace string, labelName string, labelValue string) (string, error) {
+// AddLabelsToSpecificResource adds the custom labels to the specific resource
+func AddLabelsToSpecificResource(oc *CLI, resourceKindAndName string, resourceNamespace string, labels ...string) (string, error) {
 	var cargs []string
 	if resourceNamespace != "" {
 		cargs = append(cargs, "-n", resourceNamespace)
 	}
-	cargs = append(cargs, resourceKindAndName, labelName+"="+labelValue, "--overwrite")
+	cargs = append(cargs, resourceKindAndName)
+	cargs = append(cargs, labels...)
+	cargs = append(cargs, "--overwrite")
 	return oc.AsAdmin().WithoutNamespace().Run("label").Args(cargs...).Output()
 }
 
-// GetResourceSpecificLabelValue get the specfic label value from the resource and label name
+// GetResourceSpecificLabelValue gets the specfic label value from the resource and label name
 func GetResourceSpecificLabelValue(oc *CLI, resourceKindAndName string, resourceNamespace string, labelName string) (string, error) {
 	var cargs []string
 	if resourceNamespace != "" {
@@ -39,4 +44,41 @@ func StringsSliceContains(stringsSlice []string, element string) (bool, int) {
 		}
 	}
 	return false, 0
+}
+
+// StringsSliceElementsHasPrefix judges whether the strings Slice contains an element which has the specific prefix
+// returns bool and the first matched index
+// sequential order: -> sequentialFlag: "true"
+// reverse order:    -> sequentialFlag: "false"
+// If no matched return (false, 0)
+func StringsSliceElementsHasPrefix(stringsSlice []string, elementPrefix string, sequentialFlag bool) (bool, int) {
+	if len(stringsSlice) == 0 {
+		return false, 0
+	}
+	if sequentialFlag {
+		for index, strElement := range stringsSlice {
+			if strings.HasPrefix(strElement, elementPrefix) {
+				return true, index
+			}
+		}
+	} else {
+		for i := len(stringsSlice) - 1; i >= 0; i-- {
+			if strings.HasPrefix(stringsSlice[i], elementPrefix) {
+				return true, i
+			}
+		}
+	}
+	return false, 0
+}
+
+// StringsSliceElementsAddSuffix returns a new string slice all elements with the specific suffix added
+func StringsSliceElementsAddSuffix(stringsSlice []string, suffix string) []string {
+	if len(stringsSlice) == 0 {
+		return []string{}
+	}
+	var newStringsSlice = make([]string, 0, 10)
+	for _, element := range stringsSlice {
+		newStringsSlice = append(newStringsSlice, element+suffix)
+	}
+	return newStringsSlice
 }

@@ -63,19 +63,19 @@ func DebugNodeWithChroot(oc *CLI, nodeName string, cmd ...string) (string, error
 	return strings.Join([]string{stdOut, stdErr}, "\n"), err
 }
 
-// DebugNodeWithOptions launch debug container with options e.g. --image
+// DebugNodeWithOptions launches debug container with options e.g. --image
 func DebugNodeWithOptions(oc *CLI, nodeName string, options []string, cmd ...string) (string, error) {
 	stdOut, stdErr, err := debugNode(oc, nodeName, options, false, true, cmd...)
 	return strings.Join([]string{stdOut, stdErr}, "\n"), err
 }
 
-// DebugNodeWithOptionsAndChroot launch debug container using chroot and with options e.g. --image
+// DebugNodeWithOptionsAndChroot launches debug container using chroot and with options e.g. --image
 func DebugNodeWithOptionsAndChroot(oc *CLI, nodeName string, options []string, cmd ...string) (string, error) {
 	stdOut, stdErr, err := debugNode(oc, nodeName, options, true, true, cmd...)
 	return strings.Join([]string{stdOut, stdErr}, "\n"), err
 }
 
-// DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel launch debug container using chroot and with options e.g. --image
+// DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel launches debug container using chroot and with options e.g. --image
 // WithoutRecoverNsLabel which will not recover the labels that added for debug node container adapt the podSecurity changed on 4.12+ test clusters
 // "security.openshift.io/scc.podSecurityLabelSync=false" And "pod-security.kubernetes.io/enforce=privileged"
 func DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc *CLI, nodeName string, options []string, cmd ...string) (stdOut string, stdErr string, err error) {
@@ -96,11 +96,19 @@ func debugNode(oc *CLI, nodeName string, cmdOptions []string, needChroot bool, r
 		outputError        error
 	)
 	cargs = []string{"node/" + nodeName}
-	debugNodeNamespace = oc.Namespace()
-	if debugNodeNamespace == "" {
-		debugNodeNamespace = "default"
+	// Enhance for debug node namespace used logic
+	// if "--to-namespace=" option is used, then uses the input options' namespace, otherwise use oc.Namespace()
+	// if oc.Namespace() is empty, uses "default" namespace instead
+	hasToNamespaceInCmdOptions, index := StringsSliceElementsHasPrefix(cmdOptions, "--to-namespace=", false)
+	if hasToNamespaceInCmdOptions {
+		debugNodeNamespace = strings.TrimPrefix(cmdOptions[index], "--to-namespace=")
+	} else {
+		debugNodeNamespace = oc.Namespace()
+		if debugNodeNamespace == "" {
+			debugNodeNamespace = "default"
+		}
 	}
-	// Running oc debug node in normal projects
+	// Running oc debug node command in normal projects
 	// (normal projects mean projects that are not clusters default projects like: like "default", "openshift-xxx" et al)
 	// need extra configuration on 4.12+ ocp test clusters
 	// https://github.com/openshift/oc/blob/master/pkg/helpers/cmd/errors.go#L24-L29
@@ -122,12 +130,9 @@ func debugNode(oc *CLI, nodeName string, cmdOptions []string, needChroot bool, r
 	if len(cmdOptions) > 0 {
 		cargs = append(cargs, cmdOptions...)
 	}
-	// Overwrite the debug node namespace add the "--to-namespace=" between cmdOptions and cmd
-	// Make sure to use the privileged namespace to setup the debugPod
-	// E.g. $ oc debug -n xx node/ip-10-0-142-72.us-east-2.compute.internal --to-namespace=de  --to-namespace=des -n openshift-tests
-	// Error from server (NotFound): namespaces "des" not found
-	// "oc debug node" command will use the last "--to-namespace=$(namespace)" as the final namespace even if has more than 1 this options
-	cargs = append(cargs, "--to-namespace="+debugNodeNamespace)
+	if !hasToNamespaceInCmdOptions {
+		cargs = append(cargs, "--to-namespace="+debugNodeNamespace)
+	}
 	if needChroot {
 		cargs = append(cargs, "--", "chroot", "/host")
 	} else {
@@ -137,44 +142,40 @@ func debugNode(oc *CLI, nodeName string, cmdOptions []string, needChroot bool, r
 	return oc.AsAdmin().WithoutNamespace().Run("debug").Args(cargs...).Outputs()
 }
 
-// IsDebugNodeNamespacePrivileged returns whether the input ns has the security label
-// Privileged label : "pod-security.kubernetes.io/enforce=privileged"
+// IsDebugNodeNamespacePrivileged returns bool
+// Judge whether the input namespace has the privileged label
+// Privileged label: "pod-security.kubernetes.io/enforce=privileged"
 func IsDebugNodeNamespacePrivileged(oc *CLI, namespace string) (bool, error) {
 	nsSecurityLabelValue, err := GetResourceSpecificLabelValue(oc, "ns/"+namespace, "", "pod-security\\.kubernetes\\.io/enforce")
 	if err != nil {
-		e2e.Logf("Failed to get label \"pod-security.kubernetes.io/enforce\" value from ns/%s:\"%v\"", namespace, err)
+		e2e.Logf(`Failed to get label "pod-security.kubernetes.io/enforce" value from ns/%s: "%v"`, namespace, err)
 		return false, err
 	}
 	return strings.Contains(nsSecurityLabelValue, "privileged"), nil
 }
 
-// SetDebugNodeNamespacePrivileged adds the privileged labels to the input ns
-// Privileged labels : "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged"
+// SetDebugNodeNamespacePrivileged adds the privileged labels to the input namespace
+// Privileged labels: "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged",
+// "pod-security.kubernetes.io/audit=privileged", "pod-security.kubernetes.io/warn=privileged"
+// Without audit label "pod-security.kubernetes.io/audit=privileged", an important alert will fire on cluster after pod created
+// https://github.com/openshift/cluster-kube-apiserver-operator/pull/1362
+// The warn label "pod-security.kubernetes.io/warn=privileged" is optional, it could make the warning info output gone.
 func SetDebugNodeNamespacePrivileged(oc *CLI, namespace string) error {
-	_, labeledError := AddLabelToSpecificResource(oc, "ns/"+namespace, "", "security.openshift.io/scc.podSecurityLabelSync", "false")
+	_, labeledError := AddLabelsToSpecificResource(oc, "ns/"+namespace, "", "security.openshift.io/scc.podSecurityLabelSync=false",
+		"pod-security.kubernetes.io/enforce=privileged", "pod-security.kubernetes.io/audit=privileged", "pod-security.kubernetes.io/warn=privileged")
 	if labeledError != nil {
-		e2e.Logf("Failed to add label \"security.openshift.io/scc.podSecurityLabelSync=false\" to ns/%s :\"%v\"", namespace, labeledError)
-		return labeledError
-	}
-	_, labeledError = AddLabelToSpecificResource(oc, "ns/"+namespace, "", "pod-security.kubernetes.io/enforce", "privileged")
-	if labeledError != nil {
-		e2e.Logf("Failed to add label \"pod-security.kubernetes.io/enforce=privileged\" to ns/%s :\"%v\"", namespace, labeledError)
+		e2e.Logf(`Failed to add privileged labels to ns/%s: "%v"`, namespace, labeledError)
 		return labeledError
 	}
 	return nil
 }
 
-// RecoverDebugNodeNamespaceRestricted removes the privileged labels from the input ns
-// Privileged labels : "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged"
+// RecoverDebugNodeNamespaceRestricted removes the privileged labels from the input namespace
 func RecoverDebugNodeNamespaceRestricted(oc *CLI, namespace string) error {
-	_, unlabeledError := DeleteLabelFromSpecificResource(oc, "ns/"+namespace, "", "security.openshift.io/scc.podSecurityLabelSync")
+	_, unlabeledError := DeleteLabelsFromSpecificResource(oc, "ns/"+namespace, "", "security.openshift.io/scc.podSecurityLabelSync",
+		"pod-security.kubernetes.io/enforce", "pod-security.kubernetes.io/audit", "pod-security.kubernetes.io/warn")
 	if unlabeledError != nil {
-		e2e.Logf("Failed to recover label \"security.openshift.io/scc.podSecurityLabelSync\" for ns/%s :\"%v\"", namespace, unlabeledError)
-		return unlabeledError
-	}
-	_, unlabeledError = DeleteLabelFromSpecificResource(oc, "ns/"+namespace, "", "pod-security.kubernetes.io/enforce")
-	if unlabeledError != nil {
-		e2e.Logf("Failed to recover label \"pod-security.kubernetes.io/enforce\" for ns/%s :\"%v\"", namespace, unlabeledError)
+		e2e.Logf(`Failed to recover restricted labels for ns/%s: "%v"`, namespace, unlabeledError)
 		return unlabeledError
 	}
 	return nil
