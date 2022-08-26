@@ -2289,19 +2289,21 @@ spec:
 		g.By("4) Check KAS operator pod logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs, expect none.")
 		clusterOperator := "openshift-kube-apiserver-operator"
 		keywords := "panic|fatal|SHOULD NOT HAPPEN"
-		format := `(.*)\.go:[0-9]{1,}]|namespace="([a-zA-Z0-9]|\-)*"|name="([a-zA-Z0-9]|\-)*"`
-		removeTimestamp := `s/^[0-9]{4}-[0-9]{2}.*(Z|\+[0-9]{2}:[0-9]{2})//`
+		format := `[0-9TZ.:]{5,30}`
+		frontwords := `(\w+?[^0-9a-zA-Z]+?){,3}`
+		afterwords := `(\w+?[^0-9a-zA-Z]+?){,30}`
+		// Add one temporary exception 'Should not happen: OpenAPI V3 merge'，after related bug 2115634 is fixed, will remove it.
+		exceptions := "SHOULD NOT HAPPEN.*Kind=CertificateSigningRequest|Should not happen: OpenAPI V3 merge|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|e2e-test.*-panic|kernel.*-panic|non-fatal"
 		cmd := fmt.Sprintf(`export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig
-		co='%s'
-		pod=$(oc get pod -n $co --no-headers | cut -d ' ' -f1)
-		oc logs -n "$co" "$pod" | grep -iE '(%s)' | sort > /tmp/OCP-39601-pod-errors.log
-		sed -E 's/((%s)( )*){1,}/.*/g' /tmp/OCP-39601-pod-errors.log | grep -v '^[[:space:]]*$' | sort | uniq | head -10 > /tmp/OCP-39601-pod-uniq-errors.log
+		grep -hriE "(%s%s%s)+" /var/log/pods/openshift-kube-apiserver-operator* | grep -Ev "%s" > /tmp/OCP-39601-kaso-errors.log
+		sed -E "s/%s/../g" /tmp/OCP-39601-kaso-errors.log | sort | uniq -c | sort -h | tee /tmp/OCP-39601-kaso-uniq-errors.log | head -10
 		echo '%s'
 		while read line; do
-			grep "$line" /tmp/OCP-39601-pod-errors.log | sed -E '%s' | head -1
-		done < /tmp/OCP-39601-pod-uniq-errors.log
-		echo '%s'`, clusterOperator, keywords, format, startTag, removeTimestamp, endTag)
-		masterNode := masterNodes[0]
+			grep "$line" /tmp/OCP-39601-kaso-errors.log | head -1
+		done < <(grep -oP "\w+?\.go\:[0-9]+" /tmp/OCP-39601-kaso-uniq-errors.log | uniq | head -10)
+		echo '%s'`, frontwords, keywords, afterwords, exceptions, format, startTag, endTag)
+		masterNode, err := oc.WithoutNamespace().Run("get").Args("po", "-n", clusterOperator, "-o", `jsonpath={.items[0].spec.nodeName}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By(fmt.Sprintf("4.1 -> step 1) Get log file from %s", masterNode))
 		podLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
@@ -2315,21 +2317,18 @@ spec:
 				podAbnormalLogs = append(podAbnormalLogs, fmt.Sprintf("> %s", line))
 			}
 		}
-		e2e.Logf("Pod Abnormal Logs:\n%s", strings.Join(podAbnormalLogs, "\n"))
+		e2e.Logf("KAS-O Pod abnormal Logs -------------------------->\n%s", strings.Join(podAbnormalLogs, "\n"))
 		totalAbnormalLogCount += len(podAbnormalLogs)
 
 		g.By("5) On all master nodes, check KAS log files for abnormal (fatal/SHOULD NOT HAPPEN) logs, expect none.")
-		format = `(\/.*)\.go:[0-9]{1,}]|namespace="([a-zA-Z0-9]|\-)*"|name="([a-zA-Z0-9]|\-)*"`
 		keywords = "fatal|SHOULD NOT HAPPEN"
-		// Add one temporary exception 'Should not happen: OpenAPI V3 merge'，after related bug 2115634 is fixed, will remove it.
-		exceptions := "SHOULD NOT HAPPEN.*Kind=CertificateSigningRequest|Should not happen: OpenAPI V3 merge|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|e2e-test.*-panic|non-fatal"
-		cmd = fmt.Sprintf(`grep -irE '(%s)' /var/log/pods/openshift-kube-apiserver_kube-apiserver* | grep -Ev "%s" | sort > /tmp/OCP-39601-kas-errors.log
-		sed -E 's/((%s)( )*){1,}/.*/g' /tmp/OCP-39601-kas-errors.log | grep -v '^[[:space:]]*$' | sort | uniq | head -10 > /tmp/OCP-39601-kas-uniq-errors.log
+		cmd = fmt.Sprintf(`grep -hriE "(%s%s%s)+" /var/log/pods/openshift-kube-apiserver_kube-apiserver* | grep -Ev "%s" > /tmp/OCP-39601-kas-errors.log
+		sed -E "s/%s/../g" /tmp/OCP-39601-kas-errors.log | sort | uniq -c | sort -h | tee > /tmp/OCP-39601-kas-uniq-errors.log | head -10
 		echo '%s'
 		while read line; do
-			grep "$line" /tmp/OCP-39601-kas-errors.log | sed -E '%s' | head -1
-		done < /tmp/OCP-39601-kas-uniq-errors.log
-		echo '%s'`, keywords, exceptions, format, startTag, removeTimestamp, endTag)
+			grep "$line" /tmp/OCP-39601-kas-errors.log | head -1
+		done < <(grep -oP "\w+?\.go\:[0-9]+" /tmp/OCP-39601-kas-uniq-errors.log | uniq | head -10)
+		echo '%s'`, frontwords, keywords, afterwords, exceptions, format, startTag, endTag)
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("5.%d -> step 1) Get log file from %s", i+1, masterNode))
@@ -2345,7 +2344,7 @@ spec:
 				}
 			}
 		}
-		e2e.Logf("Master Node Abnormal Logs:\n%s", strings.Join(masterNodeAbnormalLogs, "\n"))
+		e2e.Logf("KAS pods abnormal Logs ------------------------->\n%s", strings.Join(masterNodeAbnormalLogs, "\n"))
 		totalAbnormalLogCount += len(masterNodeAbnormalLogs)
 
 		g.By("6) On all master nodes, check KAS log files for panic error.")
@@ -2357,7 +2356,7 @@ spec:
 			echo ">>> Panic log file: ${f}"
 			line=$(grep -inE "${PANIC}" "${f}" | grep -m 1 -Ev "%s"  | cut -d ':' -f1)
 			endline=$(( line + 20 ))
-			sed -n "${line},${endline}p" "${f}" 
+			sed -n "${line},${endline}p" "${f}"
 		done
 		echo '%s'`, exceptions, startTag, exceptions, endTag)
 
@@ -2375,19 +2374,19 @@ spec:
 				}
 			}
 		}
-		e2e.Logf("KAS log Panic Logs:\n%s", strings.Join(externalPanicLogs, "\n"))
+		e2e.Logf("KAS pod panic Logs -------------------------->\n%s", strings.Join(externalPanicLogs, "\n"))
 		totalAbnormalLogCount += len(externalPanicLogs)
 
 		g.By("7) On all master nodes, check kas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
 		format = `[0-9TZm.:]{2,}|namespace="([a-zA-Z0-9]|\-)*"|name="([a-zA-Z0-9]|\-)*"`
-		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)|panicked: false|e2e-test.*-panic"
-		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/kube-apiserver/audit*.log | jq -r '.requestURI + " - " + .responseStatus.status + " - " + .responseStatus.message + " - " + .responseStatus.reason + " - " + .user.username' | grep -Ev '%s' | sort > /tmp/OCP-39601-audit-errors.log
-		sed -E 's/((%s)( )*){1,}/.*/g' /tmp/OCP-39601-audit-errors.log | grep -v '^[[:space:]]*$' | sort | uniq | head -10 > /tmp/OCP-39601-audit-uniq-errors.log
+		keywords = "panic|fatal|SHOULD NOT HAPPEN"
+		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)|panicked: false|e2e-test.*-panic|kernel.*-panic"
+		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/kube-apiserver/audit*.log | grep -Ev '%s' > /tmp/OCP-39601-audit-errors.log
 		echo '%s'
 		while read line; do
-			grep "$line" /tmp/OCP-39601-audit-errors.log | sed -E '%s' | head -1
-		done < /tmp/OCP-39601-audit-uniq-errors.log
-		echo '%s'`, keywords, exceptions, format, startTag, removeTimestamp, endTag)
+			grep "$line" /tmp/OCP-39601-audit-errors.log | head -1 | jq .
+		done < <(cat /tmp/OCP-39601-audit-errors.log | jq -r '.responseStatus.status + " - " + .responseStatus.message + " - " + .responseStatus.reason' | uniq | head -5 | cut -d '-' -f2 | awk '{$1=$1;print}')
+		echo '%s'`, keywords, exceptions, startTag, endTag)
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("7.%d -> step 1) Get log file from %s", i+1, masterNode))
@@ -2399,11 +2398,11 @@ spec:
 			auditLogs = trimEndTag.ReplaceAllString(auditLogs, "")
 			for _, line := range strings.Split(auditLogs, "\n") {
 				if strings.Trim(line, " ") != "" {
-					auditAbnormalLogs = append(auditAbnormalLogs, fmt.Sprintf("> %s", line))
+					auditAbnormalLogs = append(auditAbnormalLogs, fmt.Sprintf("%s", line))
 				}
 			}
 		}
-		e2e.Logf("Audit Abnormal Logs:\n%s", strings.Join(auditAbnormalLogs, "\n"))
+		e2e.Logf("KAS audit abnormal Logs --------------------->\n%s", strings.Join(auditAbnormalLogs, "\n"))
 		totalAbnormalLogCount += len(auditAbnormalLogs)
 
 		g.By("8) Assert if abnormal log exits")
