@@ -2409,4 +2409,86 @@ spec:
 		g.By("8) Assert if abnormal log exits")
 		o.Expect(totalAbnormalLogCount).Should(o.BeZero())
 	})
+
+	// author: zxiao@redhat.com
+	g.It("Author:zxiao-Medium-10592-Cluster-admin could get/edit/delete subresource", func() {
+		g.By("1) Create new project")
+		oc.SetupProject()
+
+		g.By("2) Create apply resource template")
+		template := getTestDataFilePath("application-template-stibuild.json")
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), "-f", template)
+
+		label := "deployment=database-1"
+		g.By(fmt.Sprintf("3) Get one pod with label %s", label))
+		var pods []string
+		var err error
+		err = wait.Poll(5*time.Second, 10*time.Minute, func() (bool, error) {
+			pods, err = exutil.GetAllPodsWithLabel(oc, oc.Namespace(), label)
+			if err != nil {
+				e2e.Logf("get err: %v, try next round", err)
+				return false, nil
+			}
+			if len(pods) == 0 {
+				e2e.Logf("get empty pod list, try next round")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to get pods with label %s", label))
+		pod := pods[0]
+		exutil.AssertPodToBeReady(oc, pod, oc.Namespace())
+
+		g.By("3) Get pod info json as file")
+		var podJSON string
+		err = wait.Poll(5*time.Second, 10*time.Minute, func() (bool, error) {
+			podJSON, err = oc.Run("get").Args("pod", pod, "--output=json", "-n", oc.Namespace()).Output()
+			if err != nil {
+				e2e.Logf("get err: %v, try next round", err)
+				return false, nil
+			}
+			if !strings.Contains(podJSON, `"phase": "Running"`) {
+				e2e.Logf("pod not in Running state, try next round")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "fail to get pod JSON with Running state")
+		podJSON = strings.Replace(podJSON, `"phase": "Running"`, `"phase": "Pending"`, 1)
+
+		g.By("4) Get service url for updating pod status")
+		baseURL, err := oc.Run("whoami").Args("--show-server").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		url := baseURL + filepath.Join("/api/v1/namespaces", oc.Namespace(), "pods", pod, "status")
+		e2e.Logf("Get update pod status REST API server %s", url)
+
+		g.By("5) Get access token")
+		token, err := oc.Run("whoami").Args("-t").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("6) Give user admin permission")
+		username := oc.Username()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", username).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("7) Update pod, expect 200 HTTP response status")
+		authHeader := fmt.Sprintf(`Authorization: Bearer %s`, token)
+		command := fmt.Sprintf("curl -X PUT %s -w '%s' -o /dev/null -k -H '%s' -H 'Content-Type: application/json' -d '%s'", url, "%{http_code}", authHeader, podJSON)
+		updatePodStatusRawOutput, err := exec.Command("bash", "-c", command).Output()
+		updatePodStatusOutput := string(updatePodStatusRawOutput)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(updatePodStatusOutput).To(o.Equal("200"))
+
+		g.By(fmt.Sprintf("8) Get pod %s", pod))
+		err = oc.Run("get").Args("pod", pod).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("9) Delete pod, expect 405 HTTP response status")
+		command = fmt.Sprintf("curl -X DELETE %s -w '%s' -o /dev/null -k -H '%s' -H 'Content-Type: application/json'", url, "%{http_code}", authHeader)
+		deletePodStatusRawOutput, err := exec.Command("bash", "-c", command).Output()
+		deletePodStatusOutput := string(deletePodStatusRawOutput)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(deletePodStatusOutput).To(o.Equal("405"))
+	})
 })
