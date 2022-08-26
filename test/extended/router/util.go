@@ -765,6 +765,24 @@ func readPodData(oc *exutil.CLI, podname string, ns string, executeCmd string, s
 	return output
 }
 
+// this function is a wrapper for polling `readPodData` function
+func pollReadPodData(oc *exutil.CLI, ns, routername, executeCmd, searchString string) string {
+	cmd := fmt.Sprintf("%s | grep \"%s\"", executeCmd, searchString)
+	var output string
+	var err error
+	waitErr := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		output, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, routername, "--", "bash", "-c", cmd).Output()
+		if err != nil {
+			e2e.Logf("failed to get search string: %v, retrying...", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	e2e.Logf("the matching part is: %s", output)
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but cannot find the search string."))
+	return output
+}
+
 //this function create external dns operator
 func createExternalDNSOperator(oc *exutil.CLI) {
 	buildPruningBaseDir := exutil.FixturePath("testdata", "router")

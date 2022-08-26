@@ -194,11 +194,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).Should(o.ContainSubstring(`"host":"foobar.ocp51429.%s"`, baseDomain))
 
 		g.By("check the router pod and ensure the routes are loaded in haproxy.config in default controller")
-		searchOutput1 := readRouterPodData(oc, defaultContPod, "cat haproxy.config", "foobar-unsecure")
+		searchOutput1 := pollReadPodData(oc, "openshift-ingress", defaultContPod, "cat haproxy.config", "foobar-unsecure")
 		o.Expect(searchOutput1).To(o.ContainSubstring("backend be_http:" + project2 + ":foobar-unsecure"))
 
 		g.By("check the router pod and ensure the routes are loaded in haproxy.config of custom controller")
-		searchOutput2 := readRouterPodData(oc, custContPod, "cat haproxy.config", "foobar-unsecure")
+		searchOutput2 := pollReadPodData(oc, "openshift-ingress", custContPod, "cat haproxy.config", "foobar-unsecure")
 		o.Expect(searchOutput2).To(o.ContainSubstring("backend be_http:" + project2 + ":foobar-unsecure"))
 
 		//curling through defualt controller will not work for proxy cluster.
@@ -280,7 +280,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).Should(o.ContainSubstring(`"host":"bar.alpha-alpha-ocp51437.%s"`, baseDomain))
 
 		g.By("check the router pod and ensure the routes are loaded in haproxy.config of alpha controller")
-		searchOutput1 := readRouterPodData(oc, custContPod1, "cat haproxy.config", "bar-unsecure")
+		searchOutput1 := pollReadPodData(oc, "openshift-ingress", custContPod1, "cat haproxy.config", "bar-unsecure")
 		o.Expect(searchOutput1).To(o.ContainSubstring("backend be_http:" + project3 + ":bar-unsecure"))
 
 		//curling through defualt controller will not work for proxy cluster.
@@ -305,7 +305,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).Should(o.ContainSubstring(`"host":"bar.beta-beta-ocp51437.%s"`, baseDomain))
 
 		g.By("check the router pod and ensure the routes are loaded in haproxy.config of beta controller")
-		searchOutput2 := readRouterPodData(oc, custContPod2, "cat haproxy.config", "bar-unsecure")
+		searchOutput2 := pollReadPodData(oc, "openshift-ingress", custContPod2, "cat haproxy.config", "bar-unsecure")
 		o.Expect(searchOutput2).To(o.ContainSubstring("backend be_http:" + project3 + ":bar-unsecure"))
 
 		g.By("check the reachability of the 'bar-unsecure' host in 'beta shard' controller")
