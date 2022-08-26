@@ -69,7 +69,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("Author:xiuwang-Low-43717-Add necessary priority class to pruner", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Low-43717-Add necessary priority class to pruner", func() {
 		g.By("Check priority class of pruner")
 		out := getResource(oc, asAdmin, withoutNamespace, "cronjob.batch", "-n", "openshift-image-registry", "-o=jsonpath={.items[0].spec.jobTemplate.spec.template.spec.priorityClassName}")
 		o.Expect(out).To(o.ContainSubstring(priorityClassName))
@@ -114,7 +114,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//Author: xiuwang@redhat.com
-	g.It("ConnectedOnly-Author:xiuwang-Medium-44107-Image pruner should skip images that has already been deleted [Serial]", func() {
+	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:xiuwang-Medium-44107-Image pruner should skip images that has already been deleted [Serial]", func() {
 		g.By("Setup imagepruner")
 		defer oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"keepTagRevisions":3,"keepYoungerThanDuration":null,"schedule":""}}`, "--type=merge").Execute()
 		err := oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"keepTagRevisions":0,"keepYoungerThanDuration":"0s","schedule": "* * * * *"}}`, "--type=merge").Execute()
@@ -146,7 +146,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("Author:xiuwang-Medium-33708-Verify spec.ignoreInvalidImageReference with invalid image reference [Serial]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-33708-Verify spec.ignoreInvalidImageReference with invalid image reference [Serial]", func() {
 		var (
 			imageRegistryBaseDir = exutil.FixturePath("testdata", "image_registry")
 			podFile              = filepath.Join(imageRegistryBaseDir, "single-pod.yaml")

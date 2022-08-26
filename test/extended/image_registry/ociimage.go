@@ -19,7 +19,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		manifestType = "application/vnd.oci.image.manifest.v1+json"
 	)
 	// author: wewang@redhat.com
-	g.It("Author:wewang-VMonly-ConnectedOnly-High-36291-OCI image is supported by API server and image registry", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wewang-VMonly-ConnectedOnly-High-36291-OCI image is supported by API server and image registry", func() {
 		var containerCLI = container.NewPodmanCLI()
 		oc.SetupProject()
 		g.By("Import an OCI image to internal registry")
@@ -58,7 +58,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 		oc = exutil.NewCLI("default-image-oci-vm", exutil.KubeConfigPath())
 	)
 	// author: wewang@redhat.com
-	g.It("Author:wewang-ConnectedOnly-VMonly-High-37498-Push image with OCI format directly to the internal registry", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wewang-ConnectedOnly-VMonly-High-37498-Push image with OCI format directly to the internal registry", func() {
 		var podmanCLI = container.NewPodmanCLI()
 		containerCLI := podmanCLI
 		//quay.io does not support oci image, so using docker image temporarily, https://issues.redhat.com/browse/PROJQUAY-2300
@@ -111,7 +111,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("Author:wewang-ConnectedOnly-VMonly-Critical-35998-OCI images layers configs can be pruned completely", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wewang-ConnectedOnly-VMonly-Critical-35998-OCI images layers configs can be pruned completely", func() {
 		var podmanCLI = container.NewPodmanCLI()
 		containerCLI := podmanCLI
 		ociImage := "docker.io/wzheng/ociimage"
