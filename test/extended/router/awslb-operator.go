@@ -25,6 +25,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		if strings.Contains(output, "NotFound") {
 			g.Skip("Skip since catalogsource/qe-app-registry is not installed")
 		}
+		// CredentialReqeust needs to be provioned by Cloud automatically
+		modeInCloudCredential, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("cloudcredential", "cluster", "-o=jsonpath={.spec.credentialsMode}").Output()
+		if modeInCloudCredential == "Manual" {
+			g.Skip("Skip since CCO mode is Manual")
+		}
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		if !strings.Contains(output, "AWS") {
 			g.Skip("Skip for non-supported platform, it requires AWS")
