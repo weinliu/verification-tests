@@ -28,7 +28,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	oc := exutil.NewCLIWithoutNamespace(projectName)
 
 	//author: yanyang@redhat.com
-	g.It("Author:yanyang-High-49196-Install cluster without capabilities setting", func() {
+	g.It("Author:yanyang-High-49196-Install cluster without capabilities setting [Flaky]", func() {
 		vCurrent := []string{"Console", "Insights", "Storage", "baremetal", "marketplace", "openshift-samples"}
 		orgCap, err := getCVObyJP(oc, ".spec.capabilities")
 		o.Expect(err).NotTo(o.HaveOccurred())
