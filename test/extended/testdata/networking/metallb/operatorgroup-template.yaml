@@ -8,11 +8,8 @@ objects:
   metadata:
     name: "${NAME}"
     namespace: "${NAMESPACE}"
-  spec:
-    targetNamespaces: 
-    - "${TARGETNAMESPACES}"
 parameters:
 - name: NAME
 - name: NAMESPACE
-- name: TARGETNAMESPACES
+
     
