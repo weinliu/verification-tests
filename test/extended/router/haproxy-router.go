@@ -827,7 +827,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	})
 
-	g.It("Author:aiyengar-Critical-41186-The Power-of-two balancing features switches to roundrobin mode for REEN/Edge/insecure/passthrough routes with multiple backends configured with weights", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:aiyengar-Critical-41186-The Power-of-two balancing features switches to roundrobin mode for REEN/Edge/insecure/passthrough routes with multiple backends configured with weights", func() {
 		var (
 			baseDomain = getBaseDomain(oc)
 			defaultPod = getRouterPod(oc, "default")
@@ -896,7 +896,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	})
 
-	g.It("Author:aiyengar-High-52738-The Power-of-two balancing features switches to source algorithm for passthrough routes", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:aiyengar-High-52738-The Power-of-two balancing features switches to source algorithm for passthrough routes", func() {
 		var (
 			baseDomain = getBaseDomain(oc)
 			defaultPod = getRouterPod(oc, "default")
@@ -978,7 +978,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	})
 
-	g.It("Author:aiyengar-High-41042-The Power-of-two balancing features defaults to random LB algorithm instead of leastconn for REEN/Edge/insecure routes", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:aiyengar-High-41042-The Power-of-two balancing features defaults to random LB algorithm instead of leastconn for REEN/Edge/insecure routes", func() {
 		var (
 			baseDomain = getBaseDomain(oc)
 			defaultPod = getRouterPod(oc, "default")

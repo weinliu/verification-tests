@@ -15,7 +15,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	var oc = exutil.NewCLI("route-whitelist", exutil.KubeConfigPath())
 
 	// author: aiyengar@redhat.com
-	g.It("Author:aiyengar-Medium-42230-route can be configured to whitelist more than 61 ips/CIDRs", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:aiyengar-Medium-42230-route can be configured to whitelist more than 61 ips/CIDRs", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			output              string
@@ -49,7 +49,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: mjoseph@redhat.com
-	g.It("Author:mjoseph-High-45399-ingress controller continue to function normally with unexpected high timeout value", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-High-45399-ingress controller continue to function normally with unexpected high timeout value", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			output              string
@@ -85,7 +85,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: mjoseph@redhat.com
-	g.It("Author:mjoseph-High-49802-HTTPS redirect happens even if there is a more specific http-only", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-High-49802-HTTPS redirect happens even if there is a more specific http-only", func() {
 		//curling through defualt controller will not work for proxy cluster.
 		if checkProxy(oc) {
 			g.Skip("This is proxy cluster, skip the test.")
