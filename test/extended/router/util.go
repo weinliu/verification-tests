@@ -1027,3 +1027,17 @@ func getNamespaceRouteDetails(oc *exutil.CLI, namespace, resourceName, jsonSearc
 	})
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the route details are not reachable"))
 }
+
+// this function is to make sure a command such as curl the route successfully, for the route isn't reachable occasionally
+func repeatCmd(oc *exutil.CLI, cmd []string, expectOutput string, repeatTimes int) string {
+	result := "failed"
+	output := "none"
+	for i := 0; i < repeatTimes; i++ {
+		output, _ = oc.Run("exec").Args(cmd...).Output()
+		if strings.Contains(output, expectOutput) {
+			result = "passed"
+			break
+		}
+	}
+	return result
+}

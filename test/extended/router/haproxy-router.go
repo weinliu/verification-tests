@@ -665,7 +665,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		podIP := getPodv4Address(oc, podname, "openshift-ingress")
 
 		g.By("Deploy a project with a client pod, a backend pod and its service resources")
-		oc.SetupProject()
 		project1 := oc.Namespace()
 		g.By("create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
@@ -684,9 +683,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("curl a normal route from the client pod")
 		toDst := routehost + ":80:" + podIP
-		output, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-i", "http://"+routehost, "--resolve", toDst).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("200 OK"))
+		cmdOnPod := []string{cltPodName, "--", "curl", "-i", "http://" + routehost, "--resolve", toDst}
+		result := repeatCmd(oc, cmdOnPod, "200 OK", 5)
+		o.Expect(result).To(o.ContainSubstring("passed"))
 
 		g.By("curl a non-existing route, expect to get custom http 404 Not Found error")
 		notExistRoute := "notexistroute" + "-" + project1 + "." + ingctrl.domain
