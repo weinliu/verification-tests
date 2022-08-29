@@ -1723,7 +1723,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		e2e.Logf("command %s: %s", commandStr, output)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Version:"))
-		o.Expect(output).To(o.ContainSubstring("12.0."))
+		o.Expect(output).To(o.ContainSubstring("24.2."))
 
 		commandStr = []string{"pip3", "show", "openshift"}
 		output, err = containerCLI.Exec(id, commandStr)
