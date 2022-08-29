@@ -823,3 +823,9 @@ func WrapWithBracketsIfIpv6(ip string) (string, error) {
 
 	return ip, nil
 }
+
+func isFIPSEnabledInClusterConfig(oc *exutil.CLI) bool {
+	cc := NewNamespacedResource(oc.AsAdmin(), "cm", "kube-system", "cluster-config-v1")
+	ic := cc.GetOrFail("{.data.install-config}")
+	return strings.Contains(ic, "fips: true")
+}

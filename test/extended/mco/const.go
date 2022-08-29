@@ -8,6 +8,11 @@ const (
 	// MachineConfigDaemonEvents cluster role binding
 	MachineConfigDaemonEvents = "machine-config-daemon-events"
 
+	// MachineConfigPoolMaster master pool name
+	MachineConfigPoolMaster = "master"
+	// MachineConfigPoolWorker worker pool name
+	MachineConfigPoolWorker = "worker"
+
 	// ControllerDeployment name of the deployment deploying the machine config controller
 	ControllerDeployment = "machine-config-controller"
 	// ControllerContainer name of the controller container in the controller pod

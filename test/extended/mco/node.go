@@ -2,6 +2,7 @@ package mco
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	o "github.com/onsi/gomega"
@@ -311,6 +312,33 @@ func (n Node) GetDateWithDelta(delta string) (time.Time, error) {
 	}
 
 	return date.Add(timeDuration), nil
+}
+
+// IsFIPSEnabled check whether fips is enabled on node
+func (n *Node) IsFIPSEnabled() (bool, error) {
+	output, err := exutil.DebugNodeWithChroot(n.oc, n.name, "fips-mode-setup", "--check")
+	if err != nil {
+		logger.Errorf("Error checking fips mode %s", err)
+	}
+
+	return strings.Contains(output, "FIPS mode is enabled"), err
+}
+
+// IsKernelArgEnabled check whether kernel arg is enabled on node
+func (n *Node) IsKernelArgEnabled(karg string) (bool, error) {
+	unameOut, unameErr := exutil.DebugNodeWithChroot(n.oc, n.name, "bash", "-c", "uname -a")
+	if unameErr != nil {
+		logger.Errorf("Error checking kernel arg via uname -a: %v", unameErr)
+		return false, unameErr
+	}
+
+	cliOut, cliErr := exutil.DebugNodeWithChroot(n.oc, n.name, "cat", "/proc/cmdline")
+	if cliErr != nil {
+		logger.Errorf("Err checking kernel arg via /proc/cmdline: %v", cliErr)
+		return false, cliErr
+	}
+
+	return (strings.Contains(unameOut, karg) || strings.Contains(cliOut, karg)), nil
 }
 
 // GetAll returns a []Node list with all existing nodes

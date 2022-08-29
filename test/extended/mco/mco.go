@@ -70,7 +70,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		workerNode := NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()[0]
 		mcName := "change-workers-chrony-configuration"
 		mcTemplate := "change-workers-chrony-configuration.yaml"
-		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker"}
+		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: MachineConfigPoolWorker}
 		defer mc.delete(oc)
 
 		startTime, _ := workerNode.GetDate()
@@ -103,7 +103,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		g.By("create new mc to add 100+ dummy files to /var/log")
 		mcName := "bz1866117-add-dummy-files"
 		mcTemplate := "bz1866117-add-dummy-files.yaml"
-		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker"}
+		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: MachineConfigPoolWorker}
 		defer mc.delete(oc)
 		mc.create(oc)
 
@@ -248,7 +248,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		g.By("Create new MC to add the kernel arguments, kernel type and extension")
 		mcName := "change-worker-karg-ktype-extension"
 		mcTemplate := mcName + ".yaml"
-		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker"}
+		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: MachineConfigPoolWorker}
 		defer mc.delete(oc)
 		mc.create(oc)
 
@@ -299,12 +299,12 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
 		defer func() {
 			kc.DeleteOrFail()
-			mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+			mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 			mcp.waitForComplete()
 		}()
 		kc.create()
 		kc.waitUntilSuccess("10s")
-		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		mcp.waitForComplete()
 		logger.Infof("Kubelet config is created successfully!")
 
@@ -334,11 +334,11 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		cr := NewContainerRuntimeConfig(oc.AsAdmin(), crName, crTemplate)
 		defer func() {
 			cr.DeleteOrFail()
-			mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+			mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 			mcp.waitForComplete()
 		}()
 		cr.create()
-		mcp := NewMachineConfigPool(cr.oc.AsAdmin(), "worker")
+		mcp := NewMachineConfigPool(cr.oc.AsAdmin(), MachineConfigPoolWorker)
 		mcp.waitForComplete()
 		logger.Infof("Container runtime config is created successfully!")
 
@@ -374,7 +374,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		jcName := "change-worker-jrnl-configuration"
 		jcTemplate := jcName + ".yaml"
 		journaldConf := []string{"CONFIGURATION=" + conf}
-		jc := MachineConfig{name: jcName, Template: *NewMCOTemplate(oc, jcTemplate), pool: "worker", parameters: journaldConf}
+		jc := MachineConfig{name: jcName, Template: *NewMCOTemplate(oc, jcTemplate), pool: MachineConfigPoolWorker, parameters: journaldConf}
 		defer jc.delete(oc)
 		jc.create(oc)
 		logger.Infof("Journald systemd config is created successfully!")
@@ -428,7 +428,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 				o.ContainSubstring("Changes do not require drain, skipping")))
 
 		g.By("Check that worker nodes are not tained after applying the MC")
-		workerMcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		workerMcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		workerNodes, err := workerMcp.GetNodes()
 		o.Expect(err).ShouldNot(o.HaveOccurred(), "Error getting nodes linked to the worker pool")
 		for _, node := range workerNodes {
@@ -437,7 +437,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		}
 
 		g.By("Check that master nodes have only the NoSchedule taint after applying the the MC")
-		masterMcp := NewMachineConfigPool(oc.AsAdmin(), "master")
+		masterMcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
 		masterNodes, err := masterMcp.GetNodes()
 		o.Expect(err).ShouldNot(o.HaveOccurred(), "Error getting nodes linked to the master pool")
 		expectedTaint := `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master"}]`
@@ -463,7 +463,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		g.By("Create new machine config with new authorized key")
 		mcName := TmplAddSSHAuthorizedKeyForWorker
 		mcTemplate := mcName + ".yaml"
-		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker"}
+		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: MachineConfigPoolWorker}
 		defer mc.delete(oc)
 		mc.create(oc)
 
@@ -480,7 +480,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		g.By("Create new machine config with new authorized key")
 		mcName := TmplAddSSHAuthorizedKeyForWorker
 		mcTemplate := mcName + ".yaml"
-		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker"}
+		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: MachineConfigPoolWorker}
 		defer mc.delete(oc)
 		mc.create(oc)
 
@@ -497,7 +497,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		g.By("Create new machine config with new authorized key")
 		mcName := TmplAddSSHAuthorizedKeyForWorker
 		mcTemplate := mcName + ".yaml"
-		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker"}
+		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: MachineConfigPoolWorker}
 		defer mc.delete(oc)
 		mc.create(oc)
 
@@ -521,7 +521,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		g.By("Create new machine config to add additional ssh key")
 		mcName := "add-additional-ssh-authorized-key"
 		mcTemplate := mcName + ".yaml"
-		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker"}
+		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: MachineConfigPoolWorker}
 		defer mc.delete(oc)
 		mc.create(oc)
 
@@ -575,7 +575,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		g.By("Create new machine config to add quay.io to unqualified-search-registries list")
 		mcName := "change-workers-container-reg"
-		mc := MachineConfig{name: mcName, pool: "worker"}
+		mc := MachineConfig{name: mcName, pool: MachineConfigPoolWorker}
 		defer mc.delete(oc)
 
 		fileConfig := getURLEncodedFileConfig(registriesConfPath, newConfig, "420")
@@ -584,7 +584,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(errCreate).NotTo(o.HaveOccurred(), "Error creating MachineConfig %s", mcName)
 
 		g.By("Wait for MCP to be updated")
-		mcpWorker := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mcpWorker := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		mcpWorker.waitForComplete()
 
 		g.By("Check content of registries file to verify quay.io added to unqualified-search-registries list")
@@ -625,14 +625,14 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	g.It("Author:rioliu-Longduration-NonPreRelease-High-42704-disable auto reboot for mco [Disruptive]", func() {
 		g.By("pause mcp worker")
-		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		defer mcp.pause(false)
 		mcp.pause(true)
 
 		g.By("create new mc")
 		mcName := "change-workers-chrony-configuration"
 		mcTemplate := "change-workers-chrony-configuration.yaml"
-		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker", skipWaitForMcp: true}
+		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: MachineConfigPoolWorker, skipWaitForMcp: true}
 		defer mc.delete(oc)
 		mc.create(oc)
 
@@ -675,8 +675,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(patchErr).NotTo(o.HaveOccurred())
 
 		g.By("monitor update progress of mcp master and worker, new configs should be applied successfully")
-		mcpMaster := NewMachineConfigPool(oc.AsAdmin(), "master")
-		mcpWorker := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mcpMaster := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+		mcpWorker := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		mcpMaster.waitForComplete()
 		mcpWorker.waitForComplete()
 
@@ -687,9 +687,9 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		slices := strings.Split(strings.Trim(renderedConfs, "'"), " ")
 		var renderedMasterConf, renderedWorkerConf string
 		for _, conf := range slices {
-			if strings.Contains(conf, "master") {
+			if strings.Contains(conf, MachineConfigPoolMaster) {
 				renderedMasterConf = conf
-			} else if strings.Contains(conf, "worker") {
+			} else if strings.Contains(conf, MachineConfigPoolWorker) {
 				renderedWorkerConf = conf
 			}
 		}
@@ -764,7 +764,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		g.By("Create new mc to add new file on the node and trigger node drain")
 		mcName := "test-file"
 		mcTemplate := "add-mc-to-trigger-node-drain.yaml"
-		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker", skipWaitForMcp: true}
+		mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: MachineConfigPoolWorker, skipWaitForMcp: true}
 		defer mc.delete(oc)
 		defer func() { o.Expect(pod.Delete(oc)).NotTo(o.HaveOccurred()) }()
 		mc.create(oc)
@@ -912,8 +912,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(setData).Should(o.Equal("secret/pull-secret data updated"))
 
 		g.By("Wait for configuration to be applied in master and worker pools")
-		mcpWorker := NewMachineConfigPool(oc.AsAdmin(), "worker")
-		mcpMaster := NewMachineConfigPool(oc.AsAdmin(), "master")
+		mcpWorker := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		mcpMaster := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
 		mcpWorker.waitForComplete()
 		mcpMaster.waitForComplete()
 
@@ -924,9 +924,9 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		slices := strings.Split(strings.Trim(renderedConfs, "'"), " ")
 		var renderedMasterConf, renderedWorkerConf string
 		for _, conf := range slices {
-			if strings.Contains(conf, "master") {
+			if strings.Contains(conf, MachineConfigPoolMaster) {
 				renderedMasterConf = conf
-			} else if strings.Contains(conf, "worker") {
+			} else if strings.Contains(conf, MachineConfigPoolWorker) {
 				renderedWorkerConf = conf
 			}
 		}
@@ -955,7 +955,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		kcsLimit := 10
 
 		g.By("Pause mcp worker")
-		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		defer mcp.pause(false)
 		mcp.pause(true)
 
@@ -1027,7 +1027,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		crsLimit := 10
 
 		g.By("Pause mcp worker")
-		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		defer mcp.pause(false)
 		mcp.pause(true)
 
@@ -1116,7 +1116,7 @@ nulla pariatur.`
 		destPath := "/etc/test-file"
 		fileConfig := getGzipFileJSONConfig(destPath, fileContent)
 
-		mc := MachineConfig{name: mcName, pool: "worker"}
+		mc := MachineConfig{name: mcName, pool: MachineConfigPoolWorker}
 		defer mc.delete(oc)
 
 		template := NewMCOTemplate(oc, "generic-machine-config-template.yml")
@@ -1124,7 +1124,7 @@ nulla pariatur.`
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Wait until worker MachineConfigPool has finished the configuration")
-		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		mcp.waitForComplete()
 
 		g.By("Verfiy that the file has been properly provisioned")
@@ -1192,7 +1192,7 @@ nulla pariatur.`
 		g.By("Create a MachineConfig resource to mask the chronyd service")
 		mcName := "99-test-mask-services"
 		maskSvcConfig := getMaskServiceConfig("chronyd.service", true)
-		mc := MachineConfig{name: mcName, pool: "worker"}
+		mc := MachineConfig{name: mcName, pool: MachineConfigPoolWorker}
 		defer mc.delete(oc)
 
 		template := NewMCOTemplate(oc, "generic-machine-config-template.yml")
@@ -1216,7 +1216,7 @@ nulla pariatur.`
 		}()
 
 		g.By("Wait until worker MachineConfigPool has finished the configuration")
-		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		mcp.waitForComplete()
 
 		g.By("Validate that the chronyd service is masked")
@@ -1250,7 +1250,7 @@ nulla pariatur.`
 		fileConfig := getURLEncodedFileConfig(filePath, fileContent, "")
 
 		mcName := "mco-drift-test-file"
-		mc := MachineConfig{name: mcName, pool: "worker"}
+		mc := MachineConfig{name: mcName, pool: MachineConfigPoolWorker}
 		defer mc.delete(oc)
 
 		template := NewMCOTemplate(oc, "generic-machine-config-template.yml")
@@ -1258,7 +1258,7 @@ nulla pariatur.`
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Wait until worker MCP has finished the configuration. No machine should be degraded.")
-		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		mcp.waitForComplete()
 
 		g.By("Verfiy file content and permissions")
@@ -1289,7 +1289,7 @@ nulla pariatur.`
 		g.By("create new machine config with base64 encoded gpg public key")
 		mcName := "add-gpg-pub-key"
 		mcTemplate := "add-gpg-pub-key.yaml"
-		mc := MachineConfig{name: mcName, pool: "worker", Template: *NewMCOTemplate(oc, mcTemplate)}
+		mc := MachineConfig{name: mcName, pool: MachineConfigPoolWorker, Template: *NewMCOTemplate(oc, mcTemplate)}
 		defer mc.delete(oc)
 		mc.create(oc)
 
@@ -1314,7 +1314,7 @@ nulla pariatur.`
 		g.By("create new machine config to change /etc/containers/policy.json")
 		mcName := "change-policy-json"
 		mcTemplate := "change-policy-json.yaml"
-		mc := MachineConfig{name: mcName, pool: "worker", Template: *NewMCOTemplate(oc, mcTemplate)}
+		mc := MachineConfig{name: mcName, pool: MachineConfigPoolWorker, Template: *NewMCOTemplate(oc, mcTemplate)}
 		defer mc.delete(oc)
 		mc.create(oc)
 
@@ -1349,7 +1349,7 @@ nulla pariatur.`
 		fileConfig := getURLEncodedFileConfig(filePath, fileContent, fileMode)
 
 		mcName := "mco-drift-test-file-permissions"
-		mc := MachineConfig{name: mcName, pool: "worker"}
+		mc := MachineConfig{name: mcName, pool: MachineConfigPoolWorker}
 		defer mc.delete(oc)
 
 		template := NewMCOTemplate(oc, "generic-machine-config-template.yml")
@@ -1357,7 +1357,7 @@ nulla pariatur.`
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Wait until worker MCP has finished the configuration. No machine should be degraded.")
-		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		mcp.waitForComplete()
 
 		g.By("Verfiy file content and permissions")
@@ -1389,7 +1389,7 @@ nulla pariatur.`
 		fileConfig := getGzipFileJSONConfig(filePath, fileContent)
 
 		mcName := "mco-drift-test-compressed-file"
-		mc := MachineConfig{name: mcName, pool: "worker"}
+		mc := MachineConfig{name: mcName, pool: MachineConfigPoolWorker}
 		defer mc.delete(oc)
 
 		template := NewMCOTemplate(oc, "generic-machine-config-template.yml")
@@ -1397,7 +1397,7 @@ nulla pariatur.`
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Wait until worker MCP has finished the configuration. No machine should be degraded.")
-		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		mcp.waitForComplete()
 
 		g.By("Verfiy file content and permissions")
@@ -1432,7 +1432,7 @@ nulla pariatur.`
 		unitConfig := getDropinFileConfig(unitName, unitEnabled, dropinFileName, fileContent)
 
 		mcName := "drifted-dropins-test"
-		mc := MachineConfig{name: mcName, pool: "worker"}
+		mc := MachineConfig{name: mcName, pool: MachineConfigPoolWorker}
 		defer mc.delete(oc)
 
 		template := NewMCOTemplate(oc, "generic-machine-config-template.yml")
@@ -1440,7 +1440,7 @@ nulla pariatur.`
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Wait until worker MCP has finished the configuration. No machine should be degraded.")
-		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		mcp.waitForComplete()
 
 		g.By("Verfiy file content and permissions")
@@ -1475,7 +1475,7 @@ nulla pariatur.`
 		unitConfig := getSingleUnitConfig(unitName, unitEnabled, fileContent)
 
 		mcName := "drifted-new-service-test"
-		mc := MachineConfig{name: mcName, pool: "worker"}
+		mc := MachineConfig{name: mcName, pool: MachineConfigPoolWorker}
 		defer mc.delete(oc)
 
 		template := NewMCOTemplate(oc, "generic-machine-config-template.yml")
@@ -1483,7 +1483,7 @@ nulla pariatur.`
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Wait until worker MCP has finished the configuration. No machine should be degraded.")
-		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		mcp.waitForComplete()
 
 		g.By("Verfiy file content and permissions")
@@ -1537,7 +1537,7 @@ nulla pariatur.`
 		fileConfig := getBase64EncodedFileConfig(filePath, fileContent, fileMode)
 
 		mcName := "cordontest-change-workers-chrony-configuration"
-		mc := MachineConfig{name: mcName, pool: "worker"}
+		mc := MachineConfig{name: mcName, pool: MachineConfigPoolWorker}
 		defer mc.delete(oc)
 
 		template := NewMCOTemplate(oc, "generic-machine-config-template.yml")
@@ -1545,7 +1545,7 @@ nulla pariatur.`
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check MCD logs to make sure that the node is cordoned before being drained")
-		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 
 		o.Eventually(workerNode.PollIsCordoned(), fmt.Sprintf("%dm", mcp.estimateWaitTimeInMinutes()), "20s").Should(o.BeTrue(), "Worker node must be cordoned")
@@ -1583,7 +1583,7 @@ nulla pariatur.`
 		}
 
 		g.By("Get the nodes in the worker pool sorted by update order")
-		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		workerNodes, errGet := mcp.GetSortedNodes()
 		o.Expect(errGet).NotTo(o.HaveOccurred())
 
@@ -1594,7 +1594,7 @@ nulla pariatur.`
 		fileConfig := getURLEncodedFileConfig(filePath, fileContent, fileMode)
 
 		mcName := "mco-test-file-order"
-		mc := MachineConfig{name: mcName, pool: "worker"}
+		mc := MachineConfig{name: mcName, pool: MachineConfigPoolWorker}
 		defer mc.delete(oc)
 
 		template := NewMCOTemplate(oc, "generic-machine-config-template.yml")
@@ -1645,7 +1645,7 @@ nulla pariatur.`
 		}
 
 		g.By("Get the nodes in the worker pool sorted by update order")
-		mcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		workerNodes, errGet := mcp.GetSortedNodes()
 		o.Expect(errGet).NotTo(o.HaveOccurred())
 
@@ -1661,7 +1661,7 @@ nulla pariatur.`
 		fileConfig := getURLEncodedFileConfig(filePath, fileContent, fileMode)
 
 		mcName := "mco-test-file-order2"
-		mc := MachineConfig{name: mcName, pool: "worker"}
+		mc := MachineConfig{name: mcName, pool: MachineConfigPoolWorker}
 		defer mc.delete(oc)
 
 		template := NewMCOTemplate(oc, "generic-machine-config-template.yml")
@@ -1710,7 +1710,7 @@ nulla pariatur.`
 		o.Expect(mccRule).Should(o.ContainSubstring("machine-config-controller")) // check the builtin rule exists or not
 
 		g.By("pause mcp worker")
-		workerPool := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		workerPool := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		defer func() {
 			workerPool.pause(false) // fallback solution, unpause worker pool if case is failed before last step.
 			workerPool.waitForComplete()
@@ -1956,8 +1956,8 @@ nulla pariatur.`
 		proxyInitialConfig := proxy.GetOrFail(`{.spec}`)
 		logger.Infof("Initial proxy configuration: %s", proxyInitialConfig)
 
-		wmcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
-		mmcp := NewMachineConfigPool(oc.AsAdmin(), "master")
+		wmcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		mmcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
 
 		defer func() {
 			logger.Infof("Start TC defer block")
@@ -2035,6 +2035,7 @@ nulla pariatur.`
 			"machine-config Operator should not report degraded status anymore")
 
 	})
+
 	g.It("Author:sregidor-NonPreRelease-Medium-52520-Configure unqualified-search-registries in Image.config resource [Disruptive]", func() {
 		expectedDropinFilePath := "/etc/containers/registries.conf.d/01-image-searchRegistries.conf"
 		expectedDropinContent := "unqualified-search-registries = [\"quay.io\"]\nshort-name-mode = \"\"\n"
@@ -2044,8 +2045,8 @@ nulla pariatur.`
 		icInitialConfig := ic.GetOrFail(`{.spec}`)
 		logger.Infof("Initial image.config cluster configuration: %s", icInitialConfig)
 
-		wmcp := NewMachineConfigPool(oc.AsAdmin(), "worker")
-		mmcp := NewMachineConfigPool(oc.AsAdmin(), "master")
+		wmcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		mmcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
 
 		workers, wsErr := wmcp.GetSortedNodes()
 		o.Expect(wsErr).ShouldNot(o.HaveOccurred(), "Error getting the nodes in worker pool")
@@ -2128,6 +2129,7 @@ nulla pariatur.`
 		o.Expect(mdropinFile.GetTextContent()).Should(o.Equal(expectedDropinContent))
 
 	})
+
 	g.It("Author:sregidor-NonPreRelease-High-52822-Create new config resources with 2.2.0 ignition boot image nodes [Disruptive]", func() {
 
 		// Skip if not AWS
@@ -2151,7 +2153,7 @@ nulla pariatur.`
 		crName := "change-ctr-cr-config"
 		crTemplate := generateTemplateAbsolutePath(crName + ".yaml")
 		mcName := "generic-config-file-test-52822"
-		mcpWorker := NewMachineConfigPool(oc.AsAdmin(), "worker")
+		mcpWorker := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 
 		defer func() {
 			logger.Infof("Start TC defer block")
@@ -2186,7 +2188,7 @@ nulla pariatur.`
 
 			// MachineConfig struct has not been refactored to compose the "Resource" struct
 			// so there is no "Exists" method available. Use it after refactoring MachineConfig
-			mc := MachineConfig{name: mcName, pool: "worker"}
+			mc := MachineConfig{name: mcName, pool: MachineConfigPoolWorker}
 			logger.Infof("Removing machineconfig %s", mcName)
 			mc.delete(oc.AsAdmin())
 
@@ -2290,12 +2292,53 @@ nulla pariatur.`
 		o.Expect(cFile.GetTextContent()).Should(o.Equal(genericConfig),
 			"File %s has not the expected content", genericConfigFilePath)
 	})
+
+	g.It("Author:rioliu-NonPreRelease-High-53668-when FIPS and realtime kernel are both enabled node should NOT be degraded [Disruptive]", func() {
+		// skip the test if fips is not enabled
+		skipTestIfFIPSIsNotEnabled(oc)
+		// skip the test if platform is not aws or gcp. realtime kargs currently supported on these platforms
+		skipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp")
+
+		g.By("create machine config to enable fips ")
+		fipsMcName := "50-fips-bz-poc"
+		fipsMcTemplate := "bz2096496-dummy-mc-for-fips.yaml"
+		fipsMc := MachineConfig{name: fipsMcName, Template: *NewMCOTemplate(oc, fipsMcTemplate), pool: MachineConfigPoolMaster}
+
+		defer fipsMc.delete(oc)
+		fipsMc.create(oc)
+
+		g.By("create machine config to enable RT kernel")
+		rtMcName := "50-realtime-kernel"
+		rtMcTemplate := "change-worker-kernel-argument.yaml"
+		rtMc := MachineConfig{name: rtMcName, Template: *NewMCOTemplate(oc, rtMcTemplate), pool: MachineConfigPoolMaster}
+
+		defer rtMc.delete(oc)
+		rtMc.create(oc)
+
+		masterNode := NewNodeList(oc).GetAllMasterNodesOrFail()[0]
+
+		g.By("check whether fips is enabled")
+		fipsEnabled, fipsErr := masterNode.IsFIPSEnabled()
+		o.Expect(fipsErr).NotTo(o.HaveOccurred())
+		o.Expect(fipsEnabled).Should(o.BeTrue(), "fips is not enabled on node %s", masterNode.GetName())
+
+		g.By("check whether fips related kernel arg is enabled")
+		fipsKarg := "trigger-fips-issue=1"
+		fipsKargEnabled, fipsKargErr := masterNode.IsKernelArgEnabled(fipsKarg)
+		o.Expect(fipsKargErr).NotTo(o.HaveOccurred())
+		o.Expect(fipsKargEnabled).Should(o.BeTrue(), "fips related kernel arg %s is not enabled on node %s", fipsKarg, masterNode.GetName())
+
+		g.By("check whether RT kernel is enabled")
+		rtEnabled, rtErr := masterNode.IsKernelArgEnabled("PREEMPT_RT")
+		o.Expect(rtErr).NotTo(o.HaveOccurred())
+		o.Expect(rtEnabled).Should(o.BeTrue(), "RT kernel is not enabled on node %s", masterNode.GetName())
+	})
 })
 
 func createMcAndVerifyMCValue(oc *exutil.CLI, stepText, mcName string, workerNode Node, textToVerify TextToVerify, cmd ...string) {
 	g.By(fmt.Sprintf("Create new MC to add the %s", stepText))
 	mcTemplate := mcName + ".yaml"
-	mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker"}
+	mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: MachineConfigPoolWorker}
 	defer mc.delete(oc)
 	mc.create(oc)
 	logger.Infof("Machine config is created successfully!")
@@ -2349,10 +2392,33 @@ func skipTestIfOsIsNotRhelOs(oc *exutil.CLI) Node {
 	return allRhelOs[0]
 }
 
+// skipTestIfFIPSIsNotEnabled skip the test if fips is not enabled
+func skipTestIfFIPSIsNotEnabled(oc *exutil.CLI) {
+	if !isFIPSEnabledInClusterConfig(oc) {
+		g.Skip("fips is not enabled, skip this test")
+	}
+}
+
+// skipTestIfSupportedPlatformNotMatched skip the test if supported platforms are not matched
+func skipTestIfSupportedPlatformNotMatched(oc *exutil.CLI, supported ...string) {
+	var match bool
+	p := exutil.CheckPlatform(oc)
+	for _, sp := range supported {
+		if strings.EqualFold(sp, p) {
+			match = true
+			break
+		}
+	}
+
+	if !match {
+		g.Skip(fmt.Sprintf("skip test because current platform %s is not in supported list %v", p, supported))
+	}
+}
+
 func createMcAndVerifyIgnitionVersion(oc *exutil.CLI, stepText, mcName, ignitionVersion string) {
 	g.By(fmt.Sprintf("Create machine config with %s", stepText))
 	mcTemplate := "change-worker-ign-version.yaml"
-	mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: "worker", parameters: []string{"IGNITION_VERSION=" + ignitionVersion}}
+	mc := MachineConfig{name: mcName, Template: *NewMCOTemplate(oc, mcTemplate), pool: MachineConfigPoolWorker, parameters: []string{"IGNITION_VERSION=" + ignitionVersion}}
 	defer mc.delete(oc)
 	mc.create(oc)
 
