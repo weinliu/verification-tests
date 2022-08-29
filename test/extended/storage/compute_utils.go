@@ -15,11 +15,20 @@ import (
 
 // Execute command in node
 func execCommandInSpecificNode(oc *exutil.CLI, nodeHostName string, command string) (output string, err error) {
+	debugNodeNamespace := oc.Namespace()
+	executeCmd := append([]string{"/bin/sh", "-c"}, command)
+	executeOption := []string{"-q"}
+	// Check whether current namespace is Active
+	nsState, err := oc.AsAdmin().Run("get").Args("ns/"+debugNodeNamespace, "-o=jsonpath={.status.phase}", "--ignore-not-found").Output()
+	if nsState != "Active" || err != nil {
+		debugNodeNamespace = "default"
+		executeOption = append(executeOption, "--to-namespace="+debugNodeNamespace)
+	}
 	// Running oc debug node in normal projects
 	// (normal projects mean projects that are not clusters default projects like: like "default", "openshift-xxx" et al)
 	// need extra configuration on 4.12+ ocp test clusters
 	// https://github.com/openshift/oc/blob/master/pkg/helpers/cmd/errors.go#L24-L29
-	stdOut, stdErr, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, nodeHostName, []string{"-q"}, "bin/sh", "-c", command)
+	stdOut, stdErr, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, nodeHostName, executeOption, executeCmd...)
 	debugLogf("Executed \""+command+"\" on node \"%s\":\n*stdErr* :\"%s\"\n*stdOut* :\"%s\".", nodeHostName, stdErr, stdOut)
 	// Adapt Pod Security changed on k8s v1.23+
 	// https://kubernetes.io/docs/tutorials/security/cluster-level-pss/
