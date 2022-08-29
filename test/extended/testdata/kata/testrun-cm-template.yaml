@@ -10,7 +10,7 @@ objects:
       namespace: "${NAMESPACE}"
     data:
       exists: "${EXISTS}"
-      iscpneeded: "${ICSPNEEDED}"
+      icspneeded: "${ICSPNEEDED}"
       catalogsourcename: "${CATSOURCENAME}"
       channel: "${OSCCHANNEL}"
       katamonitormage: "${KATAMONITORIMAGE}"

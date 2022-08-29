@@ -30,8 +30,9 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		subTemplate          = filepath.Join(testDataDir, "subscription_template.yaml")
 		kcLogLevel           = "info"
 		kcMonitorImageName   = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:1.2.0"
-		mustGatherImage      = "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.2.0"
-		release              = "GA"
+		mustGatherImage      = "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.3.0"
+		icspName             = "kata-brew-registry"
+		icspFile             = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
 	)
 
 	subscription := subscriptionDescription{
@@ -44,9 +45,6 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		operatorPackage:        "sandboxed-containers-operator",
 		template:               subTemplate,
 	}
-
-	// prerelease overrides for must-gather 42167
-	release = "pre-GA"
 
 	g.BeforeEach(func() {
 		// Creating/deleting kataconfig reboots all worker node and extended-platform-tests may timeout.
@@ -446,7 +444,6 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			nodeControlCount      = 0
 			nodeWorkerCount       = 0
 			podNs                 = oc.Namespace()
-			preGAregistry         = "kata-brew-registry"
 		)
 
 		mustgatherChecks := counts{
@@ -479,15 +476,6 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			describeServices: 1,
 			describeSub:      1,
 			describeVwebhook: 1,
-		}
-
-		// prerelease overrides
-		if release != "GA" {
-			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("imagecontentsourcepolicy", preGAregistry, "--ignore-not-found").Execute()
-			msg, err = imageContentSourcePolicy(oc, filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml"), preGAregistry)
-			e2e.Logf("Applied ICSP %v %v", msg, err)
-			// must-gather does not need a catalog.  It just needs an ICSP
-			mustGatherImage = "brew.registry.redhat.io/rh-osbs/openshift-sandboxed-containers-operator-must-gather:1.3.0-9"
 		}
 
 		g.By("Create ContainerRuntimeConfig to put worker nodes into debug mode")
@@ -652,31 +640,128 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", "-n", podNs, deployName).Execute()
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("containerruntimeconfig", crioRuntimeConfigName, "-n", subscription.namespace).Execute()
 		os.RemoveAll(mustgatherDir)
-		if release != "GA" {
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("imagecontentsourcepolicy", preGAregistry).Execute()
-		}
 
 		g.By("SUCCESS")
 	})
 
 	// author: tbuskey@redhat.com
 	g.It("Longduration-Author:tbuskey-High-53583-upgrade osc operator [Disruptive][Serial]", func() {
-
-		// declare the starting values
 		var (
 			testrunUpgrade testrunConfigmap
+			cmNs           = "default"
+			cmName         = "osc-config-upgrade"
+			subUpgrade     = subscription
+			label          string
+			msg            string
+			err            error
+			podsChanged    = false
 		)
 
-		g.By("Start")
-		testrunUpgrade, msg, err := getTestRunInput(oc, subscription, kcMonitorImageName, mustGatherImage, "default", "osc-config-upgrade")
+		g.By("Checking for configmap " + cmName)
+		testrunUpgrade, msg, err = getTestRunInput(oc, subUpgrade, kcMonitorImageName, mustGatherImage, cmNs, cmName)
+
 		if testrunUpgrade.exists {
-			e2e.Logf("Upgrade with testrun should be performed: %v", testrunUpgrade)
+			msg = fmt.Sprintf("Upgrade with testrun will be performed with %v", testrunUpgrade)
+			g.By(msg)
+
+			if testrunUpgrade.icspNeeded {
+				g.By("Installing ImageContentSourcePolicy")
+				// apply icsp.  Do not delete or pods can get ImagePullBackoff
+				msg, err = imageContentSourcePolicy(oc, icspFile, icspName)
+				if err != nil || msg == "" {
+					logErrorAndFail(oc, fmt.Sprintf("Error: applying ICSP"), msg, err)
+				}
+			}
+
+			if testrunUpgrade.catalogSourceName != subUpgrade.catalogSourceName {
+				// catalog should already exist, but verify to ensure it is ready
+				g.By("Check for existence of catalog " + testrunUpgrade.catalogSourceName)
+				errCheck := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+					msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", testrunUpgrade.catalogSourceName, "-n", subUpgrade.catalogSourceNamespace, "-o=jsonpath={.status.connectionState.lastObservedState}").Output()
+					if msg == "READY" {
+						return true, nil
+					}
+					return false, nil
+				})
+				exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("catalog %v is not found.  Will not upgrade: %v %v", testrunUpgrade.catalogSourceName, msg, err))
+
+				g.By("Check catalog for " + subUpgrade.subName)
+				label = fmt.Sprintf("catalog=%v", testrunUpgrade.catalogSourceName)
+				errCheck = wait.Poll(10*time.Second, 240*time.Second, func() (bool, error) {
+					msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-l", label, "-n", subUpgrade.catalogSourceNamespace).Output()
+					if strings.Contains(msg, subUpgrade.subName) {
+						return true, nil
+					}
+					return false, nil
+				})
+				exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v is not in the %v catalog. Cannot change subscription: %v %v", subUpgrade.subName, testrunUpgrade.catalogSourceName, msg, err))
+
+				g.By("Changing catalogsource in subscription")
+				msg, err = changeSubscriptionCatalog(oc, subUpgrade, testrunUpgrade)
+				if err != nil || msg == "" {
+					logErrorAndFail(oc, fmt.Sprintf("Error: patching the subscription catalog %v", subUpgrade), msg, err)
+				}
+
+				// wait for subscription to finish
+				msg, err = subscriptionIsFinished(oc, subUpgrade)
+				if err != nil || msg == "" {
+					logErrorAndFail(oc, fmt.Sprintf("Error: subscription wait failed %v", subUpgrade), msg, err)
+				}
+			}
+
+			if testrunUpgrade.channel != subUpgrade.channel {
+				g.By("Changing the subscription channel")
+				msg, err = changeSubscriptionChannel(oc, subUpgrade, testrunUpgrade)
+				if err != nil || msg == "" {
+					logErrorAndFail(oc, fmt.Sprintf("Error: patching the subscription channel %v", subUpgrade), msg, err)
+				}
+
+				// all pods restart & subscription gets recreated
+				msg, err = subscriptionIsFinished(oc, subUpgrade)
+				if err != nil || msg == "" {
+					logErrorAndFail(oc, fmt.Sprintf("Error: subscription wait failed for %v", subUpgrade), msg, err)
+				}
+				// check that controller manager pod is running?
+			}
+
+			if testrunUpgrade.katamonitorImage != kcMonitorImageName {
+				g.By("Changing the monitor image & pods")
+				msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", subUpgrade.namespace, "-l", "name=openshift-sandboxed-containers-monitor", "-o=jsonpath={.items..metadata.name}").Output()
+				if err != nil || msg == "" {
+					logErrorAndFail(oc, fmt.Sprintf("Error: cannot get the monitor pod names before patching kataconfig monitor images"), msg, err)
+				}
+				oldpods := strings.Fields(msg)
+
+				msg, err = changeKataMonitorImage(oc, subUpgrade, testrunUpgrade, commonKataConfigName)
+				if err != nil || msg == "" {
+					logErrorAndFail(oc, fmt.Sprintf("Error: cannot patch kataconfig with monitor image"), msg, err)
+				}
+
+				g.By("Wait & check for kata monitor image change")
+				// starts changing 40s after
+				for podsChanged != true {
+					msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", subUpgrade.namespace, "-l", "name=openshift-sandboxed-containers-monitor", "-o=jsonpath={.items..metadata.name}").Output()
+					for _, pod := range oldpods {
+						if strings.Contains(msg, pod) {
+							podsChanged = false
+							break // no use checking the rest
+						} else {
+							podsChanged = true
+						}
+					}
+					time.Sleep(10 * time.Second)
+				}
+				if podsChanged != true {
+					e2e.Logf("monitor pods did not upgrade from %v to %v %v", oldpods, msg, err)
+					o.Expect(podsChanged).To(o.BeTrue())
+				}
+
+			}
+
 		} else {
 			e2e.Logf("Upgrade will not be done: %v\n%v %v", testrunUpgrade, msg, err)
 		}
 
 		g.By("SUCCESS")
-
 	})
-
 })

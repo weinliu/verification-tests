@@ -29,7 +29,7 @@ type subscriptionDescription struct {
 
 type testrunConfigmap struct {
 	exists            bool
-	catalogsourceName string
+	catalogSourceName string
 	channel           string
 	icspNeeded        bool
 	mustgatherImage   string
@@ -128,17 +128,7 @@ func createKataConfig(oc *exutil.CLI, kcTemplate, kcName, kcMonitorImageName, kc
 
 	g.By("(2.3) Wait for kataconfig to finish install")
 	// Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
-	errCheck = wait.Poll(30*time.Second, kataSnooze*time.Second, func() (bool, error) {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-o=jsonpath={.status.installationStatus.IsInProgress}").Output()
-		if strings.Contains(msg, "false") {
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("kataconfig %v did not finish install", kcName))
-
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "--no-headers").Output()
-	msg = "SUCCESS kataconfig is created " + msg
+	msg, err = waitForKataconfig(oc, kcName)
 	return msg, err
 }
 
@@ -242,7 +232,6 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 		csvName string
 		v       string
 	)
-	g.By("Check that operator is AtLatestKnown")
 	errCheck := wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}").Output()
 		// o.Expect(err).NotTo(o.HaveOccurred())
@@ -252,12 +241,12 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 		}
 		return false, nil
 	})
-	e2e.Logf("Subscription %v %v, %v", msg, err, errCheck)
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("subscription %v is not correct status in ns %v", sub.subName, sub.namespace))
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Error: subscription %v is not correct status in ns %v", sub.subName, sub.namespace))
 
-	g.By("Get csvName to check its finish")
 	csvName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installedCSV}").Output()
-	// e2e.Logf("csvName %v %v", csvName, err)
+	if err != nil || csvName == "" {
+		e2e.Logf("Error: get sub for installedCSV %v %v", csvName, err)
+	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(csvName).NotTo(o.BeEmpty())
 
@@ -272,11 +261,9 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 		}
 		return false, nil
 	})
-	e2e.Logf("csv %v: %v %v", csvName, msg, err)
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status in ns %v: %v %v", csvName, sub.namespace, msg, err))
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Error: csv %v is not correct status in ns %v: %v %v", csvName, sub.namespace, msg, err))
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "--no-headers").Output()
 	return msg, err
-
 }
 
 // author: valiev@redhat.com
@@ -294,10 +281,10 @@ func waitForNodesInDebug(oc *exutil.CLI) (msg string, err error) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	workerNodeCount := len(workerNodeList)
 	if workerNodeCount < 1 {
-		e2e.Logf("ERROR no worker nodes: %v, %v %v", workerNodeList, msg, err)
+		e2e.Logf("Error: no worker nodes: %v, %v %v", workerNodeList, msg, err)
 	}
 	o.Expect(workerNodeList).NotTo(o.BeEmpty())
-	e2e.Logf("Waiting for %v nodes to enter debug: %v", workerNodeCount, workerNodeList)
+	//e2e.Logf("Waiting for %v nodes to enter debug: %v", workerNodeCount, workerNodeList)
 
 	// loop all workers until they all have debug
 	errCheck := wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
@@ -314,24 +301,24 @@ func waitForNodesInDebug(oc *exutil.CLI) (msg string, err error) {
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("only %v of %v total worker nodes are in debug: %v\n %v", count, workerNodeCount, workerNodeList, msg, err))
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Error: only %v of %v total worker nodes are in debug: %v\n %v", count, workerNodeCount, workerNodeList, msg, err))
 	msg = fmt.Sprintf("All %v worker nodes are in debug mode: %v", workerNodeCount, workerNodeList)
 	err = nil
 	return msg, err
 }
 
 // author: tbuskey@redhat.com
-func imageContentSourcePolicy(oc *exutil.CLI, configFile, name string) (msg string, err error) {
+func imageContentSourcePolicy(oc *exutil.CLI, icspFile, icspName string) (msg string, err error) {
 	g.By("Applying ImageContentSourcePolicy")
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Output()
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", icspFile).Output()
 	errCheck := wait.Poll(10*time.Second, 360*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy", "--no-headers").Output()
-		if strings.Contains(msg, name) {
+		if strings.Contains(msg, icspName) {
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("applying ImageContentSourcePolicy %v failed: %v %v", configFile, msg, err))
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Error: applying ImageContentSourcePolicy %v failed: %v %v", icspFile, msg, err))
 	return msg, err
 }
 
@@ -368,38 +355,35 @@ func waitForDeployment(oc *exutil.CLI, podNs, deployName string) (msg string, er
 func getTestRunInput(oc *exutil.CLI, subscription subscriptionDescription, katamonitorImage, mustgatherImage, cmNs, cmName string) (testrun testrunConfigmap, msg string, err error) {
 	testrun = testrunConfigmap{
 		exists:            false,
-		catalogsourceName: subscription.catalogSourceName,
+		catalogSourceName: subscription.catalogSourceName,
 		channel:           subscription.channel,
 		icspNeeded:        false,
 		mustgatherImage:   mustgatherImage,
 		katamonitorImage:  katamonitorImage,
 	}
 
-	// is it there?
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs, cmName).Output()
 	if err != nil {
-		e2e.Logf("STEP Configmap is not found: msg %v err: %v", msg, err)
+		e2e.Logf("Configmap is not found: msg %v err: %v", msg, err)
 		testrun.exists = false
 	} else {
 		testrun.exists = true
 
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs, cmName, "-o=jsonpath={.data}").Output()
-		e2e.Logf("STEP .data from %v: %v %v", cmName, msg, err)
+		if err != nil {
+			e2e.Failf("Configmap %v has error, no .data: %v %v", cmName, msg, err)
+		}
 
-		// look at all the items for a value.  If they are not empty, change the defaults
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.catalogsourcename}", "-n", cmNs).Output()
 		if err == nil {
-			e2e.Logf("STEP testrun catalogsourcename %v, err %v", msg, err)
-			testrun.catalogsourceName = msg
+			testrun.catalogSourceName = msg
 		}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.channel}", "-n", cmNs).Output()
 		if err == nil {
-			e2e.Logf("STEP testrun channel %v, err %v", msg, err)
 			testrun.channel = msg
 		}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.icspneeded}", "-n", cmNs).Output()
 		if err == nil {
-			e2e.Logf("STEP testrun icspneeded %v, err %v", msg, err)
 			testrun.icspNeeded, err = strconv.ParseBool(msg)
 			if err != nil {
 				e2e.Failf("Error in %v config map.  icspneeded must be a golang true or false string", cmName)
@@ -407,14 +391,57 @@ func getTestRunInput(oc *exutil.CLI, subscription subscriptionDescription, katam
 		}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.katamonitormage}", "-n", cmNs).Output()
 		if err == nil {
-			e2e.Logf("STEP testrun katamonitormage %v, err %v", msg, err)
 			testrun.katamonitorImage = msg
 		}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.mustgatherimage}", "-n", cmNs).Output()
 		if err == nil {
-			e2e.Logf("STEP testrun mustgatherimage %v, err %v", msg, err)
 			testrun.mustgatherImage = msg
 		}
 	}
 	return testrun, msg, err
+}
+
+func waitForKataconfig(oc *exutil.CLI, kcName string) (msg string, err error) {
+	// Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
+	errCheck := wait.Poll(30*time.Second, kataSnooze*time.Second, func() (bool, error) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-o=jsonpath={.status.installationStatus.IsInProgress}{.status.unInstallationStatus.inProgress.status}").Output()
+		// false, "" is done
+		// true, "" install is in progress
+		// falseTrue uninstall (delete) is in progress
+		if msg == "false" {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("kataconfig %v did not finish install", kcName))
+
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "--no-headers").Output()
+	msg = "SUCCESS kataconfig is created " + msg
+	return msg, err
+}
+
+func changeSubscriptionCatalog(oc *exutil.CLI, subscription subscriptionDescription, testrun testrunConfigmap) (msg string, err error) {
+	// check for catsrc existence before calling
+	patch := fmt.Sprintf("{\"spec\":{\"source\":\"%v\"}}", testrun.catalogSourceName)
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("sub", subscription.subName, "--type", "merge", "-p", patch, "-n", subscription.namespace).Output()
+	return msg, err
+}
+
+func changeSubscriptionChannel(oc *exutil.CLI, subscription subscriptionDescription, testrun testrunConfigmap) (msg string, err error) {
+	patch := fmt.Sprintf("{\"spec\":{\"channel\":\"%v\"}}", testrun.channel)
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("sub", subscription.subName, "--type", "merge", "-p", patch, "-n", subscription.namespace).Output()
+	return msg, err
+}
+
+func changeKataMonitorImage(oc *exutil.CLI, subscription subscriptionDescription, testrun testrunConfigmap, kcName string) (msg string, err error) {
+	patch := fmt.Sprintf("{\"spec\":{\"kataMonitorImage\":\"%v\"}}", testrun.katamonitorImage)
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kataconfig", kcName, "--type", "merge", "-p", patch, "-n", subscription.namespace).Output()
+	return msg, err
+}
+
+func logErrorAndFail(oc *exutil.CLI, logMsg, msg string, err error) {
+	e2e.Logf("%v: %v %v", logMsg, msg, err)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(msg).NotTo(o.BeEmpty())
+
 }
