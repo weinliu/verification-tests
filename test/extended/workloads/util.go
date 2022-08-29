@@ -1003,3 +1003,18 @@ func createSpecialRegistry(oc *exutil.CLI, namespace string, ssldir string, dock
 	}
 	return registryHost
 }
+
+func checkNodeUncordoned(oc *exutil.CLI, workerNodeName string) error {
+	return wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
+		schedulableStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", workerNodeName, "-o=jsonpath={.spec}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\nNode Schedulable Status is %s\n", schedulableStatus)
+		if !strings.Contains(schedulableStatus, "unschedulable") {
+			e2e.Logf("\n WORKER NODE IS READY\n ")
+		} else {
+			e2e.Logf("\n WORKERNODE IS NOT READY\n ")
+			return false, nil
+		}
+		return true, nil
+	})
+}

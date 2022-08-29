@@ -1,16 +1,17 @@
 package workloads
 
 import (
+	"fmt"
 	"reflect"
 	"regexp"
 	"sort"
+	"strings"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
-	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 var _ = g.Describe("[sig-apps] Workloads", func() {
@@ -108,17 +109,47 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 	g.It("Author:knarra-High-44049-DefaultPodTopologySpread doesn't work in non-CloudProvider env in OpenShift 4.7 [Disruptive][Flaky]", func() {
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		workerNodeList, err := exutil.GetClusterNodesBy(oc, "worker")
+		e2e.Logf("workernodeList is %v", workerNodeList)
 		// Create test project
 		g.By("Create test project")
 		oc.SetupProject()
 
-		// Label nodes
+		// check and label the worker node with topology.kubernetes.io/zone if it is not present
+		Output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", workerNodeList[0], "-o", "jsonpath='{.metadata.labels}'").Output()
+		e2e.Logf("Output is %v", Output)
+		if strings.Contains(Output, "topology.kubernetes.io/zone") {
+			g.Skip("Worker node has zone label so the test can be skipped, as this is only meant for worker with no zone label, for more info please refer BZ1979433")
+			return
+		}
+		defer func() {
+			for _, v := range workerNodeList {
+				oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", fmt.Sprintf("%s", v)).Execute()
+			}
+			for _, v := range workerNodeList {
+				err = checkNodeUncordoned(oc, v)
+				exutil.AssertWaitPollNoErr(err, "node is not ready")
+			}
+		}()
+
+		for _, v := range workerNodeList {
+			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("cordon", fmt.Sprintf("%s", v)).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		// Uncordon first two nodes
+		g.By("Uncordon first two nodes")
+		err = oc.AsAdmin().Run("adm").Args("uncordon", workerNodeList[0]).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().Run("adm").Args("uncordon", workerNodeList[1]).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		g.By("Label Node1 & Node2")
-		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "topology.kubernetes.io/zone")
-		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "topology.kubernetes.io/zone", "ocp44049zoneA")
-		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "topology.kubernetes.io/zone")
-		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "topology.kubernetes.io/zone", "ocp44049zoneB")
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workerNodeList[0], "topology.kubernetes.io/zone")
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workerNodeList[0], "topology.kubernetes.io/zone", "ocp44049zoneA")
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workerNodeList[1], "topology.kubernetes.io/zone")
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workerNodeList[1], "topology.kubernetes.io/zone", "ocp44049zoneB")
 
 		// Test starts here
 		// Test for Large pods
@@ -134,7 +165,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 			e2e.Logf("All pods are runnnig now\n")
 		}
 
-		expectNodeList := []string{nodeList.Items[0].Name, nodeList.Items[1].Name}
+		expectNodeList := []string{workerNodeList[0], workerNodeList[1]}
 		g.By("Geting the node list where pods running")
 		lpodNodeList := getPodNodeListByLabel(oc, oc.Namespace(), "app=ocp44049large")
 		sort.Strings(lpodNodeList)
