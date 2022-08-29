@@ -1797,3 +1797,16 @@ func (aclSettings *aclSettings) getJSONString() string {
 	annotationString := "k8s.ovn.org/acl-logging=" + string(jsonACLSetting)
 	return annotationString
 }
+
+func enableACLOnNamespace(oc *exutil.CLI, namespace, denyLevel, allowLevel string) {
+	e2e.Logf("Enable ACL looging on the namespace %s", namespace)
+	aclSettings := aclSettings{DenySetting: denyLevel, AllowSetting: allowLevel}
+	err1 := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("--overwrite", "ns", namespace, aclSettings.getJSONString()).Execute()
+	o.Expect(err1).NotTo(o.HaveOccurred())
+}
+
+func disableACLOnNamespace(oc *exutil.CLI, namespace string) {
+	e2e.Logf("Disable ACL looging on the namespace %s", namespace)
+	err1 := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("ns", namespace, "k8s.ovn.org/acl-logging-").Execute()
+	o.Expect(err1).NotTo(o.HaveOccurred())
+}
