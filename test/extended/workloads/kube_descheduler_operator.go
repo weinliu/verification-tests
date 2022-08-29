@@ -55,7 +55,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	}
 
 	// author: knarra@redhat.com
-	g.It("Author:knarra-High-21205-Low-36584-Install descheduler operator via a deployment & verify it should not violate PDB [Slow] [Disruptive] [Flaky]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-21205-Low-36584-Install descheduler operator via a deployment & verify it should not violate PDB [Slow] [Disruptive] [Flaky]", func() {
 		exutil.SkipARM64(oc)
 		deploydpT := filepath.Join(buildPruningBaseDir, "deploy_duplicatepodsrs.yaml")
 
@@ -256,7 +256,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("Author:knarra-High-37463-High-40055-Descheduler-Validate AffinityAndTaints and TopologyAndDuplicates profile [Disruptive][Slow] [Flaky]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-37463-High-40055-Descheduler-Validate AffinityAndTaints and TopologyAndDuplicates profile [Disruptive][Slow] [Flaky]", func() {
 		exutil.SkipARM64(oc)
 		deployT := filepath.Join(buildPruningBaseDir, "deploy_nodeaffinity.yaml")
 		deploynT := filepath.Join(buildPruningBaseDir, "deploy_nodetaint.yaml")
@@ -627,7 +627,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("Longduration-NonPreRelease-Author:knarra-High-43287-High-43283-Descheduler-Descheduler operator should verify config does not conflict with scheduler and SoftTopologyAndDuplicates profile [Disruptive][Slow]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:knarra-High-43287-High-43283-Descheduler-Descheduler operator should verify config does not conflict with scheduler and SoftTopologyAndDuplicates profile [Disruptive][Slow]", func() {
 		exutil.SkipARM64(oc)
 		deploysptT := filepath.Join(buildPruningBaseDir, "deploy_softPodTopologySpread.yaml")
 		deploysdT := filepath.Join(buildPruningBaseDir, "deploy_softdemopod.yaml")
@@ -883,7 +883,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("Author:knarra-Medium-43277-High-50941-Descheduler-Validate Predictive and Automatic mode for descheduler [Flaky][Slow][Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Medium-43277-High-50941-Descheduler-Validate Predictive and Automatic mode for descheduler [Flaky][Slow][Disruptive]", func() {
 		exutil.SkipARM64(oc)
 		deschedulerpT := filepath.Join(buildPruningBaseDir, "kubedescheduler_podlifetime.yaml")
 
@@ -1018,7 +1018,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("Author:knarra-High-50193-High-50191-Descheduler-Validate priorityFiltering with thresholdPriorityClassName & thresholdPriority param [Disruptive][Slow] [Flaky]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-50193-High-50191-Descheduler-Validate priorityFiltering with thresholdPriorityClassName & thresholdPriority param [Disruptive][Slow] [Flaky]", func() {
 		exutil.SkipARM64(oc)
 		deschedulerpcN := filepath.Join(buildPruningBaseDir, "kubedescheduler_priorityclassname.yaml")
 		deploypT := filepath.Join(buildPruningBaseDir, "deploy_interpodantiaffinity.yaml")
@@ -1206,7 +1206,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("Author:knarra-High-52303-Descheduler-Validate namespace filtering [Slow][Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-52303-Descheduler-Validate namespace filtering [Slow][Disruptive]", func() {
 		deschedulerinsT := filepath.Join(buildPruningBaseDir, "kubedescheduler_includins.yaml")
 		deschedulereinsT := filepath.Join(buildPruningBaseDir, "kubedescheduler_includeexcludens.yaml")
 
@@ -1353,7 +1353,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("NonPreRelease-Author:knarra-High-53058-Descheduler-Validate exclude namespace filtering	[Slow][Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-ARO-NonPreRelease-Author:knarra-High-53058-Descheduler-Validate exclude namespace filtering	[Slow][Disruptive]", func() {
 		exutil.SkipARM64(oc)
 		deschedulerinsT := filepath.Join(buildPruningBaseDir, "kubedescheduler_excludins.yaml")
 

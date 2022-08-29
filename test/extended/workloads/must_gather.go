@@ -19,7 +19,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	)
 
 	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-Medium-45694-Support to collect olm data in must-gather [Slow]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-45694-Support to collect olm data in must-gather [Slow]", func() {
 		g.By("create new namespace")
 		oc.SetupProject()
 
@@ -41,10 +41,10 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			"namespaces/openshift-logging/operators.coreos.com/subscriptions",
 		}
 		for _, v := range checkMessage {
-                        if !strings.Contains(mustGather, v) {
-                                e2e.Failf("Failed to check the olm data: " + v)
-                        }
-                }
+			if !strings.Contains(mustGather, v) {
+				e2e.Failf("Failed to check the olm data: " + v)
+			}
+		}
 	})
 
 })

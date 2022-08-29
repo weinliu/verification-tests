@@ -66,7 +66,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-High-43039-openshift-object-counts quota dynamically updating as the resource is deleted", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-43039-openshift-object-counts quota dynamically updating as the resource is deleted", func() {
 		g.By("Test for case OCP-43039 openshift-object-counts quota dynamically updating as the resource is deleted")
 		g.By("create new namespace")
 		oc.SetupProject()
@@ -127,7 +127,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-Medium-43092-Namespaced dependents try to use cross-namespace owner references will be deleted", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-43092-Namespaced dependents try to use cross-namespace owner references will be deleted", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		deploydpT := filepath.Join(buildPruningBaseDir, "deploy_duplicatepodsrs.yaml")
 
@@ -183,7 +183,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		}
 	})
 	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-Medium-43099-Cluster-scoped dependents with namespaced kind owner references will trigger warning Event [Flaky]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-43099-Cluster-scoped dependents with namespaced kind owner references will trigger warning Event [Flaky]", func() {
 		g.By("Create the first namespace")
 		err := oc.WithoutNamespace().Run("new-project").Args("p43099").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -271,7 +271,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-High-50255-make sure disabled JobTrackingWithFinalizers", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-50255-make sure disabled JobTrackingWithFinalizers", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		cronjobF := filepath.Join(buildPruningBaseDir, "cronjob50255.yaml")
 		g.By("create new namespace")
