@@ -9,7 +9,7 @@ import (
 
 // ContainerRuntimeConfig struct is used to handle ContainerRuntimeConfig resources in OCP
 type ContainerRuntimeConfig struct {
-	*Resource
+	Resource
 	template string
 }
 
@@ -20,7 +20,7 @@ type ContainerRuntimeConfigList struct {
 
 // NewContainerRuntimeConfig creates a ContainerRuntimeConfig struct
 func NewContainerRuntimeConfig(oc *exutil.CLI, name, template string) *ContainerRuntimeConfig {
-	return &ContainerRuntimeConfig{Resource: NewResource(oc, "ContainerRuntimeConfig", name), template: template}
+	return &ContainerRuntimeConfig{Resource: *NewResource(oc, "ContainerRuntimeConfig", name), template: template}
 }
 
 // NewContainerRuntimeConfigList create a NewKubeletConfigList struct

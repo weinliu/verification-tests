@@ -42,7 +42,7 @@ type MachineConfig struct {
 // MachineConfigPool struct is used to handle MachineConfigPool resources in OCP
 type MachineConfigPool struct {
 	template string
-	*Resource
+	Resource
 }
 
 // PodDisruptionBudget struct is used to handle PodDisruptionBudget resources in OCP
@@ -68,7 +68,7 @@ type TextToVerify struct {
 
 // NewMachineConfigPool create a NewMachineConfigPool struct
 func NewMachineConfigPool(oc *exutil.CLI, name string) *MachineConfigPool {
-	return &MachineConfigPool{Resource: NewResource(oc, "mcp", name)}
+	return &MachineConfigPool{Resource: *NewResource(oc, "mcp", name)}
 }
 
 func (mc *MachineConfig) create(oc *exutil.CLI) {

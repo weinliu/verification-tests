@@ -14,7 +14,7 @@ import (
 
 // Event struct is used to handle Event resources in OCP
 type Event struct {
-	*Resource
+	Resource
 }
 
 // EventList handles list of nodes
@@ -24,7 +24,7 @@ type EventList struct {
 
 // NewEvent create a Event struct
 func NewEvent(oc *exutil.CLI, namespace, name string) *Event {
-	return &Event{Resource: NewNamespacedResource(oc, "Event", namespace, name)}
+	return &Event{Resource: *NewNamespacedResource(oc, "Event", namespace, name)}
 }
 
 // String implements the Stringer interface

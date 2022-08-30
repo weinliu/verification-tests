@@ -9,7 +9,7 @@ import (
 
 // KubeletConfig struct is used to handle KubeletConfig resources in OCP
 type KubeletConfig struct {
-	*Resource
+	Resource
 	template string
 }
 
@@ -20,7 +20,7 @@ type KubeletConfigList struct {
 
 // NewKubeletConfig create a NewKubeletConfig struct
 func NewKubeletConfig(oc *exutil.CLI, name, template string) *KubeletConfig {
-	return &KubeletConfig{Resource: NewResource(oc, "KubeletConfig", name), template: template}
+	return &KubeletConfig{Resource: *NewResource(oc, "KubeletConfig", name), template: template}
 }
 
 // NewKubeletConfigList create a NewKubeletConfigList struct

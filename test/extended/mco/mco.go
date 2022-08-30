@@ -975,13 +975,13 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
 			defer kc.DeleteOrFail()
 			kc.create()
-			createdKcs = append(createdKcs, *kc)
+			createdKcs = append(createdKcs, kc)
 			logger.Infof("Created:\n %s", kcName)
 		}
 
 		g.By("Created kubeletconfigs must be successful")
 		for _, kcItem := range createdKcs {
-			kcItem.(KubeletConfig).waitUntilSuccess("10s")
+			kcItem.(*KubeletConfig).waitUntilSuccess("10s")
 		}
 
 		g.By(fmt.Sprintf("Check that %d machine configs were created", kcsLimit-existingKcs))
@@ -1000,7 +1000,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		g.By("Created kubeletconfigs inside the limit must be successful")
 		for _, kcItem := range createdKcs {
-			kcItem.(KubeletConfig).waitUntilSuccess("10s")
+			kcItem.(*KubeletConfig).waitUntilSuccess("10s")
 		}
 
 		g.By("Check that only the right machine configs were created")
@@ -1047,13 +1047,13 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			cr := NewContainerRuntimeConfig(oc.AsAdmin(), crName, crTemplate)
 			defer cr.DeleteOrFail()
 			cr.create()
-			createdCrs = append(createdCrs, *cr)
+			createdCrs = append(createdCrs, cr)
 			logger.Infof("Created:\n %s", crName)
 		}
 
 		g.By("Created ContainerRuntimeConfigs must be successful")
 		for _, crItem := range createdCrs {
-			crItem.(ContainerRuntimeConfig).waitUntilSuccess("10s")
+			crItem.(*ContainerRuntimeConfig).waitUntilSuccess("10s")
 		}
 
 		g.By(fmt.Sprintf("Check that %d machine configs were created", crsLimit-existingCrs))
@@ -1074,7 +1074,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		g.By("Created kubeletconfigs inside the limit must be successful")
 		for _, crItem := range createdCrs {
-			crItem.(ContainerRuntimeConfig).waitUntilSuccess("10s")
+			crItem.(*ContainerRuntimeConfig).waitUntilSuccess("10s")
 		}
 
 		g.By("Check that only the right machine configs were created")
