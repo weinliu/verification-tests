@@ -450,7 +450,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-42390-add machine config without ignition version [Serial]", func() {
+	g.It("Author:rioliu-NonPreRelease-High-42390-Critical-45318-add machine config without ignition version [Serial]", func() {
 		createMcAndVerifyIgnitionVersion(oc, "empty ign version", "change-worker-ign-version-to-empty", "")
 	})
 
