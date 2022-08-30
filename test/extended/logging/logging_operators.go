@@ -281,14 +281,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 
 		proj3 := "logging-46775-1-" + getRandomString()
 		defer oc.WithoutNamespace().Run("delete").Args("project", proj3).Execute()
-		err = oc.WithoutNamespace().Run("new-project").Args(proj3).Execute()
+		err = oc.WithoutNamespace().Run("create").Args("namespace", proj3).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.WithoutNamespace().Run("new-app").Args("-n", proj3, "-f", logFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		proj4 := "logging-46775-2-" + getRandomString()
 		defer oc.WithoutNamespace().Run("delete").Args("project", proj4).Execute()
-		err = oc.WithoutNamespace().Run("new-project").Args(proj4).Execute()
+		err = oc.WithoutNamespace().Run("create").Args("namespace", proj4).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.WithoutNamespace().Run("new-app").Args("-n", proj4, "-f", logFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())

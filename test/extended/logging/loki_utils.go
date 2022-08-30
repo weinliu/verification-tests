@@ -25,6 +25,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/gophercloud/gophercloud"
 	"github.com/gophercloud/gophercloud/openstack"
+	tokens3 "github.com/gophercloud/gophercloud/openstack/identity/v3/tokens"
 	"github.com/gophercloud/gophercloud/openstack/identity/v3/users"
 	"github.com/gophercloud/gophercloud/openstack/objectstorage/v1/containers"
 	"github.com/gophercloud/gophercloud/openstack/objectstorage/v1/objects"
@@ -49,6 +50,7 @@ const (
 	seriesPath      = "/loki/api/v1/series"
 	tailPath        = "/loki/api/v1/tail"
 	minioNS         = "minio-aosqe"
+	minioSecret     = "minio-creds"
 )
 
 // s3Credential defines the s3 credentials
@@ -109,7 +111,7 @@ func getMinIOCreds(oc *exutil.CLI, ns string) s3Credential {
 	err := os.MkdirAll(dirname, 0777)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/minio-creds", "-n", ns, "--confirm", "--to="+dirname).Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/"+minioSecret, "-n", ns, "--confirm", "--to="+dirname).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	accessKeyID, err := os.ReadFile(dirname + "/access_key_id")
@@ -266,7 +268,7 @@ func createSecretForMinIOBucket(oc *exutil.CLI, bucketName, secretName, ns, minI
 	err := os.MkdirAll(dirname, 0777)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/minio-creds", "-n", minIONS, "--confirm", "--to="+dirname).Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/"+minioSecret, "-n", minIONS, "--confirm", "--to="+dirname).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	endpoint := "http://minio." + minIONS + ".svc"
@@ -610,13 +612,35 @@ func newOpenStackClient(cred *openstackCredentials, serviceType string) *gopherc
 	return client
 }
 
+func getAuthenticatedUserID(providerClient *gophercloud.ProviderClient) (string, error) {
+	//copied from https://github.com/gophercloud/gophercloud/blob/master/auth_result.go
+	res := providerClient.GetAuthResult()
+	if res == nil {
+		//ProviderClient did not use openstack.Authenticate(), e.g. because token
+		//was set manually with ProviderClient.SetToken()
+		return "", fmt.Errorf("no AuthResult available")
+	}
+	switch r := res.(type) {
+	case tokens3.CreateResult:
+		u, err := r.ExtractUser()
+		if err != nil {
+			return "", err
+		}
+		return u.ID, nil
+	default:
+		return "", fmt.Errorf("got unexpected AuthResult type %t", r)
+	}
+}
+
 func getOpenStackUserIDAndDomainID(cred *openstackCredentials) (string, string) {
+	//normal users don't have permisson to list users, to get user info, must provide user ID
+	//here gets user ID from auth result
 	client := newOpenStackClient(cred, "identity")
-	allUserPages, err := users.List(client, users.ListOpts{Name: cred.Clouds.Openstack.Auth.Username}).AllPages()
+	userID, err := getAuthenticatedUserID(client.ProviderClient)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	allUsers, err := users.ExtractUsers(allUserPages)
+	user, err := users.Get(client, userID).Extract()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	return allUsers[0].ID, allUsers[0].DomainID
+	return userID, user.DomainID
 }
 
 func createOpenStackContainer(client *gophercloud.ServiceClient, name string) error {
@@ -669,9 +693,7 @@ func listOpenStackContainerObjects(client *gophercloud.ServiceClient, name strin
 	names := []string{}
 	err := pager.EachPage(func(page pagination.Page) (bool, error) {
 		objectNames, err := objects.ExtractNames(page)
-		for _, n := range objectNames {
-			names = append(names, n)
-		}
+		names = append(names, objectNames...)
 		return true, err
 	})
 	return names, err
@@ -781,6 +803,13 @@ type lokiStack struct {
 	template      string // the file used to create the loki stack
 }
 
+/*
+func (l lokiStack) setObjectStorageType(objectStorage string) lokiStack {
+	l.storageType = objectStorage
+	return l
+}
+*/
+
 // prepareResourcesForLokiStack creates buckets/containers in backend storage provider, and creates the secret for Loki to use
 func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 	var err error
@@ -792,7 +821,7 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 		{
 			cred := getAWSCredentialFromCluster(oc)
 			client := newAWSS3Client(oc, cred)
-			err := createAWSS3Bucket(oc, client, l.bucketName, cred)
+			err = createAWSS3Bucket(oc, client, l.bucketName, cred)
 			if err != nil {
 				return err
 			}
@@ -801,7 +830,7 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 	case "azure":
 		{
 			client := newAzureContainerClient(oc, l.bucketName)
-			err := createAzureStorageBlobContainer(client)
+			err = createAzureStorageBlobContainer(client)
 			if err != nil {
 				return err
 			}
@@ -809,7 +838,7 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 		}
 	case "gcs":
 		{
-			err := createGCSBucket(getGCPProjectID(oc), l.bucketName)
+			err = createGCSBucket(getGCPProjectID(oc), l.bucketName)
 			if err != nil {
 				return err
 			}
@@ -817,8 +846,8 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 		}
 	case "swift":
 		{
-			cred, err := getOpenStackCredentials(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			cred, err1 := getOpenStackCredentials(oc)
+			o.Expect(err1).NotTo(o.HaveOccurred())
 			client := newOpenStackClient(cred, "object-store")
 			err = createOpenStackContainer(client, l.bucketName)
 			if err != nil {
@@ -830,7 +859,7 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 		{
 			cred := getODFCreds(oc)
 			client := newAWSS3Client(oc, cred)
-			err := createAWSS3Bucket(oc, client, l.bucketName, cred)
+			err = createAWSS3Bucket(oc, client, l.bucketName, cred)
 			if err != nil {
 				return err
 			}
@@ -840,7 +869,7 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 		{
 			cred := getMinIOCreds(oc, minioNS)
 			client := newAWSS3Client(oc, cred)
-			err := createAWSS3Bucket(oc, client, l.bucketName, cred)
+			err = createAWSS3Bucket(oc, client, l.bucketName, cred)
 			if err != nil {
 				return err
 			}
@@ -1189,7 +1218,7 @@ func (c *lokiClient) searchByKey(logType, key, value string) (*lokiQueryResponse
 }
 
 func (c *lokiClient) searchByNamespace(logType, projectName string) (*lokiQueryResponse, error) {
-	res, err := c.searchByKey(logType, "kubernetes_namespace_name", projectName)
+	res, err := c.searchLogsInLoki(logType, "{kubernetes_namespace_name=\""+projectName+"\"}")
 	return res, err
 }
 
@@ -1465,4 +1494,34 @@ func (l externalLoki) remove(oc *exutil.CLI) {
 	resource{"deployment", l.name, l.namespace}.clear(oc)
 	resource{"svc", l.name, l.namespace}.clear(oc)
 	resource{"route", l.name, l.namespace}.clear(oc)
+}
+
+func deployMinIO(oc *exutil.CLI) {
+	// create namespace
+	_, err := oc.AdminKubeClient().CoreV1().Namespaces().Get(minioNS, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", minioNS).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	// create secret
+	_, err = oc.AdminKubeClient().CoreV1().Secrets(minioNS).Get(minioSecret, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", minioSecret, "-n", minioNS, "--from-literal=access_key_id="+getRandomString(), "--from-literal=secret_access_key=passwOOrd"+getRandomString()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	// deploy minIO
+	deployTemplate := exutil.FixturePath("testdata", "logging", "minIO", "deploy.yaml")
+	deployFile, err := processTemplate(oc, "-n", minioNS, "-f", deployTemplate, "-p", "NAMESPACE="+minioNS, "NAME=minio", "SECRET_NAME="+minioSecret)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = oc.AsAdmin().Run("apply").Args("-f", deployFile, "-n", minioNS).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	// wait for minio to be ready
+	for _, rs := range []string{"deployment", "svc", "route"} {
+		resource{rs, "minio", minioNS}.WaitForResourceToAppear(oc)
+	}
+	WaitForDeploymentPodsToBeReady(oc, minioNS, "minio")
+}
+
+func removeMinIO(oc *exutil.CLI) {
+	deleteNamespace(oc, minioNS)
 }

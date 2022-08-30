@@ -355,9 +355,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure"} {
 				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-					res, err := lc.queryRange(logType, "{log_type=\""+logType+"\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
+					res, err := lc.searchByKey(logType, "log_type", logType)
 					if err != nil {
-						e2e.Logf("\n\n\ngot err when getting %s logs: %v\n\n\n", logType, err)
+						e2e.Logf("\ngot err when getting %s logs: %v\n", logType, err)
 						return false, err
 					}
 					if len(res.Data.Result) > 0 {
@@ -379,7 +379,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			lcAudit := newLokiClient(route).withToken(token).retry(5)
 			err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-				res, err := lcAudit.queryRange("audit", "{log_type=\"audit\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
+				res, err := lcAudit.searchLogsInLoki("audit", "{log_type=\"audit\"}")
 				if err != nil {
 					e2e.Logf("\ngot err when getting audit logs: %v\n", err)
 					return false, err
@@ -391,7 +391,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			})
 			exutil.AssertWaitPollNoErr(err, "audit logs are not found")
 
-			appLog, err := lc.queryRange("application", "{kubernetes_namespace_name=\""+appProj+"\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
+			appLog, err := lc.searchByNamespace("application", appProj)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
 		})
@@ -449,7 +449,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure"} {
 				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-					res, err := lc.queryRange(logType, "{log_type=\""+logType+"\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
+					res, err := lc.searchByKey(logType, "log_type", logType)
 					if err != nil {
 						e2e.Logf("\ngot err when getting %s logs: %v\n", logType, err)
 						return false, err
@@ -473,9 +473,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			lcAudit := newLokiClient(route).withToken(token).retry(5)
 			err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-				res, err := lcAudit.queryRange("audit", "{log_type=\"audit\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
+				res, err := lcAudit.searchLogsInLoki("audit", "{log_type=\"audit\"}")
 				if err != nil {
-					e2e.Logf("\n\n\ngot err when getting audit logs: %v\n\n\n", err)
+					e2e.Logf("\ngot err when getting audit logs: %v\n", err)
 					return false, err
 				}
 				if len(res.Data.Result) > 0 {
@@ -485,7 +485,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			})
 			exutil.AssertWaitPollNoErr(err, "audit logs are not found")
 
-			appLog, err := lc.queryRange("application", "{kubernetes_namespace_name=\""+appProj+"\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
+			appLog, err := lc.searchByNamespace("application", appProj)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
 		})

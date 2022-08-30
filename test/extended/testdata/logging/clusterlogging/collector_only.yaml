@@ -18,4 +18,4 @@ parameters:
   - name: NAMESPACE
     value: "openshift-logging"
   - name: COLLECTOR
-    value: fluentd
+    value: "fluentd"

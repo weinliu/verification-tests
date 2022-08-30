@@ -258,10 +258,6 @@ func WaitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name strin
 		e2e.Logf("Waiting for full availability of %s deployment (%d/%d)\n", name, deployment.Status.AvailableReplicas, *deployment.Spec.Replicas)
 		return false, nil
 	})
-	if err != nil {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy/"+name, "-n", namespace, "-ojsonpath={.status}").Output()
-		e2e.Logf("%s", output)
-	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment %s is not availabile", name))
 }
 
@@ -302,12 +298,7 @@ func WaitForDaemonsetPodsToBeReady(oc *exutil.CLI, ns string, name string) {
 		e2e.Logf("Waiting for full availability of %s daemonset (%d/%d)\n", name, daemonset.Status.NumberReady, daemonset.Status.DesiredNumberScheduled)
 		return false, nil
 	})
-	if err != nil {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds/"+name, "-n", ns, "-ojsonpath={.status}").Output()
-		e2e.Logf("%s", output)
-	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Daemonset %s is not availabile", name))
-	e2e.Logf("Daemonset %s is available\n", name)
 }
 
 func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
