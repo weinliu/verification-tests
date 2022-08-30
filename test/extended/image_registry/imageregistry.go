@@ -2831,4 +2831,18 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring(`10909" deleted`))
 	})
 
+	//author: wewang@redhat.com
+	g.It("Author:wewang-VMonly-Medium-23063-Check the related log from must-gather tool", func() {
+		g.By("Gather registry debugging information")
+		errWait := wait.Poll(15*time.Second, 2*time.Minute, func() (bool, error) {
+			defer exec.Command("bash", "-c", "rm -rf ./inspect.local*").Output()
+			output, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("inspect", "co/image-registry").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(output, "Gathering data for ns/openshift-image-registry") && strings.Contains(output, "Wrote inspect data to inspect.local") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "no useful debugging info")
+	})
 })
