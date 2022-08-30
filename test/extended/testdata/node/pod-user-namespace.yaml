@@ -14,7 +14,7 @@ objects:
   spec:
     containers:
     - name: userns-test-1
-      image: quay.io/openshifttest/fedora:multiarch
+      image: quay.io/openshifttest/fedora:1.2.0
       command: ["sleep", "3601"]
 parameters:      
 - name: NAME

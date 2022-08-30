@@ -11,7 +11,7 @@ objects:
   spec:
     containers:
     - name: hello-pod
-      image: quay.io/openshifttest/hello-openshift:multiarch
+      image: quay.io/openshifttest/hello-openshift:1.2.0
       ports:
       - containerPort: 8080
       volumeMounts:

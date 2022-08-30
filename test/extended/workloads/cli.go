@@ -360,7 +360,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		oc.SetupProject()
 
 		g.By("Create the deploy")
-		err := oc.Run("create").Args("deploy", "d49116", "--image", "quay.io/openshifttest/hello-openshift@sha256:b1aabe8c8272f750ce757b6c4263a2712796297511e0c6df79144ee188933623", "-n", oc.Namespace()).Execute()
+		err := oc.Run("create").Args("deploy", "d49116", "--image", "quay.io/openshifttest/hello-openshift@sha256:56c354e7885051b6bb4263f9faa58b2c292d44790599b7dde0e49e7c466cf339", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("patch the deploy with startupProbe")
@@ -593,7 +593,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 		g.By("Trying to launch a registry app")
 		registry := registry{
-			dockerImage: "quay.io/openshifttest/registry:multiarch",
+			dockerImage: "quay.io/openshifttest/registry:1.2.0",
 			namespace:   ns,
 		}
 		defer registry.deleteregistry(oc)

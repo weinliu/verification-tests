@@ -24,8 +24,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		ns := "26401-upgrade-ns"
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		blockedRoute := setSecureRegistryWithoutAuth(oc, ns, "blockedreg", "quay.io/openshifttest/registry@sha256:01493571d994fd021da18c1f87aba1091482df3fc20825f443b4e60b3416c820", "5000")
-		insecuredRoute := setSecureRegistryWithoutAuth(oc, ns, "insecuredreg", "quay.io/openshifttest/registry@sha256:01493571d994fd021da18c1f87aba1091482df3fc20825f443b4e60b3416c820", "5000")
+		blockedRoute := setSecureRegistryWithoutAuth(oc, ns, "blockedreg", "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3", "5000")
+		insecuredRoute := setSecureRegistryWithoutAuth(oc, ns, "insecuredreg", "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3", "5000")
 		blockedImage := blockedRoute + "/" + ns + "/blockedimage:latest"
 		insecuredImage := insecuredRoute + "/" + ns + "/insecuredimage:latest"
 

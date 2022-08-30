@@ -438,7 +438,7 @@ func getPodNodeName(oc *exutil.CLI, namespace string, podName string) string {
 }
 
 func createLdapService(oc *exutil.CLI, namespace string, podName string, initGroup string) {
-	err := oc.AsAdmin().WithoutNamespace().Run("run").Args(podName, "--image", "quay.io/openshifttest/ldap@sha256:6db999e796e6247823e9705c03fde29dbe1d49433efaf18ab2a3a1fec1cc0a99", "-n", namespace).Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("run").Args(podName, "--image", "quay.io/openshifttest/ldap@sha256:2700c5252cc72e12b845fe97ed659b8178db5ac72e13116b617de431c7826600", "-n", namespace).Execute()
 	if err != nil {
 		oc.Run("delete").Args("pod/ldapserver", "-n", namespace).Execute()
 		e2e.Failf("failed to run the ldap pod")
@@ -654,7 +654,7 @@ func (pod *debugPodUsingDefinition) createDebugPodUsingDefinition(oc *exutil.CLI
 }
 
 func createDeployment(oc *exutil.CLI, namespace string, deployname string) {
-	err := oc.Run("create").Args("-n", namespace, "deployment", deployname, "--image=quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e", "--replicas=20").Execute()
+	err := oc.Run("create").Args("-n", namespace, "deployment", deployname, "--image=quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "--replicas=20").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -954,7 +954,7 @@ func createDir(dirname string) {
 }
 
 func createSpecialRegistry(oc *exutil.CLI, namespace string, ssldir string, dockerConfig string) string {
-	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("deploy", "mydauth", "-n", namespace, "--image=quay.io/openshifttest/registry-auth-server:multiarch", "--port=5001").Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("deploy", "mydauth", "-n", namespace, "--image=quay.io/openshifttest/registry-auth-server:1.2.0", "--port=5001").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	err = oc.AsAdmin().WithoutNamespace().Run("expose").Args("deploy", "mydauth", "-n", namespace).Execute()
@@ -987,7 +987,7 @@ func createSpecialRegistry(oc *exutil.CLI, namespace string, ssldir string, dock
 
 	registryAuthToken := "https://" + hostD + "/auth"
 	registryPara := fmt.Sprintf(`REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/tmp/registry REGISTRY_AUTH=token REGISTRY_AUTH_TOKEN_REALM=%s REGISTRY_AUTH_TOKEN_SERVICE="Docker registry" REGISTRY_AUTH_TOKEN_ISSUER="Acme auth server" REGISTRY_AUTH_TOKEN_ROOTCERTBUNDLE=/ssl/server.pem `, registryAuthToken)
-	err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--name=myregistry", fmt.Sprintf("%s", registryPara), "-n", namespace, "--image=quay.io/openshifttest/registry:multiarch").Execute()
+	err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--name=myregistry", fmt.Sprintf("%s", registryPara), "-n", namespace, "--image=quay.io/openshifttest/registry:1.2.0").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	err = oc.AsAdmin().WithoutNamespace().Run("set").Args("volume", "deploy", "myregistry", "--add", "--name=v2", "--type=secret", "--secret-name=dockerauthssl", "--mount-path=/ssl", "-n", namespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())

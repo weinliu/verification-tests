@@ -153,7 +153,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			podsrc               = podSource{
 				name:      "pod-pull-with-invalid-image",
 				namespace: "",
-				image:     "quay.io/openshifttest/hello-openshift:multiarch@",
+				image:     "quay.io/openshifttest/hello-openshift:1.2.0@",
 				template:  podFile,
 			}
 		)
@@ -167,7 +167,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		oc.SetupProject()
 		podsrc.namespace = oc.Namespace()
 		podsrc.create(oc)
-		imagePruneLog(oc, `"quay.io/openshifttest/hello-openshift:multiarch@": invalid reference format - skipping`, "DEBUGTEST")
+		imagePruneLog(oc, `"quay.io/openshifttest/hello-openshift:1.2.0@": invalid reference format - skipping`, "DEBUGTEST")
 
 		// Add retry check when imagepruner job failed https://bugzilla.redhat.com/show_bug.cgi?id=1990125
 		g.By("Check if imagepruner retry after failed")
@@ -235,7 +235,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "busybox", "smaller")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/registry@sha256:01493571d994fd021da18c1f87aba1091482df3fc20825f443b4e60b3416c820", "registry:bigger", "--reference-policy=local", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3", "registry:bigger", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "registry", "bigger")
 

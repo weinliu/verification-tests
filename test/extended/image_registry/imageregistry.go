@@ -1145,7 +1145,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		htpasswdFile, err := generateHtpasswdFile(tempDataDir, regUser, regPass)
 		defer os.RemoveAll(htpasswdFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		regRoute := setSecureRegistryEnableAuth(oc, oc.Namespace(), "myregistry", htpasswdFile, "quay.io/openshifttest/registry@sha256:01493571d994fd021da18c1f87aba1091482df3fc20825f443b4e60b3416c820")
+		regRoute := setSecureRegistryEnableAuth(oc, oc.Namespace(), "myregistry", htpasswdFile, "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3")
 
 		g.By("Push image to private registry")
 		newAuthFile, err := appendPullSecretAuth(originAuth, regRoute, regUser, regPass)
@@ -1290,7 +1290,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		htpasswdFile, err := generateHtpasswdFile(tempDataDir, regUser, regPass)
 		defer os.RemoveAll(htpasswdFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		regRoute := setSecureRegistryEnableAuth(oc, oc.Namespace(), "myregistry", htpasswdFile, "quay.io/openshifttest/registry@sha256:01493571d994fd021da18c1f87aba1091482df3fc20825f443b4e60b3416c820")
+		regRoute := setSecureRegistryEnableAuth(oc, oc.Namespace(), "myregistry", htpasswdFile, "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3")
 
 		g.By("Create secret for the private registry")
 		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("secret", "docker-registry", "myregistry-auth", "--docker-username="+regUser, "--docker-password="+regPass, "--docker-server="+regRoute, "-n", oc.Namespace()).Execute()
@@ -1334,7 +1334,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Create imagestream using source image only match to mirrors namespace in icsp")
 		oc.SetupProject()
-		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("skopeo:latest", "--from=quay.io/openshifttest/skopeo@sha256:426196e376cf045012289d53fec986554241496ed7f38e347fc56505aa8ad322", "--reference-policy=local", "--confirm", "-n", oc.Namespace()).Execute()
+		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("skopeo:latest", "--from=quay.io/openshifttest/skopeo@sha256:d5f288968744a8880f983e49870c0bfcf808703fe126e4fb5fc393fb9e599f65", "--reference-policy=local", "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "skopeo", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1968,7 +1968,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		oc.SetupProject()
 		g.By("Import an image to create imagestream")
-		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/ruby-27@sha256:cdb6a13032184468b1e0607f36cfb8834c97dbeffeeff800e9e6834323bed8fc", "ruby-test12766:latest", "-n", oc.Namespace()).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/ruby-27@sha256:8f71dd40e3f55d90662a63cb9f02b59e75ed7ac1e911c7919fd14fbfad431348", "ruby-test12766:latest", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "ruby-test12766", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1989,7 +1989,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		exutil.AssertWaitPollNoErr(pollErr, "Failed to get bc with ruby-ex")
 
 		g.By("Import an image to create imagestream with --reference-policy=local")
-		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/ruby-27@sha256:cdb6a13032184468b1e0607f36cfb8834c97dbeffeeff800e9e6834323bed8fc", "ruby-test12766-local:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/ruby-27@sha256:8f71dd40e3f55d90662a63cb9f02b59e75ed7ac1e911c7919fd14fbfad431348", "ruby-test12766-local:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "ruby-test12766-local", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2056,7 +2056,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "is50925-1", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.Run("import-image").Args("is50925-2:latest", "--from", "quay.io/openshifttest/ruby-27@sha256:cdb6a13032184468b1e0607f36cfb8834c97dbeffeeff800e9e6834323bed8fc", "--confirm", "-n", oc.Namespace()).Execute()
+		err = oc.Run("import-image").Args("is50925-2:latest", "--from", "quay.io/openshifttest/ruby-27@sha256:8f71dd40e3f55d90662a63cb9f02b59e75ed7ac1e911c7919fd14fbfad431348", "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "is50925-2", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2147,7 +2147,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	g.It("ROSA-OSD_CCS-ARO-Author:yyou-Critical-24160-lookupPolicy can be set by oc set image-lookup", func() {
 
 		g.By("Import an image stream")
-		operationErr := oc.WithoutNamespace().AsAdmin().Run("import-image").Args("is24160-1-lookup", "--from=quay.io/openshifttest/base-alpine@sha256:0b379877aba876774e0043ea5ba41b0c574825ab910d32b43c05926fab4eea22", "--confirm=true", "-n", oc.Namespace()).Execute()
+		operationErr := oc.WithoutNamespace().AsAdmin().Run("import-image").Args("is24160-1-lookup", "--from=quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", "--confirm=true", "-n", oc.Namespace()).Execute()
 		o.Expect(operationErr).NotTo(o.HaveOccurred())
 		tagErr := exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "is24160-1-lookup", "latest")
 		o.Expect(tagErr).NotTo(o.HaveOccurred())
@@ -2168,7 +2168,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		createSimpleRunPod(oc, "is24160-1-lookup", expectInfo)
 
 		g.By("Create an imagestream with pullthrough and set image-lookup")
-		operationErr = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("is24160-2-lookup", "--from=quay.io/openshifttest/base-alpine@sha256:0b379877aba876774e0043ea5ba41b0c574825ab910d32b43c05926fab4eea22", "--confirm=true", "--reference-policy=local", "-n", oc.Namespace()).Execute()
+		operationErr = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("is24160-2-lookup", "--from=quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", "--confirm=true", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(operationErr).NotTo(o.HaveOccurred())
 		lookupErr = oc.WithoutNamespace().AsAdmin().Run("set").Args("image-lookup", "is24160-2-lookup", "-n", oc.Namespace()).Execute()
 		o.Expect(lookupErr).NotTo(o.HaveOccurred())
@@ -2178,7 +2178,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		createSimpleRunPod(oc, "is24160-2-lookup", expectInfo)
 
 		g.By("Create another imagestream and create a deploy")
-		operationErr = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("is24160-3-lookup", "--from=quay.io/openshifttest/base-alpine@sha256:0b379877aba876774e0043ea5ba41b0c574825ab910d32b43c05926fab4eea22", "--confirm=true", "-n", oc.Namespace()).Execute()
+		operationErr = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("is24160-3-lookup", "--from=quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", "--confirm=true", "-n", oc.Namespace()).Execute()
 		o.Expect(operationErr).NotTo(o.HaveOccurred())
 		deployErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("deploy", "deploy-lookup", "--image=is24160-3-lookup", "--port=5000", "-n", oc.Namespace()).Execute()
 		o.Expect(deployErr).NotTo(o.HaveOccurred())
@@ -2690,7 +2690,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-High-12958-Read and write image signatures with registry endpoint", func() {
 		g.By("Create signature file")
 		var signFile = `'{"schemaVersion": 2,"type":"atomic","name":"digestid","content": "MjIK"}'`
-		err := oc.AsAdmin().Run("tag").Args("quay.io/openshifttest/skopeo@sha256:426196e376cf045012289d53fec986554241496ed7f38e347fc56505aa8ad322", "ho12958:latest", "-n", oc.Namespace()).Execute()
+		err := oc.AsAdmin().Run("tag").Args("quay.io/openshifttest/skopeo@sha256:d5f288968744a8880f983e49870c0bfcf808703fe126e4fb5fc393fb9e599f65", "ho12958:latest", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "ho12958", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2762,7 +2762,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		htpasswdFile, err := generateHtpasswdFile("/tmp/", regUser, regPass)
 		defer os.RemoveAll(htpasswdFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		regRoute := setSecureRegistryEnableAuth(oc, oc.Namespace(), "myregistry", htpasswdFile, "quay.io/openshifttest/registry@sha256:01493571d994fd021da18c1f87aba1091482df3fc20825f443b4e60b3416c820")
+		regRoute := setSecureRegistryEnableAuth(oc, oc.Namespace(), "myregistry", htpasswdFile, "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3")
 
 		g.By("Push image to private registry")
 		err = oc.AsAdmin().WithoutNamespace().Run("registry").Args("login", "--registry="+regRoute, "--auth-basic="+regUser+":"+regPass, "--to="+authFile, "--insecure", "-n", oc.Namespace()).Execute()

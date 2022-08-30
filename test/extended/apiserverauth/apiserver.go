@@ -2215,7 +2215,7 @@ spec:
 	g.It("ROSA-ARO-OSD_CCS-Author:dpunia-Medium-15870-APIServer Verify node authorization is enabled", func() {
 		var (
 			podname    = "ocp-15870-openshift"
-			image      = "quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e"
+			image      = "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83"
 			secretname = "ocp-15870-mysecret"
 		)
 

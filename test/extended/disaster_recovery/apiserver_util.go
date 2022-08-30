@@ -29,7 +29,7 @@ func ClusterSanitycheck(oc *exutil.CLI, projectName string) error {
 	})
 	exutil.AssertWaitPollNoErr(errProject, fmt.Sprintf("oc new-project %s failed", projectName))
 
-	err := oc.AsAdmin().WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e", "-n", projectName).Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", projectName).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	errDeployment := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
 		err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment/hello-openshift", "-n", projectName).Execute()

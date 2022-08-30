@@ -956,7 +956,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		g.By("Create test project")
 		oc.SetupProject()
 
-		err = oc.Run("create").Args("deployment", "ocp43277", "--image", "quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e").Execute()
+		err = oc.Run("create").Args("deployment", "ocp43277", "--image", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check all the pods should running")
@@ -1304,7 +1304,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 			e2e.Failf("Fail to create project, error:%v", err)
 		}
 
-		err = oc.AsAdmin().Run("create").Args("deployment", "ocp43277", "--image", "quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e", "-n", "test-52303").Execute()
+		err = oc.AsAdmin().Run("create").Args("deployment", "ocp43277", "--image", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", "test-52303").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check all the pods should running")
@@ -1437,7 +1437,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 			e2e.Failf("Fail to create project, error:%v", err)
 		}
 
-		err = oc.AsAdmin().Run("create").Args("deployment", "ocp53058", "--image", "quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e", "-n", "test-53058").Execute()
+		err = oc.AsAdmin().Run("create").Args("deployment", "ocp53058", "--image", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", "test-53058").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check all the pods should running")

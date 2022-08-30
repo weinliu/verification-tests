@@ -87,7 +87,7 @@ func installIPEchoServiceOnAWS(a *exutil.AwsClient, oc *exutil.CLI) (string, err
 	if sshkey == "" {
 		sshkey = "../internal/config/keys/openshift-qe.pem"
 	}
-	command := "sudo netstat -ntlp | grep 9095 || sudo podman run --name ipecho -d -p 9095:80 quay.io/openshifttest/ip-echo:multiarch"
+	command := "sudo netstat -ntlp | grep 9095 || sudo podman run --name ipecho -d -p 9095:80 quay.io/openshifttest/ip-echo:1.2.0"
 	e2e.Logf("Run command", command)
 
 	ips := getAwsIntSvcIPs(a, oc)
@@ -209,7 +209,7 @@ func installIPEchoServiceOnGCP(oc *exutil.CLI, infraID string, host string) (str
 	internalIP, err := getgcloudClient(oc).GetIntSvcInternalIP(infraID)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	port := "9095"
-	runIPEcho := fmt.Sprintf("sudo netstat -ntlp | grep %s || sudo podman run --name %s -d -p %s:80 quay.io/openshifttest/ip-echo:multiarch", port, serviceName, port)
+	runIPEcho := fmt.Sprintf("sudo netstat -ntlp | grep %s || sudo podman run --name %s -d -p %s:80 quay.io/openshifttest/ip-echo:1.2.0", port, serviceName, port)
 	user := os.Getenv("SSH_CLOUD_PRIV_GCP_USER")
 	if user == "" {
 		user = "core"
@@ -505,7 +505,7 @@ func installIPEchoServiceOnAzure(oc *exutil.CLI, sess *exutil.AzureSession, rg s
 	if sshkey == "" {
 		sshkey = "../internal/config/keys/openshift-qe.pem"
 	}
-	command := "sudo netstat -ntlp | grep 9095 || sudo podman run --name ipecho -d -p 9095:80 quay.io/openshifttest/ip-echo:multiarch"
+	command := "sudo netstat -ntlp | grep 9095 || sudo podman run --name ipecho -d -p 9095:80 quay.io/openshifttest/ip-echo:1.2.0"
 	e2e.Logf("Run command, %s \n", command)
 
 	privateIP, privateIPErr := getAzureIntSvcVMPrivateIP(oc, sess, rg)

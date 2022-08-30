@@ -10,7 +10,7 @@ objects:
     namespace: "${NAMESPACE}"
   spec:
     containers:
-    - image: "quay.io/openshifttest/stress:multiarch"
+    - image: "quay.io/openshifttest/stress:1.2.0"
       name: pod-oom
       resources:
         requests:

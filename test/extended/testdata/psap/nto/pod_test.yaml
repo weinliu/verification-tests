@@ -12,7 +12,7 @@ objects:
     spec:
       containers:
       - name: test-go
-        image: quay.io/openshifttest/hello-openshift:multiarch
+        image: quay.io/openshifttest/hello-openshift:1.2.0
         env:
         - name: GIN_MODE
           value: release

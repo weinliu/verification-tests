@@ -39,7 +39,7 @@ objects:
             value: -Dlog4j.configuration=file:/etc/kafka/log4j.properties
           - name: JMX_PORT
             value: "5555"
-          image: quay.io/openshifttest/kafka@sha256:c29a635d38f3996dde5f50d77c4a50f3da3d3754dbaa18212796f4d2039bf30c
+          image: quay.io/openshifttest/kafka@sha256:8e85560da52eb87b8465551a291d0ceaeab9249fa31847883ff57456ee8a501c
           imagePullPolicy: IfNotPresent
           lifecycle:
             preStop:
@@ -113,7 +113,7 @@ objects:
                 fieldPath: metadata.namespace
           - name: ADVERTISE_ADDR
             value: kafka
-          image: quay.io/openshifttest/kafka-initutils:multiarch
+          image: quay.io/openshifttest/kafka-initutils:1.2.0
           imagePullPolicy: IfNotPresent
           name: init-config
           resources: {}

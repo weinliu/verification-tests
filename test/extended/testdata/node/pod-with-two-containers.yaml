@@ -22,14 +22,14 @@ objects:
         capabilities:
           drop:
           - ALL
-      image: quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e
+      image: quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83
     - name: hello-openshift-fedora
       securityContext:
         allowPrivilegeEscalation: false
         capabilities:
           drop:
           - ALL
-      image: quay.io/openshifttest/hello-openshift@sha256:b1aabe8c8272f750ce757b6c4263a2712796297511e0c6df79144ee188933623
+      image: quay.io/openshifttest/hello-openshift@sha256:56c354e7885051b6bb4263f9faa58b2c292d44790599b7dde0e49e7c466cf339
 parameters:
 - name: NAME
 - name: NAMESPACE
