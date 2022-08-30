@@ -6,7 +6,7 @@ import codecs
 
 class TestResult:
     subteam = [
-                "SDN","STORAGE","Developer_Experience","User_Interface","PerfScale", "Service_Development_B","NODE","Logging",
+                "SDN","STORAGE","Developer_Experience","User_Interface","PerfScale", "Service_Development_B","NODE","LOGGING","Logging",
                 "Workloads","Metering","Cluster_Observability","Quay/Quay.io","Cluster_Infrastructure",
                 "Multi-Cluster","Cluster_Operator","Azure","Network_Edge","ETCD","Installer","Portfolio_Integration",
                 "Service_Development_A","OLM","Operator_SDK","App_Migration","Windows_Containers","Security_and_Compliance",
