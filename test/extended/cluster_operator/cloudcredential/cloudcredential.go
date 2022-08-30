@@ -196,7 +196,7 @@ data:
 		o.Expect(credsTXT).To(o.ContainSubstring("cacert: /etc/kubernetes/static-pod-resources/configmaps/cloud-config/ca-bundle.pem"))
 	})
 
-	g.It("Author:jshu-High-36498-CCO credentials secret change to STS-style", func() {
+	g.It("ROSA-OSD_CCS-Author:jshu-High-36498-CCO credentials secret change to STS-style", func() {
 		//Check IAAS platform type
 		iaasPlatform := exutil.CheckPlatform(oc)
 		if iaasPlatform != "aws" {
@@ -214,7 +214,7 @@ data:
 		}
 	})
 
-	g.It("Author:jshu-Medium-50869-High-53283 CCO Pod Security Admission change", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:jshu-Medium-50869-High-53283 CCO Pod Security Admission change", func() {
 		g.By("1.Check cloud-credential-operator pod")
 		ccoPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app=cloud-credential-operator", "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
