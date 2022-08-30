@@ -157,12 +157,19 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	//author: yanyang@redhat.com
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:yanyang-Medium-45879-check update info with oc adm upgrade --include-not-recommended [Serial][Slow]", func() {
+		g.By("Check if it's a GCP cluster")
+		platformType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.ToLower(platformType) != "gcp" {
+			g.Skip("Skip for non-gcp cluster!")
+		}
+
 		orgUpstream, err := getCVObyJP(oc, ".spec.upstream")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		orgChannel, err := getCVObyJP(oc, ".spec.channel")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		defer restoreCVSpec(orgUpstream, orgChannel, oc)
+		e2e.Logf("Original upstream:%s, original channel:%s", orgUpstream, orgChannel)
 
 		g.By("Patch upstream")
 		projectID := "openshift-qe"
@@ -178,6 +185,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer restoreCVSpec(orgUpstream, orgChannel, oc)
 
 		g.By("Check oc adm upgrade when there are not-recommended updates")
 		expUpdate := "Additional updates which are not recommended based on your cluster " +
@@ -233,9 +242,15 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	//author: yanyang@redhat.com
 	g.It("ConnectedOnly-Author:yanyang-Low-46422-cvo drops invalid conditional edges [Serial]", func() {
-		orgUpstream, _ := getCVObyJP(oc, ".spec.upstream")
+		g.By("Check if it's a GCP cluster")
+		platformType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.ToLower(platformType) != "gcp" {
+			g.Skip("Skip for non-gcp cluster!")
+		}
 
-		defer restoreCVSpec(orgUpstream, "nochange", oc)
+		orgUpstream, _ := getCVObyJP(oc, ".spec.upstream")
+		e2e.Logf("Original upstream:%s", orgUpstream)
 
 		g.By("Patch upstream")
 		projectID := "openshift-qe"
@@ -251,6 +266,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer restoreCVSpec(orgUpstream, "nochange", oc)
 
 		g.By("Check CVO prompts correct reason and message")
 		expString := "warning: Cannot display available updates:\n" +
@@ -290,9 +307,15 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	//author: yanyang@redhat.com
 	g.It("ConnectedOnly-Author:yanyang-Low-47175-upgrade cluster when current version is in the upstream but there are not update paths [Serial]", func() {
-		orgUpstream, _ := getCVObyJP(oc, ".spec.upstream")
+		g.By("Check if it's a GCP cluster")
+		platformType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.ToLower(platformType) != "gcp" {
+			g.Skip("Skip for non-gcp cluster!")
+		}
 
-		defer restoreCVSpec(orgUpstream, "nochange", oc)
+		orgUpstream, _ := getCVObyJP(oc, ".spec.upstream")
+		e2e.Logf("Original upstream:%s", orgUpstream)
 
 		g.By("Patch upstream")
 		projectID := "openshift-qe"
@@ -308,6 +331,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer restoreCVSpec(orgUpstream, "nochange", oc)
 
 		g.By("Check no updates but RetrievedUpdates=True")
 		err = wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
@@ -471,6 +496,18 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	//author: yanyang@redhat.com
 	g.It("ConnectedOnly-Author:yanyang-Medium-43178-manage channel by using oc adm upgrade channel [Serial]", func() {
+		g.By("Check if it's a GCP cluster")
+		platformType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.ToLower(platformType) != "gcp" {
+			g.Skip("Skip for non-gcp cluster!")
+		}
+
+		orgUpstream, _ := getCVObyJP(oc, ".spec.upstream")
+		orgChannel, _ := getCVObyJP(oc, ".spec.channel")
+
+		e2e.Logf("Original upstream:%s, original channel:%s", orgUpstream, orgChannel)
+
 		projectID := "openshift-qe"
 		ctx := context.Background()
 		client, err := storage.NewClient(ctx)
@@ -481,9 +518,6 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		defer DeleteBucket(client, bucket)
 		defer DeleteObject(client, bucket, object)
 		o.Expect(err).NotTo(o.HaveOccurred())
-
-		orgUpstream, _ := getCVObyJP(oc, ".spec.upstream")
-		orgChannel, _ := getCVObyJP(oc, ".spec.channel")
 
 		defer restoreCVSpec(orgUpstream, orgChannel, oc)
 
@@ -642,10 +676,18 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	//author: yanyang@redhat.com
 	g.It("ConnectedOnly-Author:yanyang-Medium-43172-get the upstream and channel info by using oc adm upgrade [Serial]", func() {
+		g.By("Check if it's a GCP cluster")
+		platformType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.ToLower(platformType) != "gcp" {
+			g.Skip("Skip for non-gcp cluster!")
+		}
+
 		orgUpstream, _ := getCVObyJP(oc, ".spec.upstream")
 		orgChannel, _ := getCVObyJP(oc, ".spec.channel")
 
-		//fmt.Printf("The original upstream is %s", orgUpstream)
+		e2e.Logf("Original upstream:%s, original channel:%s", orgUpstream, orgChannel)
+
 		defer restoreCVSpec(orgUpstream, orgChannel, oc)
 
 		g.By("Check when upstream is unset")
@@ -1183,7 +1225,14 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			targetVersion = GenerateReleaseVersion(oc)
 			targetPayload = GenerateReleasePayload(oc)
 		} else {
+			g.By("Check if it's a GCP cluster")
+			platformType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.ToLower(platformType) != "gcp" {
+				g.Skip("Skip for non-gcp cluster!")
+			}
 			origUpstream, _ := getCVObyJP(oc, ".spec.upstream")
+			e2e.Logf("Original upstream:%s", origUpstream)
 			defer restoreCVSpec(origUpstream, "nochange", oc)
 
 			g.By("Patch upstream")
