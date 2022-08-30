@@ -714,7 +714,7 @@ spec:
 	g.It("ROSA-ARO-OSD_CCS-PreChkUpgrade-NonPreRelease-Author:rgangwar-Critical-40667-Prepare Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
 		var (
 			dirname    = "/tmp/-OCP-40667/"
-			exceptions = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
+			exceptions = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>|panicked: false, err: context deadline exceeded, panic-reason: <nil>"
 			keywords   = "body: net/http: request canceled (Client.Timeout|panic"
 			// Creating below variable for clusterbuster commands "N" argument parameter.
 			namespaceCount = 0
@@ -866,7 +866,7 @@ spec:
 	g.It("ROSA-ARO-OSD_CCS-PstChkUpgrade-NonPreRelease-Author:rgangwar-Critical-40667-Post Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
 		var (
 			dirname    = "/tmp/-OCP-40667/"
-			exceptions = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
+			exceptions = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>|panicked: false, err: context deadline exceeded, panic-reason: <nil>"
 		)
 		defer os.RemoveAll(dirname)
 		defer func() {
@@ -2292,8 +2292,8 @@ spec:
 		format := `[0-9TZ.:]{5,30}`
 		frontwords := `(\w+?[^0-9a-zA-Z]+?){,3}`
 		afterwords := `(\w+?[^0-9a-zA-Z]+?){,30}`
-		// Add one temporary exception 'Should not happen: OpenAPI V3 merge'，after related bug 2115634 is fixed, will remove it.
-		exceptions := "SHOULD NOT HAPPEN.*Kind=CertificateSigningRequest|Should not happen: OpenAPI V3 merge|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|e2e-test.*-panic|kernel.*-panic|non-fatal"
+		// Add one temporary exception 'Should not happen: OpenAPI，after related bug 2115634 is fixed, will remove it.
+		exceptions := "SHOULD NOT HAPPEN.*Kind=CertificateSigningRequest|Should not happen: OpenAPI V3 m|Should not happen: O|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|e2e-test.*-panic|kernel.*-panic|non-fatal"
 		cmd := fmt.Sprintf(`export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig
 		grep -hriE "(%s%s%s)+" /var/log/pods/openshift-kube-apiserver-operator* | grep -Ev "%s" > /tmp/OCP-39601-kaso-errors.log
 		sed -E "s/%s/../g" /tmp/OCP-39601-kaso-errors.log | sort | uniq -c | sort -h | tee /tmp/OCP-39601-kaso-uniq-errors.log | head -10
@@ -2489,5 +2489,116 @@ spec:
 		deletePodStatusOutput := string(deletePodStatusRawOutput)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(deletePodStatusOutput).To(o.Equal("405"))
+	})
+
+	// author: rgangwar@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-Author:rgangwar-High-38865-Examine abnormal errors in openshift-apiserver pod logs and audit logs", func() {
+		g.By("1) Create log arrays.")
+		podAbnormalLogs := make([]string, 0)
+		masterNodeAbnormalLogs := make([]string, 0)
+		auditAbnormalLogs := make([]string, 0)
+		totalAbnormalLogCount := 0
+
+		g.By("2) Setup start/end tags for extracting logs from other unrelated stdout like oc debug warning")
+		startTag := "<START_LOG>"
+		endTag := "</END_LOG>"
+		trimStartTag, regexErr := regexp.Compile(fmt.Sprintf("(.|\n|\r)*%s", startTag))
+		o.Expect(regexErr).NotTo(o.HaveOccurred())
+		trimEndTag, regexErr := regexp.Compile(fmt.Sprintf("%s(.|\n|\r)*", endTag))
+		o.Expect(regexErr).NotTo(o.HaveOccurred())
+
+		g.By("3) Get all master nodes.")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		g.By("4) Check OAS operator pod logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs, expect none.")
+		clusterOperator := "openshift-apiserver-operator"
+		keywords := "panic|fatal|SHOULD NOT HAPPEN"
+		format := `[0-9TZ.:]{5,30}`
+		frontwords := `(\w+?[^0-9a-zA-Z]+?){,3}`
+		afterwords := `(\w+?[^0-9a-zA-Z]+?){,30}`
+		cmd := fmt.Sprintf(`export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig
+		grep -hriE "(%s%s%s)+" /var/log/pods/openshift-apiserver-operator* > /tmp/OCP-38865-oaso-errors.log
+		sed -E "s/%s/../g" /tmp/OCP-38865-oaso-errors.log | sort | uniq -c | sort -h | tee /tmp/OCP-38865-oaso-uniq-errors.log | head -10
+		echo '%s'
+		while read line; do
+			grep "$line" /tmp/OCP-38865-oaso-errors.log | head -1
+		done < <(grep -oP "\w+?\.go\:[0-9]+" /tmp/OCP-38865-oaso-uniq-errors.log | uniq | head -10)
+		echo '%s'`, frontwords, keywords, afterwords, format, startTag, endTag)
+		masterNode, err := oc.WithoutNamespace().Run("get").Args("po", "-n", clusterOperator, "-o", `jsonpath={.items[0].spec.nodeName}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By(fmt.Sprintf("4.1 -> step 1) Get log file from %s", masterNode))
+		podLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+		o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
+
+		g.By(fmt.Sprintf("4.1 -> step 2) Format log file from %s", masterNode))
+		podLogs = trimStartTag.ReplaceAllString(podLogs, "")
+		podLogs = trimEndTag.ReplaceAllString(podLogs, "")
+		for _, line := range strings.Split(podLogs, "\n") {
+			if strings.Trim(line, " ") != "" {
+				podAbnormalLogs = append(podAbnormalLogs, fmt.Sprintf("> %s", line))
+			}
+		}
+		e2e.Logf("OAS-O Pod abnormal Logs -------------------------->\n%s", strings.Join(podAbnormalLogs, "\n"))
+		totalAbnormalLogCount += len(podAbnormalLogs)
+
+		g.By("5) On all master nodes, check OAS log files for abnormal (fatal/SHOULD NOT HAPPEN) logs, expect none.")
+		keywords = "fatal|SHOULD NOT HAPPEN"
+		cmd = fmt.Sprintf(`grep -hriE "(%s%s%s)+" /var/log/pods/openshift-apiserver_apiserver* > /tmp/OCP-38865-oas-errors.log
+		sed -E "s/%s/../g" /tmp/OCP-38865-oas-errors.log | sort | uniq -c | sort -h | tee > /tmp/OCP-38865-oas-uniq-errors.log | head -10
+		echo '%s'
+		while read line; do
+			grep "$line" /tmp/OCP-38865-oas-errors.log | head -1
+		done < <(grep -oP "\w+?\.go\:[0-9]+" /tmp/OCP-38865-oas-uniq-errors.log | uniq | head -10)
+		echo '%s'`, frontwords, keywords, afterwords, format, startTag, endTag)
+
+		for i, masterNode := range masterNodes {
+			g.By(fmt.Sprintf("5.%d -> step 1) Get log file from %s", i+1, masterNode))
+			masterNodeLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
+
+			g.By(fmt.Sprintf("5.%d -> step 2) Format log file from %s", i+1, masterNode))
+			masterNodeLogs = trimStartTag.ReplaceAllString(masterNodeLogs, "")
+			masterNodeLogs = trimEndTag.ReplaceAllString(masterNodeLogs, "")
+			for _, line := range strings.Split(masterNodeLogs, "\n") {
+				if strings.Trim(line, " ") != "" {
+					masterNodeAbnormalLogs = append(masterNodeAbnormalLogs, fmt.Sprintf("> %s", line))
+				}
+			}
+		}
+		e2e.Logf("OAS pods abnormal Logs ------------------------->\n%s", strings.Join(masterNodeAbnormalLogs, "\n"))
+		totalAbnormalLogCount += len(masterNodeAbnormalLogs)
+
+		g.By("6) On all master nodes, check oas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
+		format = `[0-9TZm.:]{2,}|namespace="([a-zA-Z0-9]|\-)*"|name="([a-zA-Z0-9]|\-)*"`
+		keywords = "panic|fatal|SHOULD NOT HAPPEN"
+		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/openshift-apiserver/audit*.log > /tmp/OCP-38865-audit-errors.log
+		echo '%s'
+		while read line; do
+			grep "$line" /tmp/OCP-38865-audit-errors.log | head -1 | jq .
+		done < <(cat /tmp/OCP-38865-audit-errors.log | jq -r '.responseStatus.status + " - " + .responseStatus.message + " - " + .responseStatus.reason' | uniq | head -5 | cut -d '-' -f2 | awk '{$1=$1;print}')
+		echo '%s'`, keywords, startTag, endTag)
+
+		for i, masterNode := range masterNodes {
+			g.By(fmt.Sprintf("6.%d -> step 1) Get log file from %s", i+1, masterNode))
+			auditLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
+
+			g.By(fmt.Sprintf("6.%d -> step 2) Format log file from %s", i+1, masterNode))
+			auditLogs = trimStartTag.ReplaceAllString(auditLogs, "")
+			auditLogs = trimEndTag.ReplaceAllString(auditLogs, "")
+			for _, line := range strings.Split(auditLogs, "\n") {
+				if strings.Trim(line, " ") != "" {
+					auditAbnormalLogs = append(auditAbnormalLogs, fmt.Sprintf("%s", line))
+				}
+			}
+		}
+		e2e.Logf("OAS audit abnormal Logs --------------------->\n%s", strings.Join(auditAbnormalLogs, "\n"))
+		totalAbnormalLogCount += len(auditAbnormalLogs)
+
+		g.By("7) Assert if abnormal log exits")
+		o.Expect(totalAbnormalLogCount).Should(o.BeZero())
 	})
 })
