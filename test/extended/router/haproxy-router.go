@@ -310,7 +310,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"tuningOptions\" :{\"clientFinTimeout\": \"-7s\",\"clientTimeout\": \"-33s\",\"serverFinTimeout\": \"-3s\",\"serverTimeout\": \"-27s\",\"tlsInspectDelay\": \"-11s\",\"tunnelTimeout\": \"-1h\"}}}")
 		output := fetchJSONPathValue(oc, "openshift-ingress-operator", "ingresscontroller/"+ingctrl.name, ".spec.tuningOptions")
-		o.Expect(output).To(o.ContainSubstring("{\"clientFinTimeout\":\"-7s\",\"clientTimeout\":\"-33s\",\"serverFinTimeout\":\"-3s\",\"serverTimeout\":\"-27s\",\"tlsInspectDelay\":\"-11s\",\"tunnelTimeout\":\"-1h\"}"))
+		o.Expect(output).To(o.ContainSubstring("{\"clientFinTimeout\":\"-7s\",\"clientTimeout\":\"-33s\",\"reloadInterval\":\"0s\",\"serverFinTimeout\":\"-3s\",\"serverTimeout\":\"-27s\",\"tlsInspectDelay\":\"-11s\",\"tunnelTimeout\":\"-1h\"}"))
 
 		g.By("Check the timeout option set in the haproxy pods post the changes applied")
 		checktimeout := readRouterPodData(oc, routerpod, "cat haproxy.config", "timeout")
