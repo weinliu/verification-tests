@@ -53,6 +53,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("Longduration-NonPreRelease-PreChkUpgrade-Author:zhsun-Medium-41804-[Upgrade]Spot/preemptible instances should not block upgrade - Azure [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
 		if iaasPlatform != "azure" {
 			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
 		}
@@ -80,6 +81,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("Longduration-NonPreRelease-PstChkUpgrade-Author:zhsun-Medium-41804-[Upgrade]Spot/preemptible instances should not block upgrade - Azure [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
 		if iaasPlatform != "azure" {
 			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
 		}
