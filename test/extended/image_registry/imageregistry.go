@@ -2785,4 +2785,50 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		expectInfo := `Successfully pulled image "image-registry.openshift-image-registry.svc:5000/` + oc.Namespace()
 		createSimpleRunPod(oc, "authis:latest", expectInfo)
 	})
+
+	//author: xiuwang@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-10909-Add/update/remove signatures to the images", func() {
+		var (
+			signFile = filepath.Join(imageRegistryBaseDir, "imagesignature.yaml")
+			signsrc  = signatureSource{
+				name:     "signature-10909",
+				imageid:  "",
+				title:    "test10909",
+				content:  "GQ==",
+				template: signFile,
+			}
+		)
+		g.By("Create imagestreamimport")
+		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/skopeo@sha256:d5f288968744a8880f983e49870c0bfcf808703fe126e4fb5fc393fb9e599f65", "skopeo:latest", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "skopeo", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		manifest := saveImageMetadataName(oc, "openshifttest/skopeo")
+		o.Expect(manifest).NotTo(o.BeEmpty())
+		signsrc.imageid = manifest
+
+		g.By("Add signer role")
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "system:image-signer", "-z", "builder", "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "system:image-signer", "-z", "builder", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Add signature and check")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("imagesignature", signsrc.imageid+"@test10909", signsrc.imageid+"@newsignature10909").Execute()
+		signsrc.create(oc)
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("images", manifest, "-o=jsonpath={.signatures}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("test10909"))
+
+		g.By("Could create more than one ignature and delete")
+		signsrc.title = "newsignature10909"
+		signsrc.content = "Dw=="
+		signsrc.create(oc)
+		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("images", manifest, "-o=jsonpath={.signatures}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("newsignature10909"))
+		output, err = oc.WithoutNamespace().AsAdmin().Run("delete").Args("imagesignature", signsrc.imageid+"@test10909", signsrc.imageid+"@newsignature10909").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`10909" deleted`))
+	})
+
 })

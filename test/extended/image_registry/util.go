@@ -148,7 +148,7 @@ func (authrole *authRole) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
+func parseToJSON(oc *exutil.CLI, parameters []string) string {
 	var configFile string
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + "config.json")
@@ -161,6 +161,16 @@ func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 	})
 	exutil.AssertWaitPollNoErr(err, "Applying resources from template is failed")
 	e2e.Logf("the file of resource is %s", configFile)
+	return configFile
+}
+
+func createResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
+	configFile := parseToJSON(oc, parameters)
+	return oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", configFile).Execute()
+}
+
+func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
+	configFile := parseToJSON(oc, parameters)
 	return oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
 }
 
@@ -1096,4 +1106,17 @@ func waitRouteReady(oc *exutil.CLI, route string) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(pollErr, "The route can't be used")
+}
+
+type signatureSource struct {
+	name     string
+	imageid  string
+	title    string
+	content  string
+	template string
+}
+
+func (signsrc *signatureSource) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", signsrc.template, "-p", "NAME="+signsrc.name, "IMAGEID="+signsrc.imageid, "TITLE="+signsrc.title, "CONTENT="+signsrc.content)
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
