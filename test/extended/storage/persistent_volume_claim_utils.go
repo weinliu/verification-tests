@@ -163,6 +163,17 @@ func (pvc *persistentVolumeClaim) createWithSpecifiedPV(oc *exutil.CLI, pvName s
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+//  Create a new PersistentVolumeClaim without specifying storaheclass name
+func (pvc *persistentVolumeClaim) createWithoutStorageclassname(oc *exutil.CLI) {
+	if pvc.namespace == "" {
+		pvc.namespace = oc.Namespace()
+	}
+	deletePaths := []string{`items.0.spec.storageClassName`}
+	err := applyResourceFromTemplateDeleteParametersAsAdmin(oc, deletePaths, "--ignore-unknown-parameters=true", "-f", pvc.template, "-p", "PVCNAME="+pvc.name, "PVCNAMESPACE="+pvc.namespace, "SCNAME="+pvc.scname,
+		"ACCESSMODE="+pvc.accessmode, "VOLUMEMODE="+pvc.volumemode, "PVCCAPACITY="+pvc.capacity)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 //  Delete the PersistentVolumeClaim
 func (pvc *persistentVolumeClaim) delete(oc *exutil.CLI) {
 	err := oc.WithoutNamespace().Run("delete").Args("pvc", pvc.name, "-n", pvc.namespace).Execute()

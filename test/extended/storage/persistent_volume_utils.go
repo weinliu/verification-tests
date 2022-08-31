@@ -297,11 +297,18 @@ func getPvCapacityByPvcName(oc *exutil.CLI, pvcName string, namespace string) (s
 	return volumeSize, err
 }
 
-// Get specified storageClass related pv names
+// Get PV names with specified storageClass
 func getPvNamesOfSpecifiedSc(oc *exutil.CLI, scName string) ([]string, error) {
 	pvNamesStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", "-o=jsonpath={.items[?(@.spec.storageClassName==\""+scName+"\")].metadata.name}").Output()
 	e2e.Logf("The storageClass \"%s\" PVs are %s", scName, pvNamesStr)
 	return strings.Split(pvNamesStr, " "), err
+}
+
+// Get PV's storageClass name
+func getScNamesFromSpecifiedPv(oc *exutil.CLI, pvName string) (string, error) {
+	scName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.storageClassName}").Output()
+	e2e.Logf("The PV \"%s\" uses storageClass name \"%s\"", pvName, scName)
+	return scName, err
 }
 
 // Check persistent volume has the Attributes
