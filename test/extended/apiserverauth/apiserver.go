@@ -2370,7 +2370,7 @@ spec:
 			externalLogs = trimEndTag.ReplaceAllString(externalLogs, "")
 			for _, line := range strings.Split(externalLogs, "\n") {
 				if strings.Trim(line, " ") != "" {
-					externalPanicLogs = append(externalPanicLogs, fmt.Sprintf("> %s", line))
+					externalPanicLogs = append(externalPanicLogs, fmt.Sprintf("%s", line))
 				}
 			}
 		}
@@ -2495,6 +2495,7 @@ spec:
 	g.It("ROSA-ARO-OSD_CCS-Author:rgangwar-High-38865-Examine abnormal errors in openshift-apiserver pod logs and audit logs", func() {
 		g.By("1) Create log arrays.")
 		podAbnormalLogs := make([]string, 0)
+		externalPanicLogs := make([]string, 0)
 		masterNodeAbnormalLogs := make([]string, 0)
 		auditAbnormalLogs := make([]string, 0)
 		totalAbnormalLogCount := 0
@@ -2544,7 +2545,37 @@ spec:
 		e2e.Logf("OAS-O Pod abnormal Logs -------------------------->\n%s", strings.Join(podAbnormalLogs, "\n"))
 		totalAbnormalLogCount += len(podAbnormalLogs)
 
-		g.By("5) On all master nodes, check OAS log files for abnormal (fatal/SHOULD NOT HAPPEN) logs, expect none.")
+		g.By("5) On all master nodes, check OAS log files for panic error.")
+		exceptions := "panicked: false|e2e-test.*-panic|kernel.*-panic|non-fatal"
+		cmd = fmt.Sprintf(`RETAG="[EW][0-9]{4}\s[0-9]{2}:[0-9]{2}"
+		PANIC="${RETAG}.*panic"
+		panic_logfiles=$(grep -riE "${PANIC}" /var/log/pods/openshift-apiserver_apiserver* | grep -Ev "%s" | cut -d ':' -f1 | head -10 | uniq)
+		echo '%s'
+		for f in ${panic_logfiles}; do
+			echo ">>> Panic log file: ${f}"
+			line=$(grep -inE "${PANIC}" "${f}" | grep -m 1 -Ev "%s"  | cut -d ':' -f1)
+			endline=$(( line + 20 ))
+			sed -n "${line},${endline}p" "${f}"
+		done
+		echo '%s'`, exceptions, startTag, exceptions, endTag)
+
+		for i, masterNode := range masterNodes {
+			g.By(fmt.Sprintf("5.%d -> step 1) Get log file from %s", i+1, masterNode))
+			externalLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
+
+			g.By(fmt.Sprintf("5.%d -> step 2) Format log file from %s", i+1, masterNode))
+			externalLogs = trimStartTag.ReplaceAllString(externalLogs, "")
+			externalLogs = trimEndTag.ReplaceAllString(externalLogs, "")
+			for _, line := range strings.Split(externalLogs, "\n") {
+				if strings.Trim(line, " ") != "" {
+					externalPanicLogs = append(externalPanicLogs, fmt.Sprintf("%s", line))
+				}
+			}
+		}
+		e2e.Logf("OAS pod panic Logs -------------------------->\n%s", strings.Join(externalPanicLogs, "\n"))
+
+		g.By("6) On all master nodes, check OAS log files for abnormal (fatal/SHOULD NOT HAPPEN) logs, expect none.")
 		keywords = "fatal|SHOULD NOT HAPPEN"
 		cmd = fmt.Sprintf(`grep -hriE "(%s%s%s)+" /var/log/pods/openshift-apiserver_apiserver* > /tmp/OCP-38865-oas-errors.log
 		sed -E "s/%s/../g" /tmp/OCP-38865-oas-errors.log | sort | uniq -c | sort -h | tee > /tmp/OCP-38865-oas-uniq-errors.log | head -10
@@ -2555,11 +2586,11 @@ spec:
 		echo '%s'`, frontwords, keywords, afterwords, format, startTag, endTag)
 
 		for i, masterNode := range masterNodes {
-			g.By(fmt.Sprintf("5.%d -> step 1) Get log file from %s", i+1, masterNode))
+			g.By(fmt.Sprintf("6.%d -> step 1) Get log file from %s", i+1, masterNode))
 			masterNodeLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
-			g.By(fmt.Sprintf("5.%d -> step 2) Format log file from %s", i+1, masterNode))
+			g.By(fmt.Sprintf("6.%d -> step 2) Format log file from %s", i+1, masterNode))
 			masterNodeLogs = trimStartTag.ReplaceAllString(masterNodeLogs, "")
 			masterNodeLogs = trimEndTag.ReplaceAllString(masterNodeLogs, "")
 			for _, line := range strings.Split(masterNodeLogs, "\n") {
@@ -2571,7 +2602,7 @@ spec:
 		e2e.Logf("OAS pods abnormal Logs ------------------------->\n%s", strings.Join(masterNodeAbnormalLogs, "\n"))
 		totalAbnormalLogCount += len(masterNodeAbnormalLogs)
 
-		g.By("6) On all master nodes, check oas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
+		g.By("7) On all master nodes, check oas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
 		format = `[0-9TZm.:]{2,}|namespace="([a-zA-Z0-9]|\-)*"|name="([a-zA-Z0-9]|\-)*"`
 		keywords = "panic|fatal|SHOULD NOT HAPPEN"
 		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/openshift-apiserver/audit*.log > /tmp/OCP-38865-audit-errors.log
@@ -2580,6 +2611,120 @@ spec:
 			grep "$line" /tmp/OCP-38865-audit-errors.log | head -1 | jq .
 		done < <(cat /tmp/OCP-38865-audit-errors.log | jq -r '.responseStatus.status + " - " + .responseStatus.message + " - " + .responseStatus.reason' | uniq | head -5 | cut -d '-' -f2 | awk '{$1=$1;print}')
 		echo '%s'`, keywords, startTag, endTag)
+
+		for i, masterNode := range masterNodes {
+			g.By(fmt.Sprintf("7.%d -> step 1) Get log file from %s", i+1, masterNode))
+			auditLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
+
+			g.By(fmt.Sprintf("7.%d -> step 2) Format log file from %s", i+1, masterNode))
+			auditLogs = trimStartTag.ReplaceAllString(auditLogs, "")
+			auditLogs = trimEndTag.ReplaceAllString(auditLogs, "")
+			for _, line := range strings.Split(auditLogs, "\n") {
+				if strings.Trim(line, " ") != "" {
+					auditAbnormalLogs = append(auditAbnormalLogs, fmt.Sprintf("%s", line))
+				}
+			}
+		}
+		e2e.Logf("OAS audit abnormal Logs --------------------->\n%s", strings.Join(auditAbnormalLogs, "\n"))
+		totalAbnormalLogCount += len(auditAbnormalLogs)
+
+		g.By("8) Assert if abnormal log exits")
+		o.Expect(totalAbnormalLogCount).Should(o.BeZero())
+	})
+
+	// author: kewang@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-Author:kewang-High-42937-Examine critical errors in oauth-apiserver related log files", func() {
+		g.By("1) Create log arrays.")
+		masterNodeAbnormalLogs := make([]string, 0)
+		externalPanicLogs := make([]string, 0)
+		auditAbnormalLogs := make([]string, 0)
+		totalAbnormalLogCount := 0
+
+		g.By("2) Setup start/end tags for extracting logs from other unrelated stdout like oc debug warning")
+		startTag := "<START_LOG>"
+		endTag := "</END_LOG>"
+		trimStartTag, regexErr := regexp.Compile(fmt.Sprintf("(.|\n|\r)*%s", startTag))
+		o.Expect(regexErr).NotTo(o.HaveOccurred())
+		trimEndTag, regexErr := regexp.Compile(fmt.Sprintf("%s(.|\n|\r)*", endTag))
+		o.Expect(regexErr).NotTo(o.HaveOccurred())
+
+		g.By("3) Get all master nodes.")
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+		g.By("4) On all master nodes, check Oauth-apiserver log files for abnormal (fatal/SHOULD NOT HAPPEN) logs, expect none.")
+		keywords := "fatal|SHOULD NOT HAPPEN"
+		format := `[0-9TZ.:]{5,30}`
+		frontwords := `(\w+?[^0-9a-zA-Z]+?){,3}`
+		afterwords := `(\w+?[^0-9a-zA-Z]+?){,30}`
+		// Add one temporary exception 'Should not happen: OpenAPI V3 merge'，after related bug 2115634 is fixed, will remove it.
+		exceptions := "SHOULD NOT HAPPEN.*Kind=CertificateSigningRequest|Should not happen: OpenAPI V3|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|e2e-test.*-panic|kernel.*-panic|non-fatal"
+		cmd := fmt.Sprintf(`grep -hriE "(%s%s%s)+" /var/log/pods/openshift-oauth-apiserver_apiserver* | grep -Ev "%s" > /tmp/OCP-42937-oauthas-errors.log
+		sed -E "s/%s/../g" /tmp/OCP-42937-oauthas-errors.log | sort | uniq -c | sort -h | tee > /tmp/OCP-42937-oauthas-uniq-errors.log | head -10
+		echo '%s'
+		while read line; do
+			grep "$line" /tmp/OCP-42937-oauthas-errors.log | head -1
+		done < <(grep -oP "\w+?\.go\:[0-9]+" /tmp/OCP-42937-oauthas-uniq-errors.log | uniq | head -10)
+		echo '%s'`, frontwords, keywords, afterwords, exceptions, format, startTag, endTag)
+
+		for i, masterNode := range masterNodes {
+			g.By(fmt.Sprintf("4.%d -> step 1) Get log file from %s", i+1, masterNode))
+			masterNodeLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
+
+			g.By(fmt.Sprintf("4.%d -> step 2) Format log file from %s", i+1, masterNode))
+			masterNodeLogs = trimStartTag.ReplaceAllString(masterNodeLogs, "")
+			masterNodeLogs = trimEndTag.ReplaceAllString(masterNodeLogs, "")
+			for _, line := range strings.Split(masterNodeLogs, "\n") {
+				if strings.Trim(line, " ") != "" {
+					masterNodeAbnormalLogs = append(masterNodeAbnormalLogs, fmt.Sprintf("> %s", line))
+				}
+			}
+		}
+		e2e.Logf("Oauth-apiserver pods abnormal Logs ------------------------->\n%s", strings.Join(masterNodeAbnormalLogs, "\n"))
+		totalAbnormalLogCount += len(masterNodeAbnormalLogs)
+
+		g.By("5) On all master nodes, check Oauth-apiserver log files for panic error.")
+		cmd = fmt.Sprintf(`RETAG="[EW][0-9]{4}\s[0-9]{2}:[0-9]{2}"
+		PANIC="${RETAG}.*panic"
+		panic_logfiles=$(grep -riE "${PANIC}" /var/log/pods/openshift-oauth-apiserver_apiserver* | grep -Ev "%s" | cut -d ':' -f1 | head -10 | uniq)
+		echo '%s'
+		for f in ${panic_logfiles}; do
+			echo ">>> Panic log file: ${f}"
+			line=$(grep -inE "${PANIC}" "${f}" | grep -m 1 -Ev "%s"  | cut -d ':' -f1)
+			endline=$(( line + 20 ))
+			sed -n "${line},${endline}p" "${f}"
+		done
+		echo '%s'`, exceptions, startTag, exceptions, endTag)
+
+		for i, masterNode := range masterNodes {
+			g.By(fmt.Sprintf("5.%d -> step 1) Get log file from %s", i+1, masterNode))
+			externalLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
+
+			g.By(fmt.Sprintf("5.%d -> step 2) Format log file from %s", i+1, masterNode))
+			externalLogs = trimStartTag.ReplaceAllString(externalLogs, "")
+			externalLogs = trimEndTag.ReplaceAllString(externalLogs, "")
+			for _, line := range strings.Split(externalLogs, "\n") {
+				if strings.Trim(line, " ") != "" {
+					externalPanicLogs = append(externalPanicLogs, fmt.Sprintf("%s", line))
+				}
+			}
+		}
+		e2e.Logf("Oauth-apiserver pod panic Logs -------------------------->\n%s", strings.Join(externalPanicLogs, "\n"))
+		totalAbnormalLogCount += len(externalPanicLogs)
+
+		g.By("6) On all master nodes, check oauthas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
+		keywords = "panic|fatal|SHOULD NOT HAPPEN"
+		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)|panicked: false|e2e-test.*-panic|kernel.*-panic"
+		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/oauth-apiserver/audit*.log | grep -Ev '%s' > /tmp/OCP-42937-audit-errors.log
+		echo '%s'
+		while read line; do
+			grep "$line" /tmp/OCP-42937-audit-errors.log | head -1 | jq .
+		done < <(cat /tmp/OCP-42937-audit-errors.log | jq -r '.responseStatus.status + " - " + .responseStatus.message + " - " + .responseStatus.reason' | uniq | head -5 | cut -d '-' -f2 | awk '{$1=$1;print}')
+		echo '%s'`, keywords, exceptions, startTag, endTag)
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("6.%d -> step 1) Get log file from %s", i+1, masterNode))
@@ -2595,10 +2740,11 @@ spec:
 				}
 			}
 		}
-		e2e.Logf("OAS audit abnormal Logs --------------------->\n%s", strings.Join(auditAbnormalLogs, "\n"))
+		e2e.Logf("Oauth-apiserver audit abnormal Logs --------------------->\n%s", strings.Join(auditAbnormalLogs, "\n"))
 		totalAbnormalLogCount += len(auditAbnormalLogs)
 
 		g.By("7) Assert if abnormal log exits")
 		o.Expect(totalAbnormalLogCount).Should(o.BeZero())
 	})
+
 })
