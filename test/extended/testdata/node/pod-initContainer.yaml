@@ -9,9 +9,18 @@ objects:
     name: "${NAME}"
     namespace: "${NAMESPACE}"
   spec:
+    securityContext:
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
     initContainers:
     - name: inittest
       image: "registry.redhat.io/rhel7/rhel"
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
       command: ["bin/sh", "-ec", "echo running >> /mnt/data/test"]
       volumeMounts:
       - name: my-volume
@@ -19,6 +28,11 @@ objects:
     containers:
     - name: my-container
       image: "registry.redhat.io/rhel7/rhel"
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
       command: ["/bin/sh", "-ec", "ls /mnt/data; sleep 999999"]
       volumeMounts:
       - mountPath: /mnt/data

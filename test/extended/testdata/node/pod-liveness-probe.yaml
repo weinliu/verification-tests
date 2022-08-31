@@ -11,10 +11,19 @@ objects:
     annotations: 
       "unsupported.do-not-use.openshift.io/override-liveness-grace-period-seconds": ${OVERRIDELIVENESSGRACE}
   spec:
+    securityContext:
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
     terminationGracePeriodSeconds: ${{TERMINATIONGRACE}}
     containers:
     - image: "quay.io/openshifttest/hello-openshift@sha256:56c354e7885051b6bb4263f9faa58b2c292d44790599b7dde0e49e7c466cf339"
       name: test
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
       command: [bash, -c, "sleep 100000000"] 
       ports:
         - containerPort: 8080

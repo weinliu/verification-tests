@@ -291,7 +291,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		exutil.AssertWaitPollNoErr(err, "conainer not exit normally")
 
 		g.By("Delete init container")
-		err = podInitCon38271.deleteInitContainer(oc)
+		_, err = podInitCon38271.deleteInitContainer(oc)
 		exutil.AssertWaitPollNoErr(err, "fail to delete container")
 
 		g.By("Check init container not restart again")
@@ -420,7 +420,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		e2e.Logf("Container2 File Content is: %v", containerFile2)
 		o.Expect(containerFile2).To(o.Equal("written_from_container2"))
 	})
-	
+
 	// author: minmli@redhat.com
 	g.It("Author:minmli-High-47663-run pods in user namespaces via crio workload annotation", func() {
 		oc.SetupProject()
@@ -446,6 +446,6 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 
 		g.By("Check pod run in user namespace")
 		err = podUserNS47663.podRunInUserNS(oc)
-		exutil.AssertWaitPollNoErr(err, "pod not run in user namespace")		
+		exutil.AssertWaitPollNoErr(err, "pod not run in user namespace")
 	})
 })

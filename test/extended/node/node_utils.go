@@ -466,7 +466,7 @@ func (podInitCon *podInitConDescription) containerExit(oc *exutil.CLI) error {
 	})
 }
 
-func (podInitCon *podInitConDescription) deleteInitContainer(oc *exutil.CLI) error {
+func (podInitCon *podInitConDescription) deleteInitContainer(oc *exutil.CLI) (string, error) {
 	nodename, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].spec.nodeName}", "-n", podInitCon.namespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	containerID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].status.initContainerStatuses[0].containerID}", "-n", podInitCon.namespace).Output()
@@ -474,7 +474,7 @@ func (podInitCon *podInitConDescription) deleteInitContainer(oc *exutil.CLI) err
 	e2e.Logf("The containerID is %v", containerID)
 	initContainerID := string(containerID)[8:]
 	e2e.Logf("The initContainerID is %s", initContainerID)
-	return oc.AsAdmin().Run("debug").Args(`node/`+fmt.Sprintf("%s", nodename), "--", "chroot", "/host", "crictl", "rm", initContainerID).Execute()
+	return exutil.DebugNodeWithChroot(oc, fmt.Sprintf("%s", nodename), "crictl", "rm", initContainerID)
 }
 
 func (podInitCon *podInitConDescription) initContainerNotRestart(oc *exutil.CLI) error {
@@ -483,6 +483,7 @@ func (podInitCon *podInitConDescription) initContainerNotRestart(oc *exutil.CLI)
 		podname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-n", podInitCon.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(string(podname), "-n", podInitCon.namespace, "--", "cat", "/mnt/data/test").Output()
+		e2e.Logf("The /mnt/data/test: %s", output)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		found := re.FindAllString(output, -1)
 		if lenStr := len(found); lenStr > 1 {
