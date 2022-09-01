@@ -225,11 +225,12 @@ func getKernelPidMaxValue(kernel string) string {
 func compareSpecifiedValueByNameOnLabelNode(oc *exutil.CLI, labelNodeName, sysctlparm, specifiedvalue string) {
 
 	regexpstr, _ := regexp.Compile(sysctlparm + ".*")
-	output, err := exutil.DebugNodeWithChroot(oc, labelNodeName, "sysctl", sysctlparm)
-	conntrackMax := regexpstr.FindString(output)
+	//output, err := exutil.DebugNodeWithChroot(oc, labelNodeName, "sysctl", sysctlparm)
+	stdOut, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, labelNodeName, []string{"-q"}, "sysctl", sysctlparm)
+	conntrackMax := regexpstr.FindString(stdOut)
 	e2e.Logf("The value is %v on %v", conntrackMax, labelNodeName)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(output).To(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
+	o.Expect(stdOut).To(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
 
 }
 
@@ -241,11 +242,12 @@ func compareSysctlDifferentFromSpecifiedValueByName(oc *exutil.CLI, sysctlparm, 
 
 	regexpstr, _ := regexp.Compile(sysctlparm + ".*")
 	for i := 0; i < nodeListSize; i++ {
-		output, err := exutil.DebugNodeWithChroot(oc, nodeList[i], "sysctl", sysctlparm)
-		conntrackMax := regexpstr.FindString(output)
+		//output, err := exutil.DebugNodeWithChroot(oc, nodeList[i], "sysctl", sysctlparm)
+		stdOut, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, nodeList[i], []string{"-q"}, "sysctl", sysctlparm)
+		conntrackMax := regexpstr.FindString(stdOut)
 		e2e.Logf("The value is %v on %v", conntrackMax, nodeList[i])
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).NotTo(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
+		o.Expect(stdOut).NotTo(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
 	}
 
 }
@@ -259,17 +261,18 @@ func compareSysctlValueOnSepcifiedNodeByName(oc *exutil.CLI, tunedNodeName, sysc
 	// tuned nodes should have value of 1048578, others should be 1048576
 	regexpstr, _ := regexp.Compile(sysctlparm + ".*")
 	for i := 0; i < nodeListSize; i++ {
-		output, err := exutil.DebugNodeWithChroot(oc, nodeList[i], "sysctl", sysctlparm)
-		conntrackMax := regexpstr.FindString(output)
+		//output, err := exutil.DebugNodeWithChroot(oc, nodeList[i], "sysctl", sysctlparm)
+		stdOut, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, nodeList[i], []string{"-q"}, "sysctl", sysctlparm)
+		conntrackMax := regexpstr.FindString(stdOut)
 		e2e.Logf("The value is %v on %v", conntrackMax, nodeList[i])
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if nodeList[i] == tunedNodeName {
-			o.Expect(output).To(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
+			o.Expect(stdOut).To(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
 		} else {
 			if len(defaultvalue) == 0 {
-				o.Expect(output).NotTo(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
+				o.Expect(stdOut).NotTo(o.ContainSubstring(sysctlparm + " = " + specifiedvalue))
 			} else {
-				o.Expect(output).To(o.ContainSubstring(sysctlparm + " = " + defaultvalue))
+				o.Expect(stdOut).To(o.ContainSubstring(sysctlparm + " = " + defaultvalue))
 			}
 		}
 	}
@@ -498,7 +501,8 @@ func AssertTunedAppliedMC(oc *exutil.CLI, mcpName string, filter string) {
 
 //AssertTunedAppliedToNode Check if customed tuned applied to a certain node
 func AssertTunedAppliedToNode(oc *exutil.CLI, tunedNodeName string, filter string) bool {
-	cmdLineOutput, err := exutil.DebugNode(oc, tunedNodeName, "cat", "/proc/cmdline")
+	//cmdLineOutput, err := exutil.DebugNode(oc, tunedNodeName, "cat", "/proc/cmdline")
+	cmdLineOutput, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "cat", "/proc/cmdline")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	var isMatch bool
 	if strings.Contains(cmdLineOutput, filter) {
@@ -618,7 +622,8 @@ func compareSpecifiedValueByNameOnLabelNodewithRetry(oc *exutil.CLI, ntoNamespac
 
 	err := wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
 
-		sysctlOutput, err := exutil.DebugNodeWithChroot(oc, nodeName, "sysctl", sysctlparm)
+		//sysctlOutput, err := exutil.DebugNodeWithChroot(oc, nodeName, "sysctl", sysctlparm)
+		sysctlOutput, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, nodeName, []string{"-q"}, "sysctl", sysctlparm)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		regexpstr, _ := regexp.Compile(sysctlparm + " = " + specifiedvalue)

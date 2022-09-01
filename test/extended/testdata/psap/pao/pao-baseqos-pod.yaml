@@ -8,7 +8,15 @@ spec:
   containers:
   - name: guaranteed-pod
     image: quay.io/openshift-psap-qe/nginx-alpine:multiarch
-    imagePullPolicy: IfNotPresent
+    imagePullPolicy: Always
+    securityContext:
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL    
     resources:
       limits:
         memory: "100Mi"

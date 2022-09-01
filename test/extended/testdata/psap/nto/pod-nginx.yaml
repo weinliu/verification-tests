@@ -7,7 +7,15 @@ metadata:
 spec:
   containers:
   - name: nginx
+    securityContext:
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
     image: quay.io/openshift-psap-qe/nginx-alpine:multiarch
-    imagePullPolicy: IfNotPresent
+    imagePullPolicy: Always
 
 

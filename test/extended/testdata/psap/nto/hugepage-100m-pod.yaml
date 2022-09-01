@@ -7,8 +7,15 @@ metadata:
 spec:
   containers:
   - securityContext:
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
+      allowPrivilegeEscalation: false
       capabilities:
-        add: [ "IPC_LOCK" ]
+        drop:
+        - ALL
+      # capabilities:
+      #   add: [ "IPC_LOCK" ]
     image: rhel7:latest
     command:
     - sleep

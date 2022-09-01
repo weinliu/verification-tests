@@ -504,7 +504,7 @@ func GetMachineSetInstanceType(oc *CLI) string {
 	return instanceType
 }
 
-//GetNodeNameByMachineset used for get node name via machineset name
+//GetNodeNameByMachineset used for get
 func GetNodeNameByMachineset(oc *CLI, machinesetName string) string {
 
 	machinesetLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", machinesetName, "-n", "openshift-machine-api", "-ojsonpath={.spec.selector.matchLabels.machine\\.openshift\\.io/cluster-api-machineset}").Output()

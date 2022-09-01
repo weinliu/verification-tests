@@ -12,7 +12,15 @@ objects:
     spec:
       containers:
       - name: test-go
-        image: quay.io/openshifttest/hello-openshift:1.2.0
+        securityContext:
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
+        image: quay.io/openshifttest/hello-openshift:multiarch
         env:
         - name: GIN_MODE
           value: release
