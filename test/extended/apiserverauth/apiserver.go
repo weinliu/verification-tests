@@ -2747,4 +2747,20 @@ spec:
 		o.Expect(totalAbnormalLogCount).Should(o.BeZero())
 	})
 
+	// author: zxiao@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Medium-11476-[origin_infrastructure_392] oadm new-project should fail when invalid node selector is given", func() {
+		g.By("# Create projects with an invalid node-selector(the node selector is neither equality-based nor set-based)")
+		projectName := exutil.RandStrCustomize("abcdefghijklmnopqrstuvwxyz", 5)
+		invalidNodeSelectors := []string{"env:qa", "env,qa", "env [qa]", "env,"}
+
+		for _, invalidNodeSelector := range invalidNodeSelectors {
+			g.By(fmt.Sprintf("## Create project %s with node selector %s, expect failure", projectName, invalidNodeSelector))
+			output, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("new-project", projectName, fmt.Sprintf("--node-selector=%s", invalidNodeSelector)).Output()
+			o.Expect(err).To(o.HaveOccurred())
+
+			g.By("## Assert error message is in expected format")
+			invalidOutputRegex := fmt.Sprintf("Invalid value.*%s", regexp.QuoteMeta(invalidNodeSelector))
+			o.Expect(output).To(o.MatchRegexp(invalidOutputRegex))
+		}
+	})
 })
