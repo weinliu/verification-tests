@@ -34,9 +34,17 @@ type podModify struct {
 }
 
 type seccompProfile struct {
-	name      string
-	namespace string
-	template  string
+	name            string
+	namespace       string
+	baseprofilename string
+	template        string
+}
+
+type podWithProfile struct {
+	name             string
+	namespace        string
+	localhostProfile string
+	template         string
 }
 
 func createSecurityProfileOperator(oc *exutil.CLI, subD subscriptionDescription, ogD operatorGroupDescription) {
@@ -159,7 +167,7 @@ func checkReadyPodCountOfDaemonset(oc *exutil.CLI, name string, namespace string
 }
 
 func (secProfile *seccompProfile) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", secProfile.template, "-p", "NAME="+secProfile.name, "NAMESPACE="+secProfile.namespace)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", secProfile.template, "-p", "NAME="+secProfile.name, "NAMESPACE="+secProfile.namespace, "BASEPROFILENAME="+secProfile.baseprofilename)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"regexp"
 	"strings"
 	"time"
 
@@ -454,4 +455,29 @@ func SkipMissingDefaultSC(oc *exutil.CLI) {
 	} else {
 		e2e.Logf("This default sc is: %s", output)
 	}
+}
+
+func assertKeywordsExistsInFile(oc *exutil.CLI, keywords string, filePath string, flag bool) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		mnodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node.openshift.io/os_id=rhcos,node-role.kubernetes.io/master=",
+			"-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		standOut, _, _ := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, mnodeName, []string{"-q"}, "ls", "-ltr", filePath)
+		content, _, _ := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, mnodeName, []string{"-q"}, "cat", filePath)
+		filePathMatched, _ := regexp.MatchString(filePath, string(standOut))
+		contentMatched, _ := regexp.MatchString(keywords, string(content))
+
+		if flag == true {
+			if filePathMatched && contentMatched {
+				return true, nil
+			}
+		}
+		if flag == false {
+			if filePathMatched && !contentMatched {
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("File %s not exists on node! \n", filePath))
 }
