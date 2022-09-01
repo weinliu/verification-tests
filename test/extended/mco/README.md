@@ -262,3 +262,28 @@ It is true if the stored value is not nil
                 spec := JSON(resource.GetOrFail("{.spec}"))
                 o.Expect(spec.Get("configuration").Exists()).To(o.BeTrue())  // Make sure that the MCP spec contains the "configuration" key values
 ```
+
+## Log Extension
+
+Integrate logging framework `github.com/rs/zerolog` with `ginkgo.GinkgoWriter`, support debugg logging, user needs to export environment variable `GINKGO_TEST_ENABLE_DEBUG_LOG`
+
+```
+export GINKGO_TEST_ENABLE_DEBUG_LOG=yes
+```
+
+```
+import (
+        logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
+)
+
+g.It("Author:rioliu-Critical-12345-log ext demo [Serial]", func() {
+        logger.Infof("Hello %s", name)
+        logger.Errorf("Test is failed %v", err)
+        logger.Debugf("Debug logging %s", output)
+})
+
+Output:
+Jul 27 15:12:01.173: INFO: Hello Openshift
+Jul 27 15:12:02.123: ERROR: Test is failed return code is -1
+Jul 27 15:12:02.165: DEBUG: Debug logging <<<<^_^>>>>
+```
