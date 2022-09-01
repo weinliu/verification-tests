@@ -123,4 +123,26 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		e2e.Logf("The alertRunbook is %v", alertRunbook)
 		o.Expect(alertRunbook).To(o.ContainSubstring("https://github.com/openshift/runbooks/blob/master/alerts/cluster-network-operator/NodeWithoutOVNKubeNodePodRunning.md"))
 	})
+
+	g.It("Author:weliang-Medium-51723-bug 2094068 Create runbook and link SOP for NorthboundStale alert", func() {
+		networkType := exutil.CheckNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+
+		alertName, NameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", "-o=jsonpath={.spec.groups[*].rules[*].alert}").Output()
+		o.Expect(NameErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The alertName is %v", alertName)
+		o.Expect(alertName).To(o.ContainSubstring("NorthboundStale"))
+
+		alertSeverity, severityErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", "-o=jsonpath={.spec.groups[*].rules[?(@.alert==\"NorthboundStale\")].labels.severity}").Output()
+		o.Expect(severityErr).NotTo(o.HaveOccurred())
+		e2e.Logf("alertSeverity is %v", alertSeverity)
+		o.Expect(alertSeverity).To(o.ContainSubstring("warning"))
+
+		alertRunbook, runbookErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", "-o=jsonpath={.spec.groups[*].rules[?(@.alert==\"NorthboundStale\")].annotations.runbook_url}").Output()
+		o.Expect(runbookErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The alertRunbook is %v", alertRunbook)
+		o.Expect(alertRunbook).To(o.ContainSubstring("https://github.com/openshift/runbooks/blob/master/alerts/cluster-network-operator/NorthboundStaleAlert.md"))
+	})
 })
