@@ -12,9 +12,18 @@ objects:
       io.openshift.builder: "true"
       io.kubernetes.cri-o.userns-mode: "auto"
   spec:
+    securityContext:
+      runAsUser: 1000
+      seccompProfile:
+        type: RuntimeDefault
     containers:
     - name: userns-test-1
       image: quay.io/openshifttest/fedora:1.2.0
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
       command: ["sleep", "3601"]
 parameters:      
 - name: NAME

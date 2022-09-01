@@ -603,7 +603,7 @@ func (podUserNS *podUserNSDescription) crioWorkloadConfigExist(oc *exutil.CLI) e
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodename := nodeList.Items[0].Name
-		workloadString, err := oc.AsAdmin().Run("debug").Args(`node/`+nodename, "--", "chroot", "/host", "cat", "/etc/crio/crio.conf.d/00-default").Output()
+		workloadString, err := exutil.DebugNodeWithChroot(oc, nodename, "cat", "/etc/crio/crio.conf.d/00-default")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(string(workloadString), "crio.runtime.workloads.openshift-builder") && strings.Contains(string(workloadString), "io.kubernetes.cri-o.userns-mode") && strings.Contains(string(workloadString), "io.kubernetes.cri-o.Devices") {
 			e2e.Logf("the crio workload exist in /etc/crio/crio.conf.d/00-default")
@@ -620,9 +620,9 @@ func (podUserNS *podUserNSDescription) userContainersExistForNS(oc *exutil.CLI) 
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodename := nodeList.Items[0].Name
-		userContainers, err := oc.AsAdmin().Run("debug").Args(`node/`+nodename, "--", "chroot", "/host", "cat", "/etc/subuid").Output()
+		userContainers, err := exutil.DebugNodeWithChroot(oc, nodename, "cat", "/etc/subuid")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		groupContainers, err := oc.AsAdmin().Run("debug").Args(`node/`+nodename, "--", "chroot", "/host", "cat", "/etc/subgid").Output()
+		groupContainers, err := exutil.DebugNodeWithChroot(oc, nodename, "cat", "/etc/subgid")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(string(userContainers), "containers") && strings.Contains(string(groupContainers), "containers") {
 			e2e.Logf("the user containers exist in /etc/subuid and /etc/subgid")
@@ -650,11 +650,11 @@ func (podUserNS *podUserNSDescription) podRunInUserNS(oc *exutil.CLI) error {
 
 			nodename, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].spec.nodeName}", "-n", podUserNS.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			nodeUserNS, err := oc.AsAdmin().Run("debug").Args(`node/`+string(nodename), "--", "chroot", "/host", "/bin/bash", "-c", "lsns -t user | grep /usr/lib/systemd/systemd").Output()
+			nodeUserNS, err := exutil.DebugNodeWithChroot(oc, string(nodename), "/bin/bash", "-c", "lsns -t user | grep /usr/lib/systemd/systemd")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("host user ns string : %v", nodeUserNS)
 			nodeNSstr := strings.Split(string(nodeUserNS), "\n")
-			nodeNS := strings.Fields(nodeNSstr[len(nodeNSstr)-3])
+			nodeNS := strings.Fields(nodeNSstr[0])
 			e2e.Logf("host user namespace : %s", nodeNS[0])
 			if nodeNS[0] == podNS[1] {
 				e2e.Logf("pod run in the same user namespace with host")
