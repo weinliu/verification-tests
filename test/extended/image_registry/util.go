@@ -1117,6 +1117,20 @@ type signatureSource struct {
 }
 
 func (signsrc *signatureSource) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", signsrc.template, "-p", "NAME="+signsrc.name, "IMAGEID="+signsrc.imageid, "TITLE="+signsrc.title, "CONTENT="+signsrc.content)
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", signsrc.template, "-p", "NAME="+signsrc.name, "IMAGEID="+signsrc.imageid, "TITLE="+signsrc.title, "CONTENT="+signsrc.content)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+type isSource struct {
+	name      string
+	namespace string
+	repo      string
+	tagname   string
+	image     string
+	template  string
+}
+
+func (issrc *isSource) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", issrc.template, "-p", "NAME="+issrc.name, "REPO="+issrc.repo, "NAMESPACE="+issrc.namespace, "TAGNAME="+issrc.tagname, "IMAGE="+issrc.image)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }

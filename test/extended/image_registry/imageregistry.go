@@ -2845,4 +2845,50 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		})
 		exutil.AssertWaitPollNoErr(errWait, "no useful debugging info")
 	})
+
+	//author: xiuwang@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Low-10585-Low-10637-Do not create tags for imageStream if image repository does not have tags", func() {
+		var (
+			isFile = filepath.Join(imageRegistryBaseDir, "imagestream-notag.yaml")
+			issrc  = isSource{
+				name:      "is10585",
+				namespace: "",
+				image:     "quay.io/openshifttest/busybox",
+				template:  isFile,
+			}
+		)
+		g.By("Create imagestreamimport")
+		issrc.namespace = oc.Namespace()
+		issrc.create(oc)
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("imagestream", issrc.name, "-o=jsonpath={.spec}", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).NotTo(o.ContainSubstring("tag"))
+		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("imagestream", issrc.name, "-o=jsonpath={.status}", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).NotTo(o.ContainSubstring("tag"))
+
+		g.By("Import-image to a non-exist imagestream")
+		output, _ = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("non-exist-is", "-n", oc.Namespace()).Output()
+		o.Expect(output).To(o.ContainSubstring("pass --confirm to create and import"))
+	})
+
+	//author: xiuwang@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Critical-10721-Could not import the tag when reference is true", func() {
+		var (
+			isFile = filepath.Join(imageRegistryBaseDir, "imagestream-reference-true.yaml")
+			issrc  = isSource{
+				name:      "is10721",
+				namespace: "",
+				tagname:   "referencetrue",
+				image:     "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f",
+				template:  isFile,
+			}
+		)
+		g.By("Create imagestreamimport")
+		issrc.namespace = oc.Namespace()
+		issrc.create(oc)
+		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("imagestreamtag", issrc.name+":"+issrc.tagname, "-n", oc.Namespace()).Output()
+		o.Expect(output).To(o.ContainSubstring(`is10721:referencetrue" not found`))
+	})
+
 })
