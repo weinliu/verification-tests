@@ -20,6 +20,13 @@ objects:
       nodeSelector:
         kubernetes.io/hostname: "${HOSTNAME}"
       restartPolicy: Never
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        runAsNonRoot: true
+        seccompProfile:
+            type: "RuntimeDefault"
 parameters:
   - name: NAME
   - name: HOSTNAME

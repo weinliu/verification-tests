@@ -773,7 +773,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Eventually(workerNode.Poll(`{.spec.taints[?(@.effect=="NoSchedule")].effect}`),
 			"20m", "1m").Should(o.Equal("NoSchedule"), fmt.Sprintf("Node %s was not cordoned", workerNode.name))
 
-		g.By("Check MCC logs to see the sleep interval b/w failed drains")
+		g.By("Check MCC logs to see the early sleep interval b/w failed drains")
 		var podLogs string
 		// Wait until trying drain for 6 times
 		waitErr := wait.Poll(1*time.Minute, 15*time.Minute, func() (bool, error) {
@@ -786,8 +786,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 			return false, nil
 		})
-		o.Expect(waitErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Cannot get 'Drain failed' log lines from controller for node %s", workerNode.GetName()))
 		logger.Infof("Drain log lines for node %s:\n %s", workerNode.GetName(), podLogs)
+		o.Expect(waitErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Cannot get 'Drain failed' log lines from controller for node %s", workerNode.GetName()))
 		timestamps := filterTimestampFromLogs(podLogs, 6)
 		logger.Infof("Timestamps %s", timestamps)
 		// First 5 retries should be queued every 1 minute. We check 1 min < time < 2.7 min
@@ -795,10 +795,25 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(getTimeDifferenceInMinute(timestamps[0], timestamps[1])).Should(o.BeNumerically(">=", 1))
 		o.Expect(getTimeDifferenceInMinute(timestamps[3], timestamps[4])).Should(o.BeNumerically("<=", 2.7))
 		o.Expect(getTimeDifferenceInMinute(timestamps[3], timestamps[4])).Should(o.BeNumerically(">=", 1))
-		// From 5 retries on, they should be queued ever 5 minutes instead. We check 5 min < time < 6.7 min
-		o.Expect(getTimeDifferenceInMinute(timestamps[4], timestamps[5])).Should(o.BeNumerically("<=", 6.7))
-		// MCO team is deciding if this behavior will continue or all retries will be requeued after 1min. Right now all of them are using 1 minute.
-		// o.Expect(getTimeDifferenceInMinute(timestamps[4], timestamps[5])).Should(o.BeNumerically(">=", 5))
+
+		g.By("Check MCC logs to see the increase in the sleep interval b/w failed drains")
+		lWaitErr := wait.Poll(1*time.Minute, 15*time.Minute, func() (bool, error) {
+			logs, _ := mcc.GetFilteredLogsAsList(workerNode.GetName() + ".*Drain has been failing for more than 10 minutes. Waiting 5 minutes")
+			if len(logs) > 1 {
+				// Get only 2 lines to avoid flooding the test logs, ignore the rest if any.
+				podLogs = strings.Join(logs[0:2], "\n")
+				return true, nil
+			}
+
+			return false, nil
+		})
+		logger.Infof("Long wait drain log lines for node %s:\n %s", workerNode.GetName(), podLogs)
+		o.Expect(lWaitErr).NotTo(o.HaveOccurred(),
+			fmt.Sprintf("Cannot get 'Drain has been failing for more than 10 minutes. Waiting 5 minutes' log lines from controller for node %s",
+				workerNode.GetName()))
+		// Following developers' advice we dont check the time spam between long wait log lines. Read:
+		// https://github.com/openshift/machine-config-operator/pull/3178
+		// https://bugzilla.redhat.com/show_bug.cgi?id=2092442
 	})
 
 	g.It("Author:rioliu-NonPreRelease-High-43278-security fix for unsafe cipher [Serial]", func() {
