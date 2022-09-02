@@ -15,7 +15,7 @@ spec:
         app: prometheus-example-app
     spec:
       containers:
-      - image: quay.io/openshifttest/prometheus-example-app:multiarch
+      - image: quay.io/openshifttest/prometheus-example-app@sha256:382dc349f82d730b834515e402b48a9c7e2965d0efbc42388bd254f424f6193e
         imagePullPolicy: IfNotPresent
         name: prometheus-example-app
 ---
