@@ -3,6 +3,7 @@ package apiserverauth
 import (
 	"bufio"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -2762,5 +2763,74 @@ spec:
 			invalidOutputRegex := fmt.Sprintf("Invalid value.*%s", regexp.QuoteMeta(invalidNodeSelector))
 			o.Expect(output).To(o.MatchRegexp(invalidOutputRegex))
 		}
+	})
+
+	// author: dpunia@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-Author:dpunia-Medium-10969-Create clusterip service", func() {
+		var (
+			name  = "ocp-10969-openshift"
+			image = "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83"
+		)
+
+		g.By("1) Create new project required for this test execution")
+		oc.SetupProject()
+		namespace := oc.Namespace()
+
+		g.By("2) Get cluster worker node to deploy openshift pod")
+		workernodes, workernodegeterr := exutil.GetFirstWorkerNode(oc)
+		o.Expect(workernodegeterr).NotTo(o.HaveOccurred())
+
+		g.By("3) Create new hello pod")
+		podTemplate := getTestDataFilePath("create-pod.yaml")
+		pod := exutil.Pod{Name: name, Namespace: namespace, Template: podTemplate, Parameters: []string{"IMAGE=" + image, "HOSTNAME=" + workernodes, "PORT=8080"}}
+		defer pod.Delete(oc)
+		pod.Create(oc)
+
+		//Generate random port used to create service
+		rand.Seed(time.Now().UnixNano())
+		randomServicePort := rand.Intn(9000-6000) + 6000
+
+		g.By("4) Create clusterip service with --clusterip")
+		servicecreateout, servicecreateerror := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "service", "clusterip", name, "--clusterip", "172.30.154.186", "--tcp", fmt.Sprintf("%v:8080", randomServicePort)).Output()
+		o.Expect(servicecreateerror).NotTo(o.HaveOccurred())
+		o.Expect(servicecreateout).Should(o.ContainSubstring(fmt.Sprintf("service/%v created", name)))
+
+		g.By("5) Check clusterip service running status")
+		servicechkout, servicechkerror := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", fmt.Sprintf("172.30.154.186:%v", randomServicePort)).Output()
+		o.Expect(servicechkerror).NotTo(o.HaveOccurred())
+		o.Expect(servicechkout).Should(o.ContainSubstring("Hello OpenShift"))
+		servicedelerror := oc.Run("delete").Args("-n", namespace, "svc", name).Execute()
+		o.Expect(servicedelerror).NotTo(o.HaveOccurred())
+
+		g.By("6) Create clusterip service without --clusterip option")
+		servicecreateout, servicecreateerror = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "service", "clusterip", name, "--tcp", fmt.Sprintf("%v:8080", randomServicePort)).Output()
+		o.Expect(servicecreateout).Should(o.ContainSubstring(fmt.Sprintf("service/%v created", name)))
+		o.Expect(servicecreateerror).NotTo(o.HaveOccurred())
+
+		g.By("7) Check clusterip service running status with allotted IP")
+		serviceip, serviceipgetError := oc.WithoutNamespace().Run("get").Args("service", name, "-o=jsonpath={.spec.clusterIP}", "-n", namespace).Output()
+		o.Expect(serviceipgetError).NotTo(o.HaveOccurred())
+		serviceError := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+			servicechkout, servicechkerror = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", fmt.Sprintf("%v:%v", serviceip, randomServicePort)).Output()
+			if servicechkerror == nil {
+				o.Expect(servicechkout).Should(o.ContainSubstring("Hello OpenShift"))
+				e2e.Logf("Step 7, Test Passed: Service Accessible with allocated IP")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(serviceError, "Step 7, Test Failed: Service Not Accessible with allocated IP")
+		servicedelerror = oc.Run("delete").Args("-n", namespace, "svc", name).Execute()
+		o.Expect(servicedelerror).NotTo(o.HaveOccurred())
+
+		g.By("8) Create clusterip service without '--tcp' option")
+		servicecreateout, servicecreateerror = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "service", "clusterip", name).Output()
+		o.Expect(servicecreateout).Should(o.ContainSubstring("error: at least one tcp port specifier must be provided"))
+		o.Expect(servicecreateerror).To(o.HaveOccurred())
+
+		g.By("9) Create clusterip service with '--dry-run' option.")
+		servicecreateout, servicecreateerror = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "service", "clusterip", name, "--tcp", fmt.Sprintf("%v:8080", randomServicePort), "--dry-run=client").Output()
+		o.Expect(servicecreateout).Should(o.ContainSubstring(fmt.Sprintf("service/%v created (dry run)", name)))
+		o.Expect(servicecreateerror).NotTo(o.HaveOccurred())
 	})
 })
