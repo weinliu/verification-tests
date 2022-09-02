@@ -42,37 +42,77 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	g.It("Author:jfan-High-37312-SDK olm improve manage operator bundles in new manifests metadata format", func() {
 
 		operatorsdkCLI.showInfo = true
-		exec.Command("bash", "-c", "mkdir /tmp/memcached-operator-37312 && cd /tmp/memcached-operator-37312 && operator-sdk init --plugins ansible.sdk.operatorframework.io/v1 --domain example.com --group cache --version v1alpha1 --kind Memcached --generate-playbook").Output()
-		defer exec.Command("bash", "-c", "rm -rf /tmp/memcached-operator-37312").Output()
-		result, err := exec.Command("bash", "-c", "cd /tmp/memcached-operator-37312 && operator-sdk generate bundle --deploy-dir=config --crds-dir=config/crds --version=0.0.1").Output()
+		tmpBasePath := "/tmp/ocp-37312-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-37312")
+		err := os.MkdirAll(tmpPath, 0o755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
+
+		g.By("Step: init Ansible Based Operator")
+		_, err = operatorsdkCLI.Run("init").Args("--plugins", "ansible", "--domain", "example.com", "--group", "cache", "--version", "v1alpha1", "--kind", "Memcached", "--generate-playbook").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Step: Bundle manifests generate")
+		result, err := exec.Command("bash", "-c", "cd "+tmpPath+" && operator-sdk generate bundle --deploy-dir=config --crds-dir=config/crds --version=0.0.1").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.ContainSubstring("Bundle manifests generated successfully in bundle"))
+
 	})
 
 	// author: jfan@redhat.com
 	g.It("Author:jfan-High-37141-SDK Helm support simple structural schema generation for Helm CRDs", func() {
 
 		operatorsdkCLI.showInfo = true
-		exec.Command("bash", "-c", "mkdir /tmp/nginx-operator-37141 && cd /tmp/nginx-operator-37141 && operator-sdk init --project-name nginx-operator --plugins helm.sdk.operatorframework.io/v1").Output()
-		defer exec.Command("bash", "-c", "rm -rf /tmp/nginx-operator-37141").Output()
-		result, err := exec.Command("bash", "-c", "cd /tmp/nginx-operator-37141 && operator-sdk create api --group apps --version v1beta1 --kind Nginx").Output()
+		tmpBasePath := "/tmp/ocp-37141-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "nginx-operator-37141")
+		err := os.MkdirAll(tmpPath, 0o755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
+
+		g.By("Step: init Ansible Based Operator")
+		_, err = operatorsdkCLI.Run("init").Args("--project-name", "nginx-operator", "--plugins", "helm.sdk.operatorframework.io/v1").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Step: Create API.")
+		result, err := operatorsdkCLI.Run("create").Args("api", "--group", "apps", "--version", "v1beta1", "--kind", "Nginx").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.ContainSubstring("Created helm-charts/nginx"))
-		result, err = exec.Command("bash", "-c", "cat /tmp/nginx-operator-37141/config/crd/bases/apps.my.domain_nginxes.yaml | grep -E \"x-kubernetes-preserve-unknown-fields: true\"").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(result).To(o.ContainSubstring("x-kubernetes-preserve-unknown-fields: true"))
+
+		annotationsFile := filepath.Join(tmpPath, "config", "crd", "bases", "apps.my.domain_nginxes.yaml")
+		content := getContent(annotationsFile)
+		o.Expect(content).To(o.ContainSubstring("x-kubernetes-preserve-unknown-fields: true"))
+
 	})
 
 	// author: jfan@redhat.com
 	g.It("Author:jfan-High-37311-SDK ansible valid structural schemas for ansible based operators", func() {
+
 		operatorsdkCLI.showInfo = true
-		exec.Command("bash", "-c", "mkdir /tmp/ansible-operator-37311 && cd /tmp/ansible-operator-37311 && operator-sdk init --project-name nginx-operator --plugins ansible.sdk.operatorframework.io/v1").Output()
-		defer exec.Command("bash", "-c", "rm -rf /tmp/ansible-operator-37311").Output()
-		_, err := exec.Command("bash", "-c", "cd /tmp/ansible-operator-37311 && operator-sdk create api --group apps --version v1beta1 --kind Nginx").Output()
+		tmpBasePath := "/tmp/ocp-37311-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "ansible-operator-37311")
+		err := os.MkdirAll(tmpPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		output, err := exec.Command("bash", "-c", "cat /tmp/ansible-operator-37311/config/crd/bases/apps.my.domain_nginxes.yaml | grep -E \"x-kubernetes-preserve-unknown-fields: true\"").Output()
+		defer os.RemoveAll(tmpBasePath)
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
+
+		g.By("Step: init Ansible Based Operator")
+		_, err = operatorsdkCLI.Run("init").Args("--project-name", "nginx-operator", "--plugins", "ansible.sdk.operatorframework.io/v1").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("x-kubernetes-preserve-unknown-fields: true"))
+
+		g.By("Step: Create API.")
+
+		_, err = operatorsdkCLI.Run("create").Args("api", "--group", "apps", "--version", "v1beta1", "--kind", "Nginx").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		annotationsFile := filepath.Join(tmpPath, "config", "crd", "bases", "apps.my.domain_nginxes.yaml")
+		content := getContent(annotationsFile)
+		o.Expect(content).To(o.ContainSubstring("x-kubernetes-preserve-unknown-fields: true"))
+
 	})
 
 	// author: jfan@redhat.com
@@ -282,16 +322,30 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("Author:jfan-Medium-40521-SDK olm improve manage operator bundles in new manifests metadata format", func() {
+
 		operatorsdkCLI.showInfo = true
-		exec.Command("bash", "-c", "mkdir /tmp/memcached-operator-40521 && cd /tmp/memcached-operator-40521 && operator-sdk init --plugins ansible.sdk.operatorframework.io/v1 --domain example.com --group cache --version v1alpha1 --kind Memcached --generate-playbook").Output()
-		defer exec.Command("bash", "-c", "rm -rf /tmp/memcached-operator-40521").Output()
-		result, err := exec.Command("bash", "-c", "cd /tmp/memcached-operator-40521 && operator-sdk generate bundle --deploy-dir=config --crds-dir=config/crds --version=0.0.1").Output()
+		tmpBasePath := "/tmp/ocp-40521-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-40521")
+		err := os.MkdirAll(tmpPath, 0o755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
+
+		g.By("Step: init Ansible Based Operator")
+		_, err = operatorsdkCLI.Run("init").Args("--plugins", "ansible.sdk.operatorframework.io/v1", "--domain", "example.com", "--group", "cache", "--version", "v1alpha1", "--kind", "Memcached", "--generate-playbook").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Step: Bundle manifests generate")
+		result, err := exec.Command("bash", "-c", "cd "+tmpPath+" && operator-sdk generate bundle --deploy-dir=config --crds-dir=config/crds --version=0.0.1").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.ContainSubstring("Bundle manifests generated successfully in bundle"))
-		exec.Command("bash", "-c", "cd /tmp/memcached-operator-40521 && sed -i '/icon/,+2d' ./bundle/manifests/memcached-operator-40521.clusterserviceversion.yaml").Output()
-		msg, err := exec.Command("bash", "-c", "cd /tmp/memcached-operator-40521 && operator-sdk bundle validate ./bundle &> ./validateresult && cat validateresult").Output()
+
+		exec.Command("bash", "-c", "cd "+tmpPath+" && sed -i '/icon/,+2d' ./bundle/manifests/memcached-operator-40521.clusterserviceversion.yaml").Output()
+		msg, err := exec.Command("bash", "-c", "cd "+tmpPath+" && operator-sdk bundle validate ./bundle &> ./validateresult && cat validateresult").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("All validation tests have completed successfully"))
+
 	})
 
 	// author: jfan@redhat.com
@@ -1413,13 +1467,31 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	g.It("ConnectedOnly-Author:chuo-High-31219-scorecard bundle is mandatory ", func() {
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
-		exec.Command("bash", "-c", "mkdir -p /tmp/ocp-31219/memcached-operator && cd /tmp/ocp-31219/memcached-operator && operator-sdk init --plugins=ansible --domain example.com").Output()
-		defer exec.Command("bash", "-c", "rm -rf /tmp/ocp-31219").Output()
-		exec.Command("bash", "-c", "cd /tmp/ocp-31219/memcached-operator && operator-sdk create api --group cache --version v1alpha1 --kind Memcached --generate-role").Output()
-		exec.Command("bash", "-c", "cd /tmp/ocp-31219/memcached-operator && operator-sdk generate bundle --deploy-dir=config --crds-dir=config/crds --version=0.0.1").Output()
-		output, err := operatorsdkCLI.Run("scorecard").Args("/tmp/ocp-31219/memcached-operator/bundle", "-c", "/tmp/ocp-31219/memcached-operator/config/scorecard/bases/config.yaml", "-w", "60s", "--selector=test=basic-check-spec-test", "-n", oc.Namespace()).Output()
+		tmpBasePath := "/tmp/ocp-31219-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-31219")
+		err := os.MkdirAll(tmpPath, 0o755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
+
+		g.By("Step: init Ansible Based Operator")
+		_, err = operatorsdkCLI.Run("init").Args("--plugins", "ansible", "--domain", "example.com").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Step: Create API.")
+		output, err := operatorsdkCLI.Run("create").Args("api", "--group", "cache", "--version", "v1alpha1", "--kind", "Memcached", "--generate-role").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Writing kustomize manifests"))
+
+		result, err := exec.Command("bash", "-c", "cd "+tmpPath+" && operator-sdk generate bundle --deploy-dir=config --crds-dir=config/crds --version=0.0.1").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(result).To(o.ContainSubstring("Bundle manifests generated successfully in bundle"))
+
+		output, err = operatorsdkCLI.Run("scorecard").Args("bundle", "-c", "config/scorecard/bases/config.yaml", "-w", "60s", "--selector=test=basic-check-spec-test", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("tests selected"))
+
 	})
 
 	// author: chuo@redhat.com
