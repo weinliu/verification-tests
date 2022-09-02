@@ -2292,8 +2292,8 @@ spec:
 		format := `[0-9TZ.:]{5,30}`
 		frontwords := `(\w+?[^0-9a-zA-Z]+?){,3}`
 		afterwords := `(\w+?[^0-9a-zA-Z]+?){,30}`
-		// Add one temporary exception 'Should not happen: OpenAPI，after related bug 2115634 is fixed, will remove it.
-		exceptions := "SHOULD NOT HAPPEN.*Kind=CertificateSigningRequest|Should not happen: OpenAPI V3 m|Should not happen: O|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|e2e-test.*-panic|kernel.*-panic|non-fatal"
+		// Add one temporary exception 'merge.go:121] Should not happen: OpenAPI V3 merge'，after related bug 2115634 is fixed, will remove it.
+		exceptions := "SHOULD NOT HAPPEN.*Kind=CertificateSigningRequest|merge.go:121] Should|Should not happen: Open|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|e2e-test.*-panic|kernel.*-panic|non-fatal"
 		cmd := fmt.Sprintf(`export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig
 		grep -hriE "(%s%s%s)+" /var/log/pods/openshift-kube-apiserver-operator* | grep -Ev "%s" > /tmp/OCP-39601-kaso-errors.log
 		sed -E "s/%s/../g" /tmp/OCP-39601-kaso-errors.log | sort | uniq -c | sort -h | tee /tmp/OCP-39601-kaso-uniq-errors.log | head -10
@@ -2659,8 +2659,8 @@ spec:
 		format := `[0-9TZ.:]{5,30}`
 		frontwords := `(\w+?[^0-9a-zA-Z]+?){,3}`
 		afterwords := `(\w+?[^0-9a-zA-Z]+?){,30}`
-		// Add one temporary exception 'Should not happen: OpenAPI V3 merge'，after related bug 2115634 is fixed, will remove it.
-		exceptions := "SHOULD NOT HAPPEN.*Kind=CertificateSigningRequest|Should not happen: OpenAPI V3|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|e2e-test.*-panic|kernel.*-panic|non-fatal"
+		// Add one temporary exception 'merge.go:121] Should not happen: OpenAPI V3 merge'，after related bug 2115634 is fixed, will remove it.
+		exceptions := "SHOULD NOT HAPPEN.*Kind=CertificateSigningRequest|merge.go:121] Should|Should not happen: OpenAPI|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|e2e-test.*-panic|kernel.*-panic|non-fatal|e2e-test"
 		cmd := fmt.Sprintf(`grep -hriE "(%s%s%s)+" /var/log/pods/openshift-oauth-apiserver_apiserver* | grep -Ev "%s" > /tmp/OCP-42937-oauthas-errors.log
 		sed -E "s/%s/../g" /tmp/OCP-42937-oauthas-errors.log | sort | uniq -c | sort -h | tee > /tmp/OCP-42937-oauthas-uniq-errors.log | head -10
 		echo '%s'
@@ -2718,7 +2718,7 @@ spec:
 
 		g.By("6) On all master nodes, check oauthas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
 		keywords = "panic|fatal|SHOULD NOT HAPPEN"
-		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)|panicked: false|e2e-test.*-panic|kernel.*-panic"
+		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)|panicked: false|e2e-test.*-panic|kernel.*-panic|e2e-test"
 		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/oauth-apiserver/audit*.log | grep -Ev '%s' > /tmp/OCP-42937-audit-errors.log
 		echo '%s'
 		while read line; do
