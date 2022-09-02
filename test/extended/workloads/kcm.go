@@ -205,7 +205,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("wait until check the events")
-		err = wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err = wait.Poll(20*time.Second, 200*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", "default").Output()
 			if err != nil {
 				e2e.Logf("Fail to get events, error: %s. Trying again", err)
@@ -217,7 +217,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "clusterrole/foo43099 is not found")
+		exutil.AssertWaitPollNoErr(err, "Failed to get the events")
 		g.By("check the clusterrole should not be deleted")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrole", "foo43099").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
