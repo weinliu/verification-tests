@@ -1041,3 +1041,40 @@ func repeatCmd(oc *exutil.CLI, cmd []string, expectOutput string, repeatTimes in
 	}
 	return result
 }
+
+// this function will collect all dns pods which resides in master node and its respective machine names
+func getAllDNSAndMasterNodes(oc *exutil.CLI) ([]string, []string) {
+	masterNodeList := []string{}
+	dnsPodList := []string{}
+	podNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-dns").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	podList := strings.Split(podNames, " ")
+	e2e.Logf("The podname are %v", podList)
+	masterRe := regexp.MustCompile("[a-z0-9-]+-master-+[a-z0-9-]+")
+	if len(podList) > 0 {
+		for i := 0; i < len(podList); i++ {
+			nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", podList[i], "-o=jsonpath={.spec.nodeName}", "-n", "openshift-dns").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("The dns pod '%s' is residing in '%s' node", podList[i], nodeName)
+			machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeName, "-o=jsonpath={.metadata.annotations.machine\\.openshift\\.io/machine}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			pod := masterRe.FindAllStringSubmatch(machineName, -1)
+			if pod != nil {
+				dnsPodList = append(dnsPodList, podList[i])
+				masterNodeList = append(masterNodeList, pod[0][0])
+			}
+		}
+	}
+	e2e.Logf("The dns pods which are residing in master nodes are :%s", dnsPodList)
+	e2e.Logf("The machine name's of master nodes where dns pods residing are :%s", masterNodeList)
+	return dnsPodList, masterNodeList
+}
+
+// this function is to check whether given string is present or not in a list
+func checkGivenStringPresentOrNot(shouldContain bool, iterateObject []string, searchString string) {
+	if shouldContain {
+		o.Expect(iterateObject).To(o.ContainElement(o.ContainSubstring(searchString)))
+	} else {
+		o.Expect(iterateObject).NotTo(o.ContainElement(o.ContainSubstring(searchString)))
+	}
+}

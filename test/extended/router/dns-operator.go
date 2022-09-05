@@ -12,7 +12,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	defer g.GinkgoRecover()
 	var oc = exutil.NewCLI("dns-operator", exutil.KubeConfigPath())
 	// author: mjoseph@redhat.com
-	g.It("Author:mjoseph-Critical-41049-DNS controlls pod placement by node selector [Disruptive]", func() {
+	g.It("Author:mjoseph-Longduration-NonPreRelease-Critical-41049-DNS controlls pod placement by node selector [Disruptive]", func() {
 		var (
 			dnsWorkerNodeselector = "[{\"op\":\"add\", \"path\":\"/spec/nodePlacement/nodeSelector\", \"value\":{\"node-role.kubernetes.io/worker\":\"\"}}]"
 			dnsMasterNodeselector = "[{\"op\":\"replace\", \"path\":\"/spec/nodePlacement/nodeSelector\", \"value\":{\"node-role.kubernetes.io/master\":\"\"}}]"
@@ -24,11 +24,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).To(o.ContainSubstring("kubernetes.io/os=linux"))
 
 		g.By("Patch dns operator with worker as node selector in dns.operator default")
-		dnspodname := getDNSPodName(oc)
+		dnsNodes, _ := getAllDNSAndMasterNodes(oc)
 		defer restoreDNSOperatorDefault(oc)
 		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dnsWorkerNodeselector)
-		err = waitForResourceToDisappear(oc, "openshift-dns", "pod/"+dnspodname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+dnspodname))
+		waitForRangeOfResourceToDisappear(oc, "openshift-dns", dnsNodes)
+		_, newMasterNodes := getAllDNSAndMasterNodes(oc)
+		checkGivenStringPresentOrNot(false, newMasterNodes, "master")
+
+		g.By("check dns pod placement to confirm 'workernodes' are present")
 		output1, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "ds/dns-default").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output1).To(o.ContainSubstring("kubernetes.io/worker"))
@@ -36,11 +39,18 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(errLcfg).NotTo(o.HaveOccurred())
 		o.Expect(outputLcfg).To(o.ContainSubstring(`"node-role.kubernetes.io/worker":""`))
 
+		g.By("Restoring the dns operator back to normal")
+		restoreDNSOperatorDefault(oc)
+
 		g.By("Patch dns operator with master as node selector in dns.operator default")
-		dnspodname1 := getDNSPodName(oc)
+		dnsNodes1, _ := getAllDNSAndMasterNodes(oc)
+		defer restoreDNSOperatorDefault(oc)
 		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dnsMasterNodeselector)
-		err = waitForResourceToDisappear(oc, "openshift-dns", "pod/"+dnspodname1)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+dnspodname1))
+		waitForRangeOfResourceToDisappear(oc, "openshift-dns", dnsNodes1)
+		_, newMasterNodes1 := getAllDNSAndMasterNodes(oc)
+		checkGivenStringPresentOrNot(true, newMasterNodes1, "master")
+
+		g.By("check dns pod placement to confirm 'masternodes' are present")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "ds/dns-default").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("kubernetes.io/master"))
@@ -48,8 +58,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(errLcfg1).NotTo(o.HaveOccurred())
 		o.Expect(outputLcfg1).To(o.ContainSubstring(`"node-role.kubernetes.io/master":""`))
 	})
+
 	// author: mjoseph@redhat.com
-	g.It("Author:mjoseph-Critical-41050-DNS controll pod placement by tolerations [Disruptive]", func() {
+	g.It("Author:mjoseph-NonPreRelease-Critical-41050-DNS controll pod placement by tolerations [Disruptive]", func() {
 		var (
 			dnsMasterToleration = "[{\"op\":\"replace\", \"path\":\"/spec/nodePlacement\", \"value\":{\"tolerations\":[" +
 				"{\"effect\":\"NoExecute\",\"key\":\"my-dns-test\", \"operators\":\"Equal\", \"value\":\"abc\"}]}}]"
@@ -65,11 +76,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(outputLcfg).To(o.ContainSubstring(`{"key":"node-role.kubernetes.io/master","operator":"Exists"}`))
 
 		g.By("Patch dns operator config with custom tolerations of dns pod, not to tolerate master node taints")
-		dnspodname := getDNSPodName(oc)
+		dnsNodes, _ := getAllDNSAndMasterNodes(oc)
 		defer restoreDNSOperatorDefault(oc)
 		patchGlobalResourceAsAdmin(oc, "dns.operator.openshift.io/default", dnsMasterToleration)
-		err = waitForResourceToDisappear(oc, "openshift-dns", "pod/"+dnspodname)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+dnspodname))
+		waitForRangeOfResourceToDisappear(oc, "openshift-dns", dnsNodes)
+		_, newMasterNodes := getAllDNSAndMasterNodes(oc)
+		checkGivenStringPresentOrNot(false, newMasterNodes, "master")
+
+		g.By("check dns pod placement to check the custom tolerations")
 		outputLcfg1, errLcfg1 := oc.AsAdmin().Run("get").Args("ds/dns-default", "-n", "openshift-dns", "-o=jsonpath={.spec.template.spec.tolerations}").Output()
 		o.Expect(errLcfg1).NotTo(o.HaveOccurred())
 		o.Expect(outputLcfg1).To(o.ContainSubstring(`{"effect":"NoExecute","key":"my-dns-test","value":"abc"}`))
@@ -79,6 +93,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(errLcfg2).NotTo(o.HaveOccurred())
 		o.Expect(outputLcfg2).NotTo(o.ContainSubstring("error"))
 	})
+
 	// author: shudili@redhat.com
 	g.It("Author:shudili-NonPreRelease-Medium-46873-Configure operatorLogLevel under the default dns operator and check the logs flag [Disruptive]", func() {
 		var (
