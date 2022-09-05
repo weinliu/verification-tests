@@ -303,9 +303,13 @@ func getAllNodesInfo(oc *exutil.CLI) []node {
 // Get all schedulable linux wokers
 func getSchedulableLinuxWorkers(allNodes []node) (linuxWorkers []node) {
 	linuxWorkers = make([]node, 0, 6)
-	for _, myNode := range allNodes {
-		if myNode.scheduleable && myNode.osType == "linux" && len(myNode.role) == 1 && strings.EqualFold(myNode.role[0], "worker") && myNode.readyStatus == "True" {
-			linuxWorkers = append(linuxWorkers, myNode)
+	if len(allNodes) == 1 { // In case of SNO cluster
+		linuxWorkers = append(linuxWorkers, allNodes...)
+	} else {
+		for _, myNode := range allNodes {
+			if myNode.scheduleable && myNode.osType == "linux" && len(myNode.role) == 1 && strings.EqualFold(myNode.role[0], "worker") && myNode.readyStatus == "True" {
+				linuxWorkers = append(linuxWorkers, myNode)
+			}
 		}
 	}
 	e2e.Logf("The schedulable linux workers are: \"%+v\"", linuxWorkers)
@@ -315,9 +319,13 @@ func getSchedulableLinuxWorkers(allNodes []node) (linuxWorkers []node) {
 // Get all schedulable rhel wokers
 func getSchedulableRhelWorkers(allNodes []node) []node {
 	schedulableRhelWorkers := make([]node, 0, 6)
-	for _, myNode := range allNodes {
-		if myNode.scheduleable && myNode.osID == "rhel" && len(myNode.role) == 1 && strings.EqualFold(myNode.role[0], "worker") && myNode.readyStatus == "True" {
-			schedulableRhelWorkers = append(schedulableRhelWorkers, myNode)
+	if len(allNodes) == 1 { // In case of SNO cluster
+		schedulableRhelWorkers = append(schedulableRhelWorkers, allNodes...)
+	} else {
+		for _, myNode := range allNodes {
+			if myNode.scheduleable && myNode.osID == "rhel" && len(myNode.role) == 1 && strings.EqualFold(myNode.role[0], "worker") && myNode.readyStatus == "True" {
+				schedulableRhelWorkers = append(schedulableRhelWorkers, myNode)
+			}
 		}
 	}
 	e2e.Logf("The schedulable RHEL workers are: \"%+v\"", schedulableRhelWorkers)
@@ -330,10 +338,14 @@ func getOneSchedulableWorker(allNodes []node) (expectedWorker node) {
 	if len(schedulableRhelWorkers) != 0 {
 		expectedWorker = schedulableRhelWorkers[0]
 	} else {
-		for _, myNode := range allNodes {
-			if myNode.scheduleable && myNode.osType == "linux" && len(myNode.role) == 1 && strings.EqualFold(myNode.role[0], "worker") && myNode.readyStatus == "True" {
-				expectedWorker = myNode
-				break
+		if len(allNodes) == 1 { // In case of SNO cluster
+			expectedWorker = allNodes[0]
+		} else {
+			for _, myNode := range allNodes {
+				if myNode.scheduleable && myNode.osType == "linux" && len(myNode.role) == 1 && strings.EqualFold(myNode.role[0], "worker") && myNode.readyStatus == "True" {
+					expectedWorker = myNode
+					break
+				}
 			}
 		}
 	}
@@ -344,10 +356,14 @@ func getOneSchedulableWorker(allNodes []node) (expectedWorker node) {
 
 // Get one cluster schedulable master woker
 func getOneSchedulableMaster(allNodes []node) (expectedMater node) {
-	for _, myNode := range allNodes {
-		if myNode.scheduleable && myNode.osType == "linux" && len(myNode.role) == 1 && strings.EqualFold(myNode.role[0], "master") && myNode.readyStatus == "True" {
-			expectedMater = myNode
-			break
+	if len(allNodes) == 1 { // In case of SNO cluster
+		expectedMater = allNodes[0]
+	} else {
+		for _, myNode := range allNodes {
+			if myNode.scheduleable && myNode.osType == "linux" && len(myNode.role) == 1 && strings.EqualFold(myNode.role[0], "master") && myNode.readyStatus == "True" {
+				expectedMater = myNode
+				break
+			}
 		}
 	}
 	e2e.Logf("Get the schedulableMaster is \"%+v\"", expectedMater)
