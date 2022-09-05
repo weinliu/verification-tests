@@ -9,10 +9,7 @@ objects:
       name: cluster
     spec:
       namespace: "${NAMESPACE}"
-      ipfix:
-        cacheActiveTimeout: 60s
-        cacheMaxFlows: 400
-        sampling: 100
+      agent: ebpf
       ebpf:
         image: "${EBPF_IMAGE}"
         imagePullPolicy: IfNotPresent
@@ -31,11 +28,24 @@ objects:
         logLevel: trace
         enableKubeProbes: true
         healthPort: 8080
-        prometheusPort: 9090
+        prometheusPort: 9102
+        ignoreMetrics: []
+        dropUnusedFields: true
       kafka:
         enable: false
         address: "kafka-cluster-kafka-bootstrap.network-observability"
         topic: "network-flows"
+        tls:
+          enable: false
+          caCert:
+            type: secret
+            name: kafka-cluster-cluster-ca-cert
+            certFile: ca.crt
+          userCert:
+            type: secret
+            name: flp-kafka
+            certFile: user.crt
+            certKey: user.key
       loki:
         url: 'http://loki.default.svc.cluster.local:3100/'
         batchWait: 1s
@@ -45,12 +55,27 @@ objects:
         maxRetries: 10
         staticLabels:
           app: netobserv-flowcollector
+        tls:
+          enable: false
+          caCert:
+            type: configmap
+            name: openshift-service-ca.crt
+            certFile: service-ca.crt
       consolePlugin:
         image: "${CONSOLEPLUGIN_IMAGE}"
         imagePullPolicy: IfNotPresent
         port: 9001
-      cno:
+        logLevel: info
+        portNaming:
+          enable: true
+          portNames:
+            "3100": loki
+      clusterNetworkOperator:
         namespace: "openshift-network-operator"
+      ovnKubernetes:
+        namespace: "ovn-kubernetes"
+        daemonSetName: "ovnkube-node"
+        containerName: "ovnkube-node"
 parameters:
   - name: NAMESPACE
     description: "namespace where you want flowlogsPipeline and consoleplugin pods to be deployed"

@@ -106,6 +106,18 @@ func getOVSFlowsConfigTarget(oc *exutil.CLI, flowlogsPipelineDeployedAs string) 
 	return stdout, err
 }
 
+// returns target port configured in eBPF pods
+func getEBPFlowsConfigPort(oc *exutil.CLI) ([]string, error) {
+	jsonpath := "{.items[*].spec.containers[*].env[?(@.name==\"FLOWS_TARGET_PORT\")].value}"
+	var ports []string
+	stdout, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", oc.Namespace()+"-privileged", "-o", "jsonpath="+jsonpath).Output()
+	if err != nil {
+		return ports, err
+	}
+	ports = strings.Split(stdout, " ")
+	return ports, nil
+}
+
 // get flow collector IPs configured in OVS
 func getOVSCollectorIP(oc *exutil.CLI) ([]string, error) {
 	jsonpath := "{.items[*].spec.containers[*].env[?(@.name==\"IPFIX_COLLECTORS\")].value}"
@@ -118,6 +130,26 @@ func getOVSCollectorIP(oc *exutil.CLI) ([]string, error) {
 	}
 	collectors = strings.Split(stdout, " ")
 
+	return collectors, nil
+}
+
+// returns target IP configured in eBPF pods
+func getEBPFCollectorIP(oc *exutil.CLI, flowlogsPipelineDeployedAs string) ([]string, error) {
+	var collectors []string
+	var jsonpath string
+	if flowlogsPipelineDeployedAs == "Deployment" {
+		jsonpath = "{.items[*].spec.containers[*].env[?(@.name==\"FLOWS_TARGET_HOST\")].value}"
+	}
+
+	if flowlogsPipelineDeployedAs == "DaemonSet" {
+		jsonpath = "{.items[*].spec.containers[*].env[?(@.name==\"FLOWS_TARGET_HOST\")].valueFrom.fieldRef.fieldPath}"
+	}
+
+	stdout, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", oc.Namespace()+"-privileged", "-o", "jsonpath="+jsonpath).Output()
+	if err != nil {
+		return collectors, err
+	}
+	collectors = strings.Split(stdout, " ")
 	return collectors, nil
 }
 
