@@ -425,7 +425,7 @@ func (podTermination *podTerminationDescription) getTerminationGrace(oc *exutil.
 		e2e.Logf("The containerID is %v", containerID)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if nodeStatus == "Ready" {
-			terminationGrace, err := oc.AsAdmin().Run("debug").Args(`node/`+fmt.Sprintf("%s", nodename), "--", "chroot", "/host", "systemctl", "show", fmt.Sprintf("%s", containerID)).Output()
+			terminationGrace, err := exutil.DebugNodeWithChroot(oc, nodename, "systemctl", "show", containerID)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(string(terminationGrace), "TimeoutStopUSec=1min 30s") {
 				e2e.Logf("\nTERMINATION GRACE PERIOD IS SET CORRECTLY")

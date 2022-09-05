@@ -10,9 +10,18 @@ objects:
     namespace: "${NAMESPACE}"
   spec:
     terminationGracePeriodSeconds: 90
+    securityContext:
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
     containers:
     - image: "quay.io/openshifttest/hello-openshift@sha256:56c354e7885051b6bb4263f9faa58b2c292d44790599b7dde0e49e7c466cf339"
       name: termination
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
       command: [bash, -c, "sleep 100000000"] 
       ports:
         - containerPort: 8080
