@@ -382,6 +382,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		if checkRegistryUsingFSVolume(oc) {
 			g.Skip("Skip for fs volume")
 		}
+		g.By("Check if cluster is sno")
+		workerNodes, _ := exutil.GetClusterNodesBy(oc, "worker")
+		if len(workerNodes) == 1 {
+			g.Skip("Skip for sno cluster")
+		}
 
 		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", 2)
 		oc.SetupProject()
