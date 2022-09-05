@@ -2896,4 +2896,37 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring(`is10721:referencetrue" not found`))
 	})
 
+	// author: wewang@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:wewang-High-18984-Request to view all imagestreams via registry catalog api [Serial]", func() {
+		g.By("Tag an imagestream under project")
+		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "test18984:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "test18984", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Curl the registry catalog api without user")
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(oc, regRoute)
+		getURL := "curl -kv " + "https://" + regRoute + "/v2/_catalog?n=5"
+		curlOutput, err := exec.Command("bash", "-c", getURL).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(curlOutput)).To(o.ContainSubstring("authentication required"))
+
+		g.By("Curl the registry catalog api with user")
+		token, err := oc.Run("whoami").Args("-t").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		getURL = "curl -kv  -u " + oc.Username() + ":" + token + " https://" + regRoute + "/v2/_catalog?n=5"
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(curlOutput)).To(o.ContainSubstring("authentication required"))
+
+		g.By("Curl the registry catalog api with permission")
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "registry-viewer", oc.Username()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "registry-viewer", oc.Username()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		curlOutput, err = exec.Command("bash", "-c", getURL).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(curlOutput)).To(o.ContainSubstring("test18984"))
+	})
 })

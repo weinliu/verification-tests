@@ -314,4 +314,18 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(result).To(o.ContainSubstring("ImagePrunerSpec defines the specs for the running image pruner"))
 		o.Expect(result).To(o.ContainSubstring("ImagePrunerStatus reports image pruner operational status"))
 	})
+
+	// author: wewang@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:wewang-Medium-17167-Image soft prune via 'prune-registry' option with invalid argument", func() {
+		result, _ := oc.WithoutNamespace().AsAdmin().Run("adm").Args("prune", "images", "--keep_tag_revisions=abc").Output()
+		o.Expect(result).To(o.ContainSubstring("invalid argument"))
+		result, _ = oc.WithoutNamespace().AsAdmin().Run("adm").Args("prune", "images", "--confirm=abc").Output()
+		o.Expect(result).To(o.ContainSubstring("invalid argument"))
+		result, _ = oc.WithoutNamespace().AsAdmin().Run("adm").Args("prune", "images", "--keep_younger_than=abc").Output()
+		o.Expect(result).To(o.ContainSubstring("invalid argument"))
+		result, _ = oc.WithoutNamespace().AsAdmin().Run("adm").Args("prune", "images", "--prune_over_size_limit=abc").Output()
+		o.Expect(result).To(o.ContainSubstring("invalid argument"))
+		result, _ = oc.WithoutNamespace().AsAdmin().Run("adm").Args("prune", "images", "--prune_registry=abc").Output()
+		o.Expect(result).To(o.ContainSubstring("invalid argument"))
+	})
 })
