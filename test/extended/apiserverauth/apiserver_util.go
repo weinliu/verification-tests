@@ -370,11 +370,13 @@ func LoadSecrets(oc *exutil.CLI, noOfSecrets int, ns string, noOfNamespace int) 
 	}
 	namespaceOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", "-A").Output()
 	secretOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "-A").Output()
-	if strings.Count(namespaceOutput, ns) == noOfNamespace && strings.Count(secretOutput, "secret-"+ns) == noOfSecrets*noOfNamespace {
+	namespaceCount := strings.Count(namespaceOutput, ns)
+	secretCount := strings.Count(secretOutput, "secret-"+ns)
+	if namespaceCount == noOfNamespace && secretCount == noOfSecrets*noOfNamespace {
 		e2e.Logf("No. of namespaces created :: %v \n No. of secrets created :: %v", noOfNamespace, noOfSecrets*noOfNamespace)
 	} else {
 		defer CleanNamespace(oc, noOfNamespace, ns)
-		e2e.Failf("No. of namespaces not created :: %v \n No. of secrets not created :: %v", noOfNamespace, noOfSecrets*noOfNamespace)
+		e2e.Failf("No. of namespaces not created :: %v \n No. of secrets not created :: %v  \n Actual no. of namespaces/secrets are created %v :: %v", noOfNamespace, noOfSecrets*noOfNamespace, namespaceCount, secretCount)
 	}
 }
 

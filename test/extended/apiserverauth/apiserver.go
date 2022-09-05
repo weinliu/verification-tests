@@ -715,7 +715,7 @@ spec:
 	g.It("ROSA-ARO-OSD_CCS-PreChkUpgrade-NonPreRelease-Author:rgangwar-Critical-40667-Prepare Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
 		var (
 			dirname    = "/tmp/-OCP-40667/"
-			exceptions = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>|panicked: false, err: context deadline exceeded, panic-reason: <nil>"
+			exceptions = "panicked: false"
 			keywords   = "body: net/http: request canceled (Client.Timeout|panic"
 			// Creating below variable for clusterbuster commands "N" argument parameter.
 			namespaceCount = 0
@@ -867,7 +867,7 @@ spec:
 	g.It("ROSA-ARO-OSD_CCS-PstChkUpgrade-NonPreRelease-Author:rgangwar-Critical-40667-Post Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
 		var (
 			dirname    = "/tmp/-OCP-40667/"
-			exceptions = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>|panicked: false, err: context deadline exceeded, panic-reason: <nil>"
+			exceptions = "panicked: false"
 		)
 		defer os.RemoveAll(dirname)
 		defer func() {
