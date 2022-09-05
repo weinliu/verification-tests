@@ -345,4 +345,55 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		g.By("Check if control plane pods in HostedClusters are on " + nodes[1])
 		o.Eventually(hostedCluster2.pollIsCPPodOnlyRunningOnOneNode(nodes[1]), DefaultTimeout, DefaultTimeout/10).Should(o.BeTrue(), "Check if control plane pods in HostedClusters error")
 	})
+
+	// author: liangli@redhat.com
+	g.It("Longduration-NonPreRelease-Author:liangli-Critical-45341-[HyperShiftINSTALL] Test NodePort Publishing Strategy [Serial] [Disruptive]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 44981 is for AWS - skipping test ...")
+		}
+
+		caseID := "45341"
+		dir := "/tmp/hypershift" + caseID
+		clusterName := "hypershift-" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Config Bucket")
+		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
+		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir}
+		installHelper.newAWSS3Client()
+		defer installHelper.deleteAWSS3Bucket()
+		installHelper.createAWSS3Bucket()
+
+		g.By("install HyperShift operator")
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+		g.By("extract secret/pull-secret")
+		installHelper.extractPullSecret()
+
+		g.By("Create a nodeport ip bastion")
+		preStartJobSetup := newPreStartJob(clusterName+"-setup", oc.Namespace(), caseID, "setup", dir)
+		preStartJobTeardown := newPreStartJob(clusterName+"-teardown", oc.Namespace(), caseID, "teardown", dir)
+		defer preStartJobSetup.delete(oc)
+		preStartJobSetup.create(oc)
+		defer preStartJobTeardown.delete(oc)
+		defer preStartJobTeardown.create(oc)
+
+		g.By("create HostedClusters")
+		createCluster := installHelper.createClusterAWSCommonBuilder().
+			withName(clusterName).
+			withNodePoolReplicas(1)
+		defer installHelper.deleteHostedClustersManual(createCluster)
+		hostedCluster := installHelper.createAWSHostedClustersRender(createCluster, func(filename string) error {
+			g.By("Test NodePort Publishing Strategy")
+			ip := preStartJobSetup.preStartJobIP(oc)
+			e2e.Logf("ip:" + ip)
+			return replaceInFile(filename, "type: LoadBalancer", "type: NodePort\n      nodePort:\n        address: "+ip)
+		})
+
+		g.By("create HostedClusters node ready")
+		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
+		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(), LongTimeout, LongTimeout/10).Should(o.Equal(1), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
+	})
 })
