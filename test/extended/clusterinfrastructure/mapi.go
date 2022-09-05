@@ -19,7 +19,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "machine-api", "-o=jsonpath={.status.conditions}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(out).To(o.ContainSubstring("Cluster Machine API Operator is in NoOp mode"))
+		} else {
+			e2e.Logf("Only baremetal platform supported for the test")
+			g.Skip("We have to skip the test")
 		}
-		e2e.Logf("Only baremetal platform supported for the test")
 	})
 })
