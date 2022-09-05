@@ -93,6 +93,14 @@ func ListWorkerMachineNames(oc *CLI) []string {
 	return strings.Split(machineNames, " ")
 }
 
+// ListMasterMachineNames list all master machines
+func ListMasterMachineNames(oc *CLI) []string {
+	e2e.Logf("Listing all Machines ...")
+	machineNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-o=jsonpath={.items[*].metadata.name}", "-l", "machine.openshift.io/cluster-api-machine-type=master", "-n", machineAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Split(machineNames, " ")
+}
+
 // GetMachineNamesFromMachineSet get all Machines in a Machineset
 func GetMachineNamesFromMachineSet(oc *CLI, machineSetName string) []string {
 	e2e.Logf("Getting all Machines in a Machineset ...")
