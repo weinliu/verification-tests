@@ -5287,7 +5287,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 24382 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-dep:vschema-crdv1",
+				address:     "quay.io/olmqe/olm-dep:vschema-crdv2",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -5493,7 +5493,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 32863 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/single-bundle-index:pdb",
+				address:     "quay.io/olmqe/single-bundle-index:pdb2",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
