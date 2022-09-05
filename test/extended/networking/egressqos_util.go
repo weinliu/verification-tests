@@ -77,7 +77,7 @@ func runSSHCmdOnAWS(host string, cmd string) (string, error) {
 
 func installDscpServiceOnAWS(a *exutil.AwsClient, oc *exutil.CLI, publicIP string) error {
 
-	command := "sudo netstat -ntlp | grep 9096 || sudo podman run --name dscpecho -d -p 9096:8080 quay.io/openshifttest/hello-sdn@sha256:c89445416459e7adea9a5a416b3365ed3d74f2491beb904d61dc8d1eb89a72a4"
+	command := "sudo netstat -ntlp | grep 9096 || sudo podman run --name dscpecho -d -p 9096:8080 quay.io/openshifttest/hello-sdn@sha256:2af5b5ec480f05fda7e9b278023ba04724a3dd53a296afcd8c13f220dec52197"
 	e2e.Logf("Run command %s", command)
 
 	outPut, err := runSSHCmdOnAWS(publicIP, command)

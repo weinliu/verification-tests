@@ -27,7 +27,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
 		acceptedPlatform := strings.Contains(platform, "aws")
 		if !acceptedPlatform || !strings.Contains(networkType, "ovn") {
-			g.Skip("Test cases should be run on AWS with ovn network plugin, skip for other platforms or other network plugin!!")
+			g.Skip("Test cases should be run on AWS cluster with ovn network plugin, skip for other platforms or other network plugin!!")
 		}
 
 		switch platform {
@@ -56,7 +56,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		default:
 			e2e.Logf("cloud provider %v is not supported for auto egressqos cases for now", platform)
-			g.Skip("cloud provider %v is not supported for auto egressqos cases for now, skip the cases")
+			g.Skip("cloud provider %v is not supported for auto egressqos cases for now, skip the cases!")
 		}
 
 	})
@@ -139,7 +139,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		output, _ := egressQos3.createWithOutput(oc, "NAME="+egressQos3.name, "NAMESPACE="+egressQos3.namespace, "CIDR1="+"1.1.1.1/32", "CIDR2="+dstCIDR)
 		//Only one egressqos is permitted for one namespace
-		o.Expect(output).Should(o.MatchRegexp("Invalid value"))
+		o.Expect(output).Should(o.ContainSubstring("Invalid value"))
 
 		g.By("4) ####### Check dscp value of egress traffic of ns1    ##########")
 
@@ -149,7 +149,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		startCurlTraffic(oc, testPod1.namespace, testPod1.name, dscpSvcIP, dscpSvcPort)
 
 		chkRes1 := chkDSCPinPkts(a, oc, dscpSvcIP, pktFile1, dscpValue1)
-		o.Expect(chkRes1).Should(o.Equal(true))
+		o.Expect(chkRes1).Should(o.BeTrue())
 
 		g.By("5 ####### Check dscp value of egress traffic of ns2    ##########")
 
@@ -159,7 +159,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		startCurlTraffic(oc, testPod2.namespace, testPod2.name, dscpSvcIP, dscpSvcPort)
 
 		chkRes2 := chkDSCPinPkts(a, oc, dscpSvcIP, pktFile2, dscpValue2)
-		o.Expect(chkRes2).Should(o.Equal(true))
+		o.Expect(chkRes2).Should(o.BeTrue())
 
 	})
 
@@ -190,7 +190,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			kind:      "pod",
 			tempfile:  testPodTmpFile,
 		}
-		//Egressqos has two rules which can match egress traffic
+		//egressqos has two rules which can match egress traffic
 		defer egressQos.delete(oc)
 		egressQos.create(oc, "NAME="+egressQos.name, "NAMESPACE="+egressQos.namespace, "CIDR1="+"0.0.0.0/0", "CIDR2="+dstCIDR)
 
@@ -205,15 +205,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		startTcpdumpOnDscpService(a, oc, dscpSvcIP, pktFile)
 
 		startCurlTraffic(oc, testPod.namespace, testPod.name, dscpSvcIP, dscpSvcPort)
-		// The first matched egressqos rule can take effect
+		// the first matched egressqos rule can take effect
 		chkRes := chkDSCPinPkts(a, oc, dscpSvcIP, pktFile, dscpValue)
-		o.Expect(chkRes).Should(o.Equal(true))
+		o.Expect(chkRes).Should(o.BeTrue())
 
 	})
 
 	// author: yingwang@redhat.com
 	g.It("ConnectedOnly-Author:yingwang-Medium-51751-if egress traffic doesn't match egressqos rules, dscp value will not change.", func() {
-		g.By("1) ############## create egressqos and testpod #################")
 
 		var (
 			dscpValue1       = 40
@@ -239,6 +238,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			kind:      "pod",
 			tempfile:  testPodTmpFile,
 		}
+		g.By("1) ############## create egressqos and testpod #################")
 		//egressqos has two rules which neither matches egress traffic
 		defer egressQos.delete(oc)
 		egressQos.create(oc, "NAME="+egressQos.name, "NAMESPACE="+egressQos.namespace, "CIDR1="+"1.1.1.1/32", "CIDR2="+"2.2.2.2/32")
@@ -260,7 +260,201 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		chkRes2 := chkDSCPinPkts(a, oc, dscpSvcIP, pktFile, dscpValue2)
 		o.Expect(chkRes2).Should(o.Equal(false))
 		chkRes := chkDSCPinPkts(a, oc, dscpSvcIP, pktFile, dscpValue)
-		o.Expect(chkRes).Should(o.Equal(true))
+		o.Expect(chkRes).Should(o.BeTrue())
+
+	})
+
+	// author: yingwang@redhat.com
+	g.It("ConnectedOnly-Author:yingwang-Medium-51839-egressqos can work fine when new/update/delete matching pods.", func() {
+
+		var (
+			dscpValue1       = 40
+			dscpValue2       = 30
+			priorityValue    = "Critical"
+			dstCIDR          = dscpSvcIP + "/" + "32"
+			pktFile1         = getRandomString() + "pcap.txt"
+			pktFile2         = getRandomString() + "pcap.txt"
+			pktFile3         = getRandomString() + "pcap.txt"
+			pktFile4         = getRandomString() + "pcap.txt"
+			networkBaseDir   = exutil.FixturePath("testdata", "networking")
+			egressBaseDir    = filepath.Join(networkBaseDir, "egressqos")
+			egressQosTmpFile = filepath.Join(egressBaseDir, "egressqos-podselector-template.yaml")
+			testPodTmpFile   = filepath.Join(egressBaseDir, "testpod-template.yaml")
+		)
+
+		egressQos := egressQosResource{
+			name:      "default",
+			namespace: oc.Namespace(),
+			kind:      "egressqos",
+			tempfile:  egressQosTmpFile,
+		}
+
+		testPod1 := egressQosResource{
+			name:      "testpod1",
+			namespace: oc.Namespace(),
+			kind:      "pod",
+			tempfile:  testPodTmpFile,
+		}
+
+		testPod2 := egressQosResource{
+			name:      "testpod2",
+			namespace: oc.Namespace(),
+			kind:      "pod",
+			tempfile:  testPodTmpFile,
+		}
+
+		g.By("1) ####### Create egressqos with podselector rules  ##########")
+		defer egressQos.delete(oc)
+		egressQos.create(oc, "NAME="+egressQos.name, "NAMESPACE="+egressQos.namespace, "CIDR1="+"0.0.0.0/0", "PRIORITY="+priorityValue, "CIDR2="+dstCIDR, "LABELNAME="+testPod1.name)
+
+		g.By("2) ####### Create testpod1 which match the second podselector  ##########")
+		defer testPod1.delete(oc)
+		testPod1.create(oc, "NAME="+testPod1.name, "NAMESPACE="+testPod1.namespace)
+
+		g.By("3) ####### Check dscp value in egress traffic  ##########")
+		defer rmPktsFile(a, oc, dscpSvcIP, pktFile1)
+		startTcpdumpOnDscpService(a, oc, dscpSvcIP, pktFile1)
+
+		startCurlTraffic(oc, testPod1.namespace, testPod1.name, dscpSvcIP, dscpSvcPort)
+
+		chkRes1 := chkDSCPinPkts(a, oc, dscpSvcIP, pktFile1, dscpValue2)
+		o.Expect(chkRes1).Should(o.BeTrue())
+
+		g.By("4) ####### Create testpod2 which match the second podselector  ##########")
+		defer testPod2.delete(oc)
+		testPod1.create(oc, "NAME="+testPod2.name, "NAMESPACE="+testPod2.namespace)
+
+		g.By("5) ####### Check dscp value in egress traffic  ##########")
+		defer rmPktsFile(a, oc, dscpSvcIP, pktFile2)
+		startTcpdumpOnDscpService(a, oc, dscpSvcIP, pktFile2)
+
+		startCurlTraffic(oc, testPod2.namespace, testPod2.name, dscpSvcIP, dscpSvcPort)
+
+		chkRes2 := chkDSCPinPkts(a, oc, dscpSvcIP, pktFile1, dscpValue2)
+		o.Expect(chkRes2).Should(o.BeTrue())
+
+		g.By("6) ####### Update testpod2 label to match the first egressqos rule  ##########")
+		defer exutil.LabelPod(oc, testPod2.namespace, testPod2.name, "priority-")
+		err := exutil.LabelPod(oc, testPod2.namespace, testPod2.name, "priority="+priorityValue)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer rmPktsFile(a, oc, dscpSvcIP, pktFile3)
+		startTcpdumpOnDscpService(a, oc, dscpSvcIP, pktFile3)
+
+		startCurlTraffic(oc, testPod2.namespace, testPod2.name, dscpSvcIP, dscpSvcPort)
+
+		chkRes3 := chkDSCPinPkts(a, oc, dscpSvcIP, pktFile3, dscpValue1)
+		o.Expect(chkRes3).Should(o.BeTrue())
+
+		g.By("7) ####### Remove testpod1 and check egress traffic ##########")
+		testPod1.delete(oc)
+
+		defer rmPktsFile(a, oc, dscpSvcIP, pktFile4)
+		startTcpdumpOnDscpService(a, oc, dscpSvcIP, pktFile4)
+
+		startCurlTraffic(oc, testPod2.namespace, testPod2.name, dscpSvcIP, dscpSvcPort)
+
+		chkRes4 := chkDSCPinPkts(a, oc, dscpSvcIP, pktFile4, dscpValue1)
+		o.Expect(chkRes4).Should(o.BeTrue())
+
+	})
+
+	// author: yingwang@redhat.com
+	g.It("ConnectedOnly-Author:yingwang-Medium-51840-egressqos can work fine when new/update/delete egressqos rules", func() {
+		var (
+			dscpValue1       = 40
+			dscpValue2       = 30
+			dscpValue3       = 0
+			dscpValue4       = 20
+			priorityValue    = "Critical"
+			dstCIDR          = dscpSvcIP + "/" + "32"
+			pktFile1         = getRandomString() + "pcap.txt"
+			pktFile2         = getRandomString() + "pcap.txt"
+			pktFile3         = getRandomString() + "pcap.txt"
+			pktFile4         = getRandomString() + "pcap.txt"
+			networkBaseDir   = exutil.FixturePath("testdata", "networking")
+			egressBaseDir    = filepath.Join(networkBaseDir, "egressqos")
+			egressQosTmpFile = filepath.Join(egressBaseDir, "egressqos-podselector-template.yaml")
+			testPodTmpFile   = filepath.Join(egressBaseDir, "testpod-template.yaml")
+		)
+
+		egressQos := egressQosResource{
+			name:      "default",
+			namespace: oc.Namespace(),
+			kind:      "egressqos",
+			tempfile:  egressQosTmpFile,
+		}
+
+		testPod := egressQosResource{
+			name:      "testpod",
+			namespace: oc.Namespace(),
+			kind:      "pod",
+			tempfile:  testPodTmpFile,
+		}
+
+		g.By("1) ####### Create egressqos with podselector rules  ##########")
+		defer egressQos.delete(oc)
+		egressQos.create(oc, "NAME="+egressQos.name, "NAMESPACE="+egressQos.namespace, "CIDR1="+"0.0.0.0/0", "PRIORITY="+priorityValue, "CIDR2="+dstCIDR, "LABELNAME="+testPod.name)
+
+		g.By("2) ####### Create testpod1 which match the second podselector  ##########")
+		defer testPod.delete(oc)
+		testPod.create(oc, "NAME="+testPod.name, "NAMESPACE="+testPod.namespace)
+		//label testpod with priority Critical
+		err := exutil.LabelPod(oc, testPod.namespace, testPod.name, "priority="+priorityValue)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("3) ####### Check dscp value in egress traffic  ##########")
+		defer rmPktsFile(a, oc, dscpSvcIP, pktFile1)
+		startTcpdumpOnDscpService(a, oc, dscpSvcIP, pktFile1)
+
+		startCurlTraffic(oc, testPod.namespace, testPod.name, dscpSvcIP, dscpSvcPort)
+
+		chkRes := chkDSCPinPkts(a, oc, dscpSvcIP, pktFile1, dscpValue1)
+		o.Expect(chkRes).Should(o.BeTrue())
+
+		g.By("4) ####### Change egressqos rule and send traffic again ##########")
+		patchYamlToRestore := `[{"op":"replace","path":"/spec/egress/0/podSelector/matchLabels/priority","value":"Low"}]`
+		output, err1 := oc.AsAdmin().WithoutNamespace().Run("patch").Args(egressQos.kind, egressQos.name, "-n", egressQos.namespace, "--type=json", "-p", patchYamlToRestore).Output()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("egressqos.k8s.ovn.org/default patched"))
+
+		defer rmPktsFile(a, oc, dscpSvcIP, pktFile2)
+		startTcpdumpOnDscpService(a, oc, dscpSvcIP, pktFile2)
+
+		startCurlTraffic(oc, testPod.namespace, testPod.name, dscpSvcIP, dscpSvcPort)
+
+		chkRes = chkDSCPinPkts(a, oc, dscpSvcIP, pktFile2, dscpValue2)
+		o.Expect(chkRes).Should(o.BeTrue())
+
+		g.By("5) ####### delete egressqos rule and send traffic again ##########")
+		patchYamlToRestore = `[{"op":"remove","path":"/spec/egress/1"}]`
+		output, err1 = oc.AsAdmin().WithoutNamespace().Run("patch").Args(egressQos.kind, egressQos.name, "-n", egressQos.namespace, "--type=json", "-p", patchYamlToRestore).Output()
+		//output, err1 = oc.AsAdmin().WithoutNamespace().Run("patch").Args(egressQos.kind, egressQos.name, "-n", egressQos.namespace, "--type=json", "--patch-file", patchFile2).Output()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("egressqos.k8s.ovn.org/default patched"))
+
+		defer rmPktsFile(a, oc, dscpSvcIP, pktFile3)
+		startTcpdumpOnDscpService(a, oc, dscpSvcIP, pktFile3)
+
+		startCurlTraffic(oc, testPod.namespace, testPod.name, dscpSvcIP, dscpSvcPort)
+
+		chkRes = chkDSCPinPkts(a, oc, dscpSvcIP, pktFile3, dscpValue3)
+		o.Expect(chkRes).Should(o.BeTrue())
+
+		g.By("5) ####### add new egressqos rule and send traffic again ##########")
+		patchYamlToRestore = `[{"op": "add", "path": "/spec/egress/1", "value":{"dscp":20,"dstCIDR": "0.0.0.0/0"}}]`
+		output, err1 = oc.AsAdmin().WithoutNamespace().Run("patch").Args(egressQos.kind, egressQos.name, "-n", egressQos.namespace, "--type=json", "-p", patchYamlToRestore).Output()
+		//output, err1 = oc.AsAdmin().WithoutNamespace().Run("patch").Args(egressQos.kind, egressQos.name, "-n", egressQos.namespace, "--type=json", "--patch-file", patchFile3).Output()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("egressqos.k8s.ovn.org/default patched"))
+
+		defer rmPktsFile(a, oc, dscpSvcIP, pktFile4)
+		startTcpdumpOnDscpService(a, oc, dscpSvcIP, pktFile4)
+
+		startCurlTraffic(oc, testPod.namespace, testPod.name, dscpSvcIP, dscpSvcPort)
+
+		chkRes = chkDSCPinPkts(a, oc, dscpSvcIP, pktFile4, dscpValue4)
+		o.Expect(chkRes).Should(o.BeTrue())
 
 	})
 
