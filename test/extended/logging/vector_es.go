@@ -1,7 +1,9 @@
 package logging
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo"
@@ -225,6 +227,81 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Check Collector daemonset pods are running")
 			WaitForECKPodsToBeReady(oc, cloNS)
+		})
+
+		g.It("CPaasrunOnly-Author:ikanse-High-53995-Vector Collect OVN audit logs [Serial]", func() {
+
+			g.By("Check the network type for the test")
+			networkType := checkNetworkType(oc)
+			if !strings.Contains(networkType, "ovnkubernetes") {
+				g.Skip("Skip for non-supported network type, type is not OVNKubernetes!!!")
+			}
+
+			g.By("Create clusterlogforwarder instance to forward OVN audit logs to default Elasticsearch instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err := clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploy ClusterLogging instance.")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			g.By("waiting for the EFK pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By("Check audit index in ES pod")
+			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(cloNS, esPods.Items[0].Name, "audit-00")
+
+			g.By("Create a test project, enable OVN network log collection on it, add the OVN log app and network policies for the project")
+			oc.SetupProject()
+			ovnProj := oc.Namespace()
+			ovn := resource{"deployment", "ovn-app", ovnProj}
+			esTemplate := exutil.FixturePath("testdata", "logging", "generatelog", "42981.yaml")
+			err = ovn.applyFromTemplate(oc, "-n", ovn.namespace, "-f", esTemplate, "-p", "NAMESPACE="+ovn.namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			WaitForDeploymentPodsToBeReady(oc, ovnProj, ovn.name)
+
+			g.By("Access the OVN app pod from another pod in the same project to generate OVN ACL messages")
+			ovnPods, err := oc.AdminKubeClient().CoreV1().Pods(ovnProj).List(metav1.ListOptions{LabelSelector: "app=ovn-app"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			podIP := ovnPods.Items[0].Status.PodIP
+			e2e.Logf("Pod IP is %s ", podIP)
+			ovnCurl := "curl " + podIP + ":8080"
+			_, err = e2e.RunHostCmdWithRetries(ovnProj, ovnPods.Items[1].Name, ovnCurl, 3*time.Second, 30*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Check for the generated OVN audit logs on the OpenShift cluster nodes")
+			nodeLogs, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("-n", ovnProj, "node-logs", "-l", "beta.kubernetes.io/os=linux", "--path=/ovn/acl-audit-log.log").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(nodeLogs).Should(o.ContainSubstring(ovnProj), "The OVN logs doesn't contain logs from project %s", ovnProj)
+
+			g.By("Check for the generated OVN audit logs in Elasticsearch")
+			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+				cmd := "es_util --query=audit*/_search?format=JSON -d '{\"query\":{\"query_string\":{\"query\":\"verdict=allow AND severity=alert AND tcp,vlan_tci AND tcp_flags=ack\",\"default_field\":\"message\"}}}'"
+				stdout, err := e2e.RunHostCmdWithRetries(cloNS, esPods.Items[0].Name, cmd, 3*time.Second, 30*time.Second)
+				if err != nil {
+					return false, err
+				}
+				res := SearchResult{}
+				json.Unmarshal([]byte(stdout), &res)
+				if res.Hits.Total > 0 {
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "The ovn audit logs are not collected")
+
+			g.By("Check audit logs for missing @timestamp field.")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkLog := "{\"size\": 1, \"query\": {\"bool\":{\"must_not\":{\"exists\":{\"field\":\"@timestamp\"}}}}}"
+			logs := searchDocByQuery(cloNS, podList.Items[0].Name, "app", checkLog)
+			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Audit logs are missing @timestamp field.")
 		})
 
 	})
