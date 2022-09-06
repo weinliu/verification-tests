@@ -1217,10 +1217,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check if upstream patch required")
-		jsonpath := ".status.conditions[?(.type=='RetrievedUpdates')].status"
-		status, err := getCVObyJP(oc, jsonpath)
+		jsonpath := ".status.conditions[?(.type=='RetrievedUpdates')].reason"
+		reason, err := getCVObyJP(oc, jsonpath)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(status, "False") {
+		if strings.Contains(reason, "VersionNotFound") {
 			e2e.Logf("no patch required. skipping upstream creation")
 			targetVersion = GenerateReleaseVersion(oc)
 			targetPayload = GenerateReleasePayload(oc)
@@ -1232,8 +1232,9 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 				g.Skip("Skip for non-gcp cluster!")
 			}
 			origUpstream, _ := getCVObyJP(oc, ".spec.upstream")
-			e2e.Logf("Original upstream:%s", origUpstream)
-			defer restoreCVSpec(origUpstream, "nochange", oc)
+			origChannel, _ := getCVObyJP(oc, ".spec.channel")
+			e2e.Logf("Original upstream:%s, original channel:%s", origUpstream, origChannel)
+			defer restoreCVSpec(origUpstream, origChannel, oc)
 
 			g.By("Patch upstream")
 			projectID := "openshift-qe"
@@ -1248,16 +1249,19 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			defer DeleteObject(client, bucket, object)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
+			_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
+				{"add", "/spec/upstream", graphURL},
+				{"add", "/spec/channel", "channel-a"},
+			})
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("Check RetrievedUpdates!=True after patching upstream")
-			jsonpath = ".status.conditions[?(.type=='RetrievedUpdates')].status"
+			g.By("Check RetrievedUpdates reason VersionNotFound after patching upstream")
+			jsonpath = ".status.conditions[?(.type=='RetrievedUpdates')].reason"
 			err = wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
-				status, err := getCVObyJP(oc, jsonpath)
+				reason, err := getCVObyJP(oc, jsonpath)
 				o.Expect(err).NotTo(o.HaveOccurred())
-				e2e.Logf("received status: '%s'", status)
-				if strings.Contains(status, "False") {
+				e2e.Logf("received reason: '%s'", reason)
+				if strings.Contains(reason, "VersionNotFound") {
 					return true, nil
 				}
 				return false, nil
@@ -1298,12 +1302,12 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		exutil.AssertWaitPollNoErr(err, "Failed waiting for enable-auto-update=true")
 
 		g.By("Check cvo can not get available update after setting enable-auto-update")
-		jsonpath = ".status.conditions[?(.type=='RetrievedUpdates')].status"
+		jsonpath = ".status.conditions[?(.type=='RetrievedUpdates')].reason"
 		err = wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
-			status, err := getCVObyJP(oc, jsonpath)
+			reason, err := getCVObyJP(oc, jsonpath)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(status, "False") {
-				e2e.Logf("success - found status: %s", status)
+			if strings.Contains(reason, "VersionNotFound") {
+				e2e.Logf("success - found reason: %s", reason)
 				return true, nil
 			}
 			return false, nil
@@ -1321,6 +1325,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(desiredVersion).To(o.Equal(origVersion))
 
 	})
+
 	//author: jiajliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:jiajliu-High-46017-CVO should keep reconcile manifests when update failed on precondition check [Disruptive]", func() {
 		//Take openshift-marketplace/deployment as an example, it can be any resource which included in manifest files
