@@ -2929,4 +2929,39 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(curlOutput)).To(o.ContainSubstring("test18984"))
 	})
+
+	//author: wewang@redhat.com
+	g.It("Author:wewang-Medium-24879-Mount trusted CA for cluster proxies to Image Registry Operator with invalid setting [Disruptive]", func() {
+		g.By("Check if it's a https_proxy cluster")
+		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("proxy/cluster", "-o=jsonpath={.spec}").Output()
+		if !strings.Contains(output, "httpProxy") && !strings.Contains(output, "user-ca-bundle") {
+			g.Skip("Skip for non https_proxy platform")
+		}
+
+		g.By("Check the cluster trusted ca")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy.config.openshift.io/cluster", "-o=jsonpath={.spec.trustedCA.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.Equal("user-ca-bundle"))
+
+		g.By("Import image to internal registry")
+		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("skopeo:latest", "--from=quay.io/openshifttest/skopeo@sha256:d5f288968744a8880f983e49870c0bfcf808703fe126e4fb5fc393fb9e599f65", "--reference-policy=local", "--confirm", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "skopeo", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Update ca for invalid value to proxy resource")
+		defer oc.AsAdmin().Run("patch").Args("proxy.config.openshift.io/cluster", "-p", `{"spec":{"trustedCA":{"name":"user-ca-bundle"}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("proxy.config.openshift.io/cluster", "-p", `{"spec":{"trustedCA":{"name":"invalid"}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(25*time.Second, 2*time.Minute, func() (bool, error) {
+			result, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployments/machine-config-operator", "-n", "openshift-machine-config-operator").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(result, "configmap \"invalid\" not found") {
+				return true, nil
+			}
+			e2e.Logf("Continue to next round")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Update ca for proxy resource failed")
+	})
 })
