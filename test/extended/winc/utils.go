@@ -26,6 +26,11 @@ var (
 func createProject(oc *exutil.CLI, namespace string) {
 	_, err := oc.WithoutNamespace().Run("new-project").Args(namespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	/* turn off the automatic label synchronization required for PodSecurity admission
+	   set pods security profile to privileged. See
+	   https://kubernetes.io/docs/concepts/security/pod-security-admission/#pod-security-levels */
+	_, err = oc.WithoutNamespace().Run("label").Args("namespace", namespace, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "--overwrite").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // this function delete a workspace, we intend to do it after each test case run
