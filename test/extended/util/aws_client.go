@@ -12,6 +12,14 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+// AWSInstanceNotFound custom error for not found instances
+type AWSInstanceNotFound struct{ InstanceName string }
+
+// Error implements the error interface
+func (nfe *AWSInstanceNotFound) Error() string {
+	return fmt.Sprintf("No instance found in current cluster with name %s", nfe.InstanceName)
+}
+
 // AwsClient struct
 type AwsClient struct {
 	svc *ec2.EC2
@@ -45,7 +53,7 @@ func (a *AwsClient) GetAwsInstanceID(instanceName string) (string, error) {
 	}
 
 	if len(instanceInfo.Reservations) < 1 {
-		return "", fmt.Errorf("No instance found in current cluster with name %s", instanceName)
+		return "", &AWSInstanceNotFound{instanceName}
 	}
 
 	instanceID := instanceInfo.Reservations[0].Instances[0].InstanceId

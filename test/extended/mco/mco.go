@@ -15,6 +15,7 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	bootstrap "github.com/openshift/openshift-tests-private/test/extended/util/bootstrap"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -2347,6 +2348,37 @@ nulla pariatur.`
 		rtEnabled, rtErr := masterNode.IsKernelArgEnabled("PREEMPT_RT")
 		o.Expect(rtErr).NotTo(o.HaveOccurred())
 		o.Expect(rtEnabled).Should(o.BeTrue(), "RT kernel is not enabled on node %s", masterNode.GetName())
+	})
+
+	g.It("Author:sregidor-NonPreRelease-Critical-53960-No failed units in the bootstrap machine", func() {
+		skipTestIfSupportedPlatformNotMatched(oc, "aws")
+
+		failedUnitsCommand := "sudo systemctl list-units --failed --all"
+
+		// If no bootstrap is found, we skip the case.
+		// The  test can only be executed in deployments that didn't remove the bootstrap machine
+		bs, err := bootstrap.GetBootstrap(oc)
+		if err != nil {
+			if _, notFound := err.(*bootstrap.InstanceNotFound); notFound {
+				g.Skip("skip test because bootstrap machine does not exist in the current cluster")
+			}
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Verify that there is no failed units in the bootstrap machine")
+		// ssh client is a bit unstable, and it can return an empty string for no aparent reason every now and then.
+		// Hence we use 'Eventually' to verify the command to make the test robust.
+		o.Eventually(func() string {
+			logger.Infof("Executing command in bootstrap: %s", failedUnitsCommand)
+			failedUnits, err := bs.SSH.RunOutput(failedUnitsCommand)
+			logger.Infof("Command output:\n%s", failedUnits)
+			if err != nil {
+				logger.Errorf("Command Error:\n%s", err)
+			}
+			return failedUnits
+		}).Should(o.ContainSubstring("0 loaded units listed"),
+			"There are failed units in the bootstrap machine")
+
 	})
 })
 
