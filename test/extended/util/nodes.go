@@ -109,10 +109,10 @@ func debugNode(oc *CLI, nodeName string, cmdOptions []string, needChroot bool, r
 		}
 	}
 	// Running oc debug node command in normal projects
-	// (normal projects mean projects that are not clusters default projects like: like "default", "openshift-xxx" et al)
+	// (normal projects mean projects that are not clusters default projects like: "openshift-xxx" et al)
 	// need extra configuration on 4.12+ ocp test clusters
 	// https://github.com/openshift/oc/blob/master/pkg/helpers/cmd/errors.go#L24-L29
-	if debugNodeNamespace != "default" && !strings.HasPrefix(debugNodeNamespace, "openshift-") {
+	if !strings.HasPrefix(debugNodeNamespace, "openshift-") {
 		isNsPrivileged, outputError = IsDebugNodeNamespacePrivileged(oc, debugNodeNamespace)
 		if outputError != nil {
 			return "", "", outputError
