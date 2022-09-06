@@ -420,7 +420,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 				o.ContainSubstring("example.io/example/ubi-minimal")))
 
 		g.By("Check MCD logs to make sure drain is skipped")
-		podLogs, err := exutil.GetSpecificPodLogs(oc, "MCONamespace", "machine-config-daemon", workerNode.GetMachineConfigDaemon(), "drain")
+		podLogs, err := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, workerNode.GetMachineConfigDaemon(), "drain")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		logger.Infof("Pod logs to skip node drain :\n %v", podLogs)
 		o.Expect(podLogs).Should(
