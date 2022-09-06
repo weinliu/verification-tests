@@ -6,6 +6,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	"path/filepath"
+	"strings"
 )
 
 var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring", func() {
@@ -140,6 +141,22 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		g.By("Check labels for PV/PVC") //make sure pv/pvcs have been attached before checkMetric
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_persistentvolume_labels'`, token, `"persistentvolume"`, 2*uwmLoadTime)
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=kube_persistentvolumeclaim_labels'`, token, `"persistentvolumeclaim"`, uwmLoadTime)
+	})
+
+	// author: juzhao@redhat.com
+	g.It("Author:juzhao-Medium-45271-Allow OpenShift users to configure audit logs for prometheus-adapter", func() {
+		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+		podList, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus-adapter")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("prometheus-adapter Pods: %v", podList)
+
+		g.By("check the audit logs")
+		for _, pod := range podList {
+			exutil.AssertPodToBeReady(oc, pod, "openshift-monitoring")
+			output, err := exutil.RemoteShContainer(oc, "openshift-monitoring", pod, "prometheus-adapter", "cat", "/var/log/adapter/audit.log")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(output, `"level":"Request"`)).To(o.BeTrue(), "level Request is not in audit.log")
+		}
 	})
 
 	g.Context("user workload monitoring", func() {

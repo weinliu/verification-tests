@@ -16,6 +16,9 @@ objects:
         retention: 45d
       alertmanagerMain:
         logLevel: debug
+      k8sPrometheusAdapter:
+        audit:
+          profile: Request
 parameters:
 - name: NAME
 - name: NAMESPACE
