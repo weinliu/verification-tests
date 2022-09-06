@@ -285,6 +285,7 @@ const (
 	DefaultTimeout          = 120
 	ClusterResumeTimeout    = 600
 	ClusterUninstallTimeout = 1800
+	HibernateAfterTimer     = 300
 )
 
 //AWS Configurations

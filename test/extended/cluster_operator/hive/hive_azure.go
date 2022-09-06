@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
@@ -309,6 +310,115 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "True", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Ready")].status}`}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Unreachable")].status}`}).check(oc)
+	})
+
+	//author: mihuang@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "44946"|./bin/extended-platform-tests run --timeout 90m -f -
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-44946-Keep it hot when HibernateAfter is setting [Serial]", func() {
+		testCaseID := "44946"
+		poolName := "pool-" + testCaseID
+		imageSetName := poolName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: testOCPImage,
+			template:     imageSetTemp,
+		}
+
+		g.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		g.By("Check if ClusterImageSet was created successfully")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
+
+		oc.SetupProject()
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and azure-credentials to target namespace for the cluster
+		g.By("Copy Azure platform credentials...")
+		createAzureCreds(oc, oc.Namespace())
+
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Step1 : Create ClusterPool...")
+		poolTemp := filepath.Join(testDataDir, "clusterpool-azure.yaml")
+		pool := azureClusterPool{
+			name:           poolName,
+			namespace:      oc.Namespace(),
+			fake:           "false",
+			baseDomain:     AzureBaseDomain,
+			imageSetRef:    imageSetName,
+			platformType:   "azure",
+			credRef:        AzureCreds,
+			region:         AzureRegion,
+			resGroup:       AzureRESGroup,
+			pullSecretRef:  PullSecret,
+			size:           1,
+			maxSize:        1,
+			runningCount:   1,
+			maxConcurrent:  1,
+			hibernateAfter: "5m",
+			template:       poolTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterPool", oc.Namespace(), poolName})
+		pool.create(oc)
+		g.By("Step2 : Check if Azure ClusterPool created successfully and become ready")
+		//runningCount is 1 so pool status should be ready: 1
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, 2*ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.ready}"}).check(oc)
+
+		g.By("Get cd name from cdlist")
+		cdListStr := getCDlistfromPool(oc, poolName)
+		var cdArray []string
+		cdArray = strings.Split(strings.TrimSpace(cdListStr), "\n")
+		o.Expect(len(cdArray)).Should(o.BeNumerically(">=", 1))
+		oldCdName := cdArray[0]
+
+		g.By("Step4 : wait 7 mins")
+		//hibernateAfter is 5 min, wait for > 5 min (Need wait hardcode timer instead of check any condition here so use Sleep function directly) to check the cluster is still running status.
+		time.Sleep((HibernateAfterTimer + DefaultTimeout) * time.Second)
+
+		g.By("Step6 and Step7 : Check unclaimed cluster is still in Running status after hibernateAfter time, because of runningcount=1")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, DefaultTimeout, []string{"ClusterDeployment", oldCdName, "-n", oldCdName}).check(oc)
+
+		g.By("Step8 :Check installedTimestap and hibernating lastTransitionTime filed.")
+		installedTimestap, err := time.Parse(time.RFC3339, getResource(oc, asAdmin, withoutNamespace, "ClusterDeployment", oldCdName, "-n", oldCdName, `-o=jsonpath={.status.installedTimestamp}`))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		hibernateTransition, err := time.Parse(time.RFC3339, getResource(oc, asAdmin, withoutNamespace, "ClusterDeployment", oldCdName, "-n", oldCdName, `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].lastTransitionTime}`))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !hibernateTransition.Equal(installedTimestap) {
+			g.Fail("The two timestamps are not same, cluster ever be stopped or resumed")
+		}
+
+		g.By("Step4 : Create ClusterClaim...")
+		claimTemp := filepath.Join(testDataDir, "clusterclaim.yaml")
+		claimName := poolName + "-claim"
+		claim := clusterClaim{
+			name:            claimName,
+			namespace:       oc.Namespace(),
+			clusterPoolName: poolName,
+			template:        claimTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterClaim", oc.Namespace(), claimName})
+		claim.create(oc)
+
+		claimedTimestamp, err := time.Parse(time.RFC3339, getResource(oc, asAdmin, withoutNamespace, "ClusterClaim", claimName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.creationTimestamp}"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("get clusterclaim timestamp,creationTimestamp is %s", claimedTimestamp)
+
+		g.By("Check if ClusterClaim created successfully and become running")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, DefaultTimeout, []string{"ClusterClaim", "-n", oc.Namespace(), claimName}).check(oc)
+
+		g.By("Check if CD is Hibernating")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, 2*ClusterResumeTimeout, []string{"ClusterDeployment", oldCdName, "-n", oldCdName}).check(oc)
+
+		hibernateTimestamp, err := time.Parse(time.RFC3339, getResource(oc, asAdmin, withoutNamespace, "ClusterDeployment", oldCdName, "-n", oldCdName, `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].lastProbeTime}`))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("get hibernattimestaps, hibernateTimestamp is %s", hibernateTimestamp)
+
+		g.By("Step5 : Get Timestamp difference")
+		difference := hibernateTimestamp.Sub(claimedTimestamp)
+		e2e.Logf("Timestamp difference is %v mins", difference.Minutes())
+		o.Expect(difference.Minutes()).Should(o.BeNumerically(">=", 5))
 	})
 
 	//author: lwan@redhat.com
