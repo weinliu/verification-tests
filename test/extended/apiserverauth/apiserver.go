@@ -684,7 +684,7 @@ spec:
 		masterName := strings.Fields(masterNode)
 		cmd = fmt.Sprintf(`grep -rohiE '%s' |grep -iEv '%s' /var/log/pods/openshift-kube-apiserver_kube-apiserver*/*/* | sed -E 's/%s/../g'`, regexToGrep2, exceptions, format)
 		for i := 0; i < len(masterName); i++ {
-			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", "node/"+masterName[i], "--", "chroot", "/host", "bash", "-c", cmd).OutputToFile("OCP-43889/kas_pod.log." + masterName[i])
+			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "openshift-kube-apiserver", "node/"+masterName[i], "--", "chroot", "/host", "bash", "-c", cmd).OutputToFile("OCP-43889/kas_pod.log." + masterName[i])
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		cmd = fmt.Sprintf(`cat %v| sort | uniq -c | sort -rh | awk '$1 >5000 {print}'`, dirname+"kas_pod.log.*")
@@ -695,7 +695,7 @@ spec:
 		g.By("Check the audit log files of KAS")
 		cmd = fmt.Sprintf(`grep -rohiE '%s' /var/log/kube-apiserver/audit*.log |grep -iEv '%s' | sed -E 's/%s/../g'`, regexToGrep2, exceptions, format)
 		for i := 0; i < len(masterName); i++ {
-			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "default", "node/"+masterName[i], "--", "chroot", "/host", "bash", "-c", cmd).OutputToFile("OCP-43889/kas_audit.log." + masterName[i])
+			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "openshift-kube-apiserver", "node/"+masterName[i], "--", "chroot", "/host", "bash", "-c", cmd).OutputToFile("OCP-43889/kas_audit.log." + masterName[i])
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		cmd = fmt.Sprintf(`cat %v| sort | uniq -c | sort -rh | awk '$1 >5000 {print}'`, dirname+"kas_audit.log.*")
