@@ -803,12 +803,10 @@ type lokiStack struct {
 	template      string // the file used to create the loki stack
 }
 
-/*
-func (l lokiStack) setObjectStorageType(objectStorage string) lokiStack {
-	l.storageType = objectStorage
+func (l lokiStack) setTSize(size string) lokiStack {
+	l.tSize = size
 	return l
 }
-*/
 
 // prepareResourcesForLokiStack creates buckets/containers in backend storage provider, and creates the secret for Loki to use
 func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
@@ -911,8 +909,11 @@ func (l lokiStack) waitForLokiStackToBeReady(oc *exutil.CLI) {
 
 func (l lokiStack) removeLokiStack(oc *exutil.CLI) {
 	resource{"lokistack", l.name, l.namespace}.clear(oc)
-	resource{"secret", l.storageSecret, l.namespace}.clear(oc)
 	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pvc", "-n", l.namespace, "-l", "app.kubernetes.io/instance="+l.name).Execute()
+}
+
+func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
+	resource{"secret", l.storageSecret, l.namespace}.clear(oc)
 	switch l.storageType {
 	case "s3":
 		{

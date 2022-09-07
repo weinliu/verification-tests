@@ -15,28 +15,27 @@ import (
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 
-	var (
-		oc             = exutil.NewCLI("vector-loki-namespace", exutil.KubeConfigPath())
-		clo            = "cluster-logging-operator"
-		cloPackageName = "cluster-logging"
-	)
+	var oc = exutil.NewCLI("vector-loki-namespace", exutil.KubeConfigPath())
 
 	g.Context("test forward logs to external loki log store", func() {
-		var (
-			subTemplate       = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
-			SingleNamespaceOG = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
-			loglabeltemplate  = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-		)
-		cloNS := "openshift-logging"
-		CLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, CatalogSourceObjects{}}
 		g.BeforeEach(func() {
+			CLO := SubscriptionObjects{
+				OperatorName:  "cluster-logging-operator",
+				Namespace:     "openshift-logging",
+				PackageName:   "cluster-logging",
+				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+			}
 			g.By("deploy CLO")
 			CLO.SubscribeOperator(oc)
 			oc.SetupProject()
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-High-47760-Vector Forward logs to Loki using default value via HTTP[Serial]", func() {
-
+			var (
+				cloNS            = "openshift-logigng"
+				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			)
 			g.By("Create project for app logs and deploy the log generator app")
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
@@ -62,7 +61,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
 			g.By("Waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
 			lc := newLokiClient(route)
@@ -101,7 +100,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-Medium-48922-Vector Forward logs to Loki using correct loki.tenantKey.kubernetes.namespace_name via HTTP[Serial]", func() {
-
+			var (
+				cloNS            = "openshift-logigng"
+				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			)
 			g.By("Create project for app logs and deploy the log generator app")
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
@@ -128,7 +130,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
 			g.By("Waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 			g.By("Searching for Application Logs in Loki using tenantKey")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
@@ -151,7 +153,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-Medium-48060-Medium-47801-Vector Forward logs to Loki using loki.labelKeys [Serial]", func() {
-
+			var (
+				cloNS            = "openshift-logigng"
+				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			)
 			g.By("Create project1 for app logs")
 			appProj1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", loglabeltemplate, "-p", "LABELS={\"negative\": \"centos-logtest\"}").Execute()
@@ -185,7 +190,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
 			g.By("Waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 			g.By("Searching for Application Logs in Loki using LabelKey - Postive match")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
@@ -221,7 +226,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-High-48925-Vector Forward logs to Loki using correct loki.tenantKey.kubernetes.container_name via HTTP[Serial]", func() {
-
+			var (
+				cloNS            = "openshift-logigng"
+				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			)
 			g.By("Create project for app logs and deploy the log generator app")
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
@@ -248,7 +256,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
 			g.By("Waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 			g.By("Searching for Application Logs in Loki using tenantKey")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
@@ -277,27 +285,28 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 
-	var (
-		oc                = exutil.NewCLI("vector-lokistack", exutil.KubeConfigPath())
-		lo                = "loki-operator-controller-manager"
-		clo               = "cluster-logging-operator"
-		cloPackageName    = "cluster-logging"
-		loPackageName     = "loki-operator"
-		subTemplate       = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
-		SingleNamespaceOG = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
-		AllNamespaceOG    = exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml")
-		jsonLogFile       = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-	)
+	var oc = exutil.NewCLI("vector-lokistack", exutil.KubeConfigPath())
 
 	g.Context("test forward logs to lokistack with vector", func() {
-		cloNS := "openshift-logging"
-		loNS := "openshift-operators-redhat"
-		CLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, CatalogSourceObjects{}}
-		LO := SubscriptionObjects{lo, loNS, AllNamespaceOG, subTemplate, loPackageName, CatalogSourceObjects{}}
 		g.BeforeEach(func() {
 			s := getStorageType(oc)
 			if len(s) == 0 {
 				g.Skip("Current cluster doesn't have a proper object storage for this test!")
+			}
+			subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
+			CLO := SubscriptionObjects{
+				OperatorName:  "cluster-logging-operator",
+				Namespace:     "openshift-logging",
+				PackageName:   "cluster-logging",
+				Subscription:  subTemplate,
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+			}
+			LO := SubscriptionObjects{
+				OperatorName:  "loki-operator-controller-manager",
+				Namespace:     "openshift-operators-redhat",
+				PackageName:   "loki-operator",
+				Subscription:  subTemplate,
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
 			}
 			g.By("deploy CLO and LO")
 			CLO.SubscribeOperator(oc)
@@ -310,7 +319,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
 				g.Skip("Current platform not supported/resources not available for this test!")
 			}
-
+			var (
+				cloNS       = "openshift-logigng"
+				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			)
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -320,9 +332,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("deploy loki stack")
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{"loki-49486", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-49486-" + getInfrastructureName(oc), lokiStackTemplate}
-			defer ls.removeLokiStack(oc)
+			defer ls.removeObjectStorage(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
 			err = ls.deployLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			ls.waitForLokiStackToBeReady(oc)
@@ -343,8 +356,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=vector")
 			resource{"serviceaccount", "logcollector", cl.namespace}.WaitForResourceToAppear(oc)
 			defer removeLokiStackPermissionFromSA(oc, "lokistack-dev-tenant-logs")
-			grantLokiPermissionsToSA(oc, "lokistack-dev-tenant-logs", "logcollector", cloNS)
-			bearerToken := getSAToken(oc, "logcollector", cloNS)
+			grantLokiPermissionsToSA(oc, "lokistack-dev-tenant-logs", "logcollector", cl.namespace)
+			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
 			collector := resource{"daemonset", "collector", cl.namespace}
 			collector.WaitForResourceToAppear(oc)
 			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, collector.name)
@@ -370,7 +383,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			//sa/logcollector can't view audit logs
 			//create a new sa, and check audit logs
-			sa := resource{"serviceaccount", "loki-viewer-" + getRandomString(), cloNS}
+			sa := resource{"serviceaccount", "loki-viewer-" + getRandomString(), ls.namespace}
 			defer sa.clear(oc)
 			_ = oc.AsAdmin().WithoutNamespace().Run("create").Args("sa", sa.name, "-n", sa.namespace).Execute()
 			defer removeLokiStackPermissionFromSA(oc, sa.name)
@@ -401,7 +414,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
 				g.Skip("Current platform not supported/resources not available for this test!")
 			}
-
+			var (
+				cloNS       = "openshift-logigng"
+				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			)
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -411,9 +427,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("deploy loki stack")
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{"loki-49495", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-49495-" + getInfrastructureName(oc), lokiStackTemplate}
-			defer ls.removeLokiStack(oc)
+			defer ls.removeObjectStorage(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
 			err = ls.deployLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			ls.waitForLokiStackToBeReady(oc)
@@ -443,8 +460,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("check logs in loki")
 			resource{"serviceaccount", "logcollector", cl.namespace}.WaitForResourceToAppear(oc)
 			defer removeLokiStackPermissionFromSA(oc, "lokistack-dev-tenant-logs")
-			grantLokiPermissionsToSA(oc, "lokistack-dev-tenant-logs", "logcollector", cloNS)
-			bearerToken := getSAToken(oc, "logcollector", cloNS)
+			grantLokiPermissionsToSA(oc, "lokistack-dev-tenant-logs", "logcollector", cl.namespace)
+			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure"} {
@@ -464,7 +481,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			//sa/logcollector can't view audit logs
 			//create a new sa, and check audit logs
-			sa := resource{"serviceaccount", "loki-viewer-" + getRandomString(), cloNS}
+			sa := resource{"serviceaccount", "loki-viewer-" + getRandomString(), ls.namespace}
 			defer sa.clear(oc)
 			_ = oc.AsAdmin().WithoutNamespace().Run("create").Args("sa", sa.name, "-n", sa.namespace).Execute()
 			defer removeLokiStackPermissionFromSA(oc, sa.name)
@@ -492,20 +509,30 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 	})
 	g.Context("ClusterLogging and Loki Integration tests with vector", func() {
-		cloNS := "openshift-logging"
-		loNS := "openshift-operators-redhat"
-		CLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, CatalogSourceObjects{}}
-		LO := SubscriptionObjects{lo, loNS, AllNamespaceOG, subTemplate, loPackageName, CatalogSourceObjects{}}
 		g.BeforeEach(func() {
 			s := getStorageType(oc)
 			if len(s) == 0 {
 				g.Skip("Current cluster doesn't have a proper object storage for this test!")
 			}
+			subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
+			CLO := SubscriptionObjects{
+				OperatorName:  "cluster-logging-operator",
+				Namespace:     "openshift-logging",
+				PackageName:   "cluster-logging",
+				Subscription:  subTemplate,
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+			}
+			LO := SubscriptionObjects{
+				OperatorName:  "loki-operator-controller-manager",
+				Namespace:     "openshift-operators-redhat",
+				PackageName:   "loki-operator",
+				Subscription:  subTemplate,
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+			}
 			g.By("deploy CLO and LO")
 			CLO.SubscribeOperator(oc)
 			LO.SubscribeOperator(oc)
 			oc.SetupProject()
-
 		})
 
 		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-Critical-53128-CLO Loki Integration-Verify that by default only app and infra logs are sent to Loki (vector)[Serial]", func() {
@@ -513,7 +540,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
 				g.Skip("Current platform not supported/resources not available for this test!")
 			}
-
+			var (
+				cloNS       = "openshift-logigng"
+				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			)
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -524,9 +554,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-53128-" + getInfrastructureName(oc), lokiStackTemplate}
-			defer ls.removeLokiStack(oc)
+			defer ls.removeObjectStorage(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
 			err = ls.deployLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			ls.waitForLokiStackToBeReady(oc)
@@ -538,16 +569,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
 			e2e.Logf("waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 			//check default logs (app and infra) in loki stack
 			g.By("checking App and infra logs in loki")
-			bearerToken := getSAToken(oc, "logcollector", cloNS)
+			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure"} {
 				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-					res, err := lc.queryRange(logType, "{log_type=\""+logType+"\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
+					res, err := lc.searchByKey(logType, "log_type", logType)
 					if err != nil {
 						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
 						return false, err
@@ -561,13 +592,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
 			}
 
-			appLog, err := lc.queryRange("application", "{kubernetes_namespace_name=\""+appProj+"\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
+			appLog, err := lc.searchByNamespace("application", appProj)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
 			e2e.Logf("App log count check complete with Success!")
 
 			//create a new sa to view audit logs
-			sa := resource{"serviceaccount", "loki-viewer-" + getRandomString(), cloNS}
+			sa := resource{"serviceaccount", "loki-viewer-" + getRandomString(), ls.namespace}
 			defer sa.clear(oc)
 			_ = oc.AsAdmin().WithoutNamespace().Run("create").Args("sa", sa.name, "-n", sa.namespace).Execute()
 			defer removeLokiStackPermissionFromSA(oc, sa.name)
@@ -577,7 +608,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Checking Audit logs")
 			//Audit logs should not be found for this case
 			lcAudit := newLokiClient(route).withToken(token).retry(5)
-			res, err := lcAudit.queryRange("audit", "{log_type=\"audit\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
+			res, err := lcAudit.searchLogsInLoki("audit", "{log_type=\"audit\"}")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(res.Data.Result)).Should(o.BeZero())
 			e2e.Logf("Audit logs not found!")
@@ -589,7 +620,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
 				g.Skip("Current platform not supported/resources not available for this test!")
 			}
-
+			var (
+				cloNS       = "openshift-logigng"
+				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			)
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -600,9 +634,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
 			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-53146-" + getInfrastructureName(oc), lokiStackTemplate}
-			defer ls.removeLokiStack(oc)
+			defer ls.removeObjectStorage(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
 			err = ls.deployLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			ls.waitForLokiStackToBeReady(oc)
@@ -621,16 +656,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
 			e2e.Logf("waiting for the collector pods to be ready...")
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 			//check default logs (app and infra) in loki stack
 			g.By("checking App and infra logs in loki")
-			bearerToken := getSAToken(oc, "logcollector", cloNS)
+			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
 			for _, logType := range []string{"application", "infrastructure"} {
 				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-					res, err := lc.queryRange(logType, "{log_type=\""+logType+"\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
+					res, err := lc.searchByKey(logType, "log_type", logType)
 					if err != nil {
 						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
 						return false, err
@@ -644,13 +679,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
 			}
 
-			appLog, err := lc.queryRange("application", "{kubernetes_namespace_name=\""+appProj+"\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
+			appLog, err := lc.searchByNamespace("application", appProj)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
 			e2e.Logf("App log count check complete with Success!")
 
 			//create a new sa to view audit logs
-			sa := resource{"serviceaccount", "loki-viewer-" + getRandomString(), cloNS}
+			sa := resource{"serviceaccount", "loki-viewer-" + getRandomString(), ls.namespace}
 			defer sa.clear(oc)
 			_ = oc.AsAdmin().WithoutNamespace().Run("create").Args("sa", sa.name, "-n", sa.namespace).Execute()
 			defer removeLokiStackPermissionFromSA(oc, sa.name)
@@ -660,7 +695,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Checking Audit logs")
 			//Audit logs should be found for this case
 			lcAudit := newLokiClient(route).withToken(token).retry(5)
-			res, err := lcAudit.queryRange("audit", "{log_type=\"audit\"}", 5, time.Now().Add(time.Duration(-1)*time.Hour), time.Now(), false)
+			res, err := lcAudit.searchLogsInLoki("audit", "{log_type=\"audit\"}")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(res.Data.Result) > 0).Should(o.BeTrue())
 			e2e.Logf("Audit logs are found!")

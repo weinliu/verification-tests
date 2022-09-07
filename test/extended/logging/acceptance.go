@@ -58,9 +58,10 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		g.By("deploy loki stack")
 		lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
 		ls := lokiStack{"loki-53817", "openshift-logging", "1x.extra-small", s, "storage-secret", sc, "logging-loki-53817-" + getInfrastructureName(oc), lokiStackTemplate}
-		defer ls.removeLokiStack(oc)
+		defer ls.removeObjectStorage(oc)
 		err = ls.prepareResourcesForLokiStack(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
 		err = ls.deployLokiStack(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ls.waitForLokiStackToBeReady(oc)
