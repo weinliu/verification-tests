@@ -250,7 +250,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		}
 
 		orgUpstream, _ := getCVObyJP(oc, ".spec.upstream")
-		e2e.Logf("Original upstream:%s", orgUpstream)
+		orgChannel, _ := getCVObyJP(oc, ".spec.channel")
+		e2e.Logf("Original upstream:%s, original channel:%s", orgUpstream, orgChannel)
 
 		g.By("Patch upstream")
 		projectID := "openshift-qe"
@@ -264,10 +265,13 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		defer DeleteObject(client, bucket, object)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
+		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
+			{"add", "/spec/upstream", graphURL},
+			{"add", "/spec/channel", "stable-a"},
+		})
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		defer restoreCVSpec(orgUpstream, "nochange", oc)
+		defer restoreCVSpec(orgUpstream, orgChannel, oc)
 
 		g.By("Check CVO prompts correct reason and message")
 		expString := "warning: Cannot display available updates:\n" +
@@ -315,7 +319,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		}
 
 		orgUpstream, _ := getCVObyJP(oc, ".spec.upstream")
-		e2e.Logf("Original upstream:%s", orgUpstream)
+		orgChannel, _ := getCVObyJP(oc, ".spec.channel")
+		e2e.Logf("Original upstream:%s, original channel: %s", orgUpstream, orgChannel)
 
 		g.By("Patch upstream")
 		projectID := "openshift-qe"
@@ -329,10 +334,13 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		defer DeleteObject(client, bucket, object)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/upstream", graphURL}})
+		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
+			{"add", "/spec/upstream", graphURL},
+			{"add", "/spec/channel", "stable-a"},
+		})
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		defer restoreCVSpec(orgUpstream, "nochange", oc)
+		defer restoreCVSpec(orgUpstream, orgChannel, oc)
 
 		g.By("Check no updates but RetrievedUpdates=True")
 		err = wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
@@ -706,10 +714,13 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
+		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", "/spec/channel", "stable-a"}})
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		cmdOut, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(cmdOut).To(o.ContainSubstring("Upstream is unset, so the cluster will use an appropriate default."))
-		o.Expect(cmdOut).To(o.ContainSubstring(fmt.Sprintf("Channel: %s", orgChannel)))
+		o.Expect(cmdOut).To(o.ContainSubstring(fmt.Sprintf("Channel: stable-a")))
 
 		desiredChannel, err := getCVObyJP(oc, ".status.desired.channels")
 
