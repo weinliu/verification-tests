@@ -41,7 +41,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		g.By("Config Bucket")
 		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
-		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir}
+		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir, iaasPlatform: iaasPlatform}
 		installHelper.newAWSS3Client()
 		defer installHelper.deleteAWSS3Bucket()
 		installHelper.createAWSS3Bucket()
@@ -78,7 +78,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		g.By("Config Bucket")
 		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
-		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir}
+		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir, iaasPlatform: iaasPlatform}
 		installHelper.newAWSS3Client()
 		defer installHelper.deleteAWSS3Bucket()
 		installHelper.createAWSS3Bucket()
@@ -134,7 +134,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		g.By("Config Bucket")
 		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
-		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir}
+		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir, iaasPlatform: iaasPlatform}
 		installHelper.newAWSS3Client()
 		defer installHelper.deleteAWSS3Bucket()
 		installHelper.createAWSS3Bucket()
@@ -196,7 +196,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		g.By("Config Bucket")
 		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
-		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir}
+		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir, iaasPlatform: iaasPlatform}
 		installHelper.newAWSS3Client()
 		defer installHelper.deleteAWSS3Bucket()
 		installHelper.createAWSS3Bucket()
@@ -248,7 +248,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		g.By("Config Bucket")
 		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
-		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir}
+		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir, iaasPlatform: iaasPlatform}
 		installHelper.newAWSS3Client()
 		defer installHelper.deleteAWSS3Bucket()
 		installHelper.createAWSS3Bucket()
@@ -306,7 +306,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Config Bucket")
-		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir}
+		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		installHelper.newAWSS3Client()
 		defer installHelper.deleteAWSS3Bucket()
 		installHelper.createAWSS3Bucket()
@@ -361,7 +361,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		g.By("Config Bucket")
 		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
-		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir}
+		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir, iaasPlatform: iaasPlatform}
 		installHelper.newAWSS3Client()
 		defer installHelper.deleteAWSS3Bucket()
 		installHelper.createAWSS3Bucket()
@@ -395,5 +395,33 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		g.By("create HostedClusters node ready")
 		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
 		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(), LongTimeout, LongTimeout/10).Should(o.Equal(1), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
+	})
+
+	// author: liangli@redhat.com
+	g.It("Longduration-NonPreRelease-Author:liangli-Critical-49129-[HyperShiftINSTALL] Create multi-zone Azure infrastructure and nodepools via CLI [Serial]", func() {
+		if iaasPlatform != "azure" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 49129 is for azure - skipping test ...")
+		}
+		caseID := "49129"
+		dir := "/tmp/hypershift" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		installHelper := installHelper{oc: oc, dir: dir, iaasPlatform: iaasPlatform}
+		g.By("install HyperShift operator")
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+
+		g.By("create HostedClusters")
+		createCluster := installHelper.createClusterAzureCommonBuilder().
+			withName("hypershift-" + caseID).
+			withNodePoolReplicas(2)
+		defer installHelper.destroyAzureHostedClusters(createCluster)
+		hostedCluster := installHelper.createAzureHostedClusters(createCluster)
+
+		g.By("create HostedClusters node ready")
+		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
+		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(), LongTimeout, LongTimeout/10).Should(o.Equal(2), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
 	})
 })

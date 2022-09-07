@@ -204,6 +204,26 @@ func getAWSKey(oc *exutil.CLI) (string, string, error) {
 	return accessKeyID, secureKey, nil
 }
 
+func getAzureKey(oc *exutil.CLI) (string, string, string, string, error) {
+	clientID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/azure-credentials", "-n", "kube-system", "-o", `template={{index .data "azure_client_id"|base64decode}}`).Output()
+	if err != nil {
+		return "", "", "", "", err
+	}
+	clientSecret, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/azure-credentials", "-n", "kube-system", "-o", `template={{index .data "azure_client_secret"|base64decode}}`).Output()
+	if err != nil {
+		return "", "", "", "", err
+	}
+	subscriptionID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/azure-credentials", "-n", "kube-system", "-o", `template={{index .data "azure_subscription_id"|base64decode}}`).Output()
+	if err != nil {
+		return "", "", "", "", err
+	}
+	tenantID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/azure-credentials", "-n", "kube-system", "-o", `template={{index .data "azure_tenant_id"|base64decode}}`).Output()
+	if err != nil {
+		return "", "", "", "", err
+	}
+	return clientID, clientSecret, subscriptionID, tenantID, nil
+}
+
 /* parse a structure's tag 'param' and output cli command parameters
 e.g.
 Input:

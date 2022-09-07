@@ -17,21 +17,24 @@ import (
 )
 
 type installHelper struct {
-	oc         *exutil.CLI
-	bucketName string
-	region     string
-	dir        string
-	awsClient  *s3.Client
+	oc           *exutil.CLI
+	bucketName   string
+	region       string
+	dir          string
+	awsClient    *s3.Client
+	iaasPlatform string
 }
 
 type createCluster struct {
 	PullSecret       string `param:"pull-secret"`
 	AWSCreds         string `param:"aws-creds"`
+	AzureCreds       string `param:"azure-creds"`
 	Name             string `param:"name"`
 	BaseDomain       string `param:"base-domain"`
 	Namespace        string `param:"namespace"`
 	NodePoolReplicas *int   `param:"node-pool-replicas"`
 	Region           string `param:"region"`
+	Location         string `param:"location"`
 	InfraJSON        string `param:"infra-json"`
 	IamJSON          string `param:"iam-json"`
 	InfraID          string `param:"infra-id"`
@@ -117,6 +120,28 @@ func (receiver *installHelper) createClusterAWSCommonBuilder() *createCluster {
 	}
 }
 
+func (receiver *installHelper) createClusterAzureCommonBuilder() *createCluster {
+	nodePoolReplicas := 3
+	baseDomain, err := getBaseDomain(receiver.oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("current baseDomain:%s", baseDomain)
+	location, err := getClusterRegion(receiver.oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("current location:%s", location)
+	e2e.Logf("extract secret/pull-secret")
+	receiver.extractPullSecret()
+	e2e.Logf("extract Azure Credentials")
+	receiver.extractAzureCredentials()
+	return &createCluster{
+		PullSecret:       receiver.dir + "/.dockerconfigjson",
+		AzureCreds:       receiver.dir + "/credentials",
+		BaseDomain:       baseDomain,
+		Location:         location,
+		Namespace:        receiver.oc.Namespace(),
+		NodePoolReplicas: &nodePoolReplicas,
+	}
+}
+
 func (receiver *installHelper) createInfraCommonBuilder() *infra {
 	baseDomain, err := getBaseDomain(receiver.oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -187,9 +212,26 @@ func (receiver *installHelper) deleteAWSS3Bucket() {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+func (receiver *installHelper) extractAzureCredentials() {
+	clientID, clientSecret, subscriptionID, tenantID, err := getAzureKey(receiver.oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	content := "subscriptionId: " + subscriptionID + "\ntenantId: " + tenantID + "\nclientId: " + clientID + "\nclientSecret: " + clientSecret
+	filePath := receiver.dir + "/credentials"
+	err = ioutil.WriteFile(filePath, []byte(content), 0644)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 func (receiver *installHelper) hyperShiftInstall() {
 	var bashClient = NewCmdClient().WithShowInfo(true)
-	cmd := fmt.Sprintf("hypershift install --oidc-storage-provider-s3-bucket-name %s --oidc-storage-provider-s3-credentials %s --oidc-storage-provider-s3-region %s", receiver.bucketName, receiver.dir+"/credentials", receiver.region)
+	var cmd string
+	switch receiver.iaasPlatform {
+	case "aws":
+		cmd = fmt.Sprintf("hypershift install --oidc-storage-provider-s3-bucket-name %s --oidc-storage-provider-s3-credentials %s --oidc-storage-provider-s3-region %s", receiver.bucketName, receiver.dir+"/credentials", receiver.region)
+	case "azure":
+		cmd = "hypershift install"
+	default:
+	}
+	o.Expect(cmd).ShouldNot(o.BeEmpty())
 	_, err := bashClient.Run(cmd).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	e2e.Logf("check hyperShift operator install")
@@ -239,6 +281,22 @@ func (receiver *installHelper) createAWSHostedClusters(createCluster *createClus
 	return cluster
 }
 
+func (receiver *installHelper) createAzureHostedClusters(createCluster *createCluster) *hostedCluster {
+	vars, err := parse(createCluster)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	var bashClient = NewCmdClient().WithShowInfo(true)
+	cmd := fmt.Sprintf("hypershift create cluster azure %s", strings.Join(vars, " "))
+	_, err = bashClient.Run(cmd).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	e2e.Logf("check azure HostedClusters ready")
+	cluster := newHostedCluster(receiver.oc, createCluster.Namespace, createCluster.Name)
+	o.Eventually(cluster.pollHostedClustersReady(), ClusterInstallTimeout, ClusterInstallTimeout/10).Should(o.BeTrue(), "azure HostedClusters install error")
+	infraID, err := cluster.getInfraID()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	createCluster.InfraID = infraID
+	return cluster
+}
+
 func (receiver *installHelper) createAWSHostedClustersRender(createCluster *createCluster, exec func(filename string) error) *hostedCluster {
 	vars, err := parse(createCluster)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
@@ -266,6 +324,15 @@ func (receiver *installHelper) createAWSHostedClustersRender(createCluster *crea
 func (receiver *installHelper) destroyAWSHostedClusters(createCluster *createCluster) {
 	var bashClient = NewCmdClient().WithShowInfo(true)
 	cmd := fmt.Sprintf("hypershift destroy cluster aws --aws-creds %s --namespace %s --name %s --region %s", createCluster.AWSCreds, createCluster.Namespace, createCluster.Name, createCluster.Region)
+	_, err := bashClient.Run(cmd).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	e2e.Logf("check destroy AWS HostedClusters")
+	o.Eventually(pollGetHostedClusters(receiver.oc, receiver.oc.Namespace()), ShortTimeout, ShortTimeout/10).ShouldNot(o.ContainSubstring(createCluster.Name), "destroy AWS HostedClusters error")
+}
+
+func (receiver *installHelper) destroyAzureHostedClusters(createCluster *createCluster) {
+	var bashClient = NewCmdClient().WithShowInfo(true)
+	cmd := fmt.Sprintf("hypershift destroy cluster azure --azure-creds %s --namespace %s --name %s --location %s", createCluster.AzureCreds, createCluster.Namespace, createCluster.Name, createCluster.Location)
 	_, err := bashClient.Run(cmd).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	e2e.Logf("check destroy AWS HostedClusters")
