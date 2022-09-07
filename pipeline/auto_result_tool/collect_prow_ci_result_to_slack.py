@@ -13,23 +13,23 @@ import os
 
 class SummaryClient:
     SUBTEAM_OWNER = {
-                "SDN":"@sdn-ovn-qe-team ",
-                "STORAGE":"@storage-qe-team ",
+                "SDN":"@sdn-ovn-qe-team",
+                "STORAGE":"@storage-qe-team",
                 "Developer_Experience":"",
                 "User_Interface":"@yapei",
                 "PerfScale":"@perfscale-qe-team", 
                 "Service_Development_B":"",
                 "NODE":"@node-qe-team",
-                "Logging":"@logging-qe-team ",
-                "Workloads":"@workloads-qe-team ",
+                "Logging":"@logging-qe-team",
+                "Workloads":"@workloads-qe-team",
                 "Metering":"@pruan",
-                "Cluster_Observability":"@monitoring-qe-team ",
+                "Cluster_Observability":"@monitoring-qe-team",
                 "Quay/Quay.io":"@quay-qe-team",
                 "Cluster_Infrastructure":"@cloud-qe-team",
                 "Multi-Cluster":"",
                 "Cluster_Operator":"@lwan",
                 "Azure":"",
-                "Network_Edge":"@ne-qe-team ",
+                "Network_Edge":"@ne-qe-team",
                 "ETCD":"@geliu",
                 "Installer":"@installer-qe-team",
                 "Portfolio_Integration":"",
@@ -42,19 +42,19 @@ class SummaryClient:
                 "KNI":"",
                 "Openshift_Jenkins":"",
                 "RHV":"",
-                "ISV_Operators":"@psap-qe-team ",
+                "ISV_Operators":"@psap-qe-team",
                 "PSAP":"@psap-qe-team ",
                 "Multi-Cluster-Networking":"",
                 "OTA":"@ota-qe-team",
                 "Kata":"@kata-qe-team",
                 "Build_API":"@jitensingh",
-                "Image_Registry":"@imageregistry-qe-team ",
+                "Image_Registry":"@imageregistry-qe-team",
                 "Container_Engine_Tools":"@pmali",
-                "MCO":"@rioliu ",
-                "API_Server":"@apiserver-qe-team ",
-                "Authentication":"@auth-qe-team ",
+                "MCO":"@rioliu",
+                "API_Server":"@apiserver-qe-team",
+                "Authentication":"@auth-qe-team",
                 "Hypershift":"@hypershift-qe-team",
-                "Network_Observability":"@no-qe-team ",
+                "Network_Observability":"@no-qe-team",
                 "DR_Testing":"@geliu"
             }
     def __init__(self, args):
@@ -256,13 +256,13 @@ class SummaryClient:
                 notificationList.append("\n".join(notificationSub))
                 if subteam.strip("_cucushift") in self.SUBTEAM_OWNER.keys():
                     if self.SUBTEAM_OWNER[subteam.strip("_cucushift")] not in faildTeamOwner:
-                        faildTeamOwner = faildTeamOwner + self.SUBTEAM_OWNER[subteam.strip("_cucushift")]
+                        faildTeamOwner = faildTeamOwner + self.SUBTEAM_OWNER[subteam.strip("_cucushift")]+" "
             if faildTeamOwner=="":
                 continue 
             notificationEnd = []
             self.number = self.number+1
             if not self.silence:
-                debugMsg = "{0} Please debug failed cases, thanks!".format(faildTeamOwner)
+                debugMsg = "{0} Please debug failed cases and update the DEFECT TYPE, thanks!".format(faildTeamOwner)
                 if self.cluster:
                     debugMsg = debugMsg + " Cluster:{0}{1}".format(self.jenkins_url, self.cluster)
                 notificationEnd.append(debugMsg)
