@@ -758,7 +758,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		operatorsdkCLI.showInfo = true
 		exec.Command("bash", "-c", "mkdir -p /tmp/ocp-42614/traefikee-operator").Output()
 		defer exec.Command("bash", "-c", "rm -rf /tmp/ocp-42614").Output()
-		exec.Command("bash", "-c", "cp -rf test/extended/util/operatorsdk/ocp-42614-data/bundle/ /tmp/ocp-42614/traefikee-operator/").Output()
+		exec.Command("bash", "-c", "cp -rf test/extended/testdata/operatorsdk/ocp-42614-data/bundle/ /tmp/ocp-42614/traefikee-operator/").Output()
 
 		g.By("with deprecated api, with maxOpenShiftVersion")
 		msg, err := operatorsdkCLI.Run("bundle").Args("validate", "/tmp/ocp-42614/traefikee-operator/bundle", "--select-optional", "name=community", "-o", "json-alpha1").Output()
@@ -800,8 +800,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		defer exec.Command("bash", "-c", "rm -rf /tmp/ocp-34462").Output()
 		_, err = exec.Command("bash", "-c", "cd /tmp/ocp-34462/catalogtest && operator-sdk create api --group cache --version v1 --kind Catalogtest --generate-playbook").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exec.Command("bash", "-c", "cp -rf test/extended/util/operatorsdk/ocp-34462-data/Dockerfile /tmp/ocp-34462/catalogtest/Dockerfile").Output()
-		exec.Command("bash", "-c", "cp -rf test/extended/util/operatorsdk/ocp-34462-data/config/default/manager_auth_proxy_patch.yaml /tmp/ocp-34462/catalogtest/config/default/manager_auth_proxy_patch.yaml").Output()
+		exec.Command("bash", "-c", "cp -rf test/extended/testdata/operatorsdk/ocp-34462-data/Dockerfile /tmp/ocp-34462/catalogtest/Dockerfile").Output()
+		exec.Command("bash", "-c", "cp -rf test/extended/testdata/operatorsdk/ocp-34462-data/config/default/manager_auth_proxy_patch.yaml /tmp/ocp-34462/catalogtest/config/default/manager_auth_proxy_patch.yaml").Output()
 		_, err = exec.Command("bash", "-c", "cd /tmp/ocp-34462/catalogtest && make docker-build docker-push IMG=quay.io/olmqe/catalogtest-operator:v"+ocpversion).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer containerCLI.RemoveImage("quay.io/olmqe/catalogtest-operator:v" + ocpversion)
@@ -809,7 +809,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		// OCP-40219
 		g.By("Generate the bundle image and catalog index image")
 		_, err = exec.Command("bash", "-c", "cd /tmp/ocp-34462/catalogtest && sed -i 's#controller:latest#quay.io/olmqe/catalogtest-operator:v4.10#g' /tmp/ocp-34462/catalogtest/Makefile").Output()
-		_, err = exec.Command("bash", "-c", "cp -rf test/extended/util/operatorsdk/ocp-34462-data/manifests/bases/ /tmp/ocp-34462/catalogtest/config/manifests/").Output()
+		_, err = exec.Command("bash", "-c", "cp -rf test/extended/testdata/operatorsdk/ocp-34462-data/manifests/bases/ /tmp/ocp-34462/catalogtest/config/manifests/").Output()
 		_, err = exec.Command("bash", "-c", "cd /tmp/ocp-34462/catalogtest && make bundle").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = exec.Command("bash", "-c", "cd /tmp/ocp-34462/catalogtest && sed -i 's/--container-tool docker //g' Makefile").Output()
@@ -1026,7 +1026,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocppreversion)
 		}
 
-		dataPath := "test/extended/util/operatorsdk/ocp-34427-data/roles/memcached/"
+		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
+		dataPath := filepath.Join(buildPruningBaseDir, "ocp-34427-data", "roles", "memcached")
 		err = copy(filepath.Join(dataPath, "tasks", "main.yml"), filepath.Join(tmpPath, "roles", "memcached34427", "tasks", "main.yml"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = copy(filepath.Join(dataPath, "defaults", "main.yml"), filepath.Join(tmpPath, "roles", "memcached34427", "defaults", "main.yml"))
@@ -1187,7 +1188,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Writing kustomize manifests"))
 
-		dataPath := "test/extended/util/operatorsdk/ocp-34366-data/"
+		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
+		dataPath := filepath.Join(buildPruningBaseDir, "ocp-34366-data")
 		err = copy(filepath.Join(dataPath, "roles", "memcached", "tasks", "main.yml"), filepath.Join(tmpPath, "roles", "memcached34366", "tasks", "main.yml"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = copy(filepath.Join(dataPath, "config", "manager", "manager.yaml"), filepath.Join(tmpPath, "config", "manager", "manager.yaml"))
@@ -1262,6 +1264,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		defer os.RemoveAll(tmpBasePath)
 		operatorsdkCLI.ExecCommandPath = tmpPath
 		makeCLI.ExecCommandPath = tmpPath
+		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
+		dataPath := filepath.Join(buildPruningBaseDir, "ocp-34883-data")
 
 		g.By("Step: init Ansible Based Operator")
 		_, err = operatorsdkCLI.Run("init").Args("--plugins=ansible", "--domain", "example.com").Output()
@@ -1272,10 +1276,14 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Step: make bundle.")
-		manifestsPath := filepath.Join(tmpPath, "config", "manifests")
+		manifestsPath := filepath.Join(tmpPath, "config", "manifests", "bases")
 		err = os.MkdirAll(manifestsPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exec.Command("bash", "-c", fmt.Sprintf("cp -rf test/extended/util/operatorsdk/ocp-34883-data/manifests/bases/ %s", manifestsPath)).Output()
+		manifestsFile := filepath.Join(manifestsPath, "memcached-operator-34883.clusterserviceversion.yaml")
+		_, err = os.Create(manifestsFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = copy(filepath.Join(dataPath, "manifests", "bases", "memcached-operator-34883.clusterserviceversion.yaml"), filepath.Join(manifestsFile))
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
 			msg, _ := makeCLI.Run("bundle").Args().Output()
@@ -1313,10 +1321,16 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		_, err = operatorsdkCLI.Run("create").Args("api", "--group", "cache", "--version", "v1alpha1", "--kind", "Memcached", "--generate-role").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		manifestsPath := filepath.Join(tmpPath, "config", "manifests")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
+		dataPath := filepath.Join(buildPruningBaseDir, "ocp-43973-data")
+		manifestsPath := filepath.Join(tmpPath, "config", "manifests", "bases")
 		err = os.MkdirAll(manifestsPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exec.Command("bash", "-c", fmt.Sprintf("cp -rf test/extended/util/operatorsdk/ocp-43973-data/manifests/bases/ %s", manifestsPath)).Output()
+		manifestsFile := filepath.Join(manifestsPath, "memcached-operator.clusterserviceversion.yaml")
+		_, err = os.Create(manifestsFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = copy(filepath.Join(dataPath, "manifests", "bases", "memcached-operator.clusterserviceversion.yaml"), filepath.Join(manifestsFile))
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
 			msg, err := makeCLI.Run("bundle").Args().Output()
@@ -1391,7 +1405,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test ", "-s", "testing", "-n", oc.Namespace()).Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("serviceaccount \"testing\" not found"))
-		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", "test/extended/util/operatorsdk/ocp-43973-data/sa_testing.yaml", "-n", oc.Namespace()).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", "test/extended/testdata/operatorsdk/ocp-43973-data/sa_testing.yaml", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test ", "-s", "testing", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1409,6 +1423,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		defer os.RemoveAll(tmpBasePath)
 		operatorsdkCLI.ExecCommandPath = tmpPath
 		makeCLI.ExecCommandPath = tmpPath
+		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
+		dataPath := filepath.Join(buildPruningBaseDir, "ocp-43660-data")
 
 		g.By("step: init Ansible Based Operator")
 		_, err = operatorsdkCLI.Run("init").Args("--plugins=ansible", "--domain", "example.com").Output()
@@ -1419,10 +1435,14 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("step: make bundle.")
-		manifestsPath := filepath.Join(tmpPath, "config", "manifests")
+		manifestsPath := filepath.Join(tmpPath, "config", "manifests", "bases")
 		err = os.MkdirAll(manifestsPath, 0o755)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exec.Command("bash", "-c", fmt.Sprintf("cp -rf test/extended/util/operatorsdk/ocp-43660-data/manifests/bases/ %s", manifestsPath)).Output()
+		manifestsFile := filepath.Join(manifestsPath, "memcached-operator-43660.clusterserviceversion.yaml")
+		_, err = os.Create(manifestsFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = copy(filepath.Join(dataPath, "manifests", "bases", "memcached-operator-43660.clusterserviceversion.yaml"), filepath.Join(manifestsFile))
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		waitErr := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
 			msg, err := makeCLI.Run("bundle").Args().Output()
@@ -2470,6 +2490,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if architecture != "amd64" && architecture != "arm64" {
 			g.Skip("Do not support " + architecture)
 		}
+		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
+		dataPath := filepath.Join(buildPruningBaseDir, "ocp-48885-data")
 		tmpBasePath := "/tmp/ocp-48885-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-48885")
 		err := os.MkdirAll(tmpPath, 0o755)
@@ -2489,7 +2511,6 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(output).To(o.ContainSubstring("Writing kustomize manifests"))
 
 		g.By("step: modify files to get the quay.io/olmqe images.")
-		dataPath := "test/extended/util/operatorsdk/ocp-48885-data/"
 		// copy task main.yml
 		err = copy(filepath.Join(dataPath, "main.yml"), filepath.Join(tmpPath, "roles", "memcached48885", "tasks", "main.yml"))
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2540,6 +2561,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if architecture != "amd64" && architecture != "arm64" {
 			g.Skip("Do not support " + architecture)
 		}
+		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
+		dataPath := filepath.Join(buildPruningBaseDir, "ocp-52813-data")
 		tmpBasePath := "/tmp/ocp-52813-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-52813")
 		imageTag := "quay.io/olmqe/memcached-operator:52813-" + getRandomString()
@@ -2559,7 +2582,6 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(output).To(o.ContainSubstring("Created helm-charts"))
 
 		g.By("step: modify files to get the quay.io/olmqe images.")
-		dataPath := "test/extended/util/operatorsdk/ocp-52813-data/"
 
 		// copy watches.yaml
 		err = copy(filepath.Join(dataPath, "watches.yaml"), filepath.Join(tmpPath, "watches.yaml"))
@@ -2743,7 +2765,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		makeCLI.ExecCommandPath = tmpPath
 		nsOperator := "memcached-operator-44550-system"
 		imageTag := "quay.io/olmqe/memcached-operator:44550-" + getRandomString()
-		dataPath := "test/extended/util/operatorsdk/ocp-44550-data/"
+		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
+		dataPath := filepath.Join(buildPruningBaseDir, "ocp-44550-data")
 		crFilePath := filepath.Join(dataPath, "cache_v1_memcached44550.yaml")
 		quayCLI := container.NewQuayCLI()
 		defer quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
