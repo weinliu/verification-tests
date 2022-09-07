@@ -45,7 +45,7 @@ const (
 	ShortTimeout          = 50 * time.Second
 )
 
-func doOcpReq(oc *exutil.CLI, verb OcpClientVerb, notEmpty bool, args []string) string {
+func doOcpReq(oc *exutil.CLI, verb OcpClientVerb, notEmpty bool, args ...string) string {
 	e2e.Logf("running command : oc %s %s \n", string(verb), strings.Join(args, " "))
 	res, err := oc.AsAdmin().WithoutNamespace().Run(string(verb)).Args(args...).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())

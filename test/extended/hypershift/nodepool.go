@@ -43,9 +43,9 @@ func (np *Nodepool) Delete(oc *exutil.CLI, parsedTemplate string) {
 		}
 	}()
 
-	res := doOcpReq(oc, OcpGet, false, []string{"-n", "clusters", "nodepools", np.Name, "--ignore-not-found"})
+	res := doOcpReq(oc, OcpGet, false, "-n", "clusters", "nodepools", np.Name, "--ignore-not-found")
 	if res != "" {
-		doOcpReq(oc, OcpDelete, false, []string{"-n", "clusters", "nodepools", np.Name})
+		doOcpReq(oc, OcpDelete, false, "-n", "clusters", "nodepools", np.Name)
 	}
 }
 

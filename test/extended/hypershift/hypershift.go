@@ -21,17 +21,19 @@ import (
 var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	defer g.GinkgoRecover()
 
-	var oc = exutil.NewCLI("hypershift", exutil.KubeConfigPath())
-	var guestClusterName, guestClusterNamespace string
+	var (
+		oc                                      = exutil.NewCLI("hypershift", exutil.KubeConfigPath())
+		guestClusterName, guestClusterNamespace string
+		iaasPlatform                            string
+	)
 
 	g.BeforeEach(func() {
-		operator := doOcpReq(oc, OcpGet, false, []string{"pods", "-n", "hypershift", "-ojsonpath={.items[*].metadata.name}"})
+		operator := doOcpReq(oc, OcpGet, false, "pods", "-n", "hypershift", "-ojsonpath={.items[*].metadata.name}")
 		if len(operator) <= 0 {
 			g.Skip("hypershift operator not found, skip test run")
 		}
 
-		clusterNames := doOcpReq(oc, OcpGet, false,
-			[]string{"-n", "clusters", "hostedcluster", "-o=jsonpath={.items[*].metadata.name}"})
+		clusterNames := doOcpReq(oc, OcpGet, false, "-n", "clusters", "hostedcluster", "-o=jsonpath={.items[*].metadata.name}")
 		if len(clusterNames) <= 0 {
 			g.Skip("hypershift guest cluster not found, skip test run")
 		}
@@ -40,18 +42,16 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		guestClusterName = strings.Split(clusterNames, " ")[0]
 		guestClusterNamespace = "clusters-" + guestClusterName
 
-		res := doOcpReq(oc, OcpGet, true,
-			[]string{"-n", "hypershift", "pod", "-o=jsonpath={.items[0].status.phase}"})
+		res := doOcpReq(oc, OcpGet, true, "-n", "hypershift", "pod", "-o=jsonpath={.items[0].status.phase}")
 		checkSubstring(res, []string{"Running"})
+
+		// get IaaS platform
+		iaasPlatform = exutil.CheckPlatform(oc)
 	})
 
 	// author: heli@redhat.com
 	g.It("Author:heli-Critical-42855-Check Status Conditions for HostedControlPlane", func() {
-		g.By("hypershift OCP-42855 check hostedcontrolplane condition status")
-
-		res := doOcpReq(oc, OcpGet, true,
-			[]string{"-n", guestClusterNamespace, "hostedcontrolplane", guestClusterName,
-				"-ojsonpath={range .status.conditions[*]}{@.type}{\" \"}{@.status}{\" \"}{end}"})
+		res := doOcpReq(oc, OcpGet, true, "-n", guestClusterNamespace, "hostedcontrolplane", guestClusterName, "-ojsonpath={range .status.conditions[*]}{@.type}{\" \"}{@.status}{\" \"}{end}")
 		checkSubstring(res,
 			[]string{"ValidHostedControlPlaneConfiguration True",
 				"EtcdAvailable True", "KubeAPIServerAvailable True", "InfrastructureReady True"})
@@ -59,7 +59,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: heli@redhat.com
 	g.It("Author:heli-Critical-43555-Allow direct ingress on guest clusters on AWS", func() {
-		g.By("hypershift OCP-43555 allow direct ingress on guest cluster")
 		guestClusterKubeconfigFile := "/tmp/guestcluster-kubeconfig-43555"
 
 		var bashClient = NewCmdClient()
@@ -67,21 +66,15 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		_, err := bashClient.Run(fmt.Sprintf("hypershift create kubeconfig --name %s > %s", guestClusterName, guestClusterKubeconfigFile)).Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 
-		res := doOcpReq(oc, OcpGet, true,
-			[]string{"clusteroperator", "kube-apiserver", fmt.Sprintf("--kubeconfig=%s", guestClusterKubeconfigFile),
-				"-ojsonpath={range .status.conditions[*]}{@.type}{\" \"}{@.status}{\" \"}{end}"})
+		res := doOcpReq(oc, OcpGet, true, "clusteroperator", "kube-apiserver", fmt.Sprintf("--kubeconfig=%s", guestClusterKubeconfigFile), "-ojsonpath={range .status.conditions[*]}{@.type}{\" \"}{@.status}{\" \"}{end}")
 		checkSubstring(res, []string{"Degraded False"})
 
-		ingressDomain := doOcpReq(oc, OcpGet, true,
-			[]string{"-n", "openshift-ingress-operator", "ingresscontrollers", "-ojsonpath={.items[0].spec.domain}",
-				fmt.Sprintf("--kubeconfig=%s", guestClusterKubeconfigFile)})
+		ingressDomain := doOcpReq(oc, OcpGet, true, "-n", "openshift-ingress-operator", "ingresscontrollers", "-ojsonpath={.items[0].spec.domain}", fmt.Sprintf("--kubeconfig=%s", guestClusterKubeconfigFile))
 		e2e.Logf("The guest cluster ingress domain is : %s\n", ingressDomain)
 
-		console := doOcpReq(oc, OcpWhoami, true,
-			[]string{fmt.Sprintf("--kubeconfig=%s", guestClusterKubeconfigFile), "--show-console"})
+		console := doOcpReq(oc, OcpWhoami, true, fmt.Sprintf("--kubeconfig=%s", guestClusterKubeconfigFile), "--show-console")
 
-		pwdbase64 := doOcpReq(oc, OcpGet, true,
-			[]string{"-n", guestClusterNamespace, "secret", "kubeadmin-password", "-ojsonpath={.data.password}"})
+		pwdbase64 := doOcpReq(oc, OcpGet, true, "-n", guestClusterNamespace, "secret", "kubeadmin-password", "-ojsonpath={.data.password}")
 		pwd, err := base64.StdEncoding.DecodeString(pwdbase64)
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 
@@ -93,21 +86,17 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: heli@redhat.com
 	g.It("Author:heli-Critical-43282-Implement versioning API and report version status in hostedcluster[Serial][Disruptive]", func() {
-		g.By("hypershift OCP-43282 Implement versioning API and report version status in hostedcluster")
-
-		oriImage := doOcpReq(oc, OcpGet, true,
-			[]string{"-n", "clusters", "hostedcluster", guestClusterName, "-ojsonpath={.status.version.desired.image}"})
+		oriImage := doOcpReq(oc, OcpGet, true, "-n", "clusters", "hostedcluster", guestClusterName, "-ojsonpath={.status.version.desired.image}")
 		e2e.Logf("hostedcluster %s image: %s", guestClusterName, oriImage)
 
 		defer func() {
 			//change back
 			patchOption := fmt.Sprintf("-p=[{\"op\": \"replace\", \"path\": \"/spec/release/image\",\"value\": \"%s\"}]", oriImage)
-			doOcpReq(oc, OcpPatch, true, []string{"-n", "clusters", "hostedcluster", guestClusterName, "--type=json", patchOption})
+			doOcpReq(oc, OcpPatch, true, "-n", "clusters", "hostedcluster", guestClusterName, "--type=json", patchOption)
 
 			err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 				//check hostedcluster status image, check by spec/release/image
-				res := doOcpReq(oc, OcpGet, true,
-					[]string{"-n", "clusters", "hostedcluster", guestClusterName, "-ojsonpath={.spec.release.image}"})
+				res := doOcpReq(oc, OcpGet, true, "-n", "clusters", "hostedcluster", guestClusterName, "-ojsonpath={.spec.release.image}")
 				if strings.Contains(res, oriImage) {
 					return true, nil
 				}
@@ -117,21 +106,19 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		}()
 
 		//change image version to quay.io/openshift-release-dev/ocp-release:4.9.0-x86_64
-		desiredImage := "quay.io/openshift-release-dev/ocp-release:4.9.10-x86_64"
+		desiredImage := "quay.io/openshift-release-dev/ocp-release:4.11.3-x86_64"
 		patchOption := fmt.Sprintf("-p=[{\"op\": \"replace\", \"path\": \"/spec/release/image\",\"value\": \"%s\"}]", desiredImage)
-		doOcpReq(oc, OcpPatch, true, []string{"-n", "clusters", "hostedcluster", guestClusterName, "--type=json", patchOption})
+		doOcpReq(oc, OcpPatch, true, "-n", "clusters", "hostedcluster", guestClusterName, "--type=json", patchOption)
 
 		err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			//check hostedcluster status image
-			res := doOcpReq(oc, OcpGet, true,
-				[]string{"-n", "clusters", "hostedcluster", guestClusterName, "-ojsonpath={.status.version.desired.image}"})
+			res := doOcpReq(oc, OcpGet, true, "-n", "clusters", "hostedcluster", guestClusterName, "-ojsonpath={.status.version.desired.image}")
 			if !strings.Contains(res, desiredImage) {
 				return false, nil
 			}
 
 			//check hostedcontrolplane spec.releaseImage
-			res = doOcpReq(oc, OcpGet, true,
-				[]string{"-n", guestClusterNamespace, "hostedcontrolplane", guestClusterName, "-ojsonpath={.spec.releaseImage}"})
+			res = doOcpReq(oc, OcpGet, true, "-n", guestClusterNamespace, "hostedcontrolplane", guestClusterName, "-ojsonpath={.spec.releaseImage}")
 			if !strings.Contains(res, desiredImage) {
 				return false, nil
 			}
@@ -142,10 +129,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: heli@redhat.com
 	g.It("Longduration-NonPreRelease-Author:heli-Critical-43272-Test cluster autoscaler via hostedCluster autoScaling settings[Serial][Slow]", func() {
-		g.By("Author:jiezhao-Critical-43272-Test cluster autoscaler via hostedCluster autoScaling settings")
-
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 43272 is for AWS - skipping test ...")
+		}
 		nodeReplicasJSONPath := fmt.Sprintf(`-ojsonpath={.items[?(@.spec.clusterName=="%s")].spec.replicas}`, guestClusterName)
-		nodeReplicas := doOcpReq(oc, OcpGet, true, []string{"-n", "clusters", "nodepools", nodeReplicasJSONPath})
+		nodeReplicas := doOcpReq(oc, OcpGet, true, "-n", "clusters", "nodepools", nodeReplicasJSONPath)
 		e2e.Logf("The nodepool replicas is : %s\n", nodeReplicas)
 
 		var bashClient = NewCmdClient().WithShowInfo(true)
@@ -153,9 +141,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		npName := "jz-43272-test-01"
 
 		defer func() {
-			res := doOcpReq(oc, OcpGet, false, []string{"-n", "clusters", "nodepools", npName, "--ignore-not-found"})
+			res := doOcpReq(oc, OcpGet, false, "-n", "clusters", "nodepools", npName, "--ignore-not-found")
 			if res != "" {
-				doOcpReq(oc, OcpDelete, false, []string{"-n", "clusters", "nodepools", npName})
+				doOcpReq(oc, OcpDelete, false, "-n", "clusters", "nodepools", npName)
 			}
 		}()
 
@@ -169,12 +157,12 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		removeNpConfig := `[{"op": "remove", "path": "/spec/replicas"}]`
 		autoscalConfig := fmt.Sprintf(`--patch={"spec": {"autoScaling": {"max": %s, "min":%s}}}`, autoScalingMax, autoScalingMin)
 
-		doOcpReq(oc, OcpPatch, true, []string{"-n", "clusters", "nodepools", npName, "--type=json", "-p", removeNpConfig})
-		doOcpReq(oc, OcpPatch, true, []string{"-n", "clusters", "nodepools", npName, autoscalConfig, "--type=merge"})
+		doOcpReq(oc, OcpPatch, true, "-n", "clusters", "nodepools", npName, "--type=json", "-p", removeNpConfig)
+		doOcpReq(oc, OcpPatch, true, "-n", "clusters", "nodepools", npName, autoscalConfig, "--type=merge")
 
-		res := doOcpReq(oc, OcpGet, true, []string{"-n", "clusters", "nodepools", npName, "-ojsonpath={.spec.autoScaling.max}"})
+		res := doOcpReq(oc, OcpGet, true, "-n", "clusters", "nodepools", npName, "-ojsonpath={.spec.autoScaling.max}")
 		o.Expect(res).To(o.ContainSubstring(autoScalingMax))
-		res = doOcpReq(oc, OcpGet, true, []string{"-n", "clusters", "nodepools", npName, "-ojsonpath={.spec.autoScaling.min}"})
+		res = doOcpReq(oc, OcpGet, true, "-n", "clusters", "nodepools", npName, "-ojsonpath={.spec.autoScaling.min}")
 		o.Expect(res).To(o.ContainSubstring(autoScalingMin))
 
 		guestClusterKubeconfigFile := "/tmp/guestcluster-kubeconfig-43272"
@@ -201,7 +189,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		//wait a bit for nodepool scale up, max=20mins
 		err = wait.Poll(30*time.Second, 20*time.Minute, func() (bool, error) {
-			resNp := doOcpReq(oc, OcpGet, false, []string{"nodepool", npName, "-n", "clusters", "-ojsonpath={.status.replicas}"})
+			resNp := doOcpReq(oc, OcpGet, false, "nodepool", npName, "-n", "clusters", "-ojsonpath={.status.replicas}")
 			if resNp == autoScalingMax {
 				return true, nil
 			}
@@ -210,23 +198,22 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		exutil.AssertWaitPollNoErr(err, "nodepool auto scaling check error")
 
 		//clear
-		doOcpReq(oc, OcpDelete, true, []string{"-n", "clusters", "nodepools", npName})
+		doOcpReq(oc, OcpDelete, true, "-n", "clusters", "nodepools", npName)
 	})
 
 	// author: heli@redhat.com
 	g.It("Author:heli-Critical-43829-Test autoscaling status in nodePool conditions[Serial]", func() {
-		g.By("hypershift OCP-43829-Test autoscaling status in nodePool conditions")
-
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 43829 is for AWS - skipping test ...")
+		}
 		//check nodepool autoscale status
 		npNameJSONPath := fmt.Sprintf(`-ojsonpath={.items[?(@.spec.clusterName=="%s")].metadata.name}`, guestClusterName)
-		existingNodePools := doOcpReq(oc, OcpGet, false, []string{"nodepool", "-n", "clusters", npNameJSONPath})
+		existingNodePools := doOcpReq(oc, OcpGet, false, "nodepool", "-n", "clusters", npNameJSONPath)
 		existNp := strings.Split(existingNodePools, " ")[0]
-		res := doOcpReq(oc, OcpGet, true, []string{"nodepool", existNp, "-n", "clusters",
-			`-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}}`})
+		res := doOcpReq(oc, OcpGet, true, "nodepool", existNp, "-n", "clusters", `-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}}`)
 		o.Expect(res).To(o.ContainSubstring("AutoscalingEnabled False"))
 
-		nodeReplicas := doOcpReq(oc, OcpGet, true,
-			[]string{"-n", "clusters", "nodepools", existNp, "-ojsonpath={.spec.replicas}"})
+		nodeReplicas := doOcpReq(oc, OcpGet, true, "-n", "clusters", "nodepools", existNp, "-ojsonpath={.spec.replicas}")
 		e2e.Logf("The nodepool size is : %s\n", nodeReplicas)
 
 		//create nodepool
@@ -235,9 +222,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		npName := "jz-43829-test-01"
 
 		defer func() {
-			res := doOcpReq(oc, OcpGet, false, []string{"-n", "clusters", "nodepools", npName, "--ignore-not-found"})
+			res := doOcpReq(oc, OcpGet, false, "-n", "clusters", "nodepools", npName, "--ignore-not-found")
 			if res != "" {
-				doOcpReq(oc, OcpDelete, false, []string{"-n", "clusters", "nodepools", npName})
+				doOcpReq(oc, OcpDelete, false, "-n", "clusters", "nodepools", npName)
 			}
 		}()
 
@@ -246,44 +233,45 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 
 		//check nodepool autoscale status
-		res = doOcpReq(oc, OcpGet, true, []string{"nodepool", npName, "-n", "clusters",
-			`-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}}`})
-		o.Expect(res).To(o.ContainSubstring("AutoscalingEnabled False"))
+		o.Eventually(func() string {
+			return doOcpReq(oc, OcpGet, true, "nodepool", npName, "-n", "clusters", `-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}}`)
+		}, ShortTimeout, ShortTimeout/10).Should(o.ContainSubstring("AutoscalingEnabled False"))
 
 		//Set autoscaling and keep nodeReplicas in the nodepool:
 		autoScalingMax := "4"
 		autoScalingMin := "1"
 		autoscalConfig := fmt.Sprintf(`--patch={"spec": {"autoScaling": {"max": %s, "min":%s}}}`, autoScalingMax, autoScalingMin)
-		doOcpReq(oc, OcpPatch, true, []string{"-n", "clusters", "nodepools", npName, autoscalConfig, "--type=merge"})
+		doOcpReq(oc, OcpPatch, true, "-n", "clusters", "nodepools", npName, autoscalConfig, "--type=merge")
 
 		//Check autoscaling status
-		res = doOcpReq(oc, OcpGet, true, []string{"nodepool", npName, "-n", "clusters",
-			`-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}}`})
-		o.Expect(res).To(o.ContainSubstring("AutoscalingEnabled False"))
+		o.Eventually(func() string {
+			return doOcpReq(oc, OcpGet, true, "nodepool", npName, "-n", "clusters", `-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}}`)
+		}, ShortTimeout, ShortTimeout/10).Should(o.ContainSubstring("AutoscalingEnabled False"))
 
 		//Remove nodeReplicas, keep autoscaling in the nodepool:
 		removeNpConfig := `[{"op": "remove", "path": "/spec/replicas"}]`
-		doOcpReq(oc, OcpPatch, true, []string{"-n", "clusters", "nodepools", npName, "--type=json", "-p", removeNpConfig})
+		doOcpReq(oc, OcpPatch, true, "-n", "clusters", "nodepools", npName, "--type=json", "-p", removeNpConfig)
 
 		//Check autoscaling status
-		res = doOcpReq(oc, OcpGet, true, []string{"nodepool", npName, "-n", "clusters",
-			`-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}}`})
-		o.Expect(res).To(o.ContainSubstring("AutoscalingEnabled True"))
+		o.Eventually(func() string {
+			return doOcpReq(oc, OcpGet, true, "nodepool", npName, "-n", "clusters", `-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}}`)
+		}, ShortTimeout, ShortTimeout/10).Should(o.ContainSubstring("AutoscalingEnabled True"))
 	})
 
 	// author: heli@redhat.com
 	g.It("Author:heli-Critical-43268-Expose nodePoolManagement API to enable rolling upgrade[Serial][Disruptive]", func() {
-		g.By("hypershift OCP-43268-Expose nodePoolManagement API to enable rolling upgrade")
-
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 43268 is for AWS - skipping test ...")
+		}
 		//create nodepool
 		var bashClient = NewCmdClient().WithShowInfo(true)
 		npCount := 2
 		npName := "jz-43268-test-01"
 
 		defer func() {
-			res := doOcpReq(oc, OcpGet, false, []string{"-n", "clusters", "nodepools", npName, "--ignore-not-found"})
+			res := doOcpReq(oc, OcpGet, false, "-n", "clusters", "nodepools", npName, "--ignore-not-found")
 			if res != "" {
-				doOcpReq(oc, OcpDelete, false, []string{"-n", "clusters", "nodepools", npName})
+				doOcpReq(oc, OcpDelete, false, "-n", "clusters", "nodepools", npName)
 			}
 		}()
 
@@ -292,17 +280,16 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 
 		//Get nodepool yaml file, edit spec.release.image, change it to 4.8.5
-		npImage := doOcpReq(oc, OcpGet, true, []string{"nodepool", npName, "-n", "clusters",
-			"-ojsonpath={.spec.release.image}"})
+		npImage := doOcpReq(oc, OcpGet, true, "nodepool", npName, "-n", "clusters", "-ojsonpath={.spec.release.image}")
 		e2e.Logf("The original image of nodepool %s is : %s\n", npName, npImage)
 
 		desiredImage := "quay.io/openshift-release-dev/ocp-release:4.8.5-x86_64"
 		patchOption := fmt.Sprintf("-p=[{\"op\": \"replace\", \"path\": \"/spec/release/image\",\"value\": \"%s\"}]", desiredImage)
-		doOcpReq(oc, OcpPatch, true, []string{"-n", "clusters", "nodepool", npName, "--type=json", patchOption})
+		doOcpReq(oc, OcpPatch, true, "-n", "clusters", "nodepool", npName, "--type=json", patchOption)
 
 		err = wait.Poll(1*time.Second, 60*time.Second, func() (bool, error) {
 			//Get nodepool yaml file
-			newImage := doOcpReq(oc, OcpGet, true, []string{"nodepool", npName, "-n", "clusters", "-ojsonpath={.spec.release.image}"})
+			newImage := doOcpReq(oc, OcpGet, true, "nodepool", npName, "-n", "clusters", "-ojsonpath={.spec.release.image}")
 			if !strings.Contains(newImage, desiredImage) {
 				return false, nil
 			}
@@ -315,16 +302,16 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		autoScalingMax := "4"
 		autoScalingMin := "1"
 		removeNpConfig := "[{\"op\": \"remove\", \"path\": \"/spec/replicas\"}]"
-		doOcpReq(oc, OcpPatch, true, []string{"-n", "clusters", "nodepools", npName, "--type=json", "-p", removeNpConfig})
+		doOcpReq(oc, OcpPatch, true, "-n", "clusters", "nodepools", npName, "--type=json", "-p", removeNpConfig)
 		autoscalConfig := fmt.Sprintf("--patch={\"spec\": {\"autoScaling\":   {\"max\": %s, \"min\":%s}}}", autoScalingMax, autoScalingMin)
-		doOcpReq(oc, OcpPatch, true, []string{"-n", "clusters", "nodepools", npName, autoscalConfig, "--type=merge"})
+		doOcpReq(oc, OcpPatch, true, "-n", "clusters", "nodepools", npName, autoscalConfig, "--type=merge")
 
 		patchOption = fmt.Sprintf("-p=[{\"op\": \"replace\", \"path\": \"/spec/release/image\",\"value\": \"%s\"}]", npImage)
-		doOcpReq(oc, OcpPatch, true, []string{"-n", "clusters", "nodepool", npName, "--type=json", patchOption})
+		doOcpReq(oc, OcpPatch, true, "-n", "clusters", "nodepool", npName, "--type=json", patchOption)
 
 		err = wait.Poll(1*time.Second, 60*time.Second, func() (bool, error) {
 			//Get nodepool yaml file
-			newImage := doOcpReq(oc, OcpGet, true, []string{"nodepool", npName, "-n", "clusters", "-ojsonpath={.spec.release.image}"})
+			newImage := doOcpReq(oc, OcpGet, true, "nodepool", npName, "-n", "clusters", "-ojsonpath={.spec.release.image}")
 			if !strings.Contains(newImage, npImage) {
 				return false, nil
 			}
@@ -336,9 +323,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: heli@redhat.com
 	g.It("Author:heli-Critical-43554-Check FIPS support in the Hosted Cluster", func() {
-		g.By("hypershift OCP-43554-Check FIPS support in the Hosted Cluster")
-
-		res := doOcpReq(oc, OcpGet, false, []string{"-n", "clusters", "hostedcluster", guestClusterName, "-ojsonpath={.spec.fips}"})
+		res := doOcpReq(oc, OcpGet, false, "-n", "clusters", "hostedcluster", guestClusterName, "-ojsonpath={.spec.fips}")
 		if res != "true" {
 			g.Skip("only for the fip enabled hostedcluster, skip test run")
 		}
@@ -349,26 +334,25 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		_, err := bashClient.Run(fmt.Sprintf("hypershift create kubeconfig --name %s > %s", guestClusterName, guestClusterKubeconfigFile)).Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 
-		hostedNodes := doOcpReq(oc, OcpGet, true, []string{"--kubeconfig=" + guestClusterKubeconfigFile, "node", "-ojsonpath={.items[*].metadata.name}"})
+		hostedNodes := doOcpReq(oc, OcpGet, true, "--kubeconfig="+guestClusterKubeconfigFile, "node", "-ojsonpath={.items[*].metadata.name}")
 		for _, nodename := range strings.Split(hostedNodes, " ") {
 			na := strings.TrimSpace(nodename)
 			//check node FIP mode
-			res = doOcpReq(oc, OcpDebug, true, []string{"--kubeconfig=" + guestClusterKubeconfigFile, "node/" + na, "-q", "--", "fips-mode-setup", "--check"})
+			res = doOcpReq(oc, OcpDebug, true, "--kubeconfig="+guestClusterKubeconfigFile, "node/"+na, "-q", "--", "fips-mode-setup", "--check")
 			o.Expect(res).To(o.ContainSubstring("FIPS mode is enabled"))
 
 			//ignore cat /etc/system-fips because chroot /host failed
-			res = doOcpReq(oc, OcpDebug, true, []string{"--kubeconfig=" + guestClusterKubeconfigFile, "node/" + na, "-q", "--", "cat", "/proc/sys/crypto/fips_enabled"})
+			res = doOcpReq(oc, OcpDebug, true, "--kubeconfig="+guestClusterKubeconfigFile, "node/"+na, "-q", "--", "cat", "/proc/sys/crypto/fips_enabled")
 			o.Expect(res).To(o.ContainSubstring("1"))
 
-			res = doOcpReq(oc, OcpDebug, true, []string{"--kubeconfig=" + guestClusterKubeconfigFile, "node/" + na, "-q", "--", "sysctl", "crypto.fips_enabled"})
+			res = doOcpReq(oc, OcpDebug, true, "--kubeconfig="+guestClusterKubeconfigFile, "node/"+na, "-q", "--", "sysctl", "crypto.fips_enabled")
 			o.Expect(res).To(o.ContainSubstring("crypto.fips_enabled = 1"))
 		}
 	})
 
 	// author: heli@redhat.com
 	g.It("Author:heli-Critical-45770-Test basic fault resilient HA-capable etcd[Serial][Disruptive]", func() {
-		g.By("hypershift OCP-45770-Test basic fault resilient HA-capable etcd")
-		controlplaneMode := doOcpReq(oc, OcpGet, true, []string{"hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.spec.controllerAvailabilityPolicy}"})
+		controlplaneMode := doOcpReq(oc, OcpGet, true, "hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.spec.controllerAvailabilityPolicy}")
 		e2e.Logf("get hostedcluster %s controllerAvailabilityPolicy: %s ", guestClusterName, controlplaneMode)
 		if controlplaneMode != "HighlyAvailable" {
 			g.Skip("this is for guest cluster HA mode testrun, skip...")
@@ -380,8 +364,8 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		desiredTopogyKey := "topology.kubernetes.io/zone"
 
 		etcdSts := "etcd"
-		doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "statefulset", etcdSts, "-ojsonpath={" + antiAffinityJSONPath + "}"})
-		res := doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "statefulset", etcdSts, "-ojsonpath={" + topologyKeyJSONPath + "}"})
+		doOcpReq(oc, OcpGet, true, "-n", guestClusterNamespace, "statefulset", etcdSts, "-ojsonpath={"+antiAffinityJSONPath+"}")
+		res := doOcpReq(oc, OcpGet, true, "-n", guestClusterNamespace, "statefulset", etcdSts, "-ojsonpath={"+topologyKeyJSONPath+"}")
 		o.Expect(res).To(o.ContainSubstring(desiredTopogyKey))
 
 		//check etcd healthy
@@ -390,22 +374,22 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		etcdHealthCmd := etcdCmd + " endpoint health"
 		etcdStatusCmd := etcdCmd + " endpoint status"
 		for i := 0; i < 3; i++ {
-			res = doOcpReq(oc, OcpExec, true, []string{"-n", guestClusterNamespace, "etcd-" + strconv.Itoa(i), "--", "sh", "-c", etcdHealthCmd})
+			res = doOcpReq(oc, OcpExec, true, "-n", guestClusterNamespace, "etcd-"+strconv.Itoa(i), "--", "sh", "-c", etcdHealthCmd)
 			o.Expect(res).To(o.ContainSubstring("localhost:2379 is healthy"))
 		}
 
 		for i := 0; i < 3; i++ {
 			etcdPodName := "etcd-" + strconv.Itoa(i)
-			res = doOcpReq(oc, OcpExec, true, []string{"-n", guestClusterNamespace, etcdPodName, "--", "sh", "-c", etcdStatusCmd})
+			res = doOcpReq(oc, OcpExec, true, "-n", guestClusterNamespace, etcdPodName, "--", "sh", "-c", etcdStatusCmd)
 			if strings.Contains(res, "false, false") {
 				e2e.Logf("find etcd follower etcd-%d, begin to delete this pod", i)
 
 				//delete the first follower
-				doOcpReq(oc, OcpDelete, true, []string{"-n", guestClusterNamespace, "pod", etcdPodName})
+				doOcpReq(oc, OcpDelete, true, "-n", guestClusterNamespace, "pod", etcdPodName)
 
 				//check the follower can be restarted and keep health
 				err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-					status := doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "pod", etcdPodName, "-ojsonpath={.status.phase}"})
+					status := doOcpReq(oc, OcpGet, true, "-n", guestClusterNamespace, "pod", etcdPodName, "-ojsonpath={.status.phase}")
 					if status == "Running" {
 						return true, nil
 					}
@@ -414,12 +398,12 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 				exutil.AssertWaitPollNoErr(err, "etcd cluster health check error")
 
 				//check the follower pod running
-				status := doOcpReq(oc, OcpGet, true, []string{"-n", guestClusterNamespace, "pod", etcdPodName, "-ojsonpath={.status.phase}"})
+				status := doOcpReq(oc, OcpGet, true, "-n", guestClusterNamespace, "pod", etcdPodName, "-ojsonpath={.status.phase}")
 				o.Expect(status).To(o.ContainSubstring("Running"))
 
 				//check the follower health
 				execEtcdHealthCmd := append([]string{"-n", guestClusterNamespace, etcdPodName, "--", "sh", "-c"}, etcdHealthCmd)
-				res = doOcpReq(oc, OcpExec, true, execEtcdHealthCmd)
+				res = doOcpReq(oc, OcpExec, true, execEtcdHealthCmd...)
 				o.Expect(res).To(o.ContainSubstring("localhost:2379 is healthy"))
 
 				break
@@ -429,23 +413,21 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: heli@redhat.com
 	g.It("Author:heli-Critical-46711-Test HCP components to use service account tokens", func() {
-		g.By("hypershift OCP-46711-Test HCP components to use service account tokens")
-
 		//get capi-provider secret
 		apiPattern := `-ojsonpath={.spec.template.spec.volumes[?(@.name=="credentials")].secret.secretName}`
-		apiSecret := doOcpReq(oc, OcpGet, true, []string{"deploy", "capi-provider", "-n", guestClusterNamespace, apiPattern})
+		apiSecret := doOcpReq(oc, OcpGet, true, "deploy", "capi-provider", "-n", guestClusterNamespace, apiPattern)
 
 		//get control plane operator secret
 		cpoPattern := `-ojsonpath={.spec.template.spec.volumes[?(@.name=="provider-creds")].secret.secretName}`
-		cpoSecret := doOcpReq(oc, OcpGet, true, []string{"deploy", "control-plane-operator", "-n", guestClusterNamespace, cpoPattern})
+		cpoSecret := doOcpReq(oc, OcpGet, true, "deploy", "control-plane-operator", "-n", guestClusterNamespace, cpoPattern)
 
 		//get kube-apiserver secret
 		kubeAPIPattern := `-ojsonpath={.spec.template.spec.volumes[?(@.name=="cloud-creds")].secret.secretName}`
-		kubeAPISecret := doOcpReq(oc, OcpGet, true, []string{"deploy", "kube-apiserver", "-n", guestClusterNamespace, kubeAPIPattern})
+		kubeAPISecret := doOcpReq(oc, OcpGet, true, "deploy", "kube-apiserver", "-n", guestClusterNamespace, kubeAPIPattern)
 
 		secrets := []string{apiSecret, cpoSecret, kubeAPISecret}
 		for _, sec := range secrets {
-			cre := doOcpReq(oc, OcpGet, true, []string{"secret", sec, "-n", guestClusterNamespace, "-ojsonpath={.data.credentials}"})
+			cre := doOcpReq(oc, OcpGet, true, "secret", sec, "-n", guestClusterNamespace, "-ojsonpath={.data.credentials}")
 			roleInfo, err := base64.StdEncoding.DecodeString(cre)
 			o.Expect(err).ShouldNot(o.HaveOccurred())
 			checkSubstring(string(roleInfo), []string{"role_arn", "web_identity_token_file"})
@@ -454,30 +436,24 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: heli@redhat.com
 	g.It("Author:heli-Critical-44824-Resource requests/limit configuration for critical control plane workloads[Serial][Disruptive]", func() {
-		g.By("hypershift OCP-44824-Resource requests/limit configuration for critical control plane workloads")
-
-		cpuRequest := doOcpReq(oc, OcpGet, true, []string{"deployment", "kube-apiserver", "-n",
-			guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.cpu}"})
-		memoryRequest := doOcpReq(oc, OcpGet, true, []string{"deployment", "kube-apiserver", "-n",
-			guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.memory}"})
+		cpuRequest := doOcpReq(oc, OcpGet, true, "deployment", "kube-apiserver", "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.cpu}")
+		memoryRequest := doOcpReq(oc, OcpGet, true, "deployment", "kube-apiserver", "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.memory}")
 		e2e.Logf("cpu request: %s, memory request: %s\n", cpuRequest, memoryRequest)
 
 		defer func() {
 			//change back to original cpu, memory value
 			patchOptions := fmt.Sprintf("{\"spec\":{\"template\":{\"spec\": {\"containers\":"+
 				"[{\"name\":\"kube-apiserver\",\"resources\":{\"requests\":{\"cpu\":\"%s\", \"memory\": \"%s\"}}}]}}}}", cpuRequest, memoryRequest)
-			doOcpReq(oc, OcpPatch, true, []string{"deploy", "kube-apiserver", "-n", guestClusterNamespace, "-p", patchOptions})
+			doOcpReq(oc, OcpPatch, true, "deploy", "kube-apiserver", "-n", guestClusterNamespace, "-p", patchOptions)
 
 			//check new value of cpu, memory resource
 			err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-				cpuRes := doOcpReq(oc, OcpGet, true, []string{"deployment", "kube-apiserver", "-n",
-					guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.cpu}"})
+				cpuRes := doOcpReq(oc, OcpGet, true, "deployment", "kube-apiserver", "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.cpu}")
 				if cpuRes != cpuRequest {
 					return false, nil
 				}
 
-				memoryRes := doOcpReq(oc, OcpGet, true, []string{"deployment", "kube-apiserver", "-n",
-					guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.memory}"})
+				memoryRes := doOcpReq(oc, OcpGet, true, "deployment", "kube-apiserver", "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.memory}")
 				if memoryRes != memoryRequest {
 					return false, nil
 				}
@@ -491,18 +467,16 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		desiredMemoryReqeust := "1700Mi"
 		patchOptions := fmt.Sprintf(`{"spec":{"template":{"spec": {"containers":`+
 			`[{"name":"kube-apiserver","resources":{"requests":{"cpu":"%s", "memory": "%s"}}}]}}}}`, desiredCPURequest, desiredMemoryReqeust)
-		doOcpReq(oc, OcpPatch, true, []string{"deploy", "kube-apiserver", "-n", guestClusterNamespace, "-p", patchOptions})
+		doOcpReq(oc, OcpPatch, true, "deploy", "kube-apiserver", "-n", guestClusterNamespace, "-p", patchOptions)
 
 		//check new value of cpu, memory resource
 		err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-			cpuRes := doOcpReq(oc, OcpGet, false, []string{"deployment", "kube-apiserver", "-n",
-				guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.cpu}"})
+			cpuRes := doOcpReq(oc, OcpGet, false, "deployment", "kube-apiserver", "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.cpu}")
 			if cpuRes != desiredCPURequest {
 				return false, nil
 			}
 
-			memoryRes := doOcpReq(oc, OcpGet, false, []string{"deployment", "kube-apiserver", "-n",
-				guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.memory}"})
+			memoryRes := doOcpReq(oc, OcpGet, false, "deployment", "kube-apiserver", "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.memory}")
 			if memoryRes != desiredMemoryReqeust {
 				return false, nil
 			}
@@ -513,8 +487,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: heli@redhat.com
 	g.It("Author:heli-Critical-44926-Test priority classes for Hypershift control plane workloads", func() {
-		g.By("hypershift OCP-44926-Test priority classes for Hypershift control plane workloads")
-
 		//deployment
 		priorityClasses := map[string][]string{
 			"hypershift-api-critical": {
@@ -552,7 +524,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		for priority, components := range priorityClasses {
 			e2e.Logf("priorityClass: %s %v\n", priority, components)
 			for _, c := range components {
-				res := doOcpReq(oc, OcpGet, true, []string{"deploy", c, "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.priorityClassName}"})
+				res := doOcpReq(oc, OcpGet, true, "deploy", c, "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.priorityClassName}")
 				o.Expect(res).To(o.Equal(priority))
 			}
 		}
@@ -560,15 +532,13 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		//check statefulset for etcd
 		etcdSts := "etcd"
 		etcdPriorityClass := "hypershift-etcd"
-		res := doOcpReq(oc, OcpGet, true, []string{"statefulset", etcdSts, "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.priorityClassName}"})
+		res := doOcpReq(oc, OcpGet, true, "statefulset", etcdSts, "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.priorityClassName}")
 		o.Expect(res).To(o.Equal(etcdPriorityClass))
 	})
 
 	// author: heli@redhat.com
 	g.It("Author:heli-NonPreRelease-Critical-44942-Enable control plane deployment restart on demand[Serial]", func() {
-		g.By("hypershift OCP-44942-Enable control plane deployment restart on demand")
-
-		res := doOcpReq(oc, OcpGet, false, []string{"hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.metadata.annotations}"})
+		res := doOcpReq(oc, OcpGet, false, "hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.metadata.annotations}")
 		e2e.Logf("get hostedcluster %s annotation: %s ", guestClusterName, res)
 
 		var cmdClient = NewCmdClient()
@@ -593,22 +563,22 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		desiredAnnotation := fmt.Sprintf("\"%s\":\"%s\"", annotationKey, restartDate)
 
 		//delete if already has this annotation
-		existingAnno := doOcpReq(oc, OcpGet, false, []string{"hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.metadata.annotations}"})
+		existingAnno := doOcpReq(oc, OcpGet, false, "hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.metadata.annotations}")
 		e2e.Logf("get hostedcluster %s annotation: %s ", guestClusterName, existingAnno)
 		if strings.Contains(existingAnno, desiredAnnotation) {
 			removeAnno := annotationKey + "-"
-			doOcpReq(oc, OcpAnnotate, true, []string{"hostedcluster", guestClusterName, "-n", "clusters", removeAnno})
+			doOcpReq(oc, OcpAnnotate, true, "hostedcluster", guestClusterName, "-n", "clusters", removeAnno)
 		}
 
-		doOcpReq(oc, OcpAnnotate, true, []string{"hostedcluster", guestClusterName, "-n", "clusters", restartAnnotation})
+		doOcpReq(oc, OcpAnnotate, true, "hostedcluster", guestClusterName, "-n", "clusters", restartAnnotation)
 		e2e.Logf("set hostedcluster %s annotation %s done ", guestClusterName, restartAnnotation)
 
-		res = doOcpReq(oc, OcpGet, true, []string{"hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.metadata.annotations}"})
+		res = doOcpReq(oc, OcpGet, true, "hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.metadata.annotations}")
 		e2e.Logf("get hostedcluster %s annotation: %s ", guestClusterName, res)
 		o.Expect(res).To(o.ContainSubstring(desiredAnnotation))
 
 		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-			res = doOcpReq(oc, OcpGet, true, []string{"deploy", "kube-apiserver", "-n", guestClusterNamespace, "-ojsonpath={.spec.template.metadata.annotations}"})
+			res = doOcpReq(oc, OcpGet, true, "deploy", "kube-apiserver", "-n", guestClusterNamespace, "-ojsonpath={.spec.template.metadata.annotations}")
 			if strings.Contains(res, desiredAnnotation) {
 				return true, nil
 			}
@@ -619,8 +589,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: heli@redhat.com
 	g.It("Author:heli-Critical-44988-Colocate control plane components by default", func() {
-		g.By("hypershift OCP-44988-Colocate control plane components by default")
-
 		//deployment
 		controlplaneComponents := []string{
 			"kube-apiserver",
@@ -656,26 +624,28 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		ocJsonpath := "-ojsonpath={.spec.template.spec.affinity.podAffinity.preferredDuringSchedulingIgnoredDuringExecution[0].podAffinityTerm.labelSelector.matchLabels}"
 
 		for _, component := range controlplaneComponents {
-			res := doOcpReq(oc, OcpGet, true, []string{"deploy", component, "-n", guestClusterNamespace, ocJsonpath})
+			res := doOcpReq(oc, OcpGet, true, "deploy", component, "-n", guestClusterNamespace, ocJsonpath)
 			o.Expect(res).To(o.ContainSubstring(controlplanAffinityLabelKey))
 			o.Expect(res).To(o.ContainSubstring(controlplanAffinityLabelValue))
 		}
 
-		res := doOcpReq(oc, OcpGet, true, []string{"pod", "-n", guestClusterNamespace, "-l", controlplanAffinityLabelKey + "=" + controlplanAffinityLabelValue})
+		res := doOcpReq(oc, OcpGet, true, "pod", "-n", guestClusterNamespace, "-l", controlplanAffinityLabelKey+"="+controlplanAffinityLabelValue)
 		checkSubstring(res, controlplaneComponents)
 	})
 
 	// author: heli@redhat.com
 	g.It("Author:heli-Critical-48025-Test EBS allocation for nodepool[Disruptive]", func() {
-		g.By("hypershift OCP-48025-Test EBS allocation for nodepool")
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 48025 is for AWS - skipping test ...")
+		}
 
-		nodepoolName := doOcpReq(oc, OcpGet, true, []string{"nodepool", "-n", "clusters", "-ojsonpath={.items[].metadata.name}"})
+		nodepoolName := doOcpReq(oc, OcpGet, true, "nodepool", "-n", "clusters", "-ojsonpath={.items[].metadata.name}")
 		e2e.Logf("get nodepool name: %s ", nodepoolName)
 
-		npVolumeSize := doOcpReq(oc, OcpGet, true, []string{"nodepool", nodepoolName, "-n", "clusters", "-ojsonpath={.spec.platform.aws.rootVolume.size}"})
+		npVolumeSize := doOcpReq(oc, OcpGet, true, "nodepool", nodepoolName, "-n", "clusters", "-ojsonpath={.spec.platform.aws.rootVolume.size}")
 		e2e.Logf("the RootVolumeSize of %s is %s ", nodepoolName, npVolumeSize)
 
-		machineVolumeSize := doOcpReq(oc, OcpGet, true, []string{"awsmachines", "-n", guestClusterNamespace, "-ojsonpath={.items[].spec.rootVolume.size}"})
+		machineVolumeSize := doOcpReq(oc, OcpGet, true, "awsmachines", "-n", guestClusterNamespace, "-ojsonpath={.items[].spec.rootVolume.size}")
 		e2e.Logf("the RootVolumeSize of %s is %s ", nodepoolName, machineVolumeSize)
 
 		o.Expect(machineVolumeSize).To(o.Equal(npVolumeSize))
@@ -713,7 +683,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			},
 		}
 
-		releaseImage := doOcpReq(oc, OcpGet, true, []string{"hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.spec.release.image}"})
+		releaseImage := doOcpReq(oc, OcpGet, true, "hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.spec.release.image}")
 		for i := 0; i < len(nodepoolConfig); i++ {
 			np := &Nodepool{
 				Name:           nodepoolConfig[i].nodepoolName,
@@ -741,12 +711,12 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 			//check rootVolume size
 			err := wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
-				res := doOcpReq(oc, OcpGet, true, []string{"nodepool", np.Name, "-n", NodepoolNameSpace, "-ojsonpath={.spec.platform.aws.rootVolume.size}"})
+				res := doOcpReq(oc, OcpGet, true, "nodepool", np.Name, "-n", NodepoolNameSpace, "-ojsonpath={.spec.platform.aws.rootVolume.size}")
 				if !strings.Contains(res, strconv.Itoa(nodepoolConfig[i].rootVolumeSize)) {
 					return false, nil
 				}
 
-				res = doOcpReq(oc, OcpGet, true, []string{"awsmachines", "-n", guestClusterNamespace, awsmachineVolumeSizeFilter})
+				res = doOcpReq(oc, OcpGet, true, "awsmachines", "-n", guestClusterNamespace, awsmachineVolumeSizeFilter)
 				if strings.Contains(res, strconv.Itoa(nodepoolConfig[i].rootVolumeSize)) {
 					return true, nil
 				}
@@ -756,14 +726,14 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			exutil.AssertWaitPollNoErr(err, "ocp-48025 nodepool rootVolume size not match error")
 
 			// check rootVolume type and rootVolume iops
-			res := doOcpReq(oc, OcpGet, true, []string{"nodepool", np.Name, "-n", NodepoolNameSpace, "-ojsonpath={.spec.platform.aws.rootVolume.type}"})
+			res := doOcpReq(oc, OcpGet, true, "nodepool", np.Name, "-n", NodepoolNameSpace, "-ojsonpath={.spec.platform.aws.rootVolume.type}")
 			o.Expect(res).To(o.Equal(nodepoolConfig[i].rootVolumeType))
-			res = doOcpReq(oc, OcpGet, true, []string{"awsmachines", "-n", guestClusterNamespace, awsmachineVolumeTypeFilter})
+			res = doOcpReq(oc, OcpGet, true, "awsmachines", "-n", guestClusterNamespace, awsmachineVolumeTypeFilter)
 			o.Expect(res).To(o.Equal(nodepoolConfig[i].rootVolumeType))
 			if nodepoolConfig[i].rootVolumeIops != "" {
-				res := doOcpReq(oc, OcpGet, true, []string{"nodepool", np.Name, "-n", NodepoolNameSpace, "-ojsonpath={.spec.platform.aws.rootVolume.iops}"})
+				res := doOcpReq(oc, OcpGet, true, "nodepool", np.Name, "-n", NodepoolNameSpace, "-ojsonpath={.spec.platform.aws.rootVolume.iops}")
 				o.Expect(res).To(o.Equal(nodepoolConfig[i].rootVolumeIops))
-				res = doOcpReq(oc, OcpGet, true, []string{"awsmachines", "-n", guestClusterNamespace, awsmachineVolumeIopsFilter})
+				res = doOcpReq(oc, OcpGet, true, "awsmachines", "-n", guestClusterNamespace, awsmachineVolumeIopsFilter)
 				o.Expect(res).To(o.Equal(nodepoolConfig[i].rootVolumeIops))
 			}
 		}

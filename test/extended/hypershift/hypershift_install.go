@@ -20,7 +20,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	)
 
 	g.BeforeEach(func() {
-		operator := doOcpReq(oc, OcpGet, false, []string{"pods", "-n", "hypershift", "-ojsonpath={.items[*].metadata.name}"})
+		operator := doOcpReq(oc, OcpGet, false, "pods", "-n", "hypershift", "-ojsonpath={.items[*].metadata.name}")
 		if len(operator) > 0 {
 			g.Skip("hypershift operator found, skip install test run")
 		}
