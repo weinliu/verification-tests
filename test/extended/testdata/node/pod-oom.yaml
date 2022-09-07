@@ -9,9 +9,18 @@ objects:
     name: "${NAME}"
     namespace: "${NAMESPACE}"
   spec:
+    securityContext:
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
     containers:
     - image: "quay.io/openshifttest/stress:1.2.0"
       name: pod-oom
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
       resources:
         requests:
           memory: "50Mi"

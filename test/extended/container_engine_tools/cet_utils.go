@@ -1,4 +1,4 @@
-package container_engine_tools
+package cet
 
 import (
 	"fmt"
@@ -28,7 +28,7 @@ type podModifyDescription struct {
 
 type ctrcfgDescription struct {
 	namespace  string
-	name	   string
+	name       string
 	pidlimit   int
 	loglevel   string
 	overlay    string
@@ -39,9 +39,9 @@ type ctrcfgDescription struct {
 }
 
 type ocp48876PodDescription struct {
-	name             string
-	namespace        string
-	template         string
+	name      string
+	namespace string
+	template  string
 }
 type newappDescription struct {
 	appname string
@@ -164,6 +164,7 @@ func volStatus(oc *exutil.CLI) error {
 	})
 }
 
+// ContainerSccStatus get container scc status
 func ContainerSccStatus(oc *exutil.CLI) error {
 	return wait.Poll(1*time.Second, 1*time.Second, func() (bool, error) {
 		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "hello-pod", "-o=jsonpath={.spec.securityContext.seLinuxOptions.*}", "-n", oc.Namespace()).Output()
@@ -181,7 +182,7 @@ func ContainerSccStatus(oc *exutil.CLI) error {
 }
 
 func (ctrcfg *ctrcfgDescription) create(oc *exutil.CLI) {
-	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ctrcfg.template, "-p", "NAME="+ctrcfg.name,"LOGLEVEL="+ctrcfg.loglevel, "OVERLAY="+ctrcfg.overlay, "LOGSIZEMAX="+ctrcfg.logsizemax)
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ctrcfg.template, "-p", "NAME="+ctrcfg.name, "LOGLEVEL="+ctrcfg.loglevel, "OVERLAY="+ctrcfg.overlay, "LOGSIZEMAX="+ctrcfg.logsizemax)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -193,10 +194,9 @@ func cleanupObjectsClusterScope(oc *exutil.CLI, objs ...objectTableRefcscope) er
 			if strings.Contains(status, "Error") {
 				e2e.Logf("Error getting resources... Seems resources objects are already deleted. \n")
 				return true, nil
-			} else {
-				_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(v.kind, v.name).Output()
-				o.Expect(err).NotTo(o.HaveOccurred())
 			}
+			_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(v.kind, v.name).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		return true, nil
 	})
@@ -270,7 +270,7 @@ func checkPodmanInfo(oc *exutil.CLI) error {
 			e2e.Logf("\nNode %s Status is %s\n", v, nodeStatus)
 
 			if nodeStatus == "Ready" {
-				podmaninfo, err := oc.AsAdmin().Run("debug").Args(`node/`+fmt.Sprintf("%s", v), "--", "chroot", "/host", "podman", "info").OutputToFile("crio.conf")
+				podmaninfo, err := exutil.DebugNodeWithChroot(oc, fmt.Sprintf("%s", v), "podman", "info")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				e2e.Logf(`\nNODE NAME IS :` + fmt.Sprintf("%s", v))
 				e2e.Logf("\npodman info is  %v", podmaninfo)
@@ -365,13 +365,13 @@ func checkPodmanCrictlVersion(oc *exutil.CLI) error {
 			e2e.Logf("\nNode %s Status is %s\n", v, nodeStatus)
 
 			if nodeStatus == "Ready" {
-				podmanver, err := oc.AsAdmin().Run("debug").Args(`node/`+fmt.Sprintf("%s", v), "--", "chroot", "/host", "podman", "--version").Output()
+				podmanver, err := exutil.DebugNodeWithChroot(oc, fmt.Sprintf("%s", v), "podman", "--version")
 				o.Expect(err).NotTo(o.HaveOccurred())
-				crictlver, err1 := oc.AsAdmin().Run("debug").Args(`node/`+fmt.Sprintf("%s", v), "--", "chroot", "/host", "crictl", "version").Output()
+				crictlver, err1 := exutil.DebugNodeWithChroot(oc, fmt.Sprintf("%s", v), "crictl", "version")
 				o.Expect(err1).NotTo(o.HaveOccurred())
 				e2e.Logf(`NODE NAME IS :` + fmt.Sprintf("%s", v))
 
-				if strings.Contains(string(podmanver), "podman version 3.") && strings.Contains(string(crictlver), "RuntimeVersion:  1.2") {
+				if strings.Contains(string(podmanver), "podman version 4.") && strings.Contains(string(crictlver), "RuntimeVersion:  1.2") {
 					e2e.Logf("\n Podman and crictl is on latest version %s %s", podmanver, crictlver)
 				} else {
 					e2e.Logf("\nPodman and crictl version are NOT Updated")
@@ -387,9 +387,9 @@ func checkPodmanCrictlVersion(oc *exutil.CLI) error {
 
 func (ctrcfg *ctrcfgDescription) checkCtrcfgStatus(oc *exutil.CLI) error {
 	return wait.Poll(3*time.Second, 1*time.Minute, func() (bool, error) {
-		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ContainerRuntimeConfig", ctrcfg.name , "-o=jsonpath={.status.conditions[0].message}").Output()
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ContainerRuntimeConfig", ctrcfg.name, "-o=jsonpath={.status.conditions[0].message}").Output()
 		e2e.Logf("The ContainerRuntimeConfig message is %v", status)
-                o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(status, "Success") {
 			e2e.Logf("ContainerRuntimeConfig whose finalizer > 63 characters is applied Sucessfully \n")
 			return true, nil
@@ -399,14 +399,14 @@ func (ctrcfg *ctrcfgDescription) checkCtrcfgStatus(oc *exutil.CLI) error {
 }
 
 func getPodName(oc *exutil.CLI, ns string) string {
-    podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-n", ns).Output()
+	podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-n", ns).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("\nPod Name is is %v", podName)
 	return podName
 }
 
 func getPodIPv4(oc *exutil.CLI, podName string, ns string) string {
-    IPv4add, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, "-o=jsonpath={.status.podIP}", "-n", ns).Output()
+	IPv4add, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, "-o=jsonpath={.status.podIP}", "-n", ns).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("\nPod IP address is %v", IPv4add)
 	return IPv4add
@@ -414,18 +414,18 @@ func getPodIPv4(oc *exutil.CLI, podName string, ns string) string {
 
 func pingIpaddr(oc *exutil.CLI, ns string, podName string, cmd string) error {
 	return wait.Poll(1*time.Second, 1*time.Second, func() (bool, error) {
-		status, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, podName , "--", "/bin/bash", "-c", cmd ).OutputToFile("pingipaddr.txt")
+		status, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, podName, "--", "/bin/bash", "-c", cmd).OutputToFile("pingipaddr.txt")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		result, err1 := exec.Command("bash", "-c", "cat "+status+" | egrep '64 bytes from 8.8.8.8: icmp_seq'").Output()
-			if err1 != nil {
-					e2e.Failf("the result of ReadFile:%v", err1)
-					return false, nil
-			}
-			e2e.Logf("\nPing output is %s\n", result)
-			if strings.Contains(string(result), "64 bytes from 8.8.8.8: icmp_seq") {
-					e2e.Logf("\nPing Successful \n")
-					return true, nil
-			}
+		if err1 != nil {
+			e2e.Failf("the result of ReadFile:%v", err1)
+			return false, nil
+		}
+		e2e.Logf("\nPing output is %s\n", result)
+		if strings.Contains(string(result), "64 bytes from 8.8.8.8: icmp_seq") {
+			e2e.Logf("\nPing Successful \n")
+			return true, nil
+		}
 		return false, nil
 	})
 }

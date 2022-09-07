@@ -1,4 +1,4 @@
-package container_engine_tools
+package cet
 
 import (
 	"path/filepath"
@@ -47,11 +47,10 @@ var _ = g.Describe("[sig-node] Container_Engine_Tools crio,scc", func() {
 		}
 
 		ocp48876Pod = ocp48876PodDescription{
-			name:              "",
-			namespace:         "",
-			template:          ocp48876PodTemp,
+			name:      "",
+			namespace: "",
+			template:  ocp48876PodTemp,
 		}
-
 	)
 
 	// author: pmali@redhat.com
@@ -167,13 +166,13 @@ var _ = g.Describe("[sig-node] Container_Engine_Tools crio,scc", func() {
 		g.By("Get Pod Name \n")
 		podName := getPodName(oc, oc.Namespace())
 		g.By("Get the pod IP address\n")
-		ipv4 := getPodIPv4(oc,podName, oc.Namespace())
+		ipv4 := getPodIPv4(oc, podName, oc.Namespace())
 		g.By("Ping with IP address\n")
-		cmd := "ping -c 2 8.8.8.8 -I" +ipv4
+		cmd := "ping -c 2 8.8.8.8 -I" + ipv4
 		err = pingIpaddr(oc, oc.Namespace(), podName, cmd)
 		exutil.AssertWaitPollNoErr(err, "Ping Unsuccessful with IP address")
 		g.By("Ping with Interface Name\n")
-		cmd = "ping -c 2 8.8.8.8 -I eth0" 
+		cmd = "ping -c 2 8.8.8.8 -I eth0"
 		err = pingIpaddr(oc, oc.Namespace(), podName, cmd)
 		exutil.AssertWaitPollNoErr(err, "Ping Unsuccessful with Interface")
 	})
