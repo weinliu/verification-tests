@@ -1033,6 +1033,71 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 	})
 
+	//author: mihuang@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "51195"|./bin/extended-platform-tests run --timeout 35m -f -
+	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-High-51195-[AWS]DNSNotReadyTimeout should be terminal[Serial][Disruptive]", func() {
+		testCaseID := "51195"
+		cdName := "cluster-" + testCaseID
+		oc.SetupProject()
+
+		g.By("Remove Route53-aws-creds in hive namespace if exists to make DNSNotReady")
+		cleanupObjects(oc, objectTableRef{"secret", HiveNamespace, "route53-aws-creds"})
+
+		g.By("Config Install-Config Secret...")
+		installConfigSecret := installConfig{
+			name1:      cdName + "-install-config",
+			namespace:  oc.Namespace(),
+			baseDomain: cdName + "." + AWSBaseDomain,
+			name2:      cdName,
+			region:     AWSRegion,
+			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+
+		g.By("Config ClusterDeployment...")
+		cluster := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           cdName + "." + AWSBaseDomain,
+			clusterName:          cdName,
+			manageDNS:            true,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+			installAttemptsLimit: 3,
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		g.By("Check DNSNotReady, Provisioned and ProvisionStopped condiitons")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="DNSNotReady")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "DNS Zone not yet available", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="DNSNotReady")].message}`}).check(oc)
+
+		e2e.Logf("Check PROVISIONSTATUS=ProvisionStopped ")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "ProvisionStopped", ok, ClusterResumeTimeout+DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type=='Provisioned')].reason}"}).check(oc)
+
+		e2e.Logf("check ProvisionStopped=true and DNSNotReady.reason=DNSNotReadyTimedOut ")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "DNSNotReadyTimedOut", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="DNSNotReady")].reason}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "True", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="ProvisionStopped")].status}`}).check(oc)
+
+		g.By("Check DNSNotReadyTimeOut beacuse the default timeout is 10 min")
+		creationTimestamp, err := time.Parse(time.RFC3339, getResource(oc, asAdmin, withoutNamespace, "ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.metadata.creationTimestamp}"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("get cluster create timestamp,creationTimestampp is %v", creationTimestamp)
+
+		dnsNotReadyTimedOuTimestamp, err := time.Parse(time.RFC3339, getResource(oc, asAdmin, withoutNamespace, "ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="DNSNotReady")].lastProbeTime}`))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("get dnsnotready timestap, dnsNotReadyTimedOuTimestamp is %v", dnsNotReadyTimedOuTimestamp)
+
+		difference := dnsNotReadyTimedOuTimestamp.Sub(creationTimestamp)
+		e2e.Logf("default timeout is %v mins", difference.Minutes())
+		o.Expect(difference.Minutes()).Should(o.BeNumerically(">=", 10))
+	})
+
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "22381"|./bin/extended-platform-tests run --timeout 60m -f -

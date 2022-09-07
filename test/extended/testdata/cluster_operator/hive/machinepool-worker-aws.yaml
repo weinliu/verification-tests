@@ -18,7 +18,7 @@ objects:
         rootVolume:
           iops: ${{IOPS}}
           size: 22
-          type: gp3
+          type: gp2
         type: m4.xlarge
     replicas: 3
   status: {}
