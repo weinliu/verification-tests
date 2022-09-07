@@ -1756,7 +1756,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Create a registry could limit quota")
 		oc.SetupProject()
-		regRoute := setSecureRegistryWithoutAuth(oc, oc.Namespace(), "myregistry", "quay.io/openshifttest/registry-toomany-request@sha256:ca50d2c9b289b0bf5a22f7aa73f68586cf38de2878c63465eacf74c032a6211d", "8080")
+		regRoute := setSecureRegistryWithoutAuth(oc, oc.Namespace(), "myregistry", "quay.io/openshifttest/registry-toomany-request@sha256:56b816ca086d714680235d0ee96320bc9b1375a8abd037839d17a8759961e842", "8080")
 		o.Expect(regRoute).NotTo(o.BeEmpty())
 		err := oc.Run("set").Args("resources", "deploy/myregistry", "--requests=cpu=100m,memory=128Mi").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
