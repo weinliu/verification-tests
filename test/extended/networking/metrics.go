@@ -321,7 +321,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 	})
 
-	g.It("Author:weliang-Medium-45689-Metrics for idling enable/disabled.", func() {
+	g.It("Author:CPaasrunOnly-weliang-Medium-45689-Metrics for idling enable/disabled.", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			testPodFile         = filepath.Join(buildPruningBaseDir, "metrics/metrics-pod.json")
