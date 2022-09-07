@@ -1,14 +1,15 @@
 package bootstrap
 
 import (
+	"os"
+
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
-	"os"
 )
 
 const (
-	// SSHCloudPrivAWSUserEnvvar stores the environment variable used to configure the AWS ssh user
-	SSHCloudPrivAWSUserEnvvar = "SSH_CLOUD_PRIV_AWS_USER"
+	// EnvVarSSHCloudPrivAWSUser stores the environment variable used to configure the AWS ssh user
+	EnvVarSSHCloudPrivAWSUser = "SSH_CLOUD_PRIV_AWS_USER"
 )
 
 // AWSBSInfoProvider implements interface BSInfoProvider
@@ -67,7 +68,7 @@ func (a AWSBSInfoProvider) GetIPs(oc *exutil.CLI) (*Ips, error) {
 
 // GetSSHUser returns the user needed to connect to the bootstrap machine via ssh
 func (a AWSBSInfoProvider) GetSSHUser() string {
-	user, exists := os.LookupEnv(SSHCloudPrivAWSUserEnvvar)
+	user, exists := os.LookupEnv(EnvVarSSHCloudPrivAWSUser)
 
 	if !exists {
 		user = DefaultSSHUser

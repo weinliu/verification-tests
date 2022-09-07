@@ -2,7 +2,10 @@ package util
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute"
@@ -66,6 +69,35 @@ func GetAzureVMPrivateIP(sess *AzureSession, rg, vmName string) (string, error) 
 	}
 
 	return privateIP, nil
+
+}
+
+// GetAzureVMPublicIPByNameRegex  returns the first public IP whose name matches the given regex
+func GetAzureVMPublicIPByNameRegex(sess *AzureSession, rg, publicIPNameRegex string) (string, error) {
+	//find public IP
+	e2e.Logf("Looking for publicIP with name matching %s", publicIPNameRegex)
+	ipClient := getIPClient(sess)
+
+	for iter, err := ipClient.ListAll(context.Background()); iter.NotDone(); err = iter.Next() {
+		if err != nil {
+			return "", err
+		}
+
+		for _, value := range iter.Values() {
+			match, err := regexp.MatchString(publicIPNameRegex, *value.Name)
+			if err != nil {
+				return "", err
+			}
+
+			if match {
+				e2e.Logf("The public IP with name %s is %s,", *value.Name, *value.IPAddress)
+				return *value.IPAddress, nil
+			}
+		}
+	}
+
+	e2e.Logf("There is no public IP with its name matching regex : %s", publicIPNameRegex)
+	return "", nil
 
 }
 
@@ -139,10 +171,10 @@ func GetAzureVMInstance(sess *AzureSession, vmName string, resourceGroupName str
 		instanceName := vm.Value()
 		if *instanceName.Name == vmName {
 			e2e.Logf("Azure instance found :: %s", vmName)
-			break
+			return vmName, nil
 		}
 	}
-	return vmName, nil
+	return "", nil
 }
 
 // GetAzureVMInstanceState get vm instance state
@@ -160,4 +192,55 @@ func GetAzureVMInstanceState(sess *AzureSession, vmName string, resourceGroupNam
 	newStatus := strings.Split(status2, " ")
 	e2e.Logf("Azure instance status found :: %v", newStatus[1])
 	return string(newStatus[1]), nil
+}
+
+// GetAzureCredentialFromCluster gets Azure credentials from cluster and loads them as environment variables
+func GetAzureCredentialFromCluster(oc *CLI) (string, error) {
+	credential, getSecErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/azure-credentials", "-n", "kube-system", "-o=jsonpath={.data}").Output()
+	if getSecErr != nil {
+		return "", nil
+	}
+
+	type azureCredentials struct {
+		AzureClientID       string `json:"azure_client_id,omitempty"`
+		AzureClientSecret   string `json:"azure_client_secret,omitempty"`
+		AzureSubscriptionID string `json:"azure_subscription_id,omitempty"`
+		AzureTenantID       string `json:"azure_tenant_id,omitempty"`
+		AzureResourceGroup  string `json:"azure_resourcegroup,omitempty"`
+	}
+	azureCreds := azureCredentials{}
+	if err := json.Unmarshal([]byte(credential), &azureCreds); err != nil {
+		return "", err
+	}
+
+	azureClientID, err := base64.StdEncoding.DecodeString(azureCreds.AzureClientID)
+	if err != nil {
+		return "", err
+	}
+
+	azureClientSecret, err := base64.StdEncoding.DecodeString(azureCreds.AzureClientSecret)
+	if err != nil {
+		return "", err
+	}
+
+	azureSubscriptionID, err := base64.StdEncoding.DecodeString(azureCreds.AzureSubscriptionID)
+	if err != nil {
+		return "", err
+	}
+
+	azureTenantID, err := base64.StdEncoding.DecodeString(azureCreds.AzureTenantID)
+	if err != nil {
+		return "", err
+	}
+
+	azureResourceGroup, err := base64.StdEncoding.DecodeString(azureCreds.AzureResourceGroup)
+	if err != nil {
+		return "", err
+	}
+	os.Setenv("AZURE_CLIENT_ID", string(azureClientID))
+	os.Setenv("AZURE_CLIENT_SECRET", string(azureClientSecret))
+	os.Setenv("AZURE_SUBSCRIPTION_ID", string(azureSubscriptionID))
+	os.Setenv("AZURE_TENANT_ID", string(azureTenantID))
+	e2e.Logf("Azure credentials successfully loaded.")
+	return string(azureResourceGroup), nil
 }

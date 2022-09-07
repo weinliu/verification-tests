@@ -2,14 +2,15 @@ package bootstrap
 
 import (
 	"fmt"
+	"os"
+
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
-	"os"
 )
 
 const (
-	// SSHCloudPrivKeyEnvvar storest the environment variable used to configure the location of the ssh private key to connect to bootstrap machine
-	SSHCloudPrivKeyEnvvar = "SSH_CLOUD_PRIV_KEY"
+	// EnvVarSSHCloudPrivKey storest the environment variable used to configure the location of the ssh private key to connect to bootstrap machine
+	EnvVarSSHCloudPrivKey = "SSH_CLOUD_PRIV_KEY"
 	// DefaultSSHUser default user in case of not being configured via envvar
 	DefaultSSHUser = "core"
 )
@@ -64,6 +65,8 @@ func GetBSInfoProvider(oc *exutil.CLI) (BSInfoProvider, error) {
 	switch platform {
 	case "aws":
 		return AWSBSInfoProvider{}, nil
+	case "azure":
+		return AzureBSInfoProvider{}, nil
 	default:
 		return nil, fmt.Errorf("Platform not already supported. Cannot get bootstrap information for platform: %s", platform)
 	}
@@ -72,7 +75,7 @@ func GetBSInfoProvider(oc *exutil.CLI) (BSInfoProvider, error) {
 
 // GetBootstrapPrivateKey returns the location of the private key needed to login to the bootstrap machine
 func GetBootstrapPrivateKey() string {
-	return os.Getenv("SSH_CLOUD_PRIV_KEY")
+	return os.Getenv(EnvVarSSHCloudPrivKey)
 }
 
 func buildBootstrap(user string, bootstrapIPs Ips, port int) *Bootstrap {

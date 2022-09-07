@@ -2,7 +2,6 @@ package disasterrecovery
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -492,42 +491,9 @@ func GetOspInstancesStop(oc *exutil.CLI, infraID string) error {
 	return errVmstate
 }
 
-type azureCredentials struct {
-	AzureClientID       string `json:"azure_client_id,omitempty"`
-	AzureClientSecret   string `json:"azure_client_secret,omitempty"`
-	AzureSubscriptionID string `json:"azure_subscription_id,omitempty"`
-	AzureTenantID       string `json:"azure_tenant_id,omitempty"`
-	AzureResourceGroup  string `json:"azure_resourcegroup,omitempty"`
-}
-
-// GetAzureCredentialFromCluster get Azure credentials from cluster
-func GetAzureCredentialFromCluster(oc *exutil.CLI) (string, error) {
-	credential, getSecErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/azure-credentials", "-n", "kube-system", "-o=jsonpath={.data}").Output()
-	o.Expect(getSecErr).NotTo(o.HaveOccurred())
-	azureCreds := azureCredentials{}
-	err := json.Unmarshal([]byte(credential), &azureCreds)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	azureClientID, err1 := base64.StdEncoding.DecodeString(azureCreds.AzureClientID)
-	o.Expect(err1).NotTo(o.HaveOccurred())
-	azureClientSecret, err2 := base64.StdEncoding.DecodeString(azureCreds.AzureClientSecret)
-	o.Expect(err2).NotTo(o.HaveOccurred())
-	azureSubscriptionID, err3 := base64.StdEncoding.DecodeString(azureCreds.AzureSubscriptionID)
-	o.Expect(err3).NotTo(o.HaveOccurred())
-	azureTenantID, err4 := base64.StdEncoding.DecodeString(azureCreds.AzureTenantID)
-	o.Expect(err4).NotTo(o.HaveOccurred())
-	azureResourceGroup, err5 := base64.StdEncoding.DecodeString(azureCreds.AzureResourceGroup)
-	o.Expect(err5).NotTo(o.HaveOccurred())
-	os.Setenv("AZURE_CLIENT_ID", string(azureClientID))
-	os.Setenv("AZURE_CLIENT_SECRET", string(azureClientSecret))
-	os.Setenv("AZURE_SUBSCRIPTION_ID", string(azureSubscriptionID))
-	os.Setenv("AZURE_TENANT_ID", string(azureTenantID))
-	e2e.Logf("Azure credentials successfully loaded.")
-	return string(azureResourceGroup), nil
-}
-
 // GetAzureInstanceState get azure vm instance state
 func GetAzureInstanceState(oc *exutil.CLI, vmInstance string) (string, error) {
-	resourceGroupName, rgerr := GetAzureCredentialFromCluster(oc)
+	resourceGroupName, rgerr := exutil.GetAzureCredentialFromCluster(oc)
 	o.Expect(rgerr).NotTo(o.HaveOccurred())
 	session, sessErr := exutil.NewAzureSessionFromEnv()
 	o.Expect(sessErr).NotTo(o.HaveOccurred())
@@ -538,7 +504,7 @@ func GetAzureInstanceState(oc *exutil.CLI, vmInstance string) (string, error) {
 
 // GetAzureInstance get azure vm instance
 func GetAzureInstance(oc *exutil.CLI, vmInstance string) (string, error) {
-	resourceGroupName, rgerr := GetAzureCredentialFromCluster(oc)
+	resourceGroupName, rgerr := exutil.GetAzureCredentialFromCluster(oc)
 	o.Expect(rgerr).NotTo(o.HaveOccurred())
 	session, sessErr := exutil.NewAzureSessionFromEnv()
 	o.Expect(sessErr).NotTo(o.HaveOccurred())
@@ -549,7 +515,7 @@ func GetAzureInstance(oc *exutil.CLI, vmInstance string) (string, error) {
 
 // StartAzureVMInstance start azure vm
 func StartAzureVMInstance(oc *exutil.CLI, vmInstance string) error {
-	resourceGroupName, rgerr := GetAzureCredentialFromCluster(oc)
+	resourceGroupName, rgerr := exutil.GetAzureCredentialFromCluster(oc)
 	o.Expect(rgerr).NotTo(o.HaveOccurred())
 	session, sessErr := exutil.NewAzureSessionFromEnv()
 	o.Expect(sessErr).NotTo(o.HaveOccurred())
@@ -560,7 +526,7 @@ func StartAzureVMInstance(oc *exutil.CLI, vmInstance string) error {
 
 // StoptAzureVMInstance stop azure vm
 func StoptAzureVMInstance(oc *exutil.CLI, vmIntance string) error {
-	resourceGroupName, rgerr := GetAzureCredentialFromCluster(oc)
+	resourceGroupName, rgerr := exutil.GetAzureCredentialFromCluster(oc)
 	o.Expect(rgerr).NotTo(o.HaveOccurred())
 	session, sessErr := exutil.NewAzureSessionFromEnv()
 	o.Expect(sessErr).NotTo(o.HaveOccurred())

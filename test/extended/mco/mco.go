@@ -2351,7 +2351,7 @@ nulla pariatur.`
 	})
 
 	g.It("Author:sregidor-NonPreRelease-Critical-53960-No failed units in the bootstrap machine", func() {
-		skipTestIfSupportedPlatformNotMatched(oc, "aws")
+		skipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
 
 		failedUnitsCommand := "sudo systemctl list-units --failed --all"
 
