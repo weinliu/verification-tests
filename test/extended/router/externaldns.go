@@ -36,8 +36,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		if modeInCloudCredential == "Manual" {
 			g.Skip("Skip since CCO mode is Manual")
 		}
-
-		createExternalDNSOperator(oc)
 	})
 
 	// author: hongli@redhat.com
@@ -56,6 +54,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		if !strings.Contains(output, "AWS") {
 			g.Skip("Skip for non-supported platform, it requires AWS")
 		}
+		createExternalDNSOperator(oc)
 
 		g.By("Create CR ExternalDNS sample-aws-rt and ensure operand pod is ready")
 		waitErr := waitForPodWithLabelReady(oc, operatorNamespace, operatorLabel)
@@ -100,6 +99,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		if !strings.Contains(zoneID, "openshift") {
 			g.Skip("Skip since no valid DNS privateZone is configured in this cluster")
 		}
+		createExternalDNSOperator(oc)
 
 		g.By("Create CR ExternalDNS sample-azure-svc with invalid zone ID")
 		waitErr := waitForPodWithLabelReady(oc, operatorNamespace, operatorLabel)
@@ -154,6 +154,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		if !strings.Contains(zoneID, "private") {
 			g.Skip("Skip since no valid DNS privateZone is configured in this cluster")
 		}
+		createExternalDNSOperator(oc)
 		baseDomain := getBaseDomain(oc)
 
 		g.By("Create CR ExternalDNS sample-gcp-svc and ensure operand pod is ready")
