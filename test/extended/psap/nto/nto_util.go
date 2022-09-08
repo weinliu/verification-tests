@@ -151,49 +151,6 @@ func assertIfMasterNodeChangesApplied(oc *exutil.CLI, masterNodeName string) {
 	exutil.AssertWaitPollNoErr(err, "Node"+masterNodeName+"did not have expected changes within timeout limit")
 }
 
-// assertIfMCPChangesApplied checks the MCP of a given oc client and determines if the machine counts are as expected
-func assertIfMCPChangesAppliedByName(oc *exutil.CLI, mcpName string, timeDurationMin int) {
-	err := wait.Poll(1*time.Minute, time.Duration(timeDurationMin)*time.Minute, func() (bool, error) {
-		var (
-			mcpCheckMachineCount        string
-			mcpCheckReadyMachineCount   string
-			mcpCheckUpdatedMachineCount string
-			mcpDegradedMachineCount     string
-			err                         error
-		)
-
-		//For master node, only make sure one of master is ready.
-		if strings.Contains(mcpName, "master") {
-			mcpCheckMachineCount = "1"
-		} else {
-			mcpCheckMachineCount, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.machineCount}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-
-		//Do not check master err due to sometimes SNO can not accesss api server when server rebooted
-		if strings.Contains(mcpName, "master") {
-			mcpCheckReadyMachineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.readyMachineCount}").Output()
-			mcpCheckUpdatedMachineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.updatedMachineCount}").Output()
-			mcpDegradedMachineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.degradedMachineCount}").Output()
-		} else {
-			mcpCheckReadyMachineCount, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.readyMachineCount}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			mcpCheckUpdatedMachineCount, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.updatedMachineCount}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			mcpDegradedMachineCount, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.degradedMachineCount}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-
-		if mcpCheckMachineCount == mcpCheckReadyMachineCount && mcpCheckMachineCount == mcpCheckUpdatedMachineCount && mcpDegradedMachineCount == "0" {
-			e2e.Logf("MachineConfigPool checks succeeded!")
-			return true, nil
-		}
-		e2e.Logf("MachineConfigPool %v checks failed, the following values were found (all should be '%v'):\nmachineCount: %v\nreadyMachineCount: %v\nupdatedMachineCount: %v\nmcpDegradedMachine:%v\nRetrying...", mcpName, mcpCheckMachineCount, mcpCheckMachineCount, mcpCheckReadyMachineCount, mcpCheckUpdatedMachineCount, mcpDegradedMachineCount)
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(err, "MachineConfigPool checks were not successful within timeout limit")
-}
-
 // getMaxUserWatchesValue parses out the line determining max_user_watches in inotify.conf
 func getMaxUserWatchesValue(inotify string) string {
 	reLine := regexp.MustCompile(`fs.inotify.max_user_watches = \d+`)

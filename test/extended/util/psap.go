@@ -518,3 +518,79 @@ func GetNodeNameByMachineset(oc *CLI, machinesetName string) string {
 	o.Expect(nodeName).NotTo(o.BeEmpty())
 	return nodeName
 }
+
+//AssertIfMCPChangesAppliedByName checks the MCP of a given oc client and determines if the machine counts are as expected
+func AssertIfMCPChangesAppliedByName(oc *CLI, mcpName string, timeDurationMin int) {
+	err := wait.Poll(1*time.Minute, time.Duration(timeDurationMin)*time.Minute, func() (bool, error) {
+		var (
+			mcpMachineCount         string
+			mcpReadyMachineCount    string
+			mcpUpdatedMachineCount  string
+			mcpDegradedMachineCount string
+			mcpUpdatingStatus       string
+			mcpUpdatedStatus        string
+			err                     error
+		)
+
+		mcpUpdatingStatus, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, `-ojsonpath='{.status.conditions[?(@.type=="Updating")].status}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(mcpUpdatingStatus).NotTo(o.BeEmpty())
+		mcpUpdatedStatus, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, `-ojsonpath='{.status.conditions[?(@.type=="Updated")].status}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(mcpUpdatedStatus).NotTo(o.BeEmpty())
+
+		//For master node, only make sure one of master is ready.
+		if strings.Contains(mcpName, "master") {
+			mcpMachineCount = "1"
+			//Do not check master err due to sometimes SNO can not accesss api server when server rebooted
+			mcpReadyMachineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.readyMachineCount}").Output()
+			mcpUpdatedMachineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.updatedMachineCount}").Output()
+			mcpDegradedMachineCount, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.degradedMachineCount}").Output()
+			if mcpMachineCount == mcpReadyMachineCount && mcpMachineCount == mcpUpdatedMachineCount && mcpDegradedMachineCount == "0" {
+				e2e.Logf("MachineConfigPool [%v] checks succeeded!", mcpName)
+				return true, nil
+			}
+		} else {
+			mcpMachineCount, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.machineCount}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			mcpReadyMachineCount, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.readyMachineCount}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			mcpUpdatedMachineCount, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.updatedMachineCount}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			mcpDegradedMachineCount, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.degradedMachineCount}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(mcpUpdatingStatus, "False") && strings.Contains(mcpUpdatedStatus, "True") && mcpMachineCount == mcpReadyMachineCount && mcpMachineCount == mcpUpdatedMachineCount && mcpDegradedMachineCount == "0" {
+				e2e.Logf("MachineConfigPool [%v] checks succeeded!", mcpName)
+				return true, nil
+			}
+		}
+		e2e.Logf("MachineConfigPool [%v] checks failed, the following values were found (all should be '%v'):\nmachineCount: %v\nmcpUpdatingStatus: %v\nmcpUpdatedStatus: %v\nreadyMachineCount: %v\nupdatedMachineCount: %v\nmcpDegradedMachine:%v\nRetrying...", mcpName, mcpMachineCount, mcpMachineCount, mcpUpdatingStatus, mcpUpdatedStatus, mcpReadyMachineCount, mcpUpdatedMachineCount, mcpDegradedMachineCount)
+		return false, nil
+	})
+	AssertWaitPollNoErr(err, "MachineConfigPool checks were not successful within timeout limit")
+}
+
+//DeleteMCAndMCPByName used for checking if node return to worker machine config pool and the specified mcp is zero, then delete mc and mcp
+func DeleteMCAndMCPByName(oc *CLI, mcName string, mcpName string, timeDurationMin int) {
+
+	//Check if labeled node return back to worker mcp, then delete mc and mcp after worker mcp is ready
+	e2e.Logf("Check if labeled node return back to worker mcp")
+	AssertIfMCPChangesAppliedByName(oc, "worker", timeDurationMin)
+
+	mcpNameList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(mcpNameList).NotTo(o.BeEmpty())
+
+	if strings.Contains(mcpNameList, mcpName) {
+		//Confirm if the custom machine count is 0
+		mcpMachineCount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", mcpName, "-o=jsonpath={..status.machineCount}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(mcpMachineCount).NotTo(o.BeEmpty())
+		if mcpMachineCount == "0" {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mcp", mcpName, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", mcName, "--ignore-not-found").Execute()
+		}
+	} else {
+		e2e.Logf("The mcp [%v] has been deleted ...", mcpName)
+	}
+}

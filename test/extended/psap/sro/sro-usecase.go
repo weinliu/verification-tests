@@ -20,6 +20,7 @@ var _ = g.Describe("[sig-node] PSAP SRO should", func() {
 
 	g.BeforeEach(func() {
 
+		g.Skip("Skip SRO test case due to SRO move to eco-system, they use differnet automation tool, but keep sro code in here ...")
 		//Create Special Resource if Not Exist
 		g.By("SRO - Create Namespace for SRO")
 		nsTemplate := filepath.Join(sroDir, "sro-ns.yaml")
