@@ -273,21 +273,9 @@ func checkPodmanInfo(oc *exutil.CLI) error {
 				podmaninfo, err := exutil.DebugNodeWithChroot(oc, fmt.Sprintf("%s", v), "podman", "info")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				e2e.Logf(`\nNODE NAME IS :` + fmt.Sprintf("%s", v))
-				e2e.Logf("\npodman info is  %v", podmaninfo)
-
-				wait.Poll(5*time.Second, 1*time.Minute, func() (bool, error) {
-					result, err1 := exec.Command("bash", "-c", "cat "+podmaninfo+" | egrep ' arch:|os:'").Output()
-					if err1 != nil {
-						e2e.Logf("the result of ReadFile:%v", err1)
-						return false, nil
-					}
-					e2e.Logf("\npodman info Parameters are %s", result)
-					if strings.Contains(string(result), "arch") && strings.Contains(string(result), "os") {
-						e2e.Logf("\nPodman info parameter arch and os configured successfully")
-						return true, nil
-					}
-					return false, nil
-				})
+				o.Expect(podmaninfo).To(o.ContainSubstring("arch:"))
+				o.Expect(podmaninfo).To(o.ContainSubstring("os:"))
+				e2e.Logf("\nPodman info parameter arch and os configured successfully")
 			} else {
 				e2e.Logf("\n NODES ARE NOT READY\n ")
 			}
