@@ -110,6 +110,8 @@ func (receiver *installHelper) createClusterAWSCommonBuilder() *createCluster {
 	baseDomain, err := getBaseDomain(receiver.oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("current baseDomain %s", baseDomain)
+	e2e.Logf("extract secret/pull-secret")
+	receiver.extractPullSecret()
 	return &createCluster{
 		PullSecret:       receiver.dir + "/.dockerconfigjson",
 		AWSCreds:         receiver.dir + "/credentials",
@@ -130,8 +132,6 @@ func (receiver *installHelper) createClusterAzureCommonBuilder() *createCluster 
 	e2e.Logf("current location:%s", location)
 	e2e.Logf("extract secret/pull-secret")
 	receiver.extractPullSecret()
-	e2e.Logf("extract Azure Credentials")
-	receiver.extractAzureCredentials()
 	return &createCluster{
 		PullSecret:       receiver.dir + "/.dockerconfigjson",
 		AzureCreds:       receiver.dir + "/credentials",
@@ -182,6 +182,7 @@ func (receiver *installHelper) newAWSS3Client() {
 	filePath := receiver.dir + "/credentials"
 	err = ioutil.WriteFile(filePath, []byte(content), 0644)
 	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("extract AWS Credentials")
 	receiver.awsClient = s3.NewFromConfig(cfg)
 	receiver.region = region
 }
@@ -226,8 +227,13 @@ func (receiver *installHelper) hyperShiftInstall() {
 	var cmd string
 	switch receiver.iaasPlatform {
 	case "aws":
+		e2e.Logf("Config AWS Bucket")
+		receiver.newAWSS3Client()
+		receiver.createAWSS3Bucket()
 		cmd = fmt.Sprintf("hypershift install --oidc-storage-provider-s3-bucket-name %s --oidc-storage-provider-s3-credentials %s --oidc-storage-provider-s3-region %s", receiver.bucketName, receiver.dir+"/credentials", receiver.region)
 	case "azure":
+		e2e.Logf("extract Azure Credentials")
+		receiver.extractAzureCredentials()
 		cmd = "hypershift install"
 	default:
 	}

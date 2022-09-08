@@ -39,18 +39,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config Bucket")
-		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
-		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir, iaasPlatform: iaasPlatform}
-		installHelper.newAWSS3Client()
+		g.By("Config AWS Bucket And install HyperShift operator")
+		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		defer installHelper.deleteAWSS3Bucket()
-		installHelper.createAWSS3Bucket()
-
-		g.By("install HyperShift operator")
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
-		g.By("extract secret/pull-secret")
-		installHelper.extractPullSecret()
 
 		g.By("create HostedClusters")
 		createCluster := installHelper.createClusterAWSCommonBuilder().
@@ -76,18 +69,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config Bucket")
-		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
-		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir, iaasPlatform: iaasPlatform}
-		installHelper.newAWSS3Client()
+		g.By("Config AWS Bucket And install HyperShift operator")
+		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		defer installHelper.deleteAWSS3Bucket()
-		installHelper.createAWSS3Bucket()
-
-		g.By("install HyperShift operator")
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
-		g.By("extract secret/pull-secret")
-		installHelper.extractPullSecret()
 
 		g.By("Create the AWS infrastructure")
 		infraFile := installHelper.dir + "/" + clusterName + "-infra.json"
@@ -132,18 +118,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config Bucket")
-		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
-		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir, iaasPlatform: iaasPlatform}
-		installHelper.newAWSS3Client()
+		g.By("Config AWS Bucket And install HyperShift operator")
+		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		defer installHelper.deleteAWSS3Bucket()
-		installHelper.createAWSS3Bucket()
-
-		g.By("install HyperShift operator")
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
-		g.By("extract secret/pull-secret")
-		installHelper.extractPullSecret()
 
 		g.By("Create the AWS infrastructure 1")
 		infraFile := installHelper.dir + "/" + clusterName + "-infra.json"
@@ -194,18 +173,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config Bucket")
-		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
-		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir, iaasPlatform: iaasPlatform}
-		installHelper.newAWSS3Client()
+		g.By("Config AWS Bucket And install HyperShift operator")
+		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		defer installHelper.deleteAWSS3Bucket()
-		installHelper.createAWSS3Bucket()
-
-		g.By("install HyperShift operator")
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
-		g.By("extract secret/pull-secret")
-		installHelper.extractPullSecret()
 
 		g.By("create aws HostedClusters 1")
 		createCluster1 := installHelper.createClusterAWSCommonBuilder().
@@ -246,18 +218,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config Bucket")
-		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
-		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir, iaasPlatform: iaasPlatform}
-		installHelper.newAWSS3Client()
+		g.By("Config AWS Bucket And install HyperShift operator")
+		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		defer installHelper.deleteAWSS3Bucket()
-		installHelper.createAWSS3Bucket()
-
-		g.By("install HyperShift operator")
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
-		g.By("extract secret/pull-secret")
-		installHelper.extractPullSecret()
 
 		g.By("create HostedClusters")
 		createCluster := installHelper.createClusterAWSCommonBuilder().
@@ -305,17 +270,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err = os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config Bucket")
+		g.By("Config AWS Bucket And install HyperShift operator")
 		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
-		installHelper.newAWSS3Client()
 		defer installHelper.deleteAWSS3Bucket()
-		installHelper.createAWSS3Bucket()
-
-		g.By("install HyperShift operator")
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
-		g.By("extract secret/pull-secret")
-		installHelper.extractPullSecret()
 
 		g.By("update taint and label, taint and label use key 'hypershift.openshift.io/cluster'")
 		defer nodeAction.taintNode(nodes[0], "hypershift.openshift.io/cluster="+oc.Namespace()+"-"+clusterName+":NoSchedule-")
@@ -359,18 +318,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		err := os.MkdirAll(dir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Config Bucket")
-		bucketName := "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault())
-		installHelper := installHelper{oc: oc, bucketName: bucketName, dir: dir, iaasPlatform: iaasPlatform}
-		installHelper.newAWSS3Client()
+		g.By("Config AWS Bucket And install HyperShift operator")
+		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
 		defer installHelper.deleteAWSS3Bucket()
-		installHelper.createAWSS3Bucket()
-
-		g.By("install HyperShift operator")
 		defer installHelper.hyperShiftUninstall()
 		installHelper.hyperShiftInstall()
-		g.By("extract secret/pull-secret")
-		installHelper.extractPullSecret()
 
 		g.By("Create a nodeport ip bastion")
 		preStartJobSetup := newPreStartJob(clusterName+"-setup", oc.Namespace(), caseID, "setup", dir)
