@@ -135,11 +135,11 @@ objects:
         volumes:
         - configMap:
             defaultMode: 420
-            name: kafka
+            name: ${CM_NAME}
           name: brokerconfig
         - secret:
             defaultMode: 420
-            secretName: ${SECRETENAME}
+            secretName: ${SECRETNAME}
           name: kafkacert
         - emptyDir: {}
           name: brokerlogs
@@ -159,6 +159,6 @@ parameters:
 - name: SERVICENAME
   value: "kafka"
 - name: CM_NAME
-  value: "kafka" 
-- name: SECRETENAME
+  value: "kafka"
+- name: SECRETNAME
   value: "kafka-cluster-cert"

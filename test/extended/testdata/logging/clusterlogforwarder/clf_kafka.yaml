@@ -14,7 +14,7 @@ objects:
       type: ${TYPE}
       url: ${URL}
       secret:
-        name: ${SECRET_NAME} 
+        name: ${SECRET_NAME}
     pipelines:
     - name: test-app
       inputRefs:

@@ -910,32 +910,41 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Deploy zookeeper")
-			kafka := kafka{cloNS, "kafka", "zookeeper", "sasl-plaintext"}
+			kafka := kafka{
+				namespace:      cloNS,
+				kafkasvcName:   "kafka",
+				zoosvcName:     "zookeeper",
+				authtype:       "sasl-plaintext",
+				pipelineSecret: "kafka-fluentd",
+				collectorType:  "fluentd",
+				loggingNS:      cloNS,
+			}
 			defer kafka.removeZookeeper(oc)
 			kafka.deployZookeeper(oc)
 			g.By("Deploy kafka")
 			defer kafka.removeKafka(oc)
 			kafka.deployKafka(oc)
+			kafkaEndpoint := "tls://" + kafka.kafkasvcName + "." + kafka.namespace + ".svc.cluster.local:9092/clo-topic"
 
 			g.By("Create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "45368.yaml")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf_kafka.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", cloNS, "-f", clfTemplate)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRET_NAME="+kafka.pipelineSecret, "URL="+kafkaEndpoint, "NAMESPACE="+clf.namespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Deploy collector pods")
 			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=fluentd")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 			g.By("Check app logs in kafka consumer pod")
-			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", cloNS, "-l", "component=kafka-consumer", "-o", "name").Output()
+			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
-				consumerPodLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(consumerPodPodName, "-n", cloNS).Output()
+				consumerPodLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(consumerPodPodName, "-n", kafka.namespace).Output()
 				if err != nil {
 					return false, err
 				}
@@ -944,7 +953,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", cloNS, consumerPodPodName))
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", kafka.namespace, consumerPodPodName))
 		})
 
 		// author gkarager@redhat.com
@@ -955,32 +964,41 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Deploy zookeeper")
-			kafka := kafka{cloNS, "kafka", "zookeeper", "sasl-ssl"}
+			kafka := kafka{
+				namespace:      cloNS,
+				kafkasvcName:   "kafka",
+				zoosvcName:     "zookeeper",
+				authtype:       "sasl-ssl",
+				pipelineSecret: "kafka-fluentd",
+				collectorType:  "fluentd",
+				loggingNS:      cloNS,
+			}
 			defer kafka.removeZookeeper(oc)
 			kafka.deployZookeeper(oc)
 			g.By("Deploy kafka")
 			defer kafka.removeKafka(oc)
 			kafka.deployKafka(oc)
+			kafkaEndpoint := "tls://" + kafka.kafkasvcName + "." + kafka.namespace + ".svc.cluster.local:9093/clo-topic"
 
 			g.By("Create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "41771.yaml")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf_kafka.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", cloNS, "-f", clfTemplate)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRET_NAME="+kafka.pipelineSecret, "URL="+kafkaEndpoint, "NAMESPACE="+clf.namespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Deploy collector pods")
 			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=fluentd")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 			g.By("Check app logs in kafka consumer pod")
-			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", cloNS, "-l", "component=kafka-consumer", "-o", "name").Output()
+			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
-				consumerPodLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(consumerPodPodName, "-n", cloNS).Output()
+				consumerPodLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(consumerPodPodName, "-n", kafka.namespace).Output()
 				if err != nil {
 					return false, err
 				}
@@ -989,7 +1007,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", cloNS, consumerPodPodName))
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", kafka.namespace, consumerPodPodName))
 		})
 
 		// author gkarager@redhat.com
@@ -998,34 +1016,42 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			appProj := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-
-			kafka := kafka{cloNS, "kafka", "zookeeper", "plaintext-ssl"}
+			kafka := kafka{
+				namespace:      cloNS,
+				kafkasvcName:   "kafka",
+				zoosvcName:     "zookeeper",
+				authtype:       "plaintext-ssl",
+				pipelineSecret: "kafka-fluentd",
+				collectorType:  "fluentd",
+				loggingNS:      cloNS,
+			}
 			g.By("Deploy zookeeper")
 			defer kafka.removeZookeeper(oc)
 			kafka.deployZookeeper(oc)
 			g.By("Deploy kafka")
 			defer kafka.removeKafka(oc)
 			kafka.deployKafka(oc)
+			kafkaEndpoint := "tls://" + kafka.kafkasvcName + "." + kafka.namespace + ".svc.cluster.local:9093/clo-topic"
 
 			g.By("Create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "32333.yaml")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf_kafka.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", cloNS, "-f", clfTemplate)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "SECRET_NAME="+kafka.pipelineSecret, "URL="+kafkaEndpoint, "NAMESPACE="+clf.namespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Deploy collector pods")
 			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=fluentd")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
 			g.By("Check app logs in kafka consumer pod")
-			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", cloNS, "-l", "component=kafka-consumer", "-o", "name").Output()
+			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
-				consumerPodLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(consumerPodPodName, "-n", cloNS).Output()
+				consumerPodLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(consumerPodPodName, "-n", kafka.namespace).Output()
 				if err != nil {
 					return false, err
 				}
@@ -1034,7 +1060,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", cloNS, consumerPodPodName))
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", kafka.namespace, consumerPodPodName))
 		})
 	})
 })

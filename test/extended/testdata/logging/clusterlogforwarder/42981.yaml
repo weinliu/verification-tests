@@ -11,7 +11,7 @@ objects:
   spec:
     pipelines:
     - name: forward audit logs to default elasticsearch
-      inputRefs:  
+      inputRefs:
       - audit
       outputRefs:
       - default

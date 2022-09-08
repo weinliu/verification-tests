@@ -6,7 +6,7 @@ objects:
 - apiVersion: "logging.openshift.io/v1"
   kind: ClusterLogForwarder
   metadata:
-    name: instance 
+    name: instance
   spec:
     outputs:
      - name: cw

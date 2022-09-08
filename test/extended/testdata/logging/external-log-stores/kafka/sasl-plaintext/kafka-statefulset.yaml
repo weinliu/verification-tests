@@ -157,4 +157,4 @@ parameters:
 - name: SERVICENAME
   value: "kafka"
 - name: CM_NAME
-  value: "kafka" 
+  value: "kafka"

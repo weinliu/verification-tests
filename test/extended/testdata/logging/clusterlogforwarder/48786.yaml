@@ -17,9 +17,9 @@ objects:
             run: centos-logtest-qa
     pipelines:
     - name: forward-via-label
-      inputRefs: 
+      inputRefs:
       - myLogData
-      outputRefs: 
+      outputRefs:
       - default
 parameters:
 - name: NAME

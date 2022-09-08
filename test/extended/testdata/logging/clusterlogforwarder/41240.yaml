@@ -11,13 +11,13 @@ objects:
   spec:
     inputs:
     - application:
-        namespaces: 
+        namespaces:
         - ${PROJ_NS}
       name: test-app-logs
     outputs:
     - name: rsyslog
-      type: syslog 
-      syslog: 
+      type: syslog
+      syslog:
         facility: local0
         severity: informational
       url: ${URL}

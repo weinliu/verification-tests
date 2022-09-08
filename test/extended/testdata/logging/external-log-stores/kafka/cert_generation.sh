@@ -53,7 +53,7 @@ openssl req -new -out $CLIENT_CA_PATH/client.csr -newkey rsa:4096 -keyout $CLIEN
 
 
 # Sign client ca by intermediate ca
-cat <<EOF >$CLIENT_CA_PATH/client_sign.conf 
+cat <<EOF >$CLIENT_CA_PATH/client_sign.conf
 # Simple Signing CA
 
 # The [default] section contains global constants that can be referred to from
@@ -118,10 +118,10 @@ basicConstraints        = CA:false
 EOF
 
 touch $CA_PATH/root_ca.db
-if [ ! -f $CA_PATH/root_ca.serial.txt ] ; then 
+if [ ! -f $CA_PATH/root_ca.serial.txt ] ; then
     echo "01">$CA_PATH/root_ca.serial.txt
 fi
-openssl ca -in $CLIENT_CA_PATH/client.csr -notext -out $CLIENT_CA_PATH/client.crt -config $CLIENT_CA_PATH/client_sign.conf -batch 
+openssl ca -in $CLIENT_CA_PATH/client.csr -notext -out $CLIENT_CA_PATH/client.crt -config $CLIENT_CA_PATH/client_sign.conf -batch
 
 # Create Client keystone
 openssl pkcs12 -export -in $CLIENT_CA_PATH/client.crt -inkey $CLIENT_CA_PATH/client.key -out $CLIENT_CA_PATH/client.pkcs12  -passin pass:aosqe2021 -passout pass:aosqe2021
@@ -236,10 +236,10 @@ subjectAltName = DNS.1:kafka.${NAMESPACE}.svc.cluster.local,DNS.2:kafka.${NAMESP
 EOF
 
 touch $CA_PATH/root_ca.db
-if [ ! -f $CA_PATH/root_ca.serial.txt ] ; then 
+if [ ! -f $CA_PATH/root_ca.serial.txt ] ; then
     echo "01">$CA_PATH/root_ca.serial.txt
 fi
-openssl ca -in $CLUSTER_CA_PATH/cluster.csr -notext -out $CLUSTER_CA_PATH/cluster.crt -config $CLUSTER_CA_PATH/cluster_sign.conf -batch 
+openssl ca -in $CLUSTER_CA_PATH/cluster.csr -notext -out $CLUSTER_CA_PATH/cluster.crt -config $CLUSTER_CA_PATH/cluster_sign.conf -batch
 
 #Create keystone
 openssl pkcs12 -export -in $CLUSTER_CA_PATH/cluster.crt -inkey $CLUSTER_CA_PATH/cluster.key -out $CLUSTER_CA_PATH/cluster.pkcs12  -passin pass:aosqe2021 -passout pass:aosqe2021

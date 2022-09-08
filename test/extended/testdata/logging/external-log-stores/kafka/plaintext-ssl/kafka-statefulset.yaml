@@ -19,7 +19,7 @@ objects:
     selector:
       matchLabels:
         app: kafka
-    serviceName: kafka
+    serviceName: ${SERVICENAME}
     template:
       metadata:
         creationTimestamp: null
@@ -113,7 +113,7 @@ objects:
                 fieldPath: metadata.namespace
           - name: ADVERTISE_ADDR
             value: kafka
-          image: quay.io/openshifttest/kafka-initutils:1.2.0
+          image: quay.io/openshifttest/kafka-initutils@sha256:e73ff7a44b43b85b53849c0459ba32e704540852b885a5c78af9753f86a49d68
           imagePullPolicy: IfNotPresent
           name: init-config
           resources: {}
@@ -154,6 +154,8 @@ parameters:
   value: "kafka"
 - name: NAMESPACE
   value: "openshift-logging"
+- name: SERVICENAME
+  value: "kafka"
 - name: CM_NAME
   value: "kafka"
 - name: SECRETNAME

@@ -19,9 +19,9 @@ objects:
         - ${APP_NAMESPACE}
     pipelines:
     - name: forward-via-label
-      inputRefs: 
+      inputRefs:
       - myLogData
-      outputRefs: 
+      outputRefs:
       - default
 parameters:
 - name: NAME

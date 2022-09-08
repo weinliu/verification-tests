@@ -1725,31 +1725,31 @@ func getDataFromKafkaConsumerPod(oc *exutil.CLI, ns string, consumerName string)
 }
 
 type kafka struct {
-	namespace    string
-	kafkasvcName string
-	zoosvcName   string
-	authtype     string //Name the kafka folders under testdata same as the authtype (options: sasl_plaintext, sasl_ssl, ssl, plaintext, mutual_sasl_ssl)
+	namespace      string
+	kafkasvcName   string
+	zoosvcName     string
+	authtype       string //Name the kafka folders under testdata same as the authtype (options: plaintext-ssl, sasl-ssl, sasl-plaintext)
+	pipelineSecret string //the name of the secret for collectors to use
+	collectorType  string //must be specified when auth type is sasl-ssl/sasl-plaintext
+	loggingNS      string //the namespace where the collector pods are deployed in
 }
 
 func (k kafka) deployZookeeper(oc *exutil.CLI) {
-	kafkaFilePath := exutil.FixturePath("testdata", "logging", "external-log-stores", "kafka")
-	zookeeperConfigDir := filepath.Join(kafkaFilePath, "zookeeper-configmap")
-
+	zookeeperFilePath := exutil.FixturePath("testdata", "logging", "external-log-stores", "kafka", "zookeeper")
 	//create zookeeper configmap/svc/StatefulSet
+	configTemplate := filepath.Join(zookeeperFilePath, "configmap.yaml")
 	if k.authtype == "plaintext-ssl" {
-		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", k.zoosvcName, "-n", k.namespace, "--from-file=init.sh="+zookeeperConfigDir+"/init.sh", "--from-file=log4j.properties="+zookeeperConfigDir+"/log4j.properties", "--from-file=zookeeper.properties="+zookeeperConfigDir+"/zookeeper-ssl.properties").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-	} else {
-		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", k.zoosvcName, "-n", k.namespace, "--from-file=init.sh="+zookeeperConfigDir+"/init.sh", "--from-file=log4j.properties="+zookeeperConfigDir+"/log4j.properties", "--from-file=zookeeper.properties="+zookeeperConfigDir+"/zookeeper.properties").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		configTemplate = filepath.Join(zookeeperFilePath, "configmap-ssl.yaml")
 	}
-
-	zoosvcFile := filepath.Join(kafkaFilePath, "zookeeper-svc.yaml")
-	zoosvc := resource{"Service", k.zoosvcName, k.namespace}
-	err := zoosvc.applyFromTemplate(oc, "-n", k.namespace, "-f", zoosvcFile, "-p", "NAME="+k.zoosvcName, "-p", "NAMESPACE="+k.namespace)
+	err := resource{"configmap", k.zoosvcName, k.namespace}.applyFromTemplate(oc, "-n", k.namespace, "-f", configTemplate, "-p", "NAME="+k.zoosvcName, "NAMESPACE="+k.namespace)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	zoosfsFile := filepath.Join(kafkaFilePath, "zookeeper-statefulset.yaml")
+	zoosvcFile := filepath.Join(zookeeperFilePath, "zookeeper-svc.yaml")
+	zoosvc := resource{"Service", k.zoosvcName, k.namespace}
+	err = zoosvc.applyFromTemplate(oc, "-n", k.namespace, "-f", zoosvcFile, "-p", "NAME="+k.zoosvcName, "-p", "NAMESPACE="+k.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	zoosfsFile := filepath.Join(zookeeperFilePath, "zookeeper-statefulset.yaml")
 	zoosfs := resource{"StatefulSet", k.zoosvcName, k.namespace}
 	err = zoosfs.applyFromTemplate(oc, "-n", k.namespace, "-f", zoosfsFile, "-p", "NAME="+k.zoosvcName, "-p", "NAMESPACE="+k.namespace, "-p", "SERVICENAME="+zoosvc.name, "-p", "CM_NAME="+k.zoosvcName)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -1758,88 +1758,98 @@ func (k kafka) deployZookeeper(oc *exutil.CLI) {
 
 func (k kafka) deployKafka(oc *exutil.CLI) {
 	kafkaFilePath := exutil.FixturePath("testdata", "logging", "external-log-stores", "kafka")
-	kafkaConfigDir := filepath.Join(kafkaFilePath, k.authtype, "kafka-configmap")
-	consumerConfigDir := filepath.Join(kafkaFilePath, k.authtype, "consumer-configmap")
+	kafkaConfigmapTemplate := filepath.Join(kafkaFilePath, k.authtype, "kafka-configmap.yaml")
+	consumerConfigmapTemplate := filepath.Join(kafkaFilePath, k.authtype, "consumer-configmap.yaml")
 
-	//create kafka secrets and confimap
-	if k.authtype == "sasl-plaintext" {
-		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "kafka-client-cert", "-n", k.namespace, "--from-literal=username=admin", "--from-literal=password=admin-secret").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "kafka-fluentd", "-n", k.namespace, "--from-literal=username=admin", "--from-literal=password=admin-secret").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "kafka-vector", "-n", k.namespace, "--from-literal=sasl.enable=True", "--from-literal=sasl.mechanisms=PLAIN", "--from-literal=username=admin", "--from-literal=password=admin-secret").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", "kafka-client", "-n", k.namespace, "--from-file=client.properties="+consumerConfigDir+"/client.properties", "--from-file=kafka_client_jaas.conf="+consumerConfigDir+"/kafka_client_jaas.conf", "--from-file=sasl-consumer.properties="+consumerConfigDir+"/sasl-consumer.properties").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", k.kafkasvcName, "-n", k.namespace, "--from-file=init.sh="+kafkaConfigDir+"/init.sh", "--from-file=log4j.properties="+kafkaConfigDir+"/log4j.properties", "--from-file=server.properties="+kafkaConfigDir+"/server.properties", "--from-file=kafka_server_jaas.conf="+kafkaConfigDir+"/kafka_server_jaas.conf").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-	} else {
+	var keysPath string
+	if k.authtype == "sasl-ssl" || k.authtype == "plaintext-ssl" {
 		baseDir := exutil.FixturePath("testdata", "logging")
-		keysPath := filepath.Join(baseDir, "temp"+getRandomString())
+		keysPath = filepath.Join(baseDir, "temp"+getRandomString())
 		defer exec.Command("rm", "-r", keysPath).Output()
 		err := os.MkdirAll(keysPath, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		generateCertsSH := filepath.Join(kafkaFilePath, "cert_generation.sh")
-		cmd := []string{generateCertsSH, keysPath, k.namespace}
-		err = exec.Command("sh", cmd...).Run()
+		err = exec.Command("sh", generateCertsSH, keysPath, k.namespace).Run()
 		o.Expect(err).NotTo(o.HaveOccurred())
-
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "kafka-cluster-cert", "-n", k.namespace, "--from-file=ca_bundle.jks="+keysPath+"/ca/ca_bundle.jks", "--from-file=cluster.jks="+keysPath+"/cluster/cluster.jks").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-
-		if k.authtype == "sasl-ssl" {
-			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "kafka-client-cert", "-n", k.namespace, "--from-file=ca-bundle.jks="+keysPath+"/ca/ca_bundle.jks", "--from-file=ca-bundle.crt="+keysPath+"/ca/ca_bundle.crt", "--from-file=tls.crt="+keysPath+"/client/client.crt", "--from-file=tls.key="+keysPath+"/client/client.key", "--from-literal=username=admin", "--from-literal=password=admin-secret").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "kafka-fluentd", "-n", k.namespace, "--from-file=ca-bundle.crt="+keysPath+"/ca/ca_bundle.crt", "--from-literal=username=admin", "--from-literal=password=admin-secret", "--from-literal=sasl_over_ssl=true").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "kafka-vector", "-n", k.namespace, "--from-literal=sasl.enable=True", "--from-literal=sasl.mechanisms=PLAIN", "--from-file=ca-bundle.crt="+keysPath+"/ca/ca_bundle.crt", "--from-file=tls.crt="+keysPath+"/client/client.crt", "--from-file=tls.key="+keysPath+"/client/client.key", "--from-literal=username=admin", "--from-literal=password=admin-secret").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", "kafka-client", "-n", k.namespace, "--from-file=client.properties="+consumerConfigDir+"/client.properties", "--from-file=kafka_client_jaas.conf="+consumerConfigDir+"/kafka_client_jaas.conf", "--from-file=ssl-consumer.properties="+consumerConfigDir+"/ssl-consumer.properties").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", k.kafkasvcName, "-n", k.namespace, "--from-file=init.sh="+kafkaConfigDir+"/init.sh", "--from-file=log4j.properties="+kafkaConfigDir+"/log4j.properties", "--from-file=server.properties="+kafkaConfigDir+"/server.properties", "--from-file=kafka_server_jaas.conf="+kafkaConfigDir+"/kafka_server_jaas.conf").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-		} else if k.authtype == "plaintext-ssl" {
-			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "kafka-client-cert", "-n", k.namespace, "--from-file=ca-bundle.jks="+keysPath+"/ca/ca_bundle.jks", "--from-file=ca-bundle.crt="+keysPath+"/ca/ca_bundle.crt", "--from-file=tls.crt="+keysPath+"/client/client.crt", "--from-file=tls.key="+keysPath+"/client/client.key").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "kafka-fluentd", "-n", k.namespace, "--from-file=ca-bundle.crt="+keysPath+"/ca/ca_bundle.crt", "--from-file=tls.crt="+keysPath+"/client/client.crt", "--from-file=tls.key="+keysPath+"/client/client.key").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", "kafka-client", "-n", k.namespace, "--from-file=client.properties="+consumerConfigDir+"/client.properties").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", k.kafkasvcName, "-n", k.namespace, "--from-file=init.sh="+kafkaConfigDir+"/init.sh", "--from-file=log4j.properties="+kafkaConfigDir+"/log4j.properties", "--from-file=server.properties="+kafkaConfigDir+"/server.properties").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
 	}
 
-	//create ClusterRole
-	crFile := filepath.Join(kafkaFilePath, "kafka-clusterrole.yaml")
-	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", crFile).Execute()
+	pipelineSecret := resource{"secret", k.pipelineSecret, k.loggingNS}
+	kafkaClientCert := resource{"secret", "kafka-client-cert", k.namespace}
+	//create kafka secrets and confimap
+	cmdPipeline := []string{"secret", "generic", pipelineSecret.name, "-n", pipelineSecret.namespace}
+	cmdClient := []string{"secret", "generic", kafkaClientCert.name, "-n", kafkaClientCert.namespace}
+	switch k.authtype {
+	case "sasl-plaintext":
+		{
+			cmdClient = append(cmdClient, "--from-literal=username=admin", "--from-literal=password=admin-secret")
+			cmdPipeline = append(cmdPipeline, "--from-literal=username=admin", "--from-literal=password=admin-secret")
+			if k.collectorType == "vector" {
+				cmdPipeline = append(cmdPipeline, "--from-literal=sasl.enable=True", "--from-literal=sasl.mechanisms=PLAIN")
+			}
+		}
+	case "sasl-ssl":
+		{
+			cmdClient = append(cmdClient, "--from-file=ca-bundle.jks="+keysPath+"/ca/ca_bundle.jks", "--from-file=ca-bundle.crt="+keysPath+"/ca/ca_bundle.crt", "--from-file=tls.crt="+keysPath+"/client/client.crt", "--from-file=tls.key="+keysPath+"/client/client.key", "--from-literal=username=admin", "--from-literal=password=admin-secret")
+			cmdPipeline = append(cmdPipeline, "--from-file=ca-bundle.crt="+keysPath+"/ca/ca_bundle.crt", "--from-literal=username=admin", "--from-literal=password=admin-secret")
+			switch k.collectorType {
+			case "fluentd":
+				{
+					cmdPipeline = append(cmdPipeline, "--from-literal=sasl_over_ssl=true")
+				}
+			case "vector":
+				{
+					cmdPipeline = append(cmdPipeline, "--from-literal=sasl.enable=True", "--from-literal=sasl.mechanisms=PLAIN", "--from-file=tls.crt="+keysPath+"/client/client.crt", "--from-file=tls.key="+keysPath+"/client/client.key")
+				}
+			}
+		}
+	case "plaintext-ssl":
+		{
+			cmdClient = append(cmdClient, "--from-file=ca-bundle.jks="+keysPath+"/ca/ca_bundle.jks", "--from-file=ca-bundle.crt="+keysPath+"/ca/ca_bundle.crt", "--from-file=tls.crt="+keysPath+"/client/client.crt", "--from-file=tls.key="+keysPath+"/client/client.key")
+			cmdPipeline = append(cmdPipeline, "--from-file=ca-bundle.crt="+keysPath+"/ca/ca_bundle.crt", "--from-file=tls.crt="+keysPath+"/client/client.crt", "--from-file=tls.key="+keysPath+"/client/client.key")
+		}
+	}
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args(cmdClient...).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	kafkaClientCert.WaitForResourceToAppear(oc)
+	err = oc.AsAdmin().WithoutNamespace().Run("create").Args(cmdPipeline...).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	pipelineSecret.WaitForResourceToAppear(oc)
+
+	consumerConfigmap := resource{"configmap", "kafka-client", k.namespace}
+	err = consumerConfigmap.applyFromTemplate(oc, "-n", k.namespace, "-f", consumerConfigmapTemplate, "-p", "NAME="+consumerConfigmap.name, "NAMESPACE="+consumerConfigmap.namespace)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	//create ClusterRoleBinding
-	output, err := oc.AsAdmin().WithoutNamespace().Run("process").Args("-n", k.namespace, "-f", kafkaFilePath+"/kafka-clusterrolebinding.yaml", "-p", "NAMESPACE="+k.namespace).OutputToFile(getRandomString() + ".json")
+	kafkaConfigmap := resource{"configmap", k.kafkasvcName, k.namespace}
+	err = kafkaConfigmap.applyFromTemplate(oc, "-n", k.namespace, "-f", kafkaConfigmapTemplate, "-p", "NAME="+kafkaConfigmap.name, "NAMESPACE="+kafkaConfigmap.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	//create ClusterRole and ClusterRoleBinding
+	rbacFile := filepath.Join(kafkaFilePath, "kafka-rbac.yaml")
+	output, err := oc.AsAdmin().WithoutNamespace().Run("process").Args("-n", k.namespace, "-f", rbacFile, "-p", "NAMESPACE="+k.namespace).OutputToFile(getRandomString() + ".json")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", output, "-n", k.namespace).Execute()
 
 	//create kafka svc
 	svcFile := filepath.Join(kafkaFilePath, "kafka-svc.yaml")
 	svc := resource{"Service", k.kafkasvcName, k.namespace}
-	err = svc.applyFromTemplate(oc, "-f", svcFile, "-n", k.namespace, "-p", "NAME="+k.kafkasvcName, "-p", "NAMESPACE="+k.namespace)
+	err = svc.applyFromTemplate(oc, "-f", svcFile, "-n", svc.namespace, "-p", "NAME="+svc.name, "NAMESPACE="+svc.namespace)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	//create kafka StatefulSet
 	sfsFile := filepath.Join(kafkaFilePath, k.authtype, "kafka-statefulset.yaml")
 	sfs := resource{"StatefulSet", k.kafkasvcName, k.namespace}
-	err = sfs.applyFromTemplate(oc, "-f", sfsFile, "-n", k.namespace, "-p", "NAME="+k.kafkasvcName, "-p", "NAMESPACE="+k.namespace, "-p", "CM_NAME="+k.kafkasvcName)
+	err = sfs.applyFromTemplate(oc, "-f", sfsFile, "-n", k.namespace, "-p", "NAME="+sfs.name, "-p", "NAMESPACE="+sfs.namespace, "-p", "CM_NAME="+k.kafkasvcName)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	waitForPodReadyWithLabel(oc, k.namespace, "app="+k.kafkasvcName)
+	waitForStatefulsetReady(oc, sfs.namespace, sfs.name)
 
 	//create kafka-consumer deployment
 	deployFile := filepath.Join(kafkaFilePath, k.authtype, "kafka-consumer-deployment.yaml")
 	deploy := resource{"deployment", "kafka-consumer-" + k.authtype, k.namespace}
-	err = deploy.applyFromTemplate(oc, "-f", deployFile, "-n", k.namespace, "NAMESPACE="+k.namespace, "-p", "CM_NAME=kafka-client")
+	err = deploy.applyFromTemplate(oc, "-f", deployFile, "-n", deploy.namespace, "-p", "NAMESPACE="+deploy.namespace, "NAME="+deploy.name, "CM_NAME=kafka-client")
 	o.Expect(err).NotTo(o.HaveOccurred())
-	WaitForDeploymentPodsToBeReady(oc, k.namespace, "kafka-consumer-"+k.authtype)
+	WaitForDeploymentPodsToBeReady(oc, deploy.namespace, deploy.name)
 }
 
 func (k kafka) removeZookeeper(oc *exutil.CLI) {
@@ -1851,10 +1861,9 @@ func (k kafka) removeZookeeper(oc *exutil.CLI) {
 func (k kafka) removeKafka(oc *exutil.CLI) {
 	resource{"secret", "kafka-client-cert", k.namespace}.clear(oc)
 	resource{"secret", "kafka-cluster-cert", k.namespace}.clear(oc)
-	resource{"secret", "kafka-fluentd", k.namespace}.clear(oc)
-	resource{"secret", "kafka-vector", k.namespace}.clear(oc)
+	resource{"secret", k.pipelineSecret, k.loggingNS}.clear(oc)
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrole/kafka-node-reader").Execute()
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding/kafka-node-reader-binding").Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding/kafka-node-reader").Execute()
 	resource{"configmap", k.kafkasvcName, k.namespace}.clear(oc)
 	resource{"svc", k.kafkasvcName, k.namespace}.clear(oc)
 	resource{"statefulset", k.kafkasvcName, k.namespace}.clear(oc)
