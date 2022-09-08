@@ -834,8 +834,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("subscribe AMQ kafka into 2 different namespaces")
 			// to avoid collecting kafka logs, deploy kafka in project openshift-*
-			amqNs1 := "openshift-amq-1"
-			amqNs2 := "openshift-amq-2"
+			amqNs1 := "openshift-amq-1" + getRandomString()
+			amqNs2 := "openshift-amq-2" + getRandomString()
 			catsrc := CatalogSourceObjects{"stable", "redhat-operators", "openshift-marketplace"}
 			amq1 := SubscriptionObjects{"amq-streams-cluster-operator", amqNs1, SingleNamespaceOG, subTemplate, "amq-streams", catsrc}
 			amq2 := SubscriptionObjects{"amq-streams-cluster-operator", amqNs2, SingleNamespaceOG, subTemplate, "amq-streams", catsrc}
@@ -862,7 +862,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				waitForPodReadyWithLabel(oc, kafka.namespace, "app.kubernetes.io/instance="+kafka.name)
 			}
 			g.By("forward logs to Kafkas")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "41726.yaml")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf_kafka_multi_brokers.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
 			brokers, _ := json.Marshal([]string{"tls://" + kafkaClusterName + "-kafka-bootstrap." + amqNs1 + ".svc:9092", "tls://" + kafkaClusterName + "-kafka-bootstrap." + amqNs2 + ".svc:9092"})

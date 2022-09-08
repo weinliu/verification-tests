@@ -1720,7 +1720,7 @@ func getDataFromKafkaConsumerPod(oc *exutil.CLI, ns string, consumerName string)
 	if err != nil {
 		return "", err
 	}
-	output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ns, consumerPods.Items[0].Name, "--since=2m").Output()
+	output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ns, consumerPods.Items[0].Name, "--since=30s", "--tail=30").Output()
 	return output, err
 }
 
