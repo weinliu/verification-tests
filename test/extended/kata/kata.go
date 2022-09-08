@@ -491,6 +491,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 		g.By("Wait for worker nodes to be in crio debug mode")
 		msg, err = waitForNodesInDebug(oc)
+		e2e.Logf("%v", msg)
 
 		g.By("Create a deployment file from template")
 		// This creates N replicas where N=worker node
@@ -528,6 +529,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("Walk through " + mustgatherTopdir)
 		err = filepath.Walk(mustgatherTopdir, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
+				e2e.Logf("Error on %v: %v", path, err)
 				return err
 			}
 
@@ -536,9 +538,20 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 				if strings.Contains(path, "worker") && strings.Contains(path, "/run/vc/crio/fifo") && !strings.Contains(path, "/run/vc/crio/fifo/io") {
 					mustgatherChecks.qemuLogs++
 				}
+				if strings.Contains(path, "audit") {
+					e2e.Logf("AUDIT directory %v", path)
+				}
 			} else {
 				mustgatherFiles = append(mustgatherFiles, path)
-				if strings.Contains(path, "audit.log.gz") {
+				if strings.Contains(path, "audit") {
+					e2e.Logf("AUDIT file %v", path)
+					if strings.Contains(path, "audit_logs_listing") {
+						output, _ := ioutil.ReadFile(path)
+						e2e.Logf("%v", string(output))
+					}
+				}
+
+				if strings.Contains(path, "audit.log") {
 					mustgatherChecks.audits++
 				}
 
@@ -592,7 +605,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		// to ensure a VM is on each node another method is needed
 		e2e.Logf("mustgatherChecks.qemuLogs : %v", mustgatherChecks.qemuLogs)
 		if mustgatherChecks.qemuLogs != mustgatherExpected.qemuLogs {
-			e2e.Logf("qemu log directory (%v) does not exist on all worker nodes (%v)", mustgatherChecks.qemuLogs, mustgatherExpected.qemuLogs)
+			e2e.Logf("qemu log directory (%v) does not exist on all worker nodes (%v), is ok", mustgatherChecks.qemuLogs, mustgatherExpected.qemuLogs)
 			// VMs should be 1 on each worker node but k8s might put 2 on a node & 0 on another per node load
 			if mustgatherChecks.qemuLogs < 1 { // because deployment is used
 				fails++
