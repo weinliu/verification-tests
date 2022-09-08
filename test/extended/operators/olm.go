@@ -68,7 +68,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-High-53758-OLM failed to recreate SA for the CatalogSource that without poll Interval", func() {
+	g.It("ConnectedOnly-Author:jiazha-High-53758-OLM failed to recreate SA for the CatalogSource that without poll Interval", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		dr := make(describerResrouce)
 		itName := g.CurrentGinkgoTestDescription().TestText
