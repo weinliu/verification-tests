@@ -25,7 +25,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-47001 - [Azure-Disk-CSI-Driver] support different skuName in storageclass with Premium_LRS, StandardSSD_LRS, Standard_LRS
-	g.It("ARO-Author:wduan-High-47001-[Azure-Disk-CSI-Driver] support different skuName in storageclass with Premium_LRS, StandardSSD_LRS, Standard_LRS", func() {
+	g.It("HyperShiftGUEST-ARO-Author:wduan-High-47001-[Azure-Disk-CSI-Driver] support different skuName in storageclass with Premium_LRS, StandardSSD_LRS, Standard_LRS", func() {
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
@@ -83,7 +83,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-49625 - [Azure-Disk-CSI-Driver] support different skuName in storageclass with Premium_ZRS, StandardSSD_ZRS
-	g.It("ARO-Author:wduan-High-49625-[Azure-Disk-CSI-Driver] support different skuName in storageclass with Premium_ZRS, StandardSSD_ZRS", func() {
+	g.It("HyperShiftGUEST-ARO-Author:wduan-High-49625-[Azure-Disk-CSI-Driver] support different skuName in storageclass with Premium_ZRS, StandardSSD_ZRS", func() {
 		region := getClusterRegion(oc)
 		supportRegions := []string{"westus2", "westeurope", "northeurope", "francecentral"}
 		if !contains(supportRegions, region) {
@@ -169,7 +169,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: wduan@redhat.com
 	// OCP-49366 - [Azure-Disk-CSI-Driver] support shared disk to mount to different nodes
 	// https://github.com/kubernetes-sigs/azuredisk-csi-driver/tree/master/deploy/example/sharedisk
-	g.It("ARO-Author:wduan-High-49366-[Azure-Disk-CSI-Driver] support shared disks to mount to different nodes", func() {
+	g.It("HyperShiftGUEST-ARO-Author:wduan-High-49366-[Azure-Disk-CSI-Driver] support shared disks to mount to different nodes", func() {
 		schedulableLinuxWorkers := getSchedulableLinuxWorkers(getAllNodesInfo(oc))
 		if len(schedulableLinuxWorkers) < 2 || checkNodeZoned(oc) {
 			g.Skip("No enough schedulable node or the cluster is not zoned")

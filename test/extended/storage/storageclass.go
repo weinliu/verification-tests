@@ -48,7 +48,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-52743 - [storageclass] OCP Cluster should have no more than one default storageclass defined, PVC without specifying storagclass should succeed while only one default storageclass present
-	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-52743-[storageclass] OCP Cluster should have no more than one default storageclass defined, PVC without specifying storagclass should succeed while only one default storageclass present", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:wduan-Critical-52743-[storageclass] OCP Cluster should have no more than one default storageclass defined, PVC without specifying storagclass should succeed while only one default storageclass present", func() {
 		g.By("Check default storageclass number should not be greater than one")
 		allSCRes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "-o", "json").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

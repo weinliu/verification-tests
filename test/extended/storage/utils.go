@@ -624,9 +624,9 @@ func getResourceGroupID(oc *exutil.CLI) string {
 // Check if FIPS is enabled
 // Azure-file doesn't work on FIPS enabled cluster
 func checkFips(oc *exutil.CLI) bool {
-	masterNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[0].metadata.name}").Output()
+	node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node-role.kubernetes.io/worker", "-o=jsonpath={.items[0].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	fipsInfo, err := execCommandInSpecificNode(oc, masterNode, "fips-mode-setup --check")
+	fipsInfo, err := execCommandInSpecificNode(oc, node, "fips-mode-setup --check")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if strings.Contains(fipsInfo, "FIPS mode is disabled.") {
 		e2e.Logf("FIPS is not enabled.")

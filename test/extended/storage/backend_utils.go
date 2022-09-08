@@ -53,7 +53,7 @@ func getCredentialFromCluster(oc *exutil.CLI) {
 			dataList := strings.Split(string(stsConfig), ` `)
 			for _, subStr := range dataList {
 				if strings.Contains(subStr, `/token`) {
-					tokenPath = subStr
+					tokenPath = strings.Split(string(subStr), "\n")[0]
 				}
 				if strings.Contains(subStr, `arn:`) {
 					roleArn = strings.Split(string(subStr), "\n")[0]

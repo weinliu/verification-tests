@@ -23,7 +23,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: pewang@redhat.com
 	// https://bugzilla.redhat.com/show_bug.cgi?id=1640079
 	// https://github.com/kubernetes/kubernetes/pull/89629
-	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-26747-[ConfigMap] Pod with configmap using subpath should not stuck", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:pewang-High-26747-[ConfigMap] Pod with configmap using subpath should not stuck", func() {
 		// Set the resource objects definition for the scenario
 		var (
 			cm  = newConfigMap(setConfigMapTemplate(filepath.Join(storageTeamBaseDir, "configmap-template.yaml")))
