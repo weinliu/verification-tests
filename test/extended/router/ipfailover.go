@@ -31,6 +31,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		if !platforms[platformtype] {
 			g.Skip("Skip for non-supported platform")
 		}
+
+		g.By("check whether there are two worker nodes present for testing hostnetwork")
+		workerNodeCount, _ := exactNodeDetails(oc)
+		if workerNodeCount < 2 {
+			g.Skip("Skipping as we need two worker nodes")
+		}
 	})
 
 	g.JustBeforeEach(func() {
