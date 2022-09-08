@@ -1,33 +1,43 @@
-import { DemoPluginNamespace, DemoPluginDeployment, DemoPluginService, DemoPluginConsolePlugin } from "../fixtures/demo-plugin-oc-manifests";
 import { nav } from '../upstream/views/nav';
 import { Overview } from '../views/overview';
 
 describe('Dynamic plugins features', () => {
   before(() => {
-    // deploy plugin manifests
+    const demoPluginNamespace = 'console-demo-plugin';
+    cy.exec(`oc create namespace ${demoPluginNamespace}`);
     cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`echo '${JSON.stringify(DemoPluginNamespace)}' | oc create -f - --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`echo '${JSON.stringify(DemoPluginService)}' | oc create -f - -n ${JSON.stringify(DemoPluginNamespace.metadata.name)} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    var json = `${JSON.stringify(DemoPluginDeployment)}`;
-    var obj = JSON.parse(json, (k, v) => k == 'image' && /PLUGIN_IMAGE/.test(v) ? 'quay.io/openshifttest/console-demo-plugin:411' : v);
-    cy.exec(`echo '${JSON.stringify(obj)}' | oc create -f - -n ${JSON.stringify(DemoPluginNamespace.metadata.name)} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`echo '${JSON.stringify(DemoPluginConsolePlugin)}' | oc create -f - --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+
+    // deploy plugin manifests
+    cy.exec(`oc create -f ./fixtures/demo-plugin-consoleplugin.yaml -n ${demoPluginNamespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    const resources = ['demo-plugin-deployment', 'demo-plugin-service']
+    resources.forEach((resource) => {
+      cy.exec(`oc create -f ./fixtures/${resource}.yaml -n ${demoPluginNamespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+        .then(result => { expect(result.stdout).contain("created")})
+    });
+
     // enable plugin
     cy.exec(`oc patch console.operator cluster -p '{"spec":{"plugins":["console-demo-plugin"]}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    
     // login via web
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
-    cy.get('.pf-c-alert__action-group', {timeout: 240000}).within(() => {
-        cy.get('button').contains('Refresh').click();
-    })
+
+    // set console to Unmanaged
+    cy.exec(`oc patch console.operator cluster -p '{"spec":{"managementState":"Unmanaged"}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`).then((result) => {
+      expect(result.stdout).contains('patched')
+    });
+    cy.exec(`oc get cm console-config -n openshift-console -o yaml --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {timeout: 60000}).then((result) => {
+      expect(result.stdout).contains('console-demo-plugin')
+    });
   });
   after(() => {
+    cy.exec(`oc patch console.operator cluster -p '{"spec":{"managementState":"Managed"}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     cy.exec(`oc patch console.operator cluster -p '{"spec":{"plugins":null}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     cy.exec(`oc delete consoleplugin console-demo-plugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     cy.exec(`oc delete namespace console-demo-plugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.logout();
   });
   it('(OCP-45629, admin) dynamic plugins proxy to services on the cluster', () => {
+    nav.sidenav.switcher.changePerspectiveTo('Developer');
     // demo plugin in Dev perspective
     Overview.isLoaded();
     nav.sidenav.clickNavLink(['Demo Plugin']);
@@ -61,4 +71,11 @@ describe('Dynamic plugins features', () => {
       .eq(4)
       .should('have.text', 'Networking');
   });
-})
+
+  it('(OCP-53234,admin,yapei) Show alert when console operator is Unmanaged', () => {
+    cy.visit('/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins');
+    cy.get('a[data-test-id="console-demo-plugin"]').should('exist');
+    cy.contains('unmanaged').should('exist');
+    cy.contains('anges to plugins will have no effect').should('exist');
+  })
+});
