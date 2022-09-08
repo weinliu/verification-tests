@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -291,5 +292,106 @@ data:
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(errWait, "The port is not reset to 443")
+	})
+
+	g.It("Author:jshu-Medium-45975-Test cco condition changes [Disruptive]", func() {
+		//Check CCO mode
+		mode, err := getCloudCredentialMode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("cco mode in cluster is %v", mode)
+		if mode == "manual" || mode == "manualpodidentity" {
+			g.Skip(" Test case 45975 is not for cco mode manual - skipping test ...")
+		}
+
+		//Check IAAS platform type
+		iaasPlatform := exutil.CheckPlatform(oc)
+		var providerSpec string
+		switch iaasPlatform {
+		case "aws":
+			providerSpec = "AWSProviderSpec"
+		case "azure":
+			providerSpec = "AzureProviderSpec"
+		case "gcp":
+			providerSpec = "GCPProviderSpec"
+		case "openstack":
+			providerSpec = "OpenStackProviderSpec"
+		case "vsphere":
+			providerSpec = "VSphereProviderSpec"
+		default:
+			g.Skip("IAAS platform is " + iaasPlatform + " which is NOT supported by 45975 - skipping test ...")
+		}
+		g.By("Degraded condition status is False at first")
+		degradedStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-credential", `-o=jsonpath={.status.conditions[?(@.type=="Degraded")].status}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(degradedStatus).To(o.Equal("False"))
+
+		g.By("Create 1st CredentialsRequest whose namespace does not exist")
+		testDataDir := exutil.FixturePath("testdata", "cluster_operator/cloudcredential")
+		crTemp := filepath.Join(testDataDir, "credentials_request.yaml")
+		crName1 := "cloud-credential-operator-iam-ro-1"
+		crNamespace := "namespace-does-not-exist"
+		credentialsRequest1 := credentialsRequest{
+			name:      crName1,
+			namespace: crNamespace,
+			provider:  providerSpec,
+			template:  crTemp,
+		}
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("CredentialsRequest", crName1, "-n", "openshift-cloud-credential-operator", "--ignore-not-found").Execute()
+		credentialsRequest1.create(oc)
+
+		g.By("Check the Degraded status is True now and save the timestamp")
+		err = wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
+			degradedStatus, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-credential", `-o=jsonpath={.status.conditions[?(@.type=="Degraded")].status}`).Output()
+			if err != nil || degradedStatus != "True" {
+				e2e.Logf("Degraded status is NOT True yet, and try next round")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Degraded status is NOT set to True due to wrong CR.")
+
+		//save lastTransitionTime of Degraded condition
+		oldDegradedTimestamp, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-credential", `-o=jsonpath={.status.conditions[?(@.type=="Degraded")].lastTransitionTime}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		//save lastTransitionTime of Progressing condition
+		oldProgressingTimestamp, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-credential", `-o=jsonpath={.status.conditions[?(@.type=="Progressing")].lastTransitionTime}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create 2nd CredentialsRequest whose namespace does not exist")
+		crName2 := "cloud-credential-operator-iam-ro-2"
+		credentialsRequest2 := credentialsRequest{
+			name:      crName2,
+			namespace: crNamespace,
+			provider:  providerSpec,
+			template:  crTemp,
+		}
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("CredentialsRequest", crName2, "-n", "openshift-cloud-credential-operator", "--ignore-not-found").Execute()
+		credentialsRequest2.create(oc)
+
+		g.By("Check 2 CR reporting errors and lastTransitionTime of Degraded and Progressing not changed")
+		err = wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
+			progressingMessage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-credential", `-o=jsonpath={.status.conditions[?(@.type=="Progressing")].message}`).Output()
+			if err != nil || !strings.Contains(progressingMessage, "2 reporting errors") {
+				e2e.Logf("CCO didn't detect 2nd wrong CR yet, and try next round")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "CCO didn't detect 2nd wrong CR finally.")
+
+		//compare the lastTransitionTime
+		newDegradedTimestamp, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-credential", `-o=jsonpath={.status.conditions[?(@.type=="Degraded")].lastTransitionTime}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(newDegradedTimestamp).To(o.Equal(oldDegradedTimestamp))
+		newProgressingTimestamp, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-credential", `-o=jsonpath={.status.conditions[?(@.type=="Progressing")].lastTransitionTime}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(newProgressingTimestamp).To(o.Equal(oldProgressingTimestamp))
+
+	})
+
+	//For bug https://bugzilla.redhat.com/show_bug.cgi?id=1977319
+	g.It("ROSA-OSD_CCS-ARO-Author:jshu-High-45219-A fresh cluster should not have stale CR", func() {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "controller-manager-service", "-n", "openshift-cloud-credential-operator").Output()
+		o.Expect(output).To(o.ContainSubstring("Error from server (NotFound)"))
 	})
 })

@@ -35,6 +35,13 @@ type prometheusQueryResult struct {
 	Status string `json:"status"`
 }
 
+type credentialsRequest struct {
+	name      string
+	namespace string
+	provider  string
+	template  string
+}
+
 func getCloudCredentialMode(oc *exutil.CLI) (string, error) {
 	var (
 		mode           string
@@ -165,4 +172,8 @@ func checkSTSStyle(oc *exutil.CLI, mode string) bool {
 func patchResourceAsAdmin(oc *exutil.CLI, ns, resource, rsname, patch string) {
 	err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resource, rsname, "--type=json", "-p", patch, "-n", ns).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (cr *credentialsRequest) create(oc *exutil.CLI) {
+	exutil.ApplyNsResourceFromTemplate(oc, "openshift-cloud-credential-operator", "--ignore-unknown-parameters=true", "-f", cr.template, "-p", "NAME="+cr.name, "NAMESPACE="+cr.namespace, "PROVIDER="+cr.provider)
 }
