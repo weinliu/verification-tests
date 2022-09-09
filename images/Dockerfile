@@ -25,9 +25,9 @@ RUN oc image extract quay.io/openshifttest/hypershift-client:latest --file=/hype
     oc image extract quay.io/openshifttest/oc-compliance:latest --file /tmp/oc-compliance && mv oc-compliance /usr/bin/ && chmod 755 /usr/bin/oc-compliance && \
     oc image extract quay.io/openshifttest/openshift4-tools:v1 --file=/tmp/OpenShift4-tools.tar && tar -C /opt -xf OpenShift4-tools.tar && rm -fr OpenShift4-tools.tar && \
     curl -s -L https://github.com/vmware/govmomi/releases/latest/download/govc_Linux_x86_64.tar.gz -o govc_Linux_x86_64.tar.gz && tar -C /usr/bin/ -xvf govc_Linux_x86_64.tar.gz govc && rm -f govc_Linux_x86_64.tar.gz && \
-    curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/clients/ocp-dev-preview/latest-4.11/opm-linux.tar.gz -o opm-linux.tar.gz && \
+    curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/ocp-dev-preview/latest-4.12/opm-linux.tar.gz -o opm-linux.tar.gz && \
     tar -C /usr/bin -xzvf opm-linux.tar.gz && rm -fr opm-linux.tar.gz /usr/bin/oc && \
-    curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/ocp-dev-preview/latest/oc-mirror.tar.gz -o oc-mirror.tar.gz && tar -C /usr/bin/ -xzvf oc-mirror.tar.gz && chmod +x /usr/bin/oc-mirror && rm -f oc-mirror.tar.gz && \
+    curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/ocp-dev-preview/latest-4.12/oc-mirror.tar.gz -o oc-mirror.tar.gz && tar -C /usr/bin/ -xzvf oc-mirror.tar.gz && chmod +x /usr/bin/oc-mirror && rm -f oc-mirror.tar.gz && \
     curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/operator-sdk/ -o sdk.html && \
     curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/operator-sdk/pre-release/operator-sdk-linux-x86_64.tar.gz -o opt-sdk.tar.gz && \
     tar -C /usr/bin -xzvf opt-sdk.tar.gz && rm -fr opt-sdk.tar.gz
