@@ -20,7 +20,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-13538-Check Existing pods with matched NoExecute will stay on node for time of tolerationSeconds [Disruptive]", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-13538-Check Existing pods with matched NoExecute will stay on node for time of tolerationSeconds [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		podtolerateT := filepath.Join(buildPruningBaseDir, "pod_tolerationseconds.yaml")
 

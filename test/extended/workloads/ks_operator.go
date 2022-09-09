@@ -108,7 +108,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		}
 	})
 
-	g.It("Author:knarra-High-44049-DefaultPodTopologySpread doesn't work in non-CloudProvider env in OpenShift 4.7 [Disruptive][Flaky]", func() {
+	g.It("HyperShiftGUEST-Author:knarra-High-44049-DefaultPodTopologySpread doesn't work in non-CloudProvider env in OpenShift 4.7 [Disruptive][Flaky]", func() {
 		workerNodeList, err := exutil.GetClusterNodesBy(oc, "worker")
 		e2e.Logf("workernodeList is %v", workerNodeList)
 		// Create test project

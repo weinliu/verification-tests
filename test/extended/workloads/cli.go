@@ -26,7 +26,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		oc = exutil.NewCLI("oc", exutil.KubeConfigPath())
 	)
 
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-28007-Checking oc version show clean as gitTreeState value", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-28007-Checking oc version show clean as gitTreeState value", func() {
 		out, err := oc.Run("version").Args("-o", "json").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		versionInfo := &VersionInfo{}
@@ -40,7 +40,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-43030-oc get events always show the timestamp as LAST SEEN", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-High-43030-oc get events always show the timestamp as LAST SEEN", func() {
 		g.By("Get all the namespace")
 		output, err := oc.AsAdmin().Run("get").Args("projects", "-o=custom-columns=NAME:.metadata.name", "--no-headers").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -61,7 +61,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 	})
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-42983-always delete the debug pod when the oc debug node command exist [Flaky]", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-42983-always delete the debug pod when the oc debug node command exist [Flaky]", func() {
 		g.By("Get all the node name list")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -91,7 +91,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:yinzhou-High-43032-oc adm release mirror generating correct imageContentSources when using --to and --to-release-image [Slow]", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:yinzhou-High-43032-oc adm release mirror generating correct imageContentSources when using --to and --to-release-image [Slow]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		podMirrorT := filepath.Join(buildPruningBaseDir, "pod_mirror.yaml")
 		g.By("create new namespace")
@@ -171,7 +171,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-44797-Could define a Command for DC", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-High-44797-Could define a Command for DC", func() {
 		g.By("create new namespace")
 		oc.SetupProject()
 
@@ -196,7 +196,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-43034-should not show signature verify error msgs while trying to mirror OCP image repository to [Flaky]", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-High-43034-should not show signature verify error msgs while trying to mirror OCP image repository to [Flaky]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		podMirrorT := filepath.Join(buildPruningBaseDir, "pod_mirror.yaml")
 		g.By("create new namespace")
@@ -284,21 +284,21 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-Medium-33648-must gather pod should not schedule on windows node", func() {
+	g.It("HyperShiftGUEST-Author:yinzhou-Medium-33648-must gather pod should not schedule on windows node", func() {
 		go checkMustgatherPodNode(oc)
 		g.By("Create the must-gather pod")
 		oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--timeout="+"30s", "--dest-dir=/tmp/mustgatherlog", "--", "/etc/resolv.conf").Execute()
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-34155-oc get events sorted by lastTimestamp", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-34155-oc get events sorted by lastTimestamp", func() {
 		g.By("Get events sorted by lastTimestamp")
 		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", "openshift-operator-lifecycle-manager", "--sort-by="+".lastTimestamp").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-47555-Should not update data when use oc set data with dry-run as server", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-47555-Should not update data when use oc set data with dry-run as server", func() {
 		g.By("create new namespace")
 		oc.SetupProject()
 		g.By("Create new configmap")
@@ -333,7 +333,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Medium-48681-Could start debug pod using pod definition yaml", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:knarra-Medium-48681-Could start debug pod using pod definition yaml", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		debugPodUsingDefinitionT := filepath.Join(buildPruningBaseDir, "debugpod_48681.yaml")
 
@@ -355,7 +355,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-49116-oc debug should remove startupProbe when create debug pod", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-49116-oc debug should remove startupProbe when create debug pod", func() {
 		g.By("create new namespace")
 		oc.SetupProject()
 
@@ -377,7 +377,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-NonPreRelease-High-45307-Critical-45327-check oc adm prune deployments to prune RS [Slow][Disruptive]", func() {
+	g.It("HyperShiftGUEST-Author:yinzhou-NonPreRelease-High-45307-Critical-45327-check oc adm prune deployments to prune RS [Slow][Disruptive]", func() {
 		g.By("create new namespace")
 		oc.SetupProject()
 
@@ -430,7 +430,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		}
 	})
 	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-NonPreRelease-High-45308-check oc adm prune deployments command with the orphans options works well [Slow][Disruptive]", func() {
+	g.It("HyperShiftGUEST-Author:yinzhou-NonPreRelease-High-45308-check oc adm prune deployments command with the orphans options works well [Slow][Disruptive]", func() {
 		g.By("create new namespace")
 		oc.SetupProject()
 
@@ -475,7 +475,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-49859-should failed when oc import-image setting with Garbage values for --reference-policy", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-49859-should failed when oc import-image setting with Garbage values for --reference-policy", func() {
 		g.By("create new namespace")
 		oc.SetupProject()
 
@@ -520,7 +520,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-50399-oc apply could update EgressNetworkPolicy resource", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-50399-oc apply could update EgressNetworkPolicy resource", func() {
 		networkType := checkNetworkType(oc)
 		if strings.Contains(networkType, "ovn") {
 			g.Skip("Skip for ovn cluster !!!")
@@ -539,7 +539,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(out).To(o.ContainSubstring("default-egress-egressnetworkpolicy configured"))
 	})
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-42982-Describe quota output should always show units", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-High-42982-Describe quota output should always show units", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		deploymentconfigF := filepath.Join(buildPruningBaseDir, "deploymentconfig_with_quota.yaml")
 		clusterresourceF := filepath.Join(buildPruningBaseDir, "clusterresource_for_user.yaml")
@@ -582,7 +582,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 	})
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Critical-51009-High-51017-oc adm release new support manifest list", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Critical-51009-High-51017-oc adm release new support manifest list", func() {
 		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		if !strings.Contains(output, "AWS") {
 			g.Skip("Skip for non-supported platform")
@@ -616,7 +616,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(out).To(o.ContainSubstring("linux/s390x"))
 	})
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Medium-44928-oc image mirror support registry which authorization server's url is different from registry url", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Medium-44928-oc image mirror support registry which authorization server's url is different from registry url", func() {
 		dockerauthBaseDir := exutil.FixturePath("testdata", "workloads")
 		dockerConfigDir := filepath.Join(dockerauthBaseDir, "config")
 		dockerauthfile := filepath.Join(dockerauthBaseDir, "auth.json")
