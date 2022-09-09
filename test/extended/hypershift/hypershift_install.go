@@ -421,4 +421,33 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
 		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(), LongTimeout, LongTimeout/10).Should(o.Equal(3), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
 	})
+
+	// author: liangli@redhat.com
+	g.It("Longduration-NonPreRelease-Author:liangli-Critical-49174-[HyperShiftINSTALL] Create Azure infrastructure and nodepools via CLI [Serial]", func() {
+		if iaasPlatform != "azure" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 49174 is for azure - skipping test ...")
+		}
+		caseID := "49174"
+		dir := "/tmp/hypershift" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		installHelper := installHelper{oc: oc, dir: dir, iaasPlatform: iaasPlatform}
+		g.By("install HyperShift operator")
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+
+		g.By("create HostedClusters")
+		createCluster := installHelper.createClusterAzureCommonBuilder().
+			withName("hypershift-" + caseID).
+			withNodePoolReplicas(1)
+		defer installHelper.destroyAzureHostedClusters(createCluster)
+		hostedCluster := installHelper.createAzureHostedClusters(createCluster)
+
+		g.By("Scale up nodepool")
+		doOcpReq(oc, OcpScale, false, "nodepool", hostedCluster.name, "--namespace", hostedCluster.namespace, "--replicas=2")
+		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
+		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(), LongTimeout, LongTimeout/10).Should(o.Equal(2), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
+	})
 })

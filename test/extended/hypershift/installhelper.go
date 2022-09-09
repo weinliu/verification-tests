@@ -374,8 +374,8 @@ func (receiver *installHelper) destroyAzureHostedClusters(createCluster *createC
 	cmd := fmt.Sprintf("hypershift destroy cluster azure --azure-creds %s --namespace %s --name %s --location %s", createCluster.AzureCreds, createCluster.Namespace, createCluster.Name, createCluster.Location)
 	_, err := bashClient.Run(cmd).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
-	e2e.Logf("check destroy AWS HostedClusters")
-	o.Eventually(pollGetHostedClusters(receiver.oc, receiver.oc.Namespace()), ShortTimeout, ShortTimeout/10).ShouldNot(o.ContainSubstring(createCluster.Name), "destroy AWS HostedClusters error")
+	e2e.Logf("check destroy Azure HostedClusters")
+	o.Eventually(pollGetHostedClusters(receiver.oc, receiver.oc.Namespace()), ShortTimeout, ShortTimeout/10).ShouldNot(o.ContainSubstring(createCluster.Name), "destroy Azure HostedClusters error")
 }
 
 func (receiver *installHelper) deleteHostedClustersManual(createCluster *createCluster) {
