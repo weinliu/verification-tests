@@ -14,3 +14,8 @@ $ ./bin/extended-platform-tests run all --dry-run|grep <Your-TestCase-ID>|./bin/
 <pre>
 
 </pre>
+
+### Add the CI profile used (ex: ipi-on-aws/versioned-installer-customer\_vpc) for the cluster in which your local tests were executed.
+<pre>
+
+</pre>
