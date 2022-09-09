@@ -1134,3 +1134,11 @@ func (issrc *isSource) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", issrc.template, "-p", "NAME="+issrc.name, "REPO="+issrc.repo, "NAMESPACE="+issrc.namespace, "TAGNAME="+issrc.tagname, "IMAGE="+issrc.image)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
+
+func setWaitForAnImageStreamTag(oc *exutil.CLI, namespace, name, tag string, timeout time.Duration) error {
+	return exutil.TimedWaitForAnImageStreamTag(oc, namespace, name, tag, timeout)
+}
+
+func waitForAnImageStreamTag(oc *exutil.CLI, namespace, name, tag string) error {
+	return exutil.TimedWaitForAnImageStreamTag(oc, namespace, name, tag, time.Second*360)
+}

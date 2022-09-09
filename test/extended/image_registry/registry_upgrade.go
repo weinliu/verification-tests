@@ -197,7 +197,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.WaitForABuild(oc.BuildClient().BuildV1().Builds(oc.Namespace()), "prepare-24345-1", nil, nil, nil)
 		exutil.AssertWaitPollNoErr(err, "build is not complete")
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "prepare-24345", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "prepare-24345", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		imagename := "image-registry.openshift-image-registry.svc:5000/" + oc.Namespace() + "/prepare-24345:latest"

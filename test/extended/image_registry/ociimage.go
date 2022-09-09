@@ -25,7 +25,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Import an OCI image to internal registry")
 		err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("myimage", "--from", "docker.io/wzheng/busyboxoci", "--confirm", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Expose route of internal registry")
@@ -121,7 +121,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("--source=docker", ociImage, "35998-image:latest", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Check if new imagestreamtag created")
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "35998-image", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "35998-image", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Log into the default route")

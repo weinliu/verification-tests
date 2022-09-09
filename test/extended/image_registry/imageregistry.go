@@ -260,11 +260,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	g.It("DisconnectedOnly-Author:xiuwang-High-43715-Image registry pullthough should support pull image from the mirror registry with auth via imagecontentsourcepolicy", func() {
 		g.By("Create a imagestream using payload image with pullthrough policy")
 		oc.SetupProject()
-		err := exutil.WaitForAnImageStreamTag(oc, "openshift", "tools", "latest")
+		err := waitForAnImageStreamTag(oc, "openshift", "tools", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().Run("tag").Args("openshift/tools:latest", "mytools:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "mytools", "latest")
+		waitForAnImageStreamTag(oc, oc.Namespace(), "mytools", "latest")
 
 		g.By("Check the imagestream imported with digest id using pullthrough policy")
 		err = oc.Run("set").Args("image-lookup", "mytools", "-n", oc.Namespace()).Execute()
@@ -472,7 +472,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		oc.SetupProject()
 		err := oc.Run("import-image").Args("registry.access.redhat.com/ubi8/ubi", "--scheduled", "--confirm", "--reference-policy=local").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "ubi", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "ubi", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("set").Args("image-lookup", "ubi").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -568,7 +568,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Create a pod to check pulling issue")
 		oc.SetupProject()
-		err = exutil.WaitForAnImageStreamTag(oc, "openshift", "cli", "latest")
+		err = waitForAnImageStreamTag(oc, "openshift", "cli", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("deployment", "cli-test", "--image", "image-registry.openshift-image-registry.svc:5000/openshift/cli:latest", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -613,13 +613,13 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		//Use multiarch image with digest, so it could be test on ARM cluster and disconnect cluster.
 		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("myimage", "--from=quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Tag the image point to itself address")
 		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("myimage:test", "--from="+userroute+"/"+oc.Namespace()+"/myimage", "--insecure=true", "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "test")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "test")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Get blobs from the default registry")
@@ -1058,7 +1058,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		oc.SetupProject()
 		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "myis:latest", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), podsrc.image, "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), podsrc.image, "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		podsrc.namespace = oc.Namespace()
 		podsrc.create(oc)
@@ -1069,7 +1069,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Use pullthrough imagestream to create dc")
 		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "myis:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), podsrc.image, "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), podsrc.image, "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		podsrc.create(oc)
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploymentconfig/mydc", "-o=jsonpath={..spec.template.spec.containers[*].image}", "-n", oc.Namespace()).Output()
@@ -1184,7 +1184,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Make sure the image can be pulled after add auth")
 		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args(myimage, "newis:latest", "--reference-policy=local", "--insecure", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "newis", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "newis", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
@@ -1314,11 +1314,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Create imagestream with pull through")
 		err = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("first:latest", "--from="+myimage, "--reference-policy=local", "--insecure", "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "first", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "first", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args(myimage1, "second:latest", "--reference-policy=local", "--insecure", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "second", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "second", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create pod with the imagestreams")
@@ -1341,7 +1341,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		oc.SetupProject()
 		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("skopeo:latest", "--from=quay.io/openshifttest/skopeo@sha256:d5f288968744a8880f983e49870c0bfcf808703fe126e4fb5fc393fb9e599f65", "--reference-policy=local", "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "skopeo", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "skopeo", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("set").Args("image-lookup", "skopeo", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1354,7 +1354,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args(mysqlImage, "mysqlx:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "mysqlx", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "mysqlx", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("set").Args("image-lookup", "mysqlx", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1374,7 +1374,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("docker.io/irqe/busybox:latest", "test48710:latest", "--reference-policy=local", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Tag test48710:latest set"))
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "test48710", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "test48710", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create pod with the imagestream")
@@ -1772,7 +1772,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("import-image").Args("test-51055", "--from", myimage, "--confirm", "--reference-policy=local", "--insecure").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "test-51055", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "test-51055", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Limit the registry quota")
@@ -1975,7 +1975,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Import an image to create imagestream")
 		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/ruby-27@sha256:8f71dd40e3f55d90662a63cb9f02b59e75ed7ac1e911c7919fd14fbfad431348", "ruby-test12766:latest", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "ruby-test12766", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "ruby-test12766", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create app with imagestream and check the build info")
@@ -1996,7 +1996,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Import an image to create imagestream with --reference-policy=local")
 		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/ruby-27@sha256:8f71dd40e3f55d90662a63cb9f02b59e75ed7ac1e911c7919fd14fbfad431348", "ruby-test12766-local:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "ruby-test12766-local", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "ruby-test12766-local", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create app with imagestream and check the build info")
@@ -2059,11 +2059,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Tag 2 imagestream to non-openshift project")
 		err = oc.AsAdmin().Run("tag").Args("quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "is50925-1:latest", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "is50925-1", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "is50925-1", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("import-image").Args("is50925-2:latest", "--from", "quay.io/openshifttest/ruby-27@sha256:8f71dd40e3f55d90662a63cb9f02b59e75ed7ac1e911c7919fd14fbfad431348", "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "is50925-2", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "is50925-2", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Collect metrics of storagetype")
@@ -2122,7 +2122,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Push a image to the project")
 		checkRegistryFunctionFine(oc, "test-10904", oc.Namespace())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "test-10904", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "test-10904", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		publicImageName := regRoute + "/" + oc.Namespace() + "/test-10904:latest"
 
@@ -2144,7 +2144,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Push image with registry-admin role")
 		_, err = containerCLI.Run("push").Args(newImage, "--authfile="+authFile, "--tls-verify=false").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
@@ -2154,7 +2154,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Import an image stream")
 		operationErr := oc.WithoutNamespace().AsAdmin().Run("import-image").Args("is24160-1-lookup", "--from=quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", "--confirm=true", "-n", oc.Namespace()).Execute()
 		o.Expect(operationErr).NotTo(o.HaveOccurred())
-		tagErr := exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "is24160-1-lookup", "latest")
+		tagErr := waitForAnImageStreamTag(oc, oc.Namespace(), "is24160-1-lookup", "latest")
 		o.Expect(tagErr).NotTo(o.HaveOccurred())
 
 		g.By("Create pod from the imagestream without full repository")
@@ -2242,7 +2242,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Push a image to the project")
 		checkRegistryFunctionFine(oc, "test-11314", oc.Namespace())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "test-11314", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "test-11314", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		publicImageName := regRoute + "/" + oc.Namespace() + "/test-11314:latest"
 
@@ -2283,7 +2283,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Could pull image with the secret under project")
 		err = oc.AsAdmin().Run("tag").Args("registry.redhat.io/ubi8/httpd-24:latest", "httpd-29706:latest", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "httpd-29706", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "httpd-29706", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Could pull image using node secret after project secret removed")
@@ -2291,7 +2291,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().Run("import-image").Args("mysql-29706:latest", "--from=registry.redhat.io/rhel8/mysql-80:latest", "--confirm", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "mysql-29706", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "mysql-29706", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("set").Args("image-lookup", "mysql-29706", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2313,7 +2313,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		mReg := strings.TrimSuffix(string(mirrorReg), "\n")
 		err = oc.AsAdmin().Run("import-image").Args("httpd-dis:latest", "--from="+mReg+"/rhel8/httpd-24:latest", "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "httpd-dis", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "httpd-dis", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.Run("set").Args("image-lookup", "httpd-dis", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2328,7 +2328,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().Run("import-image").Args("cli-29696", "--from="+dockerImage, "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "cli-29696", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "cli-29696", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Could pull image")
@@ -2521,14 +2521,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		defer os.RemoveAll(authFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		err = exutil.WaitForAnImageStreamTag(oc, "openshift", "cli", "latest")
+		err = waitForAnImageStreamTag(oc, "openshift", "cli", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Copy internal image to another tag")
 		myimage := regRoute + "/" + oc.Namespace() + "/myimage:latest"
 		mirrorErr := oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", regRoute+"/openshift/cli:latest", myimage, "--insecure", "-a", authFile).Execute()
 		o.Expect(mirrorErr).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 	})
@@ -2564,11 +2564,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		thirdImagePair := "quay.io/openshifttest/registry@sha256:f4cf1bfd98c39784777f614a5d8a7bd4f2e255e87d7a28a05ff7a3e452506fdb=" + regRoute + "/" + oc.Namespace() + "/myimage3:latest"
 		mirrorErr := oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", firstImagePair, secondImagePair, thirdImagePair, "--insecure", "-a", authFile).Execute()
 		o.Expect(mirrorErr).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage1", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "myimage1", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage2", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "myimage2", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage3", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "myimage3", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 	})
@@ -2697,7 +2697,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		var signFile = `'{"schemaVersion": 2,"type":"atomic","name":"digestid","content": "MjIK"}'`
 		err := oc.AsAdmin().Run("tag").Args("quay.io/openshifttest/skopeo@sha256:d5f288968744a8880f983e49870c0bfcf808703fe126e4fb5fc393fb9e599f65", "ho12958:latest", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "ho12958", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "ho12958", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		manifest := saveImageMetadataName(oc, "openshifttest/skopeo")
 		o.Expect(manifest).NotTo(o.BeEmpty())
@@ -2754,7 +2754,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		mirrorImage := "--from=" + getRegistry + "/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f"
 		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("myimage", mirrorImage, "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
@@ -2783,7 +2783,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Make sure the image can be pulled after add auth")
 		err = oc.AsAdmin().Run("tag").Args(myimage, "authis:latest", "--reference-policy=local", "--insecure", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "authis", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "authis", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("set").Args("image-lookup", "authis", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2806,7 +2806,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Create imagestreamimport")
 		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/skopeo@sha256:d5f288968744a8880f983e49870c0bfcf808703fe126e4fb5fc393fb9e599f65", "skopeo:latest", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "skopeo", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "skopeo", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		manifest := saveImageMetadataName(oc, "openshifttest/skopeo")
 		o.Expect(manifest).NotTo(o.BeEmpty())
@@ -2901,7 +2901,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Tag an imagestream under project")
 		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "test18984:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "test18984", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "test18984", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Curl the registry catalog api without user")
@@ -2946,7 +2946,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Import image to internal registry")
 		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("skopeo:latest", "--from=quay.io/openshifttest/skopeo@sha256:d5f288968744a8880f983e49870c0bfcf808703fe126e4fb5fc393fb9e599f65", "--reference-policy=local", "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "skopeo", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "skopeo", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Update ca for invalid value to proxy resource")

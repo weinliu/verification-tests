@@ -133,7 +133,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			exutil.AssertWaitPollNoErr(err, "build is not complete")
 
 			g.By("Delete imagestreamtag when the pruner is processing")
-			err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), bcName, "latest")
+			err = waitForAnImageStreamTag(oc, oc.Namespace(), bcName, "latest")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("istag", fmt.Sprintf("%s:latest", bcName), "-n", oc.Namespace()).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -191,7 +191,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			exutil.DumpBuildLogs("image-15126", oc)
 		}
 		exutil.AssertWaitPollNoErr(err, "build is not complete")
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "image-15126", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "image-15126", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		manifest := saveImageMetadataName(oc, oc.Namespace()+"/image-15126")
@@ -233,11 +233,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		oc.SetupProject()
 		err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("busybox:smaller", "--from", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "busybox", "smaller")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "busybox", "smaller")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3", "registry:bigger", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.WaitForAnImageStreamTag(oc, oc.Namespace(), "registry", "bigger")
+		waitForAnImageStreamTag(oc, oc.Namespace(), "registry", "bigger")
 
 		g.By("Create project limit for image")
 		limitsrc.namespace = oc.Namespace()
