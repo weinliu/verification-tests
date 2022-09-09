@@ -178,6 +178,41 @@ func WaitForMachineProvisioned(oc *CLI, machineSetName string) {
 	AssertWaitPollNoErr(err, "Check machine phase failed")
 }
 
+// WaitForSpecificMachinesRunning check if all the machines with the specific labels are Running
+func WaitForSpecificMachinesRunning(oc *CLI, machineNumber int, labels string) []string {
+	e2e.Logf("Waiting for the machines Running ...")
+	err := wait.Poll(60*time.Second, 720*time.Second, func() (bool, error) {
+		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].status.phase}", "-n", machineAPINamespace).Output()
+		machinesRunning := strings.Count(msg, "Running")
+		if machinesRunning != machineNumber {
+			e2e.Logf("Expected %v machine are not Running yet and waiting up to 1 minutes ...", machineNumber)
+			return false, nil
+		}
+		e2e.Logf("Expected %v machines are Running", machineNumber)
+		return true, nil
+	})
+	AssertWaitPollNoErr(err, "Wait machine running failed.")
+	msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+	return strings.Split(msg, " ")
+}
+
+// WaitForMachineDisappear check if the machine is disappear
+func WaitForMachineDisappear(oc *CLI, machineNameSuffix string, labels string) {
+	e2e.Logf("Waiting for the machine disappear ...")
+	err := wait.Poll(60*time.Second, 960*time.Second, func() (bool, error) {
+		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+		for _, machineName := range strings.Split(msg, " ") {
+			if strings.HasSuffix(machineName, machineNameSuffix) {
+				e2e.Logf("The machine %s is not disappear and waiting up to 1 minutes ...", machineName)
+				return false, nil
+			}
+		}
+		e2e.Logf("The machine with suffix %s is disappear", machineNameSuffix)
+		return true, nil
+	})
+	AssertWaitPollNoErr(err, "Wait machine disappear failed.")
+}
+
 //CheckPlatform check the cluster's platform
 func CheckPlatform(oc *CLI) string {
 	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()

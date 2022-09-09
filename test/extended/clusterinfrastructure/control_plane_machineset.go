@@ -4,6 +4,7 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
@@ -89,5 +90,80 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(state).To(o.ContainSubstring("TrueFalseFalse"))
 		o.Expect(version).To(o.ContainSubstring("4."))
+	})
+
+	// author: huliu@redhat.com
+	g.It("Longduration-NonPreRelease-Author:huliu-Medium-53323-[CPMS] Implement update logic for RollingUpdate CPMS strategy [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		if !(iaasPlatform == "aws" || iaasPlatform == "azure") {
+			g.Skip("Skip this scenario because it is not supported on the " + iaasPlatform + " platform")
+		}
+
+		g.By("Check if controlplanemachineset exists")
+		controlplanemachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(controlplanemachineset) == 0 {
+			g.Skip("Skip for controlplanemachineset doesn't exist!")
+		}
+
+		g.By("Check if RollingUpdate is onging")
+		readyReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		currentReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.replicas}", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		desiredReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.replicas}", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !(desiredReplicas == currentReplicas && desiredReplicas == readyReplicas) {
+			g.Skip("Skip for the previous RollingUpdate is onging!")
+		}
+
+		var changeInstanceType, backupInstanceType, getInstanceTypeJSON string
+		var patchstrPrefix, patchstrSuffix string
+		switch iaasPlatform {
+		case "aws":
+			changeInstanceType = "m5.xlarge"
+			backupInstanceType = "m6i.xlarge"
+			getInstanceTypeJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.instanceType}"
+			patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"instanceType":"`
+			patchstrSuffix = `"}}}}}}}`
+		case "azure":
+			changeInstanceType = "Standard_D4s_v3"
+			backupInstanceType = "Standard_D8s_v3"
+			getInstanceTypeJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.vmSize}"
+			patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"vmSize":"`
+			patchstrSuffix = `"}}}}}}}`
+		default:
+			e2e.Logf("The " + iaasPlatform + " Platform is not supported for now.")
+		}
+
+		g.By("Get current instanceType")
+		currentInstanceType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getInstanceTypeJSON, "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("currentInstanceType:%s", currentInstanceType)
+		if currentInstanceType == changeInstanceType {
+			changeInstanceType = backupInstanceType
+		}
+
+		labelsAfter := "machine.openshift.io/instance-type=" + changeInstanceType + ",machine.openshift.io/cluster-api-machine-type=master"
+		labelsBefore := "machine.openshift.io/instance-type=" + currentInstanceType + ",machine.openshift.io/cluster-api-machine-type=master"
+		patchstrChange := patchstrPrefix + changeInstanceType + patchstrSuffix
+		patchstrRecover := patchstrPrefix + currentInstanceType + patchstrSuffix
+
+		g.By("Change instanceType to trigger RollingUpdate")
+		defer e2e.Logf(oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output())
+		defer WaitForRollingUpdateCompleted(oc, 1)
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrRecover, "--type=merge", "-n", machineAPINamespace).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrChange, "--type=merge", "-n", machineAPINamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		/*
+			The RollingUpdate will update all the master machines one by one,
+			 here only check the first machine updated success, then consider the case passed to save time,
+			 because all the machines update are the same, so I think it's ok to assumpt that.
+		*/
+		updatedMachineName := exutil.WaitForSpecificMachinesRunning(oc, 1, labelsAfter)[0]
+		e2e.Logf("updatedMachineName:%s", updatedMachineName)
+		suffix := updatedMachineName[len(updatedMachineName)-2:]
+		e2e.Logf("suffix:%s", suffix)
+		exutil.WaitForMachineDisappear(oc, suffix, labelsBefore)
 	})
 })
