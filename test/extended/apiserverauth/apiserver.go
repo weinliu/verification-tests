@@ -1718,7 +1718,7 @@ spec:
 				failedRevision, _ := strconv.Atoi(annotations)
 				o.Expect(failedRevision - 1).Should(o.BeNumerically("==", PreRevision))
 				g.By("Check created soft-link kube-apiserver-last-known-good to the last good revision")
-				out, fileChkError := exutil.DebugNodeWithOptionsAndChroot(oc, nodes[0], []string{"-n", "default"}, "bash", "-c", "ls -l /etc/kubernetes/static-pod-resources/kube-apiserver-last-known-good")
+				out, fileChkError := exutil.DebugNodeWithOptionsAndChroot(oc, nodes[0], []string{"--to-namespace=openshift-kube-apiserver"}, "bash", "-c", "ls -l /etc/kubernetes/static-pod-resources/kube-apiserver-last-known-good")
 				o.Expect(fileChkError).NotTo(o.HaveOccurred())
 				o.Expect(out).To(o.ContainSubstring("kube-apiserver-pod.yaml"))
 				e2e.Logf("Step 3, Test Passed: Cluster is fall back to last good revision")
@@ -1730,7 +1730,7 @@ spec:
 
 		g.By("4: Check startup-monitor pod was created during fallback and currently in Stopped/Removed state")
 		cmd := fmt.Sprintf("journalctl -u crio --since '10min ago'| grep 'startup-monitor' | egrep %v", keyWords)
-		out, journalctlErr := exutil.DebugNodeWithOptionsAndChroot(oc, nodes[0], []string{"-n", "default"}, cmd)
+		out, journalctlErr := exutil.DebugNodeWithOptionsAndChroot(oc, nodes[0], []string{"--to-namespace=openshift-kube-apiserver"}, cmd)
 		o.Expect(journalctlErr).NotTo(o.HaveOccurred())
 		o.Expect(out).ShouldNot(o.BeEmpty())
 		e2e.Logf("Step 4, Test Passed : Startup-monitor pod was created and Stopped/Removed state")
@@ -1942,7 +1942,7 @@ spec:
 		o.Expect(masterErr).NotTo(o.HaveOccurred())
 		e2e.Logf("Master node is %v : ", masterNode)
 		cmd := `lscpu | grep '^CPU(s):'`
-		cpuCores, cpuErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default"}, "bash", "-c", cmd)
+		cpuCores, cpuErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 		o.Expect(cpuErr).NotTo(o.HaveOccurred())
 		regexStr := regexp.MustCompile(`CPU\S+\s+\S+`)
 		cpuCore := strings.Split(regexStr.FindString(cpuCores), ":")
@@ -2191,7 +2191,7 @@ spec:
 
 		g.By("3) Check the kube-apiserver-last-known-good link file exists and is linked to a good version.")
 		cmd := "ls -l /etc/kubernetes/static-pod-resources/kube-apiserver-last-known-good"
-		output, debugNodeWithChrootErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default"}, "bash", "-c", cmd)
+		output, debugNodeWithChrootErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 		o.Expect(debugNodeWithChrootErr).NotTo(o.HaveOccurred())
 
 		g.By("3.1) Check kube-apiserver-last-known-good file exists.")
@@ -2307,7 +2307,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By(fmt.Sprintf("4.1 -> step 1) Get log file from %s", masterNode))
-		podLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+		podLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 		o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 		g.By(fmt.Sprintf("4.1 -> step 2) Format log file from %s", masterNode))
@@ -2333,7 +2333,7 @@ spec:
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("5.%d -> step 1) Get log file from %s", i+1, masterNode))
-			masterNodeLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+			masterNodeLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 			g.By(fmt.Sprintf("5.%d -> step 2) Format log file from %s", i+1, masterNode))
@@ -2363,7 +2363,7 @@ spec:
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("6.%d -> step 1) Get log file from %s", i+1, masterNode))
-			externalLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+			externalLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 			g.By(fmt.Sprintf("6.%d -> step 2) Format log file from %s", i+1, masterNode))
@@ -2371,7 +2371,7 @@ spec:
 			externalLogs = trimEndTag.ReplaceAllString(externalLogs, "")
 			for _, line := range strings.Split(externalLogs, "\n") {
 				if strings.Trim(line, " ") != "" {
-					externalPanicLogs = append(externalPanicLogs, fmt.Sprintf("%s", line))
+					externalPanicLogs = append(externalPanicLogs, line)
 				}
 			}
 		}
@@ -2391,7 +2391,7 @@ spec:
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("7.%d -> step 1) Get log file from %s", i+1, masterNode))
-			auditLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+			auditLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 			g.By(fmt.Sprintf("7.%d -> step 2) Format log file from %s", i+1, masterNode))
@@ -2532,7 +2532,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By(fmt.Sprintf("4.1 -> step 1) Get log file from %s", masterNode))
-		podLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+		podLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 		o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 		g.By(fmt.Sprintf("4.1 -> step 2) Format log file from %s", masterNode))
@@ -2562,7 +2562,7 @@ spec:
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("5.%d -> step 1) Get log file from %s", i+1, masterNode))
-			externalLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+			externalLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 			g.By(fmt.Sprintf("5.%d -> step 2) Format log file from %s", i+1, masterNode))
@@ -2588,7 +2588,7 @@ spec:
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("6.%d -> step 1) Get log file from %s", i+1, masterNode))
-			masterNodeLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+			masterNodeLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 			g.By(fmt.Sprintf("6.%d -> step 2) Format log file from %s", i+1, masterNode))
@@ -2615,7 +2615,7 @@ spec:
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("7.%d -> step 1) Get log file from %s", i+1, masterNode))
-			auditLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+			auditLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 			g.By(fmt.Sprintf("7.%d -> step 2) Format log file from %s", i+1, masterNode))
@@ -2672,7 +2672,7 @@ spec:
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("4.%d -> step 1) Get log file from %s", i+1, masterNode))
-			masterNodeLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+			masterNodeLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 			g.By(fmt.Sprintf("4.%d -> step 2) Format log file from %s", i+1, masterNode))
@@ -2702,7 +2702,7 @@ spec:
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("5.%d -> step 1) Get log file from %s", i+1, masterNode))
-			externalLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+			externalLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 			g.By(fmt.Sprintf("5.%d -> step 2) Format log file from %s", i+1, masterNode))
@@ -2710,7 +2710,7 @@ spec:
 			externalLogs = trimEndTag.ReplaceAllString(externalLogs, "")
 			for _, line := range strings.Split(externalLogs, "\n") {
 				if strings.Trim(line, " ") != "" {
-					externalPanicLogs = append(externalPanicLogs, fmt.Sprintf("%s", line))
+					externalPanicLogs = append(externalPanicLogs, line)
 				}
 			}
 		}
@@ -2729,7 +2729,7 @@ spec:
 
 		for i, masterNode := range masterNodes {
 			g.By(fmt.Sprintf("6.%d -> step 1) Get log file from %s", i+1, masterNode))
-			auditLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"-n", "default", "--quiet=true"}, "bash", "-c", cmd)
+			auditLogs, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 			o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
 
 			g.By(fmt.Sprintf("6.%d -> step 2) Format log file from %s", i+1, masterNode))
