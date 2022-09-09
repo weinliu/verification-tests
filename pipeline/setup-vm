@@ -160,7 +160,7 @@ if echo $INSTALL_TOOLS | grep -i 'opm' > /dev/null; then
         echo "get latest opm"
         unset http_proxy https_proxy
         NIGHTLYVERSIOM=${NIGHTLYFLAG:0:1}.${NIGHTLYFLAG:1:${#NIGHTLYFLAG}}
-        curl -s -k https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp-dev-preview/latest-$NIGHTLYVERSIOM/opm-linux.tar.gz -o opm-linux.tar.gz
+        curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/ocp-dev-preview/latest-$NIGHTLYVERSIOM/opm-linux.tar.gz -o opm-linux.tar.gz
         tar -xzvf opm-linux.tar.gz
         echo "get opm-linux.tar.gz successfully"
         rm -f opm-linux.tar.gz
