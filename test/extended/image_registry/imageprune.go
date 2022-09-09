@@ -271,7 +271,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: wewang@redhat.com
-	g.It("Author:wewang-Hign-27576-ImageRegistry CronJob is added to automate image prune [Disruptive]", func() {
+	g.It("Author:wewang-High-27576-ImageRegistry CronJob is added to automate image prune [Disruptive]", func() {
 		g.By("Check imagepruner fields")
 		output, checkErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("imagepruner/cluster", "-o", "yaml").Output()
 		o.Expect(checkErr).NotTo(o.HaveOccurred())

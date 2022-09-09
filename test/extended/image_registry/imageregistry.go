@@ -105,7 +105,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("Author:wewang-Critial-24262-Image registry operator can read/overlap gloabl proxy setting [Disruptive]", func() {
+	g.It("Author:wewang-Critical-24262-Image registry operator can read/overlap gloabl proxy setting [Disruptive]", func() {
 		var (
 			buildFile = filepath.Join(imageRegistryBaseDir, "inputimage.yaml")
 			buildsrc  = bcSource{
@@ -171,7 +171,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("Author:wewang-Critial-22893-PodAntiAffinity should work for image registry pod[Serial]", func() {
+	g.It("Author:wewang-Critical-22893-PodAntiAffinity should work for image registry pod[Serial]", func() {
 		g.Skip("According devel comments: https://bugzilla.redhat.com/show_bug.cgi?id=2014940, still not work,when find a solution, will enable it")
 		g.By("Check platforms")
 		//We set registry use pv on openstack&disconnect cluster, the case will fail on this scenario.
@@ -394,7 +394,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("Author:xiuwang-Critial-21593-Critial-34680-Medium-35906-High-27588-Image registry storage cannot be removed if set to Unamanaged when image registry is set to Removed [Disruptive]", func() {
+	g.It("Author:xiuwang-Critical-21593-Critical-34680-Medium-35906-High-27588-Image registry storage cannot be removed if set to Unamanaged when image registry is set to Removed [Disruptive]", func() {
 		g.By("Get registry storage info")
 		var storageinfo1, storageinfo2, storageinfo3 string
 		_, storageinfo1 = getRegistryStorageConfig(oc)
@@ -1866,7 +1866,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-Critial-23817-Check registry operator storage setup on GCP", func() {
+	g.It("Author:jitli-Critical-23817-Check registry operator storage setup on GCP", func() {
 
 		if exutil.CheckPlatform(oc) != "gcp" {
 			g.Skip("Skip for non-supported platform, only GCP")
@@ -1926,7 +1926,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("VMonly-Author:jitli-Critial-24133-TLS can be added to user-defined registry route [Disruptive]", func() {
+	g.It("VMonly-Author:jitli-Critical-24133-TLS can be added to user-defined registry route [Disruptive]", func() {
 
 		registryCrt := filepath.Join("/root", "auto", "24133", "myregistry.crt")
 		registryKey := filepath.Join("/root", "auto", "24133", "myregistry.key")
@@ -2105,7 +2105,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-VMonly-Author:xiuwang-Critial-10904-Support unauthenticated with registry-admin role", func() {
+	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-VMonly-Author:xiuwang-Critical-10904-Support unauthenticated with registry-admin role", func() {
 		g.By("Add registry-admin role to a project")
 		oc.SetupProject()
 		defer oc.AsAdmin().WithoutNamespace().Run("policy").Args("remove-role-from-user", "registry-admin", "-z", "test-registry-admin", "-n", oc.Namespace()).Execute()
@@ -2301,7 +2301,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("DisconnectedOnly-Author:xiuwang-Critial-29693-Import image from a secure registry using node credentials", func() {
+	g.It("DisconnectedOnly-Author:xiuwang-Critical-29693-Import image from a secure registry using node credentials", func() {
 		g.By("Check if image-policy-aosqe created")
 		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("imagecontentsourcepolicy").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2322,7 +2322,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Critial-29696-Use node credentials in imagestream import", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Critical-29696-Use node credentials in imagestream import", func() {
 		g.By("Create image stream whose auth has added to node credentials")
 		dockerImage, err := exutil.GetDockerImageReference(oc.ImageClient().ImageV1().ImageStreams("openshift"), "cli", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
