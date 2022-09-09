@@ -54,13 +54,15 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Check new pod is leader")
 		mewPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-cluster-machine-approver").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		logsOfPod, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args(mewPodName, "-n", "openshift-cluster-machine-approver", "-c", "machine-approver-controller").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(logsOfPod, attemptAcquireLeaderLeaseStr) {
-			e2e.Failf("fail with no expect %v", attemptAcquireLeaderLeaseStr)
-		}
-		if !strings.Contains(logsOfPod, acquiredLeaseStr) {
-			e2e.Failf("fail with no expect %v", acquiredLeaseStr)
-		}
+		err = wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
+			logsOfPod, _ = oc.AsAdmin().WithoutNamespace().Run("logs").Args(mewPodName, "-n", "openshift-cluster-machine-approver", "-c", "machine-approver-controller").Output()
+			if !strings.Contains(logsOfPod, attemptAcquireLeaderLeaseStr) || !strings.Contains(logsOfPod, acquiredLeaseStr) {
+				e2e.Logf("The new pod is not acquired lease and waiting up to 3 seconds ...")
+				return false, nil
+			}
+			e2e.Logf("The new pod is acquired lease")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "The new pod is not acquired lease after 1 minute")
 	})
 })
