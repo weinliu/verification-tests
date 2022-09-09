@@ -120,9 +120,15 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.AssertWaitPollNoErr(err, "cluster-autoscaler-operator deployment was not synced by cvo in 3m")
 
 		g.By("Check cluster-autoscaler-operator pod is running")
-		podsStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", machineAPINamespace, "-l", "k8s-app=cluster-autoscaler-operator", "-o=jsonpath={.items[0].status.phase}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(podsStatus).To(o.ContainSubstring("Running"))
+		err = wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
+			podsStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", machineAPINamespace, "-l", "k8s-app=cluster-autoscaler-operator", "-o=jsonpath={.items[0].status.phase}").Output()
+			if err != nil || strings.Compare(podsStatus, "Running") != 0 {
+				e2e.Logf("the pod status is %v, continue to next round", podsStatus)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "cluster-autoscaler-operator pod is not Running")
 	})
 
 	//author: huliu@redhat.com
