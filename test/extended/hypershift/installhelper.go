@@ -38,6 +38,7 @@ type createCluster struct {
 	InfraJSON        string `param:"infra-json"`
 	IamJSON          string `param:"iam-json"`
 	InfraID          string `param:"infra-id"`
+	RootDiskSize     *int   `param:"root-disk-size"`
 }
 
 type infra struct {
@@ -60,6 +61,14 @@ type iam struct {
 	OutputFile    string `param:"output-file"`
 }
 
+type createNodePool struct {
+	Name         string `param:"name"`
+	ClusterName  string `param:"cluster-name"`
+	Namespace    string `param:"namespace"`
+	RootDiskSize *int   `param:"root-disk-size"`
+	NodeCount    *int   `param:"node-count"`
+}
+
 func (c *createCluster) withName(name string) *createCluster {
 	c.Name = name
 	return c
@@ -77,6 +86,11 @@ func (c *createCluster) withInfraJSON(InfraJSON string) *createCluster {
 
 func (c *createCluster) withIamJSON(IamJSON string) *createCluster {
 	c.IamJSON = IamJSON
+	return c
+}
+
+func (c *createCluster) withRootDiskSize(RootDiskSize int) *createCluster {
+	c.RootDiskSize = &RootDiskSize
 	return c
 }
 
@@ -103,6 +117,16 @@ func (i *iam) withInfraID(InfraID string) *iam {
 func (i *iam) withOutputFile(OutputFile string) *iam {
 	i.OutputFile = OutputFile
 	return i
+}
+
+func (c *createNodePool) withName(name string) *createNodePool {
+	c.Name = name
+	return c
+}
+
+func (c *createNodePool) withRootDiskSize(RootDiskSize int) *createNodePool {
+	c.RootDiskSize = &RootDiskSize
+	return c
 }
 
 func (receiver *installHelper) createClusterAWSCommonBuilder() *createCluster {
@@ -165,6 +189,15 @@ func (receiver *installHelper) createIamCommonBuilder(infraFile string) *iam {
 		PublicZoneID:  gjson.Get(string(con), "publicZoneID").Str,
 		PrivateZoneID: gjson.Get(string(con), "privateZoneID").Str,
 		LocalZoneID:   gjson.Get(string(con), "localZoneID").Str,
+	}
+}
+
+func (receiver *installHelper) createNodePoolAzureCommonBuilder(clusterName string) *createNodePool {
+	nodeCount := 1
+	return &createNodePool{
+		Namespace:   receiver.oc.Namespace(),
+		ClusterName: clusterName,
+		NodeCount:   &nodeCount,
 	}
 }
 
@@ -401,4 +434,13 @@ func (receiver *installHelper) destroyAWSIam(iam *iam) {
 func (receiver *installHelper) deleteHostedClustersCRAllBackground() {
 	_, _, _, err := receiver.oc.AsAdmin().WithoutNamespace().Run("delete").Args("hostedcluster", "--all", "-n", receiver.oc.Namespace()).Background()
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (receiver *installHelper) createAzureNodePool(nodePool *createNodePool) {
+	vars, err := parse(nodePool)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	var bashClient = NewCmdClient().WithShowInfo(true)
+	cmd := fmt.Sprintf("hypershift create nodepool azure %s", strings.Join(vars, " "))
+	_, err = bashClient.Run(cmd).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
 }

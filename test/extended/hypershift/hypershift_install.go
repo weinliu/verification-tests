@@ -376,4 +376,49 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
 		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(), LongTimeout, LongTimeout/10).Should(o.Equal(2), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
 	})
+
+	// author: liangli@redhat.com
+	g.It("Longduration-NonPreRelease-Author:liangli-Critical-49173-[HyperShiftINSTALL] Test Azure node root disk size [Serial]", func() {
+		if iaasPlatform != "azure" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 49173 is for azure - skipping test ...")
+		}
+		caseID := "49173"
+		dir := "/tmp/hypershift" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		installHelper := installHelper{oc: oc, dir: dir, iaasPlatform: iaasPlatform}
+		g.By("install HyperShift operator")
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+
+		g.By("create HostedClusters")
+		createCluster := installHelper.createClusterAzureCommonBuilder().
+			withName("hypershift-" + caseID).
+			withNodePoolReplicas(1).
+			withRootDiskSize(64)
+		defer installHelper.destroyAzureHostedClusters(createCluster)
+		hostedCluster := installHelper.createAzureHostedClusters(createCluster)
+
+		g.By("Check the disk size for the nodepool '" + hostedCluster.name + "'")
+		o.Expect(hostedCluster.getAzureDiskSizeGBByNodePool(hostedCluster.name)).Should(o.ContainSubstring("64"))
+
+		g.By("create nodepool and check root-disk-size (default 120)")
+		nodePool1 := installHelper.createNodePoolAzureCommonBuilder(hostedCluster.name).
+			withName(hostedCluster.name + "-1")
+		installHelper.createAzureNodePool(nodePool1)
+		o.Expect(hostedCluster.getAzureDiskSizeGBByNodePool(nodePool1.Name)).Should(o.ContainSubstring("120"))
+
+		g.By("create nodepool and check root-disk-size (256)")
+		nodePool2 := installHelper.createNodePoolAzureCommonBuilder(hostedCluster.name).
+			withName(hostedCluster.name + "-2").
+			withRootDiskSize(256)
+		installHelper.createAzureNodePool(nodePool2)
+		o.Expect(hostedCluster.getAzureDiskSizeGBByNodePool(nodePool2.Name)).Should(o.ContainSubstring("256"))
+
+		g.By("create HostedClusters node ready")
+		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
+		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(), LongTimeout, LongTimeout/10).Should(o.Equal(3), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
+	})
 })
