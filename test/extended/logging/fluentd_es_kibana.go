@@ -236,6 +236,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		// author ikanse@redhat.com
 		g.It("CPaasrunOnly-Author:ikanse-Medium-46423-fluentd total_limit_size is not set beyond available space[Serial]", func() {
 
+			g.Skip("Known issue in Cluster Logging 5.5.z https://issues.redhat.com/browse/LOG-2790")
+
 			g.By("Create Cluster Logging instance with totalLimitSize which is more than the available space")
 			sc, err := getStorageClassName(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
