@@ -2548,7 +2548,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		csvFile := filepath.Join(tmpPath, "bundle", "manifests", "memcached-operator-48885.clusterserviceversion.yaml")
 		content := getContent(csvFile)
 		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/memcached@sha256:"))
-		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/kube-rbac-proxy@sha256:"))
+		o.Expect(content).To(o.ContainSubstring("kube-rbac-proxy@sha256:"))
 		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/ansibledisconnected@sha256:"))
 	})
 
@@ -2643,7 +2643,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		csvFile := filepath.Join(tmpPath, "bundle", "manifests", "memcached-operator-52813.clusterserviceversion.yaml")
 		content := getContent(csvFile)
 		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/nginx@sha256:"))
-		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/kube-rbac-proxy@sha256:"))
+		o.Expect(content).To(o.ContainSubstring("kube-rbac-proxy@sha256:"))
 		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/memcached-operator@sha256:"))
 	})
 
@@ -2743,7 +2743,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		csvFile := filepath.Join(tmpPath, "bundle", "manifests", "memcached-operator-52814.clusterserviceversion.yaml")
 		content := getContent(csvFile)
 		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/memcached@sha256:"))
-		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/kube-rbac-proxy@sha256:"))
+		o.Expect(content).To(o.ContainSubstring("kube-rbac-proxy@sha256:"))
 		o.Expect(content).To(o.ContainSubstring("quay.io/olmqe/memcached-operator@sha256:"))
 	})
 
