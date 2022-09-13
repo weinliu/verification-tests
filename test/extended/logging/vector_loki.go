@@ -33,7 +33,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		g.It("CPaasrunOnly-Author:ikanse-High-47760-Vector Forward logs to Loki using default value via HTTP[Serial]", func() {
 			var (
-				cloNS            = "openshift-logigng"
+				cloNS            = "openshift-logging"
 				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			)
 			g.By("Create project for app logs and deploy the log generator app")
@@ -101,7 +101,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		g.It("CPaasrunOnly-Author:ikanse-Medium-48922-Vector Forward logs to Loki using correct loki.tenantKey.kubernetes.namespace_name via HTTP[Serial]", func() {
 			var (
-				cloNS            = "openshift-logigng"
+				cloNS            = "openshift-logging"
 				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			)
 			g.By("Create project for app logs and deploy the log generator app")
@@ -154,7 +154,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		g.It("CPaasrunOnly-Author:ikanse-Medium-48060-Medium-47801-Vector Forward logs to Loki using loki.labelKeys [Serial]", func() {
 			var (
-				cloNS            = "openshift-logigng"
+				cloNS            = "openshift-logging"
 				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			)
 			g.By("Create project1 for app logs")
@@ -227,7 +227,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		g.It("CPaasrunOnly-Author:ikanse-High-48925-Vector Forward logs to Loki using correct loki.tenantKey.kubernetes.container_name via HTTP[Serial]", func() {
 			var (
-				cloNS            = "openshift-logigng"
+				cloNS            = "openshift-logging"
 				loglabeltemplate = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			)
 			g.By("Create project for app logs and deploy the log generator app")
@@ -320,7 +320,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				g.Skip("Current platform not supported/resources not available for this test!")
 			}
 			var (
-				cloNS       = "openshift-logigng"
+				cloNS       = "openshift-logging"
 				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			)
 			appProj := oc.Namespace()
@@ -415,7 +415,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				g.Skip("Current platform not supported/resources not available for this test!")
 			}
 			var (
-				cloNS       = "openshift-logigng"
+				cloNS       = "openshift-logging"
 				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			)
 			appProj := oc.Namespace()
@@ -541,7 +541,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				g.Skip("Current platform not supported/resources not available for this test!")
 			}
 			var (
-				cloNS       = "openshift-logigng"
+				cloNS       = "openshift-logging"
 				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			)
 			appProj := oc.Namespace()
@@ -621,7 +621,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				g.Skip("Current platform not supported/resources not available for this test!")
 			}
 			var (
-				cloNS       = "openshift-logigng"
+				cloNS       = "openshift-logging"
 				jsonLogFile = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			)
 			appProj := oc.Namespace()
