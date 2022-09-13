@@ -1810,3 +1810,21 @@ func disableACLOnNamespace(oc *exutil.CLI, namespace string) {
 	err1 := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("ns", namespace, "k8s.ovn.org/acl-logging-").Execute()
 	o.Expect(err1).NotTo(o.HaveOccurred())
 }
+
+func getNodeMacAddress(oc *exutil.CLI, nodeName string) string {
+	networkType := checkNetworkType(oc)
+	var macAddress string
+	if networkType == "ovnkubernetes" {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.metadata.annotations.k8s\\.ovn\\.org/l3-gateway-config}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		var data map[string]interface{}
+		json.Unmarshal([]byte(output), &data)
+		l3GatewayConfigAnnotations := data["default"].(interface{})
+		l3GatewayConfigAnnotationsJSON := l3GatewayConfigAnnotations.(map[string]interface{})
+		macAddress = l3GatewayConfigAnnotationsJSON["mac-address"].(string)
+		return macAddress
+	}
+	macAddress, err1 := exutil.DebugNodeWithOptionsAndChroot(oc, nodeName, []string{"-q"}, "bin/sh", "-c", "cat /sys/class/net/br0/address")
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	return macAddress
+}

@@ -1,4 +1,3 @@
-//MetalLB operator tests
 package networking
 
 import (
@@ -20,13 +19,16 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		opNamespace = "metallb-system"
 		opName      = "metallb-operator"
 		testDataDir = exutil.FixturePath("testdata", "networking/metallb")
+		l2Addresses = [2]string{"192.168.111.60-192.168.111.69", "192.168.111.70-192.168.111.79"}
 	)
 
 	g.BeforeEach(func() {
-		platform := checkPlatform(oc)
-		if !strings.Contains(platform, "vsphere") {
-			g.Skip("Skipping for unsupported platform, not vsphere!")
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(msg, "sriov.openshift-qe.sdn.com") {
+			g.Skip("These cases can only be run on networking team's private RDU2 cluster , skip for other envrionment!!!")
 		}
+
 		namespaceTemplate := filepath.Join(testDataDir, "namespace-template.yaml")
 		operatorGroupTemplate := filepath.Join(testDataDir, "operatorgroup-template.yaml")
 		subscriptionTemplate := filepath.Join(testDataDir, "subscription-template.yaml")
@@ -103,12 +105,9 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		var addresses []string
-		var addressIPv4 string
-		for i := 0; i <= (len(nodeList.Items) - 1); i++ {
-			addressIPv4 = getNodeIPv4(oc, opNamespace, nodeList.Items[i].Name)
-			addresses = append(addresses, addressIPv4+"-"+addressIPv4)
+		for i := 0; i <= (len(l2Addresses) - 1); i++ {
+			addresses = append(addresses, l2Addresses[i])
 		}
-
 		addresspoolTemplate := filepath.Join(testDataDir, "addresspool-template.yaml")
 		addresspool := addressPoolResource{
 			name:      "addresspool-l2",
@@ -167,6 +166,89 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		result = validateService(oc, nodeList.Items[2].Name, svcIP)
 		o.Expect(result).To(o.BeTrue())
 
+	})
+
+	g.It("Author:asood-High-53333-Verify for the service IP address of NodePort or LoadBalancer service ARP requests gets response from one interface only. [Serial]", func() {
+		var ns string
+		g.By("Test case for bug ID 2054225")
+		g.By("1. Create MetalLB CR")
+		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
+		metallbCR := metalLBCRResource{
+			name:      "metallb",
+			namespace: opNamespace,
+			template:  metallbCRTemplate,
+		}
+		defer deleteMetalLBCR(oc, metallbCR)
+		result := createMetalLBCR(oc, metallbCR, metallbCRTemplate)
+		o.Expect(result).To(o.BeTrue())
+
+		g.By("SUCCESS - MetalLB CR Created")
+
+		g.By("2. Create Layer2 addresspool")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		masterNodeList, err1 := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		var addresses []string
+		for i := 0; i <= (len(l2Addresses) - 1); i++ {
+			addresses = append(addresses, l2Addresses[i])
+		}
+
+		addresspoolTemplate := filepath.Join(testDataDir, "addresspool-template.yaml")
+		addresspool := addressPoolResource{
+			name:      "addresspool-l2",
+			namespace: opNamespace,
+			protocol:  "layer2",
+			addresses: addresses,
+			template:  addresspoolTemplate,
+		}
+		defer deleteAddressPool(oc, addresspool)
+		result = createAddressPoolCR(oc, addresspool, addresspoolTemplate)
+		o.Expect(result).To(o.BeTrue())
+		g.By("SUCCESS - Layer2 addresspool")
+
+		g.By("3. Create LoadBalancer services using Layer 2 addresses")
+		g.By("3.1 Create a namespace")
+		loadBalancerServiceTemplate := filepath.Join(testDataDir, "loadbalancer-svc-template.yaml")
+		oc.SetupProject()
+		ns = oc.Namespace()
+
+		g.By("3.2 Create a service with extenaltrafficpolicy Cluster")
+		svc := loadBalancerServiceResource{
+			name:                  "hello-world-cluster",
+			namespace:             ns,
+			externaltrafficpolicy: "Cluster",
+			template:              loadBalancerServiceTemplate,
+		}
+		result = createLoadBalancerService(oc, svc, loadBalancerServiceTemplate)
+		o.Expect(result).To(o.BeTrue())
+
+		g.By("3.3 SUCCESS - Services created successfully")
+
+		g.By("3.4 Validate LoadBalancer services")
+		err = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		svcIP := getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+		e2e.Logf("The service %s External IP is %q", svc.name, svcIP)
+		result = validateService(oc, nodeList.Items[2].Name, svcIP)
+		o.Expect(result).To(o.BeTrue())
+
+		g.By("4. Validate MAC Address assigned to service")
+		g.By("4.1 Obtain MAC address for  Load Balancer Service IP")
+		macAddress := obtainMACAddressForIP(oc, masterNodeList[0], svcIP, 5)
+		o.Expect(macAddress).NotTo(o.BeEmpty())
+		e2e.Logf("MAC address by ARP Lookup %s ", macAddress)
+
+		g.By("4.3 Get the node announcing the service IP")
+		nodeName := getNodeAnnouncingL2Service(oc, svc.name, svc.namespace)
+		e2e.Logf("Node announcing the service IP %s ", nodeName)
+
+		g.By("4.4 Get MAC address configured on the node interface announcing the service IP Address")
+		macAddress1 := getNodeMacAddress(oc, nodeName)
+		o.Expect(macAddress1).NotTo(o.BeEmpty())
+		e2e.Logf("MAC address of announcing node %s ", macAddress1)
+		o.Expect(strings.ToLower(macAddress)).Should(o.Equal(macAddress1))
 	})
 
 })

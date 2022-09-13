@@ -1,8 +1,8 @@
-//MetalLB operator tests
 package networking
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -236,4 +236,41 @@ func deleteMetalLBCR(oc *exutil.CLI, rs metalLBCRResource) {
 func deleteAddressPool(oc *exutil.CLI, rs addressPoolResource) {
 	e2e.Logf("delete %s %s in namespace %s", "addresspool", rs.name, rs.namespace)
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("addresspool", rs.name, "-n", rs.namespace).Execute()
+}
+
+func obtainMACAddressForIP(oc *exutil.CLI, nodeName string, svcExternalIP string, arpReuests int) string {
+	defInterface, intErr := getDefaultInterface(oc)
+	o.Expect(intErr).NotTo(o.HaveOccurred())
+	cmd := fmt.Sprintf("arping -I %s %s -c %d", defInterface, svcExternalIP, arpReuests)
+	output, arpErr := exutil.DebugNodeWithOptionsAndChroot(oc, nodeName, []string{"-q"}, "bin/sh", "-c", cmd)
+	o.Expect(arpErr).NotTo(o.HaveOccurred())
+	e2e.Logf("ARP request response %s", output)
+	re := regexp.MustCompile(`([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})`)
+	var macAddress string
+	if re.MatchString(output) {
+		submatchall := re.FindAllString(output, -1)
+		macAddress = submatchall[0]
+	}
+	return macAddress
+}
+
+func getNodeAnnouncingL2Service(oc *exutil.CLI, svcName string, namespace string) string {
+	var allEvents []string
+	var svcEvents string
+	fieldSelectorArgs := fmt.Sprintf("reason=nodeAssigned,involvedObject.kind=Service,involvedObject.name=%s", svcName)
+	sortByArgs := fmt.Sprintf("=.lastTimestamp")
+	svcEvents, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", namespace, "--field-selector", fieldSelectorArgs, "--sort-by", sortByArgs).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(svcEvents).ShouldNot(o.ContainSubstring("No events were found"))
+	e2e.Logf("Events %s for %s in namespace %s", svcEvents, svcName, namespace)
+	for _, index := range strings.Split(svcEvents, "\n") {
+		if strings.Contains(index, "announcing from node") {
+			re := regexp.MustCompile(`"([^\"]+)"`)
+			event := re.FindString(index)
+			allEvents = append(allEvents, event)
+		}
+	}
+
+	return strings.Trim(allEvents[len(allEvents)-1], "\"")
+
 }
