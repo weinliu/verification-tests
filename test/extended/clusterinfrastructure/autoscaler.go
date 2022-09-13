@@ -203,4 +203,39 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			o.Expect(machinesRunning).Should(o.Equal(3))
 		}
 	})
+	//author: miyadav
+	g.It("Author:miyadav-Critical-53080-[clusterautoscaler] Add verbosity option to autoscaler CRD [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		clusterAutoscalerTemplate = filepath.Join(autoscalerBaseDir, "clusterautoscalerutil.yaml")
+		clusterAutoscaler = clusterAutoscalerDescription{
+			maxNode:              100,
+			minCore:              0,
+			maxCore:              320000,
+			minMemory:            0,
+			maxMemory:            6400000,
+			utilizationThreshold: "0.08",
+			template:             clusterAutoscalerTemplate,
+		}
+		g.By("Create clusterautoscaler")
+		defer clusterAutoscaler.deleteClusterAutoscaler(oc)
+		clusterAutoscaler.createClusterAutoscaler(oc)
+
+		g.By("Patch clusterautoscaler for logVerbosity")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterautoscaler", "default", "-n", machineAPINamespace, "-p", `{"spec": {"logVerbosity": 8}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Get clusterautoscaler pod name")
+		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "cluster-autoscaler", "-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-machine-api").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Get clusterautoscaler log verbosity value for pod")
+		msg, err := oc.AsAdmin().Run("get").Args("pods", podName, "-n", machineAPINamespace, "-o=jsonpath={.spec.containers[0]}").Output()
+		if err != nil {
+			g.Fail("The failure needs to be reviewed by looking at logs of clusterautoscaler")
+		} else if msg != "" {
+			o.Expect(msg).To(o.ContainSubstring("--v=8"))
+		} else {
+			g.Fail("even after adding logverbosity log levels not changed")
+		}
+	})
 })
