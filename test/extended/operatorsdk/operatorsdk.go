@@ -3044,6 +3044,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	g.It("NonPreRelease-Longduration-VMonly-ConnectedOnly-Author:jitli-High-50065-SDK-Add file-based catalog support to run bundle", func() {
 
 		operatorsdkCLI.showInfo = true
+		oc.SetupProject()
 		g.By("Run bundle without index")
 		defer operatorsdkCLI.Run("cleanup").Args("k8sevent", "-n", oc.Namespace()).Output()
 		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/k8sevent-bundle:v"+ocpversion, "-n", oc.Namespace(), "--timeout", "5m").Output()
@@ -3081,6 +3082,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	g.It("VMonly-ConnectedOnly-Author:jitli-High-52364-SDK-Run bundle support large FBC index", func() {
 
 		operatorsdkCLI.showInfo = true
+		oc.SetupProject()
 		g.By("Run bundle with large FBC index (size >3M)")
 		defer operatorsdkCLI.Run("cleanup").Args("upgradefbc", "-n", oc.Namespace()).Output()
 		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradefbc-bundle:v0.1", "--index-image", "quay.io/operatorhubio/catalog:latest", "-n", oc.Namespace(), "--timeout", "5m").Output()
