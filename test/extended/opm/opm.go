@@ -507,7 +507,7 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		o.Expect(err).To(o.HaveOccurred())
 
 		g.By("opm diff index image with heads-only mode")
-		output, err := opmCLI.Run("alpha").Args("diff", "quay.io/olmqe/olm-index:OLM-1869-head").Output()
+		output, err := opmCLI.Run("alpha").Args("diff", "quay.io/olmqe/olm-index:OLM-1869-head", "--headsOnly").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("schema: olm.package"))
 		o.Expect(output).To(o.ContainSubstring("name: cockroachdb"))
@@ -528,7 +528,7 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		g.By("opm diff index db with heads-only mode")
 		opmBaseDir := exutil.FixturePath("testdata", "opm")
 		indexDb := filepath.Join(opmBaseDir, "render", "diff", "index.db")
-		output, err = opmCLI.Run("alpha").Args("diff", indexDb).Output()
+		output, err = opmCLI.Run("alpha").Args("diff", indexDb, "--headsOnly").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("schema: olm.package"))
 		o.Expect(output).To(o.ContainSubstring("name: cockroachdb"))
@@ -547,7 +547,7 @@ var _ = g.Describe("[sig-operators] OLM opm should", func() {
 		o.Expect(output).To(o.ContainSubstring("versionRange: 0.0.5"))
 
 		g.By("opm diff index image which package has no dependecy for heads-only mode")
-		output, err = opmCLI.Run("alpha").Args("diff", "quay.io/olmqe/olm-index:OLM-1869-head-nodep").Output()
+		output, err = opmCLI.Run("alpha").Args("diff", "quay.io/olmqe/olm-index:OLM-1869-head-nodep", "--headsOnly").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("schema: olm.package"))
 		o.Expect(output).To(o.ContainSubstring("name: cockroachdb"))
@@ -1273,7 +1273,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		g.By("step: SUCCESS")
 	})
 
-	g.It("Author:xzha-ConnectedOnly-Medium-43756-resolve and mirror dependencies automatically", func() {
+	g.It("Author:xzha-ConnectedOnly-Medium-43756-Medium-45679-opm alpha diff resolve and mirror dependencies automatically", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
@@ -1281,9 +1281,10 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		imagetag2 := "quay.io/olmqe/community-operator-index:43756-2"
 		imagetag3 := "quay.io/olmqe/community-operator-index:43756-3-dc"
 		imagetag4 := "quay.io/olmqe/community-operator-index:43756-4-dc"
+		imagetagdep := "quay.io/olmqe/etcd-index:test-skip-deps"
 
 		g.By("opm alpha diff image1")
-		output, err := opmCLI.Run("alpha").Args("diff", imagetag1, "-oyaml").Output()
+		output, err := opmCLI.Run("alpha").Args("diff", imagetag1, "--headsOnly", "-oyaml").Output()
 		if err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1294,7 +1295,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("name: planetscale-operator.v0.1.7"))
 
 		g.By("opm alpha diff image2")
-		output, err = opmCLI.Run("alpha").Args("diff", imagetag2, "-oyaml").Output()
+		output, err = opmCLI.Run("alpha").Args("diff", imagetag2, "--headsOnly", "-oyaml").Output()
 		if err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1318,7 +1319,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).NotTo(o.ContainSubstring("name: planetscale-operator.v0.1.7"))
 
 		g.By("opm alpha diff image3")
-		output, err = opmCLI.Run("alpha").Args("diff", imagetag3, "-o", "yaml").Output()
+		output, err = opmCLI.Run("alpha").Args("diff", imagetag3, "--headsOnly", "-o", "yaml").Output()
 		if err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1360,7 +1361,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("name: planetscale-operator.v0.1.8"))
 
 		g.By("opm alpha diff image4")
-		output, err = opmCLI.Run("alpha").Args("diff", imagetag4, "-o", "yaml").Output()
+		output, err = opmCLI.Run("alpha").Args("diff", imagetag4, "--headsOnly", "-o", "yaml").Output()
 		if err != nil {
 			e2e.Logf(output)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1372,6 +1373,20 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).NotTo(o.ContainSubstring("name: planetscale-operator.v0.1.6"))
 		o.Expect(string(output)).To(o.ContainSubstring("name: planetscale-operator.v0.1.7"))
 		o.Expect(string(output)).To(o.ContainSubstring("name: planetscale-operator.v0.1.8"))
+
+		g.By("45679-Configurable dependency inclusion in catalog diffs")
+		output1, err1 := opmCLI.Run("alpha").Args("list", "bundles", imagetagdep).Output()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		o.Expect(output1).To(o.ContainSubstring("planetscale-operator.v0.1.7"))
+
+		output2, err2 := opmCLI.Run("alpha").Args("diff", imagetagdep, "--headsOnly").Output()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		o.Expect(output2).To(o.ContainSubstring("name: planetscale-operator.v0.1.7"))
+
+		output3, err3 := opmCLI.Run("alpha").Args("diff", imagetagdep, "--headsOnly", "--skip-deps").Output()
+		o.Expect(err3).NotTo(o.HaveOccurred())
+		o.Expect(output3).NotTo(o.ContainSubstring("name: planetscale-operator.v0.1.7"))
+		g.By("test case 45679 SUCCESS")
 
 		g.By("step: SUCCESS")
 	})
@@ -1901,9 +1916,6 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(output)).To(o.ContainSubstring("name: ditto-operator.v0.1.0\n"))
 		o.Expect(string(output)).To(o.ContainSubstring("name: ditto-operator.v0.1.1\n"))
-		o.Expect(string(output)).To(o.ContainSubstring("name: ditto-operator.v0.2.0\n"))
-		o.Expect(string(output)).NotTo(o.ContainSubstring("name: etcdoperator.v0.9.2\n"))
-		o.Expect(string(output)).To(o.ContainSubstring("name: etcdoperator.v0.9.4\n"))
 		o.Expect(string(output)).To(o.ContainSubstring("name: etcdoperator.v0.9.2-clusterwide\n"))
 		o.Expect(string(output)).To(o.ContainSubstring("name: etcdoperator.v0.9.4-clusterwide\n"))
 
@@ -2020,26 +2032,6 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		e2e.Logf(output)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("test case 47222 SUCCESS")
-	})
-
-	// author: scolange@redhat.com
-	g.It("ConnectedOnly-Author:scolange-Medium-45679-Configurable dependency inclusion in catalog diffs", func() {
-
-		indexImage := "quay.io/olmqe/etcd-index:test-skip-deps"
-
-		output1, err1 := opmCLI.Run("alpha").Args("list", "bundles", indexImage).Output()
-		o.Expect(err1).NotTo(o.HaveOccurred())
-		o.Expect(output1).To(o.ContainSubstring("planetscale-operator.v0.1.7"))
-
-		output2, err2 := opmCLI.Run("alpha").Args("diff", indexImage).Output()
-		o.Expect(err2).NotTo(o.HaveOccurred())
-		o.Expect(output2).To(o.ContainSubstring("name: planetscale-operator.v0.1.7"))
-
-		output3, err3 := opmCLI.Run("alpha").Args("diff", indexImage, "--skip-deps").Output()
-		o.Expect(err3).NotTo(o.HaveOccurred())
-		o.Expect(output3).NotTo(o.ContainSubstring("name: planetscale-operator.v0.1.7"))
-		g.By("test case 45679 SUCCESS")
-
 	})
 
 	// author: tbuskey@redhat.com
