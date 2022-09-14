@@ -1036,6 +1036,76 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
+		g.It("CPaasrunOnly-Author:ikanse-High-50517-High-51846-Vector Structured index by kubernetes.labels and send unmatched JSON logs to fallback index outputDefaults[Serial][Slow]", func() {
+
+			g.By("Create project1 for app logs and deploy the log generator app with test=centos-logtest-qa and run=centos-logtest-stage labels")
+			oc.SetupProject()
+			appProj1 := oc.Namespace()
+			jsonLogFileUnAnnoted := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template_unannoted.json")
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-p", "LABELS={\"test\": \"centos-logtest-qa\"}", "-p", "REPLICATIONCONTROLLER=logging-centos-logtest-qa", "-p", "CONFIGMAP=logtest-config-qa", "-p", "CONTAINER=logging-centos-qa", "-f", jsonLogFileUnAnnoted).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-p", "LABELS={\"run\": \"centos-logtest-stage\"}", "-p", "REPLICATIONCONTROLLER=logging-centos-logtest-stage", "-p", "CONFIGMAP=logtest-config-stage", "-p", "CONTAINER=logging-centos-stage", "-f", jsonLogFileUnAnnoted).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create project2 for app logs and deploy the log generator app with test=centos-logtest-dev label")
+			oc.SetupProject()
+			appProj2 := oc.Namespace()
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj2, "-p", "LABELS={\"test\": \"centos-logtest-dev\"}", "-p", "REPLICATIONCONTROLLER=logging-centos-logtest-dev", "-p", "CONFIGMAP=logtest-config-dev", "-p", "CONTAINER=logging-centos-dev", "-f", jsonLogFileUnAnnoted).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogForwarder instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "structured-container-output-default.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "STRUCTURED_CONTAINER=true", "-p", "TYPE_KEY=kubernetes.labels.test", "-p", "TYPE_NAME=qa-fallback-index")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			g.By("Waiting for the Logging pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By("Check the indices in ES for structured logs")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-centos-logtest-qa-00")
+			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-centos-logtest-dev-00")
+			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-qa-fallback-index-00")
+
+			g.By("Check for logs with label test=centos-logtest-qa")
+			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"test=centos-logtest-qa\"}}}"
+			logs := searchDocByQuery(cloNS, podList.Items[0].Name, "app-centos-logtest-qa-00", checkLog)
+			o.Expect(logs.Hits.Total).ShouldNot(o.Equal(0), "Labels with test=centos-logtest-qa in logs not found in default ES index app-centos-logtest-qa-00*")
+			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app-centos-logtest-dev-00", checkLog)
+			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Labels with test=centos-logtest-qa in logs are in app-centos-logtest-dev-00* index")
+			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app-qa-fallback-index-00", checkLog)
+			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Labels with test=centos-logtest-qa in logs are in app-qa-fallback-index-00* index")
+
+			g.By("Check for logs with label test=centos-logtest-dev")
+			checkLog = "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"test=centos-logtest-dev\"}}}"
+			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app-centos-logtest-dev-00", checkLog)
+			o.Expect(logs.Hits.Total).ShouldNot(o.Equal(0), "Labels with test=centos-logtest-dev in logs not found in default ES index app-centos-logtest-dev-00*")
+			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app-centos-logtest-qa-00", checkLog)
+			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Labels with test=centos-logtest-dev in logs are in app-centos-logtest-qa-00* index")
+			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app-qa-fallback-index-00", checkLog)
+			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Labels with test=centos-logtest-dev in logs are in app-qa-fallback-index-00* index")
+
+			g.By("Unmatch logs with label run=centos-logtest-stage should be sent to app-qa-fallback index")
+			checkLog = "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"run=centos-logtest-stage\"}}}"
+			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app-qa-fallback-index-00", checkLog)
+			o.Expect(logs.Hits.Total).ShouldNot(o.Equal(0), "Labels with run=centos-logtest-stage in logs not found in default ES app-qa-fallback-index-00*")
+			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
+			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app-centos-logtest-qa-00", checkLog)
+			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Labels with run=centos-logtest-stage in logs are in app-centos-logtest-qa-00* index")
+			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app-centos-logtest-dev-00", checkLog)
+			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Labels with run=centos-logtest-stage in logs are in app-centos-logtest-dev-99* index")
+		})
+
 	})
 
 })
