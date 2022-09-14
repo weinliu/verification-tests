@@ -84,7 +84,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		}{
 			{
 				folder:   "/payload",
-				expected: "azure-cloud-node-manager.exe cni containerd hybrid-overlay-node.exe kube-node powershell windows_exporter.exe wmcb.exe",
+				expected: "azure-cloud-node-manager.exe cni containerd hybrid-overlay-node.exe kube-node powershell windows-instance-config-daemon.exe windows_exporter.exe wmcb.exe",
 			},
 			{
 				folder:   "/payload/containerd",
