@@ -10362,7 +10362,6 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		output, err = oc.AsAdmin().Run("adm").Args("catalog", "mirror", "--index-filter-by-os=linux/amd64", indexImage,
 			"localhost:5000", "--manifests-only", "--to-manifests="+tmpPath1, "-a", dockerconfigjsonpath).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Chose linux/amd64 manifest from the manifest list"))
 		o.Expect(output).To(o.ContainSubstring("wrote mirroring manifests to "))
 
 		g.By("3) Check the data of mapping.txt")
@@ -10375,7 +10374,6 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		output, err = oc.AsAdmin().Run("adm").Args("catalog", "mirror", "--index-filter-by-os=linux/s390x", indexImage,
 			"localhost:5000", "--manifests-only", "--to-manifests="+tmpPath2, "-a", dockerconfigjsonpath).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Chose linux/s390x manifest from the manifest list"))
 		o.Expect(output).To(o.ContainSubstring("wrote mirroring manifests to "))
 
 		g.By("5) Check the data of mapping.txt")
