@@ -26,20 +26,21 @@ type installHelper struct {
 }
 
 type createCluster struct {
-	PullSecret       string `param:"pull-secret"`
-	AWSCreds         string `param:"aws-creds"`
-	AzureCreds       string `param:"azure-creds"`
-	Name             string `param:"name"`
-	BaseDomain       string `param:"base-domain"`
-	Namespace        string `param:"namespace"`
-	NodePoolReplicas *int   `param:"node-pool-replicas"`
-	Region           string `param:"region"`
-	Location         string `param:"location"`
-	InfraJSON        string `param:"infra-json"`
-	IamJSON          string `param:"iam-json"`
-	InfraID          string `param:"infra-id"`
-	RootDiskSize     *int   `param:"root-disk-size"`
-	AdditionalTags   string `param:"additional-tags"`
+	PullSecret              string `param:"pull-secret"`
+	AWSCreds                string `param:"aws-creds"`
+	AzureCreds              string `param:"azure-creds"`
+	Name                    string `param:"name"`
+	BaseDomain              string `param:"base-domain"`
+	Namespace               string `param:"namespace"`
+	NodePoolReplicas        *int   `param:"node-pool-replicas"`
+	Region                  string `param:"region"`
+	Location                string `param:"location"`
+	InfraJSON               string `param:"infra-json"`
+	IamJSON                 string `param:"iam-json"`
+	InfraID                 string `param:"infra-id"`
+	RootDiskSize            *int   `param:"root-disk-size"`
+	AdditionalTags          string `param:"additional-tags"`
+	InfraAvailabilityPolicy string `param:"infra-availability-policy"`
 }
 
 type infra struct {
@@ -100,6 +101,10 @@ func (c *createCluster) withAdditionalTags(AdditionalTags string) *createCluster
 	return c
 }
 
+func (c *createCluster) withInfraAvailabilityPolicy(InfraAvailabilityPolicy string) *createCluster {
+	c.InfraAvailabilityPolicy = InfraAvailabilityPolicy
+	return c
+}
 func (i *infra) withInfraID(InfraID string) *infra {
 	i.InfraID = InfraID
 	return i

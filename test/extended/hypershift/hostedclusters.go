@@ -33,6 +33,22 @@ func (h *hostedCluster) pollGetHostedClusterReadyNodeCount() func() int {
 	}
 }
 
+func (h *hostedCluster) getHostedClusterInfrastructureTopology() (string, error) {
+	value, er := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("--kubeconfig="+h.hostedClustersKubeconfigFile, "infrastructure", "cluster", `-o=jsonpath={.status.infrastructureTopology}`).Output()
+	if er != nil {
+		e2e.Logf(" get infrastructure/cluster status error: %v", er)
+		return "", er
+	}
+	return value, nil
+}
+
+func (h *hostedCluster) pollGetHostedClusterInfrastructureTopology() func() string {
+	return func() string {
+		value, _ := h.getHostedClusterInfrastructureTopology()
+		return value
+	}
+}
+
 func (h *hostedCluster) getInfraID() (string, error) {
 	value, er := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedclusters", "-n", h.namespace, h.name, `-ojsonpath={.spec.infraID}`).Output()
 	if er != nil {

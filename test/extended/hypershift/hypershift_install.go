@@ -350,6 +350,54 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: liangli@redhat.com
+	g.It("Longduration-NonPreRelease-Author:liangli-Critical-47053-[HyperShiftINSTALL] Test InfrastructureTopology configuration [Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 47053 is for AWS - skipping test ...")
+		}
+		caseID := "47053"
+		dir := "/tmp/hypershift" + caseID
+		clusterName := "hypershift-" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Config AWS Bucket And install HyperShift operator")
+		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
+		defer installHelper.deleteAWSS3Bucket()
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+
+		g.By("create HostedClusters-1")
+		createCluster1 := installHelper.createClusterAWSCommonBuilder().
+			withName(clusterName + "-1").
+			withNodePoolReplicas(1)
+		defer installHelper.destroyAWSHostedClusters(createCluster1)
+		hostedCluster1 := installHelper.createAWSHostedClusters(createCluster1)
+
+		g.By("check HostedClusters-1 HostedClusterInfrastructureTopology")
+		installHelper.createHostedClusterKubeconfig(createCluster1, hostedCluster1)
+		o.Eventually(hostedCluster1.pollGetHostedClusterInfrastructureTopology(), LongTimeout, LongTimeout/10).Should(o.ContainSubstring("SingleReplica"), fmt.Sprintf("--infra-availability-policy (default SingleReplica) error"))
+
+		g.By("create HostedClusters-2 infra-availability-policy: HighlyAvailable")
+		createCluster2 := installHelper.createClusterAWSCommonBuilder().
+			withName(clusterName + "-2").
+			withNodePoolReplicas(2).
+			withInfraAvailabilityPolicy("HighlyAvailable")
+		defer installHelper.destroyAWSHostedClusters(createCluster2)
+		hostedCluster2 := installHelper.createAWSHostedClusters(createCluster2)
+
+		g.By("check HostedClusters-2 HostedClusterInfrastructureTopology")
+		installHelper.createHostedClusterKubeconfig(createCluster2, hostedCluster2)
+		o.Eventually(hostedCluster2.pollGetHostedClusterInfrastructureTopology(), LongTimeout, LongTimeout/10).Should(o.ContainSubstring("HighlyAvailable"), fmt.Sprintf("--infra-availability-policy HighlyAvailable"))
+
+		g.By("Check if pods of multi-zonal components spread across multi-zone")
+		o.Eventually(func() string {
+			value, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("--kubeconfig="+hostedCluster2.hostedClustersKubeconfigFile, "deployment", "-A", "-ojsonpath={.items[*].spec.replicas}").Output()
+			return strings.ReplaceAll(strings.ReplaceAll(value, "1", ""), " ", "")
+		}, DefaultTimeout, DefaultTimeout/10).ShouldNot(o.BeEmpty())
+	})
+
+	// author: liangli@redhat.com
 	g.It("Longduration-NonPreRelease-Author:liangli-Critical-48133-[HyperShiftINSTALL] Apply user defined tags to all AWS resources [Serial]", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 48133 is for AWS - skipping test ...")
