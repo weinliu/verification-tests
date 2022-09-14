@@ -34,6 +34,7 @@ type testrunConfigmap struct {
 	icspNeeded        bool
 	mustgatherImage   string
 	katamonitorImage  string
+	operatorVer       string
 }
 
 var (
@@ -49,25 +50,37 @@ func subscribeFromTemplate(oc *exutil.CLI, sub subscriptionDescription, subTempl
 
 	g.By("(1.1) Applying namespace yaml")
 	msg, err = oc.AsAdmin().Run("apply").Args("-f", nsFile).Output()
-	e2e.Logf("STEP namespace %v %v", msg, err)
-
+	if err != nil || msg == "" {
+		e2e.Logf("namespace issue %v %v", msg, err)
+	}
 	g.By("(1.2)  Applying operatorgroup yaml if needed")
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "-n", sub.namespace, "--no-headers").Output()
 	if strings.Contains(msg, "No resources found in") {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", ogFile, "-n", sub.namespace).Output()
 	}
-	e2e.Logf("STEP operator group %v %v", msg, err)
+	if err != nil || msg == "" {
+		e2e.Logf("operator group issue %v %v", msg, err)
+	}
 
 	g.By("(1.3) Creating subscription yaml from template")
 	subFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", sub.template, "-p", "SUBNAME="+sub.subName, "SUBNAMESPACE="+sub.namespace, "CHANNEL="+sub.channel,
 		"APPROVAL="+sub.ipApproval, "OPERATORNAME="+sub.operatorPackage, "SOURCENAME="+sub.catalogSourceName, "SOURCENAMESPACE="+sub.catalogSourceNamespace, "-n", sub.namespace).OutputToFile(getRandomString() + "subscriptionFile.json")
 	// o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("Created the subscription yaml %s, %v", subFile, err)
+	if err != nil || subFile != "" {
+		if !strings.Contains(subFile, "already exists") {
+			_, subFileExists := os.Stat(subFile)
+			if subFileExists != nil {
+				e2e.Logf("issue creating the subscription yaml %s, %v", subFile, err)
+			}
+		}
+	}
 
 	g.By("(1.4) Applying subscription yaml")
 	// no need to check for an existing subscription
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subFile).Output()
-	e2e.Logf("Applied subscription %v: %v, %v", subFile, msg, err)
+	if err != nil || msg == "" {
+		e2e.Logf(" issue applying subscription %v: %v, %v", subFile, msg, err)
+	}
 
 	g.By("(1.5) Verify the operator finished subscribing")
 	msg, err = subscriptionIsFinished(oc, sub)
@@ -101,12 +114,16 @@ func createKataConfig(oc *exutil.CLI, kcTemplate, kcName, kcMonitorImageName, kc
 
 	g.By("(2) Create kataconfig file")
 	configFile, err = oc.AsAdmin().WithoutNamespace().Run("process").Args("--ignore-unknown-parameters=true", "-f", kcTemplate, "-p", "NAME="+kcName, "MONITOR="+kcMonitorImageName, "LOGLEVEL="+kcLogLevel, "-n", sub.namespace).OutputToFile(getRandomString() + "kataconfig-common.json")
-	e2e.Logf("the kataconfig file is %s, %v", configFile, err)
+	if err != nil || configFile == "" {
+		_, configFileExists := os.Stat(configFile)
+		if configFileExists != nil {
+			e2e.Logf("issue creating kataconfig file is %s, %v", configFile, err)
+		}
+	}
 
 	g.By("(2.1) Apply kataconfig file")
 	errCheck := wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Output()
-		e2e.Logf("%v %v", msg, err)
 		if err == nil {
 			return true, nil
 		}
@@ -183,7 +200,9 @@ func getRandomString() string {
 func deleteKataConfig(oc *exutil.CLI, kcName string) (msg string, err error) {
 	g.By("(3) Deleting kataconfig")
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("kataconfig", kcName).Output()
-	e2e.Logf("%v %v", msg, err)
+	if err != nil || msg == "" {
+		e2e.Logf("%v %v", msg, err)
+	}
 
 	g.By("(3.1) Wait for kataconfig to be deleted")
 	errCheck := wait.Poll(30*time.Second, kataSnooze*time.Second, func() (bool, error) {
@@ -199,30 +218,49 @@ func deleteKataConfig(oc *exutil.CLI, kcName string) (msg string, err error) {
 	return msg, err
 }
 
-func getVersionInfo(oc *exutil.CLI, sub subscriptionDescription, opNamespace, subTemplate string) (string, subscriptionDescription) {
+func getVersionInfo(oc *exutil.CLI, subscription subscriptionDescription, opVer string) (operatorVer string, sub subscriptionDescription) {
+	// set default values
+	operatorVer = opVer
+	sub = subscription
+	var (
+		ocpMajorVer = "4"
+		ocpMinorVer = "10"
+		catsrcName  = "kataci-index"
+		msg         string
+		err         error
+	)
 
-	var operatorVer = "1.2.0" //default val
-	ConfigMapFound, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap/example-config-env", "-n", "default").Output()
-	//If CM exists it means its a Jenkins CI
-	if strings.Contains(ConfigMapFound, "example-config-env") && strings.Contains(ConfigMapFound, "4") {
-		configMap, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("configmap/example-config-env", "-n", "default").Output()
-		versions := strings.Split(configMap, "\n")
-		ocpMajorVer := versions[9]
-		ocpMinorVer := versions[12]
-		channelName := versions[15]
-		operatorVer := versions[18]
-		e2e.Logf("ocpMajorVer : %s", ocpMajorVer)
-		e2e.Logf("ocpMinorVer : %s", ocpMinorVer)
-		e2e.Logf("operatorVer : %s", operatorVer)
-		e2e.Logf("Channel : %s", channelName)
-		//for CI runs - catsrcName set
-		catsrcName := "kataci-index"
-		e2e.Logf("catalogSourceName : %s", catsrcName)
-		os.Setenv("cmMsg", "True")
-		sub.catalogSourceName = catsrcName
-		sub.channel = channelName
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap/example-config-env", "-n", "default").Output()
+	if err != nil { // no configmap, return with the default versions
+		e2e.Logf("Jenkins Configmap is not found: %v %v", msg, err)
 		return operatorVer, sub
 	}
+
+	os.Setenv("cmMsg", "True") // If CM exists it means its a Jenkins CI
+	e2e.Logf("configmap example-config-env was found")
+	sub.catalogSourceName = catsrcName // for CI runs - catsrcName set
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "example-config-env", "-o=jsonpath={.data.ocpMajorVer}", "-n", "default").Output()
+	if err == nil && msg != "" {
+		ocpMajorVer = msg
+	}
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "example-config-env", "-o=jsonpath={.data.ocpMinorVer}", "-n", "default").Output()
+	if err == nil && msg != "" {
+		ocpMinorVer = msg
+	}
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "example-config-env", "-o=jsonpath={.data.operatorChannel}", "-n", "default").Output()
+	if err == nil && msg != "" {
+		sub.channel = msg
+	}
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "example-config-env", "-o=jsonpath={.data.operatorVer}", "-n", "default").Output()
+	if err == nil && msg != "" {
+		operatorVer = msg
+	}
+
+	e2e.Logf("ocpMajorVer : %s", ocpMajorVer)
+	e2e.Logf("ocpMinorVer : %s", ocpMinorVer)
+	e2e.Logf("operatorVer : %s", operatorVer)
+	e2e.Logf("Channel : %s", sub.channel)
+	e2e.Logf("catalogSourceName : %s", catsrcName)
 
 	return operatorVer, sub
 }
@@ -241,7 +279,10 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Error: subscription %v is not correct status in ns %v", sub.subName, sub.namespace))
+	if err != nil || msg == "" || errCheck != nil {
+		e2e.Logf("issue with subscription %v %v, %v", msg, err, errCheck)
+	}
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("subscription %v is not correct status in ns %v", sub.subName, sub.namespace))
 
 	csvName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installedCSV}").Output()
 	if err != nil || csvName == "" {
@@ -261,7 +302,10 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Error: csv %v is not correct status in ns %v: %v %v", csvName, sub.namespace, msg, err))
+	if err != nil || msg == "" || errCheck != nil {
+		e2e.Logf("issue with csv finish %v: %v %v", csvName, msg, err)
+	}
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status in ns %v: %v %v", csvName, sub.namespace, msg, err))
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "--no-headers").Output()
 	return msg, err
 }
@@ -352,7 +396,7 @@ func waitForDeployment(oc *exutil.CLI, podNs, deployName string) (msg string, er
 	return msg, err
 }
 
-func getTestRunInput(oc *exutil.CLI, subscription subscriptionDescription, katamonitorImage, mustgatherImage, cmNs, cmName string) (testrun testrunConfigmap, msg string, err error) {
+func getTestRunInput(oc *exutil.CLI, subscription subscriptionDescription, katamonitorImage, mustgatherImage, operatorVer, cmNs, cmName string) (testrun testrunConfigmap, msg string, err error) {
 	testrun = testrunConfigmap{
 		exists:            false,
 		catalogSourceName: subscription.catalogSourceName,
@@ -360,20 +404,25 @@ func getTestRunInput(oc *exutil.CLI, subscription subscriptionDescription, katam
 		icspNeeded:        false,
 		mustgatherImage:   mustgatherImage,
 		katamonitorImage:  katamonitorImage,
+		operatorVer:       operatorVer,
 	}
 
+	// icspNeeded is set if either of the Images has "brew.registry.redhat.io" in it
+
+	// is it there?
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs, cmName).Output()
 	if err != nil {
 		e2e.Logf("Configmap is not found: msg %v err: %v", msg, err)
 		testrun.exists = false
 	} else {
 		testrun.exists = true
-
+		// cm should have a data section
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs, cmName, "-o=jsonpath={.data}").Output()
 		if err != nil {
 			e2e.Failf("Configmap %v has error, no .data: %v %v", cmName, msg, err)
 		}
 
+		// look at all the items for a value.  If they are not empty, change the defaults
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.catalogsourcename}", "-n", cmNs).Output()
 		if err == nil {
 			testrun.catalogSourceName = msg
@@ -392,13 +441,41 @@ func getTestRunInput(oc *exutil.CLI, subscription subscriptionDescription, katam
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.katamonitormage}", "-n", cmNs).Output()
 		if err == nil {
 			testrun.katamonitorImage = msg
+			if strings.Contains(msg, "brew.registry.redhat.io") {
+				testrun.icspNeeded = true
+			}
 		}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.mustgatherimage}", "-n", cmNs).Output()
 		if err == nil {
 			testrun.mustgatherImage = msg
+			if strings.Contains(msg, "brew.registry.redhat.io") {
+				testrun.icspNeeded = true
+			}
+		}
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.operatorVer }", "-n", cmNs).Output()
+		if err == nil {
+			testrun.operatorVer = msg
 		}
 	}
 	return testrun, msg, err
+}
+
+func getClusterVersion(oc *exutil.CLI) (clusterVersion, ocpMajorVer, ocpMinorVer string) {
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("version").Args("-o", "yaml").Output()
+	if err != nil || msg == "" {
+		e2e.Logf("Error: could not get oc version: %v %v", msg, err)
+	}
+	for _, s := range strings.Split(msg, "\n") {
+		if strings.Contains(s, "openshiftVersion") {
+			sa := strings.Split(s, " ")
+			clusterVersion = sa[1]
+			break
+		}
+	}
+	sa := strings.Split(clusterVersion, ".")
+	ocpMajorVer = sa[0]
+	ocpMinorVer = sa[1]
+	return ocpMajorVer, ocpMinorVer, clusterVersion
 }
 
 func waitForKataconfig(oc *exutil.CLI, kcName string) (msg string, err error) {

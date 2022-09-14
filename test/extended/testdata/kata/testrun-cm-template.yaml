@@ -13,6 +13,7 @@ objects:
       icspneeded: "${ICSPNEEDED}"
       catalogsourcename: "${CATSOURCENAME}"
       channel: "${OSCCHANNEL}"
+      operatorVer: "${OPERATORVER}"
       katamonitormage: "${KATAMONITORIMAGE}"
       mustgatherimage: "${MUSTGATHERIMAGE}"
 
@@ -27,6 +28,8 @@ parameters:
     value: "false"
   - name: OSCCHANNEL
     value: "stable-1.2"
+  - name: OPERATORVER
+    value: "1.2.0"
   - name: KATAMONITORIMAGE
     value: "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:1.2.0"
   - name: MUSTGATHERIMAGE

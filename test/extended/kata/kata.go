@@ -33,6 +33,11 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		mustGatherImage      = "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.3.0"
 		icspName             = "kata-brew-registry"
 		icspFile             = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
+		testrunInitial       testrunConfigmap
+		clusterVersion       string
+		ocpMajorVer          string
+		ocpMinorVer          string
+		operatorVer          = "1.2.0"
 	)
 
 	subscription := subscriptionDescription{
@@ -46,6 +51,8 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		template:               subTemplate,
 	}
 
+	testrunInitial.exists = false // no overrides yet
+
 	g.BeforeEach(func() {
 		// Creating/deleting kataconfig reboots all worker node and extended-platform-tests may timeout.
 		// --------- AWS baremetal may take >20m per node ----------------
@@ -56,12 +63,36 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			err error
 			msg string
 		)
-		operatorVer, sub := getVersionInfo(oc, subscription, opNamespace, subTemplate)
-		if os.Getenv("cmMsg") != "" { //env var cmMsg will have no value if configmap is not found
-			subscription = sub
-		}
 
-		kcMonitorImageName = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:" + operatorVer
+		ocpMajorVer, ocpMinorVer, clusterVersion = getClusterVersion(oc)
+		e2e.Logf("Running %v.%v on: %v", ocpMajorVer, ocpMinorVer, clusterVersion)
+
+		// check if there is a CM override
+		testrunInitial, msg, err = getTestRunInput(oc, subscription, kcMonitorImageName, mustGatherImage, operatorVer, "default", "osc-config")
+		if testrunInitial.exists { // then override
+			subscription.catalogSourceName = testrunInitial.catalogSourceName
+			subscription.channel = testrunInitial.channel
+			mustGatherImage = testrunInitial.mustgatherImage
+			kcMonitorImageName = testrunInitial.katamonitorImage
+			operatorVer = testrunInitial.operatorVer
+			if testrunInitial.icspNeeded {
+				e2e.Logf("An ICSP being applied to allow %v and %v to work", testrunInitial.katamonitorImage, testrunInitial.mustgatherImage)
+				msg, err = imageContentSourcePolicy(oc, icspFile, icspName)
+				if err != nil || msg == "" {
+					logErrorAndFail(oc, fmt.Sprintf("Error: applying ICSP"), msg, err)
+				}
+			}
+			e2e.Logf("subscription after testrun cm osc-config: %v", subscription)
+		}
+		operatorVer, sub := getVersionInfo(oc, subscription, operatorVer)
+		if os.Getenv("cmMsg") != "" { //env var cmMsg will have no value if configmap is not found
+			subscription.catalogSourceName = sub.catalogSourceName
+			subscription.channel = sub.channel
+			kcMonitorImageName = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:" + operatorVer
+			e2e.Logf("subscription after Jenkins cm example-config-env: %v", subscription)
+			e2e.Logf("operatorVer : %s", operatorVer)
+			e2e.Logf("monitor : %s", kcMonitorImageName)
+		}
 
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -671,18 +702,19 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		)
 
 		g.By("Checking for configmap " + cmName)
-		testrunUpgrade, msg, err = getTestRunInput(oc, subUpgrade, kcMonitorImageName, mustGatherImage, cmNs, cmName)
+		testrunUpgrade, msg, err = getTestRunInput(oc, subUpgrade, kcMonitorImageName, mustGatherImage, operatorVer, cmNs, cmName)
 
 		if testrunUpgrade.exists {
 			msg = fmt.Sprintf("Upgrade with testrun will be performed with %v", testrunUpgrade)
 			g.By(msg)
 
 			if testrunUpgrade.icspNeeded {
-				g.By("Installing ImageContentSourcePolicy")
+				msg = fmt.Sprintf("Installing ImageContentSourcePolicy to allow %v and %v to work", testrunUpgrade.katamonitorImage, testrunUpgrade.mustgatherImage)
+				g.By(msg)
 				// apply icsp.  Do not delete or pods can get ImagePullBackoff
 				msg, err = imageContentSourcePolicy(oc, icspFile, icspName)
 				if err != nil || msg == "" {
-					logErrorAndFail(oc, fmt.Sprintf("Error: applying ICSP"), msg, err)
+					logErrorAndFail(oc, "Error: applying ICSP", msg, err)
 				}
 			}
 
@@ -741,18 +773,18 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 				g.By("Changing the monitor image & pods")
 				msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", subUpgrade.namespace, "-l", "name=openshift-sandboxed-containers-monitor", "-o=jsonpath={.items..metadata.name}").Output()
 				if err != nil || msg == "" {
-					logErrorAndFail(oc, fmt.Sprintf("Error: cannot get the monitor pod names before patching kataconfig monitor images"), msg, err)
+					logErrorAndFail(oc, "Error: cannot get the pod info before patching kataconfig monitor images", msg, err)
 				}
 				oldpods := strings.Fields(msg)
 
 				msg, err = changeKataMonitorImage(oc, subUpgrade, testrunUpgrade, commonKataConfigName)
 				if err != nil || msg == "" {
-					logErrorAndFail(oc, fmt.Sprintf("Error: cannot patch kataconfig with monitor image"), msg, err)
+					logErrorAndFail(oc, "Error: cannot patch kataconfig with monitor image", msg, err)
 				}
 
 				g.By("Wait & check for kata monitor image change")
 				// starts changing 40s after
-				for podsChanged != true {
+				errCheck := wait.Poll(30*time.Second, 120*time.Second, func() (bool, error) {
 					msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", subUpgrade.namespace, "-l", "name=openshift-sandboxed-containers-monitor", "-o=jsonpath={.items..metadata.name}").Output()
 					for _, pod := range oldpods {
 						if strings.Contains(msg, pod) {
@@ -762,12 +794,15 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 							podsChanged = true
 						}
 					}
-					time.Sleep(10 * time.Second)
-				}
-				if podsChanged != true {
+					if podsChanged {
+						return true, nil
+					}
+					return false, nil
+				})
+				if !podsChanged {
 					e2e.Logf("monitor pods did not upgrade from %v to %v %v", oldpods, msg, err)
-					o.Expect(podsChanged).To(o.BeTrue())
 				}
+				exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("monitor pods did not change %v", msg))
 
 			}
 
