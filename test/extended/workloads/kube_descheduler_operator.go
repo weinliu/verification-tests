@@ -1533,4 +1533,202 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get metric PodLifeTime via prometheus"))
 	})
+
+	// author: knarra@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-50195-Descheduler-Validate priorityfiltering with thresholdPriority param [Slow][Disruptive]", func() {
+		deschedulertpN := filepath.Join(buildPruningBaseDir, "kubedescheduler_thresholdPriority.yaml")
+		deploypmT := filepath.Join(buildPruningBaseDir, "deploy_podWithPriorityClassName.yaml")
+		deploypcT := filepath.Join(buildPruningBaseDir, "priorityclassm.yaml")
+
+		_, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		deschu = kubedescheduler{
+			namespace:        kubeNamespace,
+			interSeconds:     60,
+			imageInfo:        "registry.redhat.io/openshift4/ose-descheduler:v4.11.0",
+			logLevel:         "Normal",
+			operatorLogLevel: "Normal",
+			profile1:         "EvictPodsWithPVC",
+			profile2:         "SoftTopologyAndDuplicates",
+			profile3:         "LifecycleAndUtilization",
+			template:         deschedulertpN,
+		}
+
+		// Create test project
+		g.By("Create test project")
+		oc.SetupProject()
+
+		testPrioPod := priorityPod{
+			dName:      "d50195",
+			namespace:  oc.Namespace(),
+			replicaSum: 1,
+			template:   deploypmT,
+		}
+
+		priorityclassm := priorityClassDefinition{
+			name:          "prioritym",
+			priorityValue: 99,
+			template:      deploypcT,
+		}
+
+		priorityclassh := priorityClassDefinition{
+			name:          "priorityh",
+			priorityValue: 100,
+			template:      deploypcT,
+		}
+
+		g.By("Create priority classes")
+		defer priorityclassm.deletePriorityClass(oc)
+		priorityclassm.createPriorityClass(oc)
+
+		defer priorityclassh.deletePriorityClass(oc)
+		priorityclassh.createPriorityClass(oc)
+
+		g.By("Create the descheduler namespace")
+		defer func() {
+			deleteNSErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
+			o.Expect(deleteNSErr).NotTo(o.HaveOccurred())
+		}()
+		createNSErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
+		o.Expect(createNSErr).NotTo(o.HaveOccurred())
+
+		patch := `[{"op":"add", "path":"/metadata/labels/openshift.io~1cluster-monitoring", "value":"true"}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("ns", kubeNamespace, "--type=json", "-p", patch).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create the operatorgroup")
+		defer og.deleteOperatorGroup(oc)
+		og.createOperatorGroup(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create the subscription")
+		defer sub.deleteSubscription(oc)
+		sub.createSubscription(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for the descheduler operator pod running")
+		if ok := waitForAvailableRsRunning(oc, "deploy", "descheduler-operator", kubeNamespace, "1"); ok {
+			e2e.Logf("Kubedescheduler operator runnnig now\n")
+		} else {
+			e2e.Failf("Kubedescheduler operator is not running even afer waiting for about 3 minutes")
+		}
+
+		g.By("Create descheduler cluster")
+		defer func() {
+			deletionErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("KubeDescheduler", "--all", "-n", kubeNamespace).Execute()
+			o.Expect(deletionErr).NotTo(o.HaveOccurred())
+		}()
+		deschu.createKubeDescheduler(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "descheduler", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
+			if err != nil {
+				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("2", output); matched {
+				e2e.Logf("deploy is up:\n%s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("observed Generation is not expected"))
+
+		g.By("Check the kubedescheduler run well")
+		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
+
+		g.By("Get descheduler cluster pod name")
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			podName, _ := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+			if strings.Contains(podName, " ") {
+				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)
+				return false, nil
+			}
+			e2e.Logf("podName does not have space, proceeding further\n")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("podName still containts space which is not expected"))
+
+		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+		o.Expect(podName).NotTo(o.BeEmpty())
+
+		// Test for thresholdPriority
+		g.By("Create the pod with thresholdPrioritySet")
+		testPrioPod.createPodWithPriorityParam(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check all the pods should running")
+		if ok := waitForAvailableRsRunning(oc, "deployment", "d50195", oc.Namespace(), "1"); ok {
+			e2e.Logf("All pods are runnnig now\n")
+		} else {
+			e2e.Failf("All pods related to deployment d50195 are not running")
+		}
+
+		g.By("Check the descheduler deploy logs, should see config error logs")
+		checkLogsFromRs(oc, kubeNamespace, "pod", podName, regexp.QuoteMeta(`"Evicted pod in dry run mode" `)+".*"+regexp.QuoteMeta(oc.Namespace())+".*"+regexp.QuoteMeta(`reason="PodLifeTime"`))
+
+		// Collect PodLifetime metrics from prometheus
+		g.By("Checking PodLifetime metrics from prometheus")
+		checkDeschedulerMetrics(oc, "PodLifeTime", "descheduler_pods_evicted")
+
+		// Test descheduler automatic mode
+		g.By("Set descheduler mode to Automatic")
+		defer func() {
+			patchYamlToRestore := `[{"op": "replace", "path": "/spec/mode", "value":"Predictive"}]`
+			e2e.Logf("Restoring descheduler mode back to Predictive")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlToRestore).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Check the kubedescheduler run well")
+			checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
+		}()
+
+		patchYamlTraceAll := `[{"op": "replace", "path": "/spec/mode", "value":"Automatic"}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubedescheduler", "cluster", "-n", kubeNamespace, "--type=json", "-p", patchYamlTraceAll).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "descheduler", "-n", kubeNamespace, "-o=jsonpath={.status.observedGeneration}").Output()
+			if err != nil {
+				e2e.Logf("deploy is still inprogress, error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("3", output); matched {
+				e2e.Logf("deploy is up:\n%s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "observed Generation is not expected")
+
+		g.By("Check the kubedescheduler run well")
+		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
+
+		g.By("Get descheduler cluster pod name after mode is set")
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			podName, _ := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+			if strings.Contains(podName, " ") {
+				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)
+				return false, nil
+			}
+			if !strings.Contains(podName, " ") {
+				e2e.Logf("podName does not have space, proceeding further\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("podName still containts space which is not expected"))
+
+		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+		o.Expect(podName).NotTo(o.BeEmpty())
+
+		g.By("Check the descheduler deploy logs, should see config error logs")
+		checkLogsFromRs(oc, kubeNamespace, "pod", podName, regexp.QuoteMeta(`"Evicted pod"`)+".*"+regexp.QuoteMeta(oc.Namespace())+".*"+regexp.QuoteMeta(`reason="PodLifeTime"`))
+
+		// Collect PodLifetime metrics from prometheus
+		g.By("Checking PodLifetime metrics from prometheus")
+		checkDeschedulerMetrics(oc, "PodLifeTime", "descheduler_pods_evicted")
+	})
 })

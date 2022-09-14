@@ -198,6 +198,13 @@ type priorityClassDefinition struct {
 	template      string
 }
 
+type priorityPod struct {
+	dName      string
+	namespace  string
+	replicaSum int
+	template   string
+}
+
 func (pod *podNodeSelector) createPodNodeSelector(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace,
@@ -1017,4 +1024,17 @@ func checkNodeUncordoned(oc *exutil.CLI, workerNodeName string) error {
 		}
 		return true, nil
 	})
+}
+
+func (prio *priorityPod) createPodWithPriorityParam(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", prio.template, "-p", "NAMESPACE="+prio.namespace, "DNAME="+prio.dName,
+			"REPLICASNUM="+strconv.Itoa(prio.replicaSum))
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod %s with priority has not been created successfully", prio.dName))
 }
