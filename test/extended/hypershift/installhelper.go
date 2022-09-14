@@ -39,6 +39,7 @@ type createCluster struct {
 	IamJSON          string `param:"iam-json"`
 	InfraID          string `param:"infra-id"`
 	RootDiskSize     *int   `param:"root-disk-size"`
+	AdditionalTags   string `param:"additional-tags"`
 }
 
 type infra struct {
@@ -91,6 +92,11 @@ func (c *createCluster) withIamJSON(IamJSON string) *createCluster {
 
 func (c *createCluster) withRootDiskSize(RootDiskSize int) *createCluster {
 	c.RootDiskSize = &RootDiskSize
+	return c
+}
+
+func (c *createCluster) withAdditionalTags(AdditionalTags string) *createCluster {
+	c.AdditionalTags = AdditionalTags
 	return c
 }
 

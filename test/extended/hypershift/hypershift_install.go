@@ -350,6 +350,40 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: liangli@redhat.com
+	g.It("Longduration-NonPreRelease-Author:liangli-Critical-48133-[HyperShiftINSTALL] Apply user defined tags to all AWS resources [Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 48133 is for AWS - skipping test ...")
+		}
+		caseID := "48133"
+		dir := "/tmp/hypershift" + caseID
+		clusterName := "hypershift-" + caseID
+		defer os.RemoveAll(dir)
+		err := os.MkdirAll(dir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Config AWS Bucket And install HyperShift operator")
+		installHelper := installHelper{oc: oc, bucketName: "hypershift-" + caseID + "-" + strings.ToLower(exutil.RandStrDefault()), dir: dir, iaasPlatform: iaasPlatform}
+		defer installHelper.deleteAWSS3Bucket()
+		defer installHelper.hyperShiftUninstall()
+		installHelper.hyperShiftInstall()
+
+		g.By("create HostedClusters")
+		createCluster := installHelper.createClusterAWSCommonBuilder().
+			withName(clusterName).
+			withNodePoolReplicas(2).
+			withAdditionalTags("adminContact=HyperShiftInstall,customTag=test")
+		defer installHelper.destroyAWSHostedClusters(createCluster)
+		cluster := installHelper.createAWSHostedClusters(createCluster)
+		installHelper.createHostedClusterKubeconfig(createCluster, cluster)
+
+		g.By("Confirm user defined tags")
+		checkSubstring(doOcpReq(oc, OcpGet, false, "hostedcluster", "-n", cluster.namespace, cluster.name, `-ojsonpath={.spec.platform.aws.resourceTags}`), []string{`{"key":"adminContact","value":"HyperShiftInstall"}`, `{"key":"customTag","value":"test"}`})
+		o.Expect(strings.Count(doOcpReq(oc, OcpGet, false, "awsmachines", "-n", cluster.namespace+"-"+cluster.name, `-ojsonpath={.items[*].spec.additionalTags}`), "HyperShiftInstall")).Should(o.Equal(2))
+		checkSubstring(doOcpReq(oc, OcpGet, false, "--kubeconfig="+cluster.hostedClustersKubeconfigFile, "infrastructure", "cluster", `-ojsonpath={.status.platformStatus.aws.resourceTags}`), []string{`{"key":"adminContact","value":"HyperShiftInstall"}`, `{"key":"customTag","value":"test"}`})
+		o.Expect(doOcpReq(oc, OcpGet, false, "--kubeconfig="+cluster.hostedClustersKubeconfigFile, "-n", "openshift-ingress", "svc/router-default", `-ojsonpath={.metadata.annotations}`)).Should(o.ContainSubstring(`"service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags":"adminContact=HyperShiftInstall,customTag=test"`))
+	})
+
+	// author: liangli@redhat.com
 	g.It("Longduration-NonPreRelease-Author:liangli-Critical-49129-[HyperShiftINSTALL] Create multi-zone Azure infrastructure and nodepools via CLI [Serial]", func() {
 		if iaasPlatform != "azure" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 49129 is for azure - skipping test ...")
