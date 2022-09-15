@@ -76,10 +76,20 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		}
 
 		g.By("Check AWS secret and access key inside image registry pod")
-		result, err = oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-image-registry", "deployment.apps/image-registry", "cat", "/var/run/secrets/cloud/credentials").Output()
+		var keyInfo string
+		waitErr := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			result, err = oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-image-registry", "deployment.apps/image-registry", "cat", "/var/run/secrets/cloud/credentials").Output()
+			if err != nil {
+				e2e.Logf("Fail to rsh into registry pod, error: %s. Trying again", err)
+				return false, nil
+			}
+			keyInfo = result
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("Registry pods are not ready %s\n", waitErr))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(result).To(o.ContainSubstring("aws_access_key_id"))
-		o.Expect(result).To(o.ContainSubstring("aws_secret_access_key"))
+		o.Expect(keyInfo).To(o.ContainSubstring("aws_access_key_id"))
+		o.Expect(keyInfo).To(o.ContainSubstring("aws_secret_access_key"))
 		g.By("Check installer-cloud-credentials secret")
 		credentials, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/installer-cloud-credentials", "-n", "openshift-image-registry", "-o=jsonpath={.data.credentials}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
