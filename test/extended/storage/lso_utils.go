@@ -289,6 +289,7 @@ func newLocalVolume(opts ...localVolumeOption) localVolume {
 
 // Create localVolume CR
 func (lv *localVolume) create(oc *exutil.CLI) {
+	o.Expect(lv.deviceID).NotTo(o.BeEmpty())
 	if lv.namespace == "" {
 		lv.namespace = oc.Namespace()
 	}
@@ -303,6 +304,7 @@ func (lv *localVolume) create(oc *exutil.CLI) {
 
 // Create localVolume CR with extra parameters
 func (lv *localVolume) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
+	o.Expect(lv.deviceID).NotTo(o.BeEmpty())
 	if lv.namespace == "" {
 		lv.namespace = oc.Namespace()
 	}

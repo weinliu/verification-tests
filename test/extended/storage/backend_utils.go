@@ -481,24 +481,34 @@ func (vol *ebsVolume) attachToInstanceSucceed(ac *ec2.EC2, oc *exutil.CLI, insta
 	vol.attachToInstance(ac, instance)
 	vol.waitAttachSucceed(ac)
 	vol.attachedNode = instance.instanceID
-	// RHEL type deviceid generate basic rule
+	deviceByID := "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_vol" + strings.TrimPrefix(vol.volumeID, "vol-")
+	// RHEL type instances deviceid generate basic rule
 	if instance.osID == "rhel" {
-		deviceInfo, err := execCommandInSpecificNode(oc, instance.name, "lsblk -J")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		sameSizeDevices := gjson.Get(deviceInfo, `blockdevices.#(size=`+strconv.FormatInt(vol.Size, 10)+`G)#.name`).Array()
-		sameTypeDevices := gjson.Get(deviceInfo, `blockdevices.#(type="disk")#.name`).Array()
-		devices := sliceIntersect(strings.Split(strings.Trim(strings.Trim(fmt.Sprint(sameSizeDevices), "["), "]"), " "),
-			strings.Split(strings.Trim(strings.Trim(fmt.Sprint(sameTypeDevices), "["), "]"), " "))
-		o.Expect(devices).NotTo(o.BeEmpty())
-		for _, device := range devices {
-			if strings.Split(device, "")[len(device)-1] == strings.Split(vol.Device, "")[len(vol.Device)-1] {
-				vol.DeviceByID = "/dev/" + device
-				break
+		if statInfo, _ := execCommandInSpecificNode(oc, instance.name, "stat "+deviceByID); strings.Contains(statInfo, "symbolic link") {
+			vol.DeviceByID = deviceByID
+		} else {
+			deviceInfo, err := execCommandInSpecificNode(oc, instance.name, "lsblk -J")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			sameSizeDevices := gjson.Get(deviceInfo, `blockdevices.#(size=`+strconv.FormatInt(vol.Size, 10)+`G)#.name`).Array()
+			sameTypeDevices := gjson.Get(deviceInfo, `blockdevices.#(type="disk")#.name`).Array()
+			devices := sliceIntersect(strings.Split(strings.Trim(strings.Trim(fmt.Sprint(sameSizeDevices), "["), "]"), " "),
+				strings.Split(strings.Trim(strings.Trim(fmt.Sprint(sameTypeDevices), "["), "]"), " "))
+			o.Expect(devices).NotTo(o.BeEmpty())
+			e2e.Logf(`The rhel node filtered Devices are: "%v"`, devices)
+			if len(devices) == 1 {
+				vol.DeviceByID = "/dev/" + devices[0]
+			} else {
+				for _, device := range devices {
+					if strings.Split(device, "")[len(device)-1] == strings.Split(vol.Device, "")[len(vol.Device)-1] {
+						vol.DeviceByID = "/dev/" + device
+						break
+					}
+				}
 			}
 		}
 	} else {
 		// RHCOS type deviceid generate basic rule
-		vol.DeviceByID = "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_vol" + strings.TrimLeft(vol.volumeID, "vol-")
+		vol.DeviceByID = deviceByID
 	}
 	e2e.Logf("Volume : \"%s\" attach to instance \"%s\" [Device:\"%s\", ById:\"%s\"]", vol.volumeID, vol.attachedNode, vol.Device, vol.DeviceByID)
 }
