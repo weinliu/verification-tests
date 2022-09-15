@@ -1,5 +1,6 @@
 import { nav } from '../upstream/views/nav';
 import { Overview } from '../views/overview';
+import { guidedTour } from '../upstream/views/guided-tour';
 
 describe('Dynamic plugins features', () => {
   before(() => {
@@ -38,6 +39,8 @@ describe('Dynamic plugins features', () => {
   });
   it('(OCP-45629, admin) dynamic plugins proxy to services on the cluster', () => {
     nav.sidenav.switcher.changePerspectiveTo('Developer');
+    guidedTour.isOpen();
+    guidedTour.close();
     // demo plugin in Dev perspective
     Overview.isLoaded();
     nav.sidenav.clickNavLink(['Demo Plugin']);
