@@ -3657,45 +3657,6 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: scolange@redhat.com
-	g.It("Author:scolange-High-23172-the copied CSV will exist in new created project", func() {
-		dr := make(describerResrouce)
-		itName := g.CurrentGinkgoTestDescription().TestText
-		dr.addIr(itName)
-
-		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
-		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-
-		sub := subscriptionDescription{
-			subName:                "sub-sample-23172",
-			namespace:              "openshift-operators",
-			catalogSourceName:      "qe-app-registry",
-			catalogSourceNamespace: "openshift-marketplace",
-			channel:                "alpha",
-			ipApproval:             "Automatic",
-			operatorPackage:        "sample-operator",
-			template:               subTemplate,
-		}
-
-		g.By("1, Check if the global operator global-operators support all namesapces")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "[]", ok, []string{"og", "global-operators", "-n", "openshift-operators", "-o=jsonpath={.status.namespaces}"})
-
-		g.By("2, Create operator targeted at all namespace")
-		defer sub.delete(itName, dr)
-		defer sub.deleteCSV(itName, dr)
-		sub.create(oc, itName, dr)
-
-		g.By("3, Create new namespace")
-		oc.SetupProject()
-
-		e2e.Logf("The test case pass")
-
-		g.By("4, Check the csv within new namespace is copied.")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
-		e2e.Logf("The t**************")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Copied", ok, []string{"csv", sub.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.reason}"})
-	})
-
-	// author: scolange@redhat.com
 	g.It("ConnectedOnly-Author:scolange-Medium-23395-Deleted catalog registry pods and verify if them are recreated automatically [Disruptive]", func() {
 
 		g.By("get pod of marketplace")
@@ -9807,7 +9768,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 	})
 
 	// It will cover test case: OCP-40531, author: xzha@redhat.com
-	g.It("ConnectedOnly-Author:xzha-High-40531-High-41051-the value of lastUpdateTime of csv and Components of Operator should be correct [Serial]", func() {
+	g.It("ConnectedOnly-Author:xzha-High-40531-High-41051-High-23172-the value of lastUpdateTime of csv and Components of Operator should be correct [Serial]", func() {
 		exutil.SkipARM64(oc)
 		var (
 			itName              = g.CurrentGinkgoTestDescription().TestText
@@ -9836,7 +9797,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		g.By("3, Create new namespace")
 		oc.SetupProject()
 
-		g.By("4, Check the csv within new namespace is copied.")
+		g.By("4, OCP-23172 Check the csv within new namespace is copied.")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Copied", ok, []string{"csv", sub.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.reason}"})
 
