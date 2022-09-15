@@ -1143,7 +1143,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-Longduration-NonPreRelease-Medium-47208-The configured EgressIPs exceeds IP capacity. [Disruptive]", func() {
+	g.It("Author:huirwang-HyperShiftGUEST-Longduration-NonPreRelease-Medium-47208-The configured EgressIPs exceeds IP capacity. [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 

@@ -102,7 +102,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(alertRunbook).To(o.ContainSubstring("https://github.com/openshift/runbooks/blob/master/alerts/cluster-network-operator/V4SubnetAllocationThresholdExceeded.md"))
 	})
 
-	g.It("Author:weliang-Medium-51726-Create runbook and link SOP for NodeWithoutOVNKubeNodePodRunning alert", func() {
+	g.It("Author:weliang-HyperShiftGUEST-Medium-51726-Create runbook and link SOP for NodeWithoutOVNKubeNodePodRunning alert", func() {
 		networkType := exutil.CheckNetworkType(oc)
 		if !strings.Contains(networkType, "ovn") {
 			g.Skip("Skip testing on non-ovn cluster!!!")

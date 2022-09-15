@@ -20,7 +20,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: anusaxen@redhat.com
-	g.It("Author:anusaxen-Medium-49216-[BZ 2009857] ovnkube-node logs should not print api token in logs. ", func() {
+	g.It("Author:anusaxen-HyperShiftGUEST-Medium-49216-[BZ 2009857] ovnkube-node logs should not print api token in logs. ", func() {
 		workerNode, err := exutil.GetFirstWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ovnkubePod, err := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", workerNode)

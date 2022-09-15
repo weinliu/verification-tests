@@ -18,12 +18,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	var oc = exutil.NewCLI("networking-operator", exutil.KubeConfigPath())
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-Medium-44954-Newline is added between user CAs and system CAs [Disruptive]", func() {
+	g.It("Author:jechen-HyperShiftGUEST-Medium-44954-Newline is added between user CAs and system CAs [Disruptive]", func() {
 		var (
 			dirname  = "/tmp/OCP-44954"
 			name     = dirname + "OCP-44954-custom"
 			validity = 3650
-			ca_subj  = dirname + "/OU=openshift/CN=admin-kubeconfig-signer-custom"
+			caSubj   = dirname + "/OU=openshift/CN=admin-kubeconfig-signer-custom"
 		)
 
 		// Generation of a new self-signed CA
@@ -32,13 +32,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(dirname)
 		e2e.Logf("Generate the CA private key")
-		openssl_cmd := fmt.Sprintf(`openssl genrsa -out %s-ca.key 4096`, name)
-		err = exec.Command("bash", "-c", openssl_cmd).Run()
+		opensslCmd := fmt.Sprintf(`openssl genrsa -out %s-ca.key 4096`, name)
+		err = exec.Command("bash", "-c", opensslCmd).Run()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Create the CA certificate")
-		openssl_cmd = fmt.Sprintf(`openssl req -x509 -new -nodes -key %s-ca.key -sha256 -days %d -out %s-ca.crt -subj %s`, name, validity, name, ca_subj)
-		err = exec.Command("bash", "-c", openssl_cmd).Run()
+		opensslCmd = fmt.Sprintf(`openssl req -x509 -new -nodes -key %s-ca.key -sha256 -days %d -out %s-ca.crt -subj %s`, name, validity, name, caSubj)
+		err = exec.Command("bash", "-c", opensslCmd).Run()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("2. Create a configmap from the CA")
