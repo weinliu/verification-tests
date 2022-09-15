@@ -41,6 +41,7 @@ type createCluster struct {
 	RootDiskSize            *int   `param:"root-disk-size"`
 	AdditionalTags          string `param:"additional-tags"`
 	InfraAvailabilityPolicy string `param:"infra-availability-policy"`
+	Zones                   string `param:"zones"`
 }
 
 type infra struct {
@@ -105,6 +106,12 @@ func (c *createCluster) withInfraAvailabilityPolicy(InfraAvailabilityPolicy stri
 	c.InfraAvailabilityPolicy = InfraAvailabilityPolicy
 	return c
 }
+
+func (c *createCluster) withZones(Zones string) *createCluster {
+	c.Zones = Zones
+	return c
+}
+
 func (i *infra) withInfraID(InfraID string) *infra {
 	i.InfraID = InfraID
 	return i
