@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,6 +23,37 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
+
+type tcpdumpDaemonSet struct {
+	name         string
+	namespace    string
+	nodeLabel    string
+	labelKey     string
+	phyInterface string
+	dstPort      int
+	dstHost      string
+	template     string
+}
+
+func (ds *tcpdumpDaemonSet) createTcpdumpDS(oc *exutil.CLI) error {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ds.template, "-p", "NAME="+ds.name, "NAMESPACE="+ds.namespace, "NODELABEL="+ds.nodeLabel, "LABELKEY="+ds.labelKey, "INF="+ds.phyInterface, "DSTPORT="+strconv.Itoa(ds.dstPort), "HOST="+ds.dstHost)
+		if err1 != nil {
+			e2e.Logf("Tcpdump daemonset created failed :%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		return fmt.Errorf("fail to create Tcpdump daemonset %v", ds.name)
+	}
+	return nil
+}
+
+func deleteTcpdumpDS(oc *exutil.CLI, dsName, dsNS string) {
+	_, err := runOcWithRetry(oc.AsAdmin(), "delete", "ds", dsName, "-n", dsNS, "--ignore-not-found=true")
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
 
 // Get AWS credential from cluster
 func getAwsCredentialFromCluster(oc *exutil.CLI) {
@@ -526,4 +559,224 @@ func installIPEchoServiceOnAzure(oc *exutil.CLI, sess *exutil.AzureSession, rg s
 
 	ipEchoURL := net.JoinHostPort(privateIP, "9095")
 	return ipEchoURL, nil
+}
+
+// runOcWithRetry runs the oc command with up to 5 retries if a timeout error occurred while running the command.
+func runOcWithRetry(oc *exutil.CLI, cmd string, args ...string) (string, error) {
+	var err error
+	var output string
+	maxRetries := 5
+
+	for numRetries := 0; numRetries < maxRetries; numRetries++ {
+		if numRetries > 0 {
+			e2e.Logf("Retrying oc command (retry count=%v/%v)", numRetries+1, maxRetries)
+		}
+
+		output, err = oc.Run(cmd).Args(args...).Output()
+		// If an error was found, either return the error, or retry if a timeout error was found.
+		if err != nil {
+			if strings.Contains(strings.ToLower(err.Error()), "i/o timeout") {
+				// Retry on "i/o timeout" errors
+				e2e.Logf("Warning: oc command encountered i/o timeout.\nerr=%v\n)", err)
+				continue
+			}
+			return output, err
+		}
+		// Break out of loop if no error.
+		break
+	}
+	return output, err
+}
+
+func createSnifferDaemonset(oc *exutil.CLI, ns, dsName, nodeLabel, labelKey, dstHost, phyInf string, dstPort int) (tcpDS *tcpdumpDaemonSet, err error) {
+	buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+	tcpdumpDSTemplate := filepath.Join(buildPruningBaseDir, "tcpdump-daemonset-template.yaml")
+
+	_, err = runOcWithRetry(oc.AsAdmin(), "adm", "policy", "add-scc-to-user", "privileged", fmt.Sprintf("system:serviceaccount:%s:default", ns))
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	tcpdumpDS := tcpdumpDaemonSet{
+		name:         dsName,
+		template:     tcpdumpDSTemplate,
+		namespace:    ns,
+		nodeLabel:    nodeLabel,
+		labelKey:     labelKey,
+		phyInterface: phyInf,
+		dstPort:      dstPort,
+		dstHost:      dstHost,
+	}
+
+	dsErr := tcpdumpDS.createTcpdumpDS(oc)
+	if dsErr != nil {
+		return &tcpdumpDS, dsErr
+	}
+
+	dsReadyErr := waitDaemonSetReady(oc, ns, tcpdumpDS.name)
+	if dsReadyErr != nil {
+		return &tcpdumpDS, dsReadyErr
+	}
+	return &tcpdumpDS, nil
+}
+
+// waitDaemonSetReady by checking  if NumberReady == DesiredNumberScheduled.
+func waitDaemonSetReady(oc *exutil.CLI, ns, dsName string) error {
+	desiredNum, err := runOcWithRetry(oc.AsAdmin(), "get", "ds", dsName, "-n", ns, "-ojsonpath={.status.desiredNumberScheduled}")
+	if err != nil {
+		return fmt.Errorf("Cannot get DesiredNumberScheduled for daemonset :%s", dsName)
+	}
+
+	dsErr := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
+		readyNum, err1 := runOcWithRetry(oc.AsAdmin(), "get", "ds", dsName, "-n", ns, "-ojsonpath={.status.numberReady}")
+		if desiredNum != readyNum || err1 != nil {
+			e2e.Logf("The DesiredNumberScheduled for daemonset :%s, ready number is %s, wait for next try.", desiredNum, readyNum)
+			return false, nil
+		}
+		e2e.Logf("The DesiredNumberScheduled for daemonset :%s, ready number is %s.", desiredNum, readyNum)
+		return true, nil
+	})
+	if dsErr != nil {
+		return fmt.Errorf("The  daemonset :%s is not ready", dsName)
+	}
+
+	return nil
+}
+
+// checkMatchedIPs, match is true, expectIP is expected in logs
+//  match is false, expectIP is NOT expected in logs
+func checkMatchedIPs(oc *exutil.CLI, ns, dsName string, searchString, expectedIP string, match bool) error {
+	e2e.Logf("Expected egressIP hit egress node logs : %v", match)
+	matchErr := wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		foundIPs, searchErr := getSnifferLogs(oc, ns, dsName, searchString)
+		o.Expect(searchErr).NotTo(o.HaveOccurred())
+
+		_, ok := foundIPs[expectedIP]
+		// Expect there are matched IPs
+		if match && !ok {
+			e2e.Logf("Waiting for the logs to be synced, try next round.")
+			return false, nil
+		}
+		//Expect there is no matched IP
+		if !match && ok {
+			e2e.Logf("Waiting for the logs to be synced, try next round.")
+			return false, nil
+		}
+
+		return true, nil
+	})
+	return matchErr
+}
+
+// getSnifferLogs scan sniffer logs and return the source IPs for the request.
+func getSnifferLogs(oc *exutil.CLI, ns, dsName, searchString string) (map[string]int, error) {
+	snifferPods := getPodName(oc, ns, "name="+dsName)
+	var snifLogs string
+	for _, pod := range snifferPods {
+		log, err := runOcWithRetry(oc.AsAdmin(), "logs", pod, "-n", ns)
+		if err != nil {
+			return nil, err
+		}
+		snifLogs += "\n" + log
+	}
+	var ip string
+	snifferLogs := strings.Split(snifLogs, "\n")
+	matchedIPs := make(map[string]int)
+	if len(snifferLogs) > 0 {
+		for _, line := range snifferLogs {
+			if !strings.Contains(line, searchString) {
+				continue
+			}
+			e2e.Logf("Found hit in log line:\n %v", line)
+			matchLineSlice := strings.Fields(line)
+			ipPortSlice := strings.Split(matchLineSlice[9], ".")
+			e2e.Logf(matchLineSlice[9])
+			ip = strings.Join(ipPortSlice[:len(ipPortSlice)-1], ".")
+			e2e.Logf("Found source ip %s in log line.", ip)
+			matchedIPs[ip]++
+		}
+
+	} else {
+		e2e.Logf("No new log generated!")
+	}
+
+	return matchedIPs, nil
+}
+
+func getRequestURL(domainName string) (string, string) {
+	randomStr := getRandomString()
+	url := fmt.Sprintf("curl -s http://%s/?request=%s --connect-timeout 5", domainName, randomStr)
+	return randomStr, url
+}
+
+func waitCloudPrivateIPconfigUpdate(oc *exutil.CLI, egressIP string, exist bool) {
+	egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+		e2e.Logf("Wait for cloudprivateipconfig updated,expect %s exist: %v.", egressIP, exist)
+		output, err := runOcWithRetry(oc.AsAdmin(), "get", "cloudprivateipconfig", egressIP)
+		e2e.Logf(output)
+		if exist && err == nil && strings.Contains(output, egressIP) {
+			return true, nil
+		}
+		if !exist && err != nil && strings.Contains(output, "NotFound") {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("CloudprivateConfigIP was not updated as expected!"))
+
+}
+
+// getSnifPhyInf Get physical interface
+func getSnifPhyInf(oc *exutil.CLI, nodeName string) (string, error) {
+	networkType := checkNetworkType(oc)
+	var phyInf string
+	if strings.Contains(networkType, "ovn") {
+		ifaceErr2 := wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+			ifaceList2, ifaceErr := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+			if ifaceErr != nil {
+				e2e.Logf("Debug node Error: %v", ifaceErr)
+				return false, nil
+			}
+			e2e.Logf(ifaceList2)
+			infList := strings.Split(ifaceList2, "\n")
+			for _, inf := range infList {
+				if strings.Contains(inf, "ovs-if-phys0") {
+					phyInf = strings.Fields(inf)[3]
+				}
+			}
+
+			return true, nil
+		})
+		return phyInf, ifaceErr2
+	}
+
+	if strings.Contains(networkType, "sdn") {
+		phyInf, error := getDefaultInterface(oc)
+		return phyInf, error
+	}
+	return "", nil
+
+}
+
+// nslookDomainName get the first IP
+func nslookDomainName(domainName string) string {
+	ips, err := net.LookupIP(domainName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	for _, ip := range ips {
+		return ip.String()
+	}
+	return ""
+}
+
+// verifyEgressIPinTCPDump Verify the EgressIP takes effect.
+func verifyEgressIPinTCPDump(oc *exutil.CLI, pod, podNS, expectedEgressIP, dstHost, tcpdumpNS, tcpdumpName string) error {
+	egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+		randomStr, url := getRequestURL(dstHost)
+		_, err := e2e.RunHostCmd(podNS, pod, url)
+		if checkMatchedIPs(oc, tcpdumpNS, tcpdumpName, randomStr, expectedEgressIP, true) != nil || err != nil {
+			e2e.Logf("No matched egressIPs in tcpdump log, try next round.")
+			return false, nil
+		}
+		return true, nil
+	})
+
+	return egressipErr
 }
