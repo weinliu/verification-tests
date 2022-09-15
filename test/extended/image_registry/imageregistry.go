@@ -2964,4 +2964,46 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "Update ca for proxy resource failed")
 	})
+
+	//author: wewang@redhat.com
+	g.It("DisconnectedOnly-Author:wewang-Medium-31767-Warning appears when registry use invalid AdditionalTrustedCA [Disruptive]", func() {
+		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("image.config/cluster", "-o=jsonpath={.spec.additionalTrustedCA.name}").Output()
+		o.Expect(output).To(o.Equal("registry-config"))
+
+		g.By("Config AdditionalTrustedCA to use a non-existent ConfigMap")
+		defer func() {
+			var message string
+			err := oc.AsAdmin().Run("patch").Args("image.config.openshift.io/cluster", "-p", `{"spec": {"additionalTrustedCA": {"name": "registry-config"}}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
+				registryDegrade := checkRegistryDegraded(oc)
+				if !registryDegrade {
+					return true, nil
+				}
+				message, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].message}").Output()
+				e2e.Logf("Wait for image-registry coming ready")
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("Image registry is not ready with info %s\n", message))
+		}()
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("image.config.openshift.io/cluster", "-p", `{"spec": {"additionalTrustedCA": {"name": "registry-config-invalid"}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(25*time.Second, 2*time.Minute, func() (bool, error) {
+			result, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/cluster-image-registry-operator", "-n", "openshift-image-registry").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(result, "configmap \"registry-config-invalid\" not found") {
+				return true, nil
+			}
+			e2e.Logf("Continue to next round")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Update cm for image.config cluster failed")
+	})
+
+	//author: wewang@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:wewang-Critical-30231-Warning appears if use invalid value for image registry virtual-hosted buckets", func() {
+		g.By("Use invalid value for image registry virtual-hosted buckets")
+		output, _ := oc.AsAdmin().Run("patch").Args("config.imageregistry/cluster", "-p", `{"spec": {"storage": {"s3": {"virtualHostedStyle": "invalid"}}}}`, "--type=merge").Output()
+		o.Expect(string(output)).To(o.ContainSubstring("Invalid value: \"string\""))
+	})
 })

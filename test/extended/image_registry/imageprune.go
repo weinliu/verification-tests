@@ -328,4 +328,23 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		result, _ = oc.WithoutNamespace().AsAdmin().Run("adm").Args("prune", "images", "--prune_registry=abc").Output()
 		o.Expect(result).To(o.ContainSubstring("invalid argument"))
 	})
+
+	// author: wewang@redhat.com
+	g.It("Author:wewang-Medium-32329-keepYoungerThanDuration can be defined for image-pruner [Disruptive]", func() {
+		g.By(" Define keepYoungerThan in imagepruner")
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("imagepruner/cluster", "-p", `{"spec": {"keepYoungerThan": null}}`, "--type=merge").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("imagepruner/cluster", "-p", `{"spec": {"keepYoungerThan": 60}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("cronjob/image-pruner", "-n", "openshift-image-registry").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("keep-younger-than=60ns"))
+
+		g.By(" Define keepYoungerThanDuration in imagepruner")
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("imagepruner/cluster", "-p", `{"spec": {"keepYoungerThanDuration": null}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("imagepruner/cluster", "-p", `{"spec": {"keepYoungerThanDuration": "90s"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("cronjob/image-pruner", "-n", "openshift-image-registry").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("keep-younger-than=1m30s"))
+	})
 })
