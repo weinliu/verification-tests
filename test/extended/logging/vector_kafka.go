@@ -109,7 +109,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Deploy kafka")
 			defer kafka.removeKafka(oc)
 			kafka.deployKafka(oc)
-			kafkaEndpoint := "tls://" + kafka.kafkasvcName + "." + kafka.namespace + ".svc.cluster.local:9092/clo-topic"
+			kafkaEndpoint := "http://" + kafka.kafkasvcName + "." + kafka.namespace + ".svc.cluster.local:9092/clo-topic"
 
 			g.By("Create clusterlogforwarder/instance")
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf_kafka.yaml")
