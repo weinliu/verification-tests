@@ -13,7 +13,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		oc           = exutil.NewCLI("control-plane-machineset", exutil.KubeConfigPath())
 		iaasPlatform string
 	)
-
 	g.BeforeEach(func() {
 		iaasPlatform = exutil.CheckPlatform(oc)
 	})
@@ -21,9 +20,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-Medium-53320-Owner reference could be added/removed to control plan machines [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		if !(iaasPlatform == "aws" || iaasPlatform == "azure") {
-			g.Skip("Skip this scenario because it is not supported on the " + iaasPlatform + " platform")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
 		g.By("Check if controlplanemachineset exists")
 		controlplanemachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -57,9 +54,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-Medium-53081-Finalizer should be added to control plan machineset [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		if !(iaasPlatform == "aws" || iaasPlatform == "azure") {
-			g.Skip("Skip this scenario because it is not supported on the " + iaasPlatform + " platform")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
 
 		g.By("Check if controlplanemachineset exists")
 		controlplanemachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Output()
@@ -95,9 +90,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-53323-[CPMS] Implement update logic for RollingUpdate CPMS strategy [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		if !(iaasPlatform == "aws" || iaasPlatform == "azure") {
-			g.Skip("Skip this scenario because it is not supported on the " + iaasPlatform + " platform")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
 
 		g.By("Check if controlplanemachineset exists")
 		controlplanemachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Output()

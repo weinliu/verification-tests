@@ -15,13 +15,8 @@ import (
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc           = exutil.NewCLI("machine-api-operator", exutil.KubeConfigPath())
-		iaasPlatform string
+		oc = exutil.NewCLI("machine-api-operator", exutil.KubeConfigPath())
 	)
-
-	g.BeforeEach(func() {
-		iaasPlatform = exutil.CheckPlatform(oc)
-	})
 
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-Medium-45772-MachineSet selector is immutable", func() {
@@ -39,9 +34,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-45377-Enable accelerated network via MachineSets on Azure [Disruptive]", func() {
 		g.By("Create a new machineset with acceleratedNetworking: true")
 		exutil.SkipConditionally(oc)
-		if iaasPlatform != "azure" {
-			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
 		machinesetName := "machineset-45377"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
 		defer ms.DeleteMachineSet(oc)
@@ -64,9 +57,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-46967-Implement Ephemeral OS Disks - OS cache placement on Azure [Disruptive]", func() {
 		g.By("Create a new machineset with Ephemeral OS Disks - OS cache placement")
 		exutil.SkipConditionally(oc)
-		if iaasPlatform != "azure" {
-			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
 		machinesetName := "machineset-46967"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
 		defer ms.DeleteMachineSet(oc)
@@ -87,9 +78,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-46303-Availability sets could be created when needed for Azure [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		if iaasPlatform != "azure" {
-			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
 		defaultWorkerMachinesetName := exutil.GetRandomMachineSetName(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, defaultWorkerMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -215,9 +204,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-44977-Machine with GPU is supported on gcp [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		if iaasPlatform != "gcp" {
-			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "gcp")
 		g.By("Create a new machineset")
 		machinesetName := "machineset-44977"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
@@ -259,9 +246,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-High-35513-Windows machine should successfully provision for aws [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		if iaasPlatform != "aws" {
-			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
 		g.By("Create a new machineset")
 		machinesetName := "machineset-35513"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
@@ -293,9 +278,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-48012-Change AWS EBS GP3 IOPS in MachineSet should take affect on aws [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		if iaasPlatform != "aws" {
-			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
 		g.By("Create a new machineset")
 		machinesetName := "machineset-48012"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
@@ -323,9 +306,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("Longduration-NonPreRelease-Author:zhsun-High-33040-Required configuration should be added to the ProviderSpec to enable spot instances - Azure [Disruptive]", func() {
-		if iaasPlatform != "azure" {
-			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
-		}
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
 		randomMachinesetName := exutil.GetRandomMachineSetName(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -352,9 +334,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-48594-AWS EFA network interfaces should be supported via machine api [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		if iaasPlatform != "aws" {
-			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
 		g.By("Create a new machineset")
 		machinesetName := "machineset-48594"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
@@ -375,9 +355,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-48595-Negative validation for AWS NetworkInterfaceType [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		if iaasPlatform != "aws" {
-			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
 		g.By("Create a new machineset")
 		machinesetName := "machineset-48595"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
@@ -400,9 +378,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-49827-Ensure pd-balanced disk is supported on GCP via machine api [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		if iaasPlatform != "gcp" {
-			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "gcp")
 		g.By("Create a new machineset")
 		machinesetName := "machineset-49827"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
@@ -428,9 +404,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonPreRelease-Author:zhsun-Medium-50731-Enable IMDSv2 on existing worker machines via machine set [Disruptive][Slow]", func() {
 		exutil.SkipConditionally(oc)
-		if iaasPlatform != "aws" {
-			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
 		g.By("Create a new machineset")
 		machinesetName := "machineset-50731"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
@@ -464,9 +438,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-37915-Creating machines using KMS keys from AWS [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		if iaasPlatform != "aws" {
-			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if region != "us-east-2" {
@@ -488,5 +460,78 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.blockDevices[0].ebs.kmsKey.arn}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).Should(o.ContainSubstring("arn:aws:kms:us-east-2"))
+	})
+
+	// author: zhsun@redhat.com
+	g.It("Longduration-NonPreRelease-Author:zhsun-Medium-52471-Enable configuration of boot diagnostics when creating VMs on Azure [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
+
+		g.By("Create a machineset configuring boot diagnostics with Azure managed storage accounts")
+		machinesetName := "machineset-52471-1"
+		ms1 := exutil.MachineSetDescription{machinesetName, 0}
+		defer ms1.DeleteMachineSet(oc)
+		ms1.CreateMachineSet(oc)
+
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"diagnostics":{"boot":{"storageAccountType":"AzureManaged"}}}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", machineAPINamespace, "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.diagnostics.boot.storageAccountType}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("AzureManaged"))
+
+		g.By("Create machineset configuring boot diagnostics with Customer managed storage accounts")
+		machinesetName = "machineset-52471-2"
+		ms2 := exutil.MachineSetDescription{machinesetName, 0}
+		defer ms2.DeleteMachineSet(oc)
+		ms2.CreateMachineSet(oc)
+
+		resourceGroupName, rgerr := exutil.GetAzureCredentialFromCluster(oc)
+		o.Expect(rgerr).NotTo(o.HaveOccurred())
+		session, sessErr := exutil.NewAzureSessionFromEnv()
+		o.Expect(sessErr).NotTo(o.HaveOccurred())
+		storageAccount, instanceErr := exutil.GetAzureStorageAccount(session, resourceGroupName)
+		o.Expect(instanceErr).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"diagnostics":{"boot":{"storageAccountType":"CustomerManaged","customerManaged":{"storageAccountURI":"https://`+storageAccount+`.blob.core.windows.net/"}}}}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachinesRunning(oc, 1, machinesetName)
+		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", machineAPINamespace, "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.diagnostics.boot.storageAccountType}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("CustomerManaged"))
+	})
+
+	// author: zhsun@redhat.com
+	g.It("Author:zhsun-Medium-52473-Webhook validations for Azure boot diagnostics [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
+
+		g.By("Create a machineset")
+		machinesetName := "machineset-52473-1"
+		ms1 := exutil.MachineSetDescription{machinesetName, 0}
+		defer ms1.DeleteMachineSet(oc)
+		ms1.CreateMachineSet(oc)
+
+		g.By("Update machineset with invalid storage account type")
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"diagnostics":{"boot":{"storageAccountType":"AzureManaged-invalid"}}}}}}}}`, "--type=merge").Output()
+		o.Expect(out).To(o.ContainSubstring("storageAccountType must be one of: AzureManaged, CustomerManaged"))
+
+		g.By("Update machineset with Customer Managed boot diagnostics, with a missing storage account URI")
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"diagnostics":{"boot":{"storageAccountType":"CustomerManaged"}}}}}}}}`, "--type=merge").Output()
+		o.Expect(out).To(o.ContainSubstring("customerManaged configuration must be provided"))
+
+		g.By("Update machineset Azure managed storage accounts")
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"diagnostics":{"boot":{"storageAccountType":"AzureManaged","customerManaged":{"storageAccountURI":"https://clusterqa2ob.blob.core.windows.net"}}}}}}}}}`, "--type=merge").Output()
+		o.Expect(out).To(o.ContainSubstring("customerManaged may not be set when type is AzureManaged"))
+
+		g.By("Update machineset with invalid storageAccountURI")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"diagnostics":{"boot":{"storageAccountType":"CustomerManaged","customerManaged":{"storageAccountURI":"https://clusterqa2ob.blob.core.windows.net.invalid"}}}}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachineFailed(oc, machinesetName)
+
+		g.By("Update machineset with invalid storage account")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace, "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"diagnostics":{"boot":{"storageAccountType":"CustomerManaged","customerManaged":{"storageAccountURI":"https://invalid.blob.core.windows.net"}}}}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachineFailed(oc, machinesetName)
 	})
 })

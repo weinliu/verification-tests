@@ -9,20 +9,13 @@ import (
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc           = exutil.NewCLI("cluster-infrastructure-upgrade", exutil.KubeConfigPath())
-		iaasPlatform string
+		oc = exutil.NewCLI("cluster-infrastructure-upgrade", exutil.KubeConfigPath())
 	)
-
-	g.BeforeEach(func() {
-		iaasPlatform = exutil.CheckPlatform(oc)
-	})
 
 	// author: zhsun@redhat.com
 	g.It("Longduration-NonPreRelease-PstChkUpgrade-Author:zhsun-High-43725-[Upgrade]Enable out-of-tree cloud providers with feature gate [Disruptive]", func() {
 		g.By("Check if ccm on this platform is supported")
-		if !(iaasPlatform == "aws" || iaasPlatform == "azure" || iaasPlatform == "openstack" || iaasPlatform == "gcp" || iaasPlatform == "vsphere") {
-			g.Skip("Skip for ccm on this platform is not supported or don't need to enable!")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "openstack", "gcp", "vsphere")
 		g.By("Check if ccm is deployed")
 		ccm, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -54,9 +47,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("Longduration-NonPreRelease-PreChkUpgrade-Author:zhsun-Medium-41804-[Upgrade]Spot/preemptible instances should not block upgrade - Azure [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		if iaasPlatform != "azure" {
-			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
 		randomMachinesetName := exutil.GetRandomMachineSetName(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -65,7 +56,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 
 		g.By("Create a spot instance on azure")
-		exutil.SkipConditionally(oc)
 		ms := exutil.MachineSetDescription{"machineset-41804", 0}
 		ms.CreateMachineSet(oc)
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, "machineset-41804", "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"spotVMOptions":{}}}}}}}`, "--type=merge").Execute()
@@ -82,9 +72,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("Longduration-NonPreRelease-PstChkUpgrade-Author:zhsun-Medium-41804-[Upgrade]Spot/preemptible instances should not block upgrade - Azure [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		if iaasPlatform != "azure" {
-			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
 		randomMachinesetName := exutil.GetRandomMachineSetName(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.location}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2019-06-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -40,6 +42,36 @@ func getNicClient(sess *AzureSession) network.InterfacesClient {
 	nicClient := network.NewInterfacesClient(sess.SubscriptionID)
 	nicClient.Authorizer = sess.Authorizer
 	return nicClient
+}
+
+// getStorageClient get storage client
+func getStorageClient(sess *AzureSession) storage.AccountsClient {
+	storageClient := storage.NewAccountsClient(sess.SubscriptionID)
+	storageClient.Authorizer = sess.Authorizer
+	return storageClient
+}
+
+// GetAzureStorageAccount get Azure Storage Account
+func GetAzureStorageAccount(sess *AzureSession, resourceGroupName string) (string, error) {
+	storageClient := getStorageClient(sess)
+	listGroupAccounts, err := storageClient.ListByResourceGroup(context.Background(), resourceGroupName)
+	if err != nil {
+		return "", err
+	}
+	for _, acc := range *listGroupAccounts.Value {
+		fmt.Printf("\t%s\n", *acc.Name)
+		match, err := regexp.MatchString("cluster", *acc.Name)
+		if err != nil {
+			return "", err
+		}
+
+		if match {
+			e2e.Logf("The storage account name is %s,", *acc.Name)
+			return *acc.Name, nil
+		}
+	}
+	e2e.Logf("There is no storage account name matching regex : cluster")
+	return "", nil
 }
 
 // getIPClient get publicIP client

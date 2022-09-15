@@ -83,9 +83,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("Longduration-NonPreRelease-Author:zhsun-High-42657-Enable out-of-tree cloud providers with feature gate [Disruptive]", func() {
 		g.By("Check if ccm on this platform is supported")
-		if !(iaasPlatform == "aws" || iaasPlatform == "azure" || iaasPlatform == "openstack" || iaasPlatform == "gcp" || iaasPlatform == "vsphere") {
-			g.Skip("Skip for ccm on this platform is not supported or don't need to enable!")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "openstack", "gcp", "vsphere")
 		g.By("Check if ccm is deployed")
 		ccm, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -116,9 +114,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-Medium-42879-Cloud-config configmap should be copied and kept in sync within the CCCMO namespace [Disruptive]", func() {
-		if !(iaasPlatform == "azure" || iaasPlatform == "vsphere") {
-			g.Skip("Skip this test scenario because it is not supported on the " + iaasPlatform + " platform")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure", "vsphere")
 
 		g.By("Check if cloud-config cm is copied to openshift-cloud-controller-manager namespace")
 		ccmCM, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.items[*].metadata.name}").Output()

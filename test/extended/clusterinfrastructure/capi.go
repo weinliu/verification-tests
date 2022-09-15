@@ -13,20 +13,13 @@ import (
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc           = exutil.NewCLI("cluster-api-operator", exutil.KubeConfigPath())
-		iaasPlatform string
+		oc = exutil.NewCLI("cluster-api-operator", exutil.KubeConfigPath())
 	)
-
-	g.BeforeEach(func() {
-		iaasPlatform = exutil.CheckPlatform(oc)
-	})
 
 	// author: zhsun@redhat.com
 	g.It("Longduration-NonPreRelease-Author:zhsun-High-51061-Enable cluster API with feature gate [Disruptive]", func() {
 		g.By("Check if cluster api on this platform is supported")
-		if !(iaasPlatform == "aws" || iaasPlatform == "azure" || iaasPlatform == "gcp" || iaasPlatform == "vsphere") {
-			g.Skip("Skip for cluster api on this platform is not supported or don't need to enable!")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere")
 		g.By("Check if cluster api is deployed, if no, enable it")
 		capi, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", clusterAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -62,9 +55,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonPreRelease-Author:zhsun-medium-51088-Providers can be recreated by operator [Disruptive][Slow]", func() {
 		g.By("Check if cluster api on this platform is supported")
-		if !(iaasPlatform == "aws" || iaasPlatform == "azure" || iaasPlatform == "gcp" || iaasPlatform == "vsphere") {
-			g.Skip("Skip for cluster api on this platform is not supported or don't need to enable!")
-		}
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere")
 		g.By("Check if cluster api is deployed")
 		capi, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", clusterAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

@@ -219,6 +219,22 @@ func CheckPlatform(oc *CLI) string {
 	return strings.ToLower(output)
 }
 
+// SkipTestIfSupportedPlatformNotMatched skip the test if supported platforms are not matched
+func SkipTestIfSupportedPlatformNotMatched(oc *CLI, supported ...string) {
+	var match bool
+	p := CheckPlatform(oc)
+	for _, sp := range supported {
+		if strings.EqualFold(sp, p) {
+			match = true
+			break
+		}
+	}
+
+	if !match {
+		g.Skip("Skip this test scenario because it is not supported on the " + p + " platform")
+	}
+}
+
 // SkipConditionally check the total number of Running machines, if greater than zero, we think machines are managed by machine api operator.
 func SkipConditionally(oc *CLI) {
 	msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "--no-headers", "-n", machineAPINamespace).Output()

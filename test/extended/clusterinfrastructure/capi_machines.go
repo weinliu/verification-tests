@@ -89,9 +89,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	g.It("NonPreRelease-Author:zhsun-High-51071-Create machineset with CAPI on aws [Disruptive][Slow]", func() {
 		g.By("Check if cluster api on this platform is supported")
-		if iaasPlatform != "aws" {
-			g.Skip("Skip for this platform is not supported for this case!")
-		}
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
 		g.By("Check if cluster api is deployed")
 		capi, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", clusterAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
