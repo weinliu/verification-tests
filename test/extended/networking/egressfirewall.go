@@ -24,6 +24,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		if networkType != "ovnkubernetes" {
 			g.Skip("EgressFirewall ACL auditing enabled on OVN network plugin")
 		}
+		if checkProxy(oc) {
+			g.Skip("This is proxy cluster, egressfirewall cannot be tested on proxy cluster, skip the test.")
+		}
 	})
 
 	// author: huirwang@redhat.com
