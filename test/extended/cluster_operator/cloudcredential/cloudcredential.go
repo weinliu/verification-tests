@@ -394,4 +394,18 @@ data:
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "controller-manager-service", "-n", "openshift-cloud-credential-operator").Output()
 		o.Expect(output).To(o.ContainSubstring("Error from server (NotFound)"))
 	})
+
+	g.It("ROSA-OSD_CCS-ARO-Author:jshu-Critical-34470-Cloud credential operator health check", func() {
+		g.By("Check CCO status conditions")
+		//Check CCO mode
+		mode, err := getCloudCredentialMode(oc)
+		e2e.Logf("cco mode in cluster is %v", mode)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkCCOHealth(oc, mode)
+		g.By("Check CCO imagePullPolicy configuration")
+		imagePullPolicy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "cloud-credential-operator", "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.spec.template.spec.containers[1].imagePullPolicy}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(imagePullPolicy).To(o.Equal("IfNotPresent"))
+	})
+
 })

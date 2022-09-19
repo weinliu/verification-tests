@@ -177,3 +177,27 @@ func patchResourceAsAdmin(oc *exutil.CLI, ns, resource, rsname, patch string) {
 func (cr *credentialsRequest) create(oc *exutil.CLI) {
 	exutil.ApplyNsResourceFromTemplate(oc, "openshift-cloud-credential-operator", "--ignore-unknown-parameters=true", "-f", cr.template, "-p", "NAME="+cr.name, "NAMESPACE="+cr.namespace, "PROVIDER="+cr.provider)
 }
+
+//Check if CCO conditions are health
+func checkCCOHealth(oc *exutil.CLI, mode string) {
+	availableStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-credential", `-o=jsonpath={.status.conditions[?(@.type=="Available")].status}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(availableStatus).To(o.Equal("True"))
+	degradedStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-credential", `-o=jsonpath={.status.conditions[?(@.type=="Degraded")].status}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(degradedStatus).To(o.Equal("False"))
+	progressingStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-credential", `-o=jsonpath={.status.conditions[?(@.type=="Progressing")].status}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(progressingStatus).To(o.Equal("False"))
+	upgradeableStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-credential", `-o=jsonpath={.status.conditions[?(@.type=="Upgradeable")].status}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	//when cco mode is manual or manual+sts, upgradeableStatus is "False" due to MissingUpgradeableAnnotation
+	if mode == "manual" || mode == "manualpodidentity" {
+		o.Expect(upgradeableStatus).To(o.Equal("False"))
+		upgradeableReason, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-credential", `-o=jsonpath={.status.conditions[?(@.type=="Upgradeable")].reason}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(upgradeableReason).To(o.Equal("MissingUpgradeableAnnotation"))
+	} else {
+		o.Expect(upgradeableStatus).To(o.Equal("True"))
+	}
+}
