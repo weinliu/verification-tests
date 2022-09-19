@@ -1054,6 +1054,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		_, patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args(patchSResource, "-p", patchInfo, "--type=merge").Output()
 		o.Expect(patchErr).NotTo(o.HaveOccurred())
 
+		//Network operator needs to recreate the pods on a merge request, therefore give it 90 secs
+		checkNetworkOperatorState(oc, 90, 90)
+
 		g.By("Obtain the namespace")
 		ns1 := oc.Namespace()
 
@@ -1093,8 +1096,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		CurlPod2PodPass(oc, ns1, "hello-pod2", ns1, "hello-pod1")
 
 		g.By("Checking messages are logged to journald")
-		cmd := fmt.Sprintf("journalctl -t ovn-controller --since '10min ago'| grep 'verdict=allow'")
+		cmd := fmt.Sprintf("journalctl -t ovn-controller --since '1min ago'| grep 'verdict=allow'")
 		output, journalctlErr := exutil.DebugNodeWithOptionsAndChroot(oc, nodeList.Items[0].Name, []string{"-q"}, "bin/sh", "-c", cmd)
+		e2e.Logf("Output %s", output)
 		o.Expect(journalctlErr).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(output, "verdict=allow")).To(o.BeTrue())
 

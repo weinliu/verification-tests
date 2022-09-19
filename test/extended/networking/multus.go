@@ -30,14 +30,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		patchResourceAsAdmin(oc, patchSResource, patchInfo)
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args(patchSResource, "-p", `[{"op": "remove", "path": "/spec/additionalNetworks"}]`, "--type=json").Execute()
 
+		//Testing will exit when network operator is in abnormal state during 60 seconding of checking operator.
 		g.By("Check NetworkOperatorStatus")
-		checkNetworkOperatorDEGRADEDState(oc)
+		checkNetworkOperatorState(oc, 10, 60)
 
 		g.By("Delete the namespace")
 		nsErr := oc.AsAdmin().Run("delete").Args("project", namespace, "--ignore-not-found").Execute()
 		o.Expect(nsErr).NotTo(o.HaveOccurred())
 
+		//Testing will exit when network operator is in abnormal state during 60 seconding of checking operator.
 		g.By("Check NetworkOperatorStatus after deleting namespace")
-		checkNetworkOperatorDEGRADEDState(oc)
+		checkNetworkOperatorState(oc, 10, 60)
 	})
 })

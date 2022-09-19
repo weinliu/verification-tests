@@ -856,9 +856,9 @@ func patchResourceAsAdmin(oc *exutil.CLI, resource, patch string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//Testing will exit when network operator is in abnormal state during 60 seconding of checking operator.
-func checkNetworkOperatorDEGRADEDState(oc *exutil.CLI) {
-	errCheck := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+//Check network operator status in intervals until timeout
+func checkNetworkOperatorState(oc *exutil.CLI, interval int, timeout int) {
+	errCheck := wait.Poll(time.Duration(interval)*time.Second, time.Duration(timeout)*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "network").Output()
 		if err != nil {
 			e2e.Logf("Fail to get clusteroperator network, error:%s. Trying again", err)
