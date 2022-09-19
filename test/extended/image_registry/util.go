@@ -94,7 +94,7 @@ func dePodLogs(pods []corev1.Pod, oc *exutil.CLI, matchlogs string) bool {
 }
 
 func getBearerTokenURLViaPod(ns string, execPodName string, url string, bearer string) (string, error) {
-	cmd := fmt.Sprintf("curl --retry 15 --max-time 2 --retry-delay 1 -s -k -H 'Authorization: Bearer %s' %s", bearer, url)
+	cmd := fmt.Sprintf("curl --retry 15 --max-time 4 --retry-delay 1 -s -k -H 'Authorization: Bearer %s' %s", bearer, url)
 	output, err := e2e.RunHostCmd(ns, execPodName, cmd)
 	if err != nil {
 		return "", fmt.Errorf("host command failed: %v\n%s", err, output)

@@ -294,7 +294,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring("successfulJobsHistoryLimit: 1"))
 
 		g.By("Check imagepruner pod is running")
-		errWait := wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
+		errWait := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
 			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-image-registry").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(output, "image-pruner") {
