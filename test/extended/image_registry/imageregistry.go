@@ -2200,7 +2200,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Check whether the image can be pulled")
 		expectInfo = `Failed to pull image "is24160-3-lookup"`
-		pollErr := wait.Poll(3*time.Second, 20*time.Second, func() (bool, error) {
+		pollErr := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
 			output, describeErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", "-l", "app=deploy-lookup", "-n", oc.Namespace()).Output()
 			o.Expect(describeErr).NotTo(o.HaveOccurred())
 			if strings.Contains(output, expectInfo) {
@@ -2222,7 +2222,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Check whether the image can be pulled again")
 		expectInfo = `Successfully pulled image`
-		pollErr = wait.Poll(3*time.Second, 20*time.Second, func() (bool, error) {
+		pollErr = wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
 			output, describeErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", "-l", "app=deploy-lookup", "-n", oc.Namespace()).Output()
 			o.Expect(describeErr).NotTo(o.HaveOccurred())
 			if strings.Contains(output, expectInfo) {

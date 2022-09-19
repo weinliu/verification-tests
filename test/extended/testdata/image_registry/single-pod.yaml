@@ -9,9 +9,18 @@ objects:
     name: "${NAME}"
     namespace: "${NAMESPACE}"
   spec:
+    securityContext:
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
     containers:
     - name: "${NAME}"
       image: "${IMAGE}" 
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL 
 
 parameters:
 - name: NAME
