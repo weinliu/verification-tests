@@ -2950,7 +2950,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Check the cluster trusted ca")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy.config.openshift.io/cluster", "-o=jsonpath={.spec.trustedCA.name}").Output()
+
 		o.Expect(err).NotTo(o.HaveOccurred())
+		if output == "" {
+			g.Skip("Skip for http_proxy platform")
+		}
 		o.Expect(output).To(o.Equal("user-ca-bundle"))
 
 		g.By("Import image to internal registry")

@@ -423,7 +423,7 @@ func (stafulsrc *staSource) create(oc *exutil.CLI) {
 }
 
 func checkPodsRunningWithLabel(oc *exutil.CLI, namespace string, label string, number int) {
-	err := wait.Poll(20*time.Second, 3*time.Minute, func() (bool, error) {
+	err := wait.Poll(25*time.Second, 5*time.Minute, func() (bool, error) {
 		podList, _ := oc.AdminKubeClient().CoreV1().Pods(namespace).List(metav1.ListOptions{LabelSelector: label})
 		if len(podList.Items) != number {
 			e2e.Logf("the pod number is not %d, Continue to next round", number)
