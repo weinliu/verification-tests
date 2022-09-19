@@ -1942,6 +1942,127 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("single-3"))
 	})
 
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-Medium-53871-Medium-53915-opm supports creating a catalog using semver veneer", func() {
+		opmBaseDir := exutil.FixturePath("testdata", "opm", "53871")
+		opmCLI.ExecCommandPath = opmBaseDir
+		defer DeleteDir(opmBaseDir, "fixture-testdata")
+
+		g.By("step: create dir catalog-1")
+		catsrcPath1 := filepath.Join(opmBaseDir, "catalog-1")
+		err := os.MkdirAll(catsrcPath1, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step: GenerateMajorChannels: true GenerateMinorChannels: false")
+		output, err := opmCLI.Run("alpha").Args("render-veneer", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-1.yaml"), "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		indexFilePath := filepath.Join(catsrcPath1, "index.yaml")
+		if err = ioutil.WriteFile(indexFilePath, []byte(output), 0644); err != nil {
+			e2e.Failf(fmt.Sprintf("Writefile %s Error: %v", indexFilePath, err))
+		}
+		output, err = opmCLI.Run("validate").Args(catsrcPath1).Output()
+		if err != nil {
+			e2e.Logf(output)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		output, err = opmCLI.Run("alpha").Args("list", "channels", catsrcPath1, "nginx-operator").Output()
+		if err != nil {
+			e2e.Logf(output)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		o.Expect(string(output)).To(o.ContainSubstring("candidate-v0  nginx-operator.v0.0.1"))
+		o.Expect(string(output)).To(o.ContainSubstring("candidate-v1  nginx-operator.v1.0.2"))
+		o.Expect(string(output)).To(o.ContainSubstring("candidate-v2  nginx-operator.v2.1.0"))
+		o.Expect(string(output)).To(o.ContainSubstring("fast-v0       nginx-operator.v0.0.1"))
+		o.Expect(string(output)).To(o.ContainSubstring("fast-v2       nginx-operator.v2.1.0"))
+		o.Expect(string(output)).To(o.ContainSubstring("stable-v1     nginx-operator.v1.0.2"))
+		o.Expect(string(output)).To(o.ContainSubstring("stable-v2     nginx-operator.v2.1.0"))
+
+		g.By("step: create dir catalog-2")
+		catsrcPath2 := filepath.Join(opmBaseDir, "catalog-2")
+		err = os.MkdirAll(catsrcPath2, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step: GenerateMajorChannels: true GenerateMinorChannels: true")
+		output, err = opmCLI.Run("alpha").Args("render-veneer", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-2.yaml"), "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		indexFilePath = filepath.Join(catsrcPath2, "index.yaml")
+		if err = ioutil.WriteFile(indexFilePath, []byte(output), 0644); err != nil {
+			e2e.Failf(fmt.Sprintf("Writefile %s Error: %v", indexFilePath, err))
+		}
+		output, err = opmCLI.Run("validate").Args(catsrcPath2).Output()
+		if err != nil {
+			e2e.Logf(output)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		output, err = opmCLI.Run("alpha").Args("list", "channels", catsrcPath2, "nginx-operator").Output()
+		if err != nil {
+			e2e.Logf(output)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		o.Expect(string(output)).To(o.ContainSubstring("candidate-v0    nginx-operator.v0.0.1"))
+		o.Expect(string(output)).To(o.ContainSubstring("candidate-v0.0  nginx-operator.v0.0.1"))
+		o.Expect(string(output)).To(o.ContainSubstring("candidate-v1    nginx-operator.v1.0.1"))
+		o.Expect(string(output)).To(o.ContainSubstring("candidate-v1.0  nginx-operator.v1.0.1"))
+		o.Expect(string(output)).To(o.ContainSubstring("fast-v1         nginx-operator.v1.0.1-beta"))
+		o.Expect(string(output)).To(o.ContainSubstring("fast-v1.0       nginx-operator.v1.0.1-beta"))
+		o.Expect(string(output)).To(o.ContainSubstring("stable-v1       nginx-operator.v1.0.1"))
+		o.Expect(string(output)).To(o.ContainSubstring("stable-v1.0     nginx-operator.v1.0.1"))
+
+		g.By("step: create dir catalog-3")
+		catsrcPath3 := filepath.Join(opmBaseDir, "catalog-3")
+		err = os.MkdirAll(catsrcPath3, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step: not set GenerateMajorChannels and GenerateMinorChannels")
+		output, err = opmCLI.Run("alpha").Args("render-veneer", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-3.yaml")).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		indexFilePath = filepath.Join(catsrcPath3, "index.json")
+		if err = ioutil.WriteFile(indexFilePath, []byte(output), 0644); err != nil {
+			e2e.Failf(fmt.Sprintf("Writefile %s Error: %v", indexFilePath, err))
+		}
+		output, err = opmCLI.Run("validate").Args(catsrcPath3).Output()
+		if err != nil {
+			e2e.Logf(output)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		output, err = opmCLI.Run("alpha").Args("list", "channels", catsrcPath3, "nginx-operator").Output()
+		if err != nil {
+			e2e.Logf(output)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		o.Expect(string(output)).NotTo(o.ContainSubstring("candidate-v0 "))
+		o.Expect(string(output)).To(o.ContainSubstring("candidate-v0.0  nginx-operator.v0.0.1"))
+		o.Expect(string(output)).NotTo(o.ContainSubstring("candidate-v1 "))
+		o.Expect(string(output)).To(o.ContainSubstring("candidate-v1.0  nginx-operator.v1.0.2"))
+		o.Expect(string(output)).NotTo(o.ContainSubstring("fast-v0 "))
+		o.Expect(string(output)).To(o.ContainSubstring("fast-v0.0       nginx-operator.v0.0.1"))
+		o.Expect(string(output)).NotTo(o.ContainSubstring("fast-v2 "))
+		o.Expect(string(output)).To(o.ContainSubstring("fast-v2.0       nginx-operator.v2.0.1"))
+		o.Expect(string(output)).To(o.ContainSubstring("fast-v2.1       nginx-operator.v2.1.0"))
+		o.Expect(string(output)).NotTo(o.ContainSubstring("stable-v2 "))
+		o.Expect(string(output)).To(o.ContainSubstring("stable-v2.1     nginx-operator.v2.1.0"))
+
+		g.By("step: generate mermaid graph data for generated-channels")
+		output, err = opmCLI.Run("alpha").Args("render-veneer", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-4.yaml"), "-o", "mermaid").Output()
+		if err != nil {
+			e2e.Logf(output)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		o.Expect(string(output)).To(o.ContainSubstring("channel \"fast-v2.0\""))
+		o.Expect(string(output)).To(o.ContainSubstring("subgraph nginx-operator-fast-v2.0[\"fast-v2.0\"]"))
+		o.Expect(string(output)).To(o.ContainSubstring("nginx-operator-fast-v2.0-nginx-operator.v2.0.1[\"nginx-operator.v2.0.1\"]"))
+
+		g.By("step: semver veneer should validate bundle versions")
+		output, err = opmCLI.Run("alpha").Args("render-veneer", "semver", filepath.Join(opmBaseDir, "catalog-semver-veneer-5.yaml")).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(string(output)).To(o.ContainSubstring("encountered bundle versions which differ only by build metadata, which cannot be ordered"))
+		o.Expect(string(output)).To(o.ContainSubstring("cannot be compared to \"1.0.1-alpha\""))
+	})
+
 	// author: scolange@redhat.com
 	g.It("ConnectedOnly-Author:scolange-VMonly-Medium-25934-Reference non-latest versions of bundles by image digests", func() {
 		containerCLI := container.NewPodmanCLI()
