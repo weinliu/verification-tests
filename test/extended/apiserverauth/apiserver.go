@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"math/rand"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1478,7 +1479,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Low-27665-Check if the kube-storage-version-migrator operator related manifests has been loaded", func() {
+	g.It("HyperShiftGUEST-ROSA-ARO-OSD_CCS-Author:zxiao-Low-27665-Check if the kube-storage-version-migrator operator related manifests has been loaded", func() {
 		resource := "customresourcedefinition"
 		resourceNames := []string{"storagestates.migration.k8s.io", "storageversionmigrations.migration.k8s.io", "kubestorageversionmigrators.operator.openshift.io"}
 		g.By("1) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "]")
@@ -2213,7 +2214,7 @@ spec:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:dpunia-Medium-15870-APIServer Verify node authorization is enabled", func() {
+	g.It("HyperShiftGUEST-ROSA-ARO-OSD_CCS-Author:dpunia-Medium-15870-APIServer Verify node authorization is enabled", func() {
 		var (
 			podname    = "ocp-15870-openshift"
 			image      = "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83"
@@ -2411,7 +2412,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("Author:zxiao-Medium-10592-Cluster-admin could get/edit/delete subresource", func() {
+	g.It("HyperShiftGUEST-Author:zxiao-Medium-10592-Cluster-admin could get/edit/delete subresource", func() {
 		g.By("1) Create new project")
 		oc.SetupProject()
 
@@ -2749,7 +2750,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Medium-11476-[origin_infrastructure_392] oadm new-project should fail when invalid node selector is given", func() {
+	g.It("HyperShiftGUEST-ROSA-ARO-OSD_CCS-Author:zxiao-Medium-11476-[origin_infrastructure_392] oadm new-project should fail when invalid node selector is given", func() {
 		g.By("# Create projects with an invalid node-selector(the node selector is neither equality-based nor set-based)")
 		projectName := exutil.RandStrCustomize("abcdefghijklmnopqrstuvwxyz", 5)
 		invalidNodeSelectors := []string{"env:qa", "env,qa", "env [qa]", "env,"}
@@ -2766,7 +2767,7 @@ spec:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:dpunia-Medium-10969-Create clusterip service", func() {
+	g.It("HyperShiftGUEST-ROSA-ARO-OSD_CCS-Author:dpunia-Medium-10969-Create clusterip service", func() {
 		var (
 			name  = "ocp-10969-openshift"
 			image = "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83"
@@ -2790,13 +2791,21 @@ spec:
 		rand.Seed(time.Now().UnixNano())
 		randomServicePort := rand.Intn(9000-6000) + 6000
 
+		//Generate random service ip from service ip range
+		serviceNetwork, serviceNetworkGetErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("networks", "cluster", `-o=jsonpath={.spec.serviceNetwork[0]}`).Output()
+		o.Expect(serviceNetworkGetErr).NotTo(o.HaveOccurred())
+		serviceIPv4, _, serviceipErr := net.ParseCIDR(fmt.Sprintf("%v", serviceNetwork))
+		o.Expect(serviceipErr).NotTo(o.HaveOccurred())
+		randomServiceIP := serviceIPv4.To4()
+		randomServiceIP[3] = randomServiceIP[3] + byte(rand.Intn(254-1))
+
 		g.By("4) Create clusterip service with --clusterip")
-		servicecreateout, servicecreateerror := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "service", "clusterip", name, "--clusterip", "172.30.154.186", "--tcp", fmt.Sprintf("%v:8080", randomServicePort)).Output()
+		servicecreateout, servicecreateerror := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "service", "clusterip", name, "--clusterip", fmt.Sprintf("%v", randomServiceIP), "--tcp", fmt.Sprintf("%v:8080", randomServicePort)).Output()
 		o.Expect(servicecreateerror).NotTo(o.HaveOccurred())
 		o.Expect(servicecreateout).Should(o.ContainSubstring(fmt.Sprintf("service/%v created", name)))
 
 		g.By("5) Check clusterip service running status")
-		servicechkout, servicechkerror := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", fmt.Sprintf("172.30.154.186:%v", randomServicePort)).Output()
+		servicechkout, servicechkerror := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", fmt.Sprintf("%v:%v", randomServiceIP, randomServicePort)).Output()
 		o.Expect(servicechkerror).NotTo(o.HaveOccurred())
 		o.Expect(servicechkout).Should(o.ContainSubstring("Hello OpenShift"))
 		servicedelerror := oc.Run("delete").Args("-n", namespace, "svc", name).Execute()
