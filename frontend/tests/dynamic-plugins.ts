@@ -1,5 +1,5 @@
 import { nav } from '../upstream/views/nav';
-import { Overview } from '../views/overview';
+import { Overview, statusCard } from '../views/overview';
 import { guidedTour } from '../upstream/views/guided-tour';
 
 describe('Dynamic plugins features', () => {
@@ -74,6 +74,19 @@ describe('Dynamic plugins features', () => {
       .eq(4)
       .should('have.text', 'Networking');
   });
+
+  it('(OCP-52366, xiangyli) Add Dyamic Plugins to Cluster Overview Status card and notification drawer', () => {
+    Overview.goToDashboard()
+    statusCard.togglePluginPopover()
+    let total = 0
+    cy.exec(`oc get consoleplugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`).then((result) => {
+      total = result.stdout.split(/\r\n|\r|\n/).length - 1
+    })
+    cy.get(".pf-c-popover__body").within(($div) => {
+      cy.get('a:contains(View all)').should('have.attr', 'href', '/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins')
+      cy.contains(`${1}/${total} enabled`).should('exist')
+    })
+  })
 
   it('(OCP-53234,admin,yapei) Show alert when console operator is Unmanaged', () => {
     cy.visit('/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins');

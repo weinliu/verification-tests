@@ -39,3 +39,11 @@ export const quotaCard = {
 export namespace OverviewSelectors {
   export const skipTour = "[data-test=tour-step-footer-secondary]";
 }
+
+export const statusCard = {
+  togglePluginPopover: () => {
+    cy.get('[data-item-id="Dynamic Plugins-health-item"]').within(() => {
+      cy.byButtonText('Dynamic Plugins').click({force: true})
+    })
+  }
+}
