@@ -561,4 +561,37 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			exutil.WaitForMachinesRunning(oc, 1, machinesetName)
 		}
 	})
+
+	// author: huliu@redhat.com
+	g.It("Longduration-NonPreRelease-Author:huliu-Medium-51013-machine api should issue client cert when AWS DNS suffix missing [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+
+		g.By("Create a new dhcpOptions")
+		var newDhcpOptionsID, currentDhcpOptionsID string
+		c2sConfigPrefix, stsConfigPrefix := exutil.GetAwsCredentialFromCluster(oc)
+		defer exutil.DeleteAwsCredentialTmpFile(c2sConfigPrefix, stsConfigPrefix)
+		awsClient := exutil.InitAwsSession()
+		newDhcpOptionsID, err := awsClient.CreateDhcpOptions()
+		defer awsClient.DeleteDhcpOptions(newDhcpOptionsID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Associate the VPC with the new dhcpOptionsId")
+		machineName := exutil.ListWorkerMachineNames(oc)[0]
+		instanceID, err := awsClient.GetAwsInstanceID(machineName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		vpcID, err := awsClient.GetAwsInstanceVPCId(instanceID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		currentDhcpOptionsID, err = awsClient.GetDhcpOptionsIDOfVpc(vpcID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer awsClient.AssociateDhcpOptions(vpcID, currentDhcpOptionsID)
+		err = awsClient.AssociateDhcpOptions(vpcID, newDhcpOptionsID)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create a new machineset")
+		machinesetName := "machineset-51013"
+		ms := exutil.MachineSetDescription{machinesetName, 1}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+	})
 })

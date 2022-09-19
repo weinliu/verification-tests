@@ -246,3 +246,85 @@ func (a *AwsClient) GetAwsInstanceState(instanceID string) (string, error) {
 	instanceState := instanceInfo.Reservations[0].Instances[0].State.Name
 	return *instanceState, err
 }
+
+// CreateDhcpOptions Create a dhcpOptions
+func (a *AwsClient) CreateDhcpOptions() (string, error) {
+	input := &ec2.CreateDhcpOptionsInput{
+		DhcpConfigurations: []*ec2.NewDhcpConfiguration{
+			{
+				Key: aws.String("domain-name-servers"),
+				Values: []*string{
+					aws.String("AmazonProvidedDNS"),
+				},
+			},
+		},
+	}
+	result, err := a.svc.CreateDhcpOptions(input)
+	if err != nil {
+		e2e.Logf("err: %v", err)
+		return "", err
+	}
+	dhcpOptionsID := result.DhcpOptions.DhcpOptionsId
+	e2e.Logf("The created dhcpOptionsId is %s", *dhcpOptionsID)
+	return *dhcpOptionsID, err
+}
+
+// DeleteDhcpOptions Delete a dhcpOptions
+func (a *AwsClient) DeleteDhcpOptions(dhcpOptionsID string) error {
+	input := &ec2.DeleteDhcpOptionsInput{
+		DhcpOptionsId: aws.String(dhcpOptionsID),
+	}
+	_, err := a.svc.DeleteDhcpOptions(input)
+	return err
+}
+
+// GetAwsInstanceVPCId gives the instance vpcID
+func (a *AwsClient) GetAwsInstanceVPCId(instanceID string) (string, error) {
+	filters := []*ec2.Filter{
+		{
+			Name: aws.String("instance-id"),
+			Values: []*string{
+				aws.String(instanceID),
+			},
+		},
+	}
+	input := ec2.DescribeInstancesInput{Filters: filters}
+	instanceInfo, err := a.svc.DescribeInstances(&input)
+	if err != nil {
+		return "", err
+	}
+
+	if len(instanceInfo.Reservations) < 1 {
+		return "", fmt.Errorf("No instance found in current cluster with ID %s", instanceID)
+	}
+
+	instanceVpcID := instanceInfo.Reservations[0].Instances[0].VpcId
+	return *instanceVpcID, err
+}
+
+// GetDhcpOptionsIDOfVpc Get VPC's dhcpOptionsID
+func (a *AwsClient) GetDhcpOptionsIDOfVpc(vpcID string) (string, error) {
+	input := &ec2.DescribeVpcsInput{
+		VpcIds: []*string{
+			aws.String(vpcID),
+		},
+	}
+	result, err := a.svc.DescribeVpcs(input)
+	if err != nil {
+		e2e.Logf("err: %v", err)
+		return "", err
+	}
+	dhcpOptionsID := result.Vpcs[0].DhcpOptionsId
+	e2e.Logf("The %s dhcpOptionsId is %s ", vpcID, *dhcpOptionsID)
+	return *dhcpOptionsID, err
+}
+
+// AssociateDhcpOptions Associate a VPC with a dhcpOptions
+func (a *AwsClient) AssociateDhcpOptions(vpcID string, dhcpOptionsID string) error {
+	input := &ec2.AssociateDhcpOptionsInput{
+		VpcId:         aws.String(vpcID),
+		DhcpOptionsId: aws.String(dhcpOptionsID),
+	}
+	_, err := a.svc.AssociateDhcpOptions(input)
+	return err
+}
