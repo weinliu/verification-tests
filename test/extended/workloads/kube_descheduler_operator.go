@@ -55,8 +55,8 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	}
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-21205-Low-36584-Install descheduler operator via a deployment & verify it should not violate PDB [Slow] [Disruptive] [Flaky]", func() {
-		exutil.SkipARM64(oc)
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:knarra-High-21205-Low-36584-Install descheduler operator via a deployment & verify it should not violate PDB [Slow] [Disruptive] [Flaky]", func() {
+		//exutil.SkipARM64(oc)
 		deploydpT := filepath.Join(buildPruningBaseDir, "deploy_duplicatepodsrs.yaml")
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -108,6 +108,17 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Get descheduler cluster pod name")
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			podName, _ := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+			if strings.Contains(podName, " ") {
+				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)
+				return false, nil
+			}
+			e2e.Logf("podName does not have space, proceeding further\n")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("podName still containts space which is not expected"))
+
 		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -186,7 +197,20 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		g.By("Check the kubedescheduler run well")
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
-		g.By("Get descheduler cluster pod name after mode is set")
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			podName, _ := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+			if strings.Contains(podName, " ") {
+				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)
+				return false, nil
+			}
+			if !strings.Contains(podName, " ") {
+				e2e.Logf("podName does not have space, proceeding further\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("podName still containts space which is not expected"))
+
 		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -256,8 +280,8 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-37463-High-40055-Descheduler-Validate AffinityAndTaints and TopologyAndDuplicates profile [Disruptive][Slow] [Flaky]", func() {
-		exutil.SkipARM64(oc)
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:knarra-High-37463-High-40055-Descheduler-Validate AffinityAndTaints and TopologyAndDuplicates profile [Disruptive][Slow] [Flaky]", func() {
+		//exutil.SkipARM64(oc)
 		deployT := filepath.Join(buildPruningBaseDir, "deploy_nodeaffinity.yaml")
 		deploynT := filepath.Join(buildPruningBaseDir, "deploy_nodetaint.yaml")
 		deploypT := filepath.Join(buildPruningBaseDir, "deploy_interpodantiaffinity.yaml")
@@ -388,6 +412,17 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Get descheduler cluster pod name")
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			podName, _ := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+			if strings.Contains(podName, " ") {
+				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)
+				return false, nil
+			}
+			e2e.Logf("podName does not have space, proceeding further\n")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("podName still containts space which is not expected"))
+
 		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -424,7 +459,18 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		g.By("Check the kubedescheduler run well")
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
-		g.By("Get descheduler cluster pod name after mode is set")
+		g.By("Get descheduler cluster pod name")
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			podName, _ := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+			if strings.Contains(podName, " ") {
+				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)
+				return false, nil
+			}
+			e2e.Logf("podName does not have space, proceeding further\n")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("podName still containts space which is not expected"))
+
 		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -483,9 +529,9 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Add taint to the node")
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "node", pod374631nodename, "dedicated:NoSchedule-").Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "node", pod374631nodename, "dedicated=special-user:NoSchedule").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "node", pod374631nodename, "dedicated-").Execute()
 
 		g.By("Check the descheduler deploy logs, should see evict logs")
 		checkLogsFromRs(oc, kubeNamespace, "pod", podName, regexp.QuoteMeta(`"Evicted pod"`)+".*"+regexp.QuoteMeta(`reason="NodeTaint"`))
@@ -493,6 +539,19 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		// Collect NodeTaint  metrics from prometheus
 		g.By("Checking NodeTaint metrics from prometheus")
 		checkDeschedulerMetrics(oc, "NodeTaint", "descheduler_pods_evicted")
+
+		// Performing cleanup for NodeTaint
+		g.By("Remove the taint from the node")
+		oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "node", pod374631nodename, "dedicated:NoSchedule-").Execute()
+		waitErr = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("node", pod374631nodename).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(msg, "dedicated") {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Taint has not been removed even after waiting for 120 seconds")
 
 		// Test for RemovePodsViolatingInterPodAntiAffinity
 
@@ -527,17 +586,31 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "e2e-az-NorthSouth")
 
-		oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "node", pod374631nodename, "dedicated-").Execute()
-
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("deployment", testd4.dName, "-n", testd4.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Test for RemoveDuplicates
 
-		g.By("Cordon node1")
-		err = oc.AsAdmin().Run("adm").Args("cordon", nodeList.Items[0].Name).Execute()
+		g.By("Cordon all nodes in the cluster")
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().Run("adm").Args("uncordon", nodeList.Items[0].Name).Execute()
+		e2e.Logf("\nNode Names are %v", nodeName)
+		node := strings.Fields(nodeName)
+
+		defer func() {
+			for _, v := range node {
+				oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", fmt.Sprintf("%s", v)).Execute()
+			}
+		}()
+
+		for _, v := range node {
+			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("cordon", fmt.Sprintf("%s", v)).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		g.By("Uncordon node1")
+		err = oc.AsAdmin().Run("adm").Args("uncordon", nodeList.Items[0].Name).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create the test deploy")
 		testdp.createDuplicatePods(oc)
@@ -548,8 +621,8 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 			e2e.Logf("All pods are runnnig now\n")
 		}
 
-		g.By("Uncordon node1")
-		err = oc.AsAdmin().Run("adm").Args("uncordon", nodeList.Items[0].Name).Execute()
+		g.By("Uncordon node2")
+		err = oc.AsAdmin().Run("adm").Args("uncordon", nodeList.Items[1].Name).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the descheduler deploy logs, should see evict logs")
@@ -563,13 +636,19 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("deployment", testdp.dName, "-n", testdp.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		// Uncordon all nodes back
+		for _, v := range node {
+			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", fmt.Sprintf("%s", v)).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
 		// Test for PodTopologySpreadConstriant
 
 		g.By("Cordon all nodes in the cluster")
-		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
+		nodeName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("\nNode Names are %v", nodeName)
-		node := strings.Fields(nodeName)
+		node = strings.Fields(nodeName)
 
 		defer func() {
 			for _, v := range node {
@@ -628,7 +707,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 	// author: knarra@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:knarra-High-43287-High-43283-Descheduler-Descheduler operator should verify config does not conflict with scheduler and SoftTopologyAndDuplicates profile [Disruptive][Slow]", func() {
-		exutil.SkipARM64(oc)
+		//exutil.SkipARM64(oc)
 		deploysptT := filepath.Join(buildPruningBaseDir, "deploy_softPodTopologySpread.yaml")
 		deploysdT := filepath.Join(buildPruningBaseDir, "deploy_softdemopod.yaml")
 
@@ -711,7 +790,18 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		g.By("Check the kubedescheduler run well")
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
-		g.By("Get descheduler cluster pod name after mode is set")
+		g.By("Get descheduler cluster pod name")
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			podName, _ := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+			if strings.Contains(podName, " ") {
+				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)
+				return false, nil
+			}
+			e2e.Logf("podName does not have space, proceeding further\n")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("podName still containts space which is not expected"))
+
 		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -883,8 +973,8 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Medium-43277-High-50941-Descheduler-Validate Predictive and Automatic mode for descheduler [Flaky][Slow][Disruptive]", func() {
-		exutil.SkipARM64(oc)
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:knarra-Medium-43277-High-50941-Descheduler-Validate Predictive and Automatic mode for descheduler [Flaky][Slow][Disruptive]", func() {
+		//exutil.SkipARM64(oc)
 		deschedulerpT := filepath.Join(buildPruningBaseDir, "kubedescheduler_podlifetime.yaml")
 
 		_, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -948,6 +1038,17 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Get descheduler cluster pod name")
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			podName, _ := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+			if strings.Contains(podName, " ") {
+				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)
+				return false, nil
+			}
+			e2e.Logf("podName does not have space, proceeding further\n")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("podName still containts space which is not expected"))
+
 		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1006,6 +1107,17 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Get descheduler cluster pod name after mode is set")
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			podName, _ := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+			if strings.Contains(podName, " ") {
+				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)
+				return false, nil
+			}
+			e2e.Logf("podName does not have space, proceeding further\n")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("podName still containts space which is not expected"))
+
 		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1018,8 +1130,8 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-50193-High-50191-Descheduler-Validate priorityFiltering with thresholdPriorityClassName & thresholdPriority param [Disruptive][Slow] [Flaky]", func() {
-		exutil.SkipARM64(oc)
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:knarra-High-50193-High-50191-Descheduler-Validate priorityFiltering with thresholdPriorityClassName & thresholdPriority param [Disruptive][Slow] [Flaky]", func() {
+		//exutil.SkipARM64(oc)
 		deschedulerpcN := filepath.Join(buildPruningBaseDir, "kubedescheduler_priorityclassname.yaml")
 		deploypT := filepath.Join(buildPruningBaseDir, "deploy_interpodantiaffinity.yaml")
 		deploypmT := filepath.Join(buildPruningBaseDir, "deploy_interpodantiaffinitytpm.yaml")
@@ -1142,6 +1254,17 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Get descheduler cluster pod name")
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			podName, _ := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+			if strings.Contains(podName, " ") {
+				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)
+				return false, nil
+			}
+			e2e.Logf("podName does not have space, proceeding further\n")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("podName still containts space which is not expected"))
+
 		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(podName).NotTo(o.BeEmpty())
 
@@ -1178,6 +1301,17 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Get descheduler cluster pod name after mode is set")
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			podName, _ := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+			if strings.Contains(podName, " ") {
+				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)
+				return false, nil
+			}
+			e2e.Logf("podName does not have space, proceeding further\n")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("podName still containts space which is not expected"))
+
 		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(podName).NotTo(o.BeEmpty())
 
@@ -1206,7 +1340,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-52303-Descheduler-Validate namespace filtering [Slow][Disruptive]", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:knarra-High-52303-Descheduler-Validate namespace filtering [Slow][Disruptive]", func() {
 		deschedulerinsT := filepath.Join(buildPruningBaseDir, "kubedescheduler_includins.yaml")
 		deschedulereinsT := filepath.Join(buildPruningBaseDir, "kubedescheduler_includeexcludens.yaml")
 
@@ -1293,6 +1427,17 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Get descheduler cluster pod name")
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			podName, _ := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+			if strings.Contains(podName, " ") {
+				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)
+				return false, nil
+			}
+			e2e.Logf("podName does not have space, proceeding further\n")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("podName still containts space which is not expected"))
+
 		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(podName).NotTo(o.BeEmpty())
 
@@ -1341,6 +1486,17 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Get descheduler cluster pod name after mode is set")
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			podName, _ := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+			if strings.Contains(podName, " ") {
+				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)
+				return false, nil
+			}
+			e2e.Logf("podName does not have space, proceeding further\n")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("podName still containts space which is not expected"))
+
 		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(podName).NotTo(o.BeEmpty())
 
@@ -1353,8 +1509,8 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-NonPreRelease-Author:knarra-High-53058-Descheduler-Validate exclude namespace filtering	[Slow][Disruptive]", func() {
-		exutil.SkipARM64(oc)
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-NonPreRelease-Author:knarra-High-53058-Descheduler-Validate exclude namespace filtering	[Slow][Disruptive]", func() {
+		//exutil.SkipARM64(oc)
 		deschedulerinsT := filepath.Join(buildPruningBaseDir, "kubedescheduler_excludins.yaml")
 
 		_, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -1426,6 +1582,17 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Get descheduler cluster pod name")
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			podName, _ := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+			if strings.Contains(podName, " ") {
+				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)
+				return false, nil
+			}
+			e2e.Logf("podName does not have space, proceeding further\n")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("podName still containts space which is not expected"))
+
 		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(podName).NotTo(o.BeEmpty())
 
@@ -1499,6 +1666,17 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Get descheduler cluster pod name after mode is set")
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			podName, _ := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+			if strings.Contains(podName, " ") {
+				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)
+				return false, nil
+			}
+			e2e.Logf("podName does not have space, proceeding further\n")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("podName still containts space which is not expected"))
+
 		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(podName).NotTo(o.BeEmpty())
 
