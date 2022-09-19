@@ -1943,7 +1943,72 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 	})
 
 	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-Medium-53869-opm supports creating a catalog using basic veneer", func() {
+		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
+			g.Skip("HTTP_PROXY is not empty - skipping test ...")
+		}
+		opmBaseDir := exutil.FixturePath("testdata", "opm", "53869")
+		opmCLI.ExecCommandPath = opmBaseDir
+		defer DeleteDir(opmBaseDir, "fixture-testdata")
+
+		g.By("step: create dir catalog")
+		catsrcPathYaml := filepath.Join(opmBaseDir, "catalog-yaml")
+		err := os.MkdirAll(catsrcPathYaml, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step: create a catalog using basic veneer with yaml format")
+		output, err := opmCLI.Run("alpha").Args("render-veneer", "basic", filepath.Join(opmBaseDir, "catalog-basic-veneer.yaml"), "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		indexFilePath := filepath.Join(catsrcPathYaml, "index.yaml")
+		if err = ioutil.WriteFile(indexFilePath, []byte(output), 0644); err != nil {
+			e2e.Failf(fmt.Sprintf("Writefile %s Error: %v", indexFilePath, err))
+		}
+		output, err = opmCLI.Run("validate").Args(catsrcPathYaml).Output()
+		if err != nil {
+			e2e.Logf(output)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		output, err = opmCLI.Run("alpha").Args("list", "bundles", catsrcPathYaml, "nginx-operator").Output()
+		if err != nil {
+			e2e.Logf(output)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		o.Expect(string(output)).To(o.ContainSubstring("quay.io/olmqe/nginxolm-operator-bundle:v0.0.1"))
+		o.Expect(string(output)).To(o.ContainSubstring("quay.io/olmqe/nginxolm-operator-bundle:v1.0.1"))
+
+		g.By("step: create dir catalog")
+		catsrcPathJSON := filepath.Join(opmBaseDir, "catalog-json")
+		err = os.MkdirAll(catsrcPathJSON, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step: create a catalog using basic veneer with json format")
+		output, err = opmCLI.Run("alpha").Args("render-veneer", "basic", filepath.Join(opmBaseDir, "catalog-basic-veneer.yaml"), "-o", "json").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		indexFilePath = filepath.Join(catsrcPathJSON, "index.json")
+		if err = ioutil.WriteFile(indexFilePath, []byte(output), 0644); err != nil {
+			e2e.Failf(fmt.Sprintf("Writefile %s Error: %v", indexFilePath, err))
+		}
+		output, err = opmCLI.Run("validate").Args(catsrcPathJSON).Output()
+		if err != nil {
+			e2e.Logf(output)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		output, err = opmCLI.Run("alpha").Args("list", "bundles", catsrcPathJSON, "nginx-operator").Output()
+		if err != nil {
+			e2e.Logf(output)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		o.Expect(string(output)).To(o.ContainSubstring("quay.io/olmqe/nginxolm-operator-bundle:v0.0.1"))
+		o.Expect(string(output)).To(o.ContainSubstring("quay.io/olmqe/nginxolm-operator-bundle:v1.0.1"))
+	})
+
+	// author: xzha@redhat.com
 	g.It("Author:xzha-ConnectedOnly-Medium-53871-Medium-53915-opm supports creating a catalog using semver veneer", func() {
+		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
+			g.Skip("HTTP_PROXY is not empty - skipping test ...")
+		}
 		opmBaseDir := exutil.FixturePath("testdata", "opm", "53871")
 		opmCLI.ExecCommandPath = opmBaseDir
 		defer DeleteDir(opmBaseDir, "fixture-testdata")
