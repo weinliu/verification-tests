@@ -1,13 +1,9 @@
 package clusterinfrastructure
 
 import (
-	"time"
-
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"k8s.io/apimachinery/pkg/util/wait"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
@@ -53,7 +49,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonPreRelease-Author:zhsun-medium-51088-Providers can be recreated by operator [Disruptive][Slow]", func() {
+	g.It("Author:zhsun-medium-51088-[CAPI] Prevent users from deleting providers [Disruptive]", func() {
 		g.By("Check if cluster api on this platform is supported")
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere")
 		g.By("Check if cluster api is deployed")
@@ -65,21 +61,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Delete coreprovider and infrastructureprovider")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("coreprovider", "cluster-api", "-n", clusterAPINamespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).To(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("infrastructureprovider", "--all", "-n", clusterAPINamespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).To(o.HaveOccurred())
 
-		g.By("Check coreprovider and infrastructureprovider will be recreated by cluster-api-operator")
-		err = wait.Poll(15*time.Second, 5*time.Minute, func() (bool, error) {
-			coreprovider, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("coreprovider", "-n", clusterAPINamespace).Output()
-			infrastructureProvider, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("InfrastructureProvider", "-n", clusterAPINamespace).Output()
-			if len(coreprovider) == 0 || len(infrastructureProvider) == 0 {
-				e2e.Logf("Providers are not recreated by cluster-api-operator")
-				return false, nil
-			}
-			e2e.Logf("Providers are recreated by cluster-api-operator")
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Providers are not recreated by cluster-api-operator in 5m")
 	})
 })
