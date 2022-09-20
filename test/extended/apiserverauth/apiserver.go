@@ -2842,4 +2842,27 @@ spec:
 		o.Expect(servicecreateout).Should(o.ContainSubstring(fmt.Sprintf("service/%v created (dry run)", name)))
 		o.Expect(servicecreateerror).NotTo(o.HaveOccurred())
 	})
+
+	// author: zxiao@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Medium-16295-[origin_platformexp_329] 3.7 User can expose the environment variables to pods", func() {
+		g.By("1) Create new project required for this test execution")
+		oc.SetupProject()
+		namespace := oc.Namespace()
+
+		filename := "ocp16295_pod.yaml"
+		g.By(fmt.Sprintf("2) Create pod with resource file %s", filename))
+		template := getTestDataFilePath(filename)
+		err := oc.Run("create").Args("-f", template, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		podName := "kubernetes-metadata-volume-example"
+		g.By(fmt.Sprintf("3) Wait for pod with name %s ready", podName))
+		exutil.AssertPodToBeReady(oc, podName, namespace)
+
+		g.By("4) Check the information in the dump files for pods")
+		execOutput, err := oc.Run("exec").Args(podName, "-i", "--", "ls", "-laR", "/data/podinfo-dir").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(execOutput).To(o.ContainSubstring("annotations ->"))
+		o.Expect(execOutput).To(o.ContainSubstring("labels ->"))
+	})
 })
