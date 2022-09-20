@@ -760,6 +760,14 @@ func (dep *deployment) restart(oc *exutil.CLI) {
 	e2e.Logf("deployment/%s in namespace %s restart successfully", dep.name, dep.namespace)
 }
 
+// Hard restart the Deployment by deleting it's pods
+func (dep *deployment) hardRestart(oc *exutil.CLI) {
+	err := oc.WithoutNamespace().Run("delete").Args("-n", dep.namespace, "pod", "-l", dep.applabel).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	dep.waitReady(oc)
+	e2e.Logf("deployment/%s in namespace %s hard restart successfully", dep.name, dep.namespace)
+}
+
 // Check the deployment ready
 func (dep *deployment) checkReady(oc *exutil.CLI) (bool, error) {
 	dep.replicasno = dep.getReplicasNum(oc)

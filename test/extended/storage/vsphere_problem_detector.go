@@ -42,7 +42,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(vpdPodlog).NotTo(o.BeEmpty())
 		o.Expect(vpdPodlog).To(o.ContainSubstring("has HW version vmx"))
 
-		g.By("# Get the node hardware versioni")
+		g.By("# Get the node hardware version")
 		re := regexp.MustCompile(`HW version vmx-([0-9][0-9])`)
 		matchRes := re.FindStringSubmatch(vpdPodlog)
 		hwVersion := matchRes[1]
@@ -64,7 +64,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author:wduan@redhat.com
-	g.It("Author:wduan-Medium-44664-[vsphere-problem-detector] The vSphere cluster is marked as unupgradable if vcenter, esxi versions or HW versions are unsupported", func() {
+	g.It("Author:wduan-Medium-44664-[vsphere-problem-detector] The vSphere cluster is marked as Upgradeable=False if vcenter, esxi versions or HW versions are unsupported", func() {
 		g.By("# Get log from vsphere-problem-detector-operator")
 		podlog, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment/vsphere-problem-detector-operator", "-n", "openshift-cluster-storage-operator").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -85,7 +85,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-o=jsonpath={.items[].status.conditions[?(.type=='Upgradeable')].status}").Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				o.Expect(status).To(o.Equal("False"))
-				e2e.Logf("The cluster is marked as unupgradeable due to %s", kind)
+				e2e.Logf("The cluster is marked as Upgradeable=False due to %s", kind)
 			} else {
 				e2e.Logf("The %s is supported", kind)
 			}
@@ -129,7 +129,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("NonPreRelease-Author:pewang-High-48763-[vsphere-problem-detector] should report 'vsphere_rwx_volumes_total' metric correctly [Serial]", func() {
 		g.By("# Get the value of 'vsphere_rwx_volumes_total' metric real init value")
 		// Restart vsphere-problem-detector-operator and get the init value of 'vsphere_rwx_volumes_total' metric
-		detectorOperator.restart(oc.AsAdmin())
+		detectorOperator.hardRestart(oc.AsAdmin())
 		newInstanceName := detectorOperator.getPodList(oc.AsAdmin())[0]
 		// When the metric update by restart the instance the metric's pod's `data.result.0.metric.pod` name will change to the newInstanceName
 		mo.waitSpecifiedMetricValueAsExpected("vsphere_rwx_volumes_total", `data.result.0.metric.pod`, newInstanceName)
@@ -155,7 +155,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("# Check the metric update correctly")
 		// Since the vsphere-problem-detector update the metric every hour restart the deployment to trigger the update right now
-		detectorOperator.restart(oc.AsAdmin())
+		detectorOperator.hardRestart(oc.AsAdmin())
 		// Wait for 'vsphere_rwx_volumes_total' metric value update correctly
 		initCountInt, err := strconv.Atoi(initCount)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -166,19 +166,19 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		waitForPersistentVolumeStatusAsExpected(oc, rwxPersistVolume.name, "deleted")
 
 		g.By("# Check the metric update correctly again")
-		detectorOperator.restart(oc.AsAdmin())
+		detectorOperator.hardRestart(oc.AsAdmin())
 		mo.waitSpecifiedMetricValueAsExpected("vsphere_rwx_volumes_total", `data.result.0.value.1`, interfaceToString(initCountInt+1))
 	})
 
 	// author:pewang@redhat.com
-	// Since it'll make the vSphere CSI driver credential invaild during the execution,so mark it Disruptive
+	// Since it'll make the vSphere CSI driver credential invalid during the execution,so mark it Disruptive
 	g.It("Author:pewang-High-48875-[vmware-vsphere-csi-driver-operator] should report 'vsphere_csi_driver_error' metric when couldn't connect to vCenter [Disruptive]", func() {
 		g.By("# Get the origin credential of vSphere CSI driver")
 		// Make sure the CSO is healthy
 		waitCSOhealthy(oc)
 		originCredential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/vmware-vsphere-cloud-credentials", "-n", "openshift-cluster-csi-drivers", "-o", "json").Output()
 		if strings.Contains(interfaceToString(err), "not found") {
-			g.Skip("Unsupport profile or test cluster is abnormal")
+			g.Skip("Unsupported profile or test cluster is abnormal")
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -195,18 +195,18 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		originPwd := gjson.Get(originCredential, `data.*password`).String()
 
 		g.By("# Replace the origin credential of vSphere CSI driver to wrong")
-		invaildPwd := base64.StdEncoding.EncodeToString([]byte(getRandomString()))
-		output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret/vmware-vsphere-cloud-credentials", "-n", "openshift-cluster-csi-drivers", `-p={"data":{"`+pwdKey+`":"`+invaildPwd+`"}}`).Output()
+		invalidPwd := base64.StdEncoding.EncodeToString([]byte(getRandomString()))
+		output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret/vmware-vsphere-cloud-credentials", "-n", "openshift-cluster-csi-drivers", `-p={"data":{"`+pwdKey+`":"`+invalidPwd+`"}}`).Output()
 		// Restore the credential of vSphere CSI driver and make sure the CSO recover healthy by defer
 		defer restoreVsphereCSIcredential(oc, pwdKey, originPwd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("patched"))
-		debugLogf("Replace the credential of vSphere CSI driver pwd to invaildPwd: \"%s\" succeed", invaildPwd)
+		debugLogf("Replace the credential of vSphere CSI driver pwd to invalidPwd: \"%s\" succeed", invalidPwd)
 
 		g.By("# Wait for the 'vsphere_csi_driver_error' metric report with correct content")
 		mo.waitSpecifiedMetricValueAsExpected("vsphere_csi_driver_error", `data.result.0.metric.failure_reason`, "vsphere_connection_failed")
 
-		g.By("# Check the cluster could still upgrade and cluster storage operator not avaiable")
+		g.By("# Check the cluster could still upgrade and cluster storage operator not available")
 		// Don't block upgrades if we can't connect to vcenter
 		// https://bugzilla.redhat.com/show_bug.cgi?id=2040880
 		waitCSOspecifiedStatusValueAsExpected(oc, "Upgradeable", "True")
