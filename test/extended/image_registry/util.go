@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -1141,4 +1142,27 @@ func setWaitForAnImageStreamTag(oc *exutil.CLI, namespace, name, tag string, tim
 
 func waitForAnImageStreamTag(oc *exutil.CLI, namespace, name, tag string) error {
 	return exutil.TimedWaitForAnImageStreamTag(oc, namespace, name, tag, time.Second*360)
+}
+
+func waitCoBecomes(oc *exutil.CLI, coName string, waitTime int, expectedStatus map[string]string) error {
+	return wait.Poll(5*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+		gottenStatus := getCoStatus(oc, coName, expectedStatus)
+		eq := reflect.DeepEqual(expectedStatus, gottenStatus)
+		if eq {
+			e2e.Logf("Given operator %s becomes %s", coName, gottenStatus)
+			return true, nil
+		}
+		return false, nil
+	})
+}
+
+func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]string) map[string]string {
+	newStatusToCompare := make(map[string]string)
+	for key := range statusToCompare {
+		args := fmt.Sprintf(`-o=jsonpath={.status.conditions[?(.type == '%s')].status}`, key)
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", args, coName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newStatusToCompare[key] = status
+	}
+	return newStatusToCompare
 }

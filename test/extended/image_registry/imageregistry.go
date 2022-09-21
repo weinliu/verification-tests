@@ -3020,4 +3020,50 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		output, _ := oc.AsAdmin().Run("patch").Args("config.imageregistry/cluster", "-p", `{"spec": {"storage": {"s3": {"virtualHostedStyle": "invalid"}}}}`, "--type=merge").Output()
 		o.Expect(string(output)).To(o.ContainSubstring("Invalid value: \"string\""))
 	})
+
+	//author: xiuwang@redhat.com
+	g.It("NonPreRelease-Longduration-Author:xiuwang-High-29435-Set the allowed list of image registry via allowedRegistriesForImport[Disruptive]", func() {
+		g.By("Set allowed list for import")
+		expectedStatus1 := map[string]string{"Progressing": "True"}
+		expectedStatus2 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		defer func() {
+			e2e.Logf("Restoring allowedRegistriesForImport setting")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("image.config/cluster", "-p", `{"spec":{"allowedRegistriesForImport":[]}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Check the openshift-apiserver operator status")
+			err = waitCoBecomes(oc, "openshift-apiserver", 60, expectedStatus1)
+			err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus2)
+			exutil.AssertWaitPollNoErr(err, "openshift-apiserver operator does not become available in 480 seconds")
+		}()
+		err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("image.config/cluster", "-p", `{"spec":{"allowedRegistriesForImport":[{"domainName":"registry.redhat.io","insecure":true},{"domainName":"quay.io","insecure":false}]}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the openshift-apiserver operator status")
+		err = waitCoBecomes(oc, "openshift-apiserver", 60, expectedStatus1)
+		err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus2)
+		exutil.AssertWaitPollNoErr(err, "openshift-apiserver operator does not become available in 480 seconds")
+
+		g.By("Import the not allowed image")
+		output, err := oc.WithoutNamespace().AsAdmin().Run("import-image").Args("notinallowed:latest", "--from=registry.access.redhat.com/ubi8/ubi", "--confirm=true", "-n", oc.Namespace()).Output()
+		if err == nil {
+			e2e.Failf("allowedRegistriesForImport does not work")
+		}
+		o.Expect(string(output)).To(o.ContainSubstring("Forbidden: registry \"registry.access.redhat.com\" not allowed by whitelist"))
+
+		g.By("Import the allowed image")
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "allowedquay:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "allowedquay", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Import the allowed image with secure")
+		output, err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("secure:latest", "--from=registry.redhat.io/ubi8/ubi", "--confirm=true", "-n", oc.Namespace()).Output()
+		if err == nil {
+			e2e.Failf("allowedRegistriesForImport does not work")
+		}
+		o.Expect(string(output)).To(o.ContainSubstring("Forbidden: registry \"registry.redhat.io\" not allowed by whitelist"))
+		o.Expect(string(output)).To(o.ContainSubstring("registry.redhat.io:80"))
+	})
+
 })
