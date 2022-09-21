@@ -37,7 +37,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Can not find any woker nodes in the cluster")
 		}
 		for i := range workerNodeList.Items {
-			checkSctpModule(oc, workerNodeList.Items[i].Name)
+			checkSctpModule(oc, workerNodeList.Items[i].Name, oc.Namespace())
 		}
 
 		g.By("create new namespace")
@@ -129,7 +129,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Can not find any woker nodes in the cluster")
 		}
 		for i := range workerNodeList.Items {
-			checkSctpModule(oc, workerNodeList.Items[i].Name)
+			checkSctpModule(oc, workerNodeList.Items[i].Name, oc.Namespace())
 		}
 
 		g.By("create new namespace")

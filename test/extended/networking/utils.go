@@ -609,7 +609,7 @@ func getDefaultSubnet(oc *exutil.CLI) (string, error) {
 	return defSubnet, nil
 }
 
-//Hosts function return the host network CIDR
+// Hosts function return the host network CIDR
 func Hosts(cidr string) ([]string, error) {
 	ip, ipnet, err := net.ParseCIDR(cidr)
 	e2e.Logf("in Hosts function, ip: %v, ipnet: %v", ip, ipnet)
@@ -741,7 +741,9 @@ func installSctpModule(oc *exutil.CLI, configFile string) {
 	}
 }
 
-func checkSctpModule(oc *exutil.CLI, nodeName string) {
+func checkSctpModule(oc *exutil.CLI, nodeName, namespace string) {
+	defer exutil.RecoverDebugNodeNamespaceRestricted(oc, namespace)
+	exutil.SetDebugNodeNamespacePrivileged(oc, namespace)
 	err := wait.Poll(30*time.Second, 15*time.Minute, func() (bool, error) {
 		// Check nodes status to make sure all nodes are up after rebooting caused by load-sctp-module
 		nodesStatus, err := oc.AsAdmin().Run("get").Args("node").Output()
@@ -856,7 +858,7 @@ func patchResourceAsAdmin(oc *exutil.CLI, resource, patch string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//Check network operator status in intervals until timeout
+// Check network operator status in intervals until timeout
 func checkNetworkOperatorState(oc *exutil.CLI, interval int, timeout int) {
 	errCheck := wait.Poll(time.Duration(interval)*time.Second, time.Duration(timeout)*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "network").Output()
@@ -882,7 +884,7 @@ func getNodeIPv4(oc *exutil.CLI, namespace string, nodeName string) string {
 	return nodeipv4
 }
 
-//Return IPv6 and IPv4 in vars respectively for Dual Stack and IPv4/IPv6 in 2nd var for single stack Clusters, and var1 will be nil in those cases
+// Return IPv6 and IPv4 in vars respectively for Dual Stack and IPv4/IPv6 in 2nd var for single stack Clusters, and var1 will be nil in those cases
 func getNodeIP(oc *exutil.CLI, nodeName string) (string, string) {
 	ipStack := checkIPStackType(oc)
 	if (ipStack == "ipv6single") || (ipStack == "ipv4single") {
@@ -1167,8 +1169,10 @@ func getTwoNodesSameSubnet(oc *exutil.CLI, nodeList *v1.NodeList) (bool, []strin
 	return true, egressNodes
 }
 
-/*getSvcIP returns IPv6 and IPv4 in vars in order on dual stack respectively and main Svc IP in case of single stack (v4 or v6) in 1st var, and nil in 2nd var.
-LoadBalancer svc will return Ingress VIP in var1, v4 or v6 and NodePort svc will return Ingress SvcIP in var1 and NodePort in var2*/
+/*
+getSvcIP returns IPv6 and IPv4 in vars in order on dual stack respectively and main Svc IP in case of single stack (v4 or v6) in 1st var, and nil in 2nd var.
+LoadBalancer svc will return Ingress VIP in var1, v4 or v6 and NodePort svc will return Ingress SvcIP in var1 and NodePort in var2
+*/
 func getSvcIP(oc *exutil.CLI, namespace string, svcName string) (string, string) {
 	ipStack := checkIPStackType(oc)
 	svctype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.type}").Output()
@@ -1250,7 +1254,7 @@ func getSvcIP(oc *exutil.CLI, namespace string, svcName string) (string, string)
 	}
 }
 
-//getPodIP returns IPv6 and IPv4 in vars in order on dual stack respectively and main IP in case of single stack (v4 or v6) in 1st var, and nil in 2nd var
+// getPodIP returns IPv6 and IPv4 in vars in order on dual stack respectively and main IP in case of single stack (v4 or v6) in 1st var, and nil in 2nd var
 func getPodIP(oc *exutil.CLI, namespace string, podName string) (string, string) {
 	ipStack := checkIPStackType(oc)
 	if (ipStack == "ipv6single") || (ipStack == "ipv4single") {
@@ -1270,7 +1274,7 @@ func getPodIP(oc *exutil.CLI, namespace string, podName string) (string, string)
 	return "", ""
 }
 
-//CurlPod2PodPass checks connectivity across pods regardless of network addressing type on cluster
+// CurlPod2PodPass checks connectivity across pods regardless of network addressing type on cluster
 func CurlPod2PodPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, namespaceDst string, podNameDst string) {
 	podIP1, podIP2 := getPodIP(oc, namespaceDst, podNameDst)
 	if podIP2 != "" {
@@ -1284,7 +1288,7 @@ func CurlPod2PodPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, nam
 	}
 }
 
-//CurlPod2PodFail ensures no connectivity from a pod to pod regardless of network addressing type on cluster
+// CurlPod2PodFail ensures no connectivity from a pod to pod regardless of network addressing type on cluster
 func CurlPod2PodFail(oc *exutil.CLI, namespaceSrc string, podNameSrc string, namespaceDst string, podNameDst string) {
 	podIP1, podIP2 := getPodIP(oc, namespaceDst, podNameDst)
 	if podIP2 != "" {
@@ -1298,7 +1302,7 @@ func CurlPod2PodFail(oc *exutil.CLI, namespaceSrc string, podNameSrc string, nam
 	}
 }
 
-//CurlNode2PodPass checks node to pod connectivity regardless of network addressing type on cluster
+// CurlNode2PodPass checks node to pod connectivity regardless of network addressing type on cluster
 func CurlNode2PodPass(oc *exutil.CLI, nodeName string, namespace string, podName string) {
 	//getPodIP returns IPv6 and IPv4 in order on dual stack in PodIP1 and PodIP2 respectively and main IP in case of single stack (v4 or v6) in PodIP1, and nil in PodIP2
 	podIP1, podIP2 := getPodIP(oc, namespace, podName)
@@ -1316,7 +1320,7 @@ func CurlNode2PodPass(oc *exutil.CLI, nodeName string, namespace string, podName
 	}
 }
 
-//CurlNode2SvcPass checks node to svc connectivity regardless of network addressing type on cluster
+// CurlNode2SvcPass checks node to svc connectivity regardless of network addressing type on cluster
 func CurlNode2SvcPass(oc *exutil.CLI, nodeName string, namespace string, svcName string) {
 	svcIP1, svcIP2 := getSvcIP(oc, namespace, svcName)
 	if svcIP2 != "" {
@@ -1333,7 +1337,7 @@ func CurlNode2SvcPass(oc *exutil.CLI, nodeName string, namespace string, svcName
 	}
 }
 
-//CurlNode2SvcFail checks node to svc connectivity regardless of network addressing type on cluster
+// CurlNode2SvcFail checks node to svc connectivity regardless of network addressing type on cluster
 func CurlNode2SvcFail(oc *exutil.CLI, nodeName string, namespace string, svcName string) {
 	svcIP1, svcIP2 := getSvcIP(oc, namespace, svcName)
 	if svcIP2 != "" {
@@ -1350,7 +1354,7 @@ func CurlNode2SvcFail(oc *exutil.CLI, nodeName string, namespace string, svcName
 	}
 }
 
-//CurlPod2SvcPass checks pod to svc connectivity regardless of network addressing type on cluster
+// CurlPod2SvcPass checks pod to svc connectivity regardless of network addressing type on cluster
 func CurlPod2SvcPass(oc *exutil.CLI, namespaceSrc string, namespaceSvc string, podNameSrc string, svcName string) {
 	svcIP1, svcIP2 := getSvcIP(oc, namespaceSvc, svcName)
 	if svcIP2 != "" {
@@ -1364,7 +1368,7 @@ func CurlPod2SvcPass(oc *exutil.CLI, namespaceSrc string, namespaceSvc string, p
 	}
 }
 
-//CurlPod2SvcFail ensures no connectivity from a pod to svc regardless of network addressing type on cluster
+// CurlPod2SvcFail ensures no connectivity from a pod to svc regardless of network addressing type on cluster
 func CurlPod2SvcFail(oc *exutil.CLI, namespaceSrc string, namespaceSvc string, podNameSrc string, svcName string) {
 	svcIP1, svcIP2 := getSvcIP(oc, namespaceSvc, svcName)
 	if svcIP2 != "" {
@@ -1445,7 +1449,7 @@ func getPodMultiNetwork(oc *exutil.CLI, namespace string, podName string) (strin
 	return pod2ns1IPv4, pod2ns1IPv6
 }
 
-//Pinging pod's secondary interfaces should pass
+// Pinging pod's secondary interfaces should pass
 func curlPod2PodMultiNetworkPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPv4 string, podIPv6 string) {
 	err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
 		msg, _ := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
@@ -1460,7 +1464,7 @@ func curlPod2PodMultiNetworkPass(oc *exutil.CLI, namespaceSrc string, podNameSrc
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test fail with err:%s", err))
 }
 
-//Pinging pod's secondary interfaces should fail
+// Pinging pod's secondary interfaces should fail
 func curlPod2PodMultiNetworkFail(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPv4 string, podIPv6 string) {
 	err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
 		msg, _ := e2e.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
@@ -1475,7 +1479,7 @@ func curlPod2PodMultiNetworkFail(oc *exutil.CLI, namespaceSrc string, podNameSrc
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test fail with err:%s", err))
 }
 
-//This function will bring 2 namespaces, 5 pods and 2 NADs for all multus multinetworkpolicy cases
+// This function will bring 2 namespaces, 5 pods and 2 NADs for all multus multinetworkpolicy cases
 func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo string) {
 
 	buildPruningBaseDir := exutil.FixturePath("testdata", "networking/multinetworkpolicy")
@@ -1702,10 +1706,10 @@ func patchReplaceResourceAsAdmin(oc *exutil.CLI, ns, resource, rsname, patch str
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//For SingleStack function returns IPv6 or IPv4 hostsubnet in case OVN
-//For SDN plugin returns only IPv4 hostsubnet
-//Dual stack not supported on openshiftSDN
-//IPv6 single stack not supported on openshiftSDN
+// For SingleStack function returns IPv6 or IPv4 hostsubnet in case OVN
+// For SDN plugin returns only IPv4 hostsubnet
+// Dual stack not supported on openshiftSDN
+// IPv6 single stack not supported on openshiftSDN
 func getNodeSubnet(oc *exutil.CLI, nodeName string) string {
 
 	networkType := checkNetworkType(oc)
