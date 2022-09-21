@@ -1530,4 +1530,42 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			o.Expect(err.Error()).To(o.ContainSubstring("timed out waiting for the condition"))
 		}
 	})
+
+	//author: jiajliu@redhat.com
+	g.It("Author:jiajliu-Medium-53906-The architecture info in clusterversion’s status should be correct", func() {
+		const heterogeneousArchKeyword = "multi"
+		g.By("Get release info from current cluster")
+		releaseInfo, _ := getReleaseInfo(oc)
+		o.Expect(releaseInfo).NotTo(o.BeNil())
+
+		g.By("Check the arch info cv.status is expected")
+		cvArchInfo, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.conditions[?(@.type==\"ReleaseAccepted\")].message}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Release payload info in cv.status: %v", cvArchInfo)
+
+		releaseMeta := releaseInfo["metadata"].(map[string]interface{})["metadata"]
+		if releaseMeta == nil {
+			e2e.Logf("This current release is a non-heterogeneous payload")
+			//It's a non-heterogeneous payload, the architecture info in clusterversion’s status should be consistent with runtime.GOARCH.
+			output, err := exec.Command("bash", "-c", "oc get nodes -ojson|jq .items[].status.nodeInfo.architecture|sort -u").Output()
+			nodesArchInfo := strings.TrimSpace(string(output))
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("Nodes arch info: %v", nodesArchInfo)
+
+			nodesArchTypeNum, err := exec.Command("bash", "-c", fmt.Sprintf("echo %v|wc -l", nodesArchInfo)).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.TrimSpace(string(nodesArchTypeNum))).To(o.Equal("1"))
+
+			e2e.Logf("Expected arch info: %v", nodesArchInfo)
+			o.Expect(cvArchInfo).To(o.ContainSubstring(nodesArchInfo))
+		} else if releaseMeta.(map[string]interface{})["release.openshift.io/architecture"].(string) == heterogeneousArchKeyword {
+			e2e.Logf("This current release is a heterogeneous payload")
+			// It's a heterogeneous payload, the architecture info in clusterversion’s status should be multi.
+			e2e.Logf("Expected arch info: %v", heterogeneousArchKeyword)
+			o.Expect(cvArchInfo).To(o.ContainSubstring(heterogeneousArchKeyword))
+		} else {
+			e2e.Logf("Unrecognized release payload: %v", releaseMeta)
+			g.Fail("Unexpected info detected in release info")
+		}
+	})
 })
