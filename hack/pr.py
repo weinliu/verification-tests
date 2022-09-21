@@ -51,6 +51,8 @@ for filename in modifedFiles.decode("utf-8").strip(os.linesep).split():
                 continue
             if re.search("VMonly|NonUnifyCI｜CPaasrunOnly｜ProdrunOnly｜StagerunOnly|DisconnectedOnly", lineIndex):
                 continue
+            if "\"" not in lineIndex:
+                continue
             caseString = lineIndex.split("\"")[1]
             caseIDs = patternIt.findall(caseString)
             for caseID in caseIDs:
@@ -62,12 +64,12 @@ print(caseList)
 if caseList:
     testcaseIDs = "|".join(caseList)
     #Skip Security_and_Compliance cases, cannot executed these cases now.
-    commands = './bin/extended-platform-tests run all --dry-run |grep -E "'+ testcaseIDs +'" |grep -v Security_and_Compliance'
+    commands = './bin/extended-platform-tests run all --dry-run |grep -E "'+ testcaseIDs +'"'
     process = subprocess.Popen(commands, shell=True, stdout=subprocess.PIPE)
     cases, err = process.communicate()
     if patternIt.findall(str(cases)):
         # run test case
-        commands = './bin/extended-platform-tests run all --dry-run |grep -E "'+ testcaseIDs + '" |grep -v Security_and_Compliance |./bin/extended-platform-tests run --timeout 45m -f -'
+        commands = './bin/extended-platform-tests run all --dry-run |grep -E "'+ testcaseIDs + '" |./bin/extended-platform-tests run --timeout 45m -f -'
         print (commands)
         process = subprocess.Popen(commands, shell=True, stdout=subprocess.PIPE)
         out, err = process.communicate()
