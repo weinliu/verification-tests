@@ -24,4 +24,22 @@ export const ClusterSettingPage = {
       cy.get(`[href="/k8s/cluster/config.openshift.io~v1~${name}/cluster"]`).should('not.exist');
     })
   },
+  editUpstreamConfig: () => {
+    cy.get('[data-test-id="cluster-version-upstream-server-url"]').click();
+    cy.get('[data-test="Custom update service.-radio-input"]').click();
+    cy.get('[id="cluster-version-custom-upstream-server-url"]')
+      .clear()
+      .type('https://openshift-release.apps.ci.l2s4.p1.openshiftapps.com/graph');
+    cy.get('[data-test="confirm-action"]').click();
+    
+  },
+  configureChannel: () => {
+    cy.get('[data-test-id="cluster-version"]').then(($version) => {
+      const text = $version.text();
+      const versionString = `stable-${text.split('.').slice(0, 2).join('.')}`
+      cy.get('[data-test-id="current-channel-update-link"]').click();
+      cy.get('.pf-c-form-control').clear().type(versionString);
+    });
+    cy.get('[data-test="confirm-action"]').click();
+  },
 }
