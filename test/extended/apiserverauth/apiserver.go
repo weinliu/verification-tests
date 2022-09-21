@@ -2295,7 +2295,7 @@ spec:
 		frontwords := `(\w+?[^0-9a-zA-Z]+?){,3}`
 		afterwords := `(\w+?[^0-9a-zA-Z]+?){,30}`
 		// Add one temporary exception 'merge.go:121] Should not happen: OpenAPI V3 merge'，after related bug 2115634 is fixed, will remove it.
-		exceptions := "SHOULD NOT HAPPEN.*Kind=CertificateSigningRequest|merge.go:121] Should|Should not happen: Open|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|e2e-test.*-panic|kernel.*-panic|non-fatal"
+		exceptions := "SHOULD NOT HAPPEN.*Kind=CertificateSigningRequest|merge.go:121] Should|Should not happen: Open|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|e2e-test-.*|kernel.*-panic|non-fatal|(ocp|OCP)[0-9]{4,}"
 		cmd := fmt.Sprintf(`export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig
 		grep -hriE "(%s%s%s)+" /var/log/pods/openshift-kube-apiserver-operator* | grep -Ev "%s" > /tmp/OCP-39601-kaso-errors.log
 		sed -E "s/%s/../g" /tmp/OCP-39601-kaso-errors.log | sort | uniq -c | sort -h | tee /tmp/OCP-39601-kaso-uniq-errors.log | head -10
@@ -2382,7 +2382,7 @@ spec:
 		g.By("7) On all master nodes, check kas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
 		format = `[0-9TZm.:]{2,}|namespace="([a-zA-Z0-9]|\-)*"|name="([a-zA-Z0-9]|\-)*"`
 		keywords = "panic|fatal|SHOULD NOT HAPPEN"
-		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)|panicked: false|e2e-test.*-panic|kernel.*-panic"
+		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)|panicked: false|e2e-test-.*|kernel.*-panic|(ocp|OCP)[0-9]{4,}"
 		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/kube-apiserver/audit*.log | grep -Ev '%s' > /tmp/OCP-39601-audit-errors.log
 		echo '%s'
 		while read line; do
@@ -2400,7 +2400,7 @@ spec:
 			auditLogs = trimEndTag.ReplaceAllString(auditLogs, "")
 			for _, line := range strings.Split(auditLogs, "\n") {
 				if strings.Trim(line, " ") != "" {
-					auditAbnormalLogs = append(auditAbnormalLogs, fmt.Sprintf("%s", line))
+					auditAbnormalLogs = append(auditAbnormalLogs, "%s")
 				}
 			}
 		}
@@ -2548,7 +2548,7 @@ spec:
 		totalAbnormalLogCount += len(podAbnormalLogs)
 
 		g.By("5) On all master nodes, check OAS log files for panic error.")
-		exceptions := "panicked: false|e2e-test.*-panic|kernel.*-panic|non-fatal"
+		exceptions := "panicked: false|e2e-test-.*|kernel.*-panic|non-fatal|(ocp|OCP)[0-9]{4,}"
 		cmd = fmt.Sprintf(`RETAG="[EW][0-9]{4}\s[0-9]{2}:[0-9]{2}"
 		PANIC="${RETAG}.*panic"
 		panic_logfiles=$(grep -riE "${PANIC}" /var/log/pods/openshift-apiserver_apiserver* | grep -Ev "%s" | cut -d ':' -f1 | head -10 | uniq)
@@ -2571,7 +2571,7 @@ spec:
 			externalLogs = trimEndTag.ReplaceAllString(externalLogs, "")
 			for _, line := range strings.Split(externalLogs, "\n") {
 				if strings.Trim(line, " ") != "" {
-					externalPanicLogs = append(externalPanicLogs, fmt.Sprintf("%s", line))
+					externalPanicLogs = append(externalPanicLogs, "%s")
 				}
 			}
 		}
@@ -2624,7 +2624,7 @@ spec:
 			auditLogs = trimEndTag.ReplaceAllString(auditLogs, "")
 			for _, line := range strings.Split(auditLogs, "\n") {
 				if strings.Trim(line, " ") != "" {
-					auditAbnormalLogs = append(auditAbnormalLogs, fmt.Sprintf("%s", line))
+					auditAbnormalLogs = append(auditAbnormalLogs, "%s")
 				}
 			}
 		}
@@ -2662,7 +2662,7 @@ spec:
 		frontwords := `(\w+?[^0-9a-zA-Z]+?){,3}`
 		afterwords := `(\w+?[^0-9a-zA-Z]+?){,30}`
 		// Add one temporary exception 'merge.go:121] Should not happen: OpenAPI V3 merge'，after related bug 2115634 is fixed, will remove it.
-		exceptions := "SHOULD NOT HAPPEN.*Kind=CertificateSigningRequest|merge.go:121] Should|Should not happen: OpenAPI|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|e2e-test.*-panic|kernel.*-panic|non-fatal|e2e-test"
+		exceptions := "SHOULD NOT HAPPEN.*Kind=CertificateSigningRequest|merge.go:121] Should|Should not happen: OpenAPI|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|e2e-test-.*|kernel.*-panic|non-fatal|(ocp|OCP)[0-9]{4,}"
 		cmd := fmt.Sprintf(`grep -hriE "(%s%s%s)+" /var/log/pods/openshift-oauth-apiserver_apiserver* | grep -Ev "%s" > /tmp/OCP-42937-oauthas-errors.log
 		sed -E "s/%s/../g" /tmp/OCP-42937-oauthas-errors.log | sort | uniq -c | sort -h | tee > /tmp/OCP-42937-oauthas-uniq-errors.log | head -10
 		echo '%s'
@@ -2720,7 +2720,7 @@ spec:
 
 		g.By("6) On all master nodes, check oauthas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
 		keywords = "panic|fatal|SHOULD NOT HAPPEN"
-		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)|panicked: false|e2e-test.*-panic|kernel.*-panic|e2e-test"
+		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)|panicked: false|kernel.*-panic|e2e-test-.*|(ocp|OCP)[0-9]{4,}"
 		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/oauth-apiserver/audit*.log | grep -Ev '%s' > /tmp/OCP-42937-audit-errors.log
 		echo '%s'
 		while read line; do
@@ -2738,7 +2738,7 @@ spec:
 			auditLogs = trimEndTag.ReplaceAllString(auditLogs, "")
 			for _, line := range strings.Split(auditLogs, "\n") {
 				if strings.Trim(line, " ") != "" {
-					auditAbnormalLogs = append(auditAbnormalLogs, fmt.Sprintf("%s", line))
+					auditAbnormalLogs = append(auditAbnormalLogs, "%s")
 				}
 			}
 		}
