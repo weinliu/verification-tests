@@ -2429,6 +2429,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-47181-Disjunctive constraint of one package and one GVK", func() {
+		exutil.SkipARM64(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		oc.SetupProject()
 		namespace := oc.Namespace()
@@ -10512,6 +10513,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 	})
 
 	g.It("VMonly-Author:xzha-ConnectedOnly-Medium-43246-Convert an existing db based index to declarative config", func() {
+		exutil.SkipARM64(oc)
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
