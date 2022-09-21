@@ -1055,7 +1055,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(patchErr).NotTo(o.HaveOccurred())
 
 		//Network operator needs to recreate the pods on a merge request, therefore give it 90 secs
-		checkNetworkOperatorState(oc, 90, 90)
+		checkNetworkOperatorState(oc, 120, 120)
 
 		g.By("Obtain the namespace")
 		ns1 := oc.Namespace()
