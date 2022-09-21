@@ -171,71 +171,6 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-High-27977-SDK ansible Implement default Ansible content path in watches.yaml", func() {
-		operatorsdkCLI.showInfo = true
-		oc.SetupProject()
-		namespace := oc.Namespace()
-		_, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/contentpath-bundle:v"+ocpversion, "-n", namespace, "--timeout", "5m").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
-			msg, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment/contentpath-controller-manager", "-n", namespace, "-c", "manager").Output()
-			if strings.Contains(msg, "Starting workers") {
-				e2e.Logf("found Starting workers")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("contentpath-controller-manager deployment of %s has not Starting workers", namespace))
-	})
-
-	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-High-34292-SDK ansible operator flags maxConcurrentReconciles by arg max concurrent reconciles", func() {
-		operatorsdkCLI.showInfo = true
-		oc.SetupProject()
-		namespace := oc.Namespace()
-		defer operatorsdkCLI.Run("cleanup").Args("max-concurrent-reconciles", "-n", namespace).Output()
-		_, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/max-concurrent-reconciles-bundle:v"+ocpversion, "-n", namespace, "--timeout", "5m").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		g.By("Check the reconciles number in logs")
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
-			msg, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deploy/max-concurrent-reconciles-controller-manager", "-c", "manager", "-n", namespace).Output()
-			if strings.Contains(msg, "\"worker count\":4") {
-				e2e.Logf("found worker count:4")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("log of deploy/max-concurrent-reconciles-controller-manager of %s doesn't have worker count:4", namespace))
-	})
-
-	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-High-28157-SDK ansible blacklist supported in watches.yaml", func() {
-		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
-		var blacklist = filepath.Join(buildPruningBaseDir, "cache1_v1_blacklist.yaml")
-		operatorsdkCLI.showInfo = true
-		oc.SetupProject()
-		namespace := oc.Namespace()
-		_, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/blacklist-bundle:v"+ocpversion, "-n", namespace, "--timeout", "5m").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		createBlacklist, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", blacklist, "-p", "NAME=blacklist-sample").OutputToFile("config-28157.json")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createBlacklist, "-n", namespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
-			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "--no-headers").Output()
-			if strings.Contains(msg, "blacklist-sample") {
-				e2e.Logf("found pod blacklist-sample")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("blacklist-sample pod in %s doesn't found", namespace))
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deploy/blacklist-controller-manager", "-c", "manager", "-n", namespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(msg).To(o.ContainSubstring("Skipping"))
-	})
-
-	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-28586-SDK ansible Content Collections Support in watches.yaml", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
 		var collectiontest = filepath.Join(buildPruningBaseDir, "cache5_v1_collectiontest.yaml")
@@ -257,34 +192,6 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("miss log dummy : Create ConfigMap in %s", namespace))
-	})
-
-	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-High-29374-SDK ansible Migrate kubernetes Ansible modules to a collect", func() {
-		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
-		var memcached = filepath.Join(buildPruningBaseDir, "cache2_v1_modulescollect.yaml")
-		operatorsdkCLI.showInfo = true
-		oc.SetupProject()
-		namespace := oc.Namespace()
-		_, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/modules-to-collect-bundle:v"+ocpversion, "-n", namespace, "--timeout", "5m").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		createModules, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", memcached, "-p", "NAME=modulescollect-sample").OutputToFile("config-29374.json")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createModules, "-n", namespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
-			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "-n", namespace).Output()
-			if strings.Contains(msg, "test-secret") {
-				e2e.Logf("found secret test-secret")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("doesn't get secret test-secret %s", namespace))
-		// oc get secret test-secret -o yaml
-		msg, err := oc.AsAdmin().Run("describe").Args("secret", "test-secret", "-n", namespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(msg).To(o.ContainSubstring("test:  6 bytes"))
 	})
 
 	// author: jfan@redhat.com
@@ -607,30 +514,6 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-High-41497-SDK ansible operatorsdk util k8s status in the task", func() {
-		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
-		var k8sstatus = filepath.Join(buildPruningBaseDir, "cache3_v1_k8sstatus.yaml")
-		operatorsdkCLI.showInfo = true
-		oc.SetupProject()
-		namespace := oc.Namespace()
-		_, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/k8sstatus-bundle:v"+ocpversion, "-n", namespace, "--timeout", "5m").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		createK8sstatus, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", k8sstatus, "-p", "NAME=k8sstatus-sample").OutputToFile("config-41497.json")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createK8sstatus, "-n", namespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
-			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("k8sstatus.cache3.k8sstatus.com", "k8sstatus-sample", "-n", namespace, "-o", "yaml").Output()
-			if strings.Contains(msg, "hello world") {
-				e2e.Logf("k8s_status test hello world")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get k8sstatus-sample hello world in %s", namespace))
-	})
-
-	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-38757-SDK operator bundle upgrade from traditional operator installation", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
 		var catalogofupgrade = filepath.Join(buildPruningBaseDir, "catalogsource.yaml")
@@ -837,32 +720,6 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get csv catalogtest.v0.0.1 in %s", namespace))
-	})
-
-	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-High-45141-SDK ansible add k8s event module to operator sdk util", func() {
-		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
-		var k8sevent = filepath.Join(buildPruningBaseDir, "k8s_v1_k8sevent.yaml")
-		operatorsdkCLI.showInfo = true
-		oc.SetupProject()
-		namespace := oc.Namespace()
-		_, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/k8sevent-bundle:v"+ocpversion, "-n", namespace, "--timeout", "5m").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", "system:serviceaccount:"+namespace+":k8sevent-controller-manager").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		createK8sevent, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", k8sevent, "-p", "NAME=k8sevent-sample").OutputToFile("config-45141.json")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createK8sevent, "-n", namespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
-			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", namespace).Output()
-			if strings.Contains(msg, "test-reason") {
-				e2e.Logf("k8s_event test")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get k8s event test-name in %s", namespace))
 	})
 
 	// author: jfan@redhat.com
@@ -3248,4 +3105,203 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "the status of deployment/memcached44553-sample is wrong")
 	})
 
+	// author: jfan@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:jfan-High-45141-High-41497-High-34292-High-29374-High-28157-High-27977-ansible k8sevent k8sstatus maxConcurrentReconciles modules to a collect blacklist [Slow]", func() {
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture != "amd64" && architecture != "arm64" {
+			g.Skip("Do not support " + architecture)
+		}
+		// test data
+		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
+		dataPath := filepath.Join(buildPruningBaseDir, "ocp-27977-data")
+		crFilePath := filepath.Join(dataPath, "ansiblebase_v1_basetest.yaml")
+		// exec dir
+		tmpBasePath := "/tmp/ocp-27977-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "ansibletest")
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
+		// exec ns & image tag
+		nsOperator := "ansibletest-system"
+		imageTag := "quay.io/olmqe/ansibletest:" + ocpversion + "-" + getRandomString()
+		// cleanup the test data
+		err := os.MkdirAll(tmpPath, 0o755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		quayCLI := container.NewQuayCLI()
+		defer quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
+
+		defer func() {
+			_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", crFilePath, "-n", nsOperator).Output()
+			g.By("step: undeploy")
+			_, err = makeCLI.Run("undeploy").Args().Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("step: init Ansible Based Operator")
+		output, err := operatorsdkCLI.Run("init").Args("--plugins=ansible", "--domain", "qetest.com").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Next"))
+
+		g.By("step: Create API.")
+		output, err = operatorsdkCLI.Run("create").Args("api", "--group", "ansiblebase", "--version", "v1", "--kind", "Basetest", "--generate-role").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Writing kustomize manifests"))
+
+		g.By("step: modify files to get the quay.io/olmqe images.")
+		// copy task main.yml
+		err = copy(filepath.Join(dataPath, "main.yml"), filepath.Join(tmpPath, "roles", "basetest", "tasks", "main.yml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// copy Dockerfile
+		dockerfileFilePath := filepath.Join(tmpPath, "Dockerfile")
+		err = copy(dockerfileFilePath, filepath.Join(tmpPath, "Dockerfile"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		replaceContent(dockerfileFilePath, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
+		// update the rbac file
+		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+
+		g.By("step: Build and push the operator image")
+		tokenDir := "/tmp/ocp-27977" + getRandomString()
+		err = os.MkdirAll(tokenDir, os.ModePerm)
+		defer os.RemoveAll(tokenDir)
+		if err != nil {
+			e2e.Failf("fail to create the token folder:%s", tokenDir)
+		}
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", tokenDir), "--confirm").Output()
+		if err != nil {
+			e2e.Failf("Fail to get the cluster auth %v", err)
+		}
+		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+
+		g.By("step: Install the CRD")
+		output, err = makeCLI.Run("install").Args().Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("basetests.ansiblebase.qetest.com"))
+
+		g.By("step: Deploy the operator")
+		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("deployment.apps/ansibletest-controller-manager"))
+
+		waitErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lines := strings.Split(podList, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "ansibletest-controller-manager") {
+					e2e.Logf("found pod ansibletest-controller-manager")
+					if strings.Contains(line, "Running") {
+						e2e.Logf("the status of pod ansibletest-controller-manager is Running")
+						return true, nil
+					}
+					e2e.Logf("the status of pod ansibletest-controller-manager is not Running")
+					return false, nil
+				}
+			}
+			return false, nil
+		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No ansibletest-controller-manager in project %s", nsOperator))
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/ansibletest-controller-manager", "-c", "manager", "-n", nsOperator).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(msg, "Starting workers") {
+			e2e.Failf("Starting workers failed")
+		}
+
+		// add the admin policy
+		err = oc.AsAdmin().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", "system:serviceaccount:"+nsOperator+":ansibletest-controller-manager").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step: Create the resource")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", nsOperator).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(msg, "basetest-sample") {
+				e2e.Logf("found pod basetest-sample")
+				return true, nil
+			}
+			return false, nil
+		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No basetest-sample in project %s", nsOperator))
+
+		// OCP-27977
+		waitErr = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/basetest-sample", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(msg, "2 desired | 2 updated | 2 total | 2 available | 0 unavailable") {
+				e2e.Logf("deployment/basetest-sample is created successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events")
+		}
+		exutil.AssertWaitPollNoErr(waitErr, "the status of deployment/basetest-sample is wrong")
+
+		// OCP-45141
+		waitErr = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", nsOperator).Output()
+			if strings.Contains(msg, "test-reason") {
+				e2e.Logf("k8s_event test")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get k8s event test-name in %s", nsOperator))
+
+		// OCP-41497
+		waitErr = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("basetest.ansiblebase.qetest.com/basetest-sample", "-n", nsOperator, "-o", "yaml").Output()
+			if strings.Contains(msg, "hello world") {
+				e2e.Logf("k8s_status test hello world")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get basetest-sample hello world in %s", nsOperator))
+
+		// OCP-34292
+		waitErr = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deploy/ansibletest-controller-manager", "-c", "manager", "-n", nsOperator).Output()
+			if strings.Contains(msg, "\"worker count\":4") {
+				e2e.Logf("found worker count:4")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("log of deploy/ansibletest-controller-manager of %s doesn't have worker count:4", nsOperator))
+
+		// OCP-29374
+		waitErr = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "-n", nsOperator).Output()
+			if strings.Contains(msg, "test-secret") {
+				e2e.Logf("found secret test-secret")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("doesn't get secret test-secret %s", nsOperator))
+		msg, err = oc.AsAdmin().Run("describe").Args("secret", "test-secret", "-n", nsOperator).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(msg).To(o.ContainSubstring("test:  6 bytes"))
+
+		// OCP-28157
+		waitErr = wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+			msg, _ := oc.AsAdmin().Run("describe").Args("configmap", "test-blacklist-watches", "-n", nsOperator).Output()
+			if strings.Contains(msg, "afdasdfsajsafj") {
+				e2e.Logf("Skipping the blacklist")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("log of deploy/ansibletest-controller-manager of %s doesn't work the blacklist", nsOperator))
+	})
 })
