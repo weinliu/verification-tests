@@ -3346,9 +3346,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 
 		var (
-			storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
-			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
-			deploymentTemplate = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			deploymentTemplate   = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
 		)
 
 		// Set up a specified project
@@ -3357,12 +3358,15 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		// Set the resource definition for the scenario
 		g.By("Create pvc and deployment")
-		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(cloudProvider, "ebs.csi.aws.com")))
+		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("ebs.csi.aws.com"))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
 		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 		pvc.namespace = oc.Namespace()
 		dep.namespace = oc.Namespace()
 
-		g.By("Create pvc/dep with the preset csi storageclass")
+		g.By("Create csi storageclass and pvc/dep with the csi storageclass")
+		storageClass.createWithExtraParameters(oc, map[string]interface{}{"allowVolumeExpansion": true})
+		defer storageClass.deleteAsAdmin(oc)
 		pvc.create(oc)
 		defer pvc.deleteAsAdmin(oc)
 		dep.create(oc)
@@ -3375,14 +3379,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		capacityInt64First, err := strconv.ParseInt(strings.TrimRight(pvc.capacity, "Gi"), 10, 64)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		capacityInt64First = capacityInt64First + getRandomNum(1, 10)
-		expandedCapactiyFirst := strconv.FormatInt(capacityInt64First, 10) + "Gi"
-		pvc.expand(oc, expandedCapactiyFirst)
-		pvc.waitResizeSuccess(oc, expandedCapactiyFirst)
+		expandedCapacityFirst := strconv.FormatInt(capacityInt64First, 10) + "Gi"
+		pvc.expand(oc, expandedCapacityFirst)
+		pvc.waitResizeSuccess(oc, expandedCapacityFirst)
 
 		g.By("Performing the second time of online resize volume, will meet error VolumeResizeFailed")
 		capacityInt64Second := capacityInt64First + getRandomNum(1, 10)
-		expandedCapactiySecond := strconv.FormatInt(capacityInt64Second, 10) + "Gi"
-		pvc.expand(oc, expandedCapactiySecond)
+		expandedCapacitySecond := strconv.FormatInt(capacityInt64Second, 10) + "Gi"
+		pvc.expand(oc, expandedCapacitySecond)
 
 		o.Eventually(func() string {
 			pvcInfo, _ := pvc.getDescription(oc)
@@ -3399,29 +3403,29 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		patchResourceAsAdmin(oc, "", "pv/"+pvName, pvPatchRetain, "merge")
 		defer patchResourceAsAdmin(oc, "", "pv/"+pvName, pvPatchDelete, "merge")
 
-		g.By("Scale donw the dep and delete original pvc, will create another pvc later")
+		g.By("Scale down the dep and delete original pvc, will create another pvc later")
 		dep.scaleReplicas(oc, "0")
 		dep.waitReady(oc)
 		deleteSpecifiedResource(oc, "pvc", pvc.name, pvc.namespace)
 
 		g.By("Delete pv claimRef entry and wait pv status become Available")
 		patchResourceAsAdmin(oc, "", "pv/"+pvName, "[{\"op\": \"remove\", \"path\": \"/spec/claimRef\"}]", "json")
-
 		waitForPersistentVolumeStatusAsExpected(oc, pvName, "Available")
 
 		g.By("Re-create pvc, Set the volumeName field of the PVC to the name of the PV")
-		pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimName(pvc.name), setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity(expandedCapactiyFirst), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(cloudProvider, "ebs.csi.aws.com")))
+		pvcNew := newPersistentVolumeClaim(setPersistentVolumeClaimName(pvc.name), setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity(expandedCapacityFirst), setPersistentVolumeClaimStorageClassName(pvc.scname))
 		// As the pvcNew use the same name with the origin pvc, no need to use new defer deleted
 		pvcNew.createWithSpecifiedPV(oc, pvName)
 
 		g.By("Restore the reclaim policy on the PV")
 		patchResourceAsAdmin(oc, "", "pv/"+pvName, pvPatchDelete, "merge")
 
-		g.By("Check origianl data in the volume")
+		g.By("Check original data in the volume")
 		dep.scaleReplicas(oc, "1")
 		dep.waitReady(oc)
 		dep.checkPodMountedVolumeDataExist(oc, true)
 	})
+
 	// author: chaoyang@redhat.com
 	// OCP-53309 - [CSI Driver] [CSI Clone] Clone volume support different storage class
 	g.It("HyperShiftGUEST-ARO-Author:chaoyang-Low-53309-[CSI Driver] [CSI Clone] [Filesystem] Clone volume support different storage class", func() {
