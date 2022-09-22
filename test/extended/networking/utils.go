@@ -895,10 +895,10 @@ func getNodeIP(oc *exutil.CLI, nodeName string) (string, string) {
 		return "", InternalIP
 	}
 	e2e.Logf("Its a Dual Stack Cluster")
-	InternalIP1, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[?(@.type==\"InternalIP\")].address}").Output()
+	InternalIP1, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[0].address}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The node's 1st Internal IP is %q", InternalIP1)
-	InternalIP2, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[?(@.type==\"InternalIP\")].address}").Output()
+	InternalIP2, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[1].address}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The node's 2nd Internal IP is %q", InternalIP2)
 	if netutils.IsIPv6String(InternalIP1) {
