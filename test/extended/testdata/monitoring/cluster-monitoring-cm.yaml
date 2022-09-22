@@ -19,6 +19,9 @@ objects:
       k8sPrometheusAdapter:
         audit:
           profile: Request
+      thanosQuerier:
+        enableRequestLogging: true
+        logLevel: debug
 parameters:
 - name: NAME
 - name: NAMESPACE

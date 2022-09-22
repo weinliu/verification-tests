@@ -1,12 +1,14 @@
 package monitoring
 
 import (
+	"path/filepath"
+	"strings"
+	"time"
+
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
-	"path/filepath"
-	"strings"
 )
 
 var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring", func() {
@@ -157,6 +159,27 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(strings.Contains(output, `"level":"Request"`)).To(o.BeTrue(), "level Request is not in audit.log")
 		}
+	})
+
+	//author: tagao@redhat.com
+	g.It("Author:tagao-Medium-48432-Allow OpenShift users to configure request logging for Thanos Querier query endpoint", func() {
+		var (
+			thanosQuerierPodName string
+		)
+		g.By("Get token of SA prometheus-k8s")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+		g.By("make sure thanos-querier pods are ready")
+		time.Sleep(60 * time.Second) //thanos-querier pod name will changed when cm modified, need time to create pods
+		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+
+		g.By("query with thanos-querier svc")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=cluster_version'`, token, `"cluster_version"`, uwmLoadTime)
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=cluster_version'`, token, `"cluster-version-operator"`, uwmLoadTime)
+
+		g.By("check from thanos-querier logs")
+		thanosQuerierPodName, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/instance=thanos-querier", "-ojsonpath={.items[].metadata.name}").Output()
+		exutil.WaitAndGetSpecificPodLogs(oc, "openshift-monitoring", "thanos-query", thanosQuerierPodName, "query=cluster_version")
 	})
 
 	g.Context("user workload monitoring", func() {
