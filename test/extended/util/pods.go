@@ -252,3 +252,11 @@ func AssertAllPodsToBeReady(oc *CLI, namespace string) {
 	})
 	AssertWaitPollNoErr(err, fmt.Sprintf("Some Pods are not ready in NS %s!", namespace))
 }
+
+//GetPodNameInHostedCluster returns the pod name in hosted cluster of hypershift
+func GetPodNameInHostedCluster(oc *CLI, namespace string, podLabel string, node string) (string, error) {
+	args := []string{"pods", "-n", namespace, "-l", podLabel,
+		"--field-selector", "spec.nodeName=" + node, "-o", "jsonpath='{..metadata.name}'"}
+	daemonPod, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args(args...).Output()
+	return strings.ReplaceAll(daemonPod, "'", ""), err
+}

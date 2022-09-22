@@ -218,3 +218,34 @@ func GetNodeHostname(oc *CLI, node string) (string, error) {
 	hostname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node, "-o", "jsonpath='{..kubernetes\\.io/hostname}'").Output()
 	return strings.Trim(hostname, "'"), err
 }
+
+// GetClusterNodesByRoleInHostedCluster returns the cluster nodes by role
+func GetClusterNodesByRoleInHostedCluster(oc *CLI, role string) ([]string, error) {
+	nodes, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("node", "-l", "node-role.kubernetes.io/"+role, "-o", "jsonpath='{.items[*].metadata.name}'").Output()
+	return strings.Split(strings.Trim(nodes, "'"), " "), err
+}
+
+// getFirstNodeByOsIDInHostedCluster returns the cluster node by role and os id
+func getFirstNodeByOsIDInHostedCluster(oc *CLI, role string, osID string) (string, error) {
+	nodes, err := GetClusterNodesByRoleInHostedCluster(oc, role)
+	for _, node := range nodes {
+		stdout, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("node/"+node, "-o", "jsonpath=\"{.metadata.labels.node\\.openshift\\.io/os_id}\"").Output()
+		if strings.Trim(stdout, "\"") == osID {
+			return node, err
+		}
+	}
+	return "", err
+}
+
+// GetFirstLinuxWorkerNodeInHostedCluster returns the first linux worker node in the cluster
+func GetFirstLinuxWorkerNodeInHostedCluster(oc *CLI) (string, error) {
+	var (
+		workerNode string
+		err        error
+	)
+	workerNode, err = getFirstNodeByOsIDInHostedCluster(oc, "worker", "rhcos")
+	if len(workerNode) == 0 {
+		workerNode, err = getFirstNodeByOsIDInHostedCluster(oc, "worker", "rhel")
+	}
+	return workerNode, err
+}

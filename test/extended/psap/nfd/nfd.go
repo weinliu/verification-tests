@@ -66,8 +66,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		} else {
 			e2e.Logf("No machineset detected and only deploy NFD and check labels")
 			g.By("Check that the NFD labels are created")
-			firstMachinesetName := exutil.GetFirstLinuxMachineSets(oc)
-			ocGetNodeLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", firstMachinesetName, "-ojsonpath={.metadata.labels}").Output()
+			firstWorkerNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(firstWorkerNodeName).NotTo(o.BeEmpty())
+			ocGetNodeLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", firstWorkerNodeName, "-ojsonpath={.metadata.labels}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(ocGetNodeLabels).NotTo(o.BeEmpty())
 			o.Expect(strings.Contains(ocGetNodeLabels, "feature")).To(o.BeTrue())

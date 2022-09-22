@@ -15,7 +15,7 @@ import (
 )
 
 // isPodInstalled will return true if any pod is found in the given namespace, and false otherwise
-func isPodInstalled(oc *exutil.CLI, namespace string) bool {
+func isNTOPodInstalled(oc *exutil.CLI, namespace string) bool {
 	e2e.Logf("Checking if pod is found in namespace %s...", namespace)
 	podList, err := oc.AdminKubeClient().CoreV1().Pods(namespace).List(metav1.ListOptions{})
 	o.Expect(err).NotTo(o.HaveOccurred())

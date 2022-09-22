@@ -52,20 +52,20 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 	g.BeforeEach(func() {
 		// ensure NTO operator is installed
-		isNTO = isPodInstalled(oc, ntoNamespace)
+		isNTO = isNTOPodInstalled(oc, ntoNamespace)
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
 	})
 
 	// author: nweinber@redhat.com
-	g.It("Author:nweinber-Medium-29789-Sysctl parameters set by tuned can not be overwritten by parameters set via /etc/sysctl [Flaky]", func() {
+	g.It("Author:liqcui-Medium-29789-Sysctl parameters set by tuned can not be overwritten by parameters set via /etc/sysctl [Flaky]", func() {
 
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		g.By("Pick one worker node and one tuned pod on said node")
+		g.By("Pick one worker node and one tuned pod on same node")
 		workerNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Worker Node: %v", workerNodeName)
@@ -129,7 +129,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 	})
 
 	// author: nweinber@redhat.com
-	g.It("Author:nweinber-Medium-33237-Test NTO support for operatorapi Unmanaged state [Flaky]", func() {
+	g.It("Author:liqcui-Medium-33237-Test NTO support for operatorapi Unmanaged state [Flaky]", func() {
 
 		// test requires NTO to be installed
 		if !isNTO {
@@ -299,7 +299,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 	})
 
 	// author: nweinber@redhat.com
-	g.It("Longduration-NonPreRelease-Author:nweinber-Medium-36881-Node Tuning Operator will provide machine config for the master machine config pool [Disruptive] [Slow]", func() {
+	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-36881-Node Tuning Operator will provide machine config for the master machine config pool [Disruptive] [Slow]", func() {
 
 		// test requires NTO to be installed
 		if !isNTO {
