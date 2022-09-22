@@ -360,12 +360,33 @@ func isSNOCluster(oc *exutil.CLI) bool {
 
 // LoadSecrets used to create secrets
 func LoadSecrets(oc *exutil.CLI, noOfSecrets int, ns string, noOfNamespace int) {
+	var cmdErr error
 	for j := 1; j <= noOfNamespace; j++ {
 		namespaceCMD := fmt.Sprintf("oc create ns " + ns + strconv.Itoa(j) + ">/dev/null")
-		_, _ = exec.Command("bash", "-c", namespaceCMD).Output()
+		errNs := wait.Poll(1*time.Second, 30*time.Second, func() (bool, error) {
+			_, cmdErr = exec.Command("bash", "-c", namespaceCMD).Output()
+			if cmdErr != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+		if cmdErr != nil {
+			defer CleanNamespace(oc, noOfNamespace, ns)
+		}
+		exutil.AssertWaitPollNoErr(errNs, fmt.Sprintf("Namespace not created :: "+ns+strconv.Itoa(j)))
 		for i := 1; i <= noOfSecrets; i++ {
 			secretCMD := fmt.Sprintf("oc create secret generic secret-" + ns + "-" + strconv.Itoa(i) + " -n " + ns + strconv.Itoa(j) + ` --from-literal abcdefg='12345^&*()'>/dev/null`)
-			_, _ = exec.Command("bash", "-c", secretCMD).Output()
+			errSecret := wait.Poll(1*time.Second, 30*time.Second, func() (bool, error) {
+				_, cmdErr = exec.Command("bash", "-c", secretCMD).Output()
+				if cmdErr != nil {
+					return false, nil
+				}
+				return true, nil
+			})
+			if cmdErr != nil {
+				defer CleanNamespace(oc, noOfNamespace, ns)
+			}
+			exutil.AssertWaitPollNoErr(errSecret, fmt.Sprintf("Secret not created :: secret-"+ns+"-"+strconv.Itoa(i)))
 		}
 	}
 	namespaceOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", "-A").Output()
