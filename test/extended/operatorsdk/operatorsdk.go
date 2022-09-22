@@ -1849,7 +1849,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("ConnectedOnly-VMonly-Author:xzha-High-52371-Enable Micrometer Metrics from java-operator-plugins", func() {
+	g.It("ConnectedOnly-VMonly-Author:xzha-High-52371-Enable Micrometer Metrics from java operator plugins", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
@@ -2342,7 +2342,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-High-48885-SDK-generate digest type bundle of ansible", func() {
+	g.It("VMonly-ConnectedOnly-Author:jfan-High-48885-SDK generate digest type bundle of ansible", func() {
 		architecture := exutil.GetClusterArchitecture(oc)
 		if architecture != "amd64" && architecture != "arm64" {
 			g.Skip("Do not support " + architecture)
@@ -2410,7 +2410,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-High-52813-SDK-generate digest type bundle of helm", func() {
+	g.It("VMonly-ConnectedOnly-Author:jfan-High-52813-SDK generate digest type bundle of helm", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
@@ -2505,7 +2505,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-High-52814-SDK-generate digest type bundle of go", func() {
+	g.It("VMonly-ConnectedOnly-Author:jfan-High-52814-SDK generate digest type bundle of go", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
@@ -2605,7 +2605,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-High-44550-SDK-support ansible type operator for http_proxy env", func() {
+	g.It("VMonly-ConnectedOnly-Author:jfan-High-44550-SDK support ansible type operator for http_proxy env", func() {
 		if os.Getenv("HTTP_PROXY") == "" && os.Getenv("http_proxy") == "" {
 			g.Skip("HTTP_PROXY is empty - skipping test ...")
 		}
@@ -2750,7 +2750,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-High-44551-SDK-support helm type operator for http_proxy env", func() {
+	g.It("VMonly-ConnectedOnly-Author:jfan-High-44551-SDK support helm type operator for http_proxy env", func() {
 		architecture := exutil.GetClusterArchitecture(oc)
 		if architecture != "amd64" && architecture != "arm64" {
 			g.Skip("Do not support " + architecture)
@@ -2898,7 +2898,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("NonPreRelease-Longduration-VMonly-ConnectedOnly-Author:jitli-High-50065-SDK-Add file-based catalog support to run bundle", func() {
+	g.It("NonPreRelease-Longduration-VMonly-ConnectedOnly-Author:jitli-High-50065-SDK Add file based catalog support to run bundle", func() {
 
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
@@ -2936,7 +2936,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jitli-High-52364-SDK-Run bundle support large FBC index", func() {
+	g.It("VMonly-ConnectedOnly-Author:jitli-High-52364-SDK Run bundle support large FBC index", func() {
 
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
@@ -2954,7 +2954,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-High-44553-SDK-support go type operator for http_proxy env [Slow]", func() {
+	g.It("VMonly-ConnectedOnly-Author:jfan-High-44553-SDK support go type operator for http_proxy env [Slow]", func() {
 		architecture := exutil.GetClusterArchitecture(oc)
 		if architecture != "amd64" {
 			g.Skip("Do not support " + architecture)
@@ -3103,6 +3103,191 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			logDebugInfo(oc, nsOperator, "events")
 		}
 		exutil.AssertWaitPollNoErr(waitErr, "the status of deployment/memcached44553-sample is wrong")
+	})
+
+	// author: jitli@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:jitli-High-51300-SDK Run bundle upgrade from bundle installation with multi bundles index image", func() {
+
+		operatorsdkCLI.showInfo = true
+		oc.SetupProject()
+
+		var (
+			dr                  = make(describerResrouce)
+			itName              = g.CurrentGinkgoTestDescription().TestText
+			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
+			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+			og                  = operatorGroupDescription{
+				name:      "test-og-51300",
+				namespace: oc.Namespace(),
+				template:  ogSingleTemplate,
+			}
+			catsrc = catalogSourceDescription{
+				name:        "upgradefbc-index-51300",
+				namespace:   oc.Namespace(),
+				displayName: "Test 51300 Operators",
+				publisher:   "OperatorSDK QE",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/upgradefbcmuli-index:v0.1",
+				interval:    "15m",
+				template:    catsrcImageTemplate,
+			}
+			sub = subscriptionDescription{
+				subName:                "upgradefbc-index-51300",
+				namespace:              oc.Namespace(),
+				catalogSourceName:      catsrc.name,
+				catalogSourceNamespace: oc.Namespace(),
+				channel:                "alpha",
+				ipApproval:             "Automatic",
+				operatorPackage:        "upgradefbc",
+				template:               subTemplate,
+			}
+		)
+		dr.addIr(itName)
+
+		g.By("Install the OperatorGroup")
+		og.createwithCheck(oc, itName, dr)
+
+		g.By("Create catalog source")
+		catsrc.createWithCheck(oc, itName, dr)
+
+		g.By("Install operator")
+		sub.create(oc, itName, dr)
+
+		g.By("Check Operator is Succeeded")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("Run bundle-upgrade operator")
+		output, err := operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradefbc-bundle:v0.0.2", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
+		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "upgradefbc.v0.0.2", "-n", oc.Namespace()).Output()
+			if strings.Contains(msg, "Succeeded") {
+				e2e.Logf("upgrade to 0.0.2 success")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("upgradefbc upgrade failed in %s ", oc.Namespace()))
+
+	})
+
+	// author: jitli@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:jitli-High-50141-SDK Run bundle upgrade from OLM installed operator [Slow]", func() {
+
+		operatorsdkCLI.showInfo = true
+		oc.SetupProject()
+
+		var (
+			dr                  = make(describerResrouce)
+			itName              = g.CurrentGinkgoTestDescription().TestText
+			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
+			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+			og                  = operatorGroupDescription{
+				name:      "test-og-50141",
+				namespace: oc.Namespace(),
+				template:  ogSingleTemplate,
+			}
+
+			catsrcfbc = catalogSourceDescription{
+				name:        "upgradefbc-index-50141",
+				namespace:   oc.Namespace(),
+				displayName: "Test 50141 Operators FBC",
+				publisher:   "OperatorSDK QE",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/upgradefbc-index:v0.1",
+				interval:    "15m",
+				template:    catsrcImageTemplate,
+			}
+			subfbc = subscriptionDescription{
+				subName:                "upgradefbc-index-50141",
+				namespace:              oc.Namespace(),
+				catalogSourceName:      catsrcfbc.name,
+				catalogSourceNamespace: oc.Namespace(),
+				channel:                "alpha",
+				ipApproval:             "Automatic",
+				operatorPackage:        "upgradefbc",
+				template:               subTemplate,
+			}
+
+			catsrcsqlite = catalogSourceDescription{
+				name:        "upgradeindex-sqlite-50141",
+				namespace:   oc.Namespace(),
+				displayName: "Test 50141 Operators SQLite",
+				publisher:   "OperatorSDK QE",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/upgradeindex-index:v0.1",
+				interval:    "15m",
+				template:    catsrcImageTemplate,
+			}
+			subsqlite = subscriptionDescription{
+				subName:                "upgradesqlite-index-50141",
+				namespace:              oc.Namespace(),
+				catalogSourceName:      catsrcsqlite.name,
+				catalogSourceNamespace: oc.Namespace(),
+				channel:                "alpha",
+				ipApproval:             "Automatic",
+				operatorPackage:        "upgradeindex",
+				startingCSV:            "upgradeindex.v0.0.1",
+				template:               subTemplate,
+			}
+		)
+		dr.addIr(itName)
+
+		g.By("Install the OperatorGroup")
+		og.createwithCheck(oc, itName, dr)
+
+		g.By("Create catalog source")
+		catsrcfbc.createWithCheck(oc, itName, dr)
+
+		g.By("Install operator through OLM and the index iamge is kind of FBC")
+		subfbc.create(oc, itName, dr)
+
+		g.By("Check Operator is Succeeded")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subfbc.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("Run bundle-upgrade operator")
+		output, err := operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradefbc-bundle:v0.0.2", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
+		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "upgradefbc.v0.0.2", "-n", oc.Namespace()).Output()
+			if strings.Contains(msg, "Succeeded") {
+				e2e.Logf("upgrade to 0.0.2 success")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("upgradefbc upgrade failed in %s ", oc.Namespace()))
+
+		g.By("Create catalog source")
+		catsrcsqlite.createWithCheck(oc, itName, dr)
+
+		g.By("Install operator through OLM and the index iamge is kind of SQLITE")
+		subsqlite.createWithoutCheck(oc, itName, dr)
+
+		g.By("Check Operator is Succeeded")
+		subsqlite.findInstalledCSV(oc, itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subsqlite.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("Run bundle-upgrade operator")
+		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeindex-bundle:v0.2", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
+		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "upgradeindex.v0.0.2", "-n", oc.Namespace()).Output()
+			if strings.Contains(msg, "Succeeded") {
+				e2e.Logf("upgrade to 0.0.2 success")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("upgradeindex upgrade failed in %s ", oc.Namespace()))
+
 	})
 
 	// author: jfan@redhat.com
@@ -3304,4 +3489,5 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("log of deploy/ansibletest-controller-manager of %s doesn't work the blacklist", nsOperator))
 	})
+
 })
