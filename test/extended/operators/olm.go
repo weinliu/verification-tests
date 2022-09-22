@@ -894,7 +894,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: jiazha@redhat.com
 	// add `Serial` label since this etcd-operator are subscribed for cluster-scoped,
 	// that means may leads to other etcd-opertor subscription fail if in Parallel
-	g.It("ConnectedOnly-VMonly-Author:jiazha-High-37826-use an PullSecret for the private Catalog Source image", func() {
+	g.It("ConnectedOnly-VMonly-Author:jiazha-High-37826-use an PullSecret for the private Catalog Source image [Serial]", func() {
 		exutil.SkipARM64(oc)
 		g.By("1) Create a pull secert for CatalogSource")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
