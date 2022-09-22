@@ -44,11 +44,10 @@
     {
       "name": "gcp",
       "storageclass": {
-        "default_sc": "standard",
+        "default_sc": "standard-csi",
         "pre_defined_sc": [
-          "standard",
           "standard-csi",
-	  "ssd-csi"
+          "ssd-csi"
         ]
       }
     },
