@@ -418,13 +418,13 @@ func (podTermination *podTerminationDescription) getTerminationGrace(oc *exutil.
 		nodename, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].spec.nodeName}", "-n", podTermination.namespace).Output()
 		e2e.Logf("The nodename is %v", nodename)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		nodeStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", fmt.Sprintf("%s", nodename), "-o=jsonpath={.status.conditions[3].type}").Output()
-		e2e.Logf("The Node state is %v", nodeStatus)
+		nodeReadyBool, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", fmt.Sprintf("%s", nodename), "-o=jsonpath={.status.conditions[?(@.reason=='KubeletReady')].status}").Output()
+		e2e.Logf("The Node Ready status is %v", nodeReadyBool)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		containerID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].status.containerStatuses[0].containerID}", "-n", podTermination.namespace).Output()
 		e2e.Logf("The containerID is %v", containerID)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if nodeStatus == "Ready" {
+		if nodeReadyBool == "True" {
 			terminationGrace, err := exutil.DebugNodeWithChroot(oc, nodename, "systemctl", "show", containerID)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(string(terminationGrace), "TimeoutStopUSec=1min 30s") {
