@@ -61,6 +61,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			machinesetName: "machineset-43764",
 			name:           "mhc-43764",
 			template:       mhcTemplate,
+			namespace:      "openshift-machine-api",
 		}
 		defer mhc.deleteMhc(oc)
 		mhc.createMhc(oc)
