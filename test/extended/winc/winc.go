@@ -84,7 +84,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 		}{
 			{
 				folder:   "/payload",
-				expected: "azure-cloud-node-manager.exe cni containerd hybrid-overlay-node.exe kube-node powershell windows-instance-config-daemon.exe windows_exporter.exe wmcb.exe",
+				expected: "azure-cloud-node-manager.exe cni containerd generated hybrid-overlay-node.exe kube-node powershell windows-instance-config-daemon.exe windows_exporter.exe wmcb.exe",
 			},
 			{
 				folder:   "/payload/containerd",
@@ -92,7 +92,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 			},
 			{
 				folder:   "/payload/cni",
-				expected: "cni-conf-template.json host-local.exe win-bridge.exe win-overlay.exe",
+				expected: "host-local.exe win-bridge.exe win-overlay.exe",
 			},
 			{
 				folder:   "/payload/kube-node",
@@ -101,6 +101,10 @@ var _ = g.Describe("[sig-windows] Windows_Containers NonUnifyCI", func() {
 			{
 				folder:   "/payload/powershell",
 				expected: "hns.psm1 wget-ignore-cert.ps1",
+			},
+			{
+				folder:   "/payload/generated",
+				expected: "network-conf.ps1",
 			},
 		}
 		for _, checkFolder := range checkFolders {
