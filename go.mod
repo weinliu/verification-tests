@@ -30,7 +30,7 @@ require (
 	github.com/openshift/api v3.9.1-0.20191201231411-9f834e337466+incompatible
 	github.com/openshift/client-go v0.0.0-20200116152001-92a2713fa240
 	github.com/openshift/library-go v0.0.0-20200120153246-906409ae5e38
-	github.com/openshift/openshift-tests v0.0.0-20220905080435-9d7daa7e9ab9
+	github.com/openshift/openshift-tests v0.0.0-20220921083135-e27bbb957ad6
 	github.com/pborman/uuid v1.2.0
 	github.com/prometheus/client_golang v1.1.0
 	github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90
