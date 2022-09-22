@@ -3,9 +3,11 @@ package securityandcompliance
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	g "github.com/onsi/ginkgo"
+	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
@@ -111,7 +113,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 
 		sub.checkPodFioStatus(oc, "running")
 		g.By("Create fileintegrity")
-		fi1.createFIOWithoutConfig(oc, itName, dr)
+		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", fi1.template, "-p", "NAME="+fi1.name, "NAMESPACE="+fi1.namespace,
+			"GRACEPERIOD="+strconv.Itoa(fi1.graceperiod), "DEBUG="+strconv.FormatBool(fi1.debug), "NODESELECTORKEY="+fi1.nodeselectorkey, "NODESELECTORVALUE="+fi1.nodeselectorvalue)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		fi1.checkFileintegrityStatus(oc, "running")
 
 		var pod = podModifyD
@@ -693,7 +697,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.checkFileintegrityStatus(oc, "running")
 		nodeName := getOneRhcosWorkerNodeName(oc)
 
-		fipsOut := checkFipsStatus(oc)
+		fipsOut := checkFipsStatus(oc, fi1.namespace)
 		if strings.Contains(fipsOut, "FIPS mode is enabled.") {
 			fi1.checkFileintegritynodestatus(oc, nodeName, "Errored")
 			var podName = fi1.getOneFioPodName(oc)

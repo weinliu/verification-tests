@@ -145,36 +145,46 @@ type resourceConfigMapDescription struct {
 	template  string
 }
 
-func (csuite *complianceSuiteDescription) create(oc *exutil.CLI, itName string, dr describerResrouce) {
+type pvExtractDescription struct {
+	name      string
+	namespace string
+	scanname  string
+	template  string
+}
+
+func (csuite *complianceSuiteDescription) create(oc *exutil.CLI) {
+	e2e.Logf("The value of debug is: %v", csuite.debug)
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", csuite.template, "-p", "NAME="+csuite.name, "NAMESPACE="+csuite.namespace,
 		"SCHEDULE="+csuite.schedule, "SCANNAME="+csuite.scanname, "SCANTYPE="+csuite.scanType, "PROFILE="+csuite.profile, "CONTENT="+csuite.content,
 		"CONTENTIMAGE="+csuite.contentImage, "RULE="+csuite.rule, "NOEXTERNALRESOURCES="+strconv.FormatBool(csuite.noExternalResources), "KEY="+csuite.key,
 		"VALUE="+csuite.value, "OPERATOR="+csuite.operator, "NODESELECTOR="+csuite.nodeSelector, "PVACCESSMODE="+csuite.pvAccessModes, "STORAGECLASSNAME="+csuite.storageClassName,
-		"SIZE="+csuite.size, "ROTATION="+strconv.Itoa(csuite.rotation), "TAILORCONFIGMAPNAME="+csuite.tailoringConfigMap)
+		"SIZE="+csuite.size, "ROTATION="+strconv.Itoa(csuite.rotation), "TAILORCONFIGMAPNAME="+csuite.tailoringConfigMap, "DEBUG="+strconv.FormatBool(csuite.debug))
 	o.Expect(err).NotTo(o.HaveOccurred())
-	dr.getIr(itName).add(newResource(oc, "compliancesuite", csuite.name, requireNS, csuite.namespace))
 }
 
-func (pb *profileBundleDescription) create(oc *exutil.CLI, itName string, dr describerResrouce) {
+func (pvExtract *pvExtractDescription) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pvExtract.template, "-p", "NAME="+pvExtract.name, "NAMESPACE="+pvExtract.namespace,
+		"SCANNAME="+pvExtract.scanname, "-n", pvExtract.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (pb *profileBundleDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pb.template, "-p", "NAME="+pb.name, "NAMESPACE="+pb.namespace,
-		"CONTENIMAGE="+pb.contentimage, "CONTENTFILE="+pb.contentfile)
+		"CONTENIMAGE="+pb.contentimage, "CONTENTFILE="+pb.contentfile, "-n", pb.namespace)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	dr.getIr(itName).add(newResource(oc, "profilebundle", pb.name, requireNS, pb.namespace))
 }
 
-func (ss *scanSettingDescription) create(oc *exutil.CLI, itName string, dr describerResrouce) {
+func (ss *scanSettingDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ss.template, "-p", "NAME="+ss.name, "NAMESPACE="+ss.namespace,
 		"AUTOAPPLYREMEDIATIONS="+strconv.FormatBool(ss.autoapplyremediations), "SCHEDULE="+ss.schedule, "SIZE="+ss.size, "ROTATION="+strconv.Itoa(ss.rotation),
 		"ROLES1="+ss.roles1, "ROLES2="+ss.roles2, "STRICTNODESCAN="+strconv.FormatBool(ss.strictnodescan))
 	o.Expect(err).NotTo(o.HaveOccurred())
-	dr.getIr(itName).add(newResource(oc, "scansetting", ss.name, requireNS, ss.namespace))
 }
 
-func (ssb *scanSettingBindingDescription) create(oc *exutil.CLI, itName string, dr describerResrouce) {
+func (ssb *scanSettingBindingDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ssb.template, "-p", "NAME="+ssb.name, "NAMESPACE="+ssb.namespace,
 		"PROFILENAME1="+ssb.profilename1, "PROFILEKIND1="+ssb.profilekind1, "PROFILENAME2="+ssb.profilename2, "SCANSETTINGNAME="+ssb.scansettingname)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	dr.getIr(itName).add(newResource(oc, "scansettingbinding", ssb.name, requireNS, ssb.namespace))
 }
 
 func (csuite *complianceSuiteDescription) delete(itName string, dr describerResrouce) {
@@ -189,52 +199,38 @@ func cleanupObjects(oc *exutil.CLI, objs ...objectTableRef) {
 	}
 }
 
-func (cscan *complianceScanDescription) create(oc *exutil.CLI, itName string, dr describerResrouce) {
+func (cscan *complianceScanDescription) create(oc *exutil.CLI) {
+	e2e.Logf("The value of debug is: %v", cscan.debug)
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cscan.template, "-p", "NAME="+cscan.name,
 		"NAMESPACE="+cscan.namespace, "SCANTYPE="+cscan.scanType, "PROFILE="+cscan.profile, "CONTENT="+cscan.content,
 		"CONTENTIMAGE="+cscan.contentImage, "RULE="+cscan.rule, "KEY="+cscan.key, "VALUE="+cscan.value, "OPERATOR="+cscan.operator,
 		"KEY1="+cscan.key1, "VALUE1="+cscan.value1, "OPERATOR1="+cscan.operator1, "NODESELECTOR="+cscan.nodeSelector,
-		"PVACCESSMODE="+cscan.pvAccessModes, "STORAGECLASSNAME="+cscan.storageClassName, "SIZE="+cscan.size)
+		"PVACCESSMODE="+cscan.pvAccessModes, "STORAGECLASSNAME="+cscan.storageClassName, "SIZE="+cscan.size, "DEBUG="+strconv.FormatBool(cscan.debug))
 	o.Expect(err).NotTo(o.HaveOccurred())
-	dr.getIr(itName).add(newResource(oc, "compliancescan", cscan.name, requireNS, cscan.namespace))
 }
 
-func (cscan *complianceScanDescription) delete(itName string, dr describerResrouce) {
-	dr.getIr(itName).remove(cscan.name, "compliancescan", cscan.namespace)
-}
-
-func (tprofile *tailoredProfileDescription) create(oc *exutil.CLI, itName string, dr describerResrouce) {
+func (tprofile *tailoredProfileDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", tprofile.template, "-p", "NAME="+tprofile.name, "NAMESPACE="+tprofile.namespace,
 		"EXTENDS="+tprofile.extends, "ENRULENAME1="+tprofile.enrulename1, "DISRULENAME1="+tprofile.disrulename1, "DISRULENAME2="+tprofile.disrulename2,
 		"VARNAME="+tprofile.varname, "VALUE="+tprofile.value)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	dr.getIr(itName).add(newResource(oc, "tailoredprofile", tprofile.name, requireNS, tprofile.namespace))
 }
 
-func (tprofile *tailoredProfileDescription) delete(itName string, dr describerResrouce) {
-	dr.getIr(itName).remove(tprofile.name, "tailoredprofile", tprofile.namespace)
-}
-
-func (tprofile *tailoredProfileWithoutVarDescription) create(oc *exutil.CLI, itName string, dr describerResrouce) {
+func (tprofile *tailoredProfileWithoutVarDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", tprofile.template, "-p", "NAME="+tprofile.name, "NAMESPACE="+tprofile.namespace,
 		"EXTENDS="+tprofile.extends, "TITLE="+tprofile.title, "DISCRIPTION="+tprofile.description, "ENRULENAME1="+tprofile.enrulename1, "RATIONALE1="+tprofile.rationale1,
 		"ENRULENAME2="+tprofile.enrulename2, "RATIONALE2="+tprofile.rationale2, "DISRULENAME1="+tprofile.disrulename1, "DRATIONALE1="+tprofile.drationale1,
 		"DISRULENAME2="+tprofile.disrulename2, "DRATIONALE2="+tprofile.drationale2)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	dr.getIr(itName).add(newResource(oc, "tailoredprofile", tprofile.name, requireNS, tprofile.namespace))
 }
 
-func (tprofile *tailoredProfileWithoutVarDescription) delete(itName string, dr describerResrouce) {
-	dr.getIr(itName).remove(tprofile.name, "tailoredprofile", tprofile.namespace)
-}
-
-func (sclass *storageClassDescription) create(oc *exutil.CLI, itName string, dr describerResrouce) {
+func (sclass *storageClassDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", sclass.template, "-p", "NAME="+sclass.name,
 		"PROVISIONER="+sclass.provisioner, "RECLAIMPOLICY="+sclass.reclaimPolicy, "VOLUMEBINDINGMODE="+sclass.volumeBindingMode)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func (confmap *resourceConfigMapDescription) create(oc *exutil.CLI, itName string, dr describerResrouce) {
+func (confmap *resourceConfigMapDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", confmap.template, "-p", "NAME="+confmap.name,
 		"NAMESPACE="+confmap.namespace, "RULE="+confmap.rule, "VARIABLE="+confmap.variable, "PROFILE="+confmap.profile)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -264,18 +260,14 @@ func checkComplianceScanStatus(oc *exutil.CLI, cscanName string, nameSpace strin
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the status of %s is not expected %s", cscanName, expected))
 }
 
-func setLabelToNode(oc *exutil.CLI) {
+func setLabelToNode(oc *exutil.CLI, label string) {
 	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=,node.openshift.io/os_id=rhcos",
 		"-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	node := strings.Fields(nodeName)
 	for _, v := range node {
-		nodeLabel, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", fmt.Sprintf("%s", v), "--show-labels").Output()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args("node", fmt.Sprintf("%s", v), label, "--overwrite").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(nodeLabel, "node-role.kubernetes.io/wscan=") {
-			_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args("node", fmt.Sprintf("%s", v), "node-role.kubernetes.io/wscan=").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
 	}
 }
 
@@ -301,6 +293,21 @@ func (subD *subscriptionDescription) scanPodName(oc *exutil.CLI, expected string
 
 func (subD *subscriptionDescription) scanPodStatus(oc *exutil.CLI, expected string) {
 	podStat, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", subD.namespace, "pods", "--selector=workload=scanner", "-o=jsonpath={.items[*].status.phase}").Output()
+	e2e.Logf("\n%v\n", podStat)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	lines := strings.Fields(podStat)
+	for _, line := range lines {
+		if strings.Contains(line, expected) {
+			continue
+		} else {
+			e2e.Failf("Compliance scan failed on one or more nodes")
+		}
+	}
+}
+
+func (subD *subscriptionDescription) scanPodStatusWithLabel(oc *exutil.CLI, scanName string, expected string) {
+	label := "compliance.openshift.io/scan-name=" + scanName + ",workload=scanner"
+	podStat, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", subD.namespace, "pods", "--selector", label, "-o=jsonpath={.items[*].status.phase}").Output()
 	e2e.Logf("\n%v\n", podStat)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	lines := strings.Fields(podStat)
@@ -360,6 +367,17 @@ func (subD *subscriptionDescription) complianceScanResult(oc *exutil.CLI, expect
 	lines := strings.Fields(cscanResult)
 	for _, line := range lines {
 		if strings.Compare(line, expected) == 0 {
+			return
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+
+func (subD *subscriptionDescription) getComplianceScanResult(oc *exutil.CLI, scanName string, expected string) {
+	cscanResult, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", subD.namespace, "compliancescan", scanName, "-o=jsonpath={.status.result}").Output()
+	lines := strings.Fields(cscanResult)
+	for _, line := range lines {
+		if strings.Compare(line, expected) == 0 {
 			e2e.Logf("\n%v\n\n", line)
 			return
 		}
@@ -367,11 +385,12 @@ func (subD *subscriptionDescription) complianceScanResult(oc *exutil.CLI, expect
 	}
 }
 
-func (subD *subscriptionDescription) getScanExitCodeFromConfigmap(oc *exutil.CLI, expected string) {
-	podName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", subD.namespace, "pods", "--selector=workload=scanner", "-o=jsonpath={.items[*].metadata.name}").Output()
-	lines := strings.Fields(podName)
-	for _, line := range lines {
-		cmCode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", line, "-n", subD.namespace, "-o=jsonpath={.data.exit-code}").Output()
+func (subD *subscriptionDescription) getScanExitCodeFromConfigmapWithScanName(oc *exutil.CLI, scanName string, expected string) {
+	configmapLabel := "compliance.openshift.io/scan-name=" + scanName + ",complianceoperator.openshift.io/scan-result="
+	configmapNameList, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-l", configmapLabel, "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+	configmaps := strings.Fields(configmapNameList)
+	for _, cm := range configmaps {
+		cmCode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cm, "-n", subD.namespace, "-o=jsonpath={.data.exit-code}").Output()
 		e2e.Logf("\n%v\n\n", cmCode)
 		if strings.Contains(cmCode, expected) {
 			break
@@ -380,12 +399,28 @@ func (subD *subscriptionDescription) getScanExitCodeFromConfigmap(oc *exutil.CLI
 	}
 }
 
-func (subD *subscriptionDescription) getScanResultFromConfigmap(oc *exutil.CLI, expected string) {
-	podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", subD.namespace, "pods", "--selector=workload=scanner", "-o=jsonpath={.items[0].metadata.name}").Output()
-	cmMsg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", subD.namespace, "configmap", podName, "-o=jsonpath={.data.error-msg}").Output()
-	e2e.Logf("\n%v\n\n", cmMsg)
-	o.Expect(cmMsg).To(o.ContainSubstring(expected))
-	o.Expect(err).NotTo(o.HaveOccurred())
+func (subD *subscriptionDescription) getScanExitCodeFromConfigmapWithSuiteName(oc *exutil.CLI, suiteName string, expected string) {
+	label := "compliance.openshift.io/suite=" + suiteName
+	scanNameList, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", subD.namespace, "scan", "-l", label, "-o=jsonpath={.items[*].metadata.name}").Output()
+	scanName := strings.Fields(scanNameList)
+	for _, scan := range scanName {
+		subD.getScanExitCodeFromConfigmapWithScanName(oc, scan, expected)
+	}
+}
+
+func (subD *subscriptionDescription) getScanResultFromConfigmap(oc *exutil.CLI, scanName string, expected string) {
+	configmapLabel := "compliance.openshift.io/scan-name=" + scanName + ",complianceoperator.openshift.io/scan-result="
+	configmaps, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", subD.namespace, "configmap", "-l", configmapLabel, "-o=jsonpath={.items[*].metadata.name}").Output()
+	cms := strings.Fields(configmaps)
+	for _, cm := range cms {
+		cmMsgs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", subD.namespace, "configmap", cm, "-o=jsonpath={.data.error-msg}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(cmMsgs, expected) {
+			continue
+		} else {
+			e2e.Failf("No expected error-msg !!!")
+		}
+	}
 }
 
 func (subD *subscriptionDescription) getPVCName(oc *exutil.CLI, expected string) {
@@ -476,24 +511,27 @@ func (subD *subscriptionDescription) getProfileName(oc *exutil.CLI, expected str
 	exutil.AssertWaitPollNoErr(err, "The profile name does not match")
 }
 
-func (subD *subscriptionDescription) getARFreportFromPVC(oc *exutil.CLI, expected string) {
-	commands := []string{"exec", "pod/pv-extract", "--", "ls", "/workers-scan-results/0"}
-	arfReport, err := oc.AsAdmin().Run(commands...).Args().Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	lines := strings.Fields(arfReport)
-	for _, line := range lines {
-		if strings.Contains(line, expected) {
-			e2e.Logf("\n%v\n\n", line)
-			break
+func (subD *subscriptionDescription) getARFreportFromPVC(oc *exutil.CLI, pvPodName string, expected string) {
+	err := wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
+		commands := []string{"-n", subD.namespace, "exec", "pod/" + pvPodName, "--", "ls", "/workers-scan-results/0"}
+		arfReport, err := oc.AsAdmin().WithoutNamespace().Run(commands...).Args().Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lines := strings.Fields(arfReport)
+		for _, line := range lines {
+			if strings.Contains(line, expected) {
+				return true, nil
+			}
 		}
-	}
-	o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred())
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "The ARF report from PVC failed")
 }
 
-func assertCoPodNumerEqualNodeNumber(oc *exutil.CLI, namespace string, label string) {
-
-	intNodeNumber := getNodeNumberPerLabel(oc, label)
-	podNameString, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "--selector=workload=scanner", "-o=jsonpath={.items[*].metadata.name}").Output()
+func assertCoPodNumerEqualNodeNumber(oc *exutil.CLI, namespace string, nodeLabel string, scanName string) {
+	intNodeNumber := getNodeNumberPerLabel(oc, nodeLabel)
+	podNameString, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-l", "compliance.openshift.io/scan-name="+scanName+",workload=scanner", "-o=jsonpath={.items[*].metadata.name}").Output()
+	e2e.Logf("the result of podNameString:%v", podNameString)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	intPodNumber := len(strings.Fields(podNameString))
 	e2e.Logf("the result of intNodeNumber:%v", intNodeNumber)
@@ -536,9 +574,9 @@ func getStorageClassVolumeBindingMode(oc *exutil.CLI) string {
 	return sclassvbm
 }
 
-func getResourceNameWithKeyword(oc *exutil.CLI, rs string, keyword string) string {
+func getResourceNameWithKeyword(oc *exutil.CLI, rs string, namespace string, keyword string) string {
 	var resourceName string
-	rsList, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(rs, "-n", oc.Namespace(), "-o=jsonpath={.items[*].metadata.name}").Output()
+	rsList, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(rs, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 	rsl := strings.Fields(rsList)
 	for _, v := range rsl {
 		resourceName = fmt.Sprintf("%s", v)
@@ -552,10 +590,10 @@ func getResourceNameWithKeyword(oc *exutil.CLI, rs string, keyword string) strin
 	return resourceName
 }
 
-func getResourceNameWithKeywordFromResourceList(oc *exutil.CLI, rs string, keyword string) string {
+func getResourceNameWithKeywordFromResourceList(oc *exutil.CLI, rs string, namespace string, keyword string) string {
 	var result, resourceName string
 	err := wait.Poll(1*time.Second, 120*time.Second, func() (bool, error) {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(rs, "-n", oc.Namespace(), "-o=jsonpath={.items[*].metadata.name}").Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(rs, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		e2e.Logf("the result of output:%v", output)
 		if strings.Contains(output, keyword) {
 			result = output
@@ -577,10 +615,10 @@ func getResourceNameWithKeywordFromResourceList(oc *exutil.CLI, rs string, keywo
 	return resourceName
 }
 
-func checkKeyWordsForRspod(oc *exutil.CLI, podname string, keyword [3]string) {
+func checkKeyWordsForRspod(oc *exutil.CLI, podname string, namespace string, keyword [3]string) {
 	var flag = true
 	var kw string
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podname, "-n", oc.Namespace(), "-o=json").Output()
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podname, "-n", namespace, "-o=json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	for _, v := range keyword {
 		kw = fmt.Sprintf("%s", v)
@@ -626,11 +664,11 @@ func checkWarnings(oc *exutil.CLI, expectedString string, parameters ...string) 
 	}
 }
 
-func checkFipsStatus(oc *exutil.CLI) string {
+func checkFipsStatus(oc *exutil.CLI, namespace string) string {
 	mnodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node.openshift.io/os_id=rhcos,node-role.kubernetes.io/master=",
 		"-o=jsonpath={.items[0].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	efips, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", oc.Namespace(), "node/"+mnodeName, "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+	efips, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "node/"+mnodeName, "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
 	if strings.Contains(efips, "FIPS mode is disabled.") {
 		e2e.Logf("Fips is disabled on master node %v ", mnodeName)
 	} else {
@@ -791,9 +829,9 @@ func checkMachineConfigPoolStatus(oc *exutil.CLI, nodeSelector string) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Fails to update %v machineconfigpool", nodeSelector))
 }
 
-func checkNodeContents(oc *exutil.CLI, nodeName string, contentList []string, cmd string, opt string, filePath string, pattern string) {
+func checkNodeContents(oc *exutil.CLI, nodeName string, namespace string, contentList []string, cmd string, opt string, filePath string, pattern string) {
 	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
-		nContent, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("nodes/"+nodeName, "-n", oc.Namespace(), "--", "chroot", "/host", cmd, opt, filePath).OutputToFile(getRandomString() + "content.json")
+		nContent, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("nodes/"+nodeName, "-n", namespace, "--", "chroot", "/host", cmd, opt, filePath).OutputToFile(getRandomString() + "content.json")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		results, _ := exec.Command("bash", "-c", "cat "+nContent+" | grep "+pattern+"; rm -rf "+nContent).Output()
 		result := string(results)
@@ -813,14 +851,16 @@ func checkNodeStatus(oc *exutil.CLI) {
 		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		node := strings.Fields(nodeName)
+		//"reason":"KubeletReady","status":"True","type":"Ready"
+		nodeConditionStr := "reason.*KubeletReady.*status.*True.*type.*Ready"
 		for _, v := range node {
-			nodeStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", fmt.Sprintf("%s", v), "-o=jsonpath={.status.conditions[3].type}").Output()
+			nodeConditions, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", fmt.Sprintf("%s", v), "-o=jsonpath={.status.conditions}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Compare(nodeStatus, "Ready") != 0 {
-				e2e.Logf("\nNode %s Status is %s\n", v, nodeStatus)
+			matched, err := regexp.MatchString(nodeConditionStr, nodeConditions)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if err != nil || !matched {
 				return false, nil
 			}
-			e2e.Logf("\nNode %s Status is %s\n", v, nodeStatus)
 		}
 		return true, nil
 	})
@@ -913,10 +953,10 @@ func checkMetric(oc *exutil.CLI, metricString []string, namespace string, operat
 		metrics, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-ks", "-H", fmt.Sprintf("Authorization: Bearer %v", token), "https://metrics."+namespace+".svc:8585/metrics-"+operator).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, metricStr := range metricString {
-			if err != nil || !strings.Contains(metrics, metricStr) {
+			matched, err := regexp.MatchString(metricStr, metrics)
+			if err != nil || !matched {
 				return false, nil
 			}
-			e2e.Logf("The string '%s' contains in compliance operator matrics \n", metricStr)
 		}
 		return true, nil
 	})

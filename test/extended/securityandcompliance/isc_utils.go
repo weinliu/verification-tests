@@ -397,7 +397,7 @@ func doAction(oc *exutil.CLI, action string, asAdmin bool, withoutNamespace bool
 func getRandomString() string {
 	chars := "abcdefghijklmnopqrstuvwxyz0123456789"
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
-	buffer := make([]byte, 8)
+	buffer := make([]byte, 10)
 	for index := range buffer {
 		buffer[index] = chars[seed.Intn(len(chars))]
 	}
@@ -457,6 +457,14 @@ func SkipMissingDefaultSC(oc *exutil.CLI) {
 	}
 }
 
+//SkipMissingRhcosWorkers mean to skip test for env without rhcos workers. The Compliance Operator is available for rhcos deployments only.
+func SkipMissingRhcosWorkers(oc *exutil.CLI) {
+	rhcosWorkerNodesNumber := getNodeNumberPerLabel(oc, "node.openshift.io/os_id=rhcos,node-role.kubernetes.io/worker=")
+	if rhcosWorkerNodesNumber == 0 {
+		g.Skip("Skip since no rhcos workers is not available")
+	}
+}
+
 func assertKeywordsExistsInFile(oc *exutil.CLI, keywords string, filePath string, flag bool) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		mnodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node.openshift.io/os_id=rhcos,node-role.kubernetes.io/master=",
@@ -480,4 +488,53 @@ func assertKeywordsExistsInFile(oc *exutil.CLI, keywords string, filePath string
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("File %s not exists on node! \n", filePath))
+}
+
+func createOperator(oc *exutil.CLI, subD subscriptionDescription, ogD operatorGroupDescription) {
+	g.By("Create namespace !!!")
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", subD.namespace).Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", subD.namespace, "openshift.io/cluster-monitoring=true", "--overwrite").Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", subD.namespace, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "pod-security.kubernetes.io/audit=privileged", "pod-security.kubernetes.io/warn=privileged", "--overwrite").Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+
+	g.By("Create operatorGroup !!!")
+	ogFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ogD.template, "-p", "NAME="+ogD.name, "NAMESPACE="+ogD.namespace, "-n", ogD.namespace).OutputToFile(getRandomString() + "og.json")
+	e2e.Logf("Created the operator-group yaml %s, %v", ogFile, err)
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", ogFile).Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+
+	g.By("Create subscription for above catalogsource !!!")
+	subFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", subD.template, "-p", "SUBNAME="+subD.subName, "SUBNAMESPACE="+subD.namespace, "CHANNEL="+subD.channel, "APPROVAL="+subD.ipApproval,
+		"OPERATORNAME="+subD.operatorPackage, "SOURCENAME="+subD.catalogSourceName, "SOURCENAMESPACE="+subD.catalogSourceNamespace, "STARTINGCSV="+subD.startingCSV, "-n", subD.namespace).OutputToFile(getRandomString() + "sub.json")
+	e2e.Logf("Created the subscription yaml %s, %v", subFile, err)
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subFile).Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+
+	msg, err = subscriptionIsFinished(oc, subD)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func createFileIntegrityOperator(oc *exutil.CLI, subD subscriptionDescription, ogD operatorGroupDescription) {
+	g.By("Check file integrity operator pod are in running state !!!")
+	createOperator(oc, subD, ogD)
+
+	g.By("Check file integrity operator pod are in running state !!!")
+	subD.checkPodFioStatus(oc, "running")
+}
+
+func createComplianceOperator(oc *exutil.CLI, subD subscriptionDescription, ogD operatorGroupDescription) {
+	g.By("Install compliance-operator !!!")
+	createOperator(oc, subD, ogD)
+
+	g.By("Check Compliance Operator & profileParser pods are in running state !!!")
+	newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", "--selector=name=compliance-operator", "-n",
+		subD.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
+	newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", "--selector=profile-bundle=ocp4", "-n",
+		subD.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
+	newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", "--selector=profile-bundle=rhcos4", "-n",
+		subD.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
+
+	g.By("Check compliance operator sucessfully installed !!! ")
 }

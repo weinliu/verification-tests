@@ -115,9 +115,9 @@ func (c *CLI) Output() (string, error) {
 	}
 }
 
-func assertCheckProfileControls(oc *exutil.CLI, prof string, keyword string) {
+func assertCheckProfileControls(oc *exutil.CLI, namespace string, prof string, keyword string) {
 	errWait := wait.Poll(5*time.Second, 10*time.Second, func() (bool, error) {
-		proControl, err := OcComplianceCLI().Run("controls").Args("profile", prof, "-n", oc.Namespace()).Output()
+		proControl, err := OcComplianceCLI().Run("controls").Args("profile", prof, "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if matched, _ := regexp.MatchString(keyword, string(proControl)); matched {
 			e2e.Logf("keyword %s matched with standards and controls for profile %s", keyword, prof)

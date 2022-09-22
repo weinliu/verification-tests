@@ -18,7 +18,7 @@ objects:
         content: "${CONTENT}"
         contentImage: "${CONTENTIMAGE}"
         rule: "${RULE}"
-        debug: true
+        debug: ${{DEBUG}}
         noExternalResources: ${{NOEXTERNALRESOURCES}}
         nodeSelector: 
           node-role.kubernetes.io/${NODESELECTOR}: ""
@@ -40,3 +40,4 @@ parameters:
 - name: NODESELECTOR
 - name: SIZE
 - name: ROTATION
+- name: DEBUG

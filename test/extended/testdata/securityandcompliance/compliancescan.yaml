@@ -14,7 +14,7 @@ objects:
     content: "${CONTENT}"
     contentImage: "${CONTENTIMAGE}"
     rule: "${RULE}"
-    debug: true
+    debug: ${{DEBUG}}
     nodeSelector:
       node-role.kubernetes.io/${NODESELECTOR}: ""
     rawResultStorage:
@@ -30,3 +30,4 @@ parameters:
 - name: RULE
 - name: NODESELECTOR
 - name: SIZE
+- name: DEBUG
