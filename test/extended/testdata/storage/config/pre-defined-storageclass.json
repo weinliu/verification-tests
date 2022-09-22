@@ -3,9 +3,8 @@
     {
       "name": "aws",
       "storageclass": {
-        "default_sc": "gp2",
+        "default_sc": "gp3-csi",
         "pre_defined_sc": [
-          "gp2",
           "gp2-csi",
           "gp3-csi"
         ]

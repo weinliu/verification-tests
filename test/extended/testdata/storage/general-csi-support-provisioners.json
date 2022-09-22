@@ -6,7 +6,7 @@
         "provisioners": [
           {
             "name": "ebs.csi.aws.com",
-            "preset_scname": "gp2-csi",
+            "preset_scname": "gp3-csi",
             "preset_vscname": "csi-aws-vsc"
           },
           {
