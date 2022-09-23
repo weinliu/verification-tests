@@ -122,6 +122,16 @@ func (h *hostedCluster) getAzureDiskSizeGBByNodePool(nodePool string) string {
 	return doOcpReq(h.oc, OcpGet, false, "nodepools", "-n", h.namespace, nodePool, `-ojsonpath={.spec.platform.azure.diskSizeGB}`)
 }
 
+func (h *hostedCluster) pollGetNodePoolReplicas() func() string {
+	return func() string {
+		value, er := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("nodepools", "-n", h.namespace, `-ojsonpath={.items[*].status.replicas}`).Output()
+		if er != nil {
+			return ""
+		}
+		return value
+	}
+}
+
 func getHostedClusters(oc *exutil.CLI, namespace string) (string, error) {
 	value, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedclusters", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 	if er != nil {

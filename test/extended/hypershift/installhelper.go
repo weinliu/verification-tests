@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -42,6 +43,7 @@ type createCluster struct {
 	AdditionalTags          string `param:"additional-tags"`
 	InfraAvailabilityPolicy string `param:"infra-availability-policy"`
 	Zones                   string `param:"zones"`
+	SSHKey                  string `param:"ssh-key"`
 }
 
 type infra struct {
@@ -70,6 +72,13 @@ type createNodePool struct {
 	Namespace    string `param:"namespace"`
 	RootDiskSize *int   `param:"root-disk-size"`
 	NodeCount    *int   `param:"node-count"`
+}
+
+type bastion struct {
+	Region     string `param:"region"`
+	InfraID    string `param:"infra-id"`
+	SSHKeyFile string `param:"ssh-key-file"`
+	AWSCreds   string `param:"aws-creds"`
 }
 
 func (c *createCluster) withName(name string) *createCluster {
@@ -109,6 +118,16 @@ func (c *createCluster) withInfraAvailabilityPolicy(InfraAvailabilityPolicy stri
 
 func (c *createCluster) withZones(Zones string) *createCluster {
 	c.Zones = Zones
+	return c
+}
+
+func (c *createCluster) withSSHKey(SSHKey string) *createCluster {
+	c.SSHKey = SSHKey
+	return c
+}
+
+func (c *createCluster) withInfraID(InfraID string) *createCluster {
+	c.InfraID = InfraID
 	return c
 }
 
@@ -281,7 +300,12 @@ func (receiver *installHelper) hyperShiftInstall() {
 		e2e.Logf("Config AWS Bucket")
 		receiver.newAWSS3Client()
 		receiver.createAWSS3Bucket()
-		cmd = fmt.Sprintf("hypershift install --oidc-storage-provider-s3-bucket-name %s --oidc-storage-provider-s3-credentials %s --oidc-storage-provider-s3-region %s", receiver.bucketName, receiver.dir+"/credentials", receiver.region)
+		_, err := os.Stat(receiver.dir + "/aws-private-creds")
+		if err == nil {
+			cmd = fmt.Sprintf("hypershift install --private-platform AWS --aws-private-creds %s --aws-private-region %s --oidc-storage-provider-s3-bucket-name %s --oidc-storage-provider-s3-credentials %s --oidc-storage-provider-s3-region %s", receiver.dir+"/aws-private-creds", receiver.region, receiver.bucketName, receiver.dir+"/credentials", receiver.region)
+		} else {
+			cmd = fmt.Sprintf("hypershift install --oidc-storage-provider-s3-bucket-name %s --oidc-storage-provider-s3-credentials %s --oidc-storage-provider-s3-region %s", receiver.bucketName, receiver.dir+"/credentials", receiver.region)
+		}
 	case "azure":
 		e2e.Logf("extract Azure Credentials")
 		receiver.extractAzureCredentials()
@@ -460,5 +484,26 @@ func (receiver *installHelper) createAzureNodePool(nodePool *createNodePool) {
 	var bashClient = NewCmdClient().WithShowInfo(true)
 	cmd := fmt.Sprintf("hypershift create nodepool azure %s", strings.Join(vars, " "))
 	_, err = bashClient.Run(cmd).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+}
+
+func (receiver *installHelper) createAWSBastion(bastion *bastion) string {
+	vars, err := parse(bastion)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	var bashClient = NewCmdClient().WithShowInfo(true)
+	cmd := fmt.Sprintf("hypershift create bastion aws %s", strings.Join(vars, " "))
+	log, err := bashClient.Run(cmd).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	numBlock := "(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])"
+	regexPattern := numBlock + "\\." + numBlock + "\\." + numBlock + "\\." + numBlock
+	regEx := regexp.MustCompile(regexPattern)
+	return regEx.FindString(log)
+}
+
+func (receiver *installHelper) destroyAWSBastion(bastion *bastion) {
+	e2e.Logf("destroy AWS bastion")
+	var bashClient = NewCmdClient().WithShowInfo(true)
+	cmd := fmt.Sprintf("hypershift destroy bastion aws --infra-id %s --aws-creds %s --region %s", bastion.InfraID, bastion.AWSCreds, bastion.Region)
+	_, err := bashClient.Run(cmd).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 }
