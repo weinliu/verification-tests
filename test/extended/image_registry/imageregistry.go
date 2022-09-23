@@ -2769,7 +2769,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-10788-Medium-12059-Could import image and pull from private registry", func() {
+	g.It("ROSA-OSD_CCS-ARO-VMonly-Author:xiuwang-Medium-10788-Medium-12059-Could import image and pull from private registry", func() {
 		g.By("Setup a private registry")
 		var regUser, regPass = "testuser", getRandomString()
 		authFile := filepath.Join("/tmp/", fmt.Sprintf("ir-auth-%s", getRandomString()))
