@@ -603,7 +603,7 @@ func waitForRangeOfResourceToDisappear(oc *exutil.CLI, resource string, podList 
 
 //this function is to wait for the expStr appearing in the corefile of the coredns under all dns pods
 func keepSearchInAllDNSPods(oc *exutil.CLI, podList []string, expStr string) {
-	cmd := "grep " + expStr + " /etc/coredns/Corefile"
+	cmd := fmt.Sprintf("grep \"%s\" /etc/coredns/Corefile", expStr)
 	o.Expect(podList).NotTo(o.BeEmpty())
 	for _, podName := range podList {
 		count := 0
@@ -674,7 +674,7 @@ func waitAllCorefilesUpdated(oc *exutil.CLI, attrList [][]string) [][]string {
 		dnspodname := dnspod[0]
 		dnspodattr := dnspod[1]
 		count := 0
-		waitErr := wait.Poll(3*time.Second, 120*time.Second, func() (bool, error) {
+		waitErr := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
 			output, _ := oc.AsAdmin().Run("exec").Args("-n", "openshift-dns", dnspodname, "-c", "dns", "--", "bash", "-c", cmd).Output()
 			count++
 			primary := false
