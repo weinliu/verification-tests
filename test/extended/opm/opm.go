@@ -2128,6 +2128,61 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("cannot be compared to \"1.0.1-alpha\""))
 	})
 
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-Medium-53917-opm can visualize the update graph for a given Operator from an arbitrary version", func() {
+		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
+			g.Skip("HTTP_PROXY is not empty - skipping test ...")
+		}
+
+		g.By("step: check help message")
+		output, err := opmCLI.Run("alpha").Args("render-graph", "-h").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(output)).To(o.ContainSubstring("--minimum-edge"))
+		o.Expect(string(output)).To(o.ContainSubstring("--use-http"))
+
+		g.By("step: opm alpha render-graph index-image")
+		output, err = opmCLI.Run("alpha").Args("render-graph", "quay.io/olmqe/nginxolm-operator-index:v1").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(output)).To(o.ContainSubstring("package \"nginx-operator\""))
+		o.Expect(string(output)).To(o.ContainSubstring("subgraph nginx-operator-alpha[\"alpha\"]"))
+
+		g.By("step: opm alpha render-graph index-image with --minimum-edge")
+		output, err = opmCLI.Run("alpha").Args("render-graph", "quay.io/olmqe/nginxolm-operator-index:v1", "--minimum-edge", "nginx-operator.v1.0.1").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(output)).To(o.ContainSubstring("package \"nginx-operator\""))
+		o.Expect(string(output)).To(o.ContainSubstring("nginx-operator.v1.0.1"))
+		o.Expect(string(output)).NotTo(o.ContainSubstring("nginx-operator.v0.0.1"))
+
+		g.By("step: create dir catalog")
+		catsrcPath := filepath.Join("/tmp", "53917-catalog")
+		defer os.RemoveAll(catsrcPath)
+		errCreateDir := os.MkdirAll(catsrcPath, 0755)
+		o.Expect(errCreateDir).NotTo(o.HaveOccurred())
+
+		g.By("step: opm alpha render-graph fbc-dir")
+		output, err = opmCLI.Run("render").Args("quay.io/olmqe/nginxolm-operator-index:v1", "-o", "json").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		indexFilePath := filepath.Join(catsrcPath, "index.json")
+		if err = ioutil.WriteFile(indexFilePath, []byte(output), 0644); err != nil {
+			e2e.Failf(fmt.Sprintf("Writefile %s Error: %v", indexFilePath, err))
+		}
+		output, err = opmCLI.Run("alpha").Args("render-graph", catsrcPath).Output()
+		if err != nil {
+			e2e.Logf(output)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		o.Expect(string(output)).To(o.ContainSubstring("package \"nginx-operator\""))
+		o.Expect(string(output)).To(o.ContainSubstring("subgraph nginx-operator-alpha[\"alpha\"]"))
+
+		g.By("step: opm alpha render-graph sqlit-based catalog image")
+		output, err = opmCLI.Run("alpha").Args("render-graph", "quay.io/olmqe/ditto-index:v1beta1").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(output)).To(o.ContainSubstring("subgraph \"ditto-operator\""))
+		o.Expect(string(output)).To(o.ContainSubstring("subgraph ditto-operator-alpha[\"alpha\"]"))
+		o.Expect(string(output)).To(o.ContainSubstring("ditto-operator.v0.2.0"))
+	})
+
 	// author: scolange@redhat.com
 	g.It("ConnectedOnly-Author:scolange-VMonly-Medium-25934-Reference non-latest versions of bundles by image digests", func() {
 		containerCLI := container.NewPodmanCLI()
