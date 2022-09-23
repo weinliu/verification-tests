@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 
 	g "github.com/onsi/ginkgo"
+	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	//e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -152,23 +153,26 @@ var _ = g.Describe("[sig-node] Container_Engine_Tools crio,scc", func() {
 	})
 
 	// author: pmali@redhat.com
-	g.It("Author:pmali-Critical-48876-Check ping I src IPdoes work on a container", func() {
+	g.It("Author:pmali-Critical-48876-Check ping I src IP does work on a container", func() {
 
 		oc.SetupProject()
 		ocp48876Pod.name = "hello-pod-ocp48876"
 		ocp48876Pod.namespace = oc.Namespace()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", ocp48876Pod.namespace, "security.openshift.io/scc.podSecurityLabelSync=false",
+			"pod-security.kubernetes.io/enforce=privileged", "--overwrite").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Create a pod \n")
 		ocp48876Pod.create(oc)
 		defer ocp48876Pod.delete(oc)
 		g.By("Check pod status\n")
-		err := podStatus(oc)
+		err = podStatus(oc)
 		exutil.AssertWaitPollNoErr(err, "pod is not running")
 		g.By("Get Pod Name \n")
 		podName := getPodName(oc, oc.Namespace())
 		g.By("Get the pod IP address\n")
 		ipv4 := getPodIPv4(oc, podName, oc.Namespace())
 		g.By("Ping with IP address\n")
-		cmd := "ping -c 2 8.8.8.8 -I" + ipv4
+		cmd := "ping -c 2 8.8.8.8 -I " + ipv4
 		err = pingIpaddr(oc, oc.Namespace(), podName, cmd)
 		exutil.AssertWaitPollNoErr(err, "Ping Unsuccessful with IP address")
 		g.By("Ping with Interface Name\n")
