@@ -3066,4 +3066,41 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(string(output)).To(o.ContainSubstring("registry.redhat.io:80"))
 	})
 
+	//author: wewang@redhat.com
+	g.It("Author:wewang-Critical-22945-Autoconfigure registry storage [Disruptive]", func() {
+		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+		if !strings.Contains(output, "AWS") {
+			g.Skip("Skip for non-supported platform")
+		}
+		g.By("Check image-registry-private-configuration secret if created")
+		output, _ = oc.AsAdmin().Run("get").Args("secret/image-registry-private-configuration", "-n", "openshift-image-registry").Output()
+		o.Expect(string(output)).To(o.ContainSubstring("image-registry-private-configuration"))
+
+		g.By("Check Add s3 bucket to be invalid")
+		defer func() {
+			err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"storage":{"s3":{"bucket":""}}}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitErr := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+				registryDegrade := checkRegistryDegraded(oc)
+				if !registryDegrade {
+					return true, nil
+				}
+				e2e.Logf("Wait for image-registry coming ready")
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("Image registry is not ready"))
+		}()
+		err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"bucket":"invalid"}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		Bucket, err := oc.AsAdmin().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.storage.s3.bucket}").Output()
+		o.Expect(Bucket).To(o.Equal("invalid"))
+		err = wait.PollImmediate(10*time.Second, 2*time.Minute, func() (bool, error) {
+			registryDegrade := checkRegistryDegraded(oc)
+			if registryDegrade {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Image registry is not degraded")
+	})
 })
