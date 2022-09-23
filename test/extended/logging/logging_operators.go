@@ -611,8 +611,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		catsrc.applyFromTemplate(oc, "-f", catsrcTemplate, "-n", catsrc.namespace, "-p", "NAME="+catsrc.name, "-p", "IMAGE=quay.io/openshift-qe-optional-operators/ocp4-index:latest")
 		waitForPodReadyWithLabel(oc, catsrc.namespace, "olm.catalogSource="+catsrc.name)
 
-		// for 5.5, test upgrade from 5.4 to 5.5
-		preSource := CatalogSourceObjects{"stable-5.4", catsrc.name, catsrc.namespace}
+		// for 5.6, test upgrade from 5.5 to 5.6
+		preSource := CatalogSourceObjects{"stable-5.5", catsrc.name, catsrc.namespace}
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", preSource.Channel))
 		preCLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, preSource}
 		preEO := SubscriptionObjects{eo, eoNS, AllNamespaceOG, subTemplate, eoPackageName, preSource}
@@ -632,7 +632,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		WaitForECKPodsToBeReady(oc, preCLO.Namespace)
 
 		//change channel, and wait for the new operators to be ready
-		var source = CatalogSourceObjects{"stable-5.5", "qe-app-registry", "openshift-marketplace"}
+		var source = CatalogSourceObjects{"stable-5.6", "qe-app-registry", "openshift-marketplace"}
 		//change channel, and wait for the new operators to be ready
 		version := strings.Split(source.Channel, "-")[1]
 		g.By(fmt.Sprintf("upgrade CLO&EO to %s", source.Channel))
