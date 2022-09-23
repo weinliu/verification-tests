@@ -3337,10 +3337,10 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		err = copy(filepath.Join(dataPath, "main.yml"), filepath.Join(tmpPath, "roles", "basetest", "tasks", "main.yml"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// copy Dockerfile
-		dockerfileFilePath := filepath.Join(tmpPath, "Dockerfile")
+		dockerfileFilePath := filepath.Join(dataPath, "Dockerfile")
 		err = copy(dockerfileFilePath, filepath.Join(tmpPath, "Dockerfile"))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		replaceContent(dockerfileFilePath, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
+		replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
 		// update the rbac file
 		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
 		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
