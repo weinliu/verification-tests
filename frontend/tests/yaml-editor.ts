@@ -1,6 +1,7 @@
 import * as yamlEditor from '../upstream/views/yaml-editor';
 import { guidedTour } from '../upstream/views/guided-tour';
 import { testName } from "../upstream/support";
+import { importYamlPage} from "../views/yaml-page"
 
 describe("yaml editor tests", () => {
   before(() => {
@@ -15,6 +16,17 @@ describe("yaml editor tests", () => {
 
   after(() => {
     cy.exec(`oc delete project ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+  });
+
+  it("(OCP-21956,xiyuzhao) drag and drop file for Import YAML page	", () => {
+    cy.visit(`/k8s/ns/${testName}/import`)
+      .contains('[data-test-id="resource-title"]', "Import YAML");
+    importYamlPage.dragDropYamlFile("./fixtures/fakelargefile.yaml");  
+    importYamlPage.checkDangerAlert(/Maximum|size|exceeded|limit/gi);
+
+    importYamlPage.dragDropYamlFile("./fixtures/default_operatorgroup.yaml");
+    yamlEditor.clickSaveCreateButton();
+    importYamlPage.checkDangerAlert(/forbidden|cannot|create/gi);
   });
 
   it("(OCP-42019) Create multiple resources by importing yaml", () => {
