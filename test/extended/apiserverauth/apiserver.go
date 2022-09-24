@@ -2221,6 +2221,11 @@ spec:
 			secretname = "ocp-15870-mysecret"
 		)
 
+		g.By("Check if cluster is SNO.")
+		if isSNOCluster(oc) {
+			g.Skip("This won't run on SNO cluster, skip.")
+		}
+
 		g.By("1) Create new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
@@ -2864,5 +2869,22 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(execOutput).To(o.ContainSubstring("annotations ->"))
 		o.Expect(execOutput).To(o.ContainSubstring("labels ->"))
+	})
+
+	// author: dpunia@redhat.com
+	g.It("HyperShiftGUEST-ROSA-ARO-OSD_CCS-Author:dpunia-High-53085-Test Holes in EndpointSlice Validation Enable Host Network Hijack", func() {
+		var (
+			ns = "tmp53085"
+		)
+
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("1) Check Holes in EndpointSlice Validation Enable Host Network Hijack")
+		endpointSliceConfig := getTestDataFilePath("endpointslice.yaml")
+		sliceCreateOut, sliceCreateError := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "-f", endpointSliceConfig).Output()
+		o.Expect(sliceCreateOut).Should(o.ContainSubstring(`Invalid value: "127.0.0.1": may not be in the loopback range`))
+		o.Expect(sliceCreateError).To(o.HaveOccurred())
 	})
 })
