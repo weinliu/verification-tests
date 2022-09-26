@@ -217,6 +217,8 @@ func (envPlatform ocpInstance) GetInstance(oc *exutil.CLI) (string, error) {
 		vmInstance, err = GetOspInstance(oc, envPlatform.nodeName)
 	case "azure":
 		vmInstance, err = GetAzureInstance(oc, envPlatform.nodeName)
+	case "baremetal":
+		vmInstance, err = GetBmhNodeMachineConfig(oc, envPlatform.nodeName)
 	default:
 		return "", nil
 	}
@@ -243,6 +245,8 @@ func (envPlatform ocpInstance) GetInstanceState(oc *exutil.CLI) (string, error) 
 		vmState, err = GetOspInstanceState(oc, envPlatform.nodeName)
 	case "azure":
 		vmState, err = GetAzureInstanceState(oc, envPlatform.nodeName)
+	case "baremetal":
+		vmState, err = GetNodestatus(oc, envPlatform.nodeName)
 	default:
 		return "", nil
 	}
@@ -268,6 +272,8 @@ func (envPlatform ocpInstance) StopInstance(oc *exutil.CLI) error {
 		err = GetOspInstancesStop(oc, envPlatform.nodeName)
 	case "azure":
 		err = StoptAzureVMInstance(oc, envPlatform.nodeName)
+	case "baremetal":
+		err = StopIPIBaremetalNode(oc, envPlatform.nodeName)
 	default:
 		return nil
 	}
@@ -288,6 +294,8 @@ func (envPlatform ocpInstance) StartInstance(oc *exutil.CLI) error {
 		err = GetOspInstancesStart(oc, envPlatform.nodeName)
 	case "azure":
 		err = StartAzureVMInstance(oc, envPlatform.nodeName)
+	case "baremetal":
+		err = StartIPIBaremetalNode(oc, envPlatform.nodeName)
 	default:
 		return nil
 	}
@@ -525,12 +533,69 @@ func StartAzureVMInstance(oc *exutil.CLI, vmInstance string) error {
 }
 
 // StoptAzureVMInstance stop azure vm
-func StoptAzureVMInstance(oc *exutil.CLI, vmIntance string) error {
+func StoptAzureVMInstance(oc *exutil.CLI, vmInstance string) error {
 	resourceGroupName, rgerr := exutil.GetAzureCredentialFromCluster(oc)
 	o.Expect(rgerr).NotTo(o.HaveOccurred())
 	session, sessErr := exutil.NewAzureSessionFromEnv()
 	o.Expect(sessErr).NotTo(o.HaveOccurred())
-	_, instanceErr := exutil.StopAzureVM(session, vmIntance, resourceGroupName)
+	_, instanceErr := exutil.StopAzureVM(session, vmInstance, resourceGroupName)
 	o.Expect(instanceErr).NotTo(o.HaveOccurred())
 	return instanceErr
+}
+
+// GetBmhNodeMachineConfig get bmh machineconfig name
+func GetBmhNodeMachineConfig(oc *exutil.CLI, vmInstance string) (string, error) {
+	var masterNodeMachineConfig string
+	bmhOutput, bmhErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", "openshift-machine-api", "-o", `jsonpath='{.items[*].metadata.name}'`).Output()
+	o.Expect(bmhErr).NotTo(o.HaveOccurred())
+	machineConfigOutput := strings.Fields(bmhOutput)
+	for i := 0; i < len(machineConfigOutput); i++ {
+		if strings.Contains(machineConfigOutput[i], vmInstance) {
+			masterNodeMachineConfig = strings.ReplaceAll(machineConfigOutput[i], "'", "")
+		}
+	}
+	return masterNodeMachineConfig, bmhErr
+}
+
+// GetNodestatus get node status
+func GetNodestatus(oc *exutil.CLI, vmInstance string) (string, error) {
+	nodeStatus, statusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", vmInstance, "-o", `jsonpath={.status.conditions[3].type}`).Output()
+	o.Expect(statusErr).NotTo(o.HaveOccurred())
+	return strings.ToLower(nodeStatus), statusErr
+}
+
+// StopIPIBaremetalNode stop ipi baremetal node
+func StopIPIBaremetalNode(oc *exutil.CLI, vmInstance string) error {
+	errVM := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+		vmInstance, err := GetBmhNodeMachineConfig(oc, vmInstance)
+		if err != nil {
+			return false, nil
+		}
+		patch := `[{"op": "replace", "path": "/spec/online", "value": false}]`
+		stopErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("bmh", "-n", "openshift-machine-api", vmInstance, "--type=json", "-p", patch).Execute()
+		if stopErr != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(errVM, fmt.Sprintf("Not able to stop %s", vmInstance))
+	return errVM
+}
+
+// StartIPIBaremetalNode stop ipi baremetal node
+func StartIPIBaremetalNode(oc *exutil.CLI, vmInstance string) error {
+	errVM := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+		vmInstance, err := GetBmhNodeMachineConfig(oc, vmInstance)
+		if err != nil {
+			return false, nil
+		}
+		patch := `[{"op": "replace", "path": "/spec/online", "value": true}]`
+		startErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("bmh", "-n", "openshift-machine-api", vmInstance, "--type=json", "-p", patch).Execute()
+		if startErr != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(errVM, fmt.Sprintf("Not able to start %s", vmInstance))
+	return errVM
 }

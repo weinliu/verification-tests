@@ -36,8 +36,10 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			e2e.Logf("\n OSP is detected, running the case on osp\n")
 		case "azure":
 			e2e.Logf("\n Azure is detected, running the case on azure\n")
+		case "baremetal":
+			e2e.Logf("\n IPI Baremetal is detected, running the case on baremetal\n")
 		default:
-			g.Skip("Not support cloud provider for DR cases for now. Test cases should be run on vsphere or aws or gcp or openstack, skip for other platforms!!")
+			g.Skip("Not support cloud provider for DR cases for now. Test cases should be run on vsphere or aws or gcp or openstack or azure or IPI baremetal, skip for other platforms!!")
 		}
 	})
 
@@ -76,13 +78,13 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			vmState, err := envPlatform.GetInstanceState(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(vmState).ShouldNot(o.BeEmpty(), fmt.Sprintf("Not able to get leader_master_node %s machine instance state", leaderMasterNode))
-			if vmState == "poweredOff" || vmState == "stopped" || vmState == "stopping" || vmState == "terminated" || vmState == "paused" || vmState == "pausing" || vmState == "deallocated" {
+			if vmState == "poweredOff" || vmState == "stopped" || vmState == "stopping" || vmState == "terminated" || vmState == "paused" || vmState == "pausing" || vmState == "deallocated" || vmState == "notready" {
 				e2e.Logf("Restarting leader_master_node %s", leaderMasterNode)
 				err = envPlatform.StartInstance(oc)
 				o.Expect(err).NotTo(o.HaveOccurred())
 				err = ClusterHealthcheck(oc, "OCP-19941/log")
 				o.Expect(err).NotTo(o.HaveOccurred())
-			} else if vmState == "poweredOn" || vmState == "running" || vmState == "active" {
+			} else if vmState == "poweredOn" || vmState == "running" || vmState == "active" || vmState == "ready" {
 				e2e.Logf("leader_master_node %s machine instance state is already %s", leaderMasterNode, vmState)
 			}
 		}()
@@ -100,9 +102,9 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		vmState, stateErr := envPlatform.GetInstanceState(oc)
 		o.Expect(stateErr).NotTo(o.HaveOccurred())
 		o.Expect(vmState).ShouldNot(o.BeEmpty(), fmt.Sprintf("Not able to get leader_master_node %s machine instance state", leaderMasterNode))
-		if vmState == "poweredOff" || vmState == "stopped" || vmState == "terminated" || vmState == "paused" || vmState == "deallocated" {
+		if vmState == "poweredOff" || vmState == "stopped" || vmState == "terminated" || vmState == "paused" || vmState == "deallocated" || vmState == "notready" {
 			e2e.Failf("leader_master_node %s instance state is already %s....before running case, so exiting from case run as cluster not ready.", vmInstance, vmState)
-		} else if vmState == "poweredOn" || vmState == "running" || vmState == "active" {
+		} else if vmState == "poweredOn" || vmState == "running" || vmState == "active" || vmState == "ready" {
 			e2e.Logf("Bringing down leader master node %s machine instance", vmInstance)
 			err = envPlatform.StopInstance(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
