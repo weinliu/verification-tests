@@ -2415,7 +2415,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
 		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" && architecture != "arm64" {
+		if architecture != "amd64" {
 			g.Skip("Do not support " + architecture)
 		}
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
@@ -2610,7 +2610,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			g.Skip("HTTP_PROXY is empty - skipping test ...")
 		}
 		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" && architecture != "arm64" {
+		if architecture != "amd64" {
 			g.Skip("Do not support " + architecture)
 		}
 		tmpBasePath := "/tmp/ocp-44550-" + getRandomString()
@@ -3293,7 +3293,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-45141-High-41497-High-34292-High-29374-High-28157-High-27977-ansible k8sevent k8sstatus maxConcurrentReconciles modules to a collect blacklist [Slow]", func() {
 		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" && architecture != "arm64" {
+		if architecture != "amd64" {
 			g.Skip("Do not support " + architecture)
 		}
 		// test data
