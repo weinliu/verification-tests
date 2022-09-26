@@ -1,3 +1,4 @@
+import { listPage } from "../upstream/views/list-page";
 export const operatorHubPage = {
   goTo: () => {
       cy.visit('/operatorhub/all-namespaces');
@@ -42,6 +43,23 @@ export const operatorHubPage = {
     cy.get('[data-id="0-0"]').within(()=> {
       cy.byTestID("status-text", {timeout: 30000}).should('have.text', "Succeeded")
     })
+  },
+  installOperator: (operatorName, csName, installNamespace) => {
+    cy.visit(`/operatorhub/subscribe?pkg=${operatorName}&catalog=${csName}&catalogNamespace=openshift-marketplace&targetNamespace=undefined`);
+    if (installNamespace) {
+      cy.get('[data-test="A specific namespace on the cluster-radio-input"]').click();
+      cy.get('button#dropdown-selectbox').click();
+      cy.contains('span', `${installNamespace}`).click();
+    }
+    cy.get('[data-test="install-operator"]').click();
+  },
+  checkOperatorStatus: (csvName, csvStatus) => {
+    cy.get(`[data-test-operator-row="${csvName}"]`).parents('tr').children().contains(`${csvStatus}`, {timeout: 60000});
+  },
+  removeOperator: (csvName) => {
+    listPage.rows.clickKebabAction(`${csvName}`,"Uninstall Operator");
+    cy.get('#confirm-action').click();
+    cy.get(`[data-test-operator-row="${csvName}"]`).should('not.exist');
   }
 };
 
