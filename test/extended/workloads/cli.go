@@ -61,18 +61,15 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 	})
 	// author: yinzhou@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-42983-always delete the debug pod when the oc debug node command exist [Flaky]", func() {
+	g.It("VMonly-HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-42983-always delete the debug pod when the oc debug node command exist [Flaky]", func() {
 		g.By("Get all the node name list")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodeList := strings.Fields(out)
 
-		g.By("Create a new namespace")
-		oc.SetupProject()
-
 		g.By("Run debug node")
 		for _, nodeName := range nodeList {
-			err = oc.AsAdmin().Run("debug").Args("node/"+nodeName, "--", "chroot", "/host", "date").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+nodeName, "--", "chroot", "/host", "date").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 

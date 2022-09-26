@@ -246,8 +246,8 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		g.By("Get the master with KCM leader")
 		leaderKcm := getLeaderKCM(oc)
 		g.By("Remove the apiserver pod from KCM leader master")
-		defer oc.AsAdmin().Run("debug").Args("node/"+leaderKcm, "--", "chroot", "/host", "mv", "/home/kube-apiserver-pod.yaml", "/etc/kubernetes/manifests/").Execute()
-		err = oc.AsAdmin().Run("debug").Args("node/"+leaderKcm, "--", "chroot", "/host", "mv", "/etc/kubernetes/manifests/kube-apiserver-pod.yaml", "/home/").Execute()
+		defer exutil.DebugNodeWithChroot(oc, leaderKcm, "mv", "/home/kube-apiserver-pod.yaml", "/etc/kubernetes/manifests/")
+		_, err = exutil.DebugNodeWithChroot(oc, leaderKcm, "mv", "/etc/kubernetes/manifests/kube-apiserver-pod.yaml", "/home/")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-kube-apiserver", "pod/"+"kube-apiserver-"+leaderKcm).Execute()
