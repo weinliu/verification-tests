@@ -35,7 +35,7 @@ class SummaryClient:
                 "Portfolio_Integration":"",
                 "Service_Development_A":"",
                 "OLM":"@olm-qe-team ",
-                "Operator_SDK":"@jfan ",
+                "Operator_SDK":"@operatorsdk-qe-team ",
                 "App_Migration":"",
                 "Windows_Containers":"",
                 "Security_and_Compliance":"",
