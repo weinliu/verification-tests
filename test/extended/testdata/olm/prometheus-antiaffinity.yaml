@@ -1,0 +1,28 @@
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  name: example
+spec:
+  evaluationInterval: 30s
+  serviceMonitorSelector: {}
+  alerting:
+    alertmanagers:
+      - namespace: monitoring
+        name: alertmanager-main
+        port: web
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - values:
+                  - dev
+                key: app
+                operator: In
+          topologyKey: kubernetes.io/hostname
+  probeSelector: {}
+  podMonitorSelector: {}
+  scrapeInterval: 30s
+  ruleSelector: {}
+  replicas: 2
+  serviceAccountName: prometheus-k8s
