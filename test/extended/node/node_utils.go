@@ -69,12 +69,6 @@ type podTerminationDescription struct {
 	template  string
 }
 
-type podOOMDescription struct {
-	name      string
-	namespace string
-	template  string
-}
-
 type podInitConDescription struct {
 	name      string
 	namespace string
@@ -154,14 +148,6 @@ func (podInitCon *podInitConDescription) delete(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func (podOOM *podOOMDescription) create(oc *exutil.CLI) {
-	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podOOM.template, "-p", "NAME="+podOOM.name, "NAMESPACE="+podOOM.namespace)
-	o.Expect(err).NotTo(o.HaveOccurred())
-}
-
-func (podOOM *podOOMDescription) delete(oc *exutil.CLI) error {
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", podOOM.namespace, "pod", podOOM.name).Execute()
-}
 func getRandomString() string {
 	chars := "abcdefghijklmnopqrstuvwxyz0123456789"
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -434,20 +420,6 @@ func (podTermination *podTerminationDescription) getTerminationGrace(oc *exutil.
 			e2e.Logf("\ntermination grace is NOT Updated")
 			return false, nil
 		}
-		return false, nil
-	})
-}
-
-func (podOOM *podOOMDescription) podOOMStatus(oc *exutil.CLI) error {
-	return wait.Poll(2*time.Second, 2*time.Minute, func() (bool, error) {
-		podstatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].status.containerStatuses[0].lastState.terminated.reason}", "-n", podOOM.namespace).Output()
-		e2e.Logf("The podstatus shows %v", podstatus)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(string(podstatus), "OOMKilled") {
-			e2e.Logf("\nPOD TERMINATED WITH OOM KILLED SITUATION")
-			return true, nil
-		}
-		e2e.Logf("\nWaiting for status....")
 		return false, nil
 	})
 }

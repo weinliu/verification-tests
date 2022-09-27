@@ -19,7 +19,6 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		buildPruningBaseDir  = exutil.FixturePath("testdata", "node")
 		customTemp           = filepath.Join(buildPruningBaseDir, "pod-modify.yaml")
 		podTerminationTemp   = filepath.Join(buildPruningBaseDir, "pod-termination.yaml")
-		podOOMTemp           = filepath.Join(buildPruningBaseDir, "pod-oom.yaml")
 		podInitConTemp       = filepath.Join(buildPruningBaseDir, "pod-initContainer.yaml")
 		podSleepTemp         = filepath.Join(buildPruningBaseDir, "sleepPod46306.yaml")
 		kubeletConfigTemp    = filepath.Join(buildPruningBaseDir, "kubeletconfig-hardeviction.yaml")
@@ -50,12 +49,6 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 			name:      "",
 			namespace: "",
 			template:  podTerminationTemp,
-		}
-
-		podOOM = podOOMDescription{
-			name:      "",
-			namespace: "",
-			template:  podOOMTemp,
 		}
 
 		podInitCon38271 = podInitConDescription{
@@ -297,22 +290,6 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		g.By("Check init container not restart again")
 		err = podInitCon38271.initContainerNotRestart(oc)
 		exutil.AssertWaitPollNoErr(err, "init container restart")
-	})
-
-	// author: pmali@redhat.com
-	g.It("Author:pmali-Medium-40558-oom kills must be monitored and logged", func() {
-
-		oc.SetupProject()
-		podOOM.name = "pod-oom"
-		podOOM.namespace = oc.Namespace()
-
-		g.By("Create a pod which will be killed with OOM\n")
-		podOOM.create(oc)
-		g.By("Check pod status\n")
-		err := podOOM.podOOMStatus(oc)
-		exutil.AssertWaitPollNoErr(err, "pod is running")
-		g.By("Delete Pod\n")
-		podOOM.delete(oc)
 	})
 
 	// author: pmali@redhat.com
