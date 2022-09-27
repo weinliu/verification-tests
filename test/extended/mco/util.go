@@ -829,3 +829,14 @@ func isFIPSEnabledInClusterConfig(oc *exutil.CLI) bool {
 	ic := cc.GetOrFail("{.data.install-config}")
 	return strings.Contains(ic, "fips: true")
 }
+
+// preChecks executes some basic checks to make sure the the cluster is healthy enough to run MCO test cases
+func preChecks(oc *exutil.CLI) {
+	nodes, err := NewNodeList(oc).GetAllLinux()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "It is not possible to get the list of nodes in the cluster")
+
+	for _, node := range nodes {
+		o.ExpectWithOffset(1, node.IsReady()).To(o.BeTrue(), "Node %s is not Ready. We can't continue testing.", node.GetName())
+	}
+
+}

@@ -48,8 +48,12 @@ func (rf *RemoteFile) Fetch() error {
 	if err != nil {
 		return err
 	}
-
-	return rf.fetchTextContent()
+	if !rf.IsDirectory() {
+		err = rf.fetchTextContent()
+	} else {
+		logger.Debugf("Remote file %s is a directory. Skipping fetch content", rf.GetName())
+	}
+	return err
 }
 
 func (rf *RemoteFile) fetchTextContent() error {

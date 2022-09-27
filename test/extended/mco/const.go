@@ -24,4 +24,10 @@ const (
 
 	// TmplAddSSHAuthorizedKeyForWorker template file name: change-worker-add-ssh-authorized-key
 	TmplAddSSHAuthorizedKeyForWorker = "change-worker-add-ssh-authorized-key"
+
+	// EnvVarLayeringTestImageRepository environment variable to define the image repository used by layering test cases
+	EnvVarLayeringTestImageRepository = "LAYERING_TEST_IMAGE_REPOSITORY"
+
+	// DefaultLayeringQuayRepository the quay repository that will be used by default to push auxiliary layering images
+	DefaultLayeringQuayRepository = "quay.io/mcoqe/layering"
 )

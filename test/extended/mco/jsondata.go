@@ -45,6 +45,11 @@ func (jd *JSONData) ToInt() int {
 	return int(jd.data.(float64))
 }
 
+// ToBool returns the stored value as bool.
+func (jd *JSONData) ToBool() bool {
+	return jd.data.(bool)
+}
+
 // ToString returns the stored value as string
 func (jd *JSONData) ToString() string {
 	return jd.data.(string)

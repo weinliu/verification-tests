@@ -41,6 +41,26 @@ func (n *Node) DebugNodeWithChroot(cmd ...string) (string, error) {
 	return exutil.DebugNodeWithChroot(n.oc, n.name, cmd...)
 }
 
+// DebugNodeWithChrootStd creates a debugging session of the node with chroot and only returns separated stdout and stderr
+func (n *Node) DebugNodeWithChrootStd(cmd ...string) (string, string, error) {
+	setErr := exutil.SetNamespacePrivileged(n.oc, n.oc.Namespace())
+	if setErr != nil {
+		return "", "", setErr
+	}
+
+	cargs := []string{"node/" + n.GetName(), "--", "chroot", "/host"}
+	cargs = append(cargs, cmd...)
+
+	stdout, stderr, err := n.oc.Run("debug").Args(cargs...).Outputs()
+
+	recErr := exutil.RecoverNamespaceRestricted(n.oc, n.oc.Namespace())
+	if recErr != nil {
+		return "", "", recErr
+	}
+
+	return stdout, stderr, err
+}
+
 // DebugNodeWithOptions launch debug container with options e.g. --image
 func (n *Node) DebugNodeWithOptions(options []string, cmd ...string) (string, error) {
 	return exutil.DebugNodeWithOptions(n.oc, n.name, options, cmd...)
@@ -120,6 +140,35 @@ func (n *Node) GetUnitStatus(unitName string) (string, error) {
 // UnmaskService executes `systemctl unmask` command on the node and returns the output
 func (n *Node) UnmaskService(svcName string) (string, error) {
 	return n.DebugNodeWithChroot("systemctl", "unmask", svcName)
+}
+
+// GetRpmOstreeStatus returns the rpm-ostree status in json format
+func (n Node) GetRpmOstreeStatus(asJSON bool) (string, error) {
+	args := []string{"rpm-ostree", "status"}
+	if asJSON {
+		args = append(args, "--json")
+	}
+	stringStatus, _, err := n.DebugNodeWithChrootStd(args...)
+	logger.Debugf("json rpm-ostree status:\n%s", stringStatus)
+	return stringStatus, err
+}
+
+// GetBootedOsTreeDeployment returns the ostree deployment currently booted. In json format
+func (n Node) GetBootedOsTreeDeployment() (string, error) {
+	stringStatus, err := n.GetRpmOstreeStatus(true)
+	if err != nil {
+		return "", err
+	}
+
+	deployments := JSON(stringStatus).Get("deployments")
+	for _, item := range deployments.Items() {
+		booted := item.Get("booted").ToBool()
+		if booted {
+			return item.AsJSONString()
+		}
+	}
+	logger.Infof("WARNING! No booted deployment found in node %s", n.GetName())
+	return "", nil
 }
 
 // PollIsCordoned returns a function that can be used by Gomega to poll the if the node is cordoned (with Eventually/Consistently)
@@ -241,9 +290,7 @@ func (n Node) CaptureMCDaemonLogsUntilRestartWithTimeout(timeout string) (string
 // GetDate executes `date`command and returns the current time in the node
 func (n Node) GetDate() (time.Time, error) {
 
-	exutil.SetNamespacePrivileged(n.oc, n.oc.Namespace())
-	date, _, err := n.oc.Run("debug").Args(`node/`+n.GetName(), `--`, `chroot`, `/host`, `date`, `+%Y-%m-%dT%H:%M:%SZ`).Outputs()
-	exutil.RecoverNamespaceRestricted(n.oc, n.oc.Namespace())
+	date, _, err := n.DebugNodeWithChrootStd(`date`, `+%Y-%m-%dT%H:%M:%SZ`)
 
 	logger.Infof("node %s. DATE: %s", n.GetName(), date)
 	if err != nil {
@@ -263,9 +310,7 @@ func (n Node) GetDate() (time.Time, error) {
 // GetUptime executes `uptime -s` command and returns the time when the node was booted
 func (n Node) GetUptime() (time.Time, error) {
 
-	exutil.SetNamespacePrivileged(n.oc, n.oc.Namespace())
-	uptime, _, err := n.oc.Run("debug").Args(`node/`+n.GetName(), `--`, `chroot`, `/host`, `uptime`, `-s`).Outputs()
-	exutil.RecoverNamespaceRestricted(n.oc, n.oc.Namespace())
+	uptime, _, err := n.DebugNodeWithChrootStd(`uptime`, `-s`)
 
 	logger.Infof("node %s. UPTIME: %s", n.GetName(), uptime)
 	if err != nil {

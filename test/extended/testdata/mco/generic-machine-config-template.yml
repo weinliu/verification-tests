@@ -10,6 +10,7 @@ objects:
         machineconfiguration.openshift.io/role: "${POOL}"
       name: "${NAME}"
     spec:
+      osImageURL: ${OS_IMAGE}
       config:
         ignition:
           version: ${IGNITION_VERSION}
@@ -26,3 +27,5 @@ parameters:
     value: "[]"
   - name: UNITS
     value: "[]"
+  - name: OS_IMAGE
+    value: ""

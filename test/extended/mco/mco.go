@@ -26,12 +26,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	g.JustBeforeEach(func() {
 		g.By("MCO Preconditions Checks")
-		nodes, err := NewNodeList(oc).GetAllLinux()
-		o.Expect(err).NotTo(o.HaveOccurred(), "It is not possible to get the list of nodes in the cluster")
-
-		for _, node := range nodes {
-			o.Expect(node.IsReady()).To(o.BeTrue(), "Node %s is not Ready. We can't continue testing.", node.GetName())
-		}
+		preChecks(oc)
 		logger.Infof("End Of MCO Preconditions")
 	})
 
@@ -451,7 +446,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-42390-Critical-45318-add machine config without ignition version [Serial]", func() {
+	g.It("Author:rioliu-NonPreRelease-High-42390-Critical-45318-add machine config without ignition version. Block the MCO upgrade rollout if any of the pools are Degraded [Serial]", func() {
 		createMcAndVerifyIgnitionVersion(oc, "empty ign version", "change-worker-ign-version-to-empty", "")
 	})
 
@@ -997,7 +992,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		g.By("Created kubeletconfigs must be successful")
 		for _, kcItem := range createdKcs {
-			kcItem.(*KubeletConfig).waitUntilSuccess("10s")
+			kcItem.(*KubeletConfig).waitUntilSuccess("15s")
 		}
 
 		g.By(fmt.Sprintf("Check that %d machine configs were created", kcsLimit-existingKcs))
@@ -2366,7 +2361,7 @@ nulla pariatur.`
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Verify that there is no failed units in the bootstrap machine")
-		// ssh client is a bit unstable, and it can return an empty string for no aparent reason every now and then.
+		// ssh client is a bit unstable, and it can return an empty string for no apparent reason every now and then.
 		// Hence we use 'Eventually' to verify the command to make the test robust.
 		o.Eventually(func() string {
 			logger.Infof("Executing command in bootstrap: %s", failedUnitsCommand)
