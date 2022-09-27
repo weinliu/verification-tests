@@ -55,6 +55,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		isNTO = isNTOPodInstalled(oc, ntoNamespace)
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
+		e2e.Logf("Cloud provider is: %v", iaasPlatform)
 	})
 
 	// author: nweinber@redhat.com
@@ -1772,38 +1773,48 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if new profile in in rendered tuned")
 		renderCheck, err := getTunedRender(oc, ntoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).NotTo(o.BeEmpty())
 		o.Expect(renderCheck).To(o.ContainSubstring("net-plugin"))
 
 		g.By("Check net-plugin tuned profile should be automatically created")
 		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
+		o.Expect(tunedNames).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(tunedNames).To(o.ContainSubstring("net-plugin"))
 
+		g.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(output).NotTo(o.BeEmpty())
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
 		g.By("Assert active and recommended profile (net-plugin) match in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 300, `active and recommended profile \(net-plugin\) match`)
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 300, `profile 'net-plugin' applied|profile \(net-plugin\) match`)
 
 		g.By("Check if new NTO profile was applied")
 		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "net-plugin")
 
 		g.By("Check if profile net-plugin applied on nodes")
 		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
+		o.Expect(nodeProfileName).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(nodeProfileName).To(o.ContainSubstring("net-plugin"))
 
 		g.By("Check current profile for each node")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(output).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Check channel for host network adapter, expected Combined: 1")
-		isMatch := assertIFChannel(oc, ntoNamespace, tunedNodeName)
+		isMatch := assertIFChannel(oc, ntoNamespace, tunedNodeName, true)
 		o.Expect(isMatch).To(o.BeTrue())
 
 		g.By("Delete tuned net-plugin and check channel for host network adapater again")
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "net-plugin", "-n", ntoNamespace, "--ignore-not-found").Execute()
 
 		g.By("Check channel for host network adapter, not expected Combined: 1")
-		isMatch = assertIFChannel(oc, ntoNamespace, tunedNodeName)
+		isMatch = assertIFChannel(oc, ntoNamespace, tunedNodeName, false)
 		o.Expect(isMatch).To(o.BeFalse())
 	})
 
@@ -1813,15 +1824,22 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
+		if iaasPlatform == "none" {
+			g.Skip("IAAS platform: " + iaasPlatform + " doesn't support cloud provider profile - skipping test ...")
+		}
+
 		//Use the first worker node as labeled node
 		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Get the tuned pod name in the same node that labeled node
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+		o.Expect(tunedPodName).NotTo(o.BeEmpty())
 
 		g.By("Get cloud provider name ...")
 		providerName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("profile", tunedNodeName, "-n", ntoNamespace, "-ojsonpath={.spec.config.providerName}").Output()
+		o.Expect(providerName).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "provider-"+providerName, "-n", ntoNamespace, "--ignore-not-found").Execute()
@@ -1829,16 +1847,19 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		providerID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.spec.providerID}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(providerID).NotTo(o.BeEmpty())
 		o.Expect(providerID).To(o.ContainSubstring(providerName))
 
 		g.By("Check /var/lib/tuned/provider on target nodes")
 		openshiftProfile, err := exutil.RemoteShPod(oc, ntoNamespace, tunedPodName, "cat", "/var/lib/tuned/provider")
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(openshiftProfile).NotTo(o.BeEmpty())
 		o.Expect(openshiftProfile).To(o.ContainSubstring(providerName))
 
 		g.By("Check the value of vm.admin_reserve_kbytes on target nodes, the expected value should be 8192")
 		sysctlOutput, err := exutil.RemoteShPod(oc, ntoNamespace, tunedPodName, "sysctl", "vm.admin_reserve_kbytes")
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(sysctlOutput).NotTo(o.BeEmpty())
 		o.Expect(sysctlOutput).To(o.ContainSubstring("vm.admin_reserve_kbytes = 8192"))
 
 		g.By("Apply cloud-provider profile ...")
@@ -1846,12 +1867,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("Check if new profile in in rendered tuned")
 		renderCheck, err := getTunedRender(oc, ntoNamespace)
+		o.Expect(renderCheck).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(renderCheck).To(o.ContainSubstring("provider-" + providerName))
 
 		g.By("Check provider + providerName profile should be automatically created")
 		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNames).NotTo(o.BeEmpty())
 		o.Expect(tunedNames).To(o.ContainSubstring("provider-" + providerName))
 
 		g.By("Check the value of vm.admin_reserve_kbytes on target nodes, the expected value is 16386")
@@ -1980,9 +2003,18 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//Use the first worker node as labeled node
 		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+
+		stalldStdout, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot /host which stalld").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(stalldStdout).NotTo(o.BeEmpty())
+		if !strings.Contains(stalldStdout, "stalld") {
+			g.Skip("No stalld service found - skipping test ...")
+		}
 
 		//Get the tuned pod name in the same node that labeled node
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+		o.Expect(tunedPodName).NotTo(o.BeEmpty())
 
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-stalld-").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "openshift-stalld", "-n", ntoNamespace, "--ignore-not-found").Execute()
@@ -2002,16 +2034,19 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if new profile in in rendered tuned")
 		renderCheck, err := getTunedRender(oc, ntoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).NotTo(o.BeEmpty())
 		o.Expect(renderCheck).To(o.ContainSubstring("openshift-stalld"))
 
 		g.By("Check openshift-stalld tuned profile should be automatically created")
 		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNames).NotTo(o.BeEmpty())
 		o.Expect(tunedNames).To(o.ContainSubstring("openshift-stalld"))
 
 		g.By("Check current profile for each node")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).NotTo(o.BeEmpty())
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Check if new NTO profile was applied")
@@ -2020,11 +2055,13 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Check if profile openshift-stalld applied on nodes")
 		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeProfileName).NotTo(o.BeEmpty())
 		o.Expect(nodeProfileName).To(o.ContainSubstring("openshift-stalld"))
 
 		g.By("Check current profile for each node")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).NotTo(o.BeEmpty())
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Check if stalld service is running ...")
@@ -2213,12 +2250,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
+		if iaasPlatform == "none" {
+			g.Skip("IAAS platform: " + iaasPlatform + " doesn't support cloud provider profile - skipping test ...")
+		}
+
 		var (
 			ntoUnknownProfile = exutil.FixturePath("testdata", "psap", "nto", "nto-unknown-profile.yaml")
 		)
 
 		//Get NTO operator pod name
 		ntoOperatorPod, err := getNTOPodName(oc, ntoNamespace)
+		o.Expect(ntoOperatorPod).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Use the first worker node as labeled node
@@ -2238,6 +2280,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("The profile worker-does-not-exist-openshift-node will be deleted automatically once created.")
 		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(tunedNames).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(tunedNames).NotTo(o.ContainSubstring("worker-does-not-exist-openshift-node"))
 

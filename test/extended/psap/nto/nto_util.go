@@ -557,22 +557,35 @@ func compareCertificateBetweenOpenSSLandTLSSecret(oc *exutil.CLI, ntoNamespace s
 	exutil.AssertWaitPollNoErr(err, "The certificate is different, please check")
 }
 
-func assertIFChannel(oc *exutil.CLI, namespace string, tunedNodeName string) bool {
+func assertIFChannel(oc *exutil.CLI, namespace string, tunedNodeName string, shouldMatch bool) bool {
 
-	ifName, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "--quiet=true", "node/"+tunedNodeName, "--", "find", "/sys/class/net", "-type", "l", "-not", "-lname", "*virtual*", "-a", "-not", "-name", "enP*", "-printf", "%f").Output()
+	var isMatch bool
+	ifNameList, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "--quiet=true", "node/"+tunedNodeName, "--", "find", "/sys/class/net", "-type", "l", "-not", "-lname", "*virtual*", "-a", "-not", "-name", "enP*", "-printf", `%f"\n"`).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(ifNameList).NotTo(o.BeEmpty())
 
-	ethToolsOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "--quiet=true", "node/"+tunedNodeName, "--", "ethtool", "-l", ifName).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("ethtool -l %v:, \n%v", ifName, ethToolsOutput)
+	//Remove double quotes
+	ifNameStr := strings.ReplaceAll(ifNameList, "\"", "")
+	o.Expect(ifNameStr).NotTo(o.BeEmpty())
+	//Check all physical nic
+	ifNames := strings.Split(ifNameStr, "\n")
+	o.Expect(ifNames).NotTo(o.BeEmpty())
 
-	regChannel, err := regexp.Compile("Combined:.*1")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	isMatch := regChannel.MatchString(ethToolsOutput)
-	if isMatch {
-		return true
+	for i := 0; i < len(ifNames); {
+		ethToolsOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", namespace, "--quiet=true", "node/"+tunedNodeName, "--", "ethtool", "-l", ifNames[i]).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(ethToolsOutput).NotTo(o.BeEmpty())
+		e2e.Logf("ethtool -l %v:, \n%v", ifNames[i], ethToolsOutput)
+
+		regChannel, err := regexp.Compile("Combined:.*1")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		isMatch = regChannel.MatchString(ethToolsOutput)
+		if isMatch == shouldMatch {
+			break
+		}
+		i++
 	}
-	return false
+	return isMatch
 }
 
 func compareSpecifiedValueByNameOnLabelNodewithRetry(oc *exutil.CLI, ntoNamespace, nodeName, sysctlparm, specifiedvalue string) {
