@@ -1600,6 +1600,65 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: bandrade@redhat.com
+	g.It("ConnectedOnly-Author:bandrade-Medium-54036-Comply with Operator NodeAffinity definition", func() {
+		exutil.SkipARM64(oc)
+		var (
+			buildPruningBaseDir  = exutil.FixturePath("testdata", "olm")
+			subFile              = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+			ogSingleTemplate     = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+			prometheusCRTemplate = filepath.Join(buildPruningBaseDir, "prometheus-nodeaffinity.yaml")
+		)
+
+		dr := make(describerResrouce)
+		itName := g.CurrentGinkgoTestDescription().TestText
+		dr.addIr(itName)
+
+		var (
+			og = operatorGroupDescription{
+				name:      "test-og-54036",
+				namespace: oc.Namespace(),
+				template:  ogSingleTemplate,
+			}
+
+			sub = subscriptionDescription{
+				subName:                "sub-54036",
+				namespace:              oc.Namespace(),
+				catalogSourceName:      "community-operators",
+				catalogSourceNamespace: "openshift-marketplace",
+				channel:                "beta",
+				ipApproval:             "Automatic",
+				operatorPackage:        "prometheus",
+				singleNamespace:        true,
+				template:               subFile,
+			}
+
+			workerNodes, _ = exutil.GetClusterNodesBy(oc, "worker")
+			firstNode      = workerNodes[0]
+		)
+
+		if isSNOCluster(oc) {
+			g.Skip("SNO cluster - skipping test ...")
+		}
+
+		g.By("1) Install the OperatorGroup in a random project")
+		og.createwithCheck(oc, itName, dr)
+		g.By("2) Install the Prometheus with Automatic approval")
+		sub.create(oc, itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("3) Install the Prometheus CR")
+		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", prometheusCRTemplate, "-p", "NODE_NAME="+firstNode, "NAMESPACE="+oc.Namespace())
+
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Available", ok, []string{"Prometheus", "example", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[0].type}"}).check(oc)
+
+		g.By("4) Ensure that pod is not scheduled in the node with the defined label")
+		deployedNode := getResource(oc, asAdmin, withoutNamespace, "pods", "prometheus-example-0", "-n", oc.Namespace(), "-o=jsonpath={.spec.nodeName}")
+		o.Expect(firstNode).To(o.Equal(deployedNode))
+
+	})
+
+	// author: bandrade@redhat.com
 	g.It("Author:bandrade-Medium-24850-Allow users to edit the deployment of an active CSV [Flaky]", func() {
 		g.By("1) Install the OperatorGroup in a random project")
 		dr := make(describerResrouce)
