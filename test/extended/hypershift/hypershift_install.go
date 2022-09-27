@@ -495,7 +495,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		checkSubstring(doOcpReq(oc, OcpGet, false, "hostedcluster", "-n", cluster.namespace, cluster.name, `-ojsonpath={.spec.platform.aws.resourceTags}`), []string{`{"key":"adminContact","value":"HyperShiftInstall"}`, `{"key":"customTag","value":"test"}`})
 		o.Expect(strings.Count(doOcpReq(oc, OcpGet, false, "awsmachines", "-n", cluster.namespace+"-"+cluster.name, `-ojsonpath={.items[*].spec.additionalTags}`), "HyperShiftInstall")).Should(o.Equal(2))
 		checkSubstring(doOcpReq(oc, OcpGet, false, "--kubeconfig="+cluster.hostedClustersKubeconfigFile, "infrastructure", "cluster", `-ojsonpath={.status.platformStatus.aws.resourceTags}`), []string{`{"key":"adminContact","value":"HyperShiftInstall"}`, `{"key":"customTag","value":"test"}`})
-		o.Expect(doOcpReq(oc, OcpGet, false, "--kubeconfig="+cluster.hostedClustersKubeconfigFile, "-n", "openshift-ingress", "svc/router-default", `-ojsonpath={.metadata.annotations}`)).Should(o.ContainSubstring(`"service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags":"adminContact=HyperShiftInstall,customTag=test"`))
+		checkSubstring(doOcpReq(oc, OcpGet, false, "--kubeconfig="+cluster.hostedClustersKubeconfigFile, "-n", "openshift-ingress", "svc/router-default", `-ojsonpath={.metadata.annotations.service\.beta\.kubernetes\.io/aws-load-balancer-additional-resource-tags}`), []string{"adminContact=HyperShiftInstall", "customTag=test"})
 	})
 
 	// author: liangli@redhat.com
