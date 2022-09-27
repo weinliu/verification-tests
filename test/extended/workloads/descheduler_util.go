@@ -276,7 +276,7 @@ func (deploy *deploynodeaffinity) createDeployNodeAffinity(oc *exutil.CLI) {
 
 func (deployn *deploynodetaint) createDeployNodeTaint(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deployn.template, "-p", "DNAME="+deployn.dName, "NAMESPACE="+deployn.namespace)
+		err1 := nonAdminApplyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deployn.template, "-p", "DNAME="+deployn.dName, "NAMESPACE="+deployn.namespace)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
@@ -288,7 +288,7 @@ func (deployn *deploynodetaint) createDeployNodeTaint(oc *exutil.CLI) {
 
 func (deployp *deployinterpodantiaffinity) createDeployInterPodAntiAffinity(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deployp.template, "-p", "DNAME="+deployp.dName, "NAMESPACE="+deployp.namespace,
+		err1 := nonAdminApplyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deployp.template, "-p", "DNAME="+deployp.dName, "NAMESPACE="+deployp.namespace,
 			"REPLICASNUM="+strconv.Itoa(deployp.replicaNum), "PODAFFINITYKEY="+deployp.podAffinityKey,
 			"OPERATORPOLICY="+deployp.operatorPolicy, "PODAFFINITYVALUE="+deployp.podAffinityValue)
 		if err1 != nil {
@@ -302,7 +302,7 @@ func (deployp *deployinterpodantiaffinity) createDeployInterPodAntiAffinity(oc *
 
 func (deploydp *deployduplicatepods) createDuplicatePods(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deploydp.template, "-p", "DNAME="+deploydp.dName, "NAMESPACE="+deploydp.namespace,
+		err1 := nonAdminApplyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deploydp.template, "-p", "DNAME="+deploydp.dName, "NAMESPACE="+deploydp.namespace,
 			"REPLICASNUM="+strconv.Itoa(deploydp.replicaNum))
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
@@ -315,7 +315,7 @@ func (deploydp *deployduplicatepods) createDuplicatePods(oc *exutil.CLI) {
 
 func (deploypts *deploypodtopologyspread) createPodTopologySpread(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deploypts.template, "-p", "DNAME="+deploypts.dName, "NAMESPACE="+deploypts.namespace)
+		err1 := nonAdminApplyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deploypts.template, "-p", "DNAME="+deploypts.dName, "NAMESPACE="+deploypts.namespace)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
