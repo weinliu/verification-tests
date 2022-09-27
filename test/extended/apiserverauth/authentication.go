@@ -396,6 +396,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		defer os.Remove(path)
 
 		oc.SetupProject()
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		BaseDir := exutil.FixturePath("testdata", "apiserverauth")
 		podYaml := filepath.Join(BaseDir, "pod-with-msgmax.yaml")
 		output, err = oc.Run("create").Args("-f", podYaml).Output()

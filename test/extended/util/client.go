@@ -187,6 +187,45 @@ func (c *CLI) SetNamespace(ns string) *CLI {
 	return c
 }
 
+// IsNamespacePrivileged returns bool
+// Judge whether the input namespace has the privileged label
+// Privileged label: "pod-security.kubernetes.io/enforce=privileged"
+func IsNamespacePrivileged(oc *CLI, namespace string) (bool, error) {
+	nsSecurityLabelValue, err := GetResourceSpecificLabelValue(oc, "ns/"+namespace, "", "pod-security\\.kubernetes\\.io/enforce")
+	if err != nil {
+		e2e.Logf(`Failed to get label "pod-security.kubernetes.io/enforce" value from ns/%s: "%v"`, namespace, err)
+		return false, err
+	}
+	return strings.Contains(nsSecurityLabelValue, "privileged"), nil
+}
+
+// SetNamespacePrivileged adds the privileged labels to the input namespace
+// Privileged labels: "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged",
+// "pod-security.kubernetes.io/audit=privileged", "pod-security.kubernetes.io/warn=privileged"
+// Without audit label "pod-security.kubernetes.io/audit=privileged", an important alert will fire on cluster after pod created
+// https://github.com/openshift/cluster-kube-apiserver-operator/pull/1362
+// The warn label "pod-security.kubernetes.io/warn=privileged" is optional, it could make the warning info output gone.
+func SetNamespacePrivileged(oc *CLI, namespace string) error {
+	_, labeledError := AddLabelsToSpecificResource(oc, "ns/"+namespace, "", "security.openshift.io/scc.podSecurityLabelSync=false",
+		"pod-security.kubernetes.io/enforce=privileged", "pod-security.kubernetes.io/audit=privileged", "pod-security.kubernetes.io/warn=privileged")
+	if labeledError != nil {
+		e2e.Logf(`Failed to add privileged labels to ns/%s: "%v"`, namespace, labeledError)
+		return labeledError
+	}
+	return nil
+}
+
+// RecoverNamespaceRestricted removes the privileged labels from the input namespace
+func RecoverNamespaceRestricted(oc *CLI, namespace string) error {
+	_, unlabeledError := DeleteLabelsFromSpecificResource(oc, "ns/"+namespace, "", "security.openshift.io/scc.podSecurityLabelSync",
+		"pod-security.kubernetes.io/enforce", "pod-security.kubernetes.io/audit", "pod-security.kubernetes.io/warn")
+	if unlabeledError != nil {
+		e2e.Logf(`Failed to recover restricted labels for ns/%s: "%v"`, namespace, unlabeledError)
+		return unlabeledError
+	}
+	return nil
+}
+
 // NotShowInfo instructs the command will not be logged
 func (c *CLI) NotShowInfo() *CLI {
 	c.showInfo = false

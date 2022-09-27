@@ -241,9 +241,9 @@ func (n Node) CaptureMCDaemonLogsUntilRestartWithTimeout(timeout string) (string
 // GetDate executes `date`command and returns the current time in the node
 func (n Node) GetDate() (time.Time, error) {
 
-	exutil.SetDebugNodeNamespacePrivileged(n.oc, n.oc.Namespace())
+	exutil.SetNamespacePrivileged(n.oc, n.oc.Namespace())
 	date, _, err := n.oc.Run("debug").Args(`node/`+n.GetName(), `--`, `chroot`, `/host`, `date`, `+%Y-%m-%dT%H:%M:%SZ`).Outputs()
-	exutil.RecoverDebugNodeNamespaceRestricted(n.oc, n.oc.Namespace())
+	exutil.RecoverNamespaceRestricted(n.oc, n.oc.Namespace())
 
 	logger.Infof("node %s. DATE: %s", n.GetName(), date)
 	if err != nil {
@@ -263,9 +263,9 @@ func (n Node) GetDate() (time.Time, error) {
 // GetUptime executes `uptime -s` command and returns the time when the node was booted
 func (n Node) GetUptime() (time.Time, error) {
 
-	exutil.SetDebugNodeNamespacePrivileged(n.oc, n.oc.Namespace())
+	exutil.SetNamespacePrivileged(n.oc, n.oc.Namespace())
 	uptime, _, err := n.oc.Run("debug").Args(`node/`+n.GetName(), `--`, `chroot`, `/host`, `uptime`, `-s`).Outputs()
-	exutil.RecoverDebugNodeNamespaceRestricted(n.oc, n.oc.Namespace())
+	exutil.RecoverNamespaceRestricted(n.oc, n.oc.Namespace())
 
 	logger.Infof("node %s. UPTIME: %s", n.GetName(), uptime)
 	if err != nil {

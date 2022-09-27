@@ -2,8 +2,6 @@ package util
 
 import (
 	"strings"
-
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 // GetFirstLinuxWorkerNode returns the first linux worker node in the cluster
@@ -113,15 +111,15 @@ func debugNode(oc *CLI, nodeName string, cmdOptions []string, needChroot bool, r
 	// need extra configuration on 4.12+ ocp test clusters
 	// https://github.com/openshift/oc/blob/master/pkg/helpers/cmd/errors.go#L24-L29
 	if !strings.HasPrefix(debugNodeNamespace, "openshift-") {
-		isNsPrivileged, outputError = IsDebugNodeNamespacePrivileged(oc, debugNodeNamespace)
+		isNsPrivileged, outputError = IsNamespacePrivileged(oc, debugNodeNamespace)
 		if outputError != nil {
 			return "", "", outputError
 		}
 		if !isNsPrivileged {
 			if recoverNsLabels {
-				defer RecoverDebugNodeNamespaceRestricted(oc, debugNodeNamespace)
+				defer RecoverNamespaceRestricted(oc, debugNodeNamespace)
 			}
-			outputError = SetDebugNodeNamespacePrivileged(oc, debugNodeNamespace)
+			outputError = SetNamespacePrivileged(oc, debugNodeNamespace)
 			if outputError != nil {
 				return "", "", outputError
 			}
@@ -140,45 +138,6 @@ func debugNode(oc *CLI, nodeName string, cmdOptions []string, needChroot bool, r
 	}
 	cargs = append(cargs, cmd...)
 	return oc.AsAdmin().WithoutNamespace().Run("debug").Args(cargs...).Outputs()
-}
-
-// IsDebugNodeNamespacePrivileged returns bool
-// Judge whether the input namespace has the privileged label
-// Privileged label: "pod-security.kubernetes.io/enforce=privileged"
-func IsDebugNodeNamespacePrivileged(oc *CLI, namespace string) (bool, error) {
-	nsSecurityLabelValue, err := GetResourceSpecificLabelValue(oc, "ns/"+namespace, "", "pod-security\\.kubernetes\\.io/enforce")
-	if err != nil {
-		e2e.Logf(`Failed to get label "pod-security.kubernetes.io/enforce" value from ns/%s: "%v"`, namespace, err)
-		return false, err
-	}
-	return strings.Contains(nsSecurityLabelValue, "privileged"), nil
-}
-
-// SetDebugNodeNamespacePrivileged adds the privileged labels to the input namespace
-// Privileged labels: "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged",
-// "pod-security.kubernetes.io/audit=privileged", "pod-security.kubernetes.io/warn=privileged"
-// Without audit label "pod-security.kubernetes.io/audit=privileged", an important alert will fire on cluster after pod created
-// https://github.com/openshift/cluster-kube-apiserver-operator/pull/1362
-// The warn label "pod-security.kubernetes.io/warn=privileged" is optional, it could make the warning info output gone.
-func SetDebugNodeNamespacePrivileged(oc *CLI, namespace string) error {
-	_, labeledError := AddLabelsToSpecificResource(oc, "ns/"+namespace, "", "security.openshift.io/scc.podSecurityLabelSync=false",
-		"pod-security.kubernetes.io/enforce=privileged", "pod-security.kubernetes.io/audit=privileged", "pod-security.kubernetes.io/warn=privileged")
-	if labeledError != nil {
-		e2e.Logf(`Failed to add privileged labels to ns/%s: "%v"`, namespace, labeledError)
-		return labeledError
-	}
-	return nil
-}
-
-// RecoverDebugNodeNamespaceRestricted removes the privileged labels from the input namespace
-func RecoverDebugNodeNamespaceRestricted(oc *CLI, namespace string) error {
-	_, unlabeledError := DeleteLabelsFromSpecificResource(oc, "ns/"+namespace, "", "security.openshift.io/scc.podSecurityLabelSync",
-		"pod-security.kubernetes.io/enforce", "pod-security.kubernetes.io/audit", "pod-security.kubernetes.io/warn")
-	if unlabeledError != nil {
-		e2e.Logf(`Failed to recover restricted labels for ns/%s: "%v"`, namespace, unlabeledError)
-		return unlabeledError
-	}
-	return nil
 }
 
 // DeleteLabelFromNode delete the custom label from the node

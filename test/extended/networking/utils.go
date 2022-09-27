@@ -742,8 +742,8 @@ func installSctpModule(oc *exutil.CLI, configFile string) {
 }
 
 func checkSctpModule(oc *exutil.CLI, nodeName, namespace string) {
-	defer exutil.RecoverDebugNodeNamespaceRestricted(oc, namespace)
-	exutil.SetDebugNodeNamespacePrivileged(oc, namespace)
+	defer exutil.RecoverNamespaceRestricted(oc, namespace)
+	exutil.SetNamespacePrivileged(oc, namespace)
 	err := wait.Poll(30*time.Second, 15*time.Minute, func() (bool, error) {
 		// Check nodes status to make sure all nodes are up after rebooting caused by load-sctp-module
 		nodesStatus, err := oc.AsAdmin().Run("get").Args("node").Output()

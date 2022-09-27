@@ -624,7 +624,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: jiazha@redhat.com
 	g.It("Author:jiazha-Medium-43977-OPENSHIFT_VERSIONS in assisted operator subscription does not propagate [Serial]", func() {
 		// From 4.12, improve the ns permissions so that pod can be run successfully.
-		defer exutil.RecoverDebugNodeNamespaceRestricted(oc, "default")
+		defer exutil.RecoverNamespaceRestricted(oc, "default")
 		_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", "default", "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=baseline", "pod-security.kubernetes.io/audit=baseline", "pod-security.kubernetes.io/warn=baseline", "--overwrite").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 

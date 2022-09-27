@@ -31,8 +31,8 @@ func (p *preStartJob) create(oc *exutil.CLI) {
 	out, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-user", "anyuid", "-z", "default", "-n", p.Namespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("oc adm policy: " + out)
-	defer exutil.RecoverDebugNodeNamespaceRestricted(oc, p.Namespace)
-	exutil.SetDebugNodeNamespacePrivileged(oc, p.Namespace)
+	defer exutil.RecoverNamespaceRestricted(oc, p.Namespace)
+	exutil.SetNamespacePrivileged(oc, p.Namespace)
 
 	preStartJobTemplate := filepath.Join(exutil.FixturePath("testdata", "hypershift"), "prestart-job.yaml")
 	vars, err := parseTemplateVarParams(p)
