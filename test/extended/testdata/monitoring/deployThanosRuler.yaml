@@ -1,0 +1,17 @@
+apiVersion: v1
+items:
+- apiVersion: monitoring.coreos.com/v1
+  kind: ThanosRuler
+  metadata:
+    labels:
+      thanosRulerName: user-workload
+    name: user-workload
+  spec:
+    alertQueryUrl: https://thanos-querier-openshift-monitoring.apps.test.qe.devcluster.openshift.com
+    alertmanagersConfig:
+      key: alertmanagers.yaml
+      name: thanos-ruler-alertmanagers-config
+kind: List
+metadata:
+  resourceVersion: ""
+  selfLink: ""

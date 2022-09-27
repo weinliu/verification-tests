@@ -182,6 +182,22 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		exutil.WaitAndGetSpecificPodLogs(oc, "openshift-monitoring", "thanos-query", thanosQuerierPodName, "query=cluster_version")
 	})
 
+	//author: tagao@redhat.com
+	g.It("Author:tagao-Low-30088-User can not deploy ThanosRuler CRs in user namespaces", func() {
+		var (
+			ns                string
+			output            string
+			err               error
+			deployThanosRuler = filepath.Join(monitoringBaseDir, "deployThanosRuler.yaml")
+		)
+		g.By("deploy ThanosRuler under namespace as a common user (non-admin)")
+		oc.SetupProject()
+		ns = oc.Namespace()
+		output, err = oc.Run("apply").Args("-n", ns, "-f", deployThanosRuler).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Error from server (Forbidden):"))
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
