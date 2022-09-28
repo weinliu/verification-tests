@@ -1993,8 +1993,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("check role resultserver")
 		rsRoleName := getResourceNameWithKeyword(oc, "role", subD.namespace, "resultserver")
 		e2e.Logf("rs role name: %v\n", rsRoleName)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "[{\"apiGroups\":[\"security.openshift.io\"],\"resourceNames\":[\"restricted\"],\"resources\":[\"securitycontextconstraints\"],\"verbs\":[\"use\"]}]",
-			ok, []string{"role", rsRoleName, "-n", subD.namespace, "-o=jsonpath={.rules}"}).check(oc)
+		rsRoleRules := "[{\"apiGroups\":[\"security.openshift.io\"],\"resourceNames\":[\"restricted\"],\"resources\":[\"securitycontextconstraints\"],\"verbs\":[\"use\"]},{\"apiGroups\":[\"scheduling.k8s.io\"],\"resources\":[\"priorityclasses\"],\"verbs\":[\"get\",\"list\",\"watch\"]}]"
+		newCheck("expect", asAdmin, withoutNamespace, contain, rsRoleRules, ok, []string{"role", rsRoleName, "-n", subD.namespace, "-o=jsonpath={.rules}"}).check(oc)
 
 		g.By("create compliancesuite")
 		csuiteMD.namespace = subD.namespace
@@ -2684,14 +2684,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				scansettingname: "default",
 				template:        scansettingbindingSingleTemplate,
 			}
-			og = operatorGroupDescription{
+			fioNamespace = "fio" + getRandomString()
+			og           = operatorGroupDescription{
 				name:      "openshift-file-integrity-qbcd",
-				namespace: "openshift-file-integrity",
+				namespace: fioNamespace,
 				template:  ogCoTemplate,
 			}
 			sub = subscriptionDescription{
 				subName:                "file-integrity-operator",
-				namespace:              "openshift-file-integrity",
+				namespace:              fioNamespace,
 				channel:                "release-0.1",
 				ipApproval:             "Automatic",
 				operatorPackage:        "file-integrity-operator",
@@ -2705,7 +2706,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			}
 			fi1 = fileintegrity{
 				name:              "example-fileintegrity",
-				namespace:         "openshift-file-integrity",
+				namespace:         fioNamespace,
 				configname:        "",
 				configkey:         "",
 				graceperiod:       15,
@@ -2715,8 +2716,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				template:          fioTemplate,
 			}
 		)
-
-		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssb.name})
+		defer func() {
+			cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssb.name})
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("fileintegrity", "--all", "-n", sub.namespace, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", sub.namespace, "-n", sub.namespace, "--ignore-not-found").Execute()
+		}()
 
 		g.By("Check default profiles name ocp4-moderate .. !!!\n")
 		subD.getProfileName(oc, "ocp4-moderate")
