@@ -1652,7 +1652,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Available", ok, []string{"Prometheus", "example", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[0].type}"}).check(oc)
 
-		g.By("4) Ensure that pod is not scheduled in the node with the defined label")
+		g.By("4) Ensure that pod is scaled in the specified node")
 		deployedNode := getResource(oc, asAdmin, withoutNamespace, "pods", "prometheus-example-0", "-n", oc.Namespace(), "-o=jsonpath={.spec.nodeName}")
 		o.Expect(firstNode).To(o.Equal(deployedNode))
 
