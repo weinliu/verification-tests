@@ -8,6 +8,7 @@ objects:
   metadata:
     annotations:
       "hive.openshift.io/fake-cluster": "${FAKE}"
+      "hive.openshift.io/cli-domain-from-installer-image": "${COPYCLIDOMAIN}"
     creationTimestamp: null
     name: "${NAME}"
     namespace: "${NAMESPACE}"
@@ -29,10 +30,12 @@ objects:
         name: "${IMAGESETREF}"
       installConfigSecretRef:
         name: "${INSTALLCONFIGSECRET}"
+      installerImageOverride: "${INSTALLERIMAGEOVERRIDE}"
     pullSecretRef:
       name: "${PULLSECRETREF}"
 parameters:
 - name: FAKE
+- name: COPYCLIDOMAIN
 - name: NAME
 - name: NAMESPACE
 - name: BASEDOMAIN
@@ -44,4 +47,5 @@ parameters:
 - name: AZURETYPE
 - name: IMAGESETREF
 - name: INSTALLCONFIGSECRET
+- name: INSTALLERIMAGEOVERRIDE
 - name: PULLSECRETREF

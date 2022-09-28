@@ -168,20 +168,22 @@ type azureInstallConfig struct {
 }
 
 type azureClusterDeployment struct {
-	fake                string
-	name                string
-	namespace           string
-	baseDomain          string
-	clusterName         string
-	platformType        string
-	credRef             string
-	region              string
-	resGroup            string
-	azureType           string
-	imageSetRef         string
-	installConfigSecret string
-	pullSecretRef       string
-	template            string
+	fake                   string
+	copyCliDomain          string
+	name                   string
+	namespace              string
+	baseDomain             string
+	clusterName            string
+	platformType           string
+	credRef                string
+	region                 string
+	resGroup               string
+	azureType              string
+	imageSetRef            string
+	installConfigSecret    string
+	installerImageOverride string
+	pullSecretRef          string
+	template               string
 }
 
 type azureClusterPool struct {
@@ -480,7 +482,7 @@ func (config *azureInstallConfig) create(oc *exutil.CLI) {
 }
 
 func (cluster *azureClusterDeployment) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cluster.template, "-p", "FAKE="+cluster.fake, "NAME="+cluster.name, "NAMESPACE="+cluster.namespace, "BASEDOMAIN="+cluster.baseDomain, "CLUSTERNAME="+cluster.clusterName, "PLATFORMTYPE="+cluster.platformType, "CREDREF="+cluster.credRef, "REGION="+cluster.region, "RESGROUP="+cluster.resGroup, "AZURETYPE="+cluster.azureType, "IMAGESETREF="+cluster.imageSetRef, "INSTALLCONFIGSECRET="+cluster.installConfigSecret, "PULLSECRETREF="+cluster.pullSecretRef)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cluster.template, "-p", "FAKE="+cluster.fake, "COPYCLIDOMAIN="+cluster.copyCliDomain, "NAME="+cluster.name, "NAMESPACE="+cluster.namespace, "BASEDOMAIN="+cluster.baseDomain, "CLUSTERNAME="+cluster.clusterName, "PLATFORMTYPE="+cluster.platformType, "CREDREF="+cluster.credRef, "REGION="+cluster.region, "RESGROUP="+cluster.resGroup, "AZURETYPE="+cluster.azureType, "IMAGESETREF="+cluster.imageSetRef, "INSTALLCONFIGSECRET="+cluster.installConfigSecret, "INSTALLERIMAGEOVERRIDE="+cluster.installerImageOverride, "PULLSECRETREF="+cluster.pullSecretRef)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

@@ -554,4 +554,141 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "0 0 0", ok, 7*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra2", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
 	})
 
+	//author: mihuang@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "54048"|./bin/extended-platform-tests run --timeout 10m -f -
+	g.It("NonPreRelease-ConnectedOnly-Author:mihuang-Medium-54048-Hive to supprt cli-domain-from-installer-image annotation [Serial]", func() {
+		testCaseID := "54048"
+		cdName := "cluster-" + testCaseID
+		imageSetName := cdName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: testOCPImage,
+			template:     imageSetTemp,
+		}
+
+		g.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		g.By("Check if ClusterImageSet was created successfully")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, imageSetName, ok, DefaultTimeout, []string{"ClusterImageSet"}).check(oc)
+
+		oc.SetupProject()
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and azure-credentials to target namespace for the cluster
+		g.By("Copy Azure platform credentials...")
+		createAzureCreds(oc, oc.Namespace())
+
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Create Install-Config Secret...")
+		installConfigTemp := filepath.Join(testDataDir, "azure-install-config.yaml")
+		installConfigSecretName := cdName + "-install-config"
+		installConfigSecret := installConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: AzureBaseDomain,
+			name2:      cdName,
+			region:     AzureRegion,
+			template:   installConfigTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
+		installConfigSecret.create(oc)
+
+		g.By("Get domain from installerimage...")
+		clusterVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion/version", "-o=jsonpath={.status.desired.version}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterVersion).NotTo(o.BeEmpty())
+		originalInstallerImage, err := getPullSpec(oc, "installer", clusterVersion)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(originalInstallerImage).NotTo(o.BeEmpty())
+		e2e.Logf("ClusterVersion is %s, originalInstallerImage is %s", clusterVersion, originalInstallerImage)
+		installerDomain := strings.SplitN(originalInstallerImage, "/", 2)[0]
+		installerPath := strings.SplitN(originalInstallerImage, "/", 2)[1]
+		overrideDomain := "mihuang.io"
+		overrideInstallerImage := overrideDomain + "/" + installerPath
+
+		type imageOverride struct {
+			copyCliDomain          string
+			installerImageOverride string
+		}
+		var scenarios = []imageOverride{
+			{
+				"true",
+				overrideInstallerImage,
+			},
+			{
+				"false",
+				overrideInstallerImage,
+			},
+			{
+				"true",
+				"",
+			},
+		}
+		for i := 0; i < len(scenarios); i++ {
+			func() {
+				//create cluster
+				if scenarios[i].copyCliDomain == "true" && scenarios[i].installerImageOverride == overrideInstallerImage {
+					g.By("Config Azure ClusterDeployment,with hive.openshift.io/cli-domain-from-installer-image=true and installerImageOverride set...")
+				} else if scenarios[i].copyCliDomain == "false" && scenarios[i].installerImageOverride == overrideInstallerImage {
+					g.By("Config Azure ClusterDeployment,with hive.openshift.io/cli-domain-from-installer-image=false and installerImageOverride set...")
+				} else if scenarios[i].copyCliDomain == "true" && scenarios[i].installerImageOverride == "" {
+					g.By("Config Azure ClusterDeployment,with hive.openshift.io/cli-domain-from-installer-image=true and installerImageOverride unset...")
+				}
+				cluster := azureClusterDeployment{
+					fake:                   "false",
+					copyCliDomain:          scenarios[i].copyCliDomain,
+					name:                   cdName,
+					namespace:              oc.Namespace(),
+					baseDomain:             AzureBaseDomain,
+					clusterName:            cdName,
+					platformType:           "azure",
+					credRef:                AzureCreds,
+					region:                 AzureRegion,
+					resGroup:               AzureRESGroup,
+					azureType:              AzurePublic,
+					imageSetRef:            cdName + "-imageset",
+					installConfigSecret:    cdName + "-install-config",
+					installerImageOverride: scenarios[i].installerImageOverride,
+					pullSecretRef:          PullSecret,
+					template:               filepath.Join(testDataDir, "clusterdeployment-azure.yaml"),
+				}
+				defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
+				cluster.create(oc)
+
+				//get conditions
+				g.By("Check if provisioning pod create success")
+				newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Provisioning", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace()}).check(oc)
+
+				e2e.Logf("Check cd .status.installerImage")
+				installerImage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.installerImage}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				overrideImageDomain := strings.SplitN(installerImage, "/", 2)[0]
+				e2e.Logf("overrideImageDomain is %s", overrideImageDomain)
+
+				e2e.Logf("Check cd .status.cliImage")
+				cliImage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.cliImage}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				cliImageDomain := strings.SplitN(cliImage, "/", 2)[0]
+				e2e.Logf("cliImageDomain is %s", cliImageDomain)
+				//check conditions for scenarios
+				if scenarios[i].copyCliDomain == "true" && scenarios[i].installerImageOverride == overrideInstallerImage {
+					g.By("Check if both cliImage and installerImage use the new domain")
+					o.Expect(overrideImageDomain).To(o.Equal(overrideDomain))
+					o.Expect(cliImageDomain).To(o.Equal(overrideDomain))
+				} else if scenarios[i].copyCliDomain == "false" && scenarios[i].installerImageOverride == overrideInstallerImage {
+					g.By("Check if cliImage use offical domain and installerImage use the new domain")
+					o.Expect(overrideImageDomain).To(o.Equal(overrideDomain))
+					o.Expect(cliImageDomain).To(o.Equal(installerDomain))
+				} else {
+					g.By("Check if both cliImage and installerImage use the offical image")
+					o.Expect(overrideImageDomain).To(o.Equal(installerDomain))
+					o.Expect(cliImageDomain).To(o.Equal(installerDomain))
+				}
+			}()
+		}
+	})
+
 })
