@@ -396,20 +396,10 @@ func waitForDeployment(oc *exutil.CLI, podNs, deployName string) (msg string, er
 	return msg, err
 }
 
-func getTestRunInput(oc *exutil.CLI, subscription subscriptionDescription, katamonitorImage, mustgatherImage, operatorVer, cmNs, cmName string) (testrun testrunConfigmap, msg string, err error) {
-	testrun = testrunConfigmap{
-		exists:            false,
-		catalogSourceName: subscription.catalogSourceName,
-		channel:           subscription.channel,
-		icspNeeded:        false,
-		mustgatherImage:   mustgatherImage,
-		katamonitorImage:  katamonitorImage,
-		operatorVer:       operatorVer,
-	}
+func getTestRunInputCm(oc *exutil.CLI, testrunDefault testrunConfigmap, cmNs, cmName string) (testrun testrunConfigmap, msg string, err error) {
+	// set defaults
+	testrun = testrunDefault
 
-	// icspNeeded is set if either of the Images has "brew.registry.redhat.io" in it
-
-	// is it there?
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs, cmName).Output()
 	if err != nil {
 		e2e.Logf("Configmap is not found: msg %v err: %v", msg, err)
@@ -521,4 +511,64 @@ func logErrorAndFail(oc *exutil.CLI, logMsg, msg string, err error) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(msg).NotTo(o.BeEmpty())
 
+}
+
+func getTestRunEnvVars(envPrefix string, testrunDefault testrunConfigmap) (testrunEnv testrunConfigmap, msg string) {
+
+	var (
+		err error
+		val = ""
+	)
+	testrunEnv = testrunDefault
+
+	switch envPrefix {
+	case "OSCS":
+		msg = fmt.Sprintf("Looking for %v prefixed environment variables for starting OSC version", envPrefix)
+	case "OSCU":
+		msg = fmt.Sprintf("Looking for %v prefixed environment variables for upgrading OSC version", envPrefix)
+	default:
+		msg = fmt.Sprintf("Cannot look for %v prefixed environment variables \nValid prefixes are OSCS or OSCU", envPrefix)
+		return testrunEnv, msg
+	}
+
+	val = os.Getenv(envPrefix + "OSCCHANNEL")
+	if val != "" {
+		testrunEnv.channel = val
+		testrunEnv.exists = true
+	}
+
+	val = os.Getenv(envPrefix + "ICSPNEEDED")
+	if val != "" {
+		testrunEnv.icspNeeded, err = strconv.ParseBool(val)
+		if err != nil {
+			e2e.Failf("Error: %v must be a golang true or false string", envPrefix+"ICSPNEEDED")
+		}
+		testrunEnv.exists = true
+	}
+
+	val = os.Getenv(envPrefix + "CATSOURCENAME")
+	if val != "" {
+		testrunEnv.catalogSourceName = val
+		testrunEnv.exists = true
+	}
+
+	val = os.Getenv(envPrefix + "KATAMONITORIMAGE")
+	if val != "" {
+		testrunEnv.katamonitorImage = val
+		testrunEnv.exists = true
+	}
+
+	val = os.Getenv(envPrefix + "MUSTGATHERIMAGE")
+	if val != "" {
+		testrunEnv.mustgatherImage = val
+		testrunEnv.exists = true
+	}
+
+	/*	val = os.Getenv(envPrefix + "OPERATORVER")
+		if val != "" {
+			testrunEnv.operatorVer = val
+			testrunEnv.exists = true
+		}
+	*/
+	return testrunEnv, msg
 }

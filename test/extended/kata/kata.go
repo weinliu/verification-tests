@@ -38,6 +38,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		ocpMajorVer          string
 		ocpMinorVer          string
 		operatorVer          = "1.2.0"
+		testrun              testrunConfigmap
 	)
 
 	subscription := subscriptionDescription{
@@ -52,6 +53,16 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	}
 
 	testrunInitial.exists = false // no overrides yet
+	sub := subscription
+
+	testrunDefault := testrunConfigmap{
+		exists:            false,
+		catalogSourceName: subscription.catalogSourceName,
+		channel:           subscription.channel,
+		icspNeeded:        false,
+		mustgatherImage:   mustGatherImage,
+		katamonitorImage:  kcMonitorImageName,
+	}
 
 	g.BeforeEach(func() {
 		// Creating/deleting kataconfig reboots all worker node and extended-platform-tests may timeout.
@@ -64,40 +75,56 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			msg string
 		)
 
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		iaasPlatform = strings.ToLower(msg)
+		e2e.Logf("the current platform is %v", iaasPlatform)
+
 		ocpMajorVer, ocpMinorVer, clusterVersion = getClusterVersion(oc)
 		e2e.Logf("Running %v.%v on: %v", ocpMajorVer, ocpMinorVer, clusterVersion)
 
 		// check if there is a CM override
-		testrunInitial, msg, err = getTestRunInput(oc, subscription, kcMonitorImageName, mustGatherImage, operatorVer, "default", "osc-config")
+		testrunInitial, msg, err = getTestRunInputCm(oc, testrunDefault, "default", "osc-config")
 		if testrunInitial.exists { // then override
 			subscription.catalogSourceName = testrunInitial.catalogSourceName
 			subscription.channel = testrunInitial.channel
 			mustGatherImage = testrunInitial.mustgatherImage
 			kcMonitorImageName = testrunInitial.katamonitorImage
 			operatorVer = testrunInitial.operatorVer
-			if testrunInitial.icspNeeded {
-				e2e.Logf("An ICSP being applied to allow %v and %v to work", testrunInitial.katamonitorImage, testrunInitial.mustgatherImage)
-				msg, err = imageContentSourcePolicy(oc, icspFile, icspName)
-				if err != nil || msg == "" {
-					logErrorAndFail(oc, fmt.Sprintf("Error: applying ICSP"), msg, err)
-				}
-			}
-			e2e.Logf("subscription after testrun cm osc-config: %v", subscription)
+			e2e.Logf("CM osc-config found. subscription: %v", subscription)
 		}
-		operatorVer, sub := getVersionInfo(oc, subscription, operatorVer)
+		// check example-config-env CM
+		msg, sub = getVersionInfo(oc, subscription, operatorVer)
 		if os.Getenv("cmMsg") != "" { //env var cmMsg will have no value if configmap is not found
 			subscription.catalogSourceName = sub.catalogSourceName
 			subscription.channel = sub.channel
 			kcMonitorImageName = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:" + operatorVer
-			e2e.Logf("subscription after Jenkins cm example-config-env: %v", subscription)
+			operatorVer = msg
+			e2e.Logf("CM example-config-env found. subscription: %v", subscription)
 			e2e.Logf("operatorVer : %s", operatorVer)
 			e2e.Logf("monitor : %s", kcMonitorImageName)
 		}
 
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		iaasPlatform = strings.ToLower(msg)
-		e2e.Logf("the current platform is %v", iaasPlatform)
+		// check env to override defaults or CM
+		testrun, msg = getTestRunEnvVars("OSCS", testrunDefault)
+		// change subscription to match testrun.  env options override default and CM values
+		if testrun.exists {
+			testrunInitial = testrun
+			subscription.catalogSourceName = testrunInitial.catalogSourceName
+			subscription.channel = testrunInitial.channel
+			mustGatherImage = testrunInitial.mustgatherImage
+			kcMonitorImageName = testrunInitial.katamonitorImage
+			operatorVer = testrunInitial.operatorVer
+			e2e.Logf("environment OSCS found. subscription: %v", subscription)
+		}
+
+		if testrunInitial.icspNeeded {
+			e2e.Logf("An ICSP is being applied to allow %v and %v to work", testrunInitial.katamonitorImage, testrunInitial.mustgatherImage)
+			msg, err = imageContentSourcePolicy(oc, icspFile, icspName)
+			if err != nil || msg == "" {
+				logErrorAndFail(oc, fmt.Sprintf("Error: applying ICSP"), msg, err)
+			}
+		}
 
 		ns := filepath.Join(testDataDir, "namespace.yaml")
 		og := filepath.Join(testDataDir, "operatorgroup.yaml")
@@ -522,7 +549,6 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 		g.By("Wait for worker nodes to be in crio debug mode")
 		msg, err = waitForNodesInDebug(oc)
-		e2e.Logf("%v", msg)
 
 		g.By("Create a deployment file from template")
 		// This creates N replicas where N=worker node
@@ -692,6 +718,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	g.It("Longduration-Author:tbuskey-High-53583-upgrade osc operator [Disruptive][Serial]", func() {
 		var (
 			testrunUpgrade testrunConfigmap
+			testrun        testrunConfigmap
 			cmNs           = "default"
 			cmName         = "osc-config-upgrade"
 			subUpgrade     = subscription
@@ -702,7 +729,14 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		)
 
 		g.By("Checking for configmap " + cmName)
-		testrunUpgrade, msg, err = getTestRunInput(oc, subUpgrade, kcMonitorImageName, mustGatherImage, operatorVer, cmNs, cmName)
+		testrunUpgrade, msg, err = getTestRunInputCm(oc, testrunDefault, cmNs, cmName)
+
+		g.By("Checking for OSCU environment vars") // env options override default and CM values
+		testrun, msg = getTestRunEnvVars("OSCU", testrunDefault)
+		if testrun.exists {
+			testrunUpgrade = testrun
+			e2e.Logf("environment OSCU found. subscription: %v", subscription)
+		}
 
 		if testrunUpgrade.exists {
 			msg = fmt.Sprintf("Upgrade with testrun will be performed with %v", testrunUpgrade)
@@ -801,6 +835,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 				})
 				if !podsChanged {
 					e2e.Logf("monitor pods did not upgrade from %v to %v %v", oldpods, msg, err)
+					o.Expect(podsChanged).To(o.BeTrue())
 				}
 				exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("monitor pods did not change %v", msg))
 
