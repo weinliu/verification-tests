@@ -651,6 +651,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	g.It("NonPreRelease-Longduration-Author:jitli-ConnectedOnly-VMonly-Medium-33051-Images can be imported from an insecure registry without 'insecure: true' if it is in insecureRegistries in image.config/cluster [Disruptive]", func() {
 
 		masterNode, _ := exutil.GetFirstMasterNode(oc)
+		e2e.Logf(masterNode)
 		defer func() {
 			err := wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
 				regStatus, _ := exutil.DebugNodeWithChroot(oc, masterNode, "cat /etc/containers/registries.conf | grep \"docker.io\"")
@@ -697,7 +698,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("registries.conf gets updated")
 		err = wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
-			registriesstatus, _ := exutil.DebugNodeWithChroot(oc, masterNode, "cat /etc/containers/registries.conf | grep default-route-openshift-image-registry.apps")
+			//registriesstatus, _ := exutil.DebugNodeWithChroot(oc, masterNode, "cat /etc/containers/registries.conf | grep default-route-openshift-image-registry.apps")
+			registriesstatus, _ := exutil.DebugNodeWithChroot(oc, fmt.Sprintf("%s", masterNode), "podman", "--version")
 			if strings.Contains(registriesstatus, "default-route-openshift-image-registry.apps") {
 				e2e.Logf("registries.conf updated")
 				return true, nil
@@ -3102,5 +3104,77 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Image registry is not degraded")
+	})
+
+	//author: wewang@redhat.com
+	g.It("ConnectedOnly-Author:wewang-High-26732-Increase the limit on the number of image signatures [Disruptive]", func() {
+		g.By("Scale down cvo to zero")
+		defer func() {
+			err := oc.AsAdmin().Run("scale").Args("deployment/cluster-version-operator", "--replicas=1", "-n", "openshift-cluster-version").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkPodsRunningWithLabel(oc, "openshift-cluster-version", "k8s-app=cluster-version-operator", 1)
+		}()
+		err := oc.AsAdmin().Run("scale").Args("deployment/cluster-version-operator", "--replicas=0", "-n", "openshift-cluster-version").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkPodsRemovedWithLabel(oc, "openshift-cluster-version", "k8s-app=cluster-version-operator")
+
+		g.By("Scale down ocm operator to zero")
+		defer func() {
+			err := oc.AsAdmin().Run("scale").Args("deployment/openshift-controller-manager-operator", "--replicas=1", "-n", "openshift-controller-manager-operator").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkPodsRunningWithLabel(oc, "openshift-controller-manager-operator", "app=openshift-controller-manager-operator", 1)
+		}()
+		err = oc.AsAdmin().Run("scale").Args("deployment/openshift-controller-manager-operator", "--replicas=0", "-n", "openshift-controller-manager-operator").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkPodsRemovedWithLabel(oc, "openshift-controller-manager-operator", "app=openshift-controller-manager-operator")
+
+		g.By("Create configmap under ocm project")
+		cmFile := filepath.Join(imageRegistryBaseDir, "registry.access.redhat.com.yaml")
+		beforeGeneration, err := oc.AsAdmin().Run("get").Args("ds/controller-manager", "-o=jsonpath={.metadata.generation}", "-n", "openshift-controller-manager").Output()
+		beforeNum, err := strconv.Atoi(beforeGeneration)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().Run("delete").Args("cm/sigstore-config", "-n", "openshift-controller-manager").Execute()
+		err = oc.AsAdmin().Run("create").Args("cm", "sigstore-config", "--from-file="+cmFile, "-n", "openshift-controller-manager").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err := oc.AsAdmin().Run("get").Args("cm", "sigstore-config", "-n", "openshift-controller-manager").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("sigstore-config"))
+
+		g.By("Configure controller-manager to load this configmap")
+		defer oc.AsAdmin().Run("set").Args("volume", "ds/controller-manager", "--remove", "--name=sigstore-config", "-n", "openshift-controller-manager").Execute()
+		err = oc.AsAdmin().Run("set").Args("volume", "ds/controller-manager", "--add", "--type=configmap", "--configmap-name=sigstore-config", "-m", "/etc/containers/registries.d/", "--name=sigstore-config", "-n", "openshift-controller-manager").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err = oc.AsAdmin().Run("get").Args("ds/controller-manager", "-o=jsonpath={.spec.template.spec.containers[0].volumeMounts[4].name}", "-n", "openshift-controller-manager").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.Equal("sigstore-config"))
+
+		g.By("Wait cm pods restart")
+		err = wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+			afterGeneration, _ := oc.AsAdmin().Run("get").Args("ds/controller-manager", "-o=jsonpath={.metadata.generation}", "-n", "openshift-controller-manager").Output()
+			afterNum, err := strconv.Atoi(afterGeneration)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if (afterNum - beforeNum) >= 1 {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pods are not restarted"))
+		checkPodsRunningWithLabel(oc, "openshift-controller-manager", "app=openshift-controller-manager", 3)
+
+		g.By("Import image")
+		err = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("registry.access.redhat.com/openshift3/ose", "--confirm", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "ose", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(25*time.Second, 4*time.Minute, func() (bool, error) {
+			output, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("istag", "ose:latest", "-n", oc.Namespace()).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			sigCount := strings.Count(output, "Signatures")
+			if sigCount >= 3 {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The number of image signatures are not enough!"))
 	})
 })

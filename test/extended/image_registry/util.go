@@ -1166,3 +1166,15 @@ func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]strin
 	}
 	return newStatusToCompare
 }
+
+func checkPodsRemovedWithLabel(oc *exutil.CLI, namespace string, label string) {
+	err := wait.Poll(25*time.Second, 3*time.Minute, func() (bool, error) {
+		podList, err := oc.AdminKubeClient().CoreV1().Pods(namespace).List(metav1.ListOptions{LabelSelector: label})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(podList.Items) == 0 {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "Pods are not removed")
+}
