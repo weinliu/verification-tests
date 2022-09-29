@@ -10473,6 +10473,9 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 	})
 
 	g.It("VMonly-ConnectedOnly-Author:xzha-High-42979-Bundle authors can explicitly specify arbitrary properties", func() {
+		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
+			g.Skip("HTTP_PROXY is not empty - skipping test ...")
+		}
 		exutil.SkipARM64(oc)
 		var (
 			containerCLI    = container.NewPodmanCLI()
