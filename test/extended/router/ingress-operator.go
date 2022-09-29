@@ -13,7 +13,7 @@ import (
 var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	defer g.GinkgoRecover()
 
-	var oc = exutil.NewCLI("ingress-operator-logging", exutil.KubeConfigPath())
+	var oc = exutil.NewCLI("ingress-operator", exutil.KubeConfigPath())
 
 	// author: mjoseph@redhat.com
 	g.It("Author:mjoseph-High-46287-ingresscontroller supports to update maxlength for syslog message", func() {
