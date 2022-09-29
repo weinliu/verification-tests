@@ -493,22 +493,19 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgrade testing", func() {
 	defer g.GinkgoRecover()
-	var (
-		oc                = exutil.NewCLI("logging-upgrade", exutil.KubeConfigPath())
-		cloNS             = "openshift-logging"
-		eoNS              = "openshift-operators-redhat"
-		eo                = "elasticsearch-operator"
-		clo               = "cluster-logging-operator"
-		cloPackageName    = "cluster-logging"
-		eoPackageName     = "elasticsearch-operator"
-		subTemplate       = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
-		SingleNamespaceOG = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
-		AllNamespaceOG    = exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml")
-	)
+	var oc = exutil.NewCLI("logging-upgrade", exutil.KubeConfigPath())
 
 	g.BeforeEach(func() {
-		CLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, CatalogSourceObjects{}}
-		EO := SubscriptionObjects{eo, eoNS, AllNamespaceOG, subTemplate, eoPackageName, CatalogSourceObjects{}}
+		CLO := SubscriptionObjects{
+			OperatorName: "cluster-logging-operator",
+			Namespace:    "openshift-logging",
+			PackageName:  "cluster-logging",
+		}
+		EO := SubscriptionObjects{
+			OperatorName: "elasticsearch-operator",
+			Namespace:    "openshift-operators-redhat",
+			PackageName:  "elasticsearch-operator",
+		}
 		g.By("uninstall CLO and EO")
 		CLO.uninstallOperator(oc)
 		EO.uninstallOperator(oc)
@@ -531,9 +528,28 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		}
 		o.Expect(disabled).ShouldNot(o.BeTrue())
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", targetchannel))
-		source := CatalogSourceObjects{targetchannel, "redhat-operators", "openshift-marketplace"}
-		preCLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, source}
-		preEO := SubscriptionObjects{eo, eoNS, AllNamespaceOG, subTemplate, eoPackageName, source}
+		source := CatalogSourceObjects{
+			Channel:         targetchannel,
+			SourceName:      "redhat-operators",
+			SourceNamespace: "openshift-marketplace",
+		}
+		subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
+		preCLO := SubscriptionObjects{
+			OperatorName:  "cluster-logging-operator",
+			Namespace:     "openshift-logging",
+			PackageName:   "cluster-logging",
+			Subscription:  subTemplate,
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+			CatalogSource: source,
+		}
+		preEO := SubscriptionObjects{
+			OperatorName:  "elasticsearch-operator",
+			Namespace:     "openshift-operators-redhat",
+			PackageName:   "elasticsearch-operator",
+			Subscription:  subTemplate,
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+			CatalogSource: source,
+		}
 		defer preCLO.uninstallOperator(oc)
 		preCLO.SubscribeOperator(oc)
 		defer preEO.uninstallOperator(oc)
@@ -542,8 +558,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		g.By("Deploy clusterlogging")
 		sc, err := getStorageClassName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		// TODO: use cl-storage-template.yaml when 5.6 is out
-		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "40508.yaml")
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")
 		cl := resource{"clusterlogging", "instance", preCLO.Namespace}
 		defer cl.deleteClusterLogging(oc)
 		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "ES_NODE_COUNT=3", "-p", "REDUNDANCY_POLICY=SingleRedundancy")
@@ -561,13 +576,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		}
 
 		// get currentCSV in packagemanifests
-		currentCloCSV := getCurrentCSVFromPackage(oc, targetchannel, cloPackageName)
-		currentEoCSV := getCurrentCSVFromPackage(oc, targetchannel, eoPackageName)
+		currentCloCSV := getCurrentCSVFromPackage(oc, targetchannel, preCLO.PackageName)
+		currentEoCSV := getCurrentCSVFromPackage(oc, targetchannel, preEO.PackageName)
 		var upgraded = false
 		//change source to qe-app-registry if needed, and wait for the new operators to be ready
 		if preCloCSV != currentCloCSV {
 			g.By(fmt.Sprintf("upgrade CLO to %s", currentCloCSV))
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", cloNS, "sub/"+preCLO.PackageName, "-p", "{\"spec\": {\"source\": \"qe-app-registry\"}}", "--type=merge").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", preCLO.Namespace, "sub/"+preCLO.PackageName, "-p", "{\"spec\": {\"source\": \"qe-app-registry\"}}", "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkResource(oc, true, true, currentCloCSV, []string{"sub", preCLO.PackageName, "-n", preCLO.Namespace, "-ojsonpath={.status.currentCSV}"})
 			WaitForDeploymentPodsToBeReady(oc, preCLO.Namespace, preCLO.OperatorName)
@@ -575,7 +590,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		}
 		if preEoCSV != currentEoCSV {
 			g.By(fmt.Sprintf("upgrade EO to %s", currentEoCSV))
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", eoNS, "sub/"+preEO.PackageName, "-p", "{\"spec\": {\"source\": \"qe-app-registry\"}}", "--type=merge").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", preEO.Namespace, "sub/"+preEO.PackageName, "-p", "{\"spec\": {\"source\": \"qe-app-registry\"}}", "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkResource(oc, true, true, currentEoCSV, []string{"sub", preEO.PackageName, "-n", preEO.Namespace, "-ojsonpath={.status.currentCSV}"})
 			WaitForDeploymentPodsToBeReady(oc, preEO.Namespace, preEO.OperatorName)
@@ -584,10 +599,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 
 		if upgraded {
 			g.By("waiting for the ECK pods to be ready after upgrade")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cl.namespace)
 			checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", preCLO.Namespace, "-ojsonpath={.status.cluster.status}"})
 			//check PVC count, it should be equal to ES node count
-			pvc, _ := oc.AdminKubeClient().CoreV1().PersistentVolumeClaims(cloNS).List(metav1.ListOptions{LabelSelector: "logging-cluster=elasticsearch"})
+			pvc, _ := oc.AdminKubeClient().CoreV1().PersistentVolumeClaims(cl.namespace).List(metav1.ListOptions{LabelSelector: "logging-cluster=elasticsearch"})
 			o.Expect(len(pvc.Items) == 3).To(o.BeTrue())
 
 			g.By("checking if the collector can collect logs after upgrading")
@@ -596,15 +611,15 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForProjectLogsAppear(cloNS, prePodList.Items[0].Name, appProj, "app-00")
+			waitForProjectLogsAppear(cl.namespace, prePodList.Items[0].Name, appProj, "app-00")
 		}
 	})
 
 	// author: qitang@redhat.com
 	g.It("Longduration-CPaasrunOnly-Author:qitang-Medium-40508-upgrade from prior version to current version[Serial][Slow]", func() {
-		// to add logging 5.4, create a new catalog source with image: quay.io/openshift-qe-optional-operators/ocp4-index:latest
+		// to add logging 5.5, create a new catalog source with image: quay.io/openshift-qe-optional-operators/ocp4-index:latest
 		catsrcTemplate := exutil.FixturePath("testdata", "logging", "subscription", "catsrc.yaml")
 		catsrc := resource{"catsrc", "logging-upgrade-" + getRandomString(), "openshift-marketplace"}
 		defer catsrc.clear(oc)
@@ -614,8 +629,23 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		// for 5.6, test upgrade from 5.5 to 5.6
 		preSource := CatalogSourceObjects{"stable-5.5", catsrc.name, catsrc.namespace}
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", preSource.Channel))
-		preCLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, preSource}
-		preEO := SubscriptionObjects{eo, eoNS, AllNamespaceOG, subTemplate, eoPackageName, preSource}
+		subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
+		preCLO := SubscriptionObjects{
+			OperatorName:  "cluster-logging-operator",
+			Namespace:     "openshift-logging",
+			PackageName:   "cluster-logging",
+			Subscription:  subTemplate,
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+			CatalogSource: preSource,
+		}
+		preEO := SubscriptionObjects{
+			OperatorName:  "elasticsearch-operator",
+			Namespace:     "openshift-operators-redhat",
+			PackageName:   "elasticsearch-operator",
+			Subscription:  subTemplate,
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+			CatalogSource: preSource,
+		}
 		defer preCLO.uninstallOperator(oc)
 		preCLO.SubscribeOperator(oc)
 		defer preEO.uninstallOperator(oc)
@@ -624,8 +654,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		g.By("Deploy clusterlogging")
 		sc, err := getStorageClassName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		// TODO: use cl-storage-template.yaml when 5.6 is out
-		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "40508.yaml")
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")
 		cl := resource{"clusterlogging", "instance", preCLO.Namespace}
 		defer cl.deleteClusterLogging(oc)
 		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "ES_NODE_COUNT=3", "-p", "REDUNDANCY_POLICY=SingleRedundancy")
@@ -636,9 +665,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		//change channel, and wait for the new operators to be ready
 		version := strings.Split(source.Channel, "-")[1]
 		g.By(fmt.Sprintf("upgrade CLO&EO to %s", source.Channel))
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", cloNS, "sub/"+preCLO.PackageName, "-p", "{\"spec\": {\"channel\": \""+source.Channel+"\", \"source\": \""+source.SourceName+"\", \"sourceNamespace\": \""+source.SourceNamespace+"\"}}", "--type=merge").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", preCLO.Namespace, "sub/"+preCLO.PackageName, "-p", "{\"spec\": {\"channel\": \""+source.Channel+"\", \"source\": \""+source.SourceName+"\", \"sourceNamespace\": \""+source.SourceNamespace+"\"}}", "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", eoNS, "sub/"+preEO.PackageName, "-p", "{\"spec\": {\"channel\": \""+source.Channel+"\", \"source\": \""+source.SourceName+"\", \"sourceNamespace\": \""+source.SourceNamespace+"\"}}", "--type=merge").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", preEO.Namespace, "sub/"+preEO.PackageName, "-p", "{\"spec\": {\"channel\": \""+source.Channel+"\", \"source\": \""+source.SourceName+"\", \"sourceNamespace\": \""+source.SourceNamespace+"\"}}", "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		checkResource(oc, true, false, version, []string{"sub", preCLO.PackageName, "-n", preCLO.Namespace, "-ojsonpath={.status.currentCSV}"})
@@ -654,11 +683,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		WaitForDeploymentPodsToBeReady(oc, preEO.Namespace, preEO.OperatorName)
 
 		g.By("waiting for the ECK pods to be ready after upgrade")
-		WaitForECKPodsToBeReady(oc, cloNS)
+		WaitForECKPodsToBeReady(oc, cl.namespace)
 		checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", preCLO.Namespace, "-ojsonpath={.status.cluster.status}"})
 
 		//check PVC count, it should be equal to ES node count
-		pvc, _ := oc.AdminKubeClient().CoreV1().PersistentVolumeClaims(cloNS).List(metav1.ListOptions{LabelSelector: "logging-cluster=elasticsearch"})
+		pvc, _ := oc.AdminKubeClient().CoreV1().PersistentVolumeClaims(cl.namespace).List(metav1.ListOptions{LabelSelector: "logging-cluster=elasticsearch"})
 		o.Expect(len(pvc.Items) == 3).To(o.BeTrue())
 
 		g.By("checking if the collector can collect logs after upgrading")
@@ -667,8 +696,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+		prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitForProjectLogsAppear(cloNS, prePodList.Items[0].Name, appProj, "app-00")
+		waitForProjectLogsAppear(cl.namespace, prePodList.Items[0].Name, appProj, "app-00")
 	})
 })
