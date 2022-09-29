@@ -4,7 +4,9 @@ reviewers:
   - bandrade
   - jianzhangbjz
   - rioliu-rh
+  - sergiordlr
 approvers:
+  - sergiordlr
   - rioliu-rh 
   - yapei
   - Xia-Zhao-rh
