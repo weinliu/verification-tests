@@ -106,7 +106,7 @@ var _ = g.Describe("[sig-node] Container_Engine_Tools crio,scc", func() {
 	})
 
 	// author: pmali@redhat.com
-	g.It("Author:pmali-High-43086-nodejs s2i build failure: 'error reading blob from source image' should not occur.", func() {
+	g.It("CPaasrunOnly-Author:pmali-High-43086-nodejs s2i build failure: 'error reading blob from source image' should not occur.", func() {
 
 		oc.SetupProject()
 		newapp.appname = "openshift/nodejs~https://github.com/openshift/nodejs-ex.git"
