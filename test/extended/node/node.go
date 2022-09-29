@@ -84,7 +84,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		}
 	)
 	// author: pmali@redhat.com
-	g.It("CPaasrunOnly-Author:pmali-High-12893-Init containers with restart policy Always", func() {
+	g.It("DEPRECATED-Author:pmali-High-12893-Init containers with restart policy Always", func() {
 		oc.SetupProject()
 		podModify.name = "init-always-fail"
 		podModify.namespace = oc.Namespace()
@@ -119,7 +119,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	// author: pmali@redhat.com
-	g.It("CPaasrunOnly-Author:pmali-High-12894-Init containers with restart policy OnFailure", func() {
+	g.It("DEPRECATED-Author:pmali-High-12894-Init containers with restart policy OnFailure", func() {
 		oc.SetupProject()
 		podModify.name = "init-onfailure-fail"
 		podModify.namespace = oc.Namespace()
@@ -189,7 +189,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	// author: pmali@redhat.com
-	g.It("CPaasrunOnly-Author:pmali-High-12911-App container status depends on init containers exit code	", func() {
+	g.It("DEPRECATED-Author:pmali-High-12911-App container status depends on init containers exit code	", func() {
 		oc.SetupProject()
 		podModify.name = "init-fail"
 		podModify.namespace = oc.Namespace()
