@@ -48,6 +48,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		isPAOInstalled bool
 		paoNamespace   = "openshift-performance-addon-operator"
 		iaasPlatform   string
+		ManualPickup   bool
 	)
 
 	g.BeforeEach(func() {
@@ -56,6 +57,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
 		e2e.Logf("Cloud provider is: %v", iaasPlatform)
+		ManualPickup = true
 	})
 
 	// author: nweinber@redhat.com
@@ -1123,6 +1125,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
+		if ManualPickup {
+			g.Skip("This is the test case that execute mannually in shared cluster ...")
+		}
+
 		skipPAODeploy := skipDeployPAO(oc)
 		isPAOInstalled = exutil.IsPAOInstalled(oc)
 		if skipPAODeploy || isPAOInstalled {
@@ -1257,6 +1263,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		if ManualPickup {
+			g.Skip("This is the test case that execute mannually in shared cluster ...")
 		}
 
 		skipPAODeploy := skipDeployPAO(oc)
@@ -1397,7 +1407,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 	})
 
-	g.It("Author:liqcui-Medium-49265-NTO support automatically rotate ssl certificate. [Disruptive]", func() {
+	g.It("NonPreRelease-Author:liqcui-Medium-49265-NTO support automatically rotate ssl certificate. [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -1594,10 +1604,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-hp", "worker-hp", 5)
 	})
 
-	g.It("Author:liqcui-Medium-49439-NTO can start and stop stalld when relying on Tuned '[service]' plugin.[Disruptive]", func() {
+	g.It("NonPreRelease-Author:liqcui-Medium-49439-NTO can start and stop stalld when relying on Tuned '[service]' plugin.[Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		if ManualPickup {
+			g.Skip("This is the test case that execute mannually in shared cluster ...")
 		}
 
 		//Use the first worker node as labeled node
@@ -2092,6 +2106,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		if ManualPickup {
+			g.Skip("This is the test case that execute mannually in shared cluster ...")
 		}
 
 		skipPAODeploy := skipDeployPAO(oc)

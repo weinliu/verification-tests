@@ -16,7 +16,8 @@ spec:
         - ALL
       # capabilities:
       #   add: [ "IPC_LOCK" ]
-    image: rhel7:latest
+    #image: rhel7:latest
+    image: quay.io/openshift-psap-qe/nginx-alpine:multiarch
     command:
     - sleep
     - inf

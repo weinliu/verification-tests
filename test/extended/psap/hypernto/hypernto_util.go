@@ -29,7 +29,7 @@ func isHyperNTOPodInstalled(oc *exutil.CLI, hostedClusterName string) bool {
 }
 
 //getNodePoolName used to get nodepool name in clusters
-func getNodePoolNamebyHosteClusterName(oc *exutil.CLI, hostedClusterName string) string {
+func getNodePoolNamebyHostedClusterName(oc *exutil.CLI, hostedClusterName string) string {
 
 	nodePoolNameList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodepool", "-n", "clusters", "-ojsonpath='{.items[*].metadata.name}'").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -50,7 +50,7 @@ func getNodePoolNamebyHosteClusterName(oc *exutil.CLI, hostedClusterName string)
 }
 
 //getTunedConfigMapName used to get tuned configmap name for specified node pool
-func getTunedConfigMapNamewithRetry(oc *exutil.CLI, namespace string, filter string) string {
+func getTunedConfigMapNameWithRetry(oc *exutil.CLI, namespace string, filter string) string {
 
 	var configmapName string
 	configmapName = ""
@@ -151,6 +151,6 @@ func assertNTOPodLogsLastLinesInHostedCluster(oc *exutil.CLI, namespace string, 
 }
 
 // getTunedRenderInHostedCluster returns a string representation of the rendered for tuned in the given namespace
-func getTunedRenderInHostedClusterInHostedCluster(oc *exutil.CLI, namespace string) (string, error) {
+func getTunedRenderInHostedCluster(oc *exutil.CLI, namespace string) (string, error) {
 	return oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "tuned", "rendered", "-ojsonpath={.spec.profile[*].name}").Output()
 }
