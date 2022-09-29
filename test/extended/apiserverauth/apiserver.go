@@ -2377,7 +2377,7 @@ spec:
 			externalLogs = trimEndTag.ReplaceAllString(externalLogs, "")
 			for _, line := range strings.Split(externalLogs, "\n") {
 				if strings.Trim(line, " ") != "" {
-					externalPanicLogs = append(externalPanicLogs, line)
+					externalPanicLogs = append(externalPanicLogs, fmt.Sprintf("> %s", line))
 				}
 			}
 		}
@@ -2405,7 +2405,7 @@ spec:
 			auditLogs = trimEndTag.ReplaceAllString(auditLogs, "")
 			for _, line := range strings.Split(auditLogs, "\n") {
 				if strings.Trim(line, " ") != "" {
-					auditAbnormalLogs = append(auditAbnormalLogs, "%s")
+					auditAbnormalLogs = append(auditAbnormalLogs, fmt.Sprintf("> %s", line))
 				}
 			}
 		}
