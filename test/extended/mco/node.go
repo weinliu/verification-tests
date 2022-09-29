@@ -183,6 +183,16 @@ func (n *Node) PollIsCordoned() func() bool {
 	}
 }
 
+// RestoreDesiredConfig changes the value of the desiredConfig annotation to equal the value of currentConfig. desiredConfig=currentConfig.
+func (n *Node) RestoreDesiredConfig() error {
+	currentConfig := n.GetCurrentMachineConfig()
+	if currentConfig == "" {
+		return fmt.Errorf("currentConfig annotation has an empty value in node %s", n.GetName())
+	}
+	logger.Infof("Node: %s. Restoring desiredConfig value to match currentConfig value: %s", n.GetName(), currentConfig)
+	return n.PatchDesiredConfig(currentConfig)
+}
+
 // GetCurrentMachineConfig returns the ID of the current machine config used in the node
 func (n Node) GetCurrentMachineConfig() string {
 	return n.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/currentConfig}`)
@@ -201,6 +211,11 @@ func (n Node) GetMachineConfigState() string {
 // GetDesiredConfig returns the desired machine config for this node
 func (n Node) GetDesiredConfig() string {
 	return n.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/desiredConfig}`)
+}
+
+// PatchDesiredConfig patches the desiredConfig annotation with the provided value
+func (n *Node) PatchDesiredConfig(desiredConfig string) error {
+	return n.Patch("merge", `{"metadata":{"annotations":{"machineconfiguration.openshift.io/desiredConfig":"`+desiredConfig+`"}}}`)
 }
 
 // GetDesiredDrain returns the last desired machine config that needed a drain operation in this node
@@ -481,4 +496,12 @@ func (nl *NodeList) GetTaintedNodes() []Node {
 	}
 
 	return taintedNodes
+}
+
+// GetAllDegraded returns a list will all the nodes reporting macineconfig degraded state
+// metadata.annotations.machineconfiguration\.openshift\.io/state=="Degraded
+func (nl NodeList) GetAllDegraded() ([]Node, error) {
+	filter := `?(@.metadata.annotations.machineconfiguration\.openshift\.io/state=="Degraded")`
+	nl.SetItemsFilter(filter)
+	return nl.GetAll()
 }

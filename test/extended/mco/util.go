@@ -98,6 +98,18 @@ func (mc *MachineConfig) create(oc *exutil.CLI) {
 
 }
 
+// TODO: This method should be deleted when we refactor the MC struct to embed the Resource struct.
+func (mc MachineConfig) exists(oc *exutil.CLI) bool {
+	_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mc", mc.name).Output()
+	return err == nil
+}
+
+// we need this method to be able to delete the MC without waiting for success.
+// TODO: This method should be deleted when we refactor the MC struct to embed the Resource struct. But right now we have no other choice.
+func (mc *MachineConfig) deleteNoWait(oc *exutil.CLI) error {
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", mc.name, "--ignore-not-found=true").Execute()
+}
+
 func (mc *MachineConfig) delete(oc *exutil.CLI) {
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", mc.name, "--ignore-not-found=true").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -423,7 +435,7 @@ func (mcp *MachineConfigPool) waitForComplete() {
 		}
 		if strings.Contains(stdout, "True") {
 			// i.e. mcp updated=true, mc is applied successfully
-			logger.Infof("mc operation is completed on mcp %s", mcp.name)
+			logger.Infof("The new MC has been successfully applied to MCP '%s'", mcp.name)
 			return true, nil
 		}
 		return false, nil
