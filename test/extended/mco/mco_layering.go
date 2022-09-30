@@ -20,7 +20,13 @@ var _ = g.Describe("[sig-mco] MCO Layering", func() {
 		logger.Infof("End Of MCO Preconditions")
 	})
 
-	g.It("Author:sregidor-ConnectedOnly-VMonly-Longduration-NonPreRelease-Critical-54085-Update osImage changing /etc /usr and /var [Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-VMonly-Longduration-NonPreRelease-Critical-54085-Update osImage changing /etc /usr and rpm [Disruptive]", func() {
+
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture != "amd64" && architecture != "arm64" {
+			g.Skip("Do not support " + architecture + "architecture")
+		}
+
 		dockerFileCommands := `
 RUN mkdir /etc/tc_54085 && chmod 3770 /etc/tc_54085 && ostree container commit
 
@@ -65,7 +71,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error creating the build directory with the Dockerfile")
 
-		berr := buildPushImage("arm64", buildDir, layeringImageRepo, secretExtractDir)
+		berr := buildPushImage(architecture, buildDir, layeringImageRepo, secretExtractDir)
 		o.Expect(berr).NotTo(o.HaveOccurred(),
 			"Error building and pushing the image %s", layeringImageRepo)
 		logger.Infof("Image pushed to: %s\n", layeringImageRepo)

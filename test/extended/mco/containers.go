@@ -33,8 +33,7 @@ func buildPushImage(architecture, buildPath, imageTag, tokenDir string) error {
 	podmanCLI := container.NewPodmanCLI()
 	podmanCLI.ExecCommandPath = buildPath
 	switch architecture {
-	case "amd64":
-	case "arm64":
+	case "arm64", "amd64":
 		output, err := podmanCLI.Run("build").Args(buildPath, "--arch", architecture, "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
 		if err != nil {
 			logger.Errorf("Podman failed building image %s with architecture %s:\n%s", imageTag, architecture, output)
