@@ -333,6 +333,31 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		oc.SetupProject()
 		ns := oc.Namespace()
 
+		ipStackType := checkIPStackType(oc)
+		g.By("get controller-managert service ip address")
+		managertServiceIP := getControllerManagerLeaderIP(oc, "openshift-controller-manager", "openshift-master-controllers")
+		var prometheusURL string
+		if ipStackType == "ipv6single" {
+			prometheusURL = "https://[" + managertServiceIP + "]:8443/metrics"
+		} else {
+			prometheusURL = "https://" + managertServiceIP + ":8443/metrics"
+		}
+
+		var metricNumber string
+		metricsErr := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			output := getOVNMetrics(oc, prometheusURL)
+			metricOutput, _ := exec.Command("bash", "-c", "cat "+output+" | grep openshift_unidle_events_total | awk 'NR==3{print $2}'").Output()
+			metricNumber = strings.TrimSpace(string(metricOutput))
+			e2e.Logf("The output of openshift_unidle_events metrics is : %v", metricNumber)
+			if !strings.Contains(metricNumber, "0") {
+				return true, nil
+			}
+			e2e.Logf("Can't get correct metrics of openshift_unidle_events and try again")
+			return false, nil
+
+		})
+		exutil.AssertWaitPollNoErr(metricsErr, fmt.Sprintf("Fail to get metric and the error is:%s", metricsErr))
+
 		g.By("create a service")
 		createResourceFromFile(oc, ns, testSvcFile)
 		ServiceOutput, serviceErr := oc.WithoutNamespace().Run("get").Args("service", "-n", ns).Output()
@@ -348,7 +373,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		testServiceIP, _ := getSvcIP(oc, ns, "test-service") //This case is check metrics not svc testing, do not need use test-service dual-stack address
 
 		g.By("test-pod can curl service ip address:port")
-		ipStackType := checkIPStackType(oc)
 		//Need curl serverice several times, otherwise casue curl: (7) Failed to connect to 172.30.248.18 port 27017
 		//after 0 ms: Connection refused\ncommand terminated with exit code 7\n\nerror:\nexit status 7"
 		if ipStackType == "ipv6single" {
@@ -387,29 +411,21 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(svcerr).NotTo(o.HaveOccurred())
 		}
 
-		g.By("get controller-managert service ip address")
-		managertServiceIP := getControllerManagerLeaderIP(oc, "openshift-controller-manager", "openshift-master-controllers")
-		var prometheusURL string
-		if ipStackType == "ipv6single" {
-			prometheusURL = "https://[" + managertServiceIP + "]:8443/metrics"
-		} else {
-			prometheusURL = "https://" + managertServiceIP + ":8443/metrics"
-		}
 		//Because Bug 2064786: Not always can get the metrics of openshift_unidle_events_total
 		//Need curl several times to get the metrics of openshift_unidle_events_total
-		metricsErr := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		metricsOutput := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			output := getOVNMetrics(oc, prometheusURL)
 			metricOutput, _ := exec.Command("bash", "-c", "cat "+output+" | grep openshift_unidle_events_total | awk 'NR==3{print $2}'").Output()
 			metricValue := strings.TrimSpace(string(metricOutput))
 			e2e.Logf("The output of openshift_unidle_events metrics is : %v", metricValue)
-			if strings.Contains(metricValue, "1") {
+			if !strings.Contains(metricValue, metricNumber) {
 				return true, nil
 			}
 			e2e.Logf("Can't get correct metrics of openshift_unidle_events and try again")
 			return false, nil
 
 		})
-		exutil.AssertWaitPollNoErr(metricsErr, fmt.Sprintf("Fail to get metric and the error is:%s", metricsErr))
+		exutil.AssertWaitPollNoErr(metricsOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricsOutput))
 	})
 
 	g.It("Author:weliang-Medium-52072- Add mechanism to record duration for k8 kinds.", func() {
