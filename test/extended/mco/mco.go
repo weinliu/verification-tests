@@ -25,9 +25,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	var oc = exutil.NewCLI("mco", exutil.KubeConfigPath())
 
 	g.JustBeforeEach(func() {
-		g.By("MCO Preconditions Checks")
 		preChecks(oc)
-		logger.Infof("End Of MCO Preconditions")
 	})
 
 	g.It("Author:rioliu-Critical-42347-health check for machine-config-operator [Serial]", func() {

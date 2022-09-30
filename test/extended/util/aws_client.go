@@ -6,8 +6,10 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/s3"
 
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -127,7 +129,7 @@ func (a *AwsClient) UpdateAwsIntSecurityRule(instanceID string, dstPort int64) e
 
 	e2e.Logf("The instance's %s,security group id is %s .", instanceID, *securityGroupID)
 
-	//Check if destination port is opned
+	// Check if destination port is opned
 	req := &ec2.DescribeSecurityGroupsInput{
 		GroupIds: []*string{aws.String(*securityGroupID)},
 	}
@@ -141,7 +143,7 @@ func (a *AwsClient) UpdateAwsIntSecurityRule(instanceID string, dstPort int64) e
 		return nil
 	}
 
-	//Update ingress secure rule to allow destination port
+	// Update ingress secure rule to allow destination port
 	_, err = a.svc.AuthorizeSecurityGroupIngress(&ec2.AuthorizeSecurityGroupIngressInput{
 		GroupId: aws.String(*securityGroupID),
 		IpPermissions: []*ec2.IpPermission{
@@ -320,11 +322,125 @@ func (a *AwsClient) GetDhcpOptionsIDOfVpc(vpcID string) (string, error) {
 }
 
 // AssociateDhcpOptions Associate a VPC with a dhcpOptions
-func (a *AwsClient) AssociateDhcpOptions(vpcID string, dhcpOptionsID string) error {
+func (a *AwsClient) AssociateDhcpOptions(vpcID, dhcpOptionsID string) error {
 	input := &ec2.AssociateDhcpOptionsInput{
 		VpcId:         aws.String(vpcID),
 		DhcpOptionsId: aws.String(dhcpOptionsID),
 	}
 	_, err := a.svc.AssociateDhcpOptions(input)
 	return err
+}
+
+// S3Client struct for S3 storage operations
+type S3Client struct {
+	svc *s3.S3
+}
+
+// NewS3Client constructor to create S3 client with default credential and config
+func NewS3Client() *S3Client {
+	return &S3Client{
+		svc: s3.New(
+			session.Must(session.NewSession()),
+		),
+	}
+}
+
+// NewS3ClientFromCredFile constrctor to create S3 client with user's credential file and region
+// param: filename crednetial file path
+// param: profile config profile e.g. [default]
+// param: region
+func NewS3ClientFromCredFile(filename, profile, region string) *S3Client {
+
+	awsSession := session.Must(session.NewSessionWithOptions(
+		session.Options{
+			SharedConfigState: session.SharedConfigDisable,
+		},
+	))
+
+	return &S3Client{
+		svc: s3.New(
+			awsSession,
+			aws.NewConfig().
+				WithRegion(region).
+				WithCredentials(credentials.NewSharedCredentials(filename, "default")),
+		),
+	}
+
+}
+
+// CreateBucket create S3 bucket
+// param: bucket name from user input
+func (sc *S3Client) CreateBucket(name string) error {
+
+	e2e.Logf("creating s3 bucket %s", name)
+
+	var createBucketInput *s3.CreateBucketInput
+	if *sc.svc.Config.Region == "us-east-1" {
+		createBucketInput = &s3.CreateBucketInput{
+			Bucket: aws.String(name),
+			ACL:    aws.String(s3.BucketCannedACLPublicRead),
+		}
+	} else {
+		createBucketInput = &s3.CreateBucketInput{
+			Bucket: aws.String(name),
+			CreateBucketConfiguration: &s3.CreateBucketConfiguration{
+				LocationConstraint: aws.String(*sc.svc.Config.Region),
+			},
+			ACL: aws.String(s3.BucketCannedACLPublicRead),
+		}
+	}
+
+	cbo, cboe := sc.svc.CreateBucket(createBucketInput)
+	if cboe != nil {
+		e2e.Logf("create bucket %s failed: %v", name, cboe)
+		return cboe
+	}
+
+	e2e.Logf("bucket %s is created successfully %v", name, cbo)
+
+	return nil
+
+}
+
+// DeleteBucket delete S3 bucket
+// param: name bucket name from user input
+func (sc *S3Client) DeleteBucket(name string) error {
+
+	e2e.Logf("deleting s3 bucket %s", name)
+
+	deleteBucketInput := &s3.DeleteBucketInput{
+		Bucket: aws.String(name),
+	}
+
+	_, dboe := sc.svc.DeleteBucket(deleteBucketInput)
+	if dboe != nil {
+		e2e.Logf("delete bucket %s failed: %v", name, dboe)
+		return dboe
+	}
+
+	e2e.Logf("bucket %s is successfully deleted", name)
+
+	return nil
+}
+
+// HeadBucket util func to check whether bucket exists or not
+// param: name bucket name
+func (sc *S3Client) HeadBucket(name string) error {
+
+	e2e.Logf("check bucket %s exists or not", name)
+
+	headBucketInput := &s3.HeadBucketInput{
+		Bucket: aws.String(name),
+	}
+
+	hbo, hboe := sc.svc.HeadBucket(headBucketInput)
+	if hboe != nil {
+		e2e.Logf("head bucket %s failed: %v", name, hboe)
+		return hboe
+	}
+
+	e2e.Logf("head bucket %s output is %v", name, hbo)
+
+	return nil
+
 }

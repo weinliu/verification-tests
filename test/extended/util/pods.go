@@ -232,9 +232,10 @@ func GetAllPodsWithLabel(oc *CLI, namespace string, label string) ([]string, err
 	return strings.Split(pods, " "), err
 }
 
-// AssertAllPodsToBeReady assert all pods in NS are in ready state until timeout in a given namespace
-func AssertAllPodsToBeReady(oc *CLI, namespace string) {
-	err := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+// AssertAllPodsToBeReadyWithPollerParams assert all pods in NS are in ready state until timeout in a given namespace
+// Pros: allow user to customize poller parameters
+func AssertAllPodsToBeReadyWithPollerParams(oc *CLI, namespace string, interval, timeout time.Duration) {
+	err := wait.Poll(interval, timeout, func() (bool, error) {
 
 		// get the status flag for all pods
 		// except the ones which are in Complete Status.
@@ -251,6 +252,11 @@ func AssertAllPodsToBeReady(oc *CLI, namespace string) {
 		return true, nil
 	})
 	AssertWaitPollNoErr(err, fmt.Sprintf("Some Pods are not ready in NS %s!", namespace))
+}
+
+// AssertAllPodsToBeReady assert all pods in NS are in ready state until timeout in a given namespace
+func AssertAllPodsToBeReady(oc *CLI, namespace string) {
+	AssertAllPodsToBeReadyWithPollerParams(oc, namespace, 10*time.Second, 2*time.Minute)
 }
 
 //GetPodNameInHostedCluster returns the pod name in hosted cluster of hypershift

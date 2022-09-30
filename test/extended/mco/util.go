@@ -19,6 +19,7 @@ import (
 
 	b64 "encoding/base64"
 
+	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -566,6 +567,7 @@ func getHostFromRoute(oc *exutil.CLI, routeName, routeNamespace string) string {
 	return stdout
 }
 
+// DEPRECATED, use generateTempFilePath instead
 func generateTmpFile(oc *exutil.CLI, fileName string) string {
 	return filepath.Join(e2e.TestContext.OutputDir, oc.Namespace()+"-"+fileName)
 }
@@ -844,11 +846,55 @@ func isFIPSEnabledInClusterConfig(oc *exutil.CLI) bool {
 
 // preChecks executes some basic checks to make sure the the cluster is healthy enough to run MCO test cases
 func preChecks(oc *exutil.CLI) {
+	g.By("MCO Preconditions Checks")
 	nodes, err := NewNodeList(oc).GetAllLinux()
 	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "It is not possible to get the list of nodes in the cluster")
 
 	for _, node := range nodes {
 		o.ExpectWithOffset(1, node.IsReady()).To(o.BeTrue(), "Node %s is not Ready. We can't continue testing.", node.GetName())
 	}
+	logger.Infof("End Of MCO Preconditions")
+}
 
+// helper func to generate a temp file path with target dir
+// and file name pattern, * is reserved keyword, will be replaced
+// by random string
+func generateTempFilePath(dir, pattern string) string {
+	return filepath.Join(dir, strings.ReplaceAll(pattern, "*", exutil.GetRandomString()))
+}
+
+// create a temp dir with e2e namespace for every test in JustBeforeEach
+// fail the test, if dir creation is failed
+func createTmpDir() string {
+	// according to review comment, dir name should not depend on temp ns
+	// it is empty when initialized by `NewCLIWithoutNamespace`
+	tmpdir := filepath.Join(e2e.TestContext.OutputDir, fmt.Sprintf("mco-test-%s", exutil.GetRandomString()))
+	err := os.MkdirAll(tmpdir, 0o755)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	logger.Infof("create test dir %s", tmpdir)
+	return tmpdir
+}
+
+// parse base domain from dns config. format is like $clustername.$basedomain
+// this func does not support negative case, if info cannot be retrieved, fail the test
+func getBaseDomain(oc *exutil.CLI) string {
+	baseDomain := NewResource(oc.AsAdmin(), "dns", "cluster").GetOrFail("{.spec.baseDomain}")
+	return baseDomain[strings.Index(baseDomain, ".")+1:]
+}
+
+// check whether hypershift operator is installed
+func isHypershiftEnabled(oc *exutil.CLI) bool {
+	// in hypershift ci, operator and hosted cluster are all enabled.
+	operatorEnabled := NewResource(oc.AsAdmin(), "ns", HypershiftNs).Exists()
+	clusterEnabled := NewResource(oc.AsAdmin(), "ns", HypershiftNsClusters).Exists()
+	enabled := operatorEnabled && clusterEnabled
+	logger.Infof("hypershift is enabled %t", enabled)
+	return enabled
+}
+
+func getFirstHostedCluster(oc *exutil.CLI) string {
+	clusters, err := NewNamespacedResourceList(oc.AsAdmin(), HypershiftHostedCluster, HypershiftNsClusters).GetAll()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(clusters).NotTo(o.BeEmpty())
+	return clusters[0].GetName()
 }

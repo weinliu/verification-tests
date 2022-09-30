@@ -30,4 +30,45 @@ const (
 
 	// DefaultLayeringQuayRepository the quay repository that will be used by default to push auxiliary layering images
 	DefaultLayeringQuayRepository = "quay.io/mcoqe/layering"
+	// TmplHypershiftMcConfigMap template file name:hypershift-cluster-mc-configmap.yaml, it's used to create mc for hosted cluster
+	TmplHypershiftMcConfigMap = "hypershift-cluster-mc-configmap.yaml"
+
+	// HypershiftCrNodePool keyword: nodepool
+	HypershiftCrNodePool = "nodepool"
+	// HypershiftHostedCluster keyword: hostedcluster
+	HypershiftHostedCluster = "hostedcluster"
+	// HypershiftNsClusters namespace: clusters
+	HypershiftNsClusters = "clusters"
+	// HypershiftNs operator namespace: hypershift
+	HypershiftNs = "hypershift"
+	// HypershiftAwsMachine keyword: awsmachine
+	HypershiftAwsMachine = "awsmachine"
+
+	// NodeAnnotationCurrentConfig current config
+	NodeAnnotationCurrentConfig = "machineconfiguration.openshift.io/currentConfig"
+	// NodeAnnotationDesiredConfig desired config
+	NodeAnnotationDesiredConfig = "machineconfiguration.openshift.io/desiredConfig"
+	// NodeAnnotationDesiredDrain desired drain id
+	NodeAnnotationDesiredDrain = "machineconfiguration.openshift.io/desiredDrain"
+	// NodeAnnotationLastAppliedDrain last applied drain id
+	NodeAnnotationLastAppliedDrain = "machineconfiguration.openshift.io/lastAppliedDrain"
+	// NodeAnnotationReason failure reason
+	NodeAnnotationReason = "machineconfiguration.openshift.io/reason"
+	// NodeAnnotationState state of the mc
+	NodeAnnotationState = "machineconfiguration.openshift.io/state"
+
+	// TestCtxKeyBucket hypershift test s3 bucket name
+	TestCtxKeyBucket = "bucket"
+	// TestCtxKeyNodePool hypershift test node pool name
+	TestCtxKeyNodePool = "nodepool"
+	// TestCtxKeyCluster hypershift test hosted cluster name
+	TestCtxKeyCluster = "cluster"
+	// TestCtxKeyConfigMap hypershift test config map name
+	TestCtxKeyConfigMap = "configmap"
+	// TestCtxKeyKubeConfig hypershift test kubeconfig of hosted cluster
+	TestCtxKeyKubeConfig = "kubeconfig"
+	// TestCtxKeyFilePath hypershift test filepath in machine config
+	TestCtxKeyFilePath = "filepath"
+	// TestCtxKeySkipCleanUp indicates whether clean up should be skipped
+	TestCtxKeySkipCleanUp = "skipCleanUp"
 )
