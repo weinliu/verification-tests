@@ -3,6 +3,7 @@ package router
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
@@ -102,4 +103,57 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		checkoutput := readRouterPodData(oc, routerpod, "cat haproxy.config", "1024")
 		o.Expect(checkoutput).To(o.ContainSubstring(`log 1.2.3.4:514 len 1024 local1 info`))
 	})
+
+	// author: hongli@redhat.com
+	g.It("Author:hongli-High-52837-switching of AWS CLB to NLB without deletion of ingresscontroller", func() {
+		// skip if platform is not AWS
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+		if !strings.Contains(output, "AWS") {
+			g.Skip("Skip for non-supported platform, it requires AWS")
+		}
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-clb.yaml")
+		var (
+			ingctrl = ingctrlNodePortDescription{
+				name:      "ocp52837",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		g.By("Create one custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("patch the existing custom ingress controller with NLB")
+		routerpod := getRouterPod(oc, "ocp52837")
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/ocp52837", "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"aws\":{\"type\":\"NLB\"}}}}}}")
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
+
+		g.By("check the LB service and ensure the annotations are updated")
+		findAnnotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "router-ocp52837", "-n", "openshift-ingress", "-o=jsonpath={.metadata.annotations}").Output()
+		o.Expect(findAnnotation).To(o.ContainSubstring("nlb"))
+		o.Expect(findAnnotation).NotTo(o.ContainSubstring("aws-load-balancer-proxy-protocol"))
+
+		g.By("patch the existing custom ingress controller with CLB")
+		routerpod = getRouterPod(oc, "ocp52837")
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/ocp52837", "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"aws\":{\"type\":\"Classic\"}}}}}}")
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
+
+		// Classic LB doesn't has explicit "classic" annotation but it needs proxy-protocol annotation
+		// so we use "aws-load-balancer-proxy-protocol" to check if using CLB
+		g.By("check the LB service and ensure the annotations are updated")
+		findAnnotation, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "router-ocp52837", "-n", "openshift-ingress", "-o=jsonpath={.metadata.annotations}").Output()
+		o.Expect(findAnnotation).To(o.ContainSubstring("aws-load-balancer-proxy-protocol"))
+		o.Expect(findAnnotation).NotTo(o.ContainSubstring("nlb"))
+	})
+
 })

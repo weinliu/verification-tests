@@ -1,0 +1,28 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+objects:
+- apiVersion: operator.openshift.io/v1
+  kind: IngressController
+  metadata:
+    name: ${NAME}
+    namespace: ${NAMESPACE}
+  spec:
+    defaultCertificate:
+      name: ${DEFAULT_CERT}
+    domain: ${DOMAIN}
+    replicas: 1
+    endpointPublishingStrategy:
+      loadBalancer:
+        providerParameters:
+          aws:
+            type: Classic
+          type: AWS
+        scope: Internal
+      type: LoadBalancerService
+parameters:
+- name: NAME
+- name: NAMESPACE
+  value: openshift-ingress-operator
+- name: DEFAULT_CERT
+  value: router-certs-default
+- name: DOMAIN
