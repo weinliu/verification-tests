@@ -190,7 +190,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 				e2e.Logf("Fail to get authentication.operator cluster, error: %s. Trying again", err)
 				return false, nil
 			}
-			if strings.Contains(output, "OAuthServiceEndpointsCheckEndpointAccessibleControllerDegraded") {
+			if strings.Contains(output, "OAuthServerServiceEndpointAccessibleControllerDegraded") {
 				e2e.Logf("Allow network policy applied successfully:\n%s", output)
 				return true, nil
 			}
@@ -220,7 +220,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 				e2e.Logf("Fail to get authentication.operator cluster, error: %s. Trying again", err)
 				return false, nil
 			}
-			if strings.Contains(output, "OAuthRouteCheckEndpointAccessibleControllerDegraded") {
+			if strings.Contains(output, "OAuthServerRouteEndpointAccessibleControllerDegraded") {
 				e2e.Logf("Deny network policy applied:\n%s", output)
 				return true, nil
 			}
