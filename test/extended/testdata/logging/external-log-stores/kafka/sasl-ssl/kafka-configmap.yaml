@@ -114,8 +114,7 @@ objects:
       listeners=PLAINTEXT://:9092,SASL_SSL://:9093
       #init#advertised.listeners=PLAINTEXT://#init#
       security.protocol=SASL_SSL
-      #authorizer.class.name=kafka.security.authorizer.AclAuthorizer
-      authorizer.class.name=kafka.security.auth.SimpleAclAuthorizer
+      authorizer.class.name=kafka.security.authorizer.AclAuthorizer
       super.users=User:admin
       allow.everyone.if.no.acl.found=true
       num.partitions=1

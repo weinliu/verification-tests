@@ -41,7 +41,7 @@ objects:
             value: -Djava.security.auth.login.config=/etc/kafka-configmap/kafka_server_jaas.conf
           - name: JMX_PORT
             value: "5555"
-          image: quay.io/openshifttest/kafka@sha256:8e85560da52eb87b8465551a291d0ceaeab9249fa31847883ff57456ee8a501c
+          image: quay.io/openshifttest/kafka@sha256:c5823a744a9c6944e3c2ba1e57f92a97835bccbd090226eaa119a50349e41a92
           imagePullPolicy: IfNotPresent
           lifecycle:
             preStop:

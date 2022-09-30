@@ -42,7 +42,7 @@ objects:
           - /bin/bash
           - -ce
           - /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 --topic clo-topic --from-beginning  --consumer.config /etc/kafka-config/client.properties
-          image: quay.io/openshifttest/kafka@sha256:8e85560da52eb87b8465551a291d0ceaeab9249fa31847883ff57456ee8a501c
+          image: quay.io/openshifttest/kafka@sha256:c5823a744a9c6944e3c2ba1e57f92a97835bccbd090226eaa119a50349e41a92
           imagePullPolicy: IfNotPresent
           name: kafka-consumer
           resources: {}
