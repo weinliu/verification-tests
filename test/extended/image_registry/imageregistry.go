@@ -651,10 +651,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	g.It("NonPreRelease-Longduration-Author:jitli-ConnectedOnly-VMonly-Medium-33051-Images can be imported from an insecure registry without 'insecure: true' if it is in insecureRegistries in image.config/cluster [Disruptive]", func() {
 
 		masterNode, _ := exutil.GetFirstMasterNode(oc)
-		e2e.Logf(masterNode)
 		defer func() {
 			err := wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
-				regStatus, _ := exutil.DebugNodeWithChroot(oc, masterNode, "cat /etc/containers/registries.conf | grep \"docker.io\"")
+				regStatus, _ := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--to-namespace=openshift-image-registry"}, "cat", "/etc/containers/registries.conf")
 				if !strings.Contains(regStatus, "location = \"docker.io\"") {
 					e2e.Logf("registries.conf updated")
 					return true, nil
@@ -698,8 +697,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("registries.conf gets updated")
 		err = wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
-			//registriesstatus, _ := exutil.DebugNodeWithChroot(oc, masterNode, "cat /etc/containers/registries.conf | grep default-route-openshift-image-registry.apps")
-			registriesstatus, _ := exutil.DebugNodeWithChroot(oc, fmt.Sprintf("%s", masterNode), "podman", "--version")
+			registriesstatus, _ := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--to-namespace=openshift-image-registry"}, "cat", "/etc/containers/registries.conf")
 			if strings.Contains(registriesstatus, "default-route-openshift-image-registry.apps") {
 				e2e.Logf("registries.conf updated")
 				return true, nil
@@ -722,7 +720,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("registries.conf gets updated")
 		err = wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
-			registriesstatus, _ := exutil.DebugNodeWithChroot(oc, masterNode, "cat /etc/containers/registries.conf | grep \"docker.io\"")
+			registriesstatus, _ := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--to-namespace=openshift-image-registry"}, "cat", "/etc/containers/registries.conf")
 			if strings.Contains(registriesstatus, "location = \"docker.io\"") {
 				e2e.Logf("registries.conf updated")
 				return true, nil
@@ -734,11 +732,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		exutil.AssertWaitPollNoErr(err, "registries.conf not contains docker.io")
 
 		g.By("Import an image from docker.io")
-		output, err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("image2-33051", "--from=docker.io/centos/ruby-22-centos7", "--confirm=true").Output()
-		e2e.Logf(output)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		output, _ = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("image2-33051", "--from=docker.io/centos/ruby-22-centos7", "--confirm=true", "-n", oc.Namespace()).Output()
 		o.Expect(output).To(o.ContainSubstring("error: Import failed (Forbidden): forbidden: registry docker.io blocked"))
-
 	})
 
 	// author: wewang@redhat.com
