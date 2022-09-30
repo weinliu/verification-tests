@@ -24,6 +24,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		g.By("Test for case OCP-40053 Syncing the groups with valid format")
 		g.By("create new namespace")
 		oc.SetupProject()
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 
 		g.By("create The LDAP server")
 		createLdapService(oc, oc.Namespace(), "ldapserver", initGroup)
