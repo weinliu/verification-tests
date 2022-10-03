@@ -321,7 +321,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 	})
 
-	g.It("Author:CPaasrunOnly-weliang-Medium-45689-Metrics for idling enable/disabled.", func() {
+	g.It("Author:weliang-Medium-45689-Metrics for idling enable/disabled.", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			testPodFile         = filepath.Join(buildPruningBaseDir, "metrics/metrics-pod.json")
@@ -349,7 +349,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			metricOutput, _ := exec.Command("bash", "-c", "cat "+output+" | grep openshift_unidle_events_total | awk 'NR==3{print $2}'").Output()
 			metricNumber = strings.TrimSpace(string(metricOutput))
 			e2e.Logf("The output of openshift_unidle_events metrics is : %v", metricNumber)
-			if !strings.Contains(metricNumber, "0") {
+			if metricNumber != "" {
 				return true, nil
 			}
 			e2e.Logf("Can't get correct metrics of openshift_unidle_events and try again")
