@@ -2,6 +2,7 @@ package winc
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -1023,6 +1024,39 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			// a restart took place
 			if rotatedCertNotBeforeParsed.Before(up) {
 				e2e.Failf("windows worker %v got restarted after CA rotation", ip)
+			}
+		}
+
+	})
+
+	g.It("Smokerun-Author:rrasouli-Medium-54711- [WICD] wmco services are running from ConfigMap", func() {
+		g.By("Check service configmap exists")
+		wmcoLogVersion := "windows-services-" + getWMCOVersionFromLogs(oc)
+		windowsServicesCM, err := popItemFromList(oc, "cm", "windows-services", "openshift-windows-machine-config-operator")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if wmcoLogVersion != windowsServicesCM {
+			e2e.Failf("Configmap of windows services mismatch with Logs version")
+		}
+
+		g.By("Check configmap services running on Windows workers")
+		payload, err := oc.WithoutNamespace().Run("get").Args("cm", windowsServicesCM, "-n", "openshift-windows-machine-config-operator", "-o=jsonpath={.data.services}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		type service struct {
+			Name         string   `json:"name"`
+			Path         string   `json:"path"`
+			Bootstrap    bool     `json:"bootstrap"`
+			Priority     int      `json:"priority"`
+			Dependencies []string `json:"dependencies,omitempty"`
+		}
+
+		var services []service
+		json.Unmarshal([]byte(payload), &services)
+		bastionHost := getSSHBastionHost(oc, iaasPlatform)
+		winInternalIP := getWindowsInternalIPs(oc)
+		for _, winhost := range winInternalIP {
+			for _, svc := range services {
+				msg, _ := runPSCommand(bastionHost, winhost, fmt.Sprintf("Get-Service %v", svc.Name), privateKey, iaasPlatform)
+				o.Expect(msg).Should(o.ContainSubstring("Running"), "Failed to check %v service is running in %v: %s", svc.Name, winhost, msg)
 			}
 		}
 

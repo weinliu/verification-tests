@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -566,6 +567,17 @@ func waitUntilWMCOStatusChanged(oc *exutil.CLI, message string) {
 	exutil.AssertWaitPollNoErr(waitLogErr, fmt.Sprintf("Failed to find %v in WMCO log after 15 minutes", message))
 }
 
+func getWMCOVersionFromLogs(oc *exutil.CLI) string {
+	wmcoVersion, err := oc.WithoutNamespace().Run("logs").Args("deployment.apps/windows-machine-config-operator", "-n", "openshift-windows-machine-config-operator").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	re := regexp.MustCompile(`version.*`)
+	wmcoVersionRe := re.Find([]byte(wmcoVersion))
+	wmcoVersionArray := strings.Split(string(wmcoVersionRe), " ")
+	wmcoVersion = strings.Trim(wmcoVersionArray[1], "ֿ}")
+	wmcoVersion = strings.Trim(wmcoVersion, "ֿ\"")
+	return wmcoVersion
+}
+
 func waitForEndpointsReady(oc *exutil.CLI, namespace string, waitTime int, numberOfEndpoints int) {
 	waitLogErr := wait.Poll(10*time.Second, time.Duration(waitTime)*time.Minute, func() (bool, error) {
 		msg, err := oc.WithoutNamespace().Run("get").Args("endpoints", "-n", namespace, "-ojsonpath={.items[*].subsets[*].addresses[*].ip}").Output()
@@ -644,4 +656,20 @@ func createWindowsAutoscaller(oc *exutil.CLI, machineSetName, namespace string) 
 func destroyWindowsAutoscaller(oc *exutil.CLI) {
 	oc.WithoutNamespace().Run("delete").Args("machineautoscaler", "winc-default-machineautoscaler", "-n", "openshift-machine-api").Output()
 	oc.WithoutNamespace().Run("delete").Args("clusterautoscalers.autoscaling.openshift.io", "default").Output()
+}
+
+func popItemFromList(oc *exutil.CLI, value string, keywordSearch string, namespace string) (string, error) {
+	rawList, err := oc.WithoutNamespace().Run("get").Args(value, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+	retValue := ""
+	if err != nil {
+		e2e.Logf("Search value %v not found", keywordSearch)
+		return retValue, err
+	}
+	rawArray := strings.Split(string(rawList), " ")
+	for _, val := range rawArray {
+		if strings.Contains(val, keywordSearch) {
+			retValue = val
+		}
+	}
+	return retValue, err
 }
