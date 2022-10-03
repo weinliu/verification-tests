@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -15,9 +16,11 @@ import (
 	"cloud.google.com/go/storage"
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
+	configv1 "github.com/openshift/api/config/v1"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	"sigs.k8s.io/yaml"
 )
 
 var _ = g.Describe("[sig-updates] OTA cvo should", func() {
@@ -1067,8 +1070,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	//author: jiajliu@redhat.com
 	g.It("Author:jiajliu-Medium-47198-Techpreview operator will not be installed on a fresh installed", func() {
-		tpOperatorNamespace := "openshift-cluster-api"
-		tpOperatorName := "cluster-api"
+		tpOperatorNames := []string{"cluster-api", "platform-operators-aggregated"}
+		tpOperator := []map[string]string{
+			{"ns": "openshift-cluster-api", "co": tpOperatorNames[0]},
+			{"ns": "openshift-platform-operators", "co": tpOperatorNames[1]}}
 
 		featuregate, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1076,24 +1081,44 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		if featuregate != "{}" && strings.Contains(featuregate, "TechPreviewNoUpgrade") {
 			g.Skip("This case is only suitable for non-techpreview cluster!")
 		}
-		g.By("Check annotation release.openshift.io/feature-gate=TechPreviewNoUpgrade in manifests are correct.")
+
+		g.By("Check annotation release.openshift.io/feature-set=TechPreviewNoUpgrade in manifests are correct.")
 		tempDataDir, err := extractManifest(oc)
 		defer os.RemoveAll(tempDataDir)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		manifestDir := filepath.Join(tempDataDir, "manifest")
-		featuregateTotalNum, _ := exec.Command("bash", "-c", fmt.Sprintf(
-			"grep -r 'release.openshift.io/feature-gate' %s|wc -l", manifestDir)).Output()
-		featuregateNoUpgradeNum, _ := exec.Command("bash", "-c", fmt.Sprintf(
-			"grep -r 'release.openshift.io/feature-gate: .*TechPreviewNoUpgrade.*' %s|wc -l", manifestDir)).Output()
-		o.Expect(featuregateNoUpgradeNum).To(o.Equal(featuregateTotalNum))
+		featuresetTechPreviewManifest, _ := exec.Command("bash", "-c", fmt.Sprintf(
+			"grep -rl 'release.openshift.io/feature-set: .*TechPreviewNoUpgrade.*' %s|grep 'clusteroperator.yaml'", manifestDir)).Output()
+		tpOperatorFilePaths := strings.Split(strings.TrimSpace(string(featuresetTechPreviewManifest)), "\n")
+		o.Expect(len(tpOperatorFilePaths)).To(o.Equal(len(tpOperator)))
+		e2e.Logf("Expected number of cluster operator manifest files with correct annotation found!")
 
-		g.By("Check no TP operator cluster-api installed by default.")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", tpOperatorNamespace).Output()
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("NotFound"))
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", tpOperatorName).Output()
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("NotFound"))
+		for _, file := range tpOperatorFilePaths {
+			data, err := ioutil.ReadFile(file)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			var co configv1.ClusterOperator
+			err = yaml.Unmarshal(data, &co)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for i := 0; i < len(tpOperatorNames); i++ {
+				if co.Name == tpOperatorNames[i] {
+					e2e.Logf("Found %s in file %v!", tpOperatorNames[i], file)
+					tpOperatorNames = append(tpOperatorNames[:i], tpOperatorNames[i+1:]...)
+					break
+				}
+			}
+		}
+		o.Expect(len(tpOperatorNames)).To(o.Equal(0))
+		e2e.Logf("All expected tp operators found in manifests!")
+
+		g.By("Check no TP operator installed by default.")
+		for i := 0; i < len(tpOperator); i++ {
+			for k, v := range tpOperator[i] {
+				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(k, v).Output()
+				o.Expect(err).To(o.HaveOccurred())
+				o.Expect(output).To(o.ContainSubstring("NotFound"))
+				e2e.Logf("Expected: Resource %s/%v not found!", k, v)
+			}
+		}
 	})
 
 	//author: yanyang@redhat.com
