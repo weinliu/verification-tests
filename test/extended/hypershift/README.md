@@ -1,0 +1,2 @@
+- [HyperShift Project doc](https://hypershift-docs.netlify.app/)
+- For HyperShift integration test, please refer to [HyperShift CI Integration](https://docs.google.com/document/d/1PCcSSISeaKJrqsYq-hzdtjrqiLkwYON8uA1DtKomf7A/edit#heading=h.nsuuq13p2qt8) 
