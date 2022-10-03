@@ -44,7 +44,13 @@ func (versions *version) deployNetobservOperator(action bool, tempdir *string) e
 		}
 		defer os.RemoveAll(*tempdir)
 		e2e.Logf("cloned git repo successfully at %s", *tempdir)
-		deployCmd = "make deploy"
+		var vers string
+		if versions.Operator.TagName == "" {
+			vers = "main"
+		} else {
+			vers = versions.Operator.TagName
+		}
+		deployCmd = "VERSION=" + vers + " make deploy"
 	} else {
 		e2e.Logf("undeploying operator")
 		deployCmd = "make undeploy"

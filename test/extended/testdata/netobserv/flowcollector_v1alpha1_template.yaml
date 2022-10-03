@@ -9,31 +9,58 @@ objects:
       name: cluster
     spec:
       namespace: "${NAMESPACE}"
-      agent: ebpf
-      ebpf:
-        image: "${EBPF_IMAGE}"
-        imagePullPolicy: IfNotPresent
-        sampling: 0
-        cacheActiveTimeout: 5s
-        cacheMaxFlows: 1000
-        interfaces: []
-        excludeInterfaces: ["lo"]
-        logLevel: info
-        privileged: false
-      flowlogsPipeline:
-        kind: "${KIND}"
+      deploymentModel: "${DEPLOYMENT_MODEL}"
+      agent:
+        type: EBPF
+        ipfix:
+          cacheActiveTimeout: 20s
+          cacheMaxFlows: 400
+          sampling: 400
+          clusterNetworkOperator:
+            namespace: openshift-network-operator
+          ovnKubernetes:
+            namespace: ovn-kubernetes
+            daemonSetName: ovnkube-node
+            containerName: ovnkube-node
+        ebpf:
+          image: "${EBPF_IMAGE}"
+          imagePullPolicy: IfNotPresent
+          sampling: 50
+          cacheActiveTimeout: 5s
+          cacheMaxFlows: 1000
+          interfaces: [ ]
+          excludeInterfaces: ["lo"]
+          logLevel: info
+          privileged: false
+          resources:
+            requests:
+              memory: 50Mi
+              cpu: 100m
+            limits:
+              memory: 100Mi
+      processor:
         port: 2055
         image: "${FLOWLOGSPIPELINE_IMAGE}"
         imagePullPolicy: IfNotPresent
         logLevel: trace
         enableKubeProbes: true
         healthPort: 8080
-        prometheusPort: 9102
+        metricsServer:
+          port: 9102
+          tls:
+            type: "${METRIC_SERVER_TLS_TYPE}"
         ignoreMetrics: []
         dropUnusedFields: true
+        resources:
+          requests:
+            memory: 100Mi
+            cpu: 100m
+          limits:
+            memory: 300Mi
+        kafkaConsumerReplicas: 3
+        kafkaConsumerAutoscaler: null
       kafka:
-        enable: false
-        address: "kafka-cluster-kafka-bootstrap.network-observability"
+        address: "kafka-cluster-kafka-bootstrap.netobserv"
         topic: "network-flows"
         tls:
           enable: false
@@ -47,7 +74,7 @@ objects:
             certFile: user.crt
             certKey: user.key
       loki:
-        url: 'http://loki.default.svc.cluster.local:3100/'
+        url: "${LOKI_URL}"
         batchWait: 1s
         batchSize: 102400
         minBackoff: 1s
@@ -62,6 +89,7 @@ objects:
             name: openshift-service-ca.crt
             certFile: service-ca.crt
       consolePlugin:
+        register: true
         image: "${CONSOLEPLUGIN_IMAGE}"
         imagePullPolicy: IfNotPresent
         port: 9001
@@ -70,19 +98,10 @@ objects:
           enable: true
           portNames:
             "3100": loki
-      clusterNetworkOperator:
-        namespace: "openshift-network-operator"
-      ovnKubernetes:
-        namespace: "ovn-kubernetes"
-        daemonSetName: "ovnkube-node"
-        containerName: "ovnkube-node"
 parameters:
   - name: NAMESPACE
     description: "namespace where you want flowlogsPipeline and consoleplugin pods to be deployed"
-    value: "network-observability"
-  - name: KIND
-    value: "DaemonSet"
-    required: true
+    value: "netobserv"
   - name: FLOWLOGSPIPELINE_IMAGE
     value: 'quay.io/netobserv/flowlogs-pipeline:main'
     required: true
@@ -92,3 +111,9 @@ parameters:
   - name: EBPF_IMAGE
     value: 'quay.io/netobserv/netobserv-ebpf-agent:main'
     required: true
+  - name: METRIC_SERVER_TLS_TYPE
+    value: "DISABLED"
+  - name: LOKI_URL
+    value: 'http://loki.netobserv.svc:3100/'
+  - name: DEPLOYMENT_MODEL
+    value: "DIRECT"

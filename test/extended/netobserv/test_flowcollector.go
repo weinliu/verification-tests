@@ -1,6 +1,9 @@
 package netobserv
 
 import (
+	filePath "path/filepath"
+	"time"
+
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -38,11 +41,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		flowcollectorFixture := "flowcollector_v1alpha1_template.yaml"
 		flowFixture := exutil.FixturePath("testdata", "netobserv", flowcollectorFixture)
 
-		flowlogsPipeline := flowcollector{
+		flowlogsPipeline := Flowcollector{
 			Namespace:             namespace,
 			FlowlogsPipelineImage: versions.FlowlogsPipeline.Image,
 			ConsolePlugin:         versions.ConsolePlugin.Image,
-			FlowlogsPipelineKind:  "DaemonSet",
 			Template:              flowFixture,
 		}
 
@@ -55,12 +57,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(output).To(o.ContainSubstring("cluster"))
 
 		g.By("4. Wait for flowlogs-pipeline pods and eBPF pods are in running state")
-		exutil.AssertAllPodsToBeReady(oc, oc.Namespace())
-		exutil.AssertAllPodsToBeReady(oc, oc.Namespace()+"-privileged")
+		exutil.AssertAllPodsToBeReady(oc, namespace)
+		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
 
 		g.By("5. Get flowlogs-pipeline pod, check the flowlogs-pipeline pod logs and verify that flows are recorded")
-		podname := getFlowlogsPipelinePod(oc, oc.Namespace(), "flowlogs-pipeline")
-		podLogs, err := exutil.WaitAndGetSpecificPodLogs(oc, oc.Namespace(), "", podname, `'{"Bytes":'`)
+		podname := getFlowlogsPipelinePod(oc, namespace, "flowlogs-pipeline")
+		podLogs, err := exutil.WaitAndGetSpecificPodLogs(oc, namespace, "", podname, `'{"Bytes":'`)
 		exutil.AssertWaitPollNoErr(err, "Did not get log for the pod with app=flowlogs-pipeline label")
 		verifyFlowRecord(podLogs)
 	})
@@ -70,11 +72,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		flowcollectorFixture := "flowcollector_v1alpha1_template.yaml"
 		flowFixture := exutil.FixturePath("testdata", "netobserv", flowcollectorFixture)
 
-		flow := flowcollector{
+		flow := Flowcollector{
 			Namespace:             namespace,
 			FlowlogsPipelineImage: versions.FlowlogsPipeline.Image,
 			ConsolePlugin:         versions.ConsolePlugin.Image,
-			FlowlogsPipelineKind:  "DaemonSet",
+			ProcessorKind:         "DaemonSet",
 			Template:              flowFixture,
 		}
 		defer flow.deleteFlowcollector(oc)
@@ -82,7 +84,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		exutil.AssertAllPodsToBeReady(oc, namespace)
 		// ensure eBPF pods are ready
-		exutil.AssertAllPodsToBeReady(oc, oc.Namespace()+"-privileged")
+		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
 
 		pods, err := exutil.GetAllPods(oc, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -93,15 +95,16 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 	})
 
 	g.It("Author:memodi-High-46712-High-46444-verify collector as Deployment or DaemonSet [Disruptive]", func() {
+		g.Skip("The new CRD changes makes this testcase obsolete...")
 		namespace := oc.Namespace()
 		flowcollectorFixture := "flowcollector_v1alpha1_template.yaml"
 		flowFixture := exutil.FixturePath("testdata", "netobserv", flowcollectorFixture)
 
-		flow := flowcollector{
+		flow := Flowcollector{
 			Namespace:             namespace,
 			FlowlogsPipelineImage: versions.FlowlogsPipeline.Image,
 			ConsolePlugin:         versions.ConsolePlugin.Image,
-			FlowlogsPipelineKind:  "DaemonSet",
+			ProcessorKind:         "DaemonSet",
 			Template:              flowFixture,
 		}
 		defer flow.deleteFlowcollector(oc)
@@ -127,7 +130,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			targetPorts, err := getEBPFlowsConfigPort(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			collectorIPs, err := getEBPFCollectorIP(oc, flow.FlowlogsPipelineKind)
+			collectorIPs, err := getEBPFCollectorIP(oc, flow.ProcessorKind)
 			o.Expect(err).NotTo(o.HaveOccurred(), "could not find collector IPs")
 
 			collectorPort, err := getCollectorPort(oc)
@@ -145,7 +148,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.Context("When collector is running as Deployment, ensure it has sharedTarget", func() {
 			// checks for DaemonSet and update to be Deployment
-			flow.FlowlogsPipelineKind = "Deployment"
+			flow.ProcessorKind = "Deployment"
 			flow.createFlowcollector(oc)
 			exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
 
@@ -154,10 +157,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 			targetPorts, err := getEBPFlowsConfigPort(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
-
-			collectorIPs, err := getEBPFCollectorIP(oc, flow.FlowlogsPipelineKind)
+			collectorIPs, err := getEBPFCollectorIP(oc, flow.ProcessorKind)
 			o.Expect(err).NotTo(o.HaveOccurred(), "could not find collector IPs")
-
 			collectorPort, err := getCollectorPort(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -171,5 +172,96 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				o.Expect(collectorIP).To(o.Equal(ns), "collector target IP for Deployment is not as expected")
 			}
 		})
+	})
+
+	g.It("Author:aramesha-High-54043-verify metric server on TLS [Disruptive]", func() {
+		namespace := oc.Namespace()
+		baseDir := exutil.FixturePath("testdata", "netobserv")
+		// flowCollector Template path
+		flowcollectorFixture := "flowcollector_v1alpha1_template.yaml"
+		flowFixturePath := filePath.Join(baseDir, flowcollectorFixture)
+		// metrics Template path
+		promMetricsFixture := "monitoring.yaml"
+		promMetricsFixturePath := filePath.Join(baseDir, promMetricsFixture)
+		curlDest := "https://flowlogs-pipeline-prom." + namespace + ".svc:9102/metrics"
+		// certificate path
+		promCertPath := "/etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt"
+		flowlogsPodCertPath := "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt"
+		// configMap Template path
+		configMapFixture := "cluster-monitoring-config-cm.yaml"
+		configMapFixturePath := filePath.Join(baseDir, configMapFixture)
+
+		// lokiPVC template path
+		lokiPVCFixture := "loki-pvc.yaml"
+		lokiPVCFixturePath := filePath.Join(baseDir, lokiPVCFixture)
+		// loki template path
+		lokiStorageFixture := "loki-storage.yaml"
+		lokiStorageFixturePath := filePath.Join(baseDir, lokiStorageFixture)
+		// loki URL
+		lokiURL := "http://loki." + namespace + ".svc.cluster.local:3100/"
+
+		flow := Flowcollector{
+			Namespace:             namespace,
+			FlowlogsPipelineImage: versions.FlowlogsPipeline.Image,
+			ConsolePlugin:         versions.ConsolePlugin.Image,
+			Template:              flowFixturePath,
+			MetricServerTLSType:   "AUTO",
+			LokiURL:               lokiURL,
+		}
+
+		metric := Metrics{
+			Namespace: namespace,
+			Template:  promMetricsFixturePath,
+		}
+
+		monitoringCM := MonitoringConfig{
+			Name:               "cluster-monitoring-config",
+			Namespace:          "openshift-monitoring",
+			EnableUserWorkload: true,
+			Template:           configMapFixturePath,
+		}
+
+		lokiPVC := LokiPersistentVolumeClaim{
+			Namespace: namespace,
+			Template:  lokiPVCFixturePath,
+		}
+
+		loki := LokiStorage{
+			Namespace: namespace,
+			Template:  lokiStorageFixturePath,
+		}
+
+		g.By("1. Deploy LokiPVC and storage")
+		lokiPVC.deployLokiPVC(oc)
+		loki.deployLokiStorage(oc)
+
+		g.By("2. Deploy FlowCollector")
+		defer flow.deleteFlowcollector(oc)
+		flow.createFlowcollector(oc)
+
+		g.By("3. Create ClusterMonitoring configMap")
+		defer monitoringCM.deleteConfigMap(oc)
+		monitoringCM.createConfigMap(oc)
+
+		g.By("4. Deploy metrics")
+		metric.createMetrics(oc)
+
+		time.Sleep(20 * time.Second)
+		g.By("5. Ensure FLP pods and eBPF pods are ready")
+		exutil.AssertAllPodsToBeReady(oc, namespace)
+		// ensure eBPF pods are ready
+		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
+		pods, err := exutil.GetAllPods(oc, namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, pod := range pods {
+			exutil.AssertPodToBeReady(oc, pod, namespace)
+		}
+
+		g.By("6. Verify metrics by running curl on FLP pod")
+		podName := getFlowlogsPipelinePod(oc, namespace, "flowlogs-pipeline")
+		verifyCurl(oc, podName, namespace, curlDest, flowlogsPodCertPath)
+
+		g.By("7. Verify metrics by running curl on prometheus pod")
+		verifyCurl(oc, "prometheus-k8s-0", "openshift-monitoring", curlDest, promCertPath)
 	})
 })
