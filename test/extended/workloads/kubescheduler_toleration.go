@@ -27,6 +27,7 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 		g.By("Test for case OCP-13538")
 		g.By("create new namespace")
 		oc.SetupProject()
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 
 		pod13538 := podTolerate{
 			namespace:      oc.Namespace(),
