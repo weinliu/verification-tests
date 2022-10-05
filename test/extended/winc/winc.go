@@ -34,6 +34,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			2: "hybrid-overlay-node",
 			3: "kube-proxy",
 			4: "containerd",
+			5: "windows-instance-config-daemon",
 		}
 		folders = map[int]string{
 			1: "c:\\k",
@@ -626,6 +627,16 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		if !strings.Contains(string(msg), "starting containerd") {
 			e2e.Failf("Failed to retrieve container runtime logs")
 		}
+
+		g.By("Check a cluster-admin can retrieve wicd runtime logs")
+		msg, err = oc.WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=wicd/windows-instance-config-daemon.exe.INFO").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, winHostName := range windowsHostNames {
+			e2e.Logf("Retrieve wicd runtime log on: " + winHostName)
+			if !strings.Contains(string(msg), winHostName+" Log file created at:") {
+				e2e.Failf("Failed to retrieve wicd log on: " + winHostName)
+			}
+		}
 	})
 
 	// author: sgao@redhat.com
@@ -1030,15 +1041,10 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	g.It("Smokerun-Author:rrasouli-Medium-54711- [WICD] wmco services are running from ConfigMap", func() {
-		g.By("Check service configmap exists")
-		wmcoLogVersion := "windows-services-" + getWMCOVersionFromLogs(oc)
-		windowsServicesCM, err := popItemFromList(oc, "cm", "windows-services", "openshift-windows-machine-config-operator")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if wmcoLogVersion != windowsServicesCM {
-			e2e.Failf("Configmap of windows services mismatch with Logs version")
-		}
 
 		g.By("Check configmap services running on Windows workers")
+		windowsServicesCM, err := popItemFromList(oc, "cm", "windows-services", "openshift-windows-machine-config-operator")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		payload, err := oc.WithoutNamespace().Run("get").Args("cm", windowsServicesCM, "-n", "openshift-windows-machine-config-operator", "-o=jsonpath={.data.services}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		type service struct {
@@ -1059,6 +1065,63 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 				o.Expect(msg).Should(o.ContainSubstring("Running"), "Failed to check %v service is running in %v: %s", svc.Name, winhost, msg)
 			}
 		}
+
+	})
+
+	g.It("Smokerun-Author:jfrancoa-Medium-50403-wmco creates and maintains Windows services ConfigMap [Disruptive]", func() {
+
+		g.By("Check service configmap exists")
+		wmcoLogVersion := getWMCOVersionFromLogs(oc)
+		cmVersionFromLog := "windows-services-" + wmcoLogVersion
+		windowsServicesCM, err := popItemFromList(oc, "configmap", "windows-services", "openshift-windows-machine-config-operator")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if cmVersionFromLog != windowsServicesCM {
+			e2e.Failf("Configmap of windows services mismatch with Logs version")
+		}
+
+		g.By("Check windowsmachineconfig/desired-version annotation")
+		for _, winHostName := range getWindowsHostNames(oc) {
+			desiredVersion, err := oc.WithoutNamespace().Run("get").Args("nodes", winHostName, "-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/desired-version}'").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Trim(desiredVersion, `'`) != wmcoLogVersion {
+				e2e.Failf("desired-version annotation missmatch, expected %v and got %v for host %v", wmcoLogVersion, desiredVersion, winHostName)
+			}
+		}
+
+		g.By("Check that windows-instance-config-daemon serviceaccount exists")
+		_, err = oc.WithoutNamespace().Run("get").Args("serviceaccount", "windows-instance-config-daemon", "-n", "openshift-windows-machine-config-operator").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Delete windows-services configmap and wait for its recreation")
+		_, err = oc.WithoutNamespace().Run("delete").Args("configmap", windowsServicesCM, "-n", "openshift-windows-machine-config-operator").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForServicesCM(oc, windowsServicesCM)
+
+		g.By("Attempt to modify the windows-services configmap")
+		_, err = oc.WithoutNamespace().Run("patch").Args("configmap", windowsServicesCM, "-p", `{"data":{"services":"[]"}}`, "-n", "openshift-windows-machine-config-operator").Output()
+		if err == nil {
+			e2e.Failf("It should not be possible to modify configmap %v", windowsServicesCM)
+		}
+		// Try to modify the inmutable field in the configmap should not have effect
+		_, err = oc.WithoutNamespace().Run("patch").Args("configmap", windowsServicesCM, "-p", `{"inmutable":false}`, "-n", "openshift-windows-machine-config-operator").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmInmutable, err := oc.WithoutNamespace().Run("get").Args("configmap", windowsServicesCM, "-n", "openshift-windows-machine-config-operator", "-o=jsonpath='{.immutable}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Trim(cmInmutable, `'`) != "true" {
+			e2e.Failf("Inmutable field inside %v configmap has been modified when it should not be possible", windowsServicesCM)
+		}
+
+		g.By("Stop WMCO, delete existing windows-services configmap and create new dummy ones. WMCO should delete all and leave only the valid one")
+		defer scaleDeployment(oc, "wmco", 1, "openshift-windows-machine-config-operator")
+		scaleDownWMCO(oc)
+		_, err = oc.WithoutNamespace().Run("delete").Args("configmap", windowsServicesCM, "-n", "openshift-windows-machine-config-operator").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		setConfigmap(oc, "wicd_configmap.yaml", map[string]string{"<version>": "8.8.8-55657c8"})
+		setConfigmap(oc, "wicd_configmap.yaml", map[string]string{"<version>": "0.0.1-55657c8"})
+		// Create also one with the same id as the existing
+		setConfigmap(oc, "wicd_configmap.yaml", map[string]string{"<version>": wmcoLogVersion})
+		scaleDeployment(oc, "wmco", 1, "openshift-windows-machine-config-operator")
+		waitForServicesCM(oc, windowsServicesCM)
 
 	})
 })

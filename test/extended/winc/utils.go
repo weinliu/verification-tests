@@ -478,14 +478,16 @@ func ip4or6(s string) string {
 	return "unknown"
 }
 
-func setConfigmap(oc *exutil.CLI, address string, administrator string, configMapFile string) error {
-	configmap := ""
-	configmap = getFileContent("winc", configMapFile)
-	configmap = strings.ReplaceAll(configmap, "<address>", address)
-	configmap = strings.ReplaceAll(configmap, "<username>", administrator)
-	defer os.Remove("configMapFile")
-	ioutil.WriteFile("configMapFile", []byte(configmap), 0644)
-	_, err := oc.WithoutNamespace().Run("create").Args("-f", "configMapFile").Output()
+func setConfigmap(oc *exutil.CLI, configMapFile string, replacement map[string]string) error {
+	configmap := getFileContent("winc", configMapFile)
+	for rep, value := range replacement {
+		configmap = strings.ReplaceAll(configmap, rep, value)
+	}
+	ts := time.Now().UTC().Format(time.RFC3339)
+	cmFileName := "configMapFile" + strings.Replace(ts, ":", "", -1) // get rid of offensive colons
+	defer os.Remove(cmFileName)
+	ioutil.WriteFile(cmFileName, []byte(configmap), 0644)
+	_, err := oc.WithoutNamespace().Run("create").Args("-f", cmFileName).Output()
 	return err
 }
 
@@ -626,7 +628,7 @@ func setBYOH(oc *exutil.CLI, iaasPlatform string, addressType string, machineset
 	createMachineset(oc, MSFileName)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	addressesArray := fetchAddress(oc, addressType, machinesetName)
-	setConfigmap(oc, addressesArray[0], user, "config-map.yaml")
+	setConfigmap(oc, "config-map.yaml", map[string]string{"<address>": addressesArray[0], "<username>": user})
 	waitForMachinesetReady(oc, machinesetName, 15, 1)
 	return addressesArray
 }
@@ -672,4 +674,22 @@ func popItemFromList(oc *exutil.CLI, value string, keywordSearch string, namespa
 		}
 	}
 	return retValue, err
+}
+
+func waitForServicesCM(oc *exutil.CLI, cmName string) {
+	pollErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		windowsServicesCM, err := popItemFromList(oc, "configmap", "windows-services", "openshift-windows-machine-config-operator")
+		if err != nil || windowsServicesCM == "" {
+			return false, nil
+		}
+		if windowsServicesCM == cmName {
+			return true, nil
+		}
+		e2e.Logf("Windows service configmap %v does not match expected %v", windowsServicesCM, cmName)
+		return false, nil
+
+	})
+	if pollErr != nil {
+		e2e.Failf("Expected windows-services configmap %v not found after %v seconds ...", cmName, 180)
+	}
 }
