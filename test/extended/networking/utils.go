@@ -1832,3 +1832,61 @@ func getNodeMacAddress(oc *exutil.CLI, nodeName string) string {
 	o.Expect(err1).NotTo(o.HaveOccurred())
 	return macAddress
 }
+
+// check if an env is in a configmap in specific namespace [usage: checkConfigMap(oc, namesapce, configmapName, envString)]
+func checkEnvInConfigMap(oc *exutil.CLI, ns, configmapName string, envString string) error {
+	err := checkConfigMap(oc, ns, configmapName)
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cm %v is not found in namespace %v", configmapName, ns))
+
+	checkErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", ns, configmapName, "-oyaml").Output()
+		if err != nil {
+			e2e.Logf("Failed to get configmap %v, error: %s. Trying again", configmapName, err)
+			return false, nil
+		}
+		if !strings.Contains(output, envString) {
+			e2e.Logf("Did not find %v in ovnkube-config configmap,try next round.", envString)
+			e2e.Logf(output)
+			return false, nil
+		}
+		return true, nil
+	})
+	return checkErr
+}
+
+// check if certain log message is in a pod in specific namespace
+func checkLogMessageInPod(oc *exutil.CLI, namespace string, containerName string, podName string, filter string) (string, error) {
+	var podLogs string
+	var err error
+	checkErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		podLogs, err = exutil.GetSpecificPodLogs(oc, namespace, containerName, podName, filter)
+		if len(podLogs) == 0 || err != nil {
+			e2e.Logf("did not get podLogs: %v, or have err:%v, try again", podLogs, err)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("fail to get expected log in pod %v, err: %v", podName, checkErr))
+	return podLogs, nil
+}
+
+// get OVN-Kubernetes management interface (ovn-k8s-mp0) IP for the node
+func getOVNK8sNodeMgmtIPv4(oc *exutil.CLI, nodeName string) string {
+	var output string
+	var err error
+	checkErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		output, err = exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", "/usr/sbin/ip -4 -brief address show | grep ovn-k8s-mp0")
+		if output == "" || err != nil {
+			e2e.Logf("Did not get node's management interface, errors: %v, try again", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("fail to get management interface for node %v, err: %v", nodeName, checkErr))
+
+	e2e.Logf("Match out the OVN-Kubernetes management IP address for the node")
+	re := regexp.MustCompile(`(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}`)
+	nodeOVNK8sMgmtIP := re.FindAllString(output, -1)[0]
+	e2e.Logf("Got ovn-k8s management interface IP for node %v as: %v", nodeName, nodeOVNK8sMgmtIP)
+	return nodeOVNK8sMgmtIP
+}
