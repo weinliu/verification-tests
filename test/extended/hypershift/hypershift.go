@@ -50,7 +50,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Author:heli-Critical-42855-Check Status Conditions for HostedControlPlane", func() {
+	g.It("HyperShiftMGMT-Author:heli-Critical-42855-Check Status Conditions for HostedControlPlane", func() {
 		res := doOcpReq(oc, OcpGet, true, "-n", guestClusterNamespace, "hostedcontrolplane", guestClusterName, "-ojsonpath={range .status.conditions[*]}{@.type}{\" \"}{@.status}{\" \"}{end}")
 		checkSubstring(res,
 			[]string{"ValidHostedControlPlaneConfiguration True",
@@ -58,7 +58,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Author:heli-Critical-43555-Allow direct ingress on guest clusters on AWS", func() {
+	g.It("HyperShiftMGMT-Author:heli-Critical-43555-Allow direct ingress on guest clusters on AWS", func() {
 		guestClusterKubeconfigFile := "/tmp/guestcluster-kubeconfig-43555"
 
 		var bashClient = NewCmdClient()
@@ -85,7 +85,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Author:heli-Critical-43282-Implement versioning API and report version status in hostedcluster[Serial][Disruptive]", func() {
+	g.It("HyperShiftMGMT-Author:heli-Critical-43282-Implement versioning API and report version status in hostedcluster[Serial][Disruptive]", func() {
 		oriImage := doOcpReq(oc, OcpGet, true, "-n", "clusters", "hostedcluster", guestClusterName, "-ojsonpath={.status.version.desired.image}")
 		e2e.Logf("hostedcluster %s image: %s", guestClusterName, oriImage)
 
@@ -128,7 +128,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Longduration-NonPreRelease-Author:heli-Critical-43272-Test cluster autoscaler via hostedCluster autoScaling settings[Serial][Slow]", func() {
+	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:heli-Critical-43272-Test cluster autoscaler via hostedCluster autoScaling settings[Serial][Slow]", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 43272 is for AWS - skipping test ...")
 		}
@@ -202,7 +202,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Author:heli-Critical-43829-Test autoscaling status in nodePool conditions[Serial]", func() {
+	g.It("HyperShiftMGMT-Author:heli-Critical-43829-Test autoscaling status in nodePool conditions[Serial]", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 43829 is for AWS - skipping test ...")
 		}
@@ -259,7 +259,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Author:heli-Critical-43268-Expose nodePoolManagement API to enable rolling upgrade[Serial][Disruptive]", func() {
+	g.It("HyperShiftMGMT-Author:heli-Critical-43268-Expose nodePoolManagement API to enable rolling upgrade[Serial][Disruptive]", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 43268 is for AWS - skipping test ...")
 		}
@@ -322,7 +322,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Author:heli-Critical-43554-Check FIPS support in the Hosted Cluster", func() {
+	g.It("HyperShiftMGMT-Author:heli-Critical-43554-Check FIPS support in the Hosted Cluster", func() {
 		res := doOcpReq(oc, OcpGet, false, "-n", "clusters", "hostedcluster", guestClusterName, "-ojsonpath={.spec.fips}")
 		if res != "true" {
 			g.Skip("only for the fip enabled hostedcluster, skip test run")
@@ -351,7 +351,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Author:heli-Critical-45770-Test basic fault resilient HA-capable etcd[Serial][Disruptive]", func() {
+	g.It("HyperShiftMGMT-Author:heli-Critical-45770-Test basic fault resilient HA-capable etcd[Serial][Disruptive]", func() {
 		controlplaneMode := doOcpReq(oc, OcpGet, true, "hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.spec.controllerAvailabilityPolicy}")
 		e2e.Logf("get hostedcluster %s controllerAvailabilityPolicy: %s ", guestClusterName, controlplaneMode)
 		if controlplaneMode != "HighlyAvailable" {
@@ -412,7 +412,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Author:heli-Critical-46711-Test HCP components to use service account tokens", func() {
+	g.It("HyperShiftMGMT-Author:heli-Critical-46711-Test HCP components to use service account tokens", func() {
 		//get capi-provider secret
 		apiPattern := `-ojsonpath={.spec.template.spec.volumes[?(@.name=="credentials")].secret.secretName}`
 		apiSecret := doOcpReq(oc, OcpGet, true, "deploy", "capi-provider", "-n", guestClusterNamespace, apiPattern)
@@ -435,7 +435,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Author:heli-Critical-44824-Resource requests/limit configuration for critical control plane workloads[Serial][Disruptive]", func() {
+	g.It("HyperShiftMGMT-Author:heli-Critical-44824-Resource requests/limit configuration for critical control plane workloads[Serial][Disruptive]", func() {
 		cpuRequest := doOcpReq(oc, OcpGet, true, "deployment", "kube-apiserver", "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.cpu}")
 		memoryRequest := doOcpReq(oc, OcpGet, true, "deployment", "kube-apiserver", "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.memory}")
 		e2e.Logf("cpu request: %s, memory request: %s\n", cpuRequest, memoryRequest)
@@ -486,7 +486,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Author:heli-Critical-44926-Test priority classes for Hypershift control plane workloads", func() {
+	g.It("HyperShiftMGMT-Author:heli-Critical-44926-Test priority classes for Hypershift control plane workloads", func() {
 		//deployment
 		priorityClasses := map[string][]string{
 			"hypershift-api-critical": {
@@ -537,7 +537,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Author:heli-NonPreRelease-Critical-44942-Enable control plane deployment restart on demand[Serial]", func() {
+	g.It("HyperShiftMGMT-Author:heli-NonPreRelease-Critical-44942-Enable control plane deployment restart on demand[Serial]", func() {
 		res := doOcpReq(oc, OcpGet, false, "hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.metadata.annotations}")
 		e2e.Logf("get hostedcluster %s annotation: %s ", guestClusterName, res)
 
@@ -588,7 +588,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Author:heli-Critical-44988-Colocate control plane components by default", func() {
+	g.It("HyperShiftMGMT-Author:heli-Critical-44988-Colocate control plane components by default", func() {
 		//deployment
 		controlplaneComponents := []string{
 			"kube-apiserver",
@@ -634,7 +634,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("Author:heli-Critical-48025-Test EBS allocation for nodepool[Disruptive]", func() {
+	g.It("HyperShiftMGMT-Author:heli-Critical-48025-Test EBS allocation for nodepool[Disruptive]", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 48025 is for AWS - skipping test ...")
 		}
