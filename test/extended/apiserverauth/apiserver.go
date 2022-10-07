@@ -1407,7 +1407,12 @@ spec:
 						// Generating Alert for removed apis
 						_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(removeReleaseAPI).Output()
 						o.Expect(err).NotTo(o.HaveOccurred())
-						alertOutput, err := oc.Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-s", "-k", "http://localhost:9090/api/v1/alerts").Output()
+						// Check prometheus monitoring pods running status to avoid failure caused by pods "prometheus" not found" Error
+						prometheusGetOut, prometheusGeterr := oc.Run("get").Args("-n", "openshift-monitoring", "pods", "-l", "app.kubernetes.io/component=prometheus", "-o", `jsonpath={.items[?(@.status.phase=="Running")].metadata.name}`).Output()
+						o.Expect(prometheusGeterr).NotTo(o.HaveOccurred())
+						prometheuspod, _ := exec.Command("bash", "-c", fmt.Sprintf("echo %v | awk '{print $1}'", prometheusGetOut)).Output()
+						o.Expect(prometheuspod).Should(o.ContainSubstring("prometheus-k8s"), "Failed to get running prometheus pods")
+						alertOutput, err := oc.Run("exec").Args("-n", "openshift-monitoring", strings.Trim(string(prometheuspod), "\n"), "-c", "prometheus", "--", "curl", "-s", "-k", "http://localhost:9090/api/v1/alerts").Output()
 						o.Expect(err).NotTo(o.HaveOccurred())
 						cmd := fmt.Sprintf(`echo '%s' | egrep 'APIRemovedInNextReleaseInUse' | grep -oh '%s'`, strings.ReplaceAll(alertOutput, "'", ""), removeReleaseAPI)
 						_, outerr := exec.Command("bash", "-c", cmd).Output()
@@ -1444,7 +1449,12 @@ spec:
 						// Generating Alert for removed apis
 						_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(removeReleaseAPI).Output()
 						o.Expect(err).NotTo(o.HaveOccurred())
-						alertOutput, err := oc.Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-s", "-k", "http://localhost:9090/api/v1/alerts").Output()
+						// Check prometheus monitoring pods running status to avoid failure caused by pods "prometheus" not found" Error
+						prometheusGetOut, prometheusGeterr := oc.Run("get").Args("-n", "openshift-monitoring", "pods", "-l", "app.kubernetes.io/component=prometheus", "-o", `jsonpath={.items[?(@.status.phase=="Running")].metadata.name}`).Output()
+						o.Expect(prometheusGeterr).NotTo(o.HaveOccurred())
+						prometheuspod, _ := exec.Command("bash", "-c", fmt.Sprintf("echo %v | awk '{print $1}'", prometheusGetOut)).Output()
+						o.Expect(prometheuspod).Should(o.ContainSubstring("prometheus-k8s"), "Failed to get running prometheus pods")
+						alertOutput, err := oc.Run("exec").Args("-n", "openshift-monitoring", strings.Trim(string(prometheuspod), "\n"), "-c", "prometheus", "--", "curl", "-s", "-k", "http://localhost:9090/api/v1/alerts").Output()
 						o.Expect(err).NotTo(o.HaveOccurred())
 						cmd := fmt.Sprintf(`echo '%v' | egrep 'APIRemovedInNextEUSReleaseInUse' | grep -oh '%s'`, strings.ReplaceAll(alertOutput, "'", ""), removeReleaseAPI)
 						_, outerr := exec.Command("bash", "-c", cmd).Output()
