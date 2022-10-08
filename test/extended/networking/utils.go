@@ -1890,3 +1890,22 @@ func getOVNK8sNodeMgmtIPv4(oc *exutil.CLI, nodeName string) string {
 	e2e.Logf("Got ovn-k8s management interface IP for node %v as: %v", nodeName, nodeOVNK8sMgmtIP)
 	return nodeOVNK8sMgmtIP
 }
+
+//findLogFromOvnMasterPod will search logs we wanted, since sometimes the leader will changed, So here check all ovnkube-master logs.
+func findLogFromOvnMasterPod(oc *exutil.CLI, logs string) bool {
+	findLog := false
+	ovnMasterPodName := getPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
+	for _, ovnPod := range ovnMasterPodName {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ovn-kubernetes", ovnPod, "-c", "ovnkube-master").OutputToFile("ovnmasterlog")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		grepOutput, err := exec.Command("bash", "-c", "cat "+output+" | grep -i '"+logs+"' | wc -l").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		grepOutputString := strings.TrimSpace(string(grepOutput))
+		if grepOutputString != "0" {
+			e2e.Logf("find the expected logs number of lines %s", grepOutputString)
+			findLog = true
+			break
+		}
+	}
+	return findLog
+}

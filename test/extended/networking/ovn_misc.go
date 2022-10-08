@@ -1,10 +1,11 @@
 package networking
 
 import (
+	"strings"
+
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"strings"
 )
 
 var _ = g.Describe("[sig-networking] SDN", func() {
@@ -20,7 +21,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: anusaxen@redhat.com
-	g.It("Author:anusaxen-HyperShiftGUEST-Medium-49216-[BZ 2009857] ovnkube-node logs should not print api token in logs. ", func() {
+	g.It("Author:anusaxen-HyperShiftGUEST-Medium-49216-ovnkube-node logs should not print api token in logs. ", func() {
+		g.By("it's for bug 2009857")
 		workerNode, err := exutil.GetFirstWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ovnkubePod, err := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", workerNode)
@@ -29,6 +31,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(podlogs).NotTo(o.ContainSubstring("kube-api-token"))
 		g.By("ovnkube-node logs doesn't contain api-token")
+	})
+
+	//author: zzhao@redhat.com
+	g.It("Author:zzhao-Medium-54742- Completed pod ip can be released. ", func() {
+		g.By("it's for bug 2091157,Check the ovnkube-master logs to see if completed pod already release ip")
+		result := findLogFromOvnMasterPod(oc, "Releasing IPs for Completed pod")
+		o.Expect(result).To(o.BeTrue())
 	})
 
 })
