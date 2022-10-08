@@ -27,9 +27,10 @@ objects:
         name: "${IMAGESETREF}"
       installConfigSecretRef:
         name: "${INSTALLCONFIGSECRET}"
-      installerImageOverride: "${INSTALLERIMAGE}"
+      installerImageOverride: "${INSTALLERIMAGEOVERRIDE}"
     pullSecretRef:
       name: "${PULLSECRETREF}"
+    installAttemptsLimit: ${{INSTALLATTEMPTSLIMIT}}
 parameters:
 - name: FAKE
 - name: NAME
@@ -42,4 +43,6 @@ parameters:
 - name: IMAGESETREF
 - name: INSTALLCONFIGSECRET
 - name: PULLSECRETREF
-- name: INSTALLERIMAGE
+- name: INSTALLERIMAGEOVERRIDE
+- name: INSTALLATTEMPTSLIMIT
+  value: "3"

@@ -217,19 +217,20 @@ type gcpInstallConfig struct {
 }
 
 type gcpClusterDeployment struct {
-	fake                string
-	name                string
-	namespace           string
-	baseDomain          string
-	clusterName         string
-	platformType        string
-	credRef             string
-	region              string
-	imageSetRef         string
-	installConfigSecret string
-	pullSecretRef       string
-	installerImage      string
-	template            string
+	fake                   string
+	name                   string
+	namespace              string
+	baseDomain             string
+	clusterName            string
+	platformType           string
+	credRef                string
+	region                 string
+	imageSetRef            string
+	installConfigSecret    string
+	pullSecretRef          string
+	installerImageOverride string
+	installAttemptsLimit   int
+	template               string
 }
 
 type gcpClusterPool struct {
@@ -259,6 +260,12 @@ type prometheusQueryResult struct {
 				ClusterpoolNamespace string `json:"clusterpool_namespace"`
 				ClusterDeployment    string `json:"cluster_deployment"`
 				ExportedNamespace    string `json:"exported_namespace"`
+				ClusterType          string `json:"cluster_type"`
+				ClusterVersion       string `json:"cluster_version"`
+				InstallAttempt       string `json:"install_attempt"`
+				Platform             string `json:"platform"`
+				Region               string `json:"region"`
+				Prometheus           string `json:"prometheus"`
 				Condition            string `json:"condition"`
 				Reason               string `json:"reason"`
 				Endpoint             string `json:"endpoint"`
@@ -266,6 +273,7 @@ type prometheusQueryResult struct {
 				Job                  string `json:"job"`
 				Namespace            string `json:"namespace"`
 				Pod                  string `json:"pod"`
+				Workers              string `json:"workers"`
 				Service              string `json:"service"`
 			} `json:"metric"`
 			Value []interface{} `json:"value"`
@@ -498,7 +506,7 @@ func (config *gcpInstallConfig) create(oc *exutil.CLI) {
 }
 
 func (cluster *gcpClusterDeployment) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cluster.template, "-p", "FAKE="+cluster.fake, "NAME="+cluster.name, "NAMESPACE="+cluster.namespace, "BASEDOMAIN="+cluster.baseDomain, "CLUSTERNAME="+cluster.clusterName, "PLATFORMTYPE="+cluster.platformType, "CREDREF="+cluster.credRef, "REGION="+cluster.region, "IMAGESETREF="+cluster.imageSetRef, "INSTALLCONFIGSECRET="+cluster.installConfigSecret, "PULLSECRETREF="+cluster.pullSecretRef, "INSTALLERIMAGE="+cluster.installerImage)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cluster.template, "-p", "FAKE="+cluster.fake, "NAME="+cluster.name, "NAMESPACE="+cluster.namespace, "BASEDOMAIN="+cluster.baseDomain, "CLUSTERNAME="+cluster.clusterName, "PLATFORMTYPE="+cluster.platformType, "CREDREF="+cluster.credRef, "REGION="+cluster.region, "IMAGESETREF="+cluster.imageSetRef, "INSTALLCONFIGSECRET="+cluster.installConfigSecret, "PULLSECRETREF="+cluster.pullSecretRef, "INSTALLERIMAGEOVERRIDE="+cluster.installerImageOverride, "INSTALLATTEMPTSLIMIT="+strconv.Itoa(cluster.installAttemptsLimit))
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -965,6 +973,24 @@ func checkResourcesMetricValue(oc *exutil.CLI, resourceName, resourceNamespace s
 						return true, nil
 					}
 					e2e.Logf("The metric Value %s didn't match expected %s, try next round", v.Value[1].(string), expectedResult)
+					return false, nil
+				}
+			case "hive_cluster_deployment_install_success_total_count":
+				if v.Metric.Region == resourceName && v.Metric.Namespace == resourceNamespace {
+					if data.Data.Result[0].Metric.InstallAttempt == expectedResult {
+						e2e.Logf("The region %s has %s install attempts", v.Metric.Region, data.Data.Result[0].Metric.InstallAttempt)
+						return true, nil
+					}
+					e2e.Logf("The metric InstallAttempt lable %s didn't match expected %s, try next round", data.Data.Result[0].Metric.InstallAttempt, expectedResult)
+					return false, nil
+				}
+			case "hive_cluster_deployment_install_failure_total_count":
+				if v.Metric.Region == resourceName && v.Metric.Namespace == resourceNamespace {
+					if data.Data.Result[2].Metric.InstallAttempt == expectedResult {
+						e2e.Logf("The region %s has %s install attempts", v.Metric.Region, data.Data.Result[2].Metric.InstallAttempt)
+						return true, nil
+					}
+					e2e.Logf("The metric InstallAttempt lable %s didn't match expected %s, try next round", data.Data.Result[2].Metric.InstallAttempt, expectedResult)
 					return false, nil
 				}
 			}

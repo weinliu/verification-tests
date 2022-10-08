@@ -71,18 +71,19 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		}
 		g.By("Config GCP ClusterDeployment...")
 		cluster := gcpClusterDeployment{
-			fake:                "false",
-			name:                cdName,
-			namespace:           oc.Namespace(),
-			baseDomain:          GCPBaseDomain,
-			clusterName:         cdName,
-			platformType:        "gcp",
-			credRef:             GCPCreds,
-			region:              GCPRegion,
-			imageSetRef:         cdName + "-imageset",
-			installConfigSecret: cdName + "-install-config",
-			pullSecretRef:       PullSecret,
-			template:            filepath.Join(testDataDir, "clusterdeployment-gcp.yaml"),
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           GCPBaseDomain,
+			clusterName:          cdName,
+			platformType:         "gcp",
+			credRef:              GCPCreds,
+			region:               GCPRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 3,
+			template:             filepath.Join(testDataDir, "clusterdeployment-gcp.yaml"),
 		}
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
@@ -368,18 +369,19 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		}
 		g.By("Config GCP ClusterDeployment...")
 		cluster := gcpClusterDeployment{
-			fake:                "false",
-			name:                cdName,
-			namespace:           oc.Namespace(),
-			baseDomain:          GCPBaseDomain,
-			clusterName:         cdName,
-			platformType:        "gcp",
-			credRef:             GCPCreds,
-			region:              GCPRegion,
-			imageSetRef:         cdName + "-imageset",
-			installConfigSecret: cdName + "-install-config",
-			pullSecretRef:       PullSecret,
-			template:            filepath.Join(testDataDir, "clusterdeployment-gcp.yaml"),
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           GCPBaseDomain,
+			clusterName:          cdName,
+			platformType:         "gcp",
+			credRef:              GCPCreds,
+			region:               GCPRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 3,
+			template:             filepath.Join(testDataDir, "clusterdeployment-gcp.yaml"),
 		}
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
@@ -612,18 +614,19 @@ spec:
 		}
 		g.By("Config GCP ClusterDeployment...")
 		cluster := gcpClusterDeployment{
-			fake:                "false",
-			name:                cdName,
-			namespace:           oc.Namespace(),
-			baseDomain:          GCPBaseDomain,
-			clusterName:         cdName,
-			platformType:        "gcp",
-			credRef:             GCPCreds,
-			region:              GCPRegion,
-			imageSetRef:         cdName + "-imageset",
-			installConfigSecret: cdName + "-install-config",
-			pullSecretRef:       PullSecret,
-			template:            filepath.Join(testDataDir, "clusterdeployment-gcp.yaml"),
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           GCPBaseDomain,
+			clusterName:          cdName,
+			platformType:         "gcp",
+			credRef:              GCPCreds,
+			region:               GCPRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 3,
+			template:             filepath.Join(testDataDir, "clusterdeployment-gcp.yaml"),
 		}
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
@@ -674,18 +677,19 @@ spec:
 		}
 		g.By("Config GCP ClusterDeployment...")
 		cluster := gcpClusterDeployment{
-			fake:                "false",
-			name:                cdName,
-			namespace:           oc.Namespace(),
-			baseDomain:          GCPBaseDomain,
-			clusterName:         cdName,
-			platformType:        "gcp",
-			credRef:             GCPCreds,
-			region:              GCPRegion,
-			imageSetRef:         cdName + "-imageset",
-			installConfigSecret: cdName + "-install-config",
-			pullSecretRef:       PullSecret,
-			template:            filepath.Join(testDataDir, "clusterdeployment-gcp.yaml"),
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           GCPBaseDomain,
+			clusterName:          cdName,
+			platformType:         "gcp",
+			credRef:              GCPCreds,
+			region:               GCPRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 3,
+			template:             filepath.Join(testDataDir, "clusterdeployment-gcp.yaml"),
 		}
 		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
@@ -838,19 +842,20 @@ spec:
 		o.Expect(installerImageForOverride).NotTo(o.BeEmpty())
 		e2e.Logf("ClusterVersion is %s, installerImageForOverride is %s", clusterVersion, installerImageForOverride)
 		cluster := gcpClusterDeployment{
-			fake:                "false",
-			name:                cdName,
-			namespace:           oc.Namespace(),
-			baseDomain:          GCPBaseDomain,
-			clusterName:         cdName,
-			platformType:        "gcp",
-			credRef:             GCPCreds,
-			region:              GCPRegion,
-			imageSetRef:         imageSetName,
-			installConfigSecret: installConfigSecretName,
-			pullSecretRef:       PullSecret,
-			installerImage:      installerImageForOverride,
-			template:            clusterTemp,
+			fake:                   "false",
+			name:                   cdName,
+			namespace:              oc.Namespace(),
+			baseDomain:             GCPBaseDomain,
+			clusterName:            cdName,
+			platformType:           "gcp",
+			credRef:                GCPCreds,
+			region:                 GCPRegion,
+			imageSetRef:            imageSetName,
+			installConfigSecret:    installConfigSecretName,
+			pullSecretRef:          PullSecret,
+			installerImageOverride: installerImageForOverride,
+			installAttemptsLimit:   3,
+			template:               clusterTemp,
 		}
 		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
 		cluster.create(oc)
@@ -973,6 +978,110 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, claimName2, ok, DefaultTimeout, []string{"ClusterClaim", "-n", oc.Namespace(), "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		e2e.Logf("Check metric %s Value change to 2", query2)
 		checkResourcesMetricValue(oc, poolName, oc.Namespace(), "2", token, PrometheusURL, query2)
+	})
+
+	//author: mihuang@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "54463"|./bin/extended-platform-tests run --timeout 35m -f -
+	g.It("NonPreRelease-ConnectedOnly-Author:mihuang-Medium-54463-Add cluster install success/fail metrics[Serial]", func() {
+		testCaseID := "54463"
+		cdName := "cluster-" + testCaseID
+		imageSetName := cdName + "-imageset"
+		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
+		imageSet := clusterImageSet{
+			name:         imageSetName,
+			releaseImage: testOCPImage,
+			template:     imageSetTemp,
+		}
+
+		g.By("Create ClusterImageSet...")
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", imageSetName})
+		imageSet.create(oc)
+
+		oc.SetupProject()
+		//secrets can be accessed by pod in the same namespace, so copy pull-secret and gcp-credentials to target namespace for the clusterdeployment
+		g.By("Don't copy GCP platform credentials make install fail...")
+		//createGCPCreds(oc, oc.Namespace())
+
+		g.By("Copy pull-secret...")
+		createPullSecret(oc, oc.Namespace())
+
+		g.By("Create GCP Install-Config Secret...")
+		installConfigTemp := filepath.Join(testDataDir, "gcp-install-config.yaml")
+		installConfigSecretName := cdName + "-install-config"
+		projectID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.platformStatus.gcp.projectID}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(projectID).NotTo(o.BeEmpty())
+		installConfigSecret := gcpInstallConfig{
+			name1:      installConfigSecretName,
+			namespace:  oc.Namespace(),
+			baseDomain: GCPBaseDomain,
+			name2:      cdName,
+			region:     GCPRegion,
+			projectid:  projectID,
+			template:   installConfigTemp,
+		}
+		defer cleanupObjects(oc, objectTableRef{"secret", oc.Namespace(), installConfigSecretName})
+		installConfigSecret.create(oc)
+
+		g.By("Get SA token to check Metrics...")
+		token, err := exutil.GetSAToken(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(token).NotTo(o.BeEmpty())
+
+		var installAttemptsLimit = []int{3, 1}
+		for i := 0; i < len(installAttemptsLimit); i++ {
+			func() {
+				if installAttemptsLimit[i] == 3 {
+					g.By("Config GCP ClusterDeployment with installAttemptsLimit=3 and make install fail..")
+				} else {
+					g.By("Config GCP ClusterDeployment with installAttemptsLimit=1 and make install success..")
+					g.By("Copy GCP platform credentials make install success...")
+					createGCPCreds(oc, oc.Namespace())
+				}
+				cluster := gcpClusterDeployment{
+					fake:                 "true",
+					name:                 cdName,
+					namespace:            oc.Namespace(),
+					baseDomain:           GCPBaseDomain,
+					clusterName:          cdName,
+					platformType:         "gcp",
+					credRef:              GCPCreds,
+					region:               GCPRegion,
+					imageSetRef:          cdName + "-imageset",
+					installConfigSecret:  cdName + "-install-config",
+					pullSecretRef:        PullSecret,
+					installAttemptsLimit: installAttemptsLimit[i],
+					template:             filepath.Join(testDataDir, "clusterdeployment-gcp.yaml"),
+				}
+				defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
+				cluster.create(oc)
+
+				if installAttemptsLimit[i] == 3 {
+					newCheck("expect", "get", asAdmin, withoutNamespace, contain, "InstallAttemptsLimitReached", ok, 5*DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[?(@.type==\"ProvisionStopped\")].reason}"}).check(oc)
+					o.Expect(checkResourceNumber(oc, cdName, []string{"pods", "-A"})).To(o.Equal(3))
+					queryFailSum := "hive_cluster_deployment_install_failure_total_sum"
+					queryFailCount := "hive_cluster_deployment_install_failure_total_count"
+					queryFailBucket := "hive_cluster_deployment_install_failure_total_bucket"
+					queryFail := []string{queryFailSum, queryFailCount, queryFailBucket}
+					g.By("Check hive metrics for cd install fail")
+					checkMetricExist(oc, ok, token, PrometheusURL, queryFail)
+					e2e.Logf("Check metric %s with install_attempt = 2", queryFailCount)
+					checkResourcesMetricValue(oc, GCPRegion, HiveNamespace, "2", token, PrometheusURL, queryFailCount)
+					e2e.Logf("delete cd and create a success case")
+				} else {
+					g.By("Check GCP ClusterDeployment installed flag is true")
+					newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+					querySuccSum := "hive_cluster_deployment_install_success_total_sum"
+					querySuccCount := "hive_cluster_deployment_install_success_total_count"
+					querySuccBucket := "hive_cluster_deployment_install_success_total_bucket"
+					querySuccess := []string{querySuccSum, querySuccCount, querySuccBucket}
+					g.By("Check hive metrics for cd installed successfully")
+					checkMetricExist(oc, ok, token, PrometheusURL, querySuccess)
+					e2e.Logf("Check metric %s with with install_attempt = 0", querySuccCount)
+					checkResourcesMetricValue(oc, GCPRegion, HiveNamespace, "0", token, PrometheusURL, querySuccCount)
+				}
+			}()
+		}
 	})
 
 })
