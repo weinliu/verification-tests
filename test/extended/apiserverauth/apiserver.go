@@ -2897,4 +2897,26 @@ spec:
 		o.Expect(sliceCreateOut).Should(o.ContainSubstring(`Invalid value: "127.0.0.1": may not be in the loopback range`))
 		o.Expect(sliceCreateError).To(o.HaveOccurred())
 	})
+
+	// author: zxiao@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Medium-10933-[platformmanagement_public_768] Check if client use protobuf data transfer scheme to communicate with master", func() {
+		g.By("1) Create new project required for this test execution")
+		oc.SetupProject()
+		namespace := oc.Namespace()
+
+		filename := "ocp10933-hello-pod.json"
+		g.By(fmt.Sprintf("2) Create pod with resource file %s", filename))
+		template := getTestDataFilePath(filename)
+		err := oc.Run("create").Args("-f", template, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		podName := "hello-openshift"
+		g.By(fmt.Sprintf("3) Wait for pod with name %s to be ready", podName))
+		exutil.AssertPodToBeReady(oc, podName, namespace)
+
+		g.By("4) Check get pods resource and check output")
+		getOutput, err := oc.Run("get").Args("pods", "--loglevel", "8", "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(getOutput).NotTo(o.ContainSubstring("protobuf"))
+	})
 })
