@@ -304,6 +304,39 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Audit logs are missing @timestamp field.")
 		})
 
+		g.It("CPaasrunOnly-Author:ikanse-High-53313-Vector collector deployed with tolerations[Serial][disruptive]", func() {
+
+			g.By("Taint a worker node vector=deploy:NoSchedule so that no collector pod will be scheduled on it")
+			taintNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[0].metadata.name}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("-n", cloNS, "taint", "node", taintNode, "vector-", "--overwrite").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("-n", cloNS, "taint", "node", taintNode, "vector=deploy:NoSchedule", "--overwrite").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			g.By("Waiting for the Logging pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By(fmt.Sprintf("Make sure that the collector pod is not scheduled on the %s", taintNode))
+			chkCollector, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=component=collector", "--field-selector", "spec.nodeName="+taintNode+"", "-o", "name").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(chkCollector).Should(o.BeEmpty())
+
+			g.By("Add toleration for collector for the taint vector=deploy:NoSchedule")
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogging/instance", "-n", cloNS, "-p", "{\"spec\":{\"collection\":{\"tolerations\":[{\"effect\":\"NoSchedule\",\"key\":\"vector\",\"operator\":\"Equal\",\"value\":\"deploy\"}]}}}", "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By(fmt.Sprintf("Make sure that the collector pod is scheduled on the node %s after applying toleration for taint vector=deploy:NoSchedule", taintNode))
+			chkCollector, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=component=collector", "--field-selector", "spec.nodeName="+taintNode+"", "-o", "name").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(chkCollector).Should(o.ContainSubstring("collector"))
+		})
+
 	})
 
 	g.Context("Vector Elasticsearch tests", func() {
