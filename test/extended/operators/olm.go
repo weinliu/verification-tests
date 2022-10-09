@@ -4546,6 +4546,106 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	g.AfterEach(func() {})
 
+	// It will cover test case: OCP-24870, author: kuiwang@redhat.com
+	g.It("ConnectedOnly-Author:kuiwang-High-24870-can not create csv without operator group", func() {
+		exutil.SkipARM64(oc)
+		var (
+			itName              = g.CurrentGinkgoTestDescription().TestText
+			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
+			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+
+			og = operatorGroupDescription{
+				name:      "og-singlenamespace",
+				namespace: "",
+				template:  ogSingleTemplate,
+			}
+			sub = subscriptionDescription{
+				subName:                "mta-operator",
+				namespace:              "",
+				channel:                "alpha",
+				ipApproval:             "Automatic",
+				operatorPackage:        "mta-operator",
+				catalogSourceName:      "community-operators",
+				catalogSourceNamespace: "openshift-marketplace",
+				startingCSV:            "",
+				currentCSV:             "",
+				installedCSV:           "",
+				template:               subTemplate,
+				singleNamespace:        true,
+			}
+		)
+		og.namespace = oc.Namespace()
+		sub.namespace = oc.Namespace()
+
+		g.By("Create csv with failure because of no operator group")
+		sub.currentCSV = "windup-operator.0.0.5"
+		sub.createWithoutCheck(oc, itName, dr)
+		newCheck("present", asUser, withNamespace, notPresent, "", ok, []string{"csv", sub.currentCSV}).check(oc)
+		sub.delete(itName, dr)
+
+		g.By("Create opertor group and then csv is created with success")
+		og.create(oc, itName, dr)
+		sub.create(oc, itName, dr)
+		newCheck("expect", asUser, withNamespace, compare, "Succeeded"+"InstallSucceeded", ok, []string{"csv", sub.installedCSV, "-o=jsonpath={.status.phase}{.status.reason}"}).check(oc)
+	})
+
+	// It will cover part of test case: OCP-25855, author: kuiwang@redhat.com
+	g.It("ConnectedOnly-Author:kuiwang-High-25855-Add the channel field to subscription_sync_count [Serial]", func() {
+		exutil.SkipARM64(oc)
+		var (
+			itName              = g.CurrentGinkgoTestDescription().TestText
+			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
+			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+
+			og = operatorGroupDescription{
+				name:      "og-singlenamespace",
+				namespace: "",
+				template:  ogSingleTemplate,
+			}
+			sub = subscriptionDescription{
+				subName:                "mta-operator",
+				namespace:              "",
+				channel:                "alpha",
+				ipApproval:             "Automatic",
+				operatorPackage:        "mta-operator",
+				catalogSourceName:      "community-operators",
+				catalogSourceNamespace: "openshift-marketplace",
+				startingCSV:            "",
+				currentCSV:             "",
+				installedCSV:           "",
+				template:               subTemplate,
+				singleNamespace:        true,
+			}
+		)
+		og.namespace = oc.Namespace()
+		sub.namespace = oc.Namespace()
+
+		g.By("Create og")
+		og.create(oc, itName, dr)
+
+		g.By("Create operator")
+		sub.create(oc, itName, dr)
+		newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("get information of catalog operator pod")
+		output := getResource(oc, asAdmin, withoutNamespace, "pods", "-l", "app=catalog-operator", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.items[0].metadata.name}{\" \"}{.items[0].status.podIP}{\":\"}{.items[0].spec.containers[0].ports[?(@.name==\"metrics\")].containerPort}")
+		o.Expect(output).NotTo(o.BeEmpty())
+		infoCatalogOperator := strings.Fields(output)
+
+		g.By("check the subscription_sync_total")
+		err := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			subscriptionSyncTotal, _ := exec.Command("bash", "-c", "oc exec -c catalog-operator "+infoCatalogOperator[0]+" -n openshift-operator-lifecycle-manager -- curl -s -k -H 'Authorization: Bearer $(oc create token prometheus-k8s -n openshift-monitoring)' https://"+infoCatalogOperator[1]+"/metrics").Output()
+			if !strings.Contains(string(subscriptionSyncTotal), sub.installedCSV) {
+				e2e.Logf("the metric is not counted and try next round")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("csv %s is not included in metric", sub.installedCSV))
+	})
+
 	// It will cover test case: OCP-29231 and OCP-29277, author: kuiwang@redhat.com
 	g.It("Author:kuiwang-Medium-29231-Medium-29277-label to target namespace of group", func() {
 		var (
@@ -9070,6 +9170,151 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 
 	g.AfterEach(func() {})
 
+	// It will cover part of test case: OCP-22226, author: kuiwang@redhat.com
+	g.It("ConnectedOnly-Author:kuiwang-High-22226-the csv without support AllNamespaces fails for og with allnamespace", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
+			cmNcTemplate        = filepath.Join(buildPruningBaseDir, "cm-namespaceconfig.yaml")
+			catsrcCmTemplate    = filepath.Join(buildPruningBaseDir, "catalogsource-configmap.yaml")
+			ogAllTemplate       = filepath.Join(buildPruningBaseDir, "og-allns.yaml")
+			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+			itName              = g.CurrentGinkgoTestDescription().TestText
+			og                  = operatorGroupDescription{
+				name:      "og-allnamespace",
+				namespace: "",
+				template:  ogAllTemplate,
+			}
+			cm = configMapDescription{
+				name:      "cm-community-namespaceconfig-operators",
+				namespace: "", //must be set in iT
+				template:  cmNcTemplate,
+			}
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-community-namespaceconfig-operators",
+				namespace:   "", //must be set in iT
+				displayName: "Community namespaceconfig Operators",
+				publisher:   "Community",
+				sourceType:  "configmap",
+				address:     "cm-community-namespaceconfig-operators",
+				template:    catsrcCmTemplate,
+			}
+			sub = subscriptionDescription{
+				subName:                "namespace-configuration-operator",
+				namespace:              "", //must be set in iT
+				channel:                "alpha",
+				ipApproval:             "Automatic",
+				operatorPackage:        "namespace-configuration-operator",
+				catalogSourceName:      "catsrc-community-namespaceconfig-operators",
+				catalogSourceNamespace: "", //must be set in iT
+				startingCSV:            "",
+				currentCSV:             "namespace-configuration-operator.v0.1.0", //it matches to that in cm, so set it.
+				installedCSV:           "",
+				template:               subTemplate,
+				singleNamespace:        true,
+			}
+		)
+
+		cm.namespace = oc.Namespace()
+		catsrc.namespace = oc.Namespace()
+		sub.namespace = oc.Namespace()
+		sub.catalogSourceNamespace = catsrc.namespace
+		og.namespace = oc.Namespace()
+		g.By("Create cm")
+		cm.create(oc, itName, dr)
+
+		g.By("Create catalog source")
+		catsrc.create(oc, itName, dr)
+
+		g.By("Create og")
+		og.create(oc, itName, dr)
+
+		g.By("Create sub")
+		sub.create(oc, itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "AllNamespaces InstallModeType not supported", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.message}"}).check(oc)
+	})
+
+	// It will cover part of test case: OCP-22226, author: kuiwang@redhat.com
+	g.It("ConnectedOnly-Author:kuiwang-High-22226-the csv without support MultiNamespace fails for og with MultiNamespace", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
+			cmNcTemplate        = filepath.Join(buildPruningBaseDir, "cm-namespaceconfig.yaml")
+			catsrcCmTemplate    = filepath.Join(buildPruningBaseDir, "catalogsource-configmap.yaml")
+			ogMultiTemplate     = filepath.Join(buildPruningBaseDir, "og-multins.yaml")
+			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+			itName              = g.CurrentGinkgoTestDescription().TestText
+			og                  = operatorGroupDescription{
+				name:         "og-multinamespace",
+				namespace:    "",
+				multinslabel: "olmtestmultins",
+				template:     ogMultiTemplate,
+			}
+			cm = configMapDescription{
+				name:      "cm-community-namespaceconfig-operators",
+				namespace: "", //must be set in iT
+				template:  cmNcTemplate,
+			}
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-community-namespaceconfig-operators",
+				namespace:   "", //must be set in iT
+				displayName: "Community namespaceconfig Operators",
+				publisher:   "Community",
+				sourceType:  "configmap",
+				address:     "cm-community-namespaceconfig-operators",
+				template:    catsrcCmTemplate,
+			}
+			sub = subscriptionDescription{
+				subName:                "namespace-configuration-operator",
+				namespace:              "", //must be set in iT
+				channel:                "alpha",
+				ipApproval:             "Automatic",
+				operatorPackage:        "namespace-configuration-operator",
+				catalogSourceName:      "catsrc-community-namespaceconfig-operators",
+				catalogSourceNamespace: "", //must be set in iT
+				startingCSV:            "",
+				currentCSV:             "namespace-configuration-operator.v0.1.0", //it matches to that in cm, so set it.
+				installedCSV:           "",
+				template:               subTemplate,
+				singleNamespace:        true,
+			}
+			p1 = projectDescription{
+				name:            "olm-enduser-multins-csv-1-fail",
+				targetNamespace: "",
+			}
+			p2 = projectDescription{
+				name:            "olm-enduser-multins-csv-2-fail",
+				targetNamespace: "",
+			}
+		)
+
+		defer p1.delete(oc)
+		defer p2.delete(oc)
+		cm.namespace = oc.Namespace()
+		catsrc.namespace = oc.Namespace()
+		sub.namespace = oc.Namespace()
+		sub.catalogSourceNamespace = catsrc.namespace
+		og.namespace = oc.Namespace()
+		p1.targetNamespace = oc.Namespace()
+		p2.targetNamespace = oc.Namespace()
+		g.By("Create new project")
+		p1.create(oc, itName, dr)
+		p1.label(oc, "olmtestmultins")
+		p2.create(oc, itName, dr)
+		p2.label(oc, "olmtestmultins")
+
+		g.By("Create cm")
+		cm.create(oc, itName, dr)
+
+		g.By("Create catalog source")
+		catsrc.create(oc, itName, dr)
+
+		g.By("Create og")
+		og.create(oc, itName, dr)
+
+		g.By("Create sub")
+		sub.create(oc, itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "MultiNamespace InstallModeType not supported", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.message}"}).check(oc)
+	})
+
 	// It will cover part of test case: OCP-29275, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-29275-label to target namespace of operator group with multi namespace", func() {
 		var (
@@ -9587,6 +9832,157 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		itName := g.CurrentGinkgoTestDescription().TestText
 		dr.getIr(itName).cleanup()
 		dr.rmIr(itName)
+	})
+
+	// It will cover test case: OCP-25679, OCP-21418(acutally it covers OCP-25679), author: kuiwang@redhat.com
+	g.It("ConnectedOnly-Author:kuiwang-High-25679-Medium-21418-Cluster resource created and deleted correctly [Serial]", func() {
+		var (
+			itName              = g.CurrentGinkgoTestDescription().TestText
+			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
+			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+			sub                 = subscriptionDescription{
+				subName:                "keda",
+				namespace:              "openshift-operators",
+				channel:                "alpha",
+				ipApproval:             "Automatic",
+				operatorPackage:        "keda",
+				catalogSourceName:      "community-operators",
+				catalogSourceNamespace: "openshift-marketplace",
+				startingCSV:            "", //get it from package based on currentCSV if ipApproval is Automatic
+				currentCSV:             "",
+				installedCSV:           "",
+				template:               subTemplate,
+				singleNamespace:        false,
+			}
+			crdName      = "kedacontrollers.keda.sh"
+			crName       = "KedaController"
+			podLabelName = "keda"
+			cl           = checkList{}
+		)
+
+		// OCP-25679, OCP-21418
+		g.By("Create operator targeted at all namespace")
+		sub.create(oc, itName, dr)
+
+		// OCP-25679, OCP-21418
+		g.By("Check the cluster resource rolebinding, role and service account exists")
+		clusterResources := strings.Fields(getResource(oc, asAdmin, withoutNamespace, "clusterrolebinding",
+			fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-o=jsonpath={.items[0].metadata.name}{\" \"}{.items[0].roleRef.name}{\" \"}{.items[0].subjects[0].name}"))
+		o.Expect(clusterResources).NotTo(o.BeEmpty())
+		cl.add(newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"clusterrole", clusterResources[1]}))
+		cl.add(newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"sa", clusterResources[2], "-n", sub.namespace}))
+
+		// OCP-21418
+		g.By("Check the pods of the operator is running")
+		cl.add(newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"pod", fmt.Sprintf("--selector=name=%s", podLabelName), "-n", sub.namespace, "-o=jsonpath={.items[*].status.phase}"}))
+
+		// OCP-21418
+		g.By("Check no resource of new crd")
+		cl.add(newCheck("present", asAdmin, withNamespace, notPresent, "", ok, []string{crName}))
+		//do check parallelly
+		cl.check(oc)
+		cl.empty()
+
+		// OCP-25679, OCP-21418
+		g.By("Delete the operator")
+		sub.delete(itName, dr)
+		sub.getCSV().delete(itName, dr)
+
+		// OCP-25679, OCP-21418
+		g.By("Check the cluster resource rolebinding, role and service account do not exist")
+		cl.add(newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"clusterrolebinding", clusterResources[0]}))
+		cl.add(newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"clusterrole", clusterResources[1]}))
+		cl.add(newCheck("present", asAdmin, withoutNamespace, notPresent, "", ok, []string{"sa", clusterResources[2], "-n", sub.namespace}))
+
+		// OCP-21418
+		g.By("Check the CRD still exists")
+		cl.add(newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"crd", crdName}))
+
+		// OCP-21418
+		g.By("Check the pods of the operator is deleted")
+		cl.add(newCheck("expect", asAdmin, withoutNamespace, compare, "", ok, []string{"pod", fmt.Sprintf("--selector=name=%s", podLabelName), "-n", sub.namespace, "-o=jsonpath={.items[*].status.phase}"}))
+
+		cl.check(oc)
+
+	})
+
+	// It will cover test case: OCP-25783, author: kuiwang@redhat.com
+	g.It("ConnectedOnly-Author:kuiwang-High-25783-Subscriptions are not getting processed taking very long to get processed [Serial]", func() {
+		exutil.SkipARM64(oc)
+		var (
+			itName              = g.CurrentGinkgoTestDescription().TestText
+			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+
+			subkeda = subscriptionDescription{
+				subName:                "keda",
+				namespace:              "openshift-operators",
+				channel:                "alpha",
+				ipApproval:             "Automatic",
+				operatorPackage:        "keda",
+				catalogSourceName:      "community-operators",
+				catalogSourceNamespace: "openshift-marketplace",
+				startingCSV:            "", //get it from package based on currentCSV if ipApproval is Automatic
+				currentCSV:             "",
+				installedCSV:           "",
+				template:               subTemplate,
+				singleNamespace:        false,
+			}
+
+			csvkeda = csvDescription{
+				name:      "",
+				namespace: "openshift-operators",
+			}
+
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-25783-operator",
+				namespace:   "openshift-marketplace",
+				displayName: "Test Catsrc 25783 Operators",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/olm-api:v21",
+				template:    catsrcImageTemplate,
+			}
+			subCockroachdb = subscriptionDescription{
+				subName:                "cockroachdb33241",
+				namespace:              "openshift-operators",
+				channel:                "stable-5.x",
+				ipApproval:             "Automatic",
+				operatorPackage:        "cockroachdb",
+				catalogSourceName:      catsrc.name,
+				catalogSourceNamespace: catsrc.namespace,
+				startingCSV:            "", //get it from package based on currentCSV if ipApproval is Automatic
+				currentCSV:             "",
+				installedCSV:           "",
+				template:               subTemplate,
+				singleNamespace:        false,
+			}
+
+			csvCockroachdb = csvDescription{
+				name:      "",
+				namespace: "openshift-operators",
+			}
+		)
+
+		g.By("create catsrc")
+		catsrc.create(oc, itName, dr)
+		defer catsrc.delete(itName, dr)
+
+		g.By("create operator keda")
+		defer subkeda.delete(itName, dr)
+		subkeda.create(oc, itName, dr)
+		csvkeda.name = subkeda.installedCSV
+		defer csvkeda.delete(itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subkeda.installedCSV, "-n", subkeda.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("create operator Cockroachdb")
+		defer subCockroachdb.delete(itName, dr)
+		subCockroachdb.create(oc, itName, dr)
+		csvCockroachdb.name = subCockroachdb.installedCSV
+		defer csvCockroachdb.delete(itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subCockroachdb.installedCSV, "-n", subCockroachdb.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+
 	})
 
 	// It will cover test case: OCP-21484, OCP-21532(actually it covers OCP-21484), author: kuiwang@redhat.com
