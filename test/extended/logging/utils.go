@@ -17,8 +17,11 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/logging"
+	"cloud.google.com/go/logging/logadmin"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"google.golang.org/api/iterator"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1899,4 +1902,103 @@ func (r resource) createEventRouter(oc *exutil.CLI, parameters ...string) {
 	parameters = append(parameters, "-l", "app=eventrouter", "-p", "EVENT_ROUTER_NAME="+r.name)
 	err := r.applyFromTemplate(oc, parameters...)
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// createSecretForGCL creates a secret for collector pods to forward logs to Google Cloud Logging
+func createSecretForGCL(oc *exutil.CLI, name, namespace string) error {
+	// for GCP STS clusters, get gcp-credentials from env var GOOGLE_APPLICATION_CREDENTIALS
+	_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get("gcp-credentials", metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		gcsCred := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+		return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", name, "-n", namespace, "--from-file=google-application-credentials.json="+gcsCred).Execute()
+	}
+	dirname := "/tmp/" + oc.Namespace() + "-creds"
+	defer os.RemoveAll(dirname)
+	err = os.MkdirAll(dirname, 0777)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/gcp-credentials", "-n", "kube-system", "--confirm", "--to="+dirname).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", name, "-n", namespace, "--from-file=google-application-credentials.json="+dirname+"/service_account.json").Execute()
+}
+
+type googleCloudLogging struct {
+	projectID string
+	logName   string
+}
+
+// listLogEntries gets the most recent 5 entries
+// example: https://cloud.google.com/logging/docs/reference/libraries#list_log_entries
+// https://github.com/GoogleCloudPlatform/golang-samples/blob/HEAD/logging/simplelog/simplelog.go
+func (gcl googleCloudLogging) listLogEntries(queryString string) ([]*logging.Entry, error) {
+	ctx := context.Background()
+
+	adminClient, err := logadmin.NewClient(ctx, gcl.projectID)
+	if err != nil {
+		e2e.Logf("Failed to create logadmin client: %v", err)
+	}
+	defer adminClient.Close()
+
+	var entries []*logging.Entry
+	lastHour := time.Now().Add(-1 * time.Hour).Format(time.RFC3339)
+
+	filter := fmt.Sprintf(`logName = "projects/%s/logs/%s" AND timestamp > "%s"`, gcl.projectID, gcl.logName, lastHour)
+	if len(queryString) > 0 {
+		filter += queryString
+	}
+
+	iter := adminClient.Entries(ctx,
+		logadmin.Filter(filter),
+		// Get most recent entries first.
+		logadmin.NewestFirst(),
+	)
+
+	// Fetch the most recent 5 entries.
+	for len(entries) < 5 {
+		entry, err := iter.Next()
+		if err == iterator.Done {
+			return entries, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry)
+	}
+	return entries, nil
+}
+
+// searchLogs search log entries match the queries
+// example queries: map[string]string{"kubernetes.container_name": "xxxx", "kubernetes.namespace_name": "xxxx"}
+// operator: the operator among these queries, example: and, or
+func (gcl googleCloudLogging) searchLogs(queries map[string]string, operator string) ([]*logging.Entry, error) {
+	op := strings.ToUpper(operator)
+	var searchString string
+	for key, value := range queries {
+		searchString += " " + op + " jsonPayload." + key + " = \"" + value + "\""
+	}
+	return gcl.listLogEntries(searchString)
+}
+
+func (gcl googleCloudLogging) getLogByType(logType string) ([]*logging.Entry, error) {
+	searchString := " AND jsonPayload.log_type = \"" + logType + "\""
+	return gcl.listLogEntries(searchString)
+}
+
+func (gcl googleCloudLogging) getLogByNamespace(namespace string) ([]*logging.Entry, error) {
+	searchString := " AND jsonPayload.kubernetes.namespace_name = \"" + namespace + "\""
+	return gcl.listLogEntries(searchString)
+}
+
+func (gcl googleCloudLogging) removeLogs() error {
+	ctx := context.Background()
+
+	adminClient, err := logadmin.NewClient(ctx, gcl.projectID)
+	if err != nil {
+		e2e.Logf("Failed to create logadmin client: %v", err)
+	}
+	defer adminClient.Close()
+
+	if err := adminClient.DeleteLog(ctx, gcl.logName); err != nil {
+		return err
+	}
+	return nil
 }
