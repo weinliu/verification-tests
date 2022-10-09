@@ -234,8 +234,6 @@ func updateMachineYmlFile(machineYmlFile string, oldMachineName string, newMaste
 			matchTag = true
 		} else if strings.Contains(string(line), "resourceVersion: ") {
 			matchTag = true
-		} else if strings.Contains(string(line), "uid: ") {
-			matchTag = true
 		} else if strings.Contains(string(line), oldMachineName) {
 			newLine = strings.Replace(string(line), oldMachineName, newMasterMachineName, -1)
 		} else {
