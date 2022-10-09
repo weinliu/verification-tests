@@ -15,6 +15,7 @@ function run {
   if [ ${REPO_OWNER} == "openshift" ]; then
     WORKBUILDDIR=${WORKSPACE}"/private"
   else
+    eval mkdir -p ${WORKSPACE}"/public"
     WORKBUILDDIR=${WORKSPACE}"/public"
   fi
   cd ${WORKBUILDDIR}
@@ -145,4 +146,7 @@ function put_fake_launch_for_each_profile {
   fi
 }
 
+# remove openshift-tests repo, so hard-coded it here.
+REPO_OWNER="openshift"
+BRANCH="master"
 run

@@ -1,9 +1,6 @@
-all: update update-public build
+all: update build
 .PHONY: all
 OUT_DIR=bin
-
-update-public:
-	export GOFLAGS="" && go get -d github.com/openshift/openshift-tests@master
 
 build:
 	mkdir -p "${OUT_DIR}"

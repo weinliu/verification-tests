@@ -10,9 +10,6 @@ These tests are based on [ginkgo](https://github.com/onsi/ginkgo) and the [kuber
 * golint installed. See [Installing golint](https://github.com/golang/lint#installation)
 * Have the environment variable `KUBECONFIG` set pointing to your cluster.
 
-### Include test cases of the Public Repo
-If you want to run the Public [openshift-tests](https://github.com/openshift/openshift-tests) test cases together, you can include the coresponding package [here](https://github.com/openshift/openshift-tests-private/blob/master/test/extended/include.go). For example, you can include the Public [extended/operators](https://github.com/openshift/openshift-tests-private/blob/master/test/extended/include.go#L28) test cases, and then run the `$ make update-public` command to get it, or you can run `$ make all` command.
-
 ### Include new test folder
 If you create a new folder for your test case, please **add the path** to the [include.go](https://github.com/openshift/openshift-tests-private/blob/master/test/extended/include.go).
 

@@ -35,7 +35,6 @@ import (
 	_ "github.com/openshift/openshift-tests-private/test/extended/storage"
 	_ "github.com/openshift/openshift-tests-private/test/extended/winc"
 	_ "github.com/openshift/openshift-tests-private/test/extended/workloads"
-	_ "github.com/openshift/openshift-tests/test/extended/operators"
 	_ "k8s.io/kubernetes/test/e2e"
 	_ "k8s.io/kubernetes/test/e2e/apimachinery"
 	_ "k8s.io/kubernetes/test/e2e/apps"
