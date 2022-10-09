@@ -229,13 +229,18 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Get clusterautoscaler log verbosity value for pod")
-		msg, err := oc.AsAdmin().Run("get").Args("pods", podName, "-n", machineAPINamespace, "-o=jsonpath={.spec.containers[0]}").Output()
-		if err != nil {
-			g.Fail("The failure needs to be reviewed by looking at logs of clusterautoscaler")
-		} else if msg != "" {
-			o.Expect(msg).To(o.ContainSubstring("--v=8"))
-		} else {
-			g.Fail("even after adding logverbosity log levels not changed")
-		}
+		err = wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
+			msg, err := oc.AsAdmin().Run("get").Args("pods", podName, "-n", machineAPINamespace, "-o=jsonpath={.spec.containers[0]}").Output()
+			if err != nil {
+				e2e.Logf("The failure needs to be reviewed by looking at logs of clusterautoscaler")
+				return false, nil
+			}
+			if !strings.Contains(msg, "--v=8") {
+				e2e.Logf("Even after adding logverbosity log levels not changed")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Log levels not changed")
 	})
 })
