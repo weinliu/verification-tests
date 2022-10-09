@@ -47,13 +47,25 @@ func GetClusterPrefixName(oc *CLI) string {
 }
 
 // GetClusterArchitecture return ClusterArchitecture
+// If ClusterArchitecture is multi-arch, return Multi-Arch
 func GetClusterArchitecture(oc *CLI) string {
-	output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("nodes", "-o=jsonpath={.items[0].status.nodeInfo.architecture}").Output()
+	architecture := ""
+	output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("nodes", "-o=jsonpath={.items[*].status.nodeInfo.architecture}").Output()
 	if err != nil {
-		e2e.Logf("Get nodes failed with err %v .", err)
-		return ""
+		e2e.Failf("get architecture failed err %v .", err)
 	}
-	return output
+	if output == "" {
+		e2e.Failf("get architecture failed")
+	}
+	architectureList := strings.Split(output, " ")
+	architecture = architectureList[0]
+	for _, architectureIndex := range architectureList {
+		if architectureIndex != architecture {
+			e2e.Logf("architecture %s", output)
+			return "Multi-Arch"
+		}
+	}
+	return architecture
 }
 
 // SkipARM64 skip the test if cluster is arm64
@@ -62,5 +74,8 @@ func SkipARM64(oc *CLI) {
 	e2e.Logf("architecture is " + arch)
 	if arch == "arm64" {
 		g.Skip("Skip for arm64")
+	}
+	if arch == "Multi-Arch" {
+		g.Skip("Skip for Multi-Arch")
 	}
 }
