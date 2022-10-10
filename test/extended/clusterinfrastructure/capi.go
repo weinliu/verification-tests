@@ -1,6 +1,8 @@
 package clusterinfrastructure
 
 import (
+	"time"
+
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -28,6 +30,16 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 
 		g.By("Check if cluster api is deployed")
+		// Need to give more time in case cluster is private , we have seen it takes time , even after cluster becomes healthy , this happens only when publicZone is not present
+		publicZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns", "cluster", "-n", "openshift-dns", "-o=jsonpath={.spec.publicZone}").Output()
+		if err != nil {
+			g.Fail("Issue with dns setup")
+		}
+		g.By("if publicZone is {id:qe} or any other value it implies not a private set up, so no need to wait")
+		if publicZone == "" {
+			time.Sleep(360)
+		}
+
 		capi, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", clusterAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(capi).To(o.ContainSubstring("cluster-capi-operator"))
