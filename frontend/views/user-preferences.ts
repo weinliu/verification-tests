@@ -9,4 +9,18 @@ export const preferNotifications = {
       }
     })
   }
+},
+export const consoleTheme = {
+  setDarkTheme: () => {
+    cy.get('button[id="console.theme"]').click();
+    cy.contains('button', 'Dark').click()
+  },
+  setLightTheme: () => {
+    cy.get('button[id="console.theme"]').click();
+    cy.contains('button', 'Light').click()
+  },
+  setSystemDefaultTheme: () => {
+    cy.get('button[id="console.theme"]').click();
+    cy.contains('button', 'System default').click()
+  }
 }

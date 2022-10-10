@@ -33,7 +33,7 @@ describe('Notification drawer tests', () => {
     cy.logout;
   })
 
-  it('(OCP-45305,admin) check alert on overview page and notification drawer list (admin)', () => {
+  it('(OCP-45305,admin,yanpzhan) check alert on overview page and notification drawer list (admin)', () => {
     preferNotifications.goToNotificationsTab();
     preferNotifications.setHideNotifications();
     Overview.goToDashboard();

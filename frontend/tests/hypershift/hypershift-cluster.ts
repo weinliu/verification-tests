@@ -11,7 +11,7 @@ describe('feature for hypershift provisined cluster', () => {
     cy.logout;
   });
 
-  it('(OCP-48890,admin) The TopologyMode needs to be passed to the console via console-config.yaml', () => {
+  it('(OCP-48890,admin,yanpzhan) The TopologyMode needs to be passed to the console via console-config.yaml', () => {
     let $topologyMode;
     cy.exec(`oc get infrastructures.config.openshift.io cluster --template={{.status.controlPlaneTopology}} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((result) => {
       $topologyMode = result.stdout;
@@ -27,7 +27,7 @@ describe('feature for hypershift provisined cluster', () => {
     });
   });
 
-  it('(OCP-50239,admin) Update cluster setting page and overview page for hypershift provisioned cluster', () => {
+  it('(OCP-50239,admin,yanpzhan) Update cluster setting page and overview page for hypershift provisioned cluster', () => {
     ClusterSettingPage.goToClusterSettingConfiguration();
     //set win.SERVER_FLAGS.controlPlaneTopology to External to simulate hypershift provisioned cluster
     cy.window().then((win: any) => {

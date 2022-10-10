@@ -11,7 +11,7 @@ describe('Insights check', () => {
     cy.logout;
   });
 
-  it('(OCP-48054,admin) Add severity links on insights popover', () => {
+  it('(OCP-48054,admin,yanpzhan) Add severity links on insights popover', () => {
     Overview.goToDashboard();
     Overview.isLoaded();
     Insights.openInsightsPopup();

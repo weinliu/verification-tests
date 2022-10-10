@@ -21,7 +21,7 @@ describe('quota related feature', () => {
     cy.logout;
   });
 
-  it('(OCP-52470,admin) Quota charts should support to show all resource types', () => {
+  it('(OCP-52470,admin,yanpzhan) Quota charts should support to show all resource types', () => {
     cy.visit('/k8s/cluster/projects/test-ocp52470');
     //check quota charts on overview quota card
     quotaCard.checkQuotaCollapsed('quota1');

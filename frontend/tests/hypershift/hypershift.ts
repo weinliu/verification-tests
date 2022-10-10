@@ -11,13 +11,13 @@ describe.skip('Check on hypershift provisined cluster', () => {
     cy.logout;
   });
 
-  it('(OCP-50740,admin,HyperShiftGUEST) Remove manchine related resources for HyperShift Provisioned Clusters', () => {
+  it('(OCP-50740,admin,HyperShiftGUEST,yanpzhan) Remove manchine related resources for HyperShift Provisioned Clusters', () => {
     sideNav.checkNoMachineResources();
     searchPage.checkNoMachineResources();
     crds.checkNoMachineResources();
   });
 
-  it('(OCP-51733,admin,HyperShiftGUEST) Check no idp alert for temporary administrative user on HyperShift Provisioned Clusters', () => {
+  it('(OCP-51733,admin,HyperShiftGUEST,yanpzhan) Check no idp alert for temporary administrative user on HyperShift Provisioned Clusters', () => {
   cy.contains('logged in as a temporary administrative user').should('not.exist');
   cy.get('div').should('not.contain', 'allow others to log in');
   });
