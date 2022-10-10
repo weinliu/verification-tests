@@ -49,7 +49,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			loki.deployLoki(oc)
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "47760.yaml")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-loki.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
 			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
@@ -118,7 +118,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			tenantKey := "kubernetes_namespace_name"
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "48922.yaml")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-loki-set-tenantkey.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
 			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "TENANTKEY=kubernetes.namespace_name", "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")
@@ -178,7 +178,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			podLabel := "centos-logtest"
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "47801.yaml")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-loki-set-labelkey.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
 			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "LABELKEY=kubernetes.labels.positive", "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100")

@@ -11,10 +11,7 @@ objects:
   spec:
     pipelines:
     - name: forward-to-default
-      inputRefs:
-      - infrastructure
-      - application
-      - audit
+      inputRefs: ${{INPUTS}}
       outputRefs:
       - default
 parameters:
@@ -22,3 +19,5 @@ parameters:
   value: "instance"
 - name: NAMESPACE
   value: "openshift-logging"
+- name: INPUTS
+  value: "[\"infrastructure\", \"audit\", \"application\"]"

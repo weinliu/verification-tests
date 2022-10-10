@@ -219,8 +219,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create CLF")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "40168.yaml")
-			err := clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ESNAMESPACE="+esProj)
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-exteranl-es-and-default.yaml")
+			err := clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200")
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Deploy EFK pods")

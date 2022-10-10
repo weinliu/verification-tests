@@ -59,8 +59,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 		g.By("create CLF")
 		clf := resource{"clusterlogforwarder", "instance", cloNS}
 		defer clf.clear(oc)
-		clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "42405.yaml")
-		err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "PIPELINE_SECRET_NAME="+s.name, "-p", "URL="+eesURL)
+		clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml")
+		err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_SECRET="+s.name, "-p", "ES_URL="+eesURL)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("deploy collector pods")

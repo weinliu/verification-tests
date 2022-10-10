@@ -198,12 +198,15 @@ func createAWSS3Bucket(oc *exutil.CLI, client *s3.Client, bucketName string, cre
 	return err
 }
 
-func deleteAWSS3Bucket(client *s3.Client, bucketName string) {
+func deleteAWSS3Bucket(client *s3.Client, bucketName string) error {
 	// empty bucket
-	emptyAWSS3Bucket(client, bucketName)
+	err := emptyAWSS3Bucket(client, bucketName)
+	if err != nil {
+		return err
+	}
 	// delete bucket
-	_, err := client.DeleteBucket(context.TODO(), &s3.DeleteBucketInput{Bucket: &bucketName})
-	o.Expect(err).NotTo(o.HaveOccurred())
+	_, err = client.DeleteBucket(context.TODO(), &s3.DeleteBucketInput{Bucket: &bucketName})
+	return err
 }
 
 func emptyAWSS3Bucket(client *s3.Client, bucketName string) error {
@@ -307,7 +310,7 @@ func createGCSBucket(projectID, bucketName string) error {
 		}
 	}
 	if exist {
-		emptyGCSBucket(*client, bucketName)
+		return emptyGCSBucket(*client, bucketName)
 	}
 
 	bucket := client.Bucket(bucketName)
@@ -384,14 +387,17 @@ func deleteFilesInGCSBucket(client storage.Client, object, bucket string) error 
 }
 
 // emptyGCSBucket removes all the objects in the bucket
-func emptyGCSBucket(client storage.Client, bucket string) {
+func emptyGCSBucket(client storage.Client, bucket string) error {
 	objects, err := listObjestsInGCSBucket(client, bucket)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	for _, object := range objects {
 		err = deleteFilesInGCSBucket(client, object, bucket)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func deleteGCSBucket(bucketName string) error {
@@ -405,7 +411,10 @@ func deleteGCSBucket(bucketName string) error {
 	defer cancel()
 
 	// remove objects
-	emptyGCSBucket(*client, bucketName)
+	err = emptyGCSBucket(*client, bucketName)
+	if err != nil {
+		return err
+	}
 	bucket := client.Bucket(bucketName)
 	if err := bucket.Delete(ctx); err != nil {
 		return fmt.Errorf("Bucket(%q).Delete: %v", bucketName, err)
@@ -473,6 +482,7 @@ func newAzureContainerClient(oc *exutil.CLI, name string) azblob.ContainerURL {
 	return serviceURL.NewContainerURL(name)
 }
 
+// create azure storage container
 func createAzureStorageBlobContainer(container azblob.ContainerURL) error {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
@@ -486,19 +496,24 @@ func createAzureStorageBlobContainer(container azblob.ContainerURL) error {
 		_, err = container.Create(ctx, azblob.Metadata{}, azblob.PublicAccessNone)
 		return err
 	}
-	emptyAzureBlobContainer(container)
-	return nil
+	return emptyAzureBlobContainer(container)
 }
 
-func deleteAzureStorageBlobContainer(container azblob.ContainerURL) {
+// delete azure storage container
+func deleteAzureStorageBlobContainer(container azblob.ContainerURL) error {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
 	defer cancel()
 
-	_, err := container.Delete(ctx, azblob.ContainerAccessConditions{})
-	o.Expect(err).NotTo(o.HaveOccurred())
+	err := emptyAzureBlobContainer(container)
+	if err != nil {
+		return err
+	}
+	_, err = container.Delete(ctx, azblob.ContainerAccessConditions{})
+	return err
 }
 
+// list files in azure storage container
 func listBlobsInAzureContainer(container azblob.ContainerURL) []string {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
@@ -522,21 +537,27 @@ func listBlobsInAzureContainer(container azblob.ContainerURL) []string {
 	return blobNames
 }
 
-func deleteAzureBlob(container azblob.ContainerURL, blobName string) {
+// delete file from azure storage container
+func deleteAzureBlob(container azblob.ContainerURL, blobName string) error {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
 	defer cancel()
 
 	blobURL := container.NewBlockBlobURL(blobName)
 	_, err := blobURL.Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
-	o.Expect(err).NotTo(o.HaveOccurred())
+	return err
 }
 
-func emptyAzureBlobContainer(container azblob.ContainerURL) {
+// remove all the files in azure storage container
+func emptyAzureBlobContainer(container azblob.ContainerURL) error {
 	blobNames := listBlobsInAzureContainer(container)
 	for _, blob := range blobNames {
-		deleteAzureBlob(container, blob)
+		err := deleteAzureBlob(container, blob)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // creates a secret for Loki to connect to azure container
@@ -914,45 +935,44 @@ func (l lokiStack) removeLokiStack(oc *exutil.CLI) {
 
 func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
 	resource{"secret", l.storageSecret, l.namespace}.clear(oc)
+	var err error
 	switch l.storageType {
 	case "s3":
 		{
 			cred := getAWSCredentialFromCluster(oc)
 			client := newAWSS3Client(oc, cred)
-			deleteAWSS3Bucket(client, l.bucketName)
+			err = deleteAWSS3Bucket(client, l.bucketName)
 		}
 	case "azure":
 		{
 			client := newAzureContainerClient(oc, l.bucketName)
-			emptyAzureBlobContainer(client)
-			deleteAzureStorageBlobContainer(client)
+			err = deleteAzureStorageBlobContainer(client)
 		}
 	case "gcs":
 		{
-			err := deleteGCSBucket(l.bucketName)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			err = deleteGCSBucket(l.bucketName)
 		}
 	case "swift":
 		{
-			cred, err := getOpenStackCredentials(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			cred, err1 := getOpenStackCredentials(oc)
+			o.Expect(err1).NotTo(o.HaveOccurred())
 			client := newOpenStackClient(cred, "object-store")
 			err = deleteOpenStackContainer(client, l.bucketName)
-			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 	case "odf":
 		{
 			cred := getODFCreds(oc)
 			client := newAWSS3Client(oc, cred)
-			deleteAWSS3Bucket(client, l.bucketName)
+			err = deleteAWSS3Bucket(client, l.bucketName)
 		}
 	case "minio":
 		{
 			cred := getMinIOCreds(oc, minioNS)
 			client := newAWSS3Client(oc, cred)
-			deleteAWSS3Bucket(client, l.bucketName)
+			err = deleteAWSS3Bucket(client, l.bucketName)
 		}
 	}
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func (l lokiStack) createPipelineSecret(oc *exutil.CLI, name, namespace, token string) {
