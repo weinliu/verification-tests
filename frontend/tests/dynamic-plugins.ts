@@ -5,7 +5,7 @@ import { guidedTour } from '../upstream/views/guided-tour';
 describe('Dynamic plugins features', () => {
   before(() => {
     const demoPluginNamespace = 'console-demo-plugin';
-    cy.exec(`oc create namespace ${demoPluginNamespace}`);
+    cy.exec(`oc create namespace ${demoPluginNamespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
 
     // deploy plugin manifests
@@ -31,18 +31,23 @@ describe('Dynamic plugins features', () => {
     });
   });
   after(() => {
+    cy.exec(`oc delete namespace console-demo-plugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     cy.exec(`oc patch console.operator cluster -p '{"spec":{"managementState":"Managed"}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     cy.exec(`oc patch console.operator cluster -p '{"spec":{"plugins":null}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     cy.exec(`oc delete consoleplugin console-demo-plugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc delete namespace console-demo-plugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
   });
   it('(OCP-45629, admin) dynamic plugins proxy to services on the cluster', () => {
     nav.sidenav.switcher.changePerspectiveTo('Developer');
-    guidedTour.isOpen();
     guidedTour.close();
+    cy.wait(30000);
+    cy.get('body').then(($body) => {
+      if ($body.find(`[data-test="toast-action"]`).length) {
+        cy.contains('Refresh web console').click();
+      }
+    });
+
     // demo plugin in Dev perspective
-    Overview.isLoaded();
     nav.sidenav.clickNavLink(['Demo Plugin']);
     nav.sidenav.shouldHaveNavSection(['Demo Plugin']);
     cy.get('.pf-c-nav__link').should('include.text', 'Dynamic Nav 1');
