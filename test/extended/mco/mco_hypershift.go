@@ -303,8 +303,9 @@ func (ht *HypershiftTest) DestroyNodePoolOnAws() {
 				// here we just log the error, will not terminate the clean up process.
 				// if any of the deletion is failed, it will be recycled by hypershift
 				logger.Errorf("delete awsmachine %s failed\n %v", machine.GetName(), deleteMachineErr)
+			} else {
+				logger.Infof("awsmachine %s is deleted successfully", machine.GetName())
 			}
-			logger.Infof("awsmachine %s is deleted successfully", machine.GetName())
 		}
 	}
 
@@ -392,7 +393,7 @@ func (ht *HypershiftTest) CreateKubeConfigForCluster() {
 
 	logger.Infof("kubeconfig of cluster %s is saved to %s", clusterName, file)
 
-	ht.Put("kubeconfig", file)
+	ht.Put(TestCtxKeyKubeConfig, file)
 }
 
 // CheckMcIsUpdatedOnNode check machine config is updated successfully

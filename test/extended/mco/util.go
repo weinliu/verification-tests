@@ -291,7 +291,7 @@ func (mcp *MachineConfigPool) GetNodes() ([]Node, error) {
 }
 
 // GetSortedNodes returns a list with the nodes that belong to the machine config pool in the same order used to update them
-//  when a configuration is applied
+// when a configuration is applied
 func (mcp *MachineConfigPool) GetSortedNodes() ([]Node, error) {
 
 	poolNodes, err := mcp.GetNodes()
@@ -304,7 +304,7 @@ func (mcp *MachineConfigPool) GetSortedNodes() ([]Node, error) {
 }
 
 // GetSortedUpdatedNodes returns the list of the UpdatedNodes sorted by the time when they started to be updated.
-//	If maxUnavailable>0, then the function will fail if more that maxUpdatingNodes are being updated at the same time
+// If maxUnavailable>0, then the function will fail if more that maxUpdatingNodes are being updated at the same time
 func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []Node {
 	timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
 	logger.Infof("Waiting %s in pool %s for all nodes to start updating.", timeToWait, mcp.name)

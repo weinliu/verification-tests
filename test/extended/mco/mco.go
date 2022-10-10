@@ -2478,7 +2478,7 @@ func createMcAndVerifyIgnitionVersion(oc *exutil.CLI, stepText, mcName, ignition
 }
 
 // verifyRenderedMcs verifies that the resources provided in the parameter "allRes" have created a
-//       a new MachineConfig owned by those resources
+// a new MachineConfig owned by those resources
 func verifyRenderedMcs(oc *exutil.CLI, renderSuffix string, allRes []ResourceInterface) []Resource {
 	// TODO: Use MachineConfigList when MC code is refactored
 	allMcs, err := NewResourceList(oc.AsAdmin(), "mc").GetAll()
@@ -2591,10 +2591,10 @@ func verifyDriftConfig(mcp *MachineConfigPool, rf *RemoteFile, newMode string, f
 }
 
 // checkUpdatedLists Compares that 2 lists are ordered in steps.
-//   when we update nodes with maxUnavailable>1, since we are polling, we cannot make sure
-//   that the sorted lists have the same order one by one. We can only make sure that the steps
-//   defined by maxUnavailable have the right order.
-//   If step=1, it is the same as comparing that both lists are equal.
+// when we update nodes with maxUnavailable>1, since we are polling, we cannot make sure
+// that the sorted lists have the same order one by one. We can only make sure that the steps
+// defined by maxUnavailable have the right order.
+// If step=1, it is the same as comparing that both lists are equal.
 func checkUpdatedLists(l, r []Node, step int) bool {
 	if len(l) != len(r) {
 		logger.Errorf("Compared lists have different size")

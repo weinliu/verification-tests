@@ -122,9 +122,9 @@ func (ms MachineSet) WaitUntilReady(duration string) error {
 // Duplicate creates a new MachineSet by ducplicating the MachineSet information but using a new name, the new duplicated Machineset has 0 replicas
 // If you need to further modify the new machineset, patch it, and scale it up
 // For example, to duplicate a machineset and use a new secret in the duplicated machineset:
-// 	newMs := ms.Duplicate("newname")
-// 	err = newMs.Patch("json", `[{ "op": "replace", "path": "/spec/template/spec/providerSpec/value/userDataSecret/name", "value": "newSecretName" }]`)
-// 	newMs.ScaleTo(1)
+// newMs := ms.Duplicate("newname")
+// err = newMs.Patch("json", `[{ "op": "replace", "path": "/spec/template/spec/providerSpec/value/userDataSecret/name", "value": "newSecretName" }]`)
+// newMs.ScaleTo(1)
 func (ms MachineSet) Duplicate(newName string) (*MachineSet, error) {
 	jMachineset := JSON(ms.GetOrFail(`{}`))
 
