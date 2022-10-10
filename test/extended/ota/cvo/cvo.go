@@ -482,16 +482,6 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	//author: yanyang@redhat.com
 	g.It("Longduration-NonPreRelease-Author:yanyang-Medium-32138-cvo alert should not be fired when RetrievedUpdates failed due to nochannel [Serial][Slow]", func() {
 		orgChannel, _ := getCVObyJP(oc, ".spec.channel")
-		cmd := "oc get clusterversion version -o json | jq '.status.history | length'"
-		hisLen, _ := exec.Command("bash", "-c", cmd).Output()
-		e2e.Logf("History length is %s", hisLen)
-		if strings.TrimSpace(string(hisLen)) == "1" {
-			g.By("Check default channel")
-			version, _, err := exutil.GetClusterVersion(oc)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			expChannel := "stable-" + version
-			o.Expect(orgChannel).To(o.Equal(expChannel))
-		}
 
 		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel", orgChannel).Execute()
 
