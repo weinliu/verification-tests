@@ -31,7 +31,7 @@ objects:
         containers:
         - name: "rsyslog"
           command: ["/usr/sbin/rsyslogd", "-f", "/etc/rsyslog/conf/rsyslog.conf", "-n"]
-          image: quay.io/openshifttest/rsyslog:gtls
+          image: quay.io/openshifttest/rsyslogd-container@sha256:e806eb41f05d7cc6eec96bf09c7bcb692f97562d4a983cb019289bd048d9aee2
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
