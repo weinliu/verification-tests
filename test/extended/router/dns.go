@@ -348,6 +348,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("Create a dns server pod")
 		project1 := oc.Namespace()
+		defer exutil.RecoverNamespaceRestricted(oc, project1)
+		exutil.SetNamespacePrivileged(oc, project1)
 		err := oc.AsAdmin().Run("create").Args("-f", coreDNSSrvPod, "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForPodWithLabelReady(oc, project1, srvPodLabel)
