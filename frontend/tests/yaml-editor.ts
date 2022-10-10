@@ -29,7 +29,7 @@ describe("yaml editor tests", () => {
     importYamlPage.checkDangerAlert(/forbidden|cannot|create/gi);
   });
 
-  it("(OCP-42019) Create multiple resources by importing yaml", () => {
+  it("(OCP-42019,yapei) Create multiple resources by importing yaml", () => {
     // import multiple resources
     // and check successful creation result on import yaml status page
     cy.byTestID('import-yaml').click();

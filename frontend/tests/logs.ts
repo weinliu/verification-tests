@@ -13,7 +13,7 @@ describe('logs related features', () => {
         cy.logout;
     });
 
-    it('(OCP-43996,admin) View Master Node Logs', () => {
+    it('(OCP-43996,admin,yapei) View Master Node Logs', () => {
         cy.visit('/k8s/cluster/nodes?rowFilter-node-role=master');
         listPage.rows.shouldBeLoaded();
         listPage.rows.clickFirstLinkInFirstRow();
@@ -29,7 +29,7 @@ describe('logs related features', () => {
         logsPage.selectLogFile('audit.log');
         logsPage.logWindowLoaded();
     });
-    it('(OCP-43996,admin) View Worker Node logs', () => {
+    it('(OCP-43996,admin,yapei) View Worker Node logs', () => {
         cy.visit('/k8s/cluster/nodes?rowFilter-node-role=worker');
         listPage.rows.shouldBeLoaded();
         listPage.rows.clickFirstLinkInFirstRow();

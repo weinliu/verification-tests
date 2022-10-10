@@ -12,7 +12,7 @@ describe('Administration pages pesudo translation', () => {
   	cy.logout;
   });
 
-  it('(OCP-35766,admin) cluster settings details', () => {
+  it('(OCP-35766,admin,yapei) cluster settings details', () => {
     cy.visit('/settings/cluster?pseudolocalization=true&lng=en');
     cy.get('.co-cluster-settings__section', {timeout: 10000});
     cy.get('.pf-c-alert__title').isPseudoLocalized();
@@ -23,13 +23,13 @@ describe('Administration pages pesudo translation', () => {
     cy.get('th').isPseudoLocalized();
   });
 
-  it('(OCP-35766,admin) cluster settings cluster operators', () => {
+  it('(OCP-35766,admin,yapei) cluster settings cluster operators', () => {
     cy.visit('/settings/cluster/clusteroperators?pseudolocalization=true&lng=en');
     listPage.rows.shouldBeLoaded();
     cy.get(ListPageSelector.tableColumnHeaders).isPseudoLocalized();
   });
 
- it('(OCP-35766,admin) cluster settings configurations', () => {
+ it('(OCP-35766,admin,yapei) cluster settings configurations', () => {
     cy.visit('/settings/cluster/globalconfig?pseudolocalization=true&lng=en');
     cy.get('.co-m-table-grid', {timeout: 10000});
     cy.get('.co-help-text').isPseudoLocalized();
@@ -37,7 +37,7 @@ describe('Administration pages pesudo translation', () => {
     cy.get('.co-m-table-grid__head').isPseudoLocalized();
   });
 
-  it('(OCP-35766,admin) Namespaces list and other pages pesudo translation', () => {
+  it('(OCP-35766,admin,yapei) Namespaces list and other pages pesudo translation', () => {
     // list page
     const test_ns = 'openshift-apiserver'
     cy.visit('/k8s/cluster/namespaces?pseudolocalization=true&lng=en');
@@ -62,7 +62,7 @@ describe('Administration pages pesudo translation', () => {
 
     // ResourceQuota and LimitRange has been covered in resource-crud.spec
 
-  it('(OCP-35766,admin) CustomResourceDefinitions list and details pesudo translation', () => {
+  it('(OCP-35766,admin,yapei) CustomResourceDefinitions list and details pesudo translation', () => {
     const CRD_kind_group = 'consolequickstarts.console.openshift.io';
     cy.visit('/k8s/cluster/customresourcedefinitions?pseudolocalization=true&lng=en');
     listPage.rows.shouldBeLoaded();

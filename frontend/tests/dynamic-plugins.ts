@@ -37,7 +37,7 @@ describe('Dynamic plugins features', () => {
     cy.exec(`oc patch console.operator cluster -p '{"spec":{"plugins":null}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     cy.exec(`oc delete consoleplugin console-demo-plugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
   });
-  it('(OCP-45629, admin) dynamic plugins proxy to services on the cluster', () => {
+  it('(OCP-45629, admin,yapei) dynamic plugins proxy to services on the cluster', () => {
     nav.sidenav.switcher.changePerspectiveTo('Developer');
     guidedTour.close();
     cy.wait(30000);
@@ -65,7 +65,7 @@ describe('Dynamic plugins features', () => {
     cy.contains('success').should('be.visible');
   });
 
-  it('(OCP-50757, admin) Support ordering of plugin nav sections in admin perspective', () => {
+  it('(OCP-50757, admin,yapei) Support ordering of plugin nav sections in admin perspective', () => {
     nav.sidenav.switcher.changePerspectiveTo('Administrator');
     // Demo Plugin nav is rendered after Workloads, before Networking
     cy.contains('button', 'Demo Plugin').should('have.attr', 'data-test', 'nav-demo-plugin');
