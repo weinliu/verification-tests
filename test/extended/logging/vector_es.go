@@ -3,6 +3,7 @@ package logging
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -335,6 +336,60 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			chkCollector, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=component=collector", "--field-selector", "spec.nodeName="+taintNode+"", "-o", "name").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(chkCollector).Should(o.ContainSubstring("collector"))
+		})
+
+		g.It("CPaasrunOnly-Author:ikanse-Medium-47063-Vector ServiceMonitor object for Vector is deployed along with Cluster Logging[Serial]", func() {
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			g.By("Waiting for the Logging pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By("Make sure the Elasticsearch cluster is healthy")
+			cl.assertResourceStatus(oc, "jsonpath={.status.logStore.elasticsearchStatus[0].cluster.status}", "green")
+
+			g.By("Check Vector status")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=collector"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			pl := resource{"pods", podList.Items[0].Name, cloNS}
+			pl.checkLogsFromRs(oc, "Healthcheck: Passed", "collector")
+			pl.checkLogsFromRs(oc, "Vector has started", "collector")
+
+			g.By("Check if the ServiceMonitor object for Vector is created.")
+			svmn, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("servicemonitor", "collector", "-o", "name").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(svmn).Should(o.Equal("servicemonitor.monitoring.coreos.com/collector"))
+
+			g.By("Check the Vector metrics")
+			bearerToken := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+			output, err := e2e.RunHostCmdWithRetries(cloNS, podList.Items[0].Name, "curl -k -H \"Authorization: Bearer "+bearerToken+"\" -H \"Content-type: application/json\" https://collector:24231/metrics", 10*time.Second, 20*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring("vector_component_received_event_bytes_total"))
+
+			g.By("Check the Log file metrics exporter metrics")
+			output, err = e2e.RunHostCmdWithRetries(cloNS, podList.Items[0].Name, "curl -k -H \"Authorization: Bearer "+bearerToken+"\" -H \"Content-type: application/json\" https://collector:2112/metrics", 10*time.Second, 20*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring("log_logged_bytes_total"))
+
+			g.By("Check Vector and Log File metrics exporter metrics from Prometheus")
+			for _, metric := range []string{"log_logged_bytes_total", "vector_processed_bytes_total"} {
+				err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+					result, err := queryPrometheus(oc, "", "/api/v1/query?", metric, "GET")
+					if err != nil {
+						return false, err
+					}
+					if len(result.Data.Result) > 0 {
+						value, _ := strconv.Atoi(result.Data.Result[0].Value[1].(string))
+						return (value > 0) && (len(result.Data.Result) > 0), nil
+					}
+					return false, nil
+
+				})
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can't find metric %s", metric))
+			}
 		})
 
 	})
