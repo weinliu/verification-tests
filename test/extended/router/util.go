@@ -495,7 +495,7 @@ func readDNSCorefile(oc *exutil.CLI, DNSPodName, searchString, grepOption string
 func ensureClusterOperatorProgress(oc *exutil.CLI, coName string) {
 	e2e.Logf("waiting for CO %v to start rolling update......", coName)
 	jsonPath := "-o=jsonpath={.status.conditions[?(@.type==\"Progressing\")].status}"
-	waitErr := wait.Poll(6*time.Second, 180*time.Second, func() (bool, error) {
+	waitErr := wait.PollImmediate(6*time.Second, 180*time.Second, func() (bool, error) {
 		status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/"+coName, jsonPath).Output()
 		primary := false
 		if strings.Compare(status, "True") == 0 {
@@ -556,6 +556,7 @@ func restoreDNSOperatorDefault(oc *exutil.CLI) {
 	if strings.Contains(output, "no change") {
 		e2e.Logf("skip the Progressing check step.")
 	} else {
+		delAllDNSPodsNoWait(oc)
 		ensureClusterOperatorProgress(oc, "dns")
 	}
 	ensureClusterOperatorNormal(oc, "dns")
@@ -591,6 +592,11 @@ func delAllDNSPods(oc *exutil.CLI) {
 	o.Expect(podList).NotTo(o.BeEmpty())
 	oc.AsAdmin().Run("delete").Args("pods", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-n", "openshift-dns").Execute()
 	waitForRangeOfResourceToDisappear(oc, "openshift-dns", podList)
+}
+
+//this function is to delete all dns pods without wait
+func delAllDNSPodsNoWait(oc *exutil.CLI) {
+	oc.AsAdmin().Run("delete").Args("pods", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-n", "openshift-dns", "--wait=false").Execute()
 }
 
 //this function is to check whether the given resource pod's are deleted or not

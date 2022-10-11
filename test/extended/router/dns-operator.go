@@ -94,6 +94,43 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(outputLcfg2).NotTo(o.ContainSubstring("error"))
 	})
 
+	// author: hongli@redhat.com
+	g.It("Author:hongli-High-46183-DNS operator supports Random, RoundRobin and Sequential policy for servers.forwardPlugin [Disruptive]", func() {
+		resourceName := "dns.operator.openshift.io/default"
+		jsonPatch := "[{\"op\":\"add\", \"path\":\"/spec/servers\", \"value\":[{\"forwardPlugin\":{\"policy\":\"Random\",\"upstreams\":[\"8.8.8.8\"]},\"name\":\"test\",\"zones\":[\"mytest.ocp\"]}]}]"
+
+		g.By("patch the dns.operator/default and add custom zones config")
+		defer restoreDNSOperatorDefault(oc)
+		patchGlobalResourceAsAdmin(oc, resourceName, jsonPatch)
+		delAllDNSPodsNoWait(oc)
+		ensureDNSRollingUpdateDone(oc)
+
+		g.By("check Corefile and ensure the policy is Random")
+		oneDNSPod := getDNSPodName(oc)
+		policy := readDNSCorefile(oc, oneDNSPod, "8.8.8.8", "-A2")
+		o.Expect(policy).To(o.ContainSubstring(`policy random`))
+
+		g.By("updateh the custom zones policy to RoundRobin ")
+		patchGlobalResourceAsAdmin(oc, resourceName, "[{\"op\":\"replace\", \"path\":\"/spec/servers/0/forwardPlugin/policy\", \"value\":\"RoundRobin\"}]")
+		delAllDNSPodsNoWait(oc)
+		ensureDNSRollingUpdateDone(oc)
+
+		g.By("check Corefile and ensure the policy is round_robin")
+		oneDNSPod = getDNSPodName(oc)
+		policy = readDNSCorefile(oc, oneDNSPod, "8.8.8.8", "-A2")
+		o.Expect(policy).To(o.ContainSubstring(`policy round_robin`))
+
+		g.By("updateh the custom zones policy to Sequential")
+		patchGlobalResourceAsAdmin(oc, resourceName, "[{\"op\":\"replace\", \"path\":\"/spec/servers/0/forwardPlugin/policy\", \"value\":\"Sequential\"}]")
+		delAllDNSPodsNoWait(oc)
+		ensureDNSRollingUpdateDone(oc)
+
+		g.By("check Corefile and ensure the policy is sequential")
+		oneDNSPod = getDNSPodName(oc)
+		policy = readDNSCorefile(oc, oneDNSPod, "8.8.8.8", "-A2")
+		o.Expect(policy).To(o.ContainSubstring(`policy sequential`))
+	})
+
 	// author: shudili@redhat.com
 	g.It("Author:shudili-NonPreRelease-Medium-46873-Configure operatorLogLevel under the default dns operator and check the logs flag [Disruptive]", func() {
 		var (
