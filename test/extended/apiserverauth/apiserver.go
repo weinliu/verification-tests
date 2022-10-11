@@ -713,7 +713,9 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-PreChkUpgrade-NonPreRelease-Author:rgangwar-Critical-40667-Prepare Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
+	// It is destructive case, probably cause the system OOM, so adding [Disruptive].Workload loading costs more than 15mins, so adding [Slow]
+	// For the Jira issue https://issues.redhat.com/browse/OCPQE-9541, we need provide a good solution for the provision of adequate stress for the load of the environment
+	g.It("ROSA-ARO-OSD_CCS-PreChkUpgrade-NonPreRelease-Author:rgangwar-Critical-40667-Prepare Upgrade cluster under stress with API Priority and Fairness feature [Slow][Disruptive]", func() {
 		var (
 			dirname    = "/tmp/-OCP-40667/"
 			exceptions = "panicked: false"
