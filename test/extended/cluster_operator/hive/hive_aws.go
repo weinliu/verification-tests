@@ -126,7 +126,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "25310"|./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-25310-High-33374-High-39747-Medium-23165-[aws]Hive ClusterDeployment Check installed and version [Serial]", func() {
 		testCaseID := "25310"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
 		g.By("config Install-Config Secret...")
@@ -375,7 +375,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "23040"|./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-High-23040-Medium-42113-High-34719-Low-41250-High-25334-High-23876-Hive to create SyncSet resource[Serial]", func() {
 		testCaseID := "23040"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
 		g.By("Config Install-Config Secret...")
@@ -615,7 +615,7 @@ spec:
 	//For simplicity, replace --simulate-bootstrap-failure with not copying aws-creds to make install failed
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-35990-Hive support limiting install attempt[Serial]", func() {
 		testCaseID := "35990"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		imageSetName := cdName + "-imageset"
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
@@ -697,7 +697,7 @@ spec:
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "32223"|./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:liangli-Medium-32223-Medium-35193-[aws]Hive ClusterDeployment Check installed and uninstalled [Serial]", func() {
 		testCaseID := "32223"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
 		g.By("Config Install-Config Secret...")
@@ -768,7 +768,7 @@ spec:
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "33642"|./bin/extended-platform-tests run --timeout 70m -f -
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-33642-[aws]Hive supports cluster hibernation [Serial]", func() {
 		testCaseID := "33642"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
 		g.By("Config Install-Config Secret...")
@@ -829,7 +829,7 @@ spec:
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "49471"|./bin/extended-platform-tests run --timeout 70m -f -
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-49471-[aws]Change EC2RootVolume: make IOPS optional [Serial]", func() {
 		testCaseID := "49471"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
 		g.By("Config Install-Config Secret with iops=1...")
@@ -898,7 +898,7 @@ spec:
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "24088"|./bin/extended-platform-tests run --timeout 90m -f -
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-High-24088-[AWS]Provisioning clusters on AWS with managed dns [Serial]", func() {
 		testCaseID := "24088"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
 		g.By("Config Install-Config Secret...")
@@ -942,7 +942,7 @@ spec:
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "33387"|./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-High-33387-[AWS]DNSZone Controller will Set a Condition If Credentials used are invalid[Serial]", func() {
 		testCaseID := "33387"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		imageSetName := cdName + "-imageset"
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
@@ -1027,8 +1027,8 @@ spec:
 		e2e.Logf("Change aws awsAccessKey to valid")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret", "aws-creds", "-n", oc.Namespace(), "-p", `{"data":{"aws_secret_access_key":"`+awsAccessKey+`"}}`, "--type=merge").Execute()
 		e2e.Logf("Check correct cd and dnszone conditions ")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "False", ok, DefaultTimeout, []string{"DNSZone", cdName + "-zone", "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="AuthenticationFailure")].status}`}).check(oc)
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="DNSNotReady")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "False", ok, 3*DefaultTimeout, []string{"DNSZone", cdName + "-zone", "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="AuthenticationFailure")].status}`}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "False", ok, 3*DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="DNSNotReady")].status}`}).check(oc)
 		g.By("Check Aws ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 	})
@@ -1037,7 +1037,7 @@ spec:
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "51195"|./bin/extended-platform-tests run --timeout 35m -f -
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-High-51195-[AWS]DNSNotReadyTimeout should be terminal[Serial][Disruptive]", func() {
 		testCaseID := "51195"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
 		g.By("Remove Route53-aws-creds in hive namespace if exists to make DNSNotReady")
@@ -1103,7 +1103,7 @@ spec:
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "22381"|./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:lwan-High-22381-Medium-34882-[AWS]Hive additional machinepool test [Serial]", func() {
 		testCaseID := "34882"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
 		g.By("Config Install-Config Secret...")
@@ -1203,10 +1203,10 @@ spec:
 
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "28867"|./bin/extended-platform-tests run --timeout 60m -f -
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "28867"|./bin/extended-platform-tests run --timeout 120m -f -
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:lwan-High-28867-Medium-41776-[aws]Hive Machinepool test for autoscale [Serial]", func() {
 		testCaseID := "28867"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
 		g.By("Config Install-Config Secret...")
@@ -1279,7 +1279,7 @@ spec:
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "--type", "merge", "-p", autoscalConfig}).check(oc)
 		e2e.Logf("Check replicas is minimum value %s", autoScalingMin)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "10", ok, 5*DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "4 3 3", ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=worker", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "4 3 3", ok, 10*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=worker", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
 		e2e.Logf("Check machines number is minReplicas %s when low workload", autoScalingMin)
 		err = wait.Poll(1*time.Minute, (ClusterResumeTimeout/60)*time.Minute, func() (bool, error) {
 			runningMachinesNum := checkResourceNumber(oc, "Running", []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=worker"})
@@ -1305,7 +1305,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "busybox", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Deployment", "busybox", "-n", "default"}).check(oc)
 		e2e.Logf("Check replicas will scale up to maximum value %s", autoScalingMax)
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "4 4 4", ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=worker", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "4 4 4", ok, 10*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=worker", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
 		e2e.Logf("Check machines number will scale up to maxReplicas %s", autoScalingMax)
 		err = wait.Poll(1*time.Minute, (ClusterResumeTimeout/60)*time.Minute, func() (bool, error) {
 			runningMachinesNum := checkResourceNumber(oc, "Running", []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=worker"})
@@ -1320,7 +1320,7 @@ spec:
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("--kubeconfig="+kubeconfig, "-f", workloadYaml).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Check replicas will scale down to minimum value %s", autoScalingMin)
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "4 3 3", ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=worker", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "4 3 3", ok, 10*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=worker", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
 		e2e.Logf("Check machines number will scale down to minReplicas %s", autoScalingMin)
 		err = wait.Poll(1*time.Minute, (ClusterResumeTimeout/60)*time.Minute, func() (bool, error) {
 			runningMachinesNum := checkResourceNumber(oc, "Running", []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=worker"})
@@ -1346,7 +1346,7 @@ spec:
 		autoscalConfig = fmt.Sprintf("{\"spec\": {\"autoscaling\": {\"maxReplicas\": %s, \"minReplicas\": %s}}}", autoScalingMax, autoScalingMin)
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"MachinePool", cdName + "-infra", "-n", oc.Namespace(), "--type", "merge", "-p", autoscalConfig}).check(oc)
 		e2e.Logf("Check replicas is 0")
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "0 0 0", ok, 2*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "0 0 0", ok, 5*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
 		e2e.Logf("Check hive allow set minReplicas=0 within zone setting")
 		infra2MachinepoolYaml := `
 apiVersion: hive.openshift.io/v1
@@ -1386,7 +1386,7 @@ spec:
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", filename).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Check replicas is 0")
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "0 0 0", ok, 2*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra2", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "0 0 0", ok, 4*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra2", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
 	})
 
 	//author: lwan@redhat.com
@@ -1395,7 +1395,7 @@ spec:
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "23289"|./bin/extended-platform-tests run --timeout 15m -f -
 	g.It("NonPreRelease-ConnectedOnly-Author:lwan-High-23289-Medium-39813-Test hive reports install restarts in CD and Metric[Serial]", func() {
 		testCaseID := "23289"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		imageSetName := cdName + "-imageset"
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
@@ -1499,7 +1499,7 @@ spec:
 			"-n", sub.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		testCaseID := "27559"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
 		g.By("Config Install-Config Secret...")

@@ -293,9 +293,10 @@ const (
 	PrometheusURL           = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
 	ClusterInstallTimeout   = 3600
 	DefaultTimeout          = 120
-	ClusterResumeTimeout    = 600
+	ClusterResumeTimeout    = 1200
 	ClusterUninstallTimeout = 1800
 	HibernateAfterTimer     = 300
+	ClusterSuffixLen        = 4
 )
 
 //AWS Configurations
@@ -679,12 +680,39 @@ func expectedResource(oc *exutil.CLI, action string, asAdmin bool, withoutNamesp
 func cleanupObjects(oc *exutil.CLI, objs ...objectTableRef) {
 	for _, v := range objs {
 		e2e.Logf("Start to remove: %v", v)
+		//Print out debugging info if CD installed is false
+		if v.kind == "ClusterDeployment" {
+			var installedFlag, statusConditions string
+			if v.namespace != "" {
+				installedFlag, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(v.kind, "-n", v.namespace, v.name, "-o=jsonpath={.spec.installed}").Output()
+				if installedFlag == "false" {
+					//Print out status.conditions
+					statusConditions, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(v.kind, "-n", v.namespace, v.name, "-o=jsonpath={.status.conditions}").Output()
+					e2e.Logf("CD Installed is false, .status.conditions is %s", statusConditions)
+					//print out provision pod logs
+					provisionPodOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "hive.openshift.io/job-type=provision", "-n", v.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+					e2e.Logf("provisionPodOutput is %s", provisionPodOutput)
+					if err == nil {
+						var provisionPod []string
+						provisionPod = strings.Split(strings.TrimSpace(provisionPodOutput), " ")
+						e2e.Logf("provisionPod is %s", provisionPod)
+						if len(provisionPod) > 0 {
+							e2e.Logf("provisionPod len is %d. provisionPod[0] is %s", len(provisionPod), provisionPod[0])
+							provisionPodLogs, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args(provisionPod[0], "-c", "hive", "-n", v.namespace).Output()
+							if len(provisionPodLogs) <= 2000 {
+								e2e.Logf("provisionPodLogs is %s", provisionPodLogs)
+							} else {
+								e2e.Logf("provisionPodLogs is %s", provisionPodLogs[len(provisionPodLogs)-2000:])
+							}
+						}
+					}
+				}
+			}
+		}
 		if v.namespace != "" {
-			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(v.kind, "-n", v.namespace, v.name, "--ignore-not-found").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args(v.kind, "-n", v.namespace, v.name, "--ignore-not-found").Output()
 		} else {
-			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(v.kind, v.name, "--ignore-not-found").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args(v.kind, v.name, "--ignore-not-found").Output()
 		}
 		//For ClusterPool or ClusterDeployment, need to wait ClusterDeployment delete done
 		if v.kind == "ClusterPool" || v.kind == "ClusterDeployment" {

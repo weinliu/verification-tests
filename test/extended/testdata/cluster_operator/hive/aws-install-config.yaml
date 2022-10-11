@@ -18,7 +18,7 @@ objects:
         platform:
           aws:
             rootVolume:
-              iops: 100
+              iops: 0
               size: 22
               type: gp2
             type: m4.xlarge
@@ -28,7 +28,7 @@ objects:
         platform:
           aws:
             rootVolume:
-              iops: 100
+              iops: 0
               size: 22
               type: gp2
             type: m4.xlarge
