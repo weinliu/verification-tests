@@ -229,11 +229,10 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	// author: yinzhou@redhat.com
 	g.It("Author:yinzhou-High-43035-KCM use internal LB to avoid outages during kube-apiserver rollout [Disruptive]", func() {
 		g.By("Get the route")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("--show-console").Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route/console", "-n", "openshift-console", "-o=jsonpath={.spec.host}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		routeS := strings.Split(output, "api")
-		routeS = strings.Split(routeS[1], ":")
-		internalLB := "server: https://api-int" + routeS[0]
+		routeS := strings.Split(output, "apps")
+		internalLB := "server: https://api-int" + routeS[1]
 
 		g.By("Check the configmap in project openshift-kube-controller-manager")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "controller-manager-kubeconfig", "-n", "openshift-kube-controller-manager", "-oyaml").Output()
