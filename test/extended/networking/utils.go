@@ -1846,7 +1846,6 @@ func checkEnvInConfigMap(oc *exutil.CLI, ns, configmapName string, envString str
 		}
 		if !strings.Contains(output, envString) {
 			e2e.Logf("Did not find %v in ovnkube-config configmap,try next round.", envString)
-			e2e.Logf(output)
 			return false, nil
 		}
 		return true, nil
