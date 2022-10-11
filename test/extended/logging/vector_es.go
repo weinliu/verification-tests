@@ -895,6 +895,49 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
+		g.It("CPaasrunOnly-Author:ikanse-Medium-47998-Vector Forward logs to multiple log stores[Serial][Slow]", func() {
+
+			g.By("Create external Elasticsearch instance")
+			esProj := oc.Namespace()
+			ees := externalES{esProj, "6.8", "elasticsearch-server", false, false, false, "", "", "", cloNS}
+			defer ees.remove(oc)
+			ees.deploy(oc)
+
+			g.By("Create project for app logs and deploy the log generator app")
+			oc.SetupProject()
+			appProj := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogForwarder instance to forward logs to both default and external log store")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-exteranl-es-and-default.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Vector as collector")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			g.By("Waiting for the Logging pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+
+			g.By("Check logs in default ES")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-000")
+			waitForIndexAppear(cloNS, podList.Items[0].Name, "infra-000")
+			waitForIndexAppear(cloNS, podList.Items[0].Name, "audit-000")
+
+			g.By("Check logs in external ES")
+			ees.waitForIndexAppear(oc, "app")
+			ees.waitForIndexAppear(oc, "infra")
+			ees.waitForIndexAppear(oc, "audit")
+
+		})
+
 	})
 
 	g.Context("JSON log tests", func() {
