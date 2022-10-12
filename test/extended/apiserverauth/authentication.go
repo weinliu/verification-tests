@@ -673,4 +673,76 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "Timed out in invalidating a token after its useroauthaccesstoken is deleted for a while")
 	})
+
+	// author: gkarager@redhat.com
+	g.It("Author:gkarager-Medium-49757-Missing content in default RBAC role, rolebinding, clusterrole and clusterrolebinding can be restored automatically when apiserver restarts [Disruptive]", func() {
+		tmpCaseFilePath, err := os.MkdirTemp("/tmp/", "tmp_49757")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpCaseFilePath)
+
+		g.By("Checking default RBAC resource annotations")
+		clusterRole, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrole.rbac", "system:build-strategy-docker", "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterRole).To(o.ContainSubstring("rbac.authorization.kubernetes.io/autoupdate: \"true\""))
+		// Storing original clusterrole configuration in clusterrole.yaml file for future use
+		clusterRoleYaml := filepath.Join(tmpCaseFilePath, "clusterrole.yaml")
+		// uid and resourceVersion must be removed, otherwise "Operation cannot be fulfilled" error will occur when running oc replace in later steps
+		re := regexp.MustCompile("(?m)[\r\n]+^  (uid|resourceVersion):.*$")
+		clusterRole = re.ReplaceAllString(clusterRole, "")
+		err = os.WriteFile(clusterRoleYaml, []byte(clusterRole), 0o644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		clusterRoleBinding, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrolebinding.rbac", "system:oauth-token-deleters", "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterRoleBinding).To(o.ContainSubstring("rbac.authorization.kubernetes.io/autoupdate: \"true\""))
+		// Storing original clusterrolebinding configuration in clusterrolebinding.yaml file for future use
+		clusterRoleBindingYaml := filepath.Join(tmpCaseFilePath, "clusterrolebinding.yaml")
+		clusterRoleBinding = re.ReplaceAllString(clusterRoleBinding, "")
+		err = os.WriteFile(clusterRoleBindingYaml, []byte(clusterRoleBinding), 0o644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		clusterRole, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrole.authorization.openshift.io", "system:build-strategy-docker", "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterRole).To(o.ContainSubstring("openshift.io/reconcile-protect: \"false\""))
+
+		clusterRoleBinding, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrolebinding.authorization.openshift.io", "system:oauth-token-deleters", "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterRoleBinding).To(o.ContainSubstring("openshift.io/reconcile-protect: \"false\""))
+
+		g.By("Modifying cluster default RBAC resources")
+		patchYaml := `{"rules":[{"apiGroups":["","build.openshift.io"],"resources":["builds/docker","builds/optimizeddocker"],"verbs":["get"]}]}`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterrole.rbac", "system:build-strategy-docker", "--type=merge", "-p", patchYaml).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			g.By("Restoring clusterrole.rbac before exiting the scenario.")
+			err = oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", clusterRoleYaml).Execute()
+		}()
+
+		patchYaml = `{"subjects":[{"apiGroup":"rbac.authorization.k8s.io","kind":"Group","name":"system:authenticated"}]}`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterrolebinding.rbac", "system:oauth-token-deleters", "--type=merge", "-p", patchYaml).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			g.By("Restoring clusterrolebinding.rbac before exiting the scenario.")
+			err = oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", clusterRoleBindingYaml).Execute()
+		}()
+
+		g.By("Restarting openshift-apiserver pods")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "--all", "-n", "openshift-apiserver").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err = waitCoBecomes(oc, "openshift-apiserver", 240, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, `openshift-apiserver status has not yet changed to {"Available": "True", "Progressing": "False", "Degraded": "False"} in 240 seconds`)
+		e2e.Logf("openshift-apiserver pods are all rotated and running.")
+
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrole.rbac", "system:build-strategy-docker", "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("- get"))
+		o.Expect(output).To(o.ContainSubstring("- create"))
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrolebinding.rbac", "system:oauth-token-deleters", "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("system:unauthenticated"))
+		e2e.Logf("The deleted parts in both clusterrole.rbac and clusterrolebinding.rbac are restored.")
+	})
 })
