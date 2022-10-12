@@ -171,30 +171,6 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-High-28586-SDK ansible Content Collections Support in watches.yaml", func() {
-		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
-		var collectiontest = filepath.Join(buildPruningBaseDir, "cache5_v1_collectiontest.yaml")
-		operatorsdkCLI.showInfo = true
-		oc.SetupProject()
-		namespace := oc.Namespace()
-		_, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/contentcollections-bundle:v"+ocpversion, "-n", namespace, "--timeout", "5m").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		createCollection, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", collectiontest, "-p", "NAME=collectiontest").OutputToFile("config-28586.json")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createCollection, "-n", namespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
-			msg, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deploy/contentcollections-controller-manager", "-c", "manager", "-n", namespace).Output()
-			if strings.Contains(msg, "dummy : Create ConfigMap") {
-				e2e.Logf("found dummy : Create ConfigMap")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("miss log dummy : Create ConfigMap in %s", namespace))
-	})
-
-	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-37142-SDK helm cr create deletion process", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
 		var nginx = filepath.Join(buildPruningBaseDir, "demo_v1_nginx.yaml")
@@ -3490,4 +3466,122 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("log of deploy/ansibletest-controller-manager of %s doesn't work the blacklist", nsOperator))
 	})
 
+	// author: jfan@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:jfan-High-28586 ansible Content Collections Support in watches.yaml", func() {
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture != "amd64" {
+			g.Skip("Do not support " + architecture)
+		}
+		// test data
+		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
+		dataPath := filepath.Join(buildPruningBaseDir, "ocp-28586-data")
+		crFilePath := filepath.Join(dataPath, "cache5_v1_collectiontest.yaml")
+		// exec dir
+		tmpBasePath := "/tmp/ocp-28586-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "contentcollections")
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
+		// exec ns & image tag
+		nsOperator := "contentcollections-system"
+		imageTag := "quay.io/olmqe/contentcollections:" + ocpversion + "-" + getRandomString()
+		// cleanup the test data
+		err := os.MkdirAll(tmpPath, 0o755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		quayCLI := container.NewQuayCLI()
+		defer quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
+
+		defer func() {
+			_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", crFilePath, "-n", nsOperator).Output()
+			g.By("step: undeploy")
+			_, err = makeCLI.Run("undeploy").Args().Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("step: init Ansible Based Operator")
+		output, err := operatorsdkCLI.Run("init").Args("--plugins=ansible", "--domain", "cotentcollect.com").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Next"))
+
+		g.By("step: Create API.")
+		output, err = operatorsdkCLI.Run("create").Args("api", "--group", "cache5", "--version", "v1", "--kind", "CollectionTest", "--generate-role").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Writing kustomize manifests"))
+
+		g.By("step: modify files to get the quay.io/olmqe images.")
+		// mkdir fixture_collection
+		collectionFilePath := filepath.Join(tmpPath, "fixture_collection", "roles", "dummy", "tasks")
+		err = os.MkdirAll(collectionFilePath, 0o755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// copy galaxy.yml & main.yml
+		err = copy(filepath.Join(dataPath, "galaxy.yml"), filepath.Join(tmpPath, "fixture_collection", "galaxy.yml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = copy(filepath.Join(dataPath, "main.yml"), filepath.Join(collectionFilePath, "main.yml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// copy Dockerfile
+		dockerfileFilePath := filepath.Join(dataPath, "Dockerfile")
+		err = copy(dockerfileFilePath, filepath.Join(tmpPath, "Dockerfile"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
+		// copy the watches.yaml
+		err = copy(filepath.Join(dataPath, "watches.yaml"), filepath.Join(tmpPath, "watches.yaml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// update the rbac file
+		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+
+		g.By("step: Build and push the operator image")
+		tokenDir := "/tmp/ocp-28586" + getRandomString()
+		err = os.MkdirAll(tokenDir, os.ModePerm)
+		defer os.RemoveAll(tokenDir)
+		if err != nil {
+			e2e.Failf("fail to create the token folder:%s", tokenDir)
+		}
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", tokenDir), "--confirm").Output()
+		if err != nil {
+			e2e.Failf("Fail to get the cluster auth %v", err)
+		}
+		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+
+		g.By("step: Install the CRD")
+		output, err = makeCLI.Run("install").Args().Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("collectiontests.cache5.cotentcollect.com"))
+
+		g.By("step: Deploy the operator")
+		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
+		o.Expect(output).To(o.ContainSubstring("deployment.apps/contentcollections-controller-manager"))
+
+		waitErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/contentcollections-controller-manager", "-c", "manager", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(msg, "Starting workers") {
+				e2e.Failf("Starting workers failed")
+				return false, nil
+			}
+			return true, nil
+		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No contentcollections-controller-manager in project %s", nsOperator))
+
+		g.By("step: Create the resource")
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", nsOperator).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(msg, "collectiontest-sample created") {
+			e2e.Failf("collectiontest-sample created failed")
+		}
+
+		// check the dummy task
+		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deploy/contentcollections-controller-manager", "-c", "manager", "-n", nsOperator).Output()
+			if strings.Contains(msg, "dummy : Create ConfigMap") {
+				e2e.Logf("found dummy : Create ConfigMap")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("miss log dummy : Create ConfigMap in %s", nsOperator))
+	})
 })
