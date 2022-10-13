@@ -496,14 +496,20 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		if dockerCred {
 			e2e.Logf("there are default docker cred in the prow")
 			err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", clusterImage).Execute()
-			o.Expect(err).Should(o.HaveOccurred())
+			if err != nil {
+				err1 := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", clusterImage, "--filter-by-os", "linux/amd64").Execute()
+				o.Expect(err1).NotTo(o.HaveOccurred())
+			}
 		}
 
 		podmanCred := checkPodmanCred()
 		if podmanCred {
 			e2e.Logf("there are default podman cred in the prow")
 			err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", clusterImage).Execute()
-			o.Expect(err).Should(o.HaveOccurred())
+			if err != nil {
+				err1 := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", clusterImage, "--filter-by-os", "linux/amd64").Execute()
+				o.Expect(err1).NotTo(o.HaveOccurred())
+			}
 		}
 
 		g.By("Set podman registry config")
@@ -514,7 +520,10 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = locatePodmanCred(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", clusterImage).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			err1 := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", clusterImage, "--filter-by-os", "linux/amd64").Execute()
+			o.Expect(err1).NotTo(o.HaveOccurred())
+		}
 	})
 	// author: yinzhou@redhat.com
 	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-50399-oc apply could update EgressNetworkPolicy resource", func() {
