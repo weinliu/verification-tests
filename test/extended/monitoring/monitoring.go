@@ -187,14 +187,12 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		var (
 			ns                string
 			output            string
-			err               error
 			deployThanosRuler = filepath.Join(monitoringBaseDir, "deployThanosRuler.yaml")
 		)
 		g.By("deploy ThanosRuler under namespace as a common user (non-admin)")
 		oc.SetupProject()
 		ns = oc.Namespace()
-		output, err = oc.Run("apply").Args("-n", ns, "-f", deployThanosRuler).Output()
-		o.Expect(err).To(o.HaveOccurred())
+		output, _ = oc.Run("apply").Args("-n", ns, "-f", deployThanosRuler).Output()
 		o.Expect(output).To(o.ContainSubstring("Error from server (Forbidden):"))
 	})
 
