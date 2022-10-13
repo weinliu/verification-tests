@@ -168,4 +168,45 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
+	g.It("ConnectedOnly-Author:yinzhou-High-46506-High-46817-Mirror a single image works well", func() {
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		operatorS := filepath.Join(ocmirrorBaseDir, "config_singleimage.yaml")
+
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+
+		g.By("Mirror to registry")
+		out, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--config", operatorS, "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(out, "using stateless mode") {
+			e2e.Failf("Can't see the stateless mode log")
+		}
+		g.By("Mirror to localhost")
+		dirname := "/tmp/46506test"
+		defer os.RemoveAll(dirname)
+		err = os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		out1, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--config", operatorS, "file:///tmp/46506test").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(out1, "using stateless mode") {
+			e2e.Failf("Can't see the stateless mode log")
+		}
+		_, err = os.Stat("/tmp/46506test/mirror_seq1_000000.tar")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Mirror to registry from archive")
+		out2, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", "/tmp/46506test/mirror_seq1_000000.tar", "docker://"+serInfo.serviceName+"/mirrorachive", "--dest-skip-tls").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(out2, "using stateless mode") {
+			e2e.Failf("Can't see the stateless mode log")
+		}
+	})
 })
