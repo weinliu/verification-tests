@@ -1,0 +1,1696 @@
+{
+    "resultType": "matrix",
+    "result": [
+        {
+            "metric": {
+                "DstAddr": "10.128.0.48",
+                "DstK8S_HostName": "ip-10-0-216-72.us-east-2.compute.internal",
+                "DstK8S_Name": "flowlogs-pipeline-rzvgd",
+                "DstK8S_Namespace": "netobserv",
+                "DstK8S_OwnerName": "flowlogs-pipeline",
+                "DstK8S_OwnerType": "DaemonSet",
+                "DstK8S_Type": "Pod",
+                "SrcAddr": "10.129.2.14",
+                "SrcK8S_HostName": "ip-10-0-170-146.us-east-2.compute.internal",
+                "SrcK8S_Name": "loki",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "loki",
+                "SrcK8S_OwnerType": "Pod",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599220,
+                    "9.066666666666666"
+                ],
+                [
+                    1665599235,
+                    "11.266666666666667"
+                ],
+                [
+                    1665599250,
+                    "4.4"
+                ],
+                [
+                    1665599265,
+                    "4.4"
+                ],
+                [
+                    1665599280,
+                    "8.8"
+                ],
+                [
+                    1665599295,
+                    "4.4"
+                ],
+                [
+                    1665599325,
+                    "4.4"
+                ],
+                [
+                    1665599340,
+                    "4.4"
+                ],
+                [
+                    1665599370,
+                    "4.966666666666667"
+                ],
+                [
+                    1665599385,
+                    "7.166666666666667"
+                ],
+                [
+                    1665599400,
+                    "4.4"
+                ],
+                [
+                    1665599415,
+                    "4.4"
+                ],
+                [
+                    1665599430,
+                    "2.2"
+                ],
+                [
+                    1665599445,
+                    "2.2"
+                ],
+                [
+                    1665599460,
+                    "9.366666666666667"
+                ],
+                [
+                    1665599475,
+                    "11.566666666666666"
+                ],
+                [
+                    1665599490,
+                    "8.8"
+                ],
+                [
+                    1665599505,
+                    "4.4"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "10.128.2.30",
+                "DstK8S_HostName": "ip-10-0-144-51.us-east-2.compute.internal",
+                "DstK8S_Name": "flowlogs-pipeline-lrq7k",
+                "DstK8S_Namespace": "netobserv",
+                "DstK8S_OwnerName": "flowlogs-pipeline",
+                "DstK8S_OwnerType": "DaemonSet",
+                "DstK8S_Type": "Pod",
+                "SrcAddr": "10.129.2.14",
+                "SrcK8S_HostName": "ip-10-0-170-146.us-east-2.compute.internal",
+                "SrcK8S_Name": "loki",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "loki",
+                "SrcK8S_OwnerType": "Pod",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599235,
+                    "2.2"
+                ],
+                [
+                    1665599250,
+                    "4.4"
+                ],
+                [
+                    1665599265,
+                    "4.4"
+                ],
+                [
+                    1665599280,
+                    "2.2"
+                ],
+                [
+                    1665599295,
+                    "2.2"
+                ],
+                [
+                    1665599310,
+                    "4.4"
+                ],
+                [
+                    1665599325,
+                    "4.4"
+                ],
+                [
+                    1665599340,
+                    "2.2"
+                ],
+                [
+                    1665599370,
+                    "4.4"
+                ],
+                [
+                    1665599385,
+                    "4.4"
+                ],
+                [
+                    1665599415,
+                    "4.666666666666667"
+                ],
+                [
+                    1665599430,
+                    "6.866666666666666"
+                ],
+                [
+                    1665599445,
+                    "7.166666666666667"
+                ],
+                [
+                    1665599460,
+                    "4.966666666666667"
+                ],
+                [
+                    1665599475,
+                    "4.4"
+                ],
+                [
+                    1665599490,
+                    "9.366666666666667"
+                ],
+                [
+                    1665599505,
+                    "7.166666666666667"
+                ],
+                [
+                    1665599520,
+                    "2.2"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "10.129.0.59",
+                "DstK8S_HostName": "ip-10-0-130-215.us-east-2.compute.internal",
+                "DstK8S_Name": "flowlogs-pipeline-ndktf",
+                "DstK8S_Namespace": "netobserv",
+                "DstK8S_OwnerName": "flowlogs-pipeline",
+                "DstK8S_OwnerType": "DaemonSet",
+                "DstK8S_Type": "Pod",
+                "SrcAddr": "10.129.2.14",
+                "SrcK8S_HostName": "ip-10-0-170-146.us-east-2.compute.internal",
+                "SrcK8S_Name": "loki",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "loki",
+                "SrcK8S_OwnerType": "Pod",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599235,
+                    "2.2"
+                ],
+                [
+                    1665599250,
+                    "9.366666666666667"
+                ],
+                [
+                    1665599265,
+                    "7.166666666666667"
+                ],
+                [
+                    1665599295,
+                    "4.666666666666667"
+                ],
+                [
+                    1665599310,
+                    "6.866666666666666"
+                ],
+                [
+                    1665599325,
+                    "2.2"
+                ],
+                [
+                    1665599355,
+                    "2.2"
+                ],
+                [
+                    1665599370,
+                    "9.366666666666667"
+                ],
+                [
+                    1665599385,
+                    "7.166666666666667"
+                ],
+                [
+                    1665599400,
+                    "2.466666666666667"
+                ],
+                [
+                    1665599415,
+                    "2.466666666666667"
+                ],
+                [
+                    1665599445,
+                    "2.2"
+                ],
+                [
+                    1665599460,
+                    "4.4"
+                ],
+                [
+                    1665599475,
+                    "11.266666666666667"
+                ],
+                [
+                    1665599490,
+                    "9.066666666666666"
+                ],
+                [
+                    1665599520,
+                    "2.2"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "10.129.2.13",
+                "DstK8S_HostName": "ip-10-0-170-146.us-east-2.compute.internal",
+                "DstK8S_Name": "flowlogs-pipeline-bw8fd",
+                "DstK8S_Namespace": "netobserv",
+                "DstK8S_OwnerName": "flowlogs-pipeline",
+                "DstK8S_OwnerType": "DaemonSet",
+                "DstK8S_Type": "Pod",
+                "SrcAddr": "10.129.2.14",
+                "SrcK8S_HostName": "ip-10-0-170-146.us-east-2.compute.internal",
+                "SrcK8S_Name": "loki",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "loki",
+                "SrcK8S_OwnerType": "Pod",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599220,
+                    "2.2"
+                ],
+                [
+                    1665599265,
+                    "2.2"
+                ],
+                [
+                    1665599280,
+                    "2.2"
+                ],
+                [
+                    1665599325,
+                    "2.2"
+                ],
+                [
+                    1665599340,
+                    "4.4"
+                ],
+                [
+                    1665599355,
+                    "2.2"
+                ],
+                [
+                    1665599445,
+                    "2.2"
+                ],
+                [
+                    1665599460,
+                    "4.4"
+                ],
+                [
+                    1665599475,
+                    "2.2"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "10.129.2.14",
+                "DstK8S_HostName": "ip-10-0-170-146.us-east-2.compute.internal",
+                "DstK8S_Name": "loki",
+                "DstK8S_Namespace": "netobserv",
+                "DstK8S_OwnerName": "loki",
+                "DstK8S_OwnerType": "Pod",
+                "DstK8S_Type": "Pod",
+                "SrcAddr": "10.128.0.48",
+                "SrcK8S_HostName": "ip-10-0-216-72.us-east-2.compute.internal",
+                "SrcK8S_Name": "flowlogs-pipeline-rzvgd",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "flowlogs-pipeline",
+                "SrcK8S_OwnerType": "DaemonSet",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599220,
+                    "275.26666666666665"
+                ],
+                [
+                    1665599235,
+                    "277.73333333333335"
+                ],
+                [
+                    1665599250,
+                    "2.466666666666667"
+                ],
+                [
+                    1665599280,
+                    "297.1666666666667"
+                ],
+                [
+                    1665599295,
+                    "297.1666666666667"
+                ],
+                [
+                    1665599310,
+                    "82.7"
+                ],
+                [
+                    1665599325,
+                    "82.7"
+                ],
+                [
+                    1665599370,
+                    "138.73333333333332"
+                ],
+                [
+                    1665599385,
+                    "345.96666666666664"
+                ],
+                [
+                    1665599400,
+                    "207.23333333333332"
+                ],
+                [
+                    1665599430,
+                    "401.6333333333333"
+                ],
+                [
+                    1665599445,
+                    "676.9"
+                ],
+                [
+                    1665599460,
+                    "275.26666666666665"
+                ],
+                [
+                    1665599475,
+                    "2.2"
+                ],
+                [
+                    1665599490,
+                    "329.4"
+                ],
+                [
+                    1665599505,
+                    "327.2"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "10.129.2.14",
+                "DstK8S_HostName": "ip-10-0-170-146.us-east-2.compute.internal",
+                "DstK8S_Name": "loki",
+                "DstK8S_Namespace": "netobserv",
+                "DstK8S_OwnerName": "loki",
+                "DstK8S_OwnerType": "Pod",
+                "DstK8S_Type": "Pod",
+                "SrcAddr": "10.128.2.30",
+                "SrcK8S_HostName": "ip-10-0-144-51.us-east-2.compute.internal",
+                "SrcK8S_Name": "flowlogs-pipeline-lrq7k",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "flowlogs-pipeline",
+                "SrcK8S_OwnerType": "DaemonSet",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599325,
+                    "2.2"
+                ],
+                [
+                    1665599340,
+                    "2.2"
+                ],
+                [
+                    1665599385,
+                    "2.2"
+                ],
+                [
+                    1665599400,
+                    "4.4"
+                ],
+                [
+                    1665599415,
+                    "2.2"
+                ],
+                [
+                    1665599430,
+                    "143.13333333333333"
+                ],
+                [
+                    1665599445,
+                    "143.13333333333333"
+                ],
+                [
+                    1665599475,
+                    "2.2"
+                ],
+                [
+                    1665599490,
+                    "2.2"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "10.129.2.14",
+                "DstK8S_HostName": "ip-10-0-170-146.us-east-2.compute.internal",
+                "DstK8S_Name": "loki",
+                "DstK8S_Namespace": "netobserv",
+                "DstK8S_OwnerName": "loki",
+                "DstK8S_OwnerType": "Pod",
+                "DstK8S_Type": "Pod",
+                "SrcAddr": "10.129.0.59",
+                "SrcK8S_HostName": "ip-10-0-130-215.us-east-2.compute.internal",
+                "SrcK8S_Name": "flowlogs-pipeline-ndktf",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "flowlogs-pipeline",
+                "SrcK8S_OwnerType": "DaemonSet",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599220,
+                    "297.1666666666667"
+                ],
+                [
+                    1665599235,
+                    "297.1666666666667"
+                ],
+                [
+                    1665599280,
+                    "2.2"
+                ],
+                [
+                    1665599295,
+                    "6.866666666666666"
+                ],
+                [
+                    1665599310,
+                    "4.666666666666667"
+                ],
+                [
+                    1665599340,
+                    "2.2"
+                ],
+                [
+                    1665599355,
+                    "140.93333333333334"
+                ],
+                [
+                    1665599370,
+                    "143.13333333333333"
+                ],
+                [
+                    1665599385,
+                    "4.4"
+                ],
+                [
+                    1665599400,
+                    "301"
+                ],
+                [
+                    1665599415,
+                    "301"
+                ],
+                [
+                    1665599430,
+                    "795.3"
+                ],
+                [
+                    1665599445,
+                    "797.5"
+                ],
+                [
+                    1665599460,
+                    "353.1666666666667"
+                ],
+                [
+                    1665599475,
+                    "489.7"
+                ],
+                [
+                    1665599490,
+                    "416.46666666666664"
+                ],
+                [
+                    1665599505,
+                    "277.73333333333335"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "10.129.2.14",
+                "DstK8S_HostName": "ip-10-0-170-146.us-east-2.compute.internal",
+                "DstK8S_Name": "loki",
+                "DstK8S_Namespace": "netobserv",
+                "DstK8S_OwnerName": "loki",
+                "DstK8S_OwnerType": "Pod",
+                "DstK8S_Type": "Pod",
+                "SrcAddr": "10.130.0.81",
+                "SrcK8S_HostName": "ip-10-0-171-36.us-east-2.compute.internal",
+                "SrcK8S_Name": "flowlogs-pipeline-q6gzk",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "flowlogs-pipeline",
+                "SrcK8S_OwnerType": "DaemonSet",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599220,
+                    "275.26666666666665"
+                ],
+                [
+                    1665599235,
+                    "554.9333333333333"
+                ],
+                [
+                    1665599250,
+                    "279.6666666666667"
+                ],
+                [
+                    1665599325,
+                    "141.2"
+                ],
+                [
+                    1665599340,
+                    "906.6666666666666"
+                ],
+                [
+                    1665599355,
+                    "1040.7333333333333"
+                ],
+                [
+                    1665599370,
+                    "275.26666666666665"
+                ],
+                [
+                    1665599415,
+                    "574.6333333333333"
+                ],
+                [
+                    1665599430,
+                    "574.6333333333333"
+                ],
+                [
+                    1665599445,
+                    "140.93333333333334"
+                ],
+                [
+                    1665599460,
+                    "140.93333333333334"
+                ],
+                [
+                    1665599490,
+                    "275.26666666666665"
+                ],
+                [
+                    1665599505,
+                    "275.26666666666665"
+                ],
+                [
+                    1665599520,
+                    "411.8"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "10.129.2.14",
+                "DstK8S_HostName": "ip-10-0-170-146.us-east-2.compute.internal",
+                "DstK8S_Name": "loki",
+                "DstK8S_Namespace": "netobserv",
+                "DstK8S_OwnerName": "loki",
+                "DstK8S_OwnerType": "Pod",
+                "DstK8S_Type": "Pod",
+                "SrcAddr": "10.131.0.25",
+                "SrcK8S_HostName": "ip-10-0-202-242.us-east-2.compute.internal",
+                "SrcK8S_Name": "flowlogs-pipeline-24nnl",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "flowlogs-pipeline",
+                "SrcK8S_OwnerType": "DaemonSet",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599220,
+                    "138.73333333333332"
+                ],
+                [
+                    1665599235,
+                    "138.73333333333332"
+                ],
+                [
+                    1665599265,
+                    "4.4"
+                ],
+                [
+                    1665599280,
+                    "145.6"
+                ],
+                [
+                    1665599295,
+                    "143.4"
+                ],
+                [
+                    1665599310,
+                    "2.2"
+                ],
+                [
+                    1665599460,
+                    "39.1"
+                ],
+                [
+                    1665599475,
+                    "39.1"
+                ],
+                [
+                    1665599490,
+                    "2.466666666666667"
+                ],
+                [
+                    1665599505,
+                    "4.666666666666667"
+                ],
+                [
+                    1665599520,
+                    "2.2"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "10.130.0.81",
+                "DstK8S_HostName": "ip-10-0-171-36.us-east-2.compute.internal",
+                "DstK8S_Name": "flowlogs-pipeline-q6gzk",
+                "DstK8S_Namespace": "netobserv",
+                "DstK8S_OwnerName": "flowlogs-pipeline",
+                "DstK8S_OwnerType": "DaemonSet",
+                "DstK8S_Type": "Pod",
+                "SrcAddr": "10.129.2.14",
+                "SrcK8S_HostName": "ip-10-0-170-146.us-east-2.compute.internal",
+                "SrcK8S_Name": "loki",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "loki",
+                "SrcK8S_OwnerType": "Pod",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599220,
+                    "7.166666666666667"
+                ],
+                [
+                    1665599235,
+                    "13.766666666666667"
+                ],
+                [
+                    1665599250,
+                    "11"
+                ],
+                [
+                    1665599265,
+                    "8.8"
+                ],
+                [
+                    1665599280,
+                    "6.866666666666666"
+                ],
+                [
+                    1665599295,
+                    "4.666666666666667"
+                ],
+                [
+                    1665599310,
+                    "6.6"
+                ],
+                [
+                    1665599325,
+                    "8.8"
+                ],
+                [
+                    1665599340,
+                    "4.4"
+                ],
+                [
+                    1665599355,
+                    "2.2"
+                ],
+                [
+                    1665599370,
+                    "2.2"
+                ],
+                [
+                    1665599385,
+                    "4.966666666666667"
+                ],
+                [
+                    1665599400,
+                    "7.166666666666667"
+                ],
+                [
+                    1665599415,
+                    "4.4"
+                ],
+                [
+                    1665599430,
+                    "11.566666666666666"
+                ],
+                [
+                    1665599445,
+                    "9.366666666666667"
+                ],
+                [
+                    1665599460,
+                    "14.033333333333333"
+                ],
+                [
+                    1665599475,
+                    "16.233333333333334"
+                ],
+                [
+                    1665599490,
+                    "4.4"
+                ],
+                [
+                    1665599505,
+                    "6.866666666666666"
+                ],
+                [
+                    1665599520,
+                    "13.466666666666667"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "10.131.0.25",
+                "DstK8S_HostName": "ip-10-0-202-242.us-east-2.compute.internal",
+                "DstK8S_Name": "flowlogs-pipeline-24nnl",
+                "DstK8S_Namespace": "netobserv",
+                "DstK8S_OwnerName": "flowlogs-pipeline",
+                "DstK8S_OwnerType": "DaemonSet",
+                "DstK8S_Type": "Pod",
+                "SrcAddr": "10.129.2.14",
+                "SrcK8S_HostName": "ip-10-0-170-146.us-east-2.compute.internal",
+                "SrcK8S_Name": "loki",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "loki",
+                "SrcK8S_OwnerType": "Pod",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599220,
+                    "2.2"
+                ],
+                [
+                    1665599235,
+                    "2.2"
+                ],
+                [
+                    1665599310,
+                    "2.2"
+                ],
+                [
+                    1665599325,
+                    "4.4"
+                ],
+                [
+                    1665599340,
+                    "4.4"
+                ],
+                [
+                    1665599355,
+                    "6.866666666666666"
+                ],
+                [
+                    1665599370,
+                    "6.866666666666666"
+                ],
+                [
+                    1665599385,
+                    "2.2"
+                ],
+                [
+                    1665599400,
+                    "12.133333333333333"
+                ],
+                [
+                    1665599415,
+                    "12.133333333333333"
+                ],
+                [
+                    1665599430,
+                    "2.2"
+                ],
+                [
+                    1665599445,
+                    "2.2"
+                ],
+                [
+                    1665599460,
+                    "4.966666666666667"
+                ],
+                [
+                    1665599475,
+                    "4.966666666666667"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "172.30.0.1",
+                "DstK8S_Name": "kubernetes",
+                "DstK8S_Namespace": "default",
+                "DstK8S_OwnerName": "kubernetes",
+                "DstK8S_OwnerType": "Service",
+                "DstK8S_Type": "Service",
+                "SrcAddr": "10.128.2.29",
+                "SrcK8S_HostName": "ip-10-0-144-51.us-east-2.compute.internal",
+                "SrcK8S_Name": "netobserv-controller-manager-6d599c7fbb-c964w",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "netobserv-controller-manager",
+                "SrcK8S_OwnerType": "Deployment",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599220,
+                    "4008.6"
+                ],
+                [
+                    1665599235,
+                    "3103"
+                ],
+                [
+                    1665599250,
+                    "2953.633333333333"
+                ],
+                [
+                    1665599265,
+                    "3606.1"
+                ],
+                [
+                    1665599280,
+                    "4382.1"
+                ],
+                [
+                    1665599295,
+                    "5321.5"
+                ],
+                [
+                    1665599310,
+                    "5251.533333333334"
+                ],
+                [
+                    1665599325,
+                    "3718.266666666667"
+                ],
+                [
+                    1665599340,
+                    "3531.4333333333334"
+                ],
+                [
+                    1665599355,
+                    "3557.633333333333"
+                ],
+                [
+                    1665599370,
+                    "2835.366666666667"
+                ],
+                [
+                    1665599385,
+                    "3007.9333333333334"
+                ],
+                [
+                    1665599400,
+                    "3670.266666666667"
+                ],
+                [
+                    1665599415,
+                    "3263.5"
+                ],
+                [
+                    1665599430,
+                    "3459.9666666666667"
+                ],
+                [
+                    1665599445,
+                    "3715.9"
+                ],
+                [
+                    1665599460,
+                    "2472.4"
+                ],
+                [
+                    1665599475,
+                    "3721.1666666666665"
+                ],
+                [
+                    1665599490,
+                    "5355.766666666666"
+                ],
+                [
+                    1665599505,
+                    "3997.6"
+                ],
+                [
+                    1665599520,
+                    "3660.9"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "172.30.0.1",
+                "DstK8S_Name": "kubernetes",
+                "DstK8S_Namespace": "default",
+                "DstK8S_OwnerName": "kubernetes",
+                "DstK8S_OwnerType": "Service",
+                "DstK8S_Type": "Service",
+                "SrcAddr": "10.128.2.30",
+                "SrcK8S_HostName": "ip-10-0-144-51.us-east-2.compute.internal",
+                "SrcK8S_Name": "flowlogs-pipeline-lrq7k",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "flowlogs-pipeline",
+                "SrcK8S_OwnerType": "DaemonSet",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599505,
+                    "2.2"
+                ],
+                [
+                    1665599520,
+                    "2.2"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "172.30.0.1",
+                "DstK8S_Name": "kubernetes",
+                "DstK8S_Namespace": "default",
+                "DstK8S_OwnerName": "kubernetes",
+                "DstK8S_OwnerType": "Service",
+                "DstK8S_Type": "Service",
+                "SrcAddr": "10.128.2.7",
+                "SrcK8S_HostName": "ip-10-0-144-51.us-east-2.compute.internal",
+                "SrcK8S_Name": "router-default-865d7f5bdc-v4x94",
+                "SrcK8S_Namespace": "openshift-ingress",
+                "SrcK8S_OwnerName": "router-default",
+                "SrcK8S_OwnerType": "Deployment",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599280,
+                    "3.566666666666667"
+                ],
+                [
+                    1665599295,
+                    "3.566666666666667"
+                ],
+                [
+                    1665599340,
+                    "2.2"
+                ],
+                [
+                    1665599355,
+                    "2.2"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "172.30.0.1",
+                "DstK8S_Name": "kubernetes",
+                "DstK8S_Namespace": "default",
+                "DstK8S_OwnerName": "kubernetes",
+                "DstK8S_OwnerType": "Service",
+                "DstK8S_Type": "Service",
+                "SrcAddr": "10.129.0.59",
+                "SrcK8S_HostName": "ip-10-0-130-215.us-east-2.compute.internal",
+                "SrcK8S_Name": "flowlogs-pipeline-ndktf",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "flowlogs-pipeline",
+                "SrcK8S_OwnerType": "DaemonSet",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599220,
+                    "2.2"
+                ],
+                [
+                    1665599235,
+                    "2.2"
+                ],
+                [
+                    1665599280,
+                    "3.3666666666666667"
+                ],
+                [
+                    1665599295,
+                    "3.3666666666666667"
+                ],
+                [
+                    1665599310,
+                    "2.2"
+                ],
+                [
+                    1665599325,
+                    "2.2"
+                ],
+                [
+                    1665599520,
+                    "6.033333333333333"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "172.30.0.1",
+                "DstK8S_Name": "kubernetes",
+                "DstK8S_Namespace": "default",
+                "DstK8S_OwnerName": "kubernetes",
+                "DstK8S_OwnerType": "Service",
+                "DstK8S_Type": "Service",
+                "SrcAddr": "10.129.2.13",
+                "SrcK8S_HostName": "ip-10-0-170-146.us-east-2.compute.internal",
+                "SrcK8S_Name": "flowlogs-pipeline-bw8fd",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "flowlogs-pipeline",
+                "SrcK8S_OwnerType": "DaemonSet",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599475,
+                    "2.2"
+                ],
+                [
+                    1665599490,
+                    "2.2"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "172.30.0.1",
+                "DstK8S_Name": "kubernetes",
+                "DstK8S_Namespace": "default",
+                "DstK8S_OwnerName": "kubernetes",
+                "DstK8S_OwnerType": "Service",
+                "DstK8S_Type": "Service",
+                "SrcAddr": "10.130.0.81",
+                "SrcK8S_HostName": "ip-10-0-171-36.us-east-2.compute.internal",
+                "SrcK8S_Name": "flowlogs-pipeline-q6gzk",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "flowlogs-pipeline",
+                "SrcK8S_OwnerType": "DaemonSet",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599265,
+                    "2.2"
+                ],
+                [
+                    1665599280,
+                    "2.2"
+                ],
+                [
+                    1665599415,
+                    "3.3666666666666667"
+                ],
+                [
+                    1665599430,
+                    "6.733333333333333"
+                ],
+                [
+                    1665599445,
+                    "3.3666666666666667"
+                ],
+                [
+                    1665599520,
+                    "2.2"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "172.30.0.1",
+                "DstK8S_Name": "kubernetes",
+                "DstK8S_Namespace": "default",
+                "DstK8S_OwnerName": "kubernetes",
+                "DstK8S_OwnerType": "Service",
+                "DstK8S_Type": "Service",
+                "SrcAddr": "10.131.0.7",
+                "SrcK8S_HostName": "ip-10-0-202-242.us-east-2.compute.internal",
+                "SrcK8S_Name": "router-default-865d7f5bdc-ksj9b",
+                "SrcK8S_Namespace": "openshift-ingress",
+                "SrcK8S_OwnerName": "router-default",
+                "SrcK8S_OwnerType": "Deployment",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599280,
+                    "2.2"
+                ],
+                [
+                    1665599295,
+                    "2.2"
+                ],
+                [
+                    1665599415,
+                    "2.2"
+                ],
+                [
+                    1665599430,
+                    "2.2"
+                ],
+                [
+                    1665599445,
+                    "2.2"
+                ],
+                [
+                    1665599460,
+                    "2.2"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "172.30.233.119",
+                "DstK8S_Name": "loki",
+                "DstK8S_Namespace": "netobserv",
+                "DstK8S_OwnerName": "loki",
+                "DstK8S_OwnerType": "Service",
+                "DstK8S_Type": "Service",
+                "SrcAddr": "10.128.0.48",
+                "SrcK8S_HostName": "ip-10-0-216-72.us-east-2.compute.internal",
+                "SrcK8S_Name": "flowlogs-pipeline-rzvgd",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "flowlogs-pipeline",
+                "SrcK8S_OwnerType": "DaemonSet",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599220,
+                    "297.1666666666667"
+                ],
+                [
+                    1665599235,
+                    "297.1666666666667"
+                ],
+                [
+                    1665599250,
+                    "2.2"
+                ],
+                [
+                    1665599265,
+                    "4.4"
+                ],
+                [
+                    1665599280,
+                    "2.2"
+                ],
+                [
+                    1665599340,
+                    "297.1666666666667"
+                ],
+                [
+                    1665599355,
+                    "416.46666666666664"
+                ],
+                [
+                    1665599370,
+                    "416.46666666666664"
+                ],
+                [
+                    1665599385,
+                    "297.1666666666667"
+                ],
+                [
+                    1665599400,
+                    "669.5666666666667"
+                ],
+                [
+                    1665599415,
+                    "1105.4666666666667"
+                ],
+                [
+                    1665599430,
+                    "552.7333333333333"
+                ],
+                [
+                    1665599445,
+                    "255.56666666666666"
+                ],
+                [
+                    1665599460,
+                    "140.93333333333334"
+                ],
+                [
+                    1665599475,
+                    "140.93333333333334"
+                ],
+                [
+                    1665599490,
+                    "277.46666666666664"
+                ],
+                [
+                    1665599505,
+                    "435.9"
+                ],
+                [
+                    1665599520,
+                    "297.1666666666667"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "172.30.233.119",
+                "DstK8S_Name": "loki",
+                "DstK8S_Namespace": "netobserv",
+                "DstK8S_OwnerName": "loki",
+                "DstK8S_OwnerType": "Service",
+                "DstK8S_Type": "Service",
+                "SrcAddr": "10.128.2.30",
+                "SrcK8S_HostName": "ip-10-0-144-51.us-east-2.compute.internal",
+                "SrcK8S_Name": "flowlogs-pipeline-lrq7k",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "flowlogs-pipeline",
+                "SrcK8S_OwnerType": "DaemonSet",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599235,
+                    "2.2"
+                ],
+                [
+                    1665599250,
+                    "2.2"
+                ],
+                [
+                    1665599265,
+                    "138.73333333333332"
+                ],
+                [
+                    1665599280,
+                    "143.4"
+                ],
+                [
+                    1665599295,
+                    "4.666666666666667"
+                ],
+                [
+                    1665599415,
+                    "2.2"
+                ],
+                [
+                    1665599430,
+                    "2.2"
+                ],
+                [
+                    1665599445,
+                    "2.2"
+                ],
+                [
+                    1665599460,
+                    "2.2"
+                ],
+                [
+                    1665599490,
+                    "212.9"
+                ],
+                [
+                    1665599505,
+                    "212.9"
+                ],
+                [
+                    1665599520,
+                    "2.2"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "172.30.233.119",
+                "DstK8S_Name": "loki",
+                "DstK8S_Namespace": "netobserv",
+                "DstK8S_OwnerName": "loki",
+                "DstK8S_OwnerType": "Service",
+                "DstK8S_Type": "Service",
+                "SrcAddr": "10.129.0.59",
+                "SrcK8S_HostName": "ip-10-0-130-215.us-east-2.compute.internal",
+                "SrcK8S_Name": "flowlogs-pipeline-ndktf",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "flowlogs-pipeline",
+                "SrcK8S_OwnerType": "DaemonSet",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599235,
+                    "275.26666666666665"
+                ],
+                [
+                    1665599250,
+                    "275.26666666666665"
+                ],
+                [
+                    1665599265,
+                    "435.9"
+                ],
+                [
+                    1665599280,
+                    "733.0666666666667"
+                ],
+                [
+                    1665599295,
+                    "435.9"
+                ],
+                [
+                    1665599310,
+                    "143.13333333333333"
+                ],
+                [
+                    1665599325,
+                    "4.4"
+                ],
+                [
+                    1665599340,
+                    "275.26666666666665"
+                ],
+                [
+                    1665599355,
+                    "275.26666666666665"
+                ],
+                [
+                    1665599385,
+                    "4.666666666666667"
+                ],
+                [
+                    1665599400,
+                    "4.666666666666667"
+                ],
+                [
+                    1665599415,
+                    "2.2"
+                ],
+                [
+                    1665599430,
+                    "299.3666666666667"
+                ],
+                [
+                    1665599445,
+                    "594.3333333333334"
+                ],
+                [
+                    1665599460,
+                    "299.3666666666667"
+                ],
+                [
+                    1665599475,
+                    "2.2"
+                ],
+                [
+                    1665599490,
+                    "2.2"
+                ],
+                [
+                    1665599505,
+                    "2.2"
+                ],
+                [
+                    1665599520,
+                    "299.6333333333333"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "172.30.233.119",
+                "DstK8S_Name": "loki",
+                "DstK8S_Namespace": "netobserv",
+                "DstK8S_OwnerName": "loki",
+                "DstK8S_OwnerType": "Service",
+                "DstK8S_Type": "Service",
+                "SrcAddr": "10.129.2.13",
+                "SrcK8S_HostName": "ip-10-0-170-146.us-east-2.compute.internal",
+                "SrcK8S_Name": "flowlogs-pipeline-bw8fd",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "flowlogs-pipeline",
+                "SrcK8S_OwnerType": "DaemonSet",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599220,
+                    "4.4"
+                ],
+                [
+                    1665599235,
+                    "177"
+                ],
+                [
+                    1665599250,
+                    "174.8"
+                ],
+                [
+                    1665599280,
+                    "2.466666666666667"
+                ],
+                [
+                    1665599295,
+                    "7.133333333333334"
+                ],
+                [
+                    1665599310,
+                    "4.666666666666667"
+                ],
+                [
+                    1665599475,
+                    "138.73333333333332"
+                ],
+                [
+                    1665599490,
+                    "138.73333333333332"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "172.30.233.119",
+                "DstK8S_Name": "loki",
+                "DstK8S_Namespace": "netobserv",
+                "DstK8S_OwnerName": "loki",
+                "DstK8S_OwnerType": "Service",
+                "DstK8S_Type": "Service",
+                "SrcAddr": "10.130.0.81",
+                "SrcK8S_HostName": "ip-10-0-171-36.us-east-2.compute.internal",
+                "SrcK8S_Name": "flowlogs-pipeline-q6gzk",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "flowlogs-pipeline",
+                "SrcK8S_OwnerType": "DaemonSet",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599220,
+                    "299.3666666666667"
+                ],
+                [
+                    1665599235,
+                    "299.3666666666667"
+                ],
+                [
+                    1665599310,
+                    "108.2"
+                ],
+                [
+                    1665599325,
+                    "108.2"
+                ],
+                [
+                    1665599400,
+                    "2.2"
+                ],
+                [
+                    1665599415,
+                    "2.2"
+                ],
+                [
+                    1665599430,
+                    "275.26666666666665"
+                ],
+                [
+                    1665599445,
+                    "572.4333333333333"
+                ],
+                [
+                    1665599460,
+                    "297.1666666666667"
+                ],
+                [
+                    1665599475,
+                    "116.83333333333333"
+                ],
+                [
+                    1665599490,
+                    "116.83333333333333"
+                ],
+                [
+                    1665599505,
+                    "2.2"
+                ],
+                [
+                    1665599520,
+                    "2.2"
+                ]
+            ]
+        },
+        {
+            "metric": {
+                "DstAddr": "172.30.233.119",
+                "DstK8S_Name": "loki",
+                "DstK8S_Namespace": "netobserv",
+                "DstK8S_OwnerName": "loki",
+                "DstK8S_OwnerType": "Service",
+                "DstK8S_Type": "Service",
+                "SrcAddr": "10.131.0.25",
+                "SrcK8S_HostName": "ip-10-0-202-242.us-east-2.compute.internal",
+                "SrcK8S_Name": "flowlogs-pipeline-24nnl",
+                "SrcK8S_Namespace": "netobserv",
+                "SrcK8S_OwnerName": "flowlogs-pipeline",
+                "SrcK8S_OwnerType": "DaemonSet",
+                "SrcK8S_Type": "Pod"
+            },
+            "values": [
+                [
+                    1665599235,
+                    "138.26666666666668"
+                ],
+                [
+                    1665599250,
+                    "140.46666666666667"
+                ],
+                [
+                    1665599265,
+                    "2.2"
+                ],
+                [
+                    1665599325,
+                    "2.2"
+                ],
+                [
+                    1665599340,
+                    "189.4"
+                ],
+                [
+                    1665599355,
+                    "325.93333333333334"
+                ],
+                [
+                    1665599370,
+                    "138.73333333333332"
+                ],
+                [
+                    1665599400,
+                    "6.866666666666666"
+                ],
+                [
+                    1665599415,
+                    "6.866666666666666"
+                ],
+                [
+                    1665599490,
+                    "2.2"
+                ],
+                [
+                    1665599505,
+                    "234.46666666666667"
+                ],
+                [
+                    1665599520,
+                    "232.26666666666668"
+                ]
+            ]
+        }
+    ],
+    "stats": {
+        "numQueries": 1,
+        "limitReached": false,
+        "queriesStats": [
+            {
+                "ingester": {
+                    "store": {
+                        "chunk": {
+                            "compressedBytes": 27300332,
+                            "decompressedBytes": 128290504,
+                            "decompressedLines": 212713,
+                            "headChunkBytes": 1079187,
+                            "headChunkLines": 2122,
+                            "totalDuplicates": 313
+                        },
+                        "chunksDownloadTime": 362385356,
+                        "totalChunksDownloaded": 374,
+                        "totalChunksRef": 374
+                    },
+                    "totalBatches": 23,
+                    "totalChunksMatched": 697,
+                    "totalLinesSent": 361,
+                    "totalReached": 80
+                },
+                "querier": {
+                    "store": {
+                        "chunk": {
+                            "compressedBytes": 0,
+                            "decompressedBytes": 0,
+                            "decompressedLines": 0,
+                            "headChunkBytes": 0,
+                            "headChunkLines": 0,
+                            "totalDuplicates": 0
+                        },
+                        "chunksDownloadTime": 0,
+                        "totalChunksDownloaded": 0,
+                        "totalChunksRef": 0
+                    }
+                },
+                "summary": {
+                    "bytesProcessedPerSecond": 366829818,
+                    "execTime": 0.352669506,
+                    "linesProcessedPerSecond": 609168,
+                    "queueTime": 6.092026961,
+                    "subqueries": 5,
+                    "totalBytesProcessed": 129369691,
+                    "totalEntriesReturned": 24,
+                    "totalLinesProcessed": 214835
+                }
+            }
+        ]
+    }
+}

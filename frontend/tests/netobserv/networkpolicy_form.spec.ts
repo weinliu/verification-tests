@@ -18,7 +18,7 @@ describe.skip('(OCP-41858, OCP-45303, NETOBSERV) Console Network Policies form t
         let tmpFile = `/tmp/${helperfuncs.getRandomName()}`
         cy.writeFile(tmpFile, JSON.stringify(testFixture))
 
-        let creds: OCCreds = { idp: Cypress.env('LOGIN_IDP'), user: Cypress.env('LOGIN_USERNAME'), password: Cypress.env('LOGIN_PASSWORD') }
+        let creds: OCCreds = { idp: Cypress.env('LOGIN_IDP'), user: Cypress.env('LOGIN_USERNAME'), password: Cypress.env('LOGIN_PASSWORD'), kubeconfig: Cypress.env('KUBECONFIG_PATH') }
         cy.login(creds.idp, creds.user, creds.password);
         helperfuncs.clickIfExist(OverviewSelectors.skipTour)
         cy.switchPerspective('Administrator');

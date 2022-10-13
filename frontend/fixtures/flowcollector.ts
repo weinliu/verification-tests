@@ -3,7 +3,7 @@ export const PVC = {
     "kind": "PersistentVolumeClaim",
     "metadata": {
         "name": "loki-store",
-        "namespace": "network-observability"
+        "namespace": "test-netobserv"
     },
     "spec": {
         "resources": {
@@ -23,7 +23,7 @@ export const LokiConfigMap = {
     "kind": "ConfigMap",
     "metadata": {
         "name": "loki-config",
-        "namespace": "network-observability"
+        "namespace": "test-netobserv"
     },
     "data": {
         "local-config.yaml": "auth_enabled: false\\nserver:\\n  http_listen_port: 3100\\n  grpc_listen_port: 9096\\ncommon:\\n  path_prefix: /loki-store\\n  storage:\\n    filesystem:\\n      chunks_directory: /loki-store/chunks\\n      rules_directory: /loki-store/rules\\n  replication_factor: 1\\n  ring:\\n    instance_addr: 127.0.0.1\\n    kvstore:\\n      store: inmemory\\nschema_config:\\n  configs:\\n    - from: 2020-10-24\\n      store: boltdb-shipper\\n      object_store: filesystem\\n      schema: v11\\n      index:\\n        prefix: index_\\n        period: 24h\\nstorage_config:\\n  filesystem:\\n    directory: /loki-store/storage\\n  boltdb_shipper:\\n    active_index_directory: /loki-store/index\\n    shared_store: filesystem\\n    cache_location: /loki-store/boltdb-cache\\n"
@@ -38,7 +38,7 @@ export const LokiDeployment = {
         "labels": {
             "app": "loki"
         },
-        "namespace": "network-observability"
+        "namespace": "test-netobserv"
     },
     "spec": {
         "replicas": 1,
@@ -112,7 +112,7 @@ export const LokiService = {
     "apiVersion": "v1",
     "metadata": {
         "name": "loki",
-        "namespace": "network-observability"
+        "namespace": "test-netobserv"
     },
     "spec": {
         "selector": {
@@ -134,50 +134,101 @@ export const flowcollector = {
         "name": "cluster"
     },
     "spec": {
-        "namespace": "network-observability",
-        "agent": "ipfix",
-        "ipfix": {
-            "cacheActiveTimeout": "60s",
-            "cacheMaxFlows": 100,
-            "sampling": 1
+        "namespace": "test-netobserv",
+        "agent": {
+            "type": "EBPF",
+            "ipfix": {
+                "cacheActiveTimeout": "20s",
+                "cacheMaxFlows": 400,
+                "sampling": 400
+            },
+            "ebpf": {
+                "image": "quay.io/netobserv/netobserv-ebpf-agent:main",
+                "imagePullPolicy": "IfNotPresent",
+                "sampling": 50,
+                "cacheActiveTimeout": "5s",
+                "cacheMaxFlows": 1000,
+                "interfaces": [],
+                "excludeInterfaces": [
+                    "lo"
+                ],
+                "logLevel": "info",
+                "privileged": false,
+                "resources": {
+                    "requests": {
+                        "memory": "50Mi",
+                        "cpu": "100m"
+                    },
+                    "limits": {
+                        "memory": "100Mi"
+                    }
+                }
+            }
         },
-        "ebpf": {
-            "image": "quay.io/netobserv/netobserv-ebpf-agent:v0.1.0",
-            "imagePullPolicy": "IfNotPresent",
-            "sampling": 0,
-            "cacheActiveTimeout": "5s",
-            "cacheMaxFlows": 1000,
-            "interfaces": [],
-            "excludeInterfaces": [
-                "lo"
-            ],
-            "logLevel": "info"
-        },
-        "flowlogsPipeline": {
+        "processor": {
             "kind": "DaemonSet",
             "port": 2055,
-            "image": "quay.io/netobserv/flowlogs-pipeline:v0.1.1",
+            "image": "quay.io/netobserv/flowlogs-pipeline:main",
             "imagePullPolicy": "IfNotPresent",
             "logLevel": "info",
             "enableKubeProbes": true,
             "healthPort": 8080,
-            "prometheusPort": 9090
+            "prometheus": {
+                "port": 9102
+            },
+            "ignoreMetrics": [],
+            "dropUnusedFields": true,
+            "resources": {
+                "requests": {
+                    "memory": "100Mi",
+                    "cpu": "100m"
+                },
+                "limits": {
+                    "memory": "300Mi"
+                }
+            }
+        },
+        "kafka": {
+            "enable": false,
+            "address": "kafka-cluster-kafka-bootstrap.test-netobserv",
+            "topic": "network-flows",
+            "tls": {
+                "enable": false,
+                "caCert": {
+                    "type": "secret",
+                    "name": "kafka-cluster-cluster-ca-cert",
+                    "certFile": "ca.crt"
+                },
+                "userCert": {
+                    "type": "secret",
+                    "name": "flp-kafka",
+                    "certFile": "user.crt",
+                    "certKey": "user.key"
+                }
+            }
         },
         "loki": {
-            "url": "http://loki:3100/",
+            "url": "http://loki.test-netobserv.svc:3100/",
             "batchWait": "1s",
             "batchSize": 102400,
             "minBackoff": "1s",
             "maxBackoff": "300s",
             "maxRetries": 10,
-            "timestampLabel": "TimeFlowEnd",
             "staticLabels": {
                 "app": "netobserv-flowcollector"
+            },
+            "tls": {
+                "enable": false,
+                "caCert": {
+                    "type": "configmap",
+                    "name": "loki",
+                    "certFile": "service-ca.crt"
+                }
             }
         },
         "consolePlugin": {
             "register": true,
-            "image": "quay.io/netobserv/network-observability-console-plugin:v0.1.2",
+            "image": "quay.io/netobserv/network-observability-console-plugin:main",
             "imagePullPolicy": "IfNotPresent",
             "port": 9001,
             "logLevel": "info",
@@ -190,6 +241,11 @@ export const flowcollector = {
         },
         "clusterNetworkOperator": {
             "namespace": "openshift-network-operator"
+        },
+        "ovnKubernetes": {
+            "namespace": "ovn-kubernetes",
+            "daemonSetName": "ovnkube-node",
+            "containerName": "ovnkube-node"
         }
     }
 }
