@@ -740,42 +740,6 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get hybirdtest go type pods in %s", namespace))
 	})
 
-	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-48366-SDK add ansible prometheus metrics", func() {
-		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
-		var metrics = filepath.Join(buildPruningBaseDir, "metrics_v1_testmetrics.yaml")
-		operatorsdkCLI.showInfo = true
-		oc.SetupProject()
-		namespace := oc.Namespace()
-		defer operatorsdkCLI.Run("cleanup").Args("ansiblemetrics", "-n", namespace).Output()
-		_, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/testmetrics-bundle:v"+ocpversion, "-n", namespace, "--timeout", "5m").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		createMetrics, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", metrics, "-p", "NAME=metrics-sample").OutputToFile("config-48366.json")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createMetrics, "-n", namespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
-			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace).Output()
-			if strings.Contains(msg, "metrics-sample") {
-				e2e.Logf("metrics created success")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get metrics samples in %s", namespace))
-		promeToken, err := exutil.GetSAToken(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(promeToken).NotTo(o.BeEmpty())
-		promeEp, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ep", "ansiblemetrics-controller-manager-metrics-service", "-o=jsonpath={.subsets[0].addresses[0].ip}", "-n", namespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		metricsMsg, err := exec.Command("bash", "-c", "oc exec deployment/ansiblemetrics-controller-manager -n "+namespace+" -- curl -k -H \"Authorization: Bearer "+promeToken+"\" 'https://"+promeEp+":8443/metrics' | grep -E \"Observe|gague|my_counter\"").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(metricsMsg).To(o.ContainSubstring("my gague and set it to 2"))
-		o.Expect(metricsMsg).To(o.ContainSubstring("counter"))
-		o.Expect(metricsMsg).To(o.ContainSubstring("Observe my histogram"))
-		o.Expect(metricsMsg).To(o.ContainSubstring("Observe my summary"))
-	})
-
 	// author: chuo@redhat.com
 	g.It("Author:chuo-Medium-27718-scorecard remove version flag", func() {
 		operatorsdkCLI.showInfo = true
@@ -3553,8 +3517,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(output).To(o.ContainSubstring("deployment.apps/contentcollections-controller-manager"))
 
 		waitErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
-			msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/contentcollections-controller-manager", "-c", "manager", "-n", nsOperator).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/contentcollections-controller-manager", "-c", "manager", "-n", nsOperator).Output()
 			if !strings.Contains(msg, "Starting workers") {
 				e2e.Failf("Starting workers failed")
 				return false, nil
@@ -3583,5 +3546,120 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("miss log dummy : Create ConfigMap in %s", nsOperator))
+	})
+
+	// author: jfan@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:jfan-High-48366 add ansible prometheus metrics", func() {
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture != "amd64" {
+			g.Skip("Do not support " + architecture)
+		}
+		// test data
+		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
+		dataPath := filepath.Join(buildPruningBaseDir, "ocp-48366-data")
+		crFilePath := filepath.Join(dataPath, "metrics_v1_testmetrics.yaml")
+		// exec dir
+		tmpBasePath := "/tmp/ocp-48366-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "ansiblemetrics")
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
+		// exec ns & image tag
+		nsOperator := "ansiblemetrics-system"
+		imageTag := "quay.io/olmqe/testmetrics:" + ocpversion + "-" + getRandomString()
+		// cleanup the test data
+		err := os.MkdirAll(tmpPath, 0o755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		quayCLI := container.NewQuayCLI()
+		defer quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
+
+		defer func() {
+			_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", crFilePath, "-n", nsOperator).Output()
+			g.By("step: undeploy")
+			_, err = makeCLI.Run("undeploy").Args().Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("step: init Ansible metrics Operator")
+		output, err := operatorsdkCLI.Run("init").Args("--plugins=ansible", "--domain", "testmetrics.com").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Next"))
+
+		g.By("step: Create API.")
+		output, err = operatorsdkCLI.Run("create").Args("api", "--group", "metrics", "--version", "v1", "--kind", "Testmetrics", "--generate-role").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Writing kustomize manifests"))
+
+		g.By("step: modify files to get the quay.io/olmqe images.")
+
+		// copy Dockerfile
+		dockerfileFilePath := filepath.Join(tmpPath, "Dockerfile")
+		err = copy(filepath.Join(dataPath, "Dockerfile"), dockerfileFilePath)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		replaceContent(dockerfileFilePath, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
+		// copy the roles/testmetrics/tasks/main.yml
+		err = copy(filepath.Join(dataPath, "main.yml"), filepath.Join(tmpPath, "roles", "testmetrics", "tasks", "main.yml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// update the rbac file
+		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+
+		g.By("step: Build and push the operator image")
+		tokenDir := "/tmp/ocp-48366" + getRandomString()
+		err = os.MkdirAll(tokenDir, os.ModePerm)
+		defer os.RemoveAll(tokenDir)
+		if err != nil {
+			e2e.Failf("fail to create the token folder:%s", tokenDir)
+		}
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", tokenDir), "--confirm").Output()
+		if err != nil {
+			e2e.Failf("Fail to get the cluster auth %v", err)
+		}
+		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+
+		g.By("step: Install the CRD")
+		output, err = makeCLI.Run("install").Args().Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("metrics"))
+
+		g.By("step: Deploy the operator")
+		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
+		o.Expect(output).To(o.ContainSubstring("deployment.apps/ansiblemetrics-controller-manager"))
+
+		waitErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/ansiblemetrics-controller-manager", "-c", "manager", "-n", nsOperator).Output()
+			if !strings.Contains(msg, "Starting workers") {
+				e2e.Failf("Starting workers failed")
+				return false, nil
+			}
+			return true, nil
+		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No ansiblemetrics-controller-manager in project %s", nsOperator))
+
+		g.By("step: Create the resource")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", crFilePath, "-n", nsOperator).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
+			if strings.Contains(msg, "metrics-sample") {
+				e2e.Logf("metrics created success")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get metrics samples in %s", nsOperator))
+		metricsToken, _ := exutil.GetSAToken(oc)
+		o.Expect(metricsToken).NotTo(o.BeEmpty())
+		promeEp, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ep", "ansiblemetrics-controller-manager-metrics-service", "-o=jsonpath={.subsets[0].addresses[0].ip}", "-n", nsOperator).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		metricsMsg, err := exec.Command("bash", "-c", "oc exec deployment/ansiblemetrics-controller-manager -n "+nsOperator+" -- curl -k -H \"Authorization: Bearer "+metricsToken+"\" 'https://"+promeEp+":8443/metrics'").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(metricsMsg).To(o.ContainSubstring("my gague and set it to 2"))
+		o.Expect(metricsMsg).To(o.ContainSubstring("counter"))
+		o.Expect(metricsMsg).To(o.ContainSubstring("Observe my histogram"))
+		o.Expect(metricsMsg).To(o.ContainSubstring("Observe my summary"))
 	})
 })
