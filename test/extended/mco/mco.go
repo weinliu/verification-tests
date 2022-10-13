@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"

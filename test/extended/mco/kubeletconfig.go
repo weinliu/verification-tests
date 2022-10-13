@@ -3,8 +3,8 @@ package mco
 import (
 	o "github.com/onsi/gomega"
 
-	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
 // KubeletConfig struct is used to handle KubeletConfig resources in OCP

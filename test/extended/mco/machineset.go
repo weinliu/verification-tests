@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"time"
 
-	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 

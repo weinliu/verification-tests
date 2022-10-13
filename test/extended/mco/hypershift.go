@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	o "github.com/onsi/gomega"
-	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
 // HypershiftCli will be used to execute hypershift command e.g. hypershift install etc.

@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
 // Controller handles the functinalities related to the MCO controller pod

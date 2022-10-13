@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"time"
 
-	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	container "github.com/openshift/openshift-tests-private/test/extended/util/container"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 

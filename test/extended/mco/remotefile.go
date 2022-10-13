@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	logger "github.com/openshift/openshift-tests-private/test/extended/mco/logext"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
 const (
