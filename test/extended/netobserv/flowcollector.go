@@ -26,6 +26,7 @@ type Flowcollector struct {
 type Metrics struct {
 	Namespace string
 	Template  string
+	Scheme    string
 }
 
 // MonitoringConfig struct to handle MonitoringConfig resources
@@ -82,13 +83,23 @@ func (flow *Flowcollector) deleteFlowcollector(oc *exutil.CLI) error {
 // create metrics for a given manifest file
 func (metric *Metrics) createMetrics(oc *exutil.CLI) {
 	parameters := []string{"--ignore-unknown-parameters=true", "-f", metric.Template, "-p", "NAMESPACE=" + metric.Namespace}
+
+	if metric.Scheme != "" {
+		parameters = append(parameters, "PROTOCOL="+metric.Scheme)
+	}
+
 	exutil.ApplyNsResourceFromTemplate(oc, metric.Namespace, parameters...)
 }
 
 // create configMap
 func (cm *MonitoringConfig) createConfigMap(oc *exutil.CLI) {
 	e2e.Logf("Create configmap: cluster-monitoring-config")
-	parameters := []string{"--ignore-unknown-parameters=true", "-f", cm.Template, "-p", "NAME=" + cm.Name, "NAMESPACE=" + cm.Namespace, "ENABLEUSERWORKLOAD=" + fmt.Sprintf("%v", cm.EnableUserWorkload)}
+	parameters := []string{"--ignore-unknown-parameters=true", "-f", cm.Template, "-p", "ENABLEUSERWORKLOAD=" + fmt.Sprintf("%v", cm.EnableUserWorkload)}
+
+	if cm.Name != "" {
+		parameters = append(parameters, "NAME="+cm.Name)
+	}
+
 	exutil.ApplyNsResourceFromTemplate(oc, cm.Namespace, parameters...)
 }
 

@@ -76,32 +76,24 @@ func verifyCurl(oc *exutil.CLI, podName string, ns string, curlDest string, Cert
 	command := []string{"exec", "-n", ns, podName, "--", "curl", "-s", "-v", "-L", curlDest, "--cacert", CertPath}
 	output, err := oc.AsAdmin().WithoutNamespace().Run(command...).Args().OutputToFile("metrics.txt")
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if output == "" {
-		e2e.Logf("No metrics found")
-	}
+	o.Expect(output).NotTo(o.BeEmpty(), "No Metrics found")
 
 	// grep the HTTPS Code
 	metric1, _ := exec.Command("bash", "-c", "cat "+output+" | grep \"HTTP/2\" | awk 'NR==4{print $3}'").Output()
 	httpCode := strings.TrimSpace(string(metric1))
-	if httpCode == "" {
-		e2e.Logf("Http Code is empty")
-	}
+	o.Expect(httpCode).NotTo(o.BeEmpty(), "HTTP Code not found")
 	e2e.Logf("The http code is : %v", httpCode)
 
 	// grep the number of flows processed
 	metric2, _ := exec.Command("bash", "-c", "cat "+output+" | grep ingest_flows_processed | awk 'NR==3{print $2}'").Output()
 	flowLogsProcessed := strings.TrimSpace(string(metric2))
-	if flowLogsProcessed == "" {
-		e2e.Logf("The number of flowlogs processed is empty")
-	}
+	o.Expect(flowLogsProcessed).NotTo(o.BeEmpty(), "The number of flowlogs processed is empty")
 	e2e.Logf("The number of flowslogs processed are : %v", flowLogsProcessed)
 
 	// grep the number of loki records written
 	metric3, _ := exec.Command("bash", "-c", "cat "+output+" | grep records_written | awk 'NR==3{print $2}'").Output()
 	lokiRecordsWritten := strings.TrimSpace(string(metric3))
-	if httpCode == "" {
-		e2e.Logf("The number of loki records written is empty")
-	}
+	o.Expect(lokiRecordsWritten).NotTo(o.BeEmpty(), "The number of loki records written is empty")
 	e2e.Logf("The number of loki records written are : %v", lokiRecordsWritten)
 
 	// verify all the metrics

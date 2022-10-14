@@ -15,6 +15,6 @@ parameters:
 - name: NAME
   value: "cluster-monitoring-config"
 - name: NAMESPACE
-  value: "netobserv"
+  value: "openshift-monitoring"
 - name: ENABLEUSERWORKLOAD
   value: "true"

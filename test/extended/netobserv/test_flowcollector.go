@@ -1,8 +1,10 @@
 package netobserv
 
 import (
+	"fmt"
+	"os/exec"
 	filePath "path/filepath"
-	"time"
+	"strings"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
@@ -38,8 +40,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 	g.It("Author:jechen-High-45304-Kube-enricher uses flowlogsPipeline as collector for network flow [Disruptive]", func() {
 		g.By("1. create new namespace")
 		namespace := oc.Namespace()
-		flowcollectorFixture := "flowcollector_v1alpha1_template.yaml"
-		flowFixture := exutil.FixturePath("testdata", "netobserv", flowcollectorFixture)
+		flowFixture := exutil.FixturePath("testdata", "netobserv", "flowcollector_v1alpha1_template.yaml")
 
 		flowlogsPipeline := Flowcollector{
 			Namespace:             namespace,
@@ -97,8 +98,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 	g.It("Author:memodi-High-46712-High-46444-verify collector as Deployment or DaemonSet [Disruptive]", func() {
 		g.Skip("The new CRD changes makes this testcase obsolete...")
 		namespace := oc.Namespace()
-		flowcollectorFixture := "flowcollector_v1alpha1_template.yaml"
-		flowFixture := exutil.FixturePath("testdata", "netobserv", flowcollectorFixture)
+		flowFixture := exutil.FixturePath("testdata", "netobserv", "flowcollector_v1alpha1_template.yaml")
 
 		flow := Flowcollector{
 			Namespace:             namespace,
@@ -178,27 +178,22 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		namespace := oc.Namespace()
 		baseDir := exutil.FixturePath("testdata", "netobserv")
 		// flowCollector Template path
-		flowcollectorFixture := "flowcollector_v1alpha1_template.yaml"
-		flowFixturePath := filePath.Join(baseDir, flowcollectorFixture)
+		flowFixturePath := filePath.Join(baseDir, "flowcollector_v1alpha1_template.yaml")
 		// metrics Template path
-		promMetricsFixture := "monitoring.yaml"
-		promMetricsFixturePath := filePath.Join(baseDir, promMetricsFixture)
-		curlDest := "https://flowlogs-pipeline-prom." + namespace + ".svc:9102/metrics"
+		promMetricsFixturePath := filePath.Join(baseDir, "monitoring.yaml")
+		curlDest := fmt.Sprintf("https://flowlogs-pipeline-prom.%s.svc:9102/metrics", namespace)
 		// certificate path
 		promCertPath := "/etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt"
 		flowlogsPodCertPath := "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt"
 		// configMap Template path
-		configMapFixture := "cluster-monitoring-config-cm.yaml"
-		configMapFixturePath := filePath.Join(baseDir, configMapFixture)
+		configMapFixturePath := filePath.Join(baseDir, "cluster-monitoring-config-cm.yaml")
 
 		// lokiPVC template path
-		lokiPVCFixture := "loki-pvc.yaml"
-		lokiPVCFixturePath := filePath.Join(baseDir, lokiPVCFixture)
+		lokiPVCFixturePath := filePath.Join(baseDir, "loki-pvc.yaml")
 		// loki template path
-		lokiStorageFixture := "loki-storage.yaml"
-		lokiStorageFixturePath := filePath.Join(baseDir, lokiStorageFixture)
+		lokiStorageFixturePath := filePath.Join(baseDir, "loki-storage.yaml")
 		// loki URL
-		lokiURL := "http://loki." + namespace + ".svc.cluster.local:3100/"
+		lokiURL := fmt.Sprintf("http://loki.%s.svc.cluster.local:3100/", namespace)
 
 		flow := Flowcollector{
 			Namespace:             namespace,
@@ -212,11 +207,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		metric := Metrics{
 			Namespace: namespace,
 			Template:  promMetricsFixturePath,
+			Scheme:    "https",
 		}
 
 		monitoringCM := MonitoringConfig{
-			Name:               "cluster-monitoring-config",
-			Namespace:          "openshift-monitoring",
 			EnableUserWorkload: true,
 			Template:           configMapFixturePath,
 		}
@@ -246,16 +240,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		g.By("4. Deploy metrics")
 		metric.createMetrics(oc)
 
-		time.Sleep(20 * time.Second)
 		g.By("5. Ensure FLP pods and eBPF pods are ready")
 		exutil.AssertAllPodsToBeReady(oc, namespace)
 		// ensure eBPF pods are ready
 		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
-		pods, err := exutil.GetAllPods(oc, namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		for _, pod := range pods {
-			exutil.AssertPodToBeReady(oc, pod, namespace)
-		}
 
 		g.By("6. Verify metrics by running curl on FLP pod")
 		podName := getFlowlogsPipelinePod(oc, namespace, "flowlogs-pipeline")
@@ -263,5 +251,100 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("7. Verify metrics by running curl on prometheus pod")
 		verifyCurl(oc, "prometheus-k8s-0", "openshift-monitoring", curlDest, promCertPath)
+	})
+
+	g.It("Author:aramesha-High-50504-Verify flowlogs-pipeline metrics and health [Disruptive]", func() {
+		namespace := oc.Namespace()
+		baseDir := exutil.FixturePath("testdata", "netobserv")
+		// flowCollector Template path
+		flowFixturePath := filePath.Join(baseDir, "flowcollector_v1alpha1_template.yaml")
+		// metrics Template path
+		promMetricsFixturePath := filePath.Join(baseDir, "monitoring.yaml")
+		// curl URL
+		curlMetrics := fmt.Sprintf("http://flowlogs-pipeline-prom.%s.svc:9102/metrics", namespace)
+		curlLive := "http://localhost:8080/live"
+		// configMap Template path
+		configMapFixturePath := filePath.Join(baseDir, "cluster-monitoring-config-cm.yaml")
+
+		// lokiPVC template path
+		lokiPVCFixturePath := filePath.Join(baseDir, "loki-pvc.yaml")
+		// loki template path
+		lokiStorageFixturePath := filePath.Join(baseDir, "loki-storage.yaml")
+		// loki URL
+		lokiURL := fmt.Sprintf("http://loki.%s.svc.cluster.local:3100/", namespace)
+
+		flow := Flowcollector{
+			Namespace:             namespace,
+			FlowlogsPipelineImage: versions.FlowlogsPipeline.Image,
+			ConsolePlugin:         versions.ConsolePlugin.Image,
+			Template:              flowFixturePath,
+			LokiURL:               lokiURL,
+		}
+
+		metric := Metrics{
+			Namespace: namespace,
+			Template:  promMetricsFixturePath,
+		}
+
+		monitoringCM := MonitoringConfig{
+			EnableUserWorkload: true,
+			Template:           configMapFixturePath,
+		}
+
+		lokiPVC := LokiPersistentVolumeClaim{
+			Namespace: namespace,
+			Template:  lokiPVCFixturePath,
+		}
+
+		loki := LokiStorage{
+			Namespace: namespace,
+			Template:  lokiStorageFixturePath,
+		}
+
+		g.By("1. Deploy LokiPVC and storage")
+		lokiPVC.deployLokiPVC(oc)
+		loki.deployLokiStorage(oc)
+
+		g.By("2. Deploy FlowCollector")
+		defer flow.deleteFlowcollector(oc)
+		flow.createFlowcollector(oc)
+
+		g.By("3. Create ClusterMonitoring configMap")
+		defer monitoringCM.deleteConfigMap(oc)
+		monitoringCM.createConfigMap(oc)
+
+		g.By("4. Deploy metrics")
+		metric.createMetrics(oc)
+
+		g.By("5. Ensure FLP pods and eBPF pods are ready")
+		exutil.AssertAllPodsToBeReady(oc, namespace)
+		// ensure eBPF pods are ready
+		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
+
+		// get all flowlogs pipeline pods
+		FLPpods, err := exutil.GetAllPodsWithLabel(oc, namespace, "app=flowlogs-pipeline")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("6. Ensure metrics are reported")
+		for _, pod := range FLPpods {
+			command := []string{"exec", "-n", namespace, pod, "--", "curl", "-s", "-v", "-L", curlMetrics}
+			output, err := oc.AsAdmin().WithoutNamespace().Run(command...).Args().OutputToFile("metrics.txt")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).NotTo(o.BeEmpty(), "No Metrics found")
+
+			metric, _ := exec.Command("bash", "-c", "cat "+output+" | grep \"HTTP/1.1\" | awk 'NR==2{print $3}'").Output()
+			httpCode := strings.TrimSpace(string(metric))
+			o.Expect(httpCode).NotTo(o.BeEmpty(), "HTTP Code not found")
+			e2e.Logf("The http code is : %v", httpCode)
+			o.Expect(httpCode).To(o.Equal("200"))
+		}
+
+		g.By("6. Ensure liveliness/readiness of FLP pods")
+		for _, pod := range FLPpods {
+			command := []string{"exec", "-n", namespace, pod, "--", "curl", "-s", curlLive}
+			output, err := oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.Equal("{}"))
+		}
 	})
 })

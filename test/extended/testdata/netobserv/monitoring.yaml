@@ -28,7 +28,7 @@ objects:
       endpoints:
       - interval: 15s
         port: metrics
-        scheme: https
+        scheme: "${SCHEME}"
         tlsconfig:
           ca:
             configMap:
@@ -62,3 +62,5 @@ objects:
 parameters:
   - name: NAMESPACE
     value: "netobserv"
+  - name: SCHEME
+    value: "http"
