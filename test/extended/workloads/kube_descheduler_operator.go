@@ -30,7 +30,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	sub := subscription{
 		name:        "cluster-kube-descheduler-operator",
 		namespace:   kubeNamespace,
-		channelName: "4.11",
+		channelName: "4.12",
 		opsrcName:   "qe-app-registry",
 		sourceName:  "openshift-marketplace",
 		template:    subscriptionT,
@@ -143,10 +143,26 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		// Test for descheduler not violating PDB
 
-		g.By("Cordon node1")
-		err = oc.AsAdmin().Run("adm").Args("cordon", nodeList.Items[0].Name).Execute()
+		g.By("Cordon all nodes in the cluster")
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().Run("adm").Args("uncordon", nodeList.Items[0].Name).Execute()
+		e2e.Logf("\nNode Names are %v", nodeName)
+		node := strings.Fields(nodeName)
+
+		defer func() {
+			for _, v := range node {
+				oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", fmt.Sprintf("%s", v)).Execute()
+			}
+		}()
+
+		for _, v := range node {
+			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("cordon", fmt.Sprintf("%s", v)).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		g.By("Uncordon node1")
+		err = oc.AsAdmin().Run("adm").Args("uncordon", nodeList.Items[0].Name).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create the test deploy")
 		testdp.createDuplicatePods(oc)
@@ -213,8 +229,8 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Uncordon node1")
-		err = oc.AsAdmin().Run("adm").Args("uncordon", nodeList.Items[0].Name).Execute()
+		g.By("Uncordon node2")
+		err = oc.AsAdmin().Run("adm").Args("uncordon", nodeList.Items[1].Name).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the descheduler deploy logs, should see evict logs")
@@ -244,10 +260,9 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		exutil.AssertWaitPollNoErr(err, "All pods associated with replicaset have been not deleted")
 
 		// Test for PDB with --max-unavailable=1
-		g.By("cordon node1")
-		err = oc.AsAdmin().Run("adm").Args("cordon", nodeList.Items[0].Name).Execute()
+		g.By("cordon node2")
+		err = oc.AsAdmin().Run("adm").Args("cordon", nodeList.Items[1].Name).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().Run("adm").Args("uncordon", nodeList.Items[0].Name).Execute()
 
 		g.By("Create the test deploy")
 		testdp.createDuplicatePods(oc)
@@ -264,8 +279,8 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().Run("delete").Args("pdb", testdp.dName).Execute()
 
-		g.By("Uncordon node1")
-		err = oc.AsAdmin().Run("adm").Args("uncordon", nodeList.Items[0].Name).Execute()
+		g.By("Uncordon node2")
+		err = oc.AsAdmin().Run("adm").Args("uncordon", nodeList.Items[1].Name).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the descheduler deploy logs, should see evict logs")
