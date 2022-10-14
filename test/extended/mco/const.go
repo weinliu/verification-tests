@@ -30,6 +30,9 @@ const (
 
 	// DefaultLayeringQuayRepository the quay repository that will be used by default to push auxiliary layering images
 	DefaultLayeringQuayRepository = "quay.io/mcoqe/layering"
+
+	// LayeringBaseImageReleaseInfo is the name of the layering base image in release info
+	LayeringBaseImageReleaseInfo = "rhel-coreos-8"
 	// TmplHypershiftMcConfigMap template file name:hypershift-cluster-mc-configmap.yaml, it's used to create mc for hosted cluster
 	TmplHypershiftMcConfigMap = "hypershift-cluster-mc-configmap.yaml"
 

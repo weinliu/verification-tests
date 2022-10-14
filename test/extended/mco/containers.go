@@ -3,7 +3,9 @@ package mco
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -60,8 +62,9 @@ func buildPushImage(architecture, buildPath, imageTag, tokenDir string) error {
 	return nil
 }
 
-func getLayeringBaseImage(oc *exutil.CLI, tokenDir string) (string, error) {
-	stdout, stderr, err := oc.Run("adm").Args("release", "info", "-o", `jsonpath={.references.spec.tags[?(@.name=="rhel-coreos-8")].from.name}`,
+func getImageFromRelaseInfo(oc *exutil.CLI, imageName, tokenDir string) (string, error) {
+
+	stdout, stderr, err := oc.Run("adm").Args("release", "info", "-o", fmt.Sprintf(`jsonpath={.references.spec.tags[?(@.name=="%s")].from.name}`, imageName),
 		"--registry-config", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Outputs()
 	if err != nil {
 		logger.Errorf("STDOUT: %s", stdout)
@@ -80,4 +83,29 @@ func getLayeringTestImageRepository() string {
 	}
 
 	return layeringImageRepo
+}
+
+func skopeoInspect(image, tokenDir string) (string, string, error) {
+	var (
+		stdout, stderr []byte
+		exitCode       int
+		err            error
+	)
+
+	argsString := fmt.Sprintf("inspect --tls-verify=false --config docker://%s --authfile %s/.dockerconfigjson", image, tokenDir)
+
+	logger.Infof("Executing command: skopeo %s", argsString)
+	args := strings.Split(argsString, " ")
+	stdout, err = exec.Command("skopeo", args...).Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderr = exitErr.Stderr
+			exitCode = exitErr.ExitCode()
+			return string(stdout), string(stderr), fmt.Errorf("Skopeo command [skopeo %s] failed with return code %d.\nStdout: %s\nStderr: %s",
+				argsString, exitCode, stdout, stderr)
+		}
+		return string(stdout), "", err
+	}
+
+	return string(stdout), string(stderr), nil
 }

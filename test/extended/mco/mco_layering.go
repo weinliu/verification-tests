@@ -56,7 +56,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 
 		// Build new osImage
 		g.By("Get base image for layering")
-		baseImage, err := getLayeringBaseImage(oc.AsAdmin(), secretExtractDir)
+		baseImage, err := getImageFromRelaseInfo(oc.AsAdmin(), LayeringBaseImageReleaseInfo, secretExtractDir)
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error getting the base image to build new osImages")
 		logger.Infof("Base image: %s\n", baseImage)
@@ -238,6 +238,58 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		)
 
 		checkInvalidOsImagesDegradedStatus(oc.AsAdmin(), nonPullableImage, layeringMcName, expectedNDStatus, expectedNDMessage, expectedNDReason)
+	})
+
+	g.It("Author:sregidor-NonPreRelease-Medium-54049-Verify base images in the release image", func() {
+		var (
+			oldMachineConfigOsImage = "machine-os-content"
+			coreExtensions          = "rhel-coreos-8-extensions"
+		)
+
+		g.By("Extract pull-secret")
+		pullSecret := GetPullSecret(oc.AsAdmin())
+		// TODO: when the code to create a tmp directory in the beforeEach section is merged, use ExtractToDir method instead
+		secretExtractDir, err := pullSecret.Extract()
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error extracting pull-secret")
+		logger.Infof("Pull secret has been extracted to: %s\n", secretExtractDir)
+
+		g.By("Get base image for layering")
+		baseImage, err := getImageFromRelaseInfo(oc.AsAdmin(), LayeringBaseImageReleaseInfo, secretExtractDir)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the base image to build new osImages")
+		logger.Infof("Base image: %s\n", baseImage)
+
+		g.By("Inspect base image information")
+		inspectInfo, _, err := skopeoInspect(baseImage, secretExtractDir)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error using 'skopeo' to inspect base image %s", baseImage)
+
+		logger.Infof("Check if image is bootable")
+		inspectJSON := JSON(inspectInfo)
+		ostreeBootable := inspectJSON.Get("config").Get("Labels").Get("ostree.bootable").ToString()
+		o.Expect(ostreeBootable).To(o.Equal("true"),
+			`The base image %s is expected to be bootable (.config.Labels.ostree\.bootable == "true", but skopeo information says that it is not bootable. %s`,
+			baseImage, inspectInfo)
+		logger.Infof("OK!\n")
+
+		g.By("Verify that old machine config os content is not present in the release info")
+		mcOsIMage, mcErr := getImageFromRelaseInfo(oc.AsAdmin(), oldMachineConfigOsImage, secretExtractDir)
+		o.Expect(mcErr).NotTo(o.HaveOccurred(),
+			"Error getting the old machine config os content image")
+		o.Expect(mcOsIMage).To(o.BeEmpty(),
+			"%s image should not be present in the release image, but we can find it with value %s", oldMachineConfigOsImage, mcOsIMage)
+		logger.Infof("OK!\n")
+
+		g.By("Verify that new core extensions image is present in the release info")
+		coreExtensionsValue, exErr := getImageFromRelaseInfo(oc.AsAdmin(), coreExtensions, secretExtractDir)
+		o.Expect(exErr).NotTo(o.HaveOccurred(),
+			"Error getting the new core extensions image")
+		o.Expect(coreExtensionsValue).NotTo(o.BeEmpty(),
+			"%s image should be present in the release image, but we cannot find it with value %s", coreExtensions)
+		logger.Infof("%s is present in the release infor with value %s", coreExtensions, coreExtensionsValue)
+		logger.Infof("OK!\n")
+
 	})
 })
 
