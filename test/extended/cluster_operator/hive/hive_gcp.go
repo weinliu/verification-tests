@@ -53,7 +53,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "41777"|./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:lwan-High-41777-High-28636-Hive API support for GCP[Serial]", func() {
 		testCaseID := "41777"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
 		g.By("Config GCP Install-Config Secret...")
@@ -351,7 +351,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "41499"|./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:lwan-High-41499-High-34404-High-25333-Hive syncset test for paused and multi-modes[Serial]", func() {
 		testCaseID := "41499"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
 		g.By("Config GCP Install-Config Secret...")
@@ -584,7 +584,7 @@ spec:
 		err = ioutil.WriteFile(filename, []byte(syncsetYaml), 0644)
 		defer os.Remove(filename)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		output, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", filename).Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", filename, "-n", oc.Namespace()).Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(`Invalid value: "authorization.openshift.io/v1": must use kubernetes group for this resource kind`))
 		e2e.Logf("oc create syncset failed, this is expected.")
@@ -596,7 +596,7 @@ spec:
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "35069"|./bin/extended-platform-tests run --timeout 70m -f -
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-35069-Hive supports cluster hibernation for gcp[Serial]", func() {
 		testCaseID := "35069"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
 		g.By("Config GCP Install-Config Secret...")
@@ -659,7 +659,7 @@ spec:
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "52411"|./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:lwan-Medium-52411-[GCP]Hive Machinepool test for autoscale [Serial]", func() {
 		testCaseID := "52411"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
 		g.By("Config GCP Install-Config Secret...")
@@ -793,7 +793,7 @@ spec:
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "46729"|./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("NonPreRelease-ConnectedOnly-Author:lwan-Medium-46729-[HIVE]Support overriding installer image [Serial]", func() {
 		testCaseID := "46729"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		imageSetName := cdName + "-imageset"
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
@@ -984,7 +984,7 @@ spec:
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "54463"|./bin/extended-platform-tests run --timeout 35m -f -
 	g.It("NonPreRelease-ConnectedOnly-Author:mihuang-Medium-54463-Add cluster install success/fail metrics[Serial]", func() {
 		testCaseID := "54463"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		imageSetName := cdName + "-imageset"
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{
