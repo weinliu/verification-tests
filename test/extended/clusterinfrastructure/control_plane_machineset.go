@@ -54,7 +54,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-Medium-53081-Finalizer should be added to control plan machineset [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "vsphere")
 
 		g.By("Check if controlplanemachineset exists")
 		controlplanemachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Output()
