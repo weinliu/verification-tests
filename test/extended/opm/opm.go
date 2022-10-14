@@ -1550,7 +1550,7 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("Author:xzha-ConnectedOnly-Medium-53871-Medium-53915-opm supports creating a catalog using semver veneer", func() {
+	g.It("Author:xzha-ConnectedOnly-Medium-53871-Medium-53915-Medium-53996-opm supports creating a catalog using semver veneer", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
@@ -1671,6 +1671,54 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(string(output)).To(o.ContainSubstring("encountered bundle versions which differ only by build metadata, which cannot be ordered"))
 		o.Expect(string(output)).To(o.ContainSubstring("cannot be compared to \"1.0.1-alpha\""))
+
+		g.By("OCP-53996")
+		filePath := filepath.Join(opmBaseDir, "catalog-semver-veneer-1.yaml")
+		g.By("step: create dir catalog")
+		catsrcPath53996 := filepath.Join(opmBaseDir, "catalog-53996")
+		err = os.MkdirAll(catsrcPath53996, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("step: generate index.yaml with yaml format")
+		command := "cat " + filePath + "| opm alpha render-veneer semver -o yaml - "
+		contentByte, err := exec.Command("bash", "-c", command).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		indexFilePath = filepath.Join(catsrcPath53996, "index.yaml")
+		if err = ioutil.WriteFile(indexFilePath, contentByte, 0644); err != nil {
+			e2e.Failf(fmt.Sprintf("Writefile %s Error: %v", indexFilePath, err))
+		}
+		output, err = opmCLI.Run("validate").Args(catsrcPath53996).Output()
+		if err != nil {
+			e2e.Logf(output)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		output, err = opmCLI.Run("alpha").Args("list", "channels", catsrcPath53996, "nginx-operator").Output()
+		if err != nil {
+			e2e.Logf(output)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		o.Expect(string(output)).To(o.ContainSubstring("candidate-v0  nginx-operator.v0.0.1"))
+		o.Expect(string(output)).To(o.ContainSubstring("candidate-v1  nginx-operator.v1.0.2"))
+		o.Expect(string(output)).To(o.ContainSubstring("candidate-v2  nginx-operator.v2.1.0"))
+		o.Expect(string(output)).To(o.ContainSubstring("fast-v0       nginx-operator.v0.0.1"))
+		o.Expect(string(output)).To(o.ContainSubstring("fast-v2       nginx-operator.v2.1.0"))
+		o.Expect(string(output)).To(o.ContainSubstring("stable-v1     nginx-operator.v1.0.2"))
+		o.Expect(string(output)).To(o.ContainSubstring("stable-v2     nginx-operator.v2.1.0"))
+
+		g.By("step: generate json format file")
+		command = "cat " + filePath + `| opm alpha render-veneer semver  - | jq 'select(.schema=="olm.channel")'| jq '{name,entries}'`
+		contentByte, err = exec.Command("bash", "-c", command).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(contentByte)).To(o.ContainSubstring("nginx-operator.v1.0.2"))
+		o.Expect(string(contentByte)).To(o.ContainSubstring("candidate-v1"))
+
+		g.By("step: generate mermaid graph data for generated-channels")
+		command = "cat " + filePath + "| opm alpha render-veneer semver -o mermaid -"
+		contentByte, err = exec.Command("bash", "-c", command).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(contentByte)).To(o.ContainSubstring("package \"nginx-operator\""))
+		o.Expect(string(contentByte)).To(o.ContainSubstring("nginx-operator-candidate-v1-nginx-operator.v1.0.1"))
 	})
 
 	// author: xzha@redhat.com
