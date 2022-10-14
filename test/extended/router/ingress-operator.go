@@ -8,13 +8,50 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	// e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("ingress-operator", exutil.KubeConfigPath())
+
+	// author: hongli@redhat.com
+	// Bug: 1960284
+	g.It("Author:hongli-Critical-42276-enable annotation traffic-policy.network.alpha.openshift.io/local-with-fallback on LB and nodePort service", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+		var (
+			ingctrl = ingctrlNodePortDescription{
+				name:      "ocp42276",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		g.By("Create one custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("check the annotation of nodeport service")
+		annotation := fetchJSONPathValue(oc, "openshift-ingress", "svc/router-nodeport-ocp42276", ".metadata.annotations")
+		o.Expect(annotation).To(o.ContainSubstring(`traffic-policy.network.alpha.openshift.io/local-with-fallback`))
+
+		// LB service is supported on public cloud platform
+		g.By("check the annotation of default LoadBalancer service if it is available")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-ingress", "service", "router-default", "-o=jsonpath={.spec.type}").Output()
+		if strings.Contains(output, "LoadBalancer") {
+			annotation = fetchJSONPathValue(oc, "openshift-ingress", "svc/router-default", ".metadata.annotations")
+			o.Expect(annotation).To(o.ContainSubstring(`traffic-policy.network.alpha.openshift.io/local-with-fallback`))
+		} else {
+			e2e.Logf("skip the LB service checking part, since it is not supported on this cluster")
+		}
+	})
 
 	// author: mjoseph@redhat.com
 	g.It("Author:mjoseph-High-46287-ingresscontroller supports to update maxlength for syslog message", func() {
