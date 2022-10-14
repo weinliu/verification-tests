@@ -745,4 +745,62 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(output).To(o.ContainSubstring("system:unauthenticated"))
 		e2e.Logf("The deleted parts in both clusterrole.rbac and clusterrolebinding.rbac are restored.")
 	})
+
+	// author: gkarager@redhat.com
+	g.It("Author:gkarager-Medium-52324-Pod security admission autolabelling opting out keeps old labels/does not sync [Disruptive]", func() {
+		g.By("1. Create a namespace as normal user")
+		oc.SetupProject()
+		testNameSpace := oc.Namespace()
+
+		g.By("2. Check the project labels")
+		output, err := oc.Run("get").Args("project", testNameSpace, "-o=jsonpath={.metadata.labels}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// for 4.11, default project lables are "warn", "audit"
+		// for 4.12, default project label is 'enforce'
+		o.Expect(output).To(o.ContainSubstring("\"pod-security.kubernetes.io/enforce\":\"restricted\""))
+
+		g.By("3. Create a standalone pod with oc run")
+		output, err = oc.Run("run").Args("hello-openshift", "--image=quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).NotTo(o.ContainSubstring("Warning"))
+		e2e.Logf("Waiting for all pods of hello-openshift application to be ready ...")
+		exutil.AssertAllPodsToBeReadyWithPollerParams(oc, testNameSpace, 30*time.Second, 10*time.Minute)
+
+		g.By("4. Opt out of autolabelling")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", testNameSpace, "security.openshift.io/scc.podSecurityLabelSync=false").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Adding label to the namespace failed")
+
+		g.By("5. Add privileged scc to user")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "default", "-n", testNameSpace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("6. Check labels")
+		output, err = oc.Run("get").Args("project", testNameSpace, "-o=jsonpath={.metadata.labels}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("\"pod-security.kubernetes.io/enforce\":\"restricted\""))
+		o.Expect(output).To(o.ContainSubstring("\"security.openshift.io/scc.podSecurityLabelSync\":\"false\""))
+
+		g.By("7. Opt into autolabelling explicitly")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", testNameSpace, "security.openshift.io/scc.podSecurityLabelSync=true", "--overwrite").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Adding label to the namespace failed")
+
+		g.By("8. Check labels")
+		output, err = oc.Run("get").Args("project", testNameSpace, "-o=jsonpath={.metadata.labels}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("\"pod-security.kubernetes.io/enforce\":\"privileged\""))
+		o.Expect(output).To(o.ContainSubstring("\"security.openshift.io/scc.podSecurityLabelSync\":\"true\""))
+
+		g.By("9. Remove the privileged scc from user")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-scc-from-user", "privileged", "-z", "default", "-n", testNameSpace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("10. Add the restricted scc to the user")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-user", "restricted", "-z", "default", "-n", testNameSpace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("11. Check labels")
+		output, err = oc.Run("get").Args("project", testNameSpace, "-o=jsonpath={.metadata.labels}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("\"pod-security.kubernetes.io/enforce\":\"baseline\""))
+	})
 })
