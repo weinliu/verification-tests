@@ -2,6 +2,7 @@ package operators
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -11032,7 +11033,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		g.By("SUCCESS")
 	})
 
-	g.It("VMonly-Author:xzha-ConnectedOnly-Medium-43246-Convert an existing db based index to declarative config", func() {
+	g.It("VMonly-Author:xzha-ConnectedOnly-Medium-43246-Medium-53873-Convert an existing db based index to declarative config", func() {
 		exutil.SkipARM64(oc)
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
@@ -11051,13 +11052,15 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 		g.By("Migrate a sqlite-based index image or database file to a file-based catalog")
 		output, err := opmCLI.Run("migrate").Args(imagetag, catalogFileName).Output()
-		e2e.Logf(output)
+		o.Expect(output).To(o.ContainSubstring("file-based catalog"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Generate the index docker file")
-		output, err = opmCLI.Run("generate").Args("dockerfile", catalogFileName).Output()
-		e2e.Logf(output)
+		_, err = opmCLI.Run("generate").Args("dockerfile", catalogFileName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		dockerFileContent, err := ioutil.ReadFile(filepath.Join(TmpDataPath, catalogFileName+".Dockerfile"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(dockerFileContent).To(o.ContainSubstring("--cache-dir=/tmp/cache"))
 
 		g.By("Build and push the image")
 		podmanCLI := container.NewPodmanCLI()
