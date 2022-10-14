@@ -101,7 +101,7 @@ func getAwsIntSvcIPs(a *exutil.AwsClient, oc *exutil.CLI) map[string]string {
 	return ips
 }
 
-//Update int svc instance ingress rule to allow destination port
+// Update int svc instance ingress rule to allow destination port
 func updateAwsIntSvcSecurityRule(a *exutil.AwsClient, oc *exutil.CLI, dstPort int64) {
 	instanceID, err := getAwsIntSvcInstanceID(a, oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -191,6 +191,23 @@ func findUnUsedIPsOnNode(oc *exutil.CLI, nodeName, cidr string, number int) []st
 
 	}
 	return ipUnused
+}
+
+func findFreeIPs(oc *exutil.CLI, nodeName string, number int) []string {
+	var freeIps = []string{}
+	platform := exutil.CheckPlatform(oc)
+	if strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") {
+		sub1, err := getDefaultSubnet(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		freeIps = findUnUsedIPs(oc, sub1, number)
+
+	} else {
+		sub1 := getIfaddrFromNode(nodeName, oc)
+		freeIps = findUnUsedIPsOnNode(oc, nodeName, sub1, number)
+	}
+
+	return freeIps
+
 }
 
 func execCommandInOVNPodOnNode(oc *exutil.CLI, nodeName, command string) (string, error) {
@@ -331,7 +348,7 @@ func accessEgressNodeFromIntSvcInstanceOnGCP(host string, IPaddr string) (string
 	return "0", nil
 }
 
-//start one AWS instance
+// start one AWS instance
 func startInstanceOnAWS(a *exutil.AwsClient, hostname string) {
 	instanceID, err := a.GetAwsInstanceIDFromHostname(hostname)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -641,8 +658,7 @@ func waitDaemonSetReady(oc *exutil.CLI, ns, dsName string) error {
 	return nil
 }
 
-// checkMatchedIPs, match is true, expectIP is expected in logs
-//  match is false, expectIP is NOT expected in logs
+// checkMatchedIPs, match is true, expectIP is expected in logs,match is false, expectIP is NOT expected in logs
 func checkMatchedIPs(oc *exutil.CLI, ns, dsName string, searchString, expectedIP string, match bool) error {
 	e2e.Logf("Expected egressIP hit egress node logs : %v", match)
 	matchErr := wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
@@ -708,19 +724,24 @@ func getRequestURL(domainName string) (string, string) {
 }
 
 func waitCloudPrivateIPconfigUpdate(oc *exutil.CLI, egressIP string, exist bool) {
-	egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
-		e2e.Logf("Wait for cloudprivateipconfig updated,expect %s exist: %v.", egressIP, exist)
-		output, err := runOcWithRetry(oc.AsAdmin(), "get", "cloudprivateipconfig", egressIP)
-		e2e.Logf(output)
-		if exist && err == nil && strings.Contains(output, egressIP) {
-			return true, nil
-		}
-		if !exist && err != nil && strings.Contains(output, "NotFound") {
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("CloudprivateConfigIP was not updated as expected!"))
+	platform := exutil.CheckPlatform(oc)
+	if strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") {
+		e2e.Logf("Baremetal and Vsphere platform don't have cloudprivateipconfig, no need check cloudprivateipconfig!")
+	} else {
+		egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			e2e.Logf("Wait for cloudprivateipconfig updated,expect %s exist: %v.", egressIP, exist)
+			output, err := runOcWithRetry(oc.AsAdmin(), "get", "cloudprivateipconfig", egressIP)
+			e2e.Logf(output)
+			if exist && err == nil && strings.Contains(output, egressIP) {
+				return true, nil
+			}
+			if !exist && err != nil && strings.Contains(output, "NotFound") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(egressipErr, "CloudprivateConfigIP was not updated as expected!")
+	}
 
 }
 
@@ -767,12 +788,12 @@ func nslookDomainName(domainName string) string {
 }
 
 // verifyEgressIPinTCPDump Verify the EgressIP takes effect.
-func verifyEgressIPinTCPDump(oc *exutil.CLI, pod, podNS, expectedEgressIP, dstHost, tcpdumpNS, tcpdumpName string) error {
+func verifyEgressIPinTCPDump(oc *exutil.CLI, pod, podNS, expectedEgressIP, dstHost, tcpdumpNS, tcpdumpName string, expectedOrNot bool) error {
 	egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
 		randomStr, url := getRequestURL(dstHost)
 		_, err := e2e.RunHostCmd(podNS, pod, url)
-		if checkMatchedIPs(oc, tcpdumpNS, tcpdumpName, randomStr, expectedEgressIP, true) != nil || err != nil {
-			e2e.Logf("No matched egressIPs in tcpdump log, try next round.")
+		if checkMatchedIPs(oc, tcpdumpNS, tcpdumpName, randomStr, expectedEgressIP, expectedOrNot) != nil || err != nil {
+			e2e.Logf("Expected to find egressIP in tcpdump is: %v, did not get expected result in tcpdump log, try next round.", expectedOrNot)
 			return false, nil
 		}
 		return true, nil

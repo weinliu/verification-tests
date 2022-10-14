@@ -1108,7 +1108,7 @@ func checkNodeStatus(oc *exutil.CLI, nodeName string, expectedStatus string) {
 		err1 := fmt.Errorf("TBD supported node status")
 		o.Expect(err1).NotTo(o.HaveOccurred())
 	}
-	err := wait.Poll(10*time.Second, 6*time.Minute, func() (bool, error) {
+	err := wait.Poll(30*time.Second, 15*time.Minute, func() (bool, error) {
 		statusOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeName, "-ojsonpath={.status.conditions[-1].status}").Output()
 		if err != nil {
 			e2e.Logf("\nGet node status with error : %v", err)
@@ -1147,8 +1147,8 @@ func getTwoNodesSameSubnet(oc *exutil.CLI, nodeList *v1.NodeList) (bool, []strin
 		e2e.Logf("Not enough nodes available for the test, skip the case!!")
 		return false, nil
 	}
-	switch exutil.CheckPlatform(oc) {
-	case "aws":
+	platform := exutil.CheckPlatform(oc)
+	if strings.Contains(platform, "aws") {
 		e2e.Logf("find the two nodes that have same subnet")
 		check, nodes := findTwoNodesWithSameSubnet(oc, nodeList)
 		if check {
@@ -1157,15 +1157,11 @@ func getTwoNodesSameSubnet(oc *exutil.CLI, nodeList *v1.NodeList) (bool, []strin
 			e2e.Logf("No more than 2 worker nodes in same subnet, skip the test!!!")
 			return false, nil
 		}
-	case "gcp":
-		e2e.Logf("since GCP worker nodes all have same subnet, just pick first two nodes as egress nodes")
+	} else {
+		e2e.Logf("since worker nodes all have same subnet, just pick first two nodes as egress nodes")
 		egressNodes = append(egressNodes, nodeList.Items[0].Name)
 		egressNodes = append(egressNodes, nodeList.Items[1].Name)
-	default:
-		e2e.Logf("Not supported platform yet!")
-		return false, nil
 	}
-
 	return true, egressNodes
 }
 
@@ -1890,7 +1886,7 @@ func getOVNK8sNodeMgmtIPv4(oc *exutil.CLI, nodeName string) string {
 	return nodeOVNK8sMgmtIP
 }
 
-//findLogFromOvnMasterPod will search logs we wanted, since sometimes the leader will changed, So here check all ovnkube-master logs.
+// findLogFromOvnMasterPod will search logs we wanted, since sometimes the leader will changed, So here check all ovnkube-master logs.
 func findLogFromOvnMasterPod(oc *exutil.CLI, logs string) bool {
 	findLog := false
 	ovnMasterPodName := getPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
