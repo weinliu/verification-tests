@@ -83,16 +83,16 @@ import (
 }
 */
 type SearchResult struct {
-	Took     string `json:"took"`
-	TimedOut bool   `json:"timed_out"`
+	Took     int64 `json:"took"`
+	TimedOut bool  `json:"timed_out"`
 	Shards   struct {
-		Total      int `json:"total"`
-		Successful int `json:"successful"`
-		Skipped    int `json:"skipped"`
-		Failed     int `json:"failed"`
+		Total      int64 `json:"total"`
+		Successful int64 `json:"successful"`
+		Skipped    int64 `json:"skipped"`
+		Failed     int64 `json:"failed"`
 	} `json:"_shards"`
 	Hits struct {
-		Total    int     `json:"total"`
+		Total    int64   `json:"total"`
 		MaxScore float32 `json:"max_score"`
 		DataHits []struct {
 			Index  string  `json:"_index"`
@@ -173,9 +173,82 @@ type SearchResult struct {
 					} `json:"layer2,omitempty"`
 				} `json:"structured,omitempty"`
 			} `json:"_source"`
-		} `json:"hits"`
+		} `json:"hits,omitempty"`
 	} `json:"hits"`
+	Aggregations struct {
+		LoggingAggregations struct {
+			DocCount          int64 `json:"doc_count,omitempty"`
+			InnerAggregations struct {
+				DocCountErrorUpperBound int64 `json:"doc_count_error_upper_bound,omitempty"`
+				SumOtherDocCount        int64 `json:"sum_other_doc_count,omitempty"`
+				Buckets                 []struct {
+					Key      string `json:"key,omitempty"`
+					DocCount int64  `json:"doc_count,omitempty"`
+				} `json:"buckets,omitempty"`
+			} `json:"inner_aggregations,omitempty"`
+		} `json:"logging_aggregations,omitempty"`
+	} `json:"aggregations,omitempty"`
 }
+
+/*
+The aggregation query string must be set as:
+{
+    "aggs" : {
+        "logging_aggregations": {
+            "filter": {
+                "exists": {
+                    "field":"kubernetes"
+                }
+            },
+            "aggs" : {
+                "inner_aggregations": {
+                    "terms" : {
+                        "field" : "hostname"
+                    }
+                }
+            }
+        }
+    }
+}
+AggregationResult example
+{
+	"aggregations": {
+		"logging_aggregations": {
+		    "doc_count": 13089,
+		    "inner_aggregations": {
+			    "doc_count_error_upper_bound": 0,
+			    "sum_other_doc_count": 0,
+			    "buckets": [
+			        {
+				        "key": "ip-10-0-202-141",
+				    	"doc_count": 3250
+			  		},
+			  		{
+						"key": "ip-10-0-147-235",
+						"doc_count": 3064
+			  		},
+			  		{
+						"key": "ip-10-0-210-50",
+						"doc_count": 2515
+			  		},
+			  		{
+						"key": "ip-10-0-167-109",
+						"doc_count": 1832
+			  		},
+			  		{
+						"key": "ip-10-0-186-71",
+						"doc_count": 1321
+			 		},
+			  		{
+						"key": "ip-10-0-143-89",
+						"doc_count": 1107
+			 		 }
+				]
+		  	}
+		}
+	}
+}
+*/
 
 // CountResult example
 /*
@@ -190,12 +263,12 @@ type SearchResult struct {
 }
 */
 type CountResult struct {
-	Count  int `json:"count"`
+	Count  int64 `json:"count"`
 	Shards struct {
-		Total      int `json:"total"`
-		Successful int `json:"successful"`
-		Skipped    int `json:"skipped"`
-		Failed     int `json:"failed"`
+		Total      int64 `json:"total"`
+		Successful int64 `json:"successful"`
+		Skipped    int64 `json:"skipped"`
+		Failed     int64 `json:"failed"`
 	} `json:"_shards"`
 }
 

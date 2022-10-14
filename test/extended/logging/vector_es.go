@@ -392,6 +392,78 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
+		//author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-Critical-47060-All node logs have been sent to Elasticsearch[Serial]", func() {
+			g.By("Create ClusterLogging instance with Vector as collector")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", "openshift-logging"}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			g.By("Waiting for the Logging pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cl.namespace)
+
+			g.By("check indices in ES pod")
+			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(cl.namespace, esPods.Items[0].Name, "infra")
+			collectorPods, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(metav1.ListOptions{LabelSelector: "component=collector"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			var nodeNames []string
+			for _, pod := range collectorPods.Items {
+				nodeNames = append(nodeNames, pod.Spec.NodeName)
+			}
+
+			g.By("check container logs")
+			queryContainerLog := "_search?size=0 -d'{\"aggs\": {\"logging_aggregations\": {\"filter\": {\"exists\": {\"field\":\"kubernetes\"}},\"aggs\": {\"inner_aggregations\": {\"terms\": {\"field\" : \"hostname\"}}}}}}'"
+			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+				aggRes, err := queryInES(cl.namespace, esPods.Items[0].Name, queryContainerLog)
+				if err != nil {
+					return false, err
+				}
+				containerBuckets := aggRes.Aggregations.LoggingAggregations.InnerAggregations.Buckets
+				if aggRes.Hits.Total <= 0 || len(containerBuckets) != len(collectorPods.Items) {
+					return false, nil
+				}
+				for _, node := range nodeNames {
+					if !containSubstring(containerBuckets, node) {
+						return false, nil
+					}
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "Not all nodes' container logs have been sent to ES")
+
+			g.By("check journal logs")
+			queryJournalLog := "_search?size=0 -d'{\"aggs\": {\"logging_aggregations\": {\"filter\": {\"exists\": {\"field\":\"systemd\"}},\"aggs\": {\"inner_aggregations\": {\"terms\": {\"field\" : \"hostname\"}}}}}}'"
+			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+				journalLog, err := queryInES(cl.namespace, esPods.Items[0].Name, queryJournalLog)
+				if err != nil {
+					return false, err
+				}
+				if journalLog.Hits.Total <= 0 {
+					return false, nil
+				}
+				journalBuckets := journalLog.Aggregations.LoggingAggregations.InnerAggregations.Buckets
+				// In AWS, the hostname in journal logs is not the same as the node name
+				if exutil.CheckPlatform(oc) == "aws" {
+					for _, bu := range journalBuckets {
+						if !containSubstring(nodeNames, bu.Key) {
+							return false, nil
+						}
+					}
+				} else {
+					for _, node := range nodeNames {
+						if !containSubstring(journalBuckets, node) {
+							return false, nil
+						}
+					}
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "Not all nodes' journal logs have been sent to ES")
+		})
+
 	})
 
 	g.Context("Vector Elasticsearch tests", func() {

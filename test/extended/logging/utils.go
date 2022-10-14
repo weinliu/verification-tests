@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -72,11 +73,25 @@ func getRandomString() string {
 	return string(buffer)
 }
 
-// contain checks if the array a contains string b
+// contain checks if b is an elememt of a
 func contain(a []string, b string) bool {
 	for _, c := range a {
 		if c == b {
 			return true
+		}
+	}
+	return false
+}
+
+// containSubstring checks if b is a's element's substring
+func containSubstring(a interface{}, b string) bool {
+	switch reflect.TypeOf(a).Kind() {
+	case reflect.Slice, reflect.Array:
+		s := reflect.ValueOf(a)
+		for i := 0; i < s.Len(); i++ {
+			if strings.Contains(fmt.Sprintln(s.Index(i)), b) {
+				return true
+			}
 		}
 	}
 	return false

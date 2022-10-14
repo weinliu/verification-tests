@@ -53,7 +53,7 @@ func waitForIndexAppear(ns string, pod string, indexName string) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Index %s is not appeared or the doc count is 0 in last 180 seconds.", indexName))
 }
 
-func getDocCountByQuery(ns string, pod string, indexName string, queryString string) (int, error) {
+func getDocCountByQuery(ns string, pod string, indexName string, queryString string) (int64, error) {
 	cmd := "es_util --query=" + indexName + "*/_count?format=JSON -d '" + queryString + "'"
 	stdout, err := e2e.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
 	res := CountResult{}
@@ -85,6 +85,17 @@ func searchDocByQuery(ns string, pod string, indexName string, queryString strin
 	//_ = json.NewDecoder(data).Decode(&res)
 	json.Unmarshal([]byte(stdout), &res)
 	return res
+}
+
+func queryInES(ns, pod, queryString string) (SearchResult, error) {
+	cmd := "es_util --query=" + queryString
+	res := SearchResult{}
+	stdout, err := e2e.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
+	if err != nil {
+		return res, err
+	}
+	err = json.Unmarshal([]byte(stdout), &res)
+	return res, err
 }
 
 type externalES struct {
@@ -270,7 +281,7 @@ func (es externalES) waitForIndexAppear(oc *exutil.CLI, indexName string) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Index %s didn't appear or the doc count is 0 in last 3 minutes.", indexName))
 }
 
-func (es externalES) getDocCount(oc *exutil.CLI, indexName string, queryString string) (int, error) {
+func (es externalES) getDocCount(oc *exutil.CLI, indexName string, queryString string) (int64, error) {
 	cmd := es.baseCurlString() + indexName + "*/_count?format=JSON -d '" + queryString + "'"
 	stdout, err := e2e.RunHostCmdWithRetries(es.namespace, es.getPodName(oc), cmd, 5*time.Second, 30*time.Second)
 	res := CountResult{}
