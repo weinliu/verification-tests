@@ -3431,7 +3431,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-High-28586 ansible Content Collections Support in watches.yaml", func() {
+	g.It("VMonly-ConnectedOnly-Author:jfan-High-28586-ansible Content Collections Support in watches.yaml", func() {
 		architecture := exutil.GetClusterArchitecture(oc)
 		if architecture != "amd64" {
 			g.Skip("Do not support " + architecture)
@@ -3549,7 +3549,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-High-48366 add ansible prometheus metrics", func() {
+	g.It("VMonly-ConnectedOnly-Author:jfan-High-48366-add ansible prometheus metrics", func() {
 		architecture := exutil.GetClusterArchitecture(oc)
 		if architecture != "amd64" {
 			g.Skip("Do not support " + architecture)
