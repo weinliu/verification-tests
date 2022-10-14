@@ -10,14 +10,14 @@ import (
 
 	o "github.com/onsi/gomega"
 
-	cvers "github.com/openshift/openshift-tests-private/test/extended/mco"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 // ClusterSanitycheck do sanity check on cluster.
 func ClusterSanitycheck(oc *exutil.CLI, projectName string) error {
-	errProject := wait.Poll(15*time.Second, 100*time.Second, func() (bool, error) {
+	e2e.Logf("Running cluster sanity")
+	errProject := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
 		// Added like this to handle project exist error.
 		cmd := fmt.Sprintf(`oc new-project %s || oc project %s`, projectName, projectName)
 		_, err := exec.Command("bash", "-c", cmd).Output()
@@ -28,11 +28,17 @@ func ClusterSanitycheck(oc *exutil.CLI, projectName string) error {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(errProject, fmt.Sprintf("oc new-project %s failed", projectName))
-
-	err := oc.AsAdmin().WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", projectName).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	errDeployment := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
-		err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment/hello-openshift", "-n", projectName).Execute()
+	errApp := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
+		err := oc.AsAdmin().WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", projectName).Execute()
+		if err != nil {
+			return false, nil
+		}
+		e2e.Logf("oc new app succeeded")
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(errApp, "oc log deployment failed")
+	errDeployment := wait.Poll(15*time.Second, 500*time.Second, func() (bool, error) {
+		err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment/hello-openshift", "-n", projectName).Execute()
 		if err != nil {
 			return false, nil
 		}
@@ -139,42 +145,4 @@ func ClusterNodesHealthcheck(oc *exutil.CLI, waitTime int, dirname string) error
 	}
 	exutil.AssertWaitPollNoErr(errNode, "Abnormality found in nodes.")
 	return errNode
-}
-
-// GetLeaderMasterNode get leader master node
-func (envPlarform ocpInstance) GetLeaderMasterNode(oc *exutil.CLI) string {
-	// get clusterversion
-	e2e.Logf("Checking clusterversion")
-	clusterVersion, _, err := exutil.GetClusterVersion(oc)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("Get leader node")
-	var leaderNode string
-	var leaderMasterNode string
-	if cvers.CompareVersions(clusterVersion, ">", "4.9") {
-		leaderNode, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("leases", "kube-controller-manager", "-n", "kube-system", "-o=jsonpath={.spec.holderIdentity}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-	} else {
-		masterStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "kube-controller-manager", "-n", "kube-system", "-o", "jsonpath='{.metadata.annotations}'").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		jqCmd := fmt.Sprintf(`echo %s | jq -r .'"control-plane.alpha.kubernetes.io/leader"'| jq -r  .holderIdentity`, masterStr)
-		masterNode, err := exec.Command("bash", "-c", jqCmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		leaderNode = string(masterNode)
-	}
-	masterNodeStr := strings.Split(leaderNode, "_")
-
-	masterNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	masterName := strings.Fields(masterNode)
-	for i := 0; i < len(masterName); i++ {
-		if strings.Contains(masterName[i], string(masterNodeStr[0])) {
-			leaderMasterNode = masterName[i]
-			e2e.Logf("Leader master node is :: %s", leaderMasterNode)
-			if envPlarform.platform == "gcp" {
-				leaderMasterNodeGcp := strings.Split(leaderMasterNode, ".")
-				leaderMasterNode = leaderMasterNodeGcp[0]
-			}
-		}
-	}
-	return leaderMasterNode
 }

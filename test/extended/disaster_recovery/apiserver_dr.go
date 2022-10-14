@@ -19,49 +19,31 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLIWithoutNamespace("default")
-	var envPlatform ocpInstance
-
-	g.BeforeEach(func() {
-		platform := exutil.CheckPlatform(oc)
-		envPlatform = ocpInstance{platform: platform}
-		e2e.Logf("\n\nThe platform is %v", platform)
-		switch platform {
-		case "vsphere":
-			e2e.Logf("\n vsphere is detected, running the case on vsphere\n")
-		case "aws":
-			e2e.Logf("\n AWS is detected, running the case on AWS\n")
-		case "gcp":
-			e2e.Logf("\n GCP is detected, running the case on gcp\n")
-		case "openstack":
-			e2e.Logf("\n OSP is detected, running the case on osp\n")
-		case "azure":
-			e2e.Logf("\n Azure is detected, running the case on azure\n")
-		case "baremetal":
-			e2e.Logf("\n IPI Baremetal is detected, running the case on baremetal\n")
-		default:
-			g.Skip("Not support cloud provider for DR cases for now. Test cases should be run on vsphere or aws or gcp or openstack or azure or IPI baremetal, skip for other platforms!!")
-		}
-	})
 
 	// author: rgangwar@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Author:rgangwar-High-19941-[Apiserver] [failure inject] when 1 master is down the cluster should continue serving well without unavailable more than 30s [Disruptive]", func() {
 		var (
-			dirname          = "/tmp/-OCP-19941/"
-			leaderMasterNode string
 			// Adding wait time here of 90s because sometimes wait poll taking more thans 30s to complete for aws, gcp and vsphere platform.
 			expectedOutageTime = 90
 			randProject1       = "test-ocp19941-project"
+			dirname            = "/tmp/-OCP-19941/"
 		)
 		defer os.RemoveAll(dirname)
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		platform := exutil.CheckPlatform(oc)
 		g.By("1. Get the leader master node of cluster")
-		leaderMasterNode = envPlatform.GetLeaderMasterNode(oc)
-		envPlatform.nodeName = leaderMasterNode
+
+		nodes, cleanup := GetDrMasterNodes(oc)
+		if cleanup != nil {
+			defer cleanup()
+		}
+		// we're only interested in the leader
+		node := nodes.leaderMasterNodeName(oc)
 
 		defer func() {
-			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", randProject1, "--ignore-not-found").Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", randProject1, "--ignore-not-found").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 
@@ -69,29 +51,29 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			contextErr := oc.AsAdmin().WithoutNamespace().Run("config").Args("use-context", "admin").Execute()
 			o.Expect(contextErr).NotTo(o.HaveOccurred())
 			contextOutput, contextErr := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("--show-context").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(contextErr).NotTo(o.HaveOccurred())
 			e2e.Logf("Context after rollack :: %v", contextOutput)
 		}()
 
 		defer func() {
 			e2e.Logf("Recovering cluster")
-			vmState, err := envPlatform.GetInstanceState(oc)
+			vmState, err := node.State()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(vmState).ShouldNot(o.BeEmpty(), fmt.Sprintf("Not able to get leader_master_node %s machine instance state", leaderMasterNode))
+			o.Expect(vmState).ShouldNot(o.BeEmpty(), fmt.Sprintf("Not able to get leader_master_node %s machine instance state", node.GetName()))
 			if vmState == "poweredOff" || vmState == "stopped" || vmState == "stopping" || vmState == "terminated" || vmState == "paused" || vmState == "pausing" || vmState == "deallocated" || vmState == "notready" {
-				e2e.Logf("Restarting leader_master_node %s", leaderMasterNode)
-				err = envPlatform.StartInstance(oc)
+				e2e.Logf("Restarting leader_master_node %s", node.GetName())
+				err = node.Start()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				err = ClusterHealthcheck(oc, "OCP-19941/log")
 				o.Expect(err).NotTo(o.HaveOccurred())
 			} else if vmState == "poweredOn" || vmState == "running" || vmState == "active" || vmState == "ready" {
-				e2e.Logf("leader_master_node %s machine instance state is already %s", leaderMasterNode, vmState)
+				e2e.Logf("leader_master_node %s machine instance state is already %s", node.GetName(), vmState)
 			}
 		}()
 
 		g.By("2. Shut down a leader master node to simulate a user failure.")
 		e2e.Logf("Checking leader_master_node machine instance.")
-		vmInstance, err := envPlatform.GetInstance(oc)
+		vmInstance, err := node.GetInstanceID()
 		o.Expect(vmInstance).ShouldNot(o.BeEmpty(), "Not able to get leader_master_node machine instance")
 		e2e.Logf("Get instance name : %v.", vmInstance)
 		if err != nil {
@@ -99,23 +81,23 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		}
 
 		e2e.Logf("Checking leader_master_node instance state.")
-		vmState, stateErr := envPlatform.GetInstanceState(oc)
+		vmState, stateErr := node.State()
 		o.Expect(stateErr).NotTo(o.HaveOccurred())
-		o.Expect(vmState).ShouldNot(o.BeEmpty(), fmt.Sprintf("Not able to get leader_master_node %s machine instance state", leaderMasterNode))
+		o.Expect(vmState).ShouldNot(o.BeEmpty(), fmt.Sprintf("Not able to get leader_master_node %s machine instance state", node.GetName()))
 		if vmState == "poweredOff" || vmState == "stopped" || vmState == "terminated" || vmState == "paused" || vmState == "deallocated" || vmState == "notready" {
 			e2e.Failf("leader_master_node %s instance state is already %s....before running case, so exiting from case run as cluster not ready.", vmInstance, vmState)
 		} else if vmState == "poweredOn" || vmState == "running" || vmState == "active" || vmState == "ready" {
 			e2e.Logf("Bringing down leader master node %s machine instance", vmInstance)
-			err = envPlatform.StopInstance(oc)
+			err = node.Stop()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		} else {
 			e2e.Logf("Not able to get leader_master_node %s machine instance state :: %s", vmInstance, err)
 		}
 
 		g.By("3. When the leader master node is unavailable, apiservers continue to serve after a short interruption.")
-		// Adding wait time here of 200s because sometimes wait poll taking more thans 30s to complete for osp platform.
-		if envPlatform.platform == "openstack" {
-			expectedOutageTime = 200
+		// Adding wait time here of 300s because sometimes wait poll taking more thans 30s to complete for osp platform.
+		if platform == "openstack" {
+			expectedOutageTime = 300
 		}
 		timeFirstServiceDisruption := time.Now()
 		isFirstServiceDisruption := false
@@ -181,11 +163,11 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		}
 
 		e2e.Logf("Restarting leader master node")
-		err = envPlatform.StartInstance(oc)
+		err = node.Start()
 		if err == nil {
-			e2e.Logf("Restarted leader_master_node %s", leaderMasterNode)
+			e2e.Logf("Restarted leader_master_node %s", node.GetName())
 		} else {
-			e2e.Failf("Failed to restart the leader master node %s", leaderMasterNode)
+			e2e.Failf("Failed to restart the leader master node %s", node.GetName())
 		}
 
 		g.By("5. After restarted the leader master node, verify the cluster availability")
