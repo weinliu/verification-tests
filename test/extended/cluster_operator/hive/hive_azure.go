@@ -51,7 +51,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-High-25447-High-28657-Hive API support for Azure[Serial]", func() {
 		testCaseID := "25447"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
 		g.By("Config Azure Install-Config Secret...")
@@ -107,7 +107,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		inframp.create(oc)
 
 		g.By("Check Azure ClusterDeployment installed flag is true")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, AzureClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
 		g.By("OCP-28657: Hive supports remote Machine Set Management for Azure")
 		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
@@ -219,7 +219,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		pool.create(oc)
 		g.By("Check if Azure ClusterPool created successfully and become ready")
 		//runningCount is 0 so pool status should be standby: 1, ready: 0
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, AzureClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.standby}"}).check(oc)
 
 		g.By("Check if CD is Hibernating")
 		cdListStr := getCDlistfromPool(oc, poolName)
@@ -253,7 +253,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "35297"|./bin/extended-platform-tests run --timeout 90m -f -
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-35297-Hive supports cluster hibernation[Serial]", func() {
 		testCaseID := "35297"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
 		g.By("Config Azure Install-Config Secret...")
@@ -288,7 +288,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
 
 		g.By("Check Azure ClusterDeployment installed flag is true")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, AzureClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
 		g.By("Check CD has Hibernating condition")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
@@ -364,7 +364,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		pool.create(oc)
 		g.By("Step2 : Check if Azure ClusterPool created successfully and become ready")
 		//runningCount is 1 so pool status should be ready: 1
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, 2*ClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.ready}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "1", ok, AzureClusterInstallTimeout, []string{"ClusterPool", poolName, "-n", oc.Namespace(), "-o=jsonpath={.status.ready}"}).check(oc)
 
 		g.By("Get cd name from cdlist")
 		cdListStr := getCDlistfromPool(oc, poolName)
@@ -385,9 +385,9 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		hibernateTransition, err := time.Parse(time.RFC3339, getResource(oc, asAdmin, withoutNamespace, "ClusterDeployment", oldCdName, "-n", oldCdName, `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].lastTransitionTime}`))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if !hibernateTransition.Equal(installedTimestap) {
-			g.Fail("The two timestamps are not same, cluster ever be stopped or resumed")
-		}
+		difference := hibernateTransition.Sub(installedTimestap)
+		e2e.Logf("Timestamp difference is %v min", difference.Minutes())
+		o.Expect(difference.Minutes()).Should(o.BeNumerically("<=", 1))
 
 		g.By("Step4 : Create ClusterClaim...")
 		claimTemp := filepath.Join(testDataDir, "clusterclaim.yaml")
@@ -416,17 +416,17 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		e2e.Logf("get hibernattimestaps, hibernateTimestamp is %s", hibernateTimestamp)
 
 		g.By("Step5 : Get Timestamp difference")
-		difference := hibernateTimestamp.Sub(claimedTimestamp)
+		difference = hibernateTimestamp.Sub(claimedTimestamp)
 		e2e.Logf("Timestamp difference is %v mins", difference.Minutes())
 		o.Expect(difference.Minutes()).Should(o.BeNumerically(">=", 5))
 	})
 
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "52415"|./bin/extended-platform-tests run --timeout 60m -f -
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "52415"|./bin/extended-platform-tests run --timeout 90m -f -
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:lwan-Medium-52415-[Azure]Hive Machinepool test for autoscale [Serial]", func() {
 		testCaseID := "52415"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
 
 		g.By("Config Azure Install-Config Secret...")
@@ -472,7 +472,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		inframp.create(oc)
 
 		g.By("Check if ClusterDeployment created successfully and become Provisioned")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, AzureClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
 		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
 		err := os.MkdirAll(tmpDir, 0777)
@@ -514,7 +514,7 @@ spec:
     azure:
       osDisk:
         diskSizeGB: 128
-      type: Standard_D2s_v3
+      type: Standard_D4s_v3
       zones:
       - "1"
       - "2"
@@ -551,14 +551,14 @@ spec:
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("--kubeconfig="+kubeconfig, "-f", workloadYaml).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Check replicas will scale down to minimum value")
-		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "0 0 0", ok, 7*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra2", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "0 0 0", ok, 10*DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "MachineSet", "-n", "openshift-machine-api", "-l", "hive.openshift.io/machine-pool=infra2", "-o=jsonpath={.items[*].status.replicas}"}).check(oc)
 	})
 
 	//author: mihuang@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "54048"|./bin/extended-platform-tests run --timeout 10m -f -
 	g.It("NonPreRelease-ConnectedOnly-Author:mihuang-Medium-54048-Hive to supprt cli-domain-from-installer-image annotation [Serial]", func() {
 		testCaseID := "54048"
-		cdName := "cluster-" + testCaseID
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		imageSetName := cdName + "-imageset"
 		imageSetTemp := filepath.Join(testDataDir, "clusterimageset.yaml")
 		imageSet := clusterImageSet{

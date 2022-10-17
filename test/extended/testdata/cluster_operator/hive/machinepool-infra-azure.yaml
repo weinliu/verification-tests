@@ -20,7 +20,7 @@ objects:
       azure:
         osDisk:
           diskSizeGB: 128
-        type: Standard_D2s_v3
+        type: Standard_D4s_v3
     replicas: 1
     taints: 
     - effect: NoSchedule

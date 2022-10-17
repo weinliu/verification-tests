@@ -309,11 +309,12 @@ const (
 
 //Azure Configurations
 const (
-	AzureBaseDomain = "qe.azure.devcluster.openshift.com" //Azure BaseDomain
-	AzureRegion     = "centralus"
-	AzureCreds      = "azure-credentials"
-	AzureRESGroup   = "os4-common"
-	AzurePublic     = "AzurePublicCloud"
+	AzureClusterInstallTimeout = 4500
+	AzureBaseDomain            = "qe.azure.devcluster.openshift.com" //Azure BaseDomain
+	AzureRegion                = "centralus"
+	AzureCreds                 = "azure-credentials"
+	AzureRESGroup              = "os4-common"
+	AzurePublic                = "AzurePublicCloud"
 )
 
 //GCP Configurations
