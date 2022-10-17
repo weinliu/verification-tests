@@ -2673,6 +2673,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	//author: yyou@redhat.com
 	g.It("NonPreRelease-ConnectedOnly-Author:yyou-Medium-22230-Can set the Requests values in imageregistry config [Disruptive]", func() {
+		g.By("Check if openshift-sample operator installed")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/openshift-samples").Output()
+		if err != nil && strings.Contains(output, `openshift-samples" not found`) {
+			g.Skip("Skip test for openshift-samples which managed templates and imagestream are not installed")
+		}
 		podNum := getImageRegistryPodNumber(oc)
 		defer func() {
 			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("configs.imageregistry.operator.openshift.io/cluster", "-p", `{"spec": {"requests": {"read": {"maxInQueue": null,"maxRunning": null,"maxWaitInQueue": "0s"},"write": {"maxInQueue": null,"maxRunning": null,"maxWaitInQueue": "0s"}}}}`, "--type=merge").Execute()
@@ -2686,13 +2691,13 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
 
 		g.By("Create the app,and trigger the build")
-		createAppError := oc.WithoutNamespace().AsAdmin().Run("new-app").Args("registry.redhat.io/ubi8/ruby-30:latest~https://github.com/sclorg/ruby-ex.git", "-n", oc.Namespace()).Execute()
+		createAppError := oc.WithoutNamespace().AsAdmin().Run("new-app").Args("openshift/ruby:2.7~https://github.com/sclorg/ruby-ex", "-n", oc.Namespace()).Execute()
 		o.Expect(createAppError).NotTo(o.HaveOccurred())
 		result, err := exutil.StartBuildResult(oc, "ruby-ex")
 		err = exutil.WaitForBuildResult(oc.BuildClient().BuildV1().Builds(oc.Namespace()), result)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result.BuildFailure).To(o.BeTrue(), "Build did succeed: %v", result)
-		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("build/ruby-ex-2", "--tail=10", "-n", oc.Namespace()).Output()
+		output, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("build/ruby-ex-2", "--tail=10", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("too many requests to registry"))
 
