@@ -3,21 +3,22 @@ kind: Template
 metadata:
   name: common-pod-template
 objects:
-- apiVersion: v1
-  kind: Pod
-  metadata: 
-    labels: 
-      app: httpd
-    name: "${NAME}"
-  spec: 
-    containers: 
-      - image: "image-registry.openshift-image-registry.svc:5000/openshift/httpd:latest"
-        name: httpd
-        ports: 
-          - containerPort: 8080
-    runtimeClassName: kata
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      labels:
+        app: httpd
+      name: "${NAME}"
+    spec:
+      runtimeClassName: kata
+      containers:
+        - image: "image-registry.openshift-image-registry.svc:5000/openshift/httpd:latest"
+          name: httpd
+          ports:
+            - containerPort: 8080
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
 
 parameters:
-- name: NAME
-
-
+  - name: NAME

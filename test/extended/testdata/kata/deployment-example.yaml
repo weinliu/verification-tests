@@ -19,12 +19,15 @@ objects:
             app: httpd-app
         spec:
           replicas: 1
+          runtimeClassName: kata
           containers:
-            - name: "${NAME}"
-              image: "image-registry.openshift-image-registry.svc:5000/openshift/httpd:latest"
+            - image: "image-registry.openshift-image-registry.svc:5000/openshift/httpd:latest"
+              name: "${NAME}"
               ports:
                 - containerPort: 8080
-          runtimeClassName: kata
+              securityContext:
+                seccompProfile:
+                  type: RuntimeDefault
 
 parameters:
   - name: NAME
