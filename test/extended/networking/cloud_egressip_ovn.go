@@ -1237,23 +1237,25 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-NonPreRelease-Medium-47020-Low-47024-EgressIP node liveness probe. [Disruptive]", func() {
+	g.It("Author:huirwang-NonPreRelease-Medium-47029-Low-47024-Any egress IP can only be assigned to one node only. Warning event will be triggered if applying EgressIP object but no EgressIP nodes. [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
 		g.By("1 Get list of nodes \n")
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		egressNode := nodeList.Items[0].Name
+		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
+		if !ok || egressNodes == nil || len(egressNodes) < 2 {
+			g.Skip("The prerequirement was not fullfilled, skip the case!!")
+		}
 
 		g.By("2 Create first egressip object \n")
-		sub1 := getIfaddrFromNode(egressNode, oc)
-		freeIps := findUnUsedIPsOnNode(oc, egressNode, sub1, 1)
-		o.Expect(len(freeIps) == 1).Should(o.BeTrue())
+		freeIPs := findFreeIPs(oc, egressNodes[0], 2)
+		o.Expect(len(freeIPs)).Should(o.Equal(2))
 		egressip1 := egressIPResource1{
-			name:          "egressip-47020",
+			name:          "egressip-47029",
 			template:      egressIP2Template,
-			egressIP1:     freeIps[0],
+			egressIP1:     freeIPs[0],
 			nsLabelKey:    "org",
 			nsLabelValue:  "qe",
 			podLabelKey:   "color",
@@ -1275,32 +1277,43 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 			}
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(warnErr, fmt.Sprintf("Warning event doesn't conclude: NoMatchingNodeFound."))
+		exutil.AssertWaitPollNoErr(warnErr, "Warning event doesn't conclude: NoMatchingNodeFound.")
 
-		g.By("4 Apply EgressLabel Key to one node. \n")
-		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
-		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
+		g.By("4 Apply EgressLabel Key to nodes. \n")
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel, "true")
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel)
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel, "true")
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel)
 
 		g.By("5. Check EgressIP assigned in the object.\n")
 		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
-		o.Expect(len(egressIPMaps1) == 1).Should(o.BeTrue())
+		o.Expect(len(egressIPMaps1)).Should(o.Equal(1), "EgressIP object should get one applied item, but actually not.")
 
-		g.By("6. Add iptables on ovn-k8s-mp0 port to block probe detect.\n")
-		_, err1 := exutil.DebugNodeWithChroot(oc, egressNode, "iptables", "-I", "INPUT", "1", "-i", "ovn-k8s-mp0", "-p", "tcp", "--destination-port", "9", "-j", "DROP")
-		defer exutil.DebugNodeWithChroot(oc, egressNode, "iptables", "-D", "INPUT", "-i", "ovn-k8s-mp0", "-p", "tcp", "--destination-port", "9", "-j", "DROP")
-		o.Expect(err1).NotTo(o.HaveOccurred())
+		g.By("6 Create second egressip object with same egressIP \n")
+		egressip2 := egressIPResource1{
+			name:          "egressip-47024",
+			template:      egressIP2Template,
+			egressIP1:     freeIPs[0],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "pink",
+		}
+		egressip2.createEgressIPObject2(oc)
+		defer egressip2.deleteEgressIPObject1(oc)
 
-		g.By("7. Wait for the egressip object updated, should no egress node assigned.\n")
-		egressIPMaps1 = getAssignedEIPInEIPObject(oc, egressip1.name)
-		o.Expect(len(egressIPMaps1) == 0).Should(o.BeTrue())
+		g.By("7 Check the second egressIP object, no egressIP assigned  .\n")
+		egressIPStatus, egressIPerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressip", egressip2.name, "-ojsonpath={.status.items}").Output()
+		o.Expect(egressIPerr).NotTo(o.HaveOccurred())
+		o.Expect(egressIPStatus).To(o.Equal(""))
 
-		g.By("8. Remove iptables ovn-k8s-mp0 port to unblock probe detect.\n")
-		_, err1 = exutil.DebugNodeWithChroot(oc, egressNode, "iptables", "-D", "INPUT", "-i", "ovn-k8s-mp0", "-p", "tcp", "--destination-port", "9", "-j", "DROP")
-		o.Expect(err1).NotTo(o.HaveOccurred())
+		g.By("8. Edit the second egressIP object to another IP\n")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressip/"+egressip2.name, "-p", "{\"spec\":{\"egressIPs\":[\""+freeIPs[1]+"\"]}}", "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("9. Check EgressIP assigned in the object.\n")
-		egressIPMaps1 = getAssignedEIPInEIPObject(oc, egressip1.name)
-		o.Expect(len(egressIPMaps1) == 1).Should(o.BeTrue())
+		g.By("9. Check egressIP assigned in the second object.\n")
+		egressIPMaps2 := getAssignedEIPInEIPObject(oc, egressip2.name)
+		o.Expect(len(egressIPMaps2)).Should(o.Equal(1), "EgressIP object should get one applied item, but actually not.")
 
 	})
 
