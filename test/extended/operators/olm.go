@@ -5462,7 +5462,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			itName              = g.CurrentGinkgoTestDescription().TestText
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-legacy.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			etcdCluster         = filepath.Join(buildPruningBaseDir, "etcd-cluster.yaml")
 			og                  = operatorGroupDescription{
@@ -5476,7 +5476,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 24382 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-dep:vschema-crdv2",
+				address:     "quay.io/olmqe/olm-dep:vschema-crdv1",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
@@ -5500,12 +5500,13 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				template:  etcdCluster,
 			}
 		)
-		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
 		etcdCr.namespace = oc.Namespace()
+		defer exutil.RecoverNamespaceRestricted(oc, oc.Namespace())
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 
 		g.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
