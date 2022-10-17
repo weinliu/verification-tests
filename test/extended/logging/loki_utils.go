@@ -218,8 +218,11 @@ func emptyAWSS3Bucket(client *s3.Client, bucketName string) error {
 	for _, object := range objects.Contents {
 		newObjects = append(newObjects, types.ObjectIdentifier{Key: object.Key})
 	}
-	_, err = client.DeleteObjects(context.TODO(), &s3.DeleteObjectsInput{Bucket: &bucketName, Delete: &types.Delete{Quiet: true, Objects: newObjects}})
-	return err
+	if len(newObjects) > 0 {
+		_, err = client.DeleteObjects(context.TODO(), &s3.DeleteObjectsInput{Bucket: &bucketName, Delete: &types.Delete{Quiet: true, Objects: newObjects}})
+		return err
+	}
+	return nil
 }
 
 // createSecretForAWSS3Bucket creates a secret for Loki to connect to s3 bucket

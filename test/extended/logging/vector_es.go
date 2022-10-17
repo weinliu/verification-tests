@@ -310,8 +310,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Taint a worker node vector=deploy:NoSchedule so that no collector pod will be scheduled on it")
 			taintNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[0].metadata.name}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("-n", cloNS, "taint", "node", taintNode, "vector-", "--overwrite").Execute()
-			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("-n", cloNS, "taint", "node", taintNode, "vector=deploy:NoSchedule", "--overwrite").Execute()
+			defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "node", taintNode, "vector-", "--overwrite").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "node", taintNode, "vector=deploy:NoSchedule", "--overwrite").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogging instance with Vector as collector")
@@ -320,20 +320,20 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
 			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cl.namespace)
 
 			g.By(fmt.Sprintf("Make sure that the collector pod is not scheduled on the %s", taintNode))
-			chkCollector, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=component=collector", "--field-selector", "spec.nodeName="+taintNode+"", "-o", "name").Output()
+			chkCollector, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", cl.namespace, "pods", "--selector=component=collector", "--field-selector", "spec.nodeName="+taintNode+"", "-o", "name").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(chkCollector).Should(o.BeEmpty())
 
 			g.By("Add toleration for collector for the taint vector=deploy:NoSchedule")
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogging/instance", "-n", cloNS, "-p", "{\"spec\":{\"collection\":{\"tolerations\":[{\"effect\":\"NoSchedule\",\"key\":\"vector\",\"operator\":\"Equal\",\"value\":\"deploy\"}]}}}", "--type=merge").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogging/instance", "-n", cl.namespace, "-p", "{\"spec\":{\"collection\":{\"tolerations\":[{\"effect\":\"NoSchedule\",\"key\":\"vector\",\"operator\":\"Equal\",\"value\":\"deploy\"}]}}}", "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			WaitForECKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cl.namespace)
 
 			g.By(fmt.Sprintf("Make sure that the collector pod is scheduled on the node %s after applying toleration for taint vector=deploy:NoSchedule", taintNode))
-			chkCollector, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector=component=collector", "--field-selector", "spec.nodeName="+taintNode+"", "-o", "name").Output()
+			chkCollector, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", cl.namespace, "pods", "--selector=component=collector", "--field-selector", "spec.nodeName="+taintNode+"", "-o", "name").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(chkCollector).Should(o.ContainSubstring("collector"))
 		})
@@ -346,31 +346,31 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
 			g.By("Waiting for the Logging pods to be ready...")
-			WaitForECKPodsToBeReady(oc, cloNS)
+			WaitForECKPodsToBeReady(oc, cl.namespace)
 
 			g.By("Make sure the Elasticsearch cluster is healthy")
 			cl.assertResourceStatus(oc, "jsonpath={.status.logStore.elasticsearchStatus[0].cluster.status}", "green")
 
 			g.By("Check Vector status")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=collector"})
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(metav1.ListOptions{LabelSelector: "component=collector"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			pl := resource{"pods", podList.Items[0].Name, cloNS}
+			pl := resource{"pods", podList.Items[0].Name, cl.namespace}
 			pl.checkLogsFromRs(oc, "Healthcheck: Passed", "collector")
 			pl.checkLogsFromRs(oc, "Vector has started", "collector")
 
 			g.By("Check if the ServiceMonitor object for Vector is created.")
-			svmn, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("servicemonitor", "collector", "-o", "name").Output()
+			svmn, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", cl.namespace, "servicemonitor", "collector", "-o", "name").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(svmn).Should(o.Equal("servicemonitor.monitoring.coreos.com/collector"))
 
 			g.By("Check the Vector metrics")
 			bearerToken := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
-			output, err := e2e.RunHostCmdWithRetries(cloNS, podList.Items[0].Name, "curl -k -H \"Authorization: Bearer "+bearerToken+"\" -H \"Content-type: application/json\" https://collector:24231/metrics", 10*time.Second, 20*time.Second)
+			output, err := e2e.RunHostCmdWithRetries(cl.namespace, podList.Items[0].Name, "curl -k -H \"Authorization: Bearer "+bearerToken+"\" -H \"Content-type: application/json\" https://collector:24231/metrics", 10*time.Second, 20*time.Second)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).Should(o.ContainSubstring("vector_component_received_event_bytes_total"))
 
 			g.By("Check the Log file metrics exporter metrics")
-			output, err = e2e.RunHostCmdWithRetries(cloNS, podList.Items[0].Name, "curl -k -H \"Authorization: Bearer "+bearerToken+"\" -H \"Content-type: application/json\" https://collector:2112/metrics", 10*time.Second, 20*time.Second)
+			output, err = e2e.RunHostCmdWithRetries(cl.namespace, podList.Items[0].Name, "curl -k -H \"Authorization: Bearer "+bearerToken+"\" -H \"Content-type: application/json\" https://collector:2112/metrics", 10*time.Second, 20*time.Second)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).Should(o.ContainSubstring("log_logged_bytes_total"))
 
