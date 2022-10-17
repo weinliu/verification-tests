@@ -171,32 +171,6 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-37142-SDK helm cr create deletion process", func() {
-		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
-		var nginx = filepath.Join(buildPruningBaseDir, "demo_v1_nginx.yaml")
-		operatorsdkCLI.showInfo = true
-		oc.SetupProject()
-		namespace := oc.Namespace()
-		_, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/nginx-bundle:v"+ocpversion, "-n", namespace, "--timeout", "5m").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		createNginx, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", nginx, "-p", "NAME=nginx-sample").OutputToFile("config-37142.json")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createNginx, "-n", namespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
-			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "--no-headers").Output()
-			if strings.Contains(msg, "nginx-sample") {
-				e2e.Logf("found pod nginx-sample")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("miss pod nginx-sample in %s", namespace))
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("nginx.helmdemo.example.com", "nginx-sample", "-n", namespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-	})
-
-	// author: jfan@redhat.com
 	g.It("Author:jfan-High-34441-SDK commad operator sdk support init help message", func() {
 		output, err := operatorsdkCLI.Run("init").Args("--help").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1312,7 +1286,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: chuo@redhat.com
-	g.It("ConnectedOnly-VMonly-Author:chuo-High-34426-Critical-52625-Ensure that Helm Based Operators creation is working ", func() {
+	g.It("ConnectedOnly-VMonly-Author:chuo-High-34426-Critical-52625-Medium-37142-ensure that Helm Based Operators creation and cr create delete ", func() {
 		architecture := exutil.GetClusterArchitecture(oc)
 		if architecture != "amd64" && architecture != "arm64" {
 			g.Skip("Do not support " + architecture)
@@ -1432,6 +1406,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-user", "anyuid", fmt.Sprintf("system:serviceaccount:%s:nginx34426-sample", nsOperator)).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		// OCP-37142
 		g.By("step: Create the resource")
 		filePath := filepath.Join(tmpPath, "config", "samples", "demo_v1_nginx34426.yaml")
 		replaceContent(filePath, "repository: nginx", "repository: quay.io/olmqe/nginx-docker")
