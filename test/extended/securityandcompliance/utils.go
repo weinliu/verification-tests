@@ -73,10 +73,9 @@ func createSecurityProfileOperator(oc *exutil.CLI, subD subscriptionDescription,
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Check Security Profile Operator &webhook &spod pods are in running state !!!")
-	workerCount := getWorkerCount(oc)
 	nodeCount := getNodeCount(oc)
-	checkReadyPodCountOfDeployment(oc, "security-profiles-operator", subD.namespace, workerCount)
-	checkReadyPodCountOfDeployment(oc, "security-profiles-operator-webhook", subD.namespace, workerCount)
+	checkReadyPodCountOfDeployment(oc, "security-profiles-operator", subD.namespace, 3)
+	checkReadyPodCountOfDeployment(oc, "security-profiles-operator-webhook", subD.namespace, 3)
 	checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
 
 	g.By("Security Profiles Operator sucessfully installed !!! ")
@@ -134,7 +133,7 @@ func getWorkerCount(oc *exutil.CLI) int {
 }
 
 func getNodeCount(oc *exutil.CLI) int {
-	RhcosNodeDetails, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node.openshift.io/os_id=rhcos").Output()
+	RhcosNodeDetails, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=kubernetes.io/os=linux").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	rhcosCount := int(strings.Count(RhcosNodeDetails, "Ready")) + int(strings.Count(RhcosNodeDetails, "NotReady"))
 	e2e.Logf("rhcos node details are: %v", RhcosNodeDetails)
