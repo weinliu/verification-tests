@@ -310,7 +310,8 @@ func WaitForDaemonsetPodsToBeReady(oc *exutil.CLI, ns string, name string) {
 			}
 			return false, err
 		}
-		if daemonset.Status.NumberReady == daemonset.Status.DesiredNumberScheduled && daemonset.Status.UpdatedNumberScheduled == daemonset.Status.DesiredNumberScheduled {
+		if daemonset.Status.DesiredNumberScheduled > 0 && daemonset.Status.NumberReady == daemonset.Status.DesiredNumberScheduled && daemonset.Status.UpdatedNumberScheduled == daemonset.Status.DesiredNumberScheduled {
+			e2e.Logf("Daemonset/%s is available (%d/%d)\n", name, daemonset.Status.NumberReady, daemonset.Status.DesiredNumberScheduled)
 			return true, nil
 		}
 		e2e.Logf("Waiting for full availability of %s daemonset (%d/%d)\n", name, daemonset.Status.NumberReady, daemonset.Status.DesiredNumberScheduled)
@@ -343,10 +344,6 @@ func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 		}
 		return ready, nil
 	})
-	if err != nil {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", label, "-n", ns, "-ojsonpath={.items[*].status}").Output()
-		e2e.Logf("%s", output)
-	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The pod with label %s is not availabile", label))
 }
 

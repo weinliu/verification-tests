@@ -491,7 +491,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 
 })
 
-var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgrade testing", func() {
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasticsearch upgrade testing", func() {
 	defer g.GinkgoRecover()
 	var oc = exutil.NewCLI("logging-upgrade", exutil.KubeConfigPath())
 
@@ -699,5 +699,274 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operators upgr
 		prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForProjectLogsAppear(cl.namespace, prePodList.Items[0].Name, appProj, "app-00")
+	})
+})
+
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki upgrade testing", func() {
+	defer g.GinkgoRecover()
+	var oc = exutil.NewCLI("logging-loki-upgrade", exutil.KubeConfigPath())
+
+	g.BeforeEach(func() {
+		if len(getStorageType(oc)) == 0 {
+			g.Skip("Current cluster doesn't have a proper object storage for this test!")
+		}
+		if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
+			g.Skip("The cluster doesn't have sufficient CPU/Memory for this test!")
+		}
+		clo := SubscriptionObjects{
+			OperatorName: "cluster-logging-operator",
+			Namespace:    "openshift-logging",
+			PackageName:  "cluster-logging",
+		}
+		lo := SubscriptionObjects{
+			OperatorName: "loki-operator-controller-manager",
+			Namespace:    "openshift-operators-redhat",
+			PackageName:  "loki-operator",
+		}
+		g.By("uninstall CLO and LO")
+		clo.uninstallOperator(oc)
+		lo.uninstallOperator(oc)
+	})
+
+	// author qitang@redhat.com
+	g.It("Longduration-CPaasrunOnly-Author:qitang-Critical-53407-Cluster Logging upgrade with Vector as collector - minor version.[Disruptive][Slow]", func() {
+		var targetchannel = "stable"
+		var oh OperatorHub
+		g.By("check source/redhat-operators status in operatorhub")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhub/cluster", "-ojson").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		json.Unmarshal([]byte(output), &oh)
+		var disabled bool
+		for _, source := range oh.Status.Sources {
+			if source.Name == "redhat-operators" {
+				disabled = source.Disabled
+				break
+			}
+		}
+		o.Expect(disabled).ShouldNot(o.BeTrue())
+		g.By(fmt.Sprintf("Subscribe operators to %s channel", targetchannel))
+		source := CatalogSourceObjects{
+			Channel:         targetchannel,
+			SourceName:      "redhat-operators",
+			SourceNamespace: "openshift-marketplace",
+		}
+		subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
+		preCLO := SubscriptionObjects{
+			OperatorName:  "cluster-logging-operator",
+			Namespace:     "openshift-logging",
+			PackageName:   "cluster-logging",
+			Subscription:  subTemplate,
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+			CatalogSource: source,
+		}
+		preLO := SubscriptionObjects{
+			OperatorName:  "loki-operator-controller-manager",
+			Namespace:     "openshift-operators-redhat",
+			PackageName:   "loki-operator",
+			Subscription:  subTemplate,
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+			CatalogSource: source,
+		}
+		defer preCLO.uninstallOperator(oc)
+		preCLO.SubscribeOperator(oc)
+		defer preLO.uninstallOperator(oc)
+		preLO.SubscribeOperator(oc)
+
+		g.By("Deploy lokistack")
+		sc, err := getStorageClassName(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+		ls := lokiStack{"loki-53407", "openshift-logging", "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-53407-" + getInfrastructureName(oc), lokiStackTemplate}
+		defer ls.removeObjectStorage(oc)
+		err = ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		g.By("Deploy clusterlogging")
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
+		cl := resource{"clusterlogging", "instance", preCLO.Namespace}
+		defer cl.deleteClusterLogging(oc)
+		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=vector", "LOKISTACKNAME="+ls.name)
+		resource{"serviceaccount", "logcollector", cl.namespace}.WaitForResourceToAppear(oc)
+		collector := resource{"daemonset", "collector", cl.namespace}
+		collector.WaitForResourceToAppear(oc)
+		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+		//get current csv version
+		preCloCSV := preCLO.getInstalledCSV(oc)
+		preLoCSV := preLO.getInstalledCSV(oc)
+
+		//disable source/redhat-operators if it's not disabled
+		if !disabled {
+			defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("operatorhub/cluster", "-p", "{\"spec\": {\"sources\": [{\"name\": \"redhat-operators\", \"disabled\": false}]}}", "--type=merge").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("operatorhub/cluster", "-p", "{\"spec\": {\"sources\": [{\"name\": \"redhat-operators\", \"disabled\": true}]}}", "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		// get currentCSV in packagemanifests
+		currentCloCSV := getCurrentCSVFromPackage(oc, targetchannel, preCLO.PackageName)
+		currentLoCSV := getCurrentCSVFromPackage(oc, targetchannel, preLO.PackageName)
+		var upgraded = false
+		//change source to qe-app-registry if needed, and wait for the new operators to be ready
+		if preCloCSV != currentCloCSV {
+			g.By(fmt.Sprintf("upgrade CLO to %s", currentCloCSV))
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", preCLO.Namespace, "sub/"+preCLO.PackageName, "-p", "{\"spec\": {\"source\": \"qe-app-registry\"}}", "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkResource(oc, true, true, currentCloCSV, []string{"sub", preCLO.PackageName, "-n", preCLO.Namespace, "-ojsonpath={.status.currentCSV}"})
+			WaitForDeploymentPodsToBeReady(oc, preCLO.Namespace, preCLO.OperatorName)
+			upgraded = true
+		}
+		if preLoCSV != currentLoCSV {
+			g.By(fmt.Sprintf("upgrade EO to %s", currentLoCSV))
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", preLO.Namespace, "sub/"+preLO.PackageName, "-p", "{\"spec\": {\"source\": \"qe-app-registry\"}}", "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkResource(oc, true, true, currentLoCSV, []string{"sub", preLO.PackageName, "-n", preLO.Namespace, "-ojsonpath={.status.currentCSV}"})
+			WaitForDeploymentPodsToBeReady(oc, preLO.Namespace, preLO.OperatorName)
+			upgraded = true
+		}
+
+		if upgraded {
+			g.By("waiting for the Loki and Vector pods to be ready after upgrade")
+			ls.waitForLokiStackToBeReady(oc)
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+			// In upgrade testing, sometimes a pod may not be ready but the deployment/statefulset might be ready
+			// here add a step to check the pods' status
+			waitForPodReadyWithLabel(oc, ls.namespace, "app.kubernetes.io/instance="+ls.name)
+
+			g.By("checking if the collector can collect logs after upgrading")
+			oc.SetupProject()
+			appProj := oc.Namespace()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
+			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+			lc := newLokiClient(route).withToken(bearerToken).retry(5)
+			err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+				res, err := lc.searchByNamespace("application", appProj)
+				if err != nil {
+					e2e.Logf("\ngot err when getting application logs: %v\n", err)
+					return false, err
+				}
+				if len(res.Data.Result) > 0 {
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "application logs are not found")
+		}
+	})
+
+	// author: qitang@redhat.com
+	g.It("Longduration-CPaasrunOnly-Author:qitang-Critical-53404-Cluster Logging upgrade with Vector as collector - major version.[Serial][Slow]", func() {
+		// to add logging 5.5, create a new catalog source with image: quay.io/openshift-qe-optional-operators/ocp4-index:latest
+		catsrcTemplate := exutil.FixturePath("testdata", "logging", "subscription", "catsrc.yaml")
+		catsrc := resource{"catsrc", "logging-upgrade-" + getRandomString(), "openshift-marketplace"}
+		defer catsrc.clear(oc)
+		catsrc.applyFromTemplate(oc, "-f", catsrcTemplate, "-n", catsrc.namespace, "-p", "NAME="+catsrc.name, "-p", "IMAGE=quay.io/openshift-qe-optional-operators/ocp4-index:latest")
+		waitForPodReadyWithLabel(oc, catsrc.namespace, "olm.catalogSource="+catsrc.name)
+
+		// for 5.6, test upgrade from 5.5 to 5.6
+		preSource := CatalogSourceObjects{"stable-5.5", catsrc.name, catsrc.namespace}
+		g.By(fmt.Sprintf("Subscribe operators to %s channel", preSource.Channel))
+		subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
+		preCLO := SubscriptionObjects{
+			OperatorName:  "cluster-logging-operator",
+			Namespace:     "openshift-logging",
+			PackageName:   "cluster-logging",
+			Subscription:  subTemplate,
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+			CatalogSource: preSource,
+		}
+		preLO := SubscriptionObjects{
+			OperatorName:  "loki-operator-controller-manager",
+			Namespace:     "openshift-operators-redhat",
+			PackageName:   "loki-operator",
+			Subscription:  subTemplate,
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+			CatalogSource: preSource,
+		}
+		defer preCLO.uninstallOperator(oc)
+		preCLO.SubscribeOperator(oc)
+		defer preLO.uninstallOperator(oc)
+		preLO.SubscribeOperator(oc)
+
+		g.By("Deploy lokistack")
+		sc, err := getStorageClassName(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+		ls := lokiStack{"loki-53404", "openshift-logging", "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-53404-" + getInfrastructureName(oc), lokiStackTemplate}
+		defer ls.removeObjectStorage(oc)
+		err = ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		g.By("Deploy clusterlogging")
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
+		cl := resource{"clusterlogging", "instance", preCLO.Namespace}
+		defer cl.deleteClusterLogging(oc)
+		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=vector", "LOKISTACKNAME="+ls.name)
+		resource{"serviceaccount", "logcollector", cl.namespace}.WaitForResourceToAppear(oc)
+		collector := resource{"daemonset", "collector", cl.namespace}
+		collector.WaitForResourceToAppear(oc)
+		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+		//change channel, and wait for the new operators to be ready
+		var source = CatalogSourceObjects{"stable-5.6", "qe-app-registry", "openshift-marketplace"}
+		//change channel, and wait for the new operators to be ready
+		version := strings.Split(source.Channel, "-")[1]
+		g.By(fmt.Sprintf("upgrade CLO&LO to %s", source.Channel))
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", preCLO.Namespace, "sub/"+preCLO.PackageName, "-p", "{\"spec\": {\"channel\": \""+source.Channel+"\", \"source\": \""+source.SourceName+"\", \"sourceNamespace\": \""+source.SourceNamespace+"\"}}", "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", preLO.Namespace, "sub/"+preLO.PackageName, "-p", "{\"spec\": {\"channel\": \""+source.Channel+"\", \"source\": \""+source.SourceName+"\", \"sourceNamespace\": \""+source.SourceNamespace+"\"}}", "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		checkResource(oc, true, false, version, []string{"sub", preCLO.PackageName, "-n", preCLO.Namespace, "-ojsonpath={.status.currentCSV}"})
+		cloCurrentCSV, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", preCLO.Namespace, preCLO.PackageName, "-ojsonpath={.status.currentCSV}").Output()
+		resource{"csv", cloCurrentCSV, preCLO.Namespace}.WaitForResourceToAppear(oc)
+		checkResource(oc, true, true, "Succeeded", []string{"csv", cloCurrentCSV, "-n", preCLO.Namespace, "-ojsonpath={.status.phase}"})
+		WaitForDeploymentPodsToBeReady(oc, preCLO.Namespace, preCLO.OperatorName)
+
+		checkResource(oc, true, false, version, []string{"sub", preLO.PackageName, "-n", preLO.Namespace, "-ojsonpath={.status.currentCSV}"})
+		loCurrentCSV, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", preLO.Namespace, preLO.PackageName, "-ojsonpath={.status.currentCSV}").Output()
+		resource{"csv", loCurrentCSV, preLO.Namespace}.WaitForResourceToAppear(oc)
+		checkResource(oc, true, true, "Succeeded", []string{"csv", loCurrentCSV, "-n", preLO.Namespace, "-ojsonpath={.status.phase}"})
+		WaitForDeploymentPodsToBeReady(oc, preLO.Namespace, preLO.OperatorName)
+
+		g.By("waiting for the Loki and Vector pods to be ready after upgrade")
+		ls.waitForLokiStackToBeReady(oc)
+		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+		// In upgrade testing, sometimes a pod may not be ready but the deployment/statefulset might be ready
+		// here add a step to check the pods' status
+		waitForPodReadyWithLabel(oc, ls.namespace, "app.kubernetes.io/instance="+ls.name)
+
+		g.By("checking if the collector can collect logs after upgrading")
+		oc.SetupProject()
+		appProj := oc.Namespace()
+		jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bearerToken := getSAToken(oc, "logcollector", cl.namespace)
+		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+		lc := newLokiClient(route).withToken(bearerToken).retry(5)
+		err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+			res, err := lc.searchByNamespace("application", appProj)
+			if err != nil {
+				e2e.Logf("\ngot err when getting application logs: %v\n", err)
+				return false, err
+			}
+			if len(res.Data.Result) > 0 {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "application logs are not found")
 	})
 })
