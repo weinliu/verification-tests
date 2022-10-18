@@ -311,17 +311,17 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 }
 
 // author: valiev@redhat.com
-func getNodeListByLabel(oc *exutil.CLI, labelKey string) (nodeNameList []string, msg string, err error) {
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", labelKey, "-o=jsonpath={.items[*].metadata.name}").Output()
+func getNodeListByLabel(oc *exutil.CLI, opNamespace, labelKey string) (nodeNameList []string, msg string, err error) {
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-n", opNamespace, "-l", labelKey, "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	nodeNameList = strings.Fields(msg)
 	return nodeNameList, msg, err
 }
 
 // author: tbuskey@redhat.com
-func waitForNodesInDebug(oc *exutil.CLI) (msg string, err error) {
+func waitForNodesInDebug(oc *exutil.CLI, opNamespace string) (msg string, err error) {
 	count := 0
-	workerNodeList, msg, err := getNodeListByLabel(oc, "node-role.kubernetes.io/worker=")
+	workerNodeList, msg, err := getNodeListByLabel(oc, opNamespace, "node-role.kubernetes.io/worker=")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	workerNodeCount := len(workerNodeList)
 	if workerNodeCount < 1 {
@@ -334,7 +334,7 @@ func waitForNodesInDebug(oc *exutil.CLI) (msg string, err error) {
 	errCheck := wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
 		count = 0
 		for index := range workerNodeList {
-			msg, err = oc.AsAdmin().Run("debug").Args("node/"+workerNodeList[index], "--", "chroot", "/host", "crio", "config").Output()
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", opNamespace, "node/"+workerNodeList[index], "--", "chroot", "/host", "crio", "config").Output()
 			if strings.Contains(msg, "log_level = \"debug") {
 				count++
 				o.Expect(msg).To(o.ContainSubstring("log_level = \"debug"))
@@ -396,10 +396,13 @@ func waitForDeployment(oc *exutil.CLI, podNs, deployName string) (msg string, er
 	return msg, err
 }
 
-func getTestRunInputCm(oc *exutil.CLI, testrunDefault testrunConfigmap, cmNs, cmName string) (testrun testrunConfigmap, msg string, err error) {
+func getTestRunConfigmap(oc *exutil.CLI, testrunDefault testrunConfigmap, cmNs, cmName string) (testrun testrunConfigmap, msg string, err error) {
 	// set defaults
 	testrun = testrunDefault
 
+	// icspNeeded is set if either of the Images has "brew.registry.redhat.io" in it
+
+	// is a configmap there?
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", cmNs, cmName).Output()
 	if err != nil {
 		e2e.Logf("Configmap is not found: msg %v err: %v", msg, err)
@@ -556,19 +559,24 @@ func getTestRunEnvVars(envPrefix string, testrunDefault testrunConfigmap) (testr
 	if val != "" {
 		testrunEnv.katamonitorImage = val
 		testrunEnv.exists = true
+		if strings.Contains(val, "brew.registry.redhat.io") {
+			testrunEnv.icspNeeded = true
+		}
 	}
 
 	val = os.Getenv(envPrefix + "MUSTGATHERIMAGE")
 	if val != "" {
 		testrunEnv.mustgatherImage = val
 		testrunEnv.exists = true
+		if strings.Contains(val, "brew.registry.redhat.io") {
+			testrunEnv.icspNeeded = true
+		}
 	}
 
-	/*	val = os.Getenv(envPrefix + "OPERATORVER")
-		if val != "" {
-			testrunEnv.operatorVer = val
-			testrunEnv.exists = true
-		}
-	*/
+	val = os.Getenv(envPrefix + "OPERATORVER")
+	if val != "" {
+		testrunEnv.operatorVer = val
+		testrunEnv.exists = true
+	}
 	return testrunEnv, msg
 }

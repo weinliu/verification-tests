@@ -53,7 +53,6 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	}
 
 	testrunInitial.exists = false // no overrides yet
-	sub := subscription
 
 	testrunDefault := testrunConfigmap{
 		exists:            false,
@@ -84,23 +83,22 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		e2e.Logf("Running %v.%v on: %v", ocpMajorVer, ocpMinorVer, clusterVersion)
 
 		// check if there is a CM override
-		testrunInitial, msg, err = getTestRunInputCm(oc, testrunDefault, "default", "osc-config")
+		testrunInitial, msg, err = getTestRunConfigmap(oc, testrunDefault, "default", "osc-config")
 		if testrunInitial.exists { // then override
 			subscription.catalogSourceName = testrunInitial.catalogSourceName
 			subscription.channel = testrunInitial.channel
 			mustGatherImage = testrunInitial.mustgatherImage
 			kcMonitorImageName = testrunInitial.katamonitorImage
 			operatorVer = testrunInitial.operatorVer
-			e2e.Logf("CM osc-config found. subscription: %v", subscription)
+			e2e.Logf("subscription after testrun cm osc-config: %v", subscription)
 		}
-		// check example-config-env CM
-		msg, sub = getVersionInfo(oc, subscription, operatorVer)
+
+		operatorVer, sub := getVersionInfo(oc, subscription, operatorVer)
 		if os.Getenv("cmMsg") != "" { //env var cmMsg will have no value if configmap is not found
 			subscription.catalogSourceName = sub.catalogSourceName
 			subscription.channel = sub.channel
 			kcMonitorImageName = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:" + operatorVer
-			operatorVer = msg
-			e2e.Logf("CM example-config-env found. subscription: %v", subscription)
+			e2e.Logf("subscription after Jenkins cm example-config-env: %v", subscription)
 			e2e.Logf("operatorVer : %s", operatorVer)
 			e2e.Logf("monitor : %s", kcMonitorImageName)
 		}
@@ -193,7 +191,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("Checking if ns 'openshift-sandboxed-containers-operator' exists")
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespaces").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(msg).To(o.ContainSubstring(opNamespace))
+		o.Expect(msg).To(o.ContainSubstring(subscription.namespace))
 		g.By("SUCCESS - Namespace check complete")
 
 	})
@@ -487,11 +485,13 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			crioRuntimeConfigName = "crio-debug-42167"
 			crioRuntimeLogLevel   = "debug"
 			crioTemplate          = filepath.Join(testDataDir, "containerruntimeconfig_template.yaml")
-			deployConfigFile      string
+			deployConfigFile      = ""
 			deployName            = "mg-42167"
 			deploymentTemplate    = filepath.Join(testDataDir, "deployment-example.yaml")
+			deploymentFile        = getRandomString() + "dep-common.json"
 			err                   error
 			fails                 = 0
+			kcLogLevel            = "{\"spec\":{\"logLevel\":\"debug\"}}"
 			logFile               string
 			mustgatherFiles       = []string{""}
 			mustgatherName        = "mustgather" + getRandomString()
@@ -502,6 +502,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			nodeControlCount      = 0
 			nodeWorkerCount       = 0
 			podNs                 = oc.Namespace()
+			singleNode            = false
 		)
 
 		mustgatherChecks := counts{
@@ -516,11 +517,11 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			describeVwebhook: 0,
 		}
 
-		nodeControlList, msg, err := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
+		nodeControlList, msg, err := getNodeListByLabel(oc, subscription.namespace, "node-role.kubernetes.io/master=")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodeControlCount = len(nodeControlList)
 
-		nodeWorkerList, msg, err := getNodeListByLabel(oc, "node-role.kubernetes.io/worker=")
+		nodeWorkerList, msg, err := getNodeListByLabel(oc, subscription.namespace, "node-role.kubernetes.io/worker=")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodeWorkerCount = len(nodeWorkerList)
 
@@ -536,6 +537,12 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			describeVwebhook: 1,
 		}
 
+		// for SNO
+		if nodeWorkerCount == 1 && !strings.Contains(nodeWorkerList[0], "worker") {
+			singleNode = true
+			mustgatherExpected.crio = nodeWorkerCount
+		}
+
 		g.By("Create ContainerRuntimeConfig to put worker nodes into debug mode")
 		// or logLevel: debug in kataconfig for 1.3 will already do it
 		crioFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", crioTemplate, "-p", "NAME="+crioRuntimeConfigName, "LOGLEVEL="+crioRuntimeLogLevel, "-n", subscription.namespace).OutputToFile(getRandomString() + "-crioRuntimeConfigFile.json")
@@ -546,15 +553,33 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crioFile).Output()
 		e2e.Logf("Applied ContainerRuntimeConfig %v: %v, %v", crioFile, msg, err)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("containerruntimeconfig", crioRuntimeConfigName, "-n", subscription.namespace, "--ignore-not-found").Execute()
+		// 4.12 needs the loglevel
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kataconfig", commonKataConfigName, "-n", subscription.namespace, "--type", "merge", "--patch", kcLogLevel).Output()
+		e2e.Logf("kcLogLevel patched: %v %v", msg, err)
+
+		// oc patch kataconfig example-kataconfig --type merge --patch '{"spec":{"logLevel":"debug"}}'
 
 		g.By("Wait for worker nodes to be in crio debug mode")
-		msg, err = waitForNodesInDebug(oc)
+		msg, err = waitForNodesInDebug(oc, subscription.namespace)
+		e2e.Logf("%v", msg)
 
 		g.By("Create a deployment file from template")
 		// This creates N replicas where N=worker node
 		// It does not ensure that there is a replica on each worker node.
-		deployConfigFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", deploymentTemplate, "-p", "NAME="+deployName, "-p", "NAMESPACE="+podNs, "-p", "REPLICAS="+fmt.Sprintf("%v", nodeWorkerCount)).OutputToFile(getRandomString() + "dep-common.json")
-		e2e.Logf("Deploy file: %v %v", deployConfigFile, err)
+		/* Loop because on 4.12 SNO, nodes might not respond at 1st
+		error: unable to process template
+		service unavailable
+		exit status 1
+		*/
+		errCheck := wait.Poll(10*time.Second, 360*time.Second, func() (bool, error) {
+			deployConfigFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", deploymentTemplate, "-p", "NAME="+deployName, "-p", "NAMESPACE="+podNs, "-p", "REPLICAS="+fmt.Sprintf("%v", nodeWorkerCount)).OutputToFile(deploymentFile)
+			if strings.Contains(deployConfigFile, deploymentFile) {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Error: Unable to create deployment file from template: %v %v", deployConfigFile, err))
+		o.Expect(deployConfigFile).NotTo(o.BeEmpty())
 
 		g.By("Apply deployment " + deployConfigFile)
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", deployConfigFile, "-n", podNs).Output()
@@ -601,10 +626,13 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			} else {
 				mustgatherFiles = append(mustgatherFiles, path)
 				if strings.Contains(path, "audit") {
-					e2e.Logf("AUDIT file %v", path)
+					if strings.Contains(path, "audit.log") {
+						e2e.Logf("AUDIT file %v", path)
+					}
 					if strings.Contains(path, "audit_logs_listing") {
 						output, _ := ioutil.ReadFile(path)
-						e2e.Logf("%v", string(output))
+						e2e.Logf("AUDIT logs listing\n%v", string(output))
+						e2e.Logf("nodeWorkerList %v", nodeWorkerList)
 					}
 				}
 
@@ -616,7 +644,8 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 					if strings.Contains(path, "_logs_crio") {
 						mustgatherChecks.crio++
 					}
-					if strings.Contains(path, "worker") && strings.Contains(path, "/version") {
+					// in SNO, no worker, just master
+					if (strings.Contains(path, "worker") || (singleNode == true && strings.Contains(path, "master"))) && strings.Contains(path, "/version") {
 						mustgatherChecks.qemuVersion++
 						// read file to extract kata-containers-* and qemu-kvm-core-* ?
 					}
@@ -664,7 +693,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		if mustgatherChecks.qemuLogs != mustgatherExpected.qemuLogs {
 			e2e.Logf("qemu log directory (%v) does not exist on all worker nodes (%v), is ok", mustgatherChecks.qemuLogs, mustgatherExpected.qemuLogs)
 			// VMs should be 1 on each worker node but k8s might put 2 on a node & 0 on another per node load
-			if mustgatherChecks.qemuLogs < 1 { // because deployment is used
+			if !singleNode && mustgatherChecks.qemuLogs < 1 { // because deployment is used
 				fails++
 			}
 		}
@@ -729,7 +758,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		)
 
 		g.By("Checking for configmap " + cmName)
-		testrunUpgrade, msg, err = getTestRunInputCm(oc, testrunDefault, cmNs, cmName)
+		testrunUpgrade, msg, err = getTestRunConfigmap(oc, testrunDefault, cmNs, cmName)
 
 		g.By("Checking for OSCU environment vars") // env options override default and CM values
 		testrun, msg = getTestRunEnvVars("OSCU", testrunDefault)
