@@ -354,7 +354,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		assertKeywordsExists(oc, 300, "DONE", "compliancesuite", ssb.name, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
@@ -462,8 +462,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		defer func() {
 			taintNode(oc, "taint", "node", nodeName, "key1=value1:NoSchedule-", "key2=value2:NoExecute-")
 			labelTaintNode(oc, "node", nodeName, "taint-")
-			cleanupObjects(oc, objectTableRef{"compliancescan", subD.namespace, cscanD.name},
-				objectTableRef{"pod", subD.namespace, "-l compliance.openshift.io/scan-name=" + cscanD.name})
+			cleanupObjects(oc, objectTableRef{"compliancescan", subD.namespace, cscanD.name})
 		}()
 
 		cscanD.namespace = subD.namespace
@@ -836,6 +835,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			if strings.Contains(output2, "true") {
 				labelTaintNode(oc, "node", nodeName, "taint-")
 			}
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("compliancesuite", csuiteD.name, "-n", subD.namespace, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("compliancesuite", csuite.name, "-n", subD.namespace, "--ignore-not-found").Execute()
 		}()
 		taintNode(oc, "taint", "node", nodeName, "key1=value1:NoSchedule")
 		labelTaintNode(oc, "node", nodeName, "taint=true")
@@ -881,14 +882,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 		g.By("Verify if pod generated for tainted node.. !!!\n")
 		assertCoPodNumerEqualNodeNumber(oc, subD.namespace, "node-role.kubernetes.io/wscan=", csuite.scanname)
-
-		g.By("Remove csuite, taint label and key from worker node.. !!!\n")
-		cleanupObjects(oc, objectTableRef{"compliancesuite", subD.namespace, csuite.name})
-		cleanupObjects(oc, objectTableRef{"pod", subD.namespace, "-l compliance.openshift.io/scan-name=" + csuite.scanname})
-		taintNode(oc, "taint", "node", nodeName, "key1=:NoSchedule-")
-		labelTaintNode(oc, "node", nodeName, "taint-")
-		//	removeTaintKeyFromWorkerNode(oc)
-		//	removeTaintLabelFromWorkerNode(oc)
 
 		g.By("ocp-33609 The compliance scan performed on tained node successfully.. !!!\n")
 
@@ -947,6 +940,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			if strings.Contains(output2, "true") {
 				labelTaintNode(oc, "node", nodeName, "taint-")
 			}
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("compliancescan", cscanD.name, "-n", subD.namespace, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("compliancescan", cscan.name, "-n", subD.namespace, "--ignore-not-found").Execute()
 		}()
 		taintNode(oc, "taint", "node", nodeName, "key1=value1:NoSchedule")
 		labelTaintNode(oc, "node", nodeName, "taint=true")
@@ -989,12 +984,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 		g.By("Verify if the scan pod generated for tainted node...!!!\n")
 		assertCoPodNumerEqualNodeNumber(oc, subD.namespace, "node-role.kubernetes.io/wscan=", cscan.name)
-
-		g.By("Remove compliancescan object and taint label and key from worker node.. !!!\n")
-		cleanupObjects(oc, objectTableRef{"compliancescan", subD.namespace, cscan.name})
-		cleanupObjects(oc, objectTableRef{"pod", subD.namespace, "-l compliance.openshift.io/scan-name=" + cscan.name})
-		taintNode(oc, "taint", "node", nodeName, "key1=:NoSchedule-")
-		labelTaintNode(oc, "node", nodeName, "taint-")
 
 		g.By("ocp-33610 The compliance scan performed on tained node successfully.. !!!\n")
 
@@ -1124,9 +1113,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			}
 		)
 
-		defer cleanupObjects(oc,
-			objectTableRef{"compliancesuite", subD.namespace, csuiteD.name},
-		)
+		defer cleanupObjects(oc, objectTableRef{"compliancesuite", subD.namespace, csuiteD.name})
 
 		csuiteD.namespace = subD.namespace
 		g.By("Create platform-compliancesuite.. !!!\n")
@@ -1192,10 +1179,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		g.By("Label all rhcos worker nodes as wscan.. !!!\n")
 		setLabelToNode(oc, "node-role.kubernetes.io/wscan=")
 
+		g.By("Remove all suites in case the test case failed in the middle !!!\n")
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("compliancesuite", csuiteD.name, "-n", subD.namespace, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("compliancesuite", csuiteMD.name, "-n", subD.namespace, "--ignore-not-found").Execute()
+		}()
+
 		csuiteD.namespace = subD.namespace
 		g.By("Create worker-compliancesuite !!!\n")
 		csuiteD.create(oc)
-
 		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", csuiteD.name, "-n",
 			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
@@ -1891,6 +1883,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	// author: pdhamdhe@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-High-34928-Storage class and access modes are configurable through ComplianceSuite and ComplianceScan", func() {
+		SkipForIBMCloud(oc)
 
 		var (
 			csuiteD = complianceSuiteDescription{
@@ -2055,7 +2048,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:xiyuan-High-33859-Verify if the profileparser enables to get content updates when the image digest updated [Slow]", func() {
+	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-High-33859-Verify if the profileparser enables to get content updates when the image digest updated [Serial][Slow]", func() {
 		var (
 			pb = profileBundleDescription{
 				name:         "test1",
@@ -2136,7 +2129,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-33578-Verify if the profileparser enables to get content updates when add a new ProfileBundle [Slow]", func() {
+	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-Medium-33578-Verify if the profileparser enables to get content updates when add a new ProfileBundle [Serial][Slow]", func() {
 		var (
 			pb = profileBundleDescription{
 				name:         "test1",
@@ -2674,7 +2667,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Low-42685-Low-46927-check the manual remediation for rules file-integrity-exists and file-integrity-notification-enabled working as expected [Serial][Slow]", func() {
+	g.It("NonPreRelease-ConnectedOnly-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Low-42685-Low-46927-check the manual remediation for rules file-integrity-exists and file-integrity-notification-enabled working as expected [Serial][Slow]", func() {
 		var (
 			ssb = scanSettingBindingDescription{
 				name:            "moderate-test" + getRandomString(),
@@ -2696,7 +2689,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				channel:                "release-0.1",
 				ipApproval:             "Automatic",
 				operatorPackage:        "file-integrity-operator",
-				catalogSourceName:      "qe-app-registry",
+				catalogSourceName:      "redhat-operators",
 				catalogSourceNamespace: "openshift-marketplace",
 				startingCSV:            "",
 				currentCSV:             "",
@@ -4212,9 +4205,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		keywordsInstr := "min-request-timeout.*3600"
 		keywordsAnnot := "compliance.openshift.io/rule-variable.*var-api-min-request-timeout"
 		keywordsVariableValue := "3600"
-		assertKeywordsExists(oc, keywordsInstr, "rule", "ocp4-api-server-request-timeout", "-o=jsonpath={.description}", "-n", subD.namespace)
-		assertKeywordsExists(oc, keywordsAnnot, "rule", "ocp4-api-server-request-timeout", "-o=jsonpath={.metadata.annotations}", "-n", subD.namespace)
-		assertKeywordsExists(oc, keywordsVariableValue, "variables", "ocp4-var-api-min-request-timeout", "-o=jsonpath={.value}", "-n", subD.namespace)
+		assertKeywordsExists(oc, 10, keywordsInstr, "rule", "ocp4-api-server-request-timeout", "-o=jsonpath={.description}", "-n", subD.namespace)
+		assertKeywordsExists(oc, 10, keywordsAnnot, "rule", "ocp4-api-server-request-timeout", "-o=jsonpath={.metadata.annotations}", "-n", subD.namespace)
+		assertKeywordsExists(oc, 10, keywordsVariableValue, "variables", "ocp4-var-api-min-request-timeout", "-o=jsonpath={.value}", "-n", subD.namespace)
 	})
 
 	// author: xiyuan@redhat.com

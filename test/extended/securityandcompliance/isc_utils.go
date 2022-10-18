@@ -465,6 +465,14 @@ func SkipMissingRhcosWorkers(oc *exutil.CLI) {
 	}
 }
 
+func SkipForIBMCloud(oc *exutil.CLI) {
+	platform, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", oc.Namespace(), "-o=jsonpath={.status.platform}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Compare(platform, "IBMCloud") == 0 {
+		g.Skip("Skip since it is IBMCloud")
+	}
+}
+
 func assertKeywordsExistsInFile(oc *exutil.CLI, keywords string, filePath string, flag bool) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		mnodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node.openshift.io/os_id=rhcos,node-role.kubernetes.io/master=",
