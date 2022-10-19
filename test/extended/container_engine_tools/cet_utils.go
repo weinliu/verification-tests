@@ -210,24 +210,17 @@ func (ctrcfg *ctrcfgDescription) checkCtrcfgParameters(oc *exutil.CLI) error {
 		node := strings.Fields(nodeName)
 
 		for _, v := range node {
-			nodeStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", fmt.Sprintf("%s", v), "-o=jsonpath={.status.conditions[3].type}").Output()
+			nodeReadyBool, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", fmt.Sprintf("%s", v), "-o=jsonpath={.status.conditions[?(@.reason=='KubeletReady')].status}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("\nNode %s Status is %s\n", v, nodeStatus)
+			e2e.Logf("The Node Ready status is %v", nodeReadyBool)
 
-			if nodeStatus == "Ready" {
-				criostatus, err := oc.AsAdmin().Run("debug").Args(`node/`+fmt.Sprintf("%s", v), "--", "chroot", "/host", "crio", "config").OutputToFile("crio.conf")
+			if nodeReadyBool == "True" {
+				criostatus, err := exutil.DebugNodeWithChroot(oc, fmt.Sprintf("%s", v), "crio", "config")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				e2e.Logf(`\nCRI-O PARAMETER ON THE WORKER NODE :` + fmt.Sprintf("%s", v))
-				e2e.Logf("\ncrio config file path is  %v", criostatus)
 
 				wait.Poll(3*time.Minute, 10*time.Minute, func() (bool, error) {
-					result, err1 := exec.Command("bash", "-c", "cat "+criostatus+" | egrep 'pids_limit|log_level'").Output()
-					if err1 != nil {
-						e2e.Failf("the result of ReadFile:%v", err1)
-						return false, nil
-					}
-					e2e.Logf("\nCtrcfg Parameters is %s", result)
-					if strings.Contains(string(result), "debug") && strings.Contains(string(result), "2048") {
+					if strings.Contains(string(criostatus), "pids_limit = 2048") && strings.Contains(string(criostatus), "log_level = \"debug\"") {
 						e2e.Logf("\nCtrcfg parameter pod limit and log_level configured successfully")
 						return true, nil
 					}
@@ -311,10 +304,10 @@ func checkNodeStatus(oc *exutil.CLI) error {
 		e2e.Logf("\nNode Names are %v", nodeName)
 		node := strings.Fields(nodeName)
 		for _, v := range node {
-			nodeStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", fmt.Sprintf("%s", v), "-o=jsonpath={.status.conditions[3].type}").Output()
+			nodeReadyBool, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", fmt.Sprintf("%s", v), "-o=jsonpath={.status.conditions[?(@.reason=='KubeletReady')].status}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("\nNode %s Status is %s\n", v, nodeStatus)
-			if nodeStatus == "Ready" {
+			e2e.Logf("\nNode %s Ready Status is %s\n", v, nodeReadyBool)
+			if nodeReadyBool == "True" {
 				e2e.Logf("\n NODES ARE READY\n ")
 			} else {
 				e2e.Logf("\n NODES ARE NOT READY\n ")
