@@ -209,4 +209,26 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			e2e.Failf("Can't see the stateless mode log")
 		}
 	})
+	g.It("Author:yinzhou-Low-51093-oc-mirror init", func() {
+		g.By("Set podman registry config")
+		dirname := "/tmp/case44061"
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		out, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("init").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(out, "local") {
+			e2e.Failf("Can't find the storageconfig of local")
+		}
+		out1, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("init", "--registry", "localhost:5000/test:latest").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(out1, "registry") {
+			e2e.Failf("Can't find the storageconfig of registry")
+		}
+		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("init", "--registry", "localhost:5000/test:latest", "--output", "json").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 })
