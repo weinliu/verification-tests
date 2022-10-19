@@ -28,7 +28,7 @@ describe("Improve MachineConfigPool list table for update status", () => {
     ClusterSettingPage.configureChannel()
     ClusterSettingPage.editUpstreamConfig()
     cy.visit('/settings/cluster')
-    cy.contains('Up to date').should('be.visible')
+    cy.contains(/Up to date|Available updates/g).should('be.visible')
 
     mcp.listPage.goToMCPPage()
     // Old columns should not exist
