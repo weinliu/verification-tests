@@ -95,7 +95,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		oc.SetupProject()
 
 		registry := registry{
-			dockerImage: "quay.io/openshifttest/registry:2",
+			dockerImage: "quay.io/openshifttest/registry:1.2.0",
 			namespace:   oc.Namespace(),
 		}
 
@@ -200,7 +200,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		oc.SetupProject()
 
 		registry := registry{
-			dockerImage: "quay.io/openshifttest/registry:2",
+			dockerImage: "quay.io/openshifttest/registry:1.2.0",
 			namespace:   oc.Namespace(),
 		}
 
