@@ -416,9 +416,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-47370 -[CSI Driver] [Dynamic PV] [Filesystem] provisioning volume with subpath
 	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:pewang-High-47370-[CSI Driver] [Dynamic PV] [Filesystem] provisioning volume with subpath", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com"}
 		// Set the resource template for the scenario
 		var (
+			// SeLinuxLabel values nfs_t: AWS EFS, container_t: other provisioner, cifs_t: azurefile
+			SELinuxLabelValue   string
 			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
 			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
@@ -431,13 +433,20 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
 		for _, provisioner := range supportProvisioners {
+
+			if provisioner == "efs.csi.aws.com" {
+				SELinuxLabelValue = "nfs_t"
+			} else {
+				SELinuxLabelValue = "container_file_t"
+			}
+
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
-			podWithSubpathA := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
-			podWithSubpathB := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
-			podWithSubpathC := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
-			podWithNoneSubpath := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			podAWithSubpathA := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			podBWithSubpathB := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			podCWithSubpathA := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			podDWithNoneSubpath := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 
 			g.By("# Create a pvc with the preset csi storageclass")
 			pvc.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
@@ -445,47 +454,47 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
 
-			g.By("# Create podWithSubpathA, podWithSubpathB, podWithNoneSubpath with the created pvc and wait for the pods ready")
-			podWithSubpathA.createWithSubpathVolume(oc, "subpathA")
-			defer podWithSubpathA.deleteAsAdmin(oc)
-			podWithSubpathA.waitReady(oc)
+			g.By("# Create podAWithSubpathA, podBWithSubpathB, podDWithNoneSubpath with the created pvc and wait for the pods ready")
+			podAWithSubpathA.createWithSubpathVolume(oc, "subpathA")
+			defer podAWithSubpathA.deleteAsAdmin(oc)
+			podAWithSubpathA.waitReady(oc)
 			// Since the scenario all the test pods comsume the same pvc and scheduler maybe schedule the test pods to different cause flake of "Unable to attach or mount volumes"
 			// Patch the test namespace with node-selector schedule the test pods to the same node
-			nodeName := getNodeNameByPod(oc, podWithSubpathA.namespace, podWithSubpathA.name)
+			nodeName := getNodeNameByPod(oc, podAWithSubpathA.namespace, podAWithSubpathA.name)
 			nodeNameLabel, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node/"+nodeName, `-o=jsonpath={.metadata.labels.kubernetes\.io\/hostname}`).Output()
 			o.Expect(err).ShouldNot(o.HaveOccurred())
 			patchPath := `{"metadata":{"annotations":{"openshift.io/node-selector":"kubernetes.io/hostname=` + nodeNameLabel + `"}}}`
-			_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("namespace", podWithSubpathA.namespace, "-p", patchPath).Output()
+			_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("namespace", podAWithSubpathA.namespace, "-p", patchPath).Output()
 			o.Expect(err).ShouldNot(o.HaveOccurred())
-			// Create podWithSubpathB, podWithNoneSubpath with the same pvc
-			podWithSubpathB.createWithSubpathVolume(oc, "subpathB")
-			defer podWithSubpathB.deleteAsAdmin(oc)
-			podWithNoneSubpath.create(oc)
-			defer podWithNoneSubpath.deleteAsAdmin(oc)
-			podWithSubpathB.waitReady(oc)
-			podWithNoneSubpath.waitReady(oc)
+			// Create podBWithSubpathB, podDWithNoneSubpath with the same pvc
+			podBWithSubpathB.createWithSubpathVolume(oc, "subpathB")
+			defer podBWithSubpathB.deleteAsAdmin(oc)
+			podDWithNoneSubpath.create(oc)
+			defer podDWithNoneSubpath.deleteAsAdmin(oc)
+			podBWithSubpathB.waitReady(oc)
+			podDWithNoneSubpath.waitReady(oc)
 
-			g.By("# Check the podWithSubpathA's volume could be read, written, exec and podWithSubpathB couldn't see the written content")
-			podWithSubpathA.checkMountedVolumeCouldRW(oc)
-			podWithSubpathA.checkMountedVolumeHaveExecRight(oc)
-			output, err := podWithSubpathB.execCommand(oc, "ls /mnt/storage")
+			g.By("# Check the podAWithSubpathA's volume could be read, written, exec and podWithSubpathB couldn't see the written content")
+			podAWithSubpathA.checkMountedVolumeCouldRW(oc)
+			podAWithSubpathA.checkMountedVolumeHaveExecRight(oc)
+			output, err := podBWithSubpathB.execCommand(oc, "ls /mnt/storage")
 			o.Expect(err).ShouldNot(o.HaveOccurred())
 			o.Expect(output).ShouldNot(o.ContainSubstring("testfile"))
 
-			g.By("# Check the podWithNoneSubpath could see both 'subpathA' and 'subpathB' folders with 'container_file_t' label")
-			output, err = podWithNoneSubpath.execCommand(oc, "ls -Z /mnt/storage")
+			g.By("# Check the podDWithNoneSubpath could see both 'subpathA' and 'subpathB' folders with " + SELinuxLabelValue + " label")
+			output, err = podDWithNoneSubpath.execCommand(oc, "ls -Z /mnt/storage")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).Should(o.ContainSubstring("subpathA"))
 			o.Expect(output).Should(o.ContainSubstring("subpathB"))
-			o.Expect(output).Should(o.ContainSubstring("container_file_t"))
+			o.Expect(output).Should(o.ContainSubstring(SELinuxLabelValue))
 
-			g.By("# Use the same subpath 'subpathA' create podWithSubpathC and wait for the pod ready")
-			podWithSubpathC.createWithSubpathVolume(oc, "subpathA")
-			defer podWithSubpathC.deleteAsAdmin(oc)
-			podWithSubpathC.waitReady(oc)
+			g.By("# Create podCWithSubpathA and wait for the pod ready")
+			podCWithSubpathA.createWithSubpathVolume(oc, "subpathA")
+			defer podCWithSubpathA.deleteAsAdmin(oc)
+			podCWithSubpathA.waitReady(oc)
 
-			g.By("# Check the subpathA's data still exist not be covered and podWithSubpathC could also see the file content")
-			output, err = podWithSubpathC.execCommand(oc, "cat /mnt/storage/testfile")
+			g.By("# Check the subpathA's data still exist not be covered and podCWithSubpathA could also see the file content")
+			output, err = podCWithSubpathA.execCommand(oc, "cat /mnt/storage/testfile")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).Should(o.ContainSubstring("storage test"))
 
@@ -836,7 +845,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-44909 [CSI Driver] Volume should mount again after `oc adm drain`
 	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:pewang-High-44909-[CSI Driver] Volume should mount again after `oc adm drain` [Disruptive]", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir                   = exutil.FixturePath("testdata", "storage")
@@ -849,7 +858,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.Skip("Skip: Non-supported provisioner!!!")
 		}
 
-		var nonZonedProvisioners = []string{"file.csi.azure.com"}
+		var nonZonedProvisioners = []string{"file.csi.azure.com", "efs.csi.aws.com"}
 		if len(schedulableWorkersWithSameAz) == 0 {
 			e2e.Logf("The test cluster has less than two schedulable workers in each avaiable zone, check whether there is non-zoned provisioner")
 			if len(sliceIntersect(nonZonedProvisioners, supportProvisioners)) != 0 {
@@ -876,7 +885,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				defer pvc.deleteAsAdmin(oc)
 
 				g.By("# Create a deployment with the created pvc, node selector and wait for the pod ready")
-				if azName == "noneAzCluster" || provisioner == "file.csi.azure.com" { // file.csi.azure is not dependent of same az
+				if azName == "noneAzCluster" || contains(nonZonedProvisioners, provisioner) { // file.csi.azure is not dependent of same az
 					dep.create(oc)
 				} else {
 					dep.createWithNodeSelector(oc, `topology\.kubernetes\.io\/zone`, azName)
@@ -915,7 +924,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// https://kubernetes.io/docs/concepts/storage/persistent-volumes/#delete
 	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:pewang-High-44906-[CSI Driver] [Dynamic PV] [Delete reclaimPolicy] volumes should be deleted after the pvc deletion", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
@@ -976,7 +985,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// https://kubernetes.io/docs/concepts/storage/persistent-volumes/#retain
 	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:pewang-High-44907-[CSI Driver] [Dynamic PV] [Retain reclaimPolicy] [Static PV] volumes could be re-used after the pvc/pv deletion", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
@@ -1001,7 +1010,21 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			newpod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(newpvc.name))
 
 			g.By("# Create csi storageclass with 'reclaimPolicy: retain'")
-			storageClass.create(oc)
+			if provisioner == "efs.csi.aws.com" {
+				// Get the efs present scName and fsid
+				fsid := getFsIDFromStorageClass(oc, getPresetStorageClassNameByProvisioner(cloudProvider, provisioner))
+				efsExtra := map[string]string{
+					"provisioningMode": "efs-ap",
+					"fileSystemId":     fsid,
+					"directoryPerms":   "700",
+				}
+				extraParameters := map[string]interface{}{
+					"parameters": efsExtra,
+				}
+				storageClass.createWithExtraParameters(oc, extraParameters)
+			} else {
+				storageClass.create(oc)
+			}
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 
 			g.By("# Create a pvc with the csi storageclass")
@@ -2193,11 +2216,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
 			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
 			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
-			podTemplate            = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			depTemplate            = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
 			storageClassParameters = map[string]string{}
 			extraParameters        = map[string]interface{}{
 				"parameters": storageClassParameters,
 			}
+			volumeFsType string
 		)
 
 		// Define the test scenario support volumeBindingModes
@@ -2226,6 +2250,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 						"fileSystemId":     fsid,
 						"directoryPerms":   "700",
 					}
+					volumeFsType = "nfs4"
 				}
 				extraParameters = map[string]interface{}{
 					"parameters":           storageClassParameters,
@@ -2235,7 +2260,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				// Set the resource definition for the scenario
 				storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode(volumeBindingMode))
 				pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
-				pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+				dep := newDeployment(setDeploymentTemplate(depTemplate), setDeploymentPVCName(pvc.name))
 
 				g.By("# Create csi storageclass")
 				storageClass.provisioner = provisioner
@@ -2257,15 +2282,37 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				}
 
 				g.By("# Create pod with the created pvc and wait for the pod ready")
-				pod.create(oc)
-				defer pod.deleteAsAdmin(oc)
-				pod.waitReady(oc)
+				dep.create(oc)
+				defer dep.deleteAsAdmin(oc)
+				dep.waitReady(oc)
 
 				g.By("# Check the pod volume can be read and write")
-				pod.checkMountedVolumeCouldRW(oc)
+				dep.checkPodMountedVolumeCouldRW(oc)
 
 				g.By("# Check the pod volume have the exec right")
-				pod.checkMountedVolumeHaveExecRight(oc)
+				dep.checkPodMountedVolumeHaveExecRight(oc)
+
+				g.By("#. Check the volume mounted on the pod located node")
+				volName := pvc.getVolumeName(oc)
+				nodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
+				checkVolumeMountCmdContain(oc, volName, nodeName, volumeFsType)
+
+				g.By("#. Scale down the replicas number to 0")
+				dep.scaleReplicas(oc, "0")
+
+				g.By("#. Wait for the deployment scale down completed and check nodes has no mounted volume")
+				dep.waitReady(oc)
+				checkVolumeNotMountOnNode(oc, volName, nodeName)
+
+				g.By("#. Scale up the deployment replicas number to 1")
+				dep.scaleReplicas(oc, "1")
+
+				g.By("#. Wait for the deployment scale up completed")
+				dep.waitReady(oc)
+
+				g.By("#. After scaled check the deployment's pod mounted volume contents and exec right")
+				o.Expect(execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat /mnt/storage/testfile*")).To(o.ContainSubstring("storage test"))
+				o.Expect(execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "/mnt/storage/hello")).To(o.ContainSubstring("Hello OpenShift Storage"))
 
 				g.By("****** volumeBindingMode: \"" + volumeBindingMode + "\" parameter test finish ******")
 			}

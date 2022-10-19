@@ -129,8 +129,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("NonPreRelease-Author:pewang-High-48763-[vsphere-problem-detector] should report 'vsphere_rwx_volumes_total' metric correctly [Serial]", func() {
 		g.By("# Get the value of 'vsphere_rwx_volumes_total' metric real init value")
 		// Restart vsphere-problem-detector-operator and get the init value of 'vsphere_rwx_volumes_total' metric
-		detectorOperator.hardRestart(oc.AsAdmin())
-		newInstanceName := detectorOperator.getPodList(oc.AsAdmin())[0]
+		vSphereDetectorOperator.hardRestart(oc.AsAdmin())
+		newInstanceName := vSphereDetectorOperator.getPodList(oc.AsAdmin())[0]
 		// When the metric update by restart the instance the metric's pod's `data.result.0.metric.pod` name will change to the newInstanceName
 		mo.waitSpecifiedMetricValueAsExpected("vsphere_rwx_volumes_total", `data.result.0.metric.pod`, newInstanceName)
 		initCount, err := mo.getSpecifiedMetricValue("vsphere_rwx_volumes_total", `data.result.0.value.1`)
@@ -155,7 +155,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("# Check the metric update correctly")
 		// Since the vsphere-problem-detector update the metric every hour restart the deployment to trigger the update right now
-		detectorOperator.hardRestart(oc.AsAdmin())
+		vSphereDetectorOperator.hardRestart(oc.AsAdmin())
 		// Wait for 'vsphere_rwx_volumes_total' metric value update correctly
 		initCountInt, err := strconv.Atoi(initCount)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -166,7 +166,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		waitForPersistentVolumeStatusAsExpected(oc, rwxPersistVolume.name, "deleted")
 
 		g.By("# Check the metric update correctly again")
-		detectorOperator.hardRestart(oc.AsAdmin())
+		vSphereDetectorOperator.hardRestart(oc.AsAdmin())
 		mo.waitSpecifiedMetricValueAsExpected("vsphere_rwx_volumes_total", `data.result.0.value.1`, interfaceToString(initCountInt+1))
 	})
 

@@ -519,7 +519,7 @@ func restoreVsphereCSIcredential(oc *exutil.CLI, pwdKey string, originPwd string
 	output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret/vmware-vsphere-cloud-credentials", "-n", "openshift-cluster-csi-drivers", `-p={"data":{"`+pwdKey+`":"`+originPwd+`"}}`).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(output).To(o.ContainSubstring("patched"))
-	driverController.waitReady(oc.AsAdmin())
+	vSphereDriverController.waitReady(oc.AsAdmin())
 	// Make sure the Cluster Storage Operator recover healthy
 	waitCSOhealthy(oc.AsAdmin())
 	return nil

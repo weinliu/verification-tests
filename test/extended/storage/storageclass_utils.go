@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -193,6 +194,19 @@ func getFsIDFromStorageClass(oc *exutil.CLI, scName string) string {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The filesystem Id is %s", fsID)
 	return fsID
+}
+
+// Get the gidValue from sc
+func getGidRangeStartValueFromStorageClass(oc *exutil.CLI, scName string) (int, error) {
+	gidStartValue, err := oc.WithoutNamespace().Run("get").Args("sc", scName, "-o", "jsonpath={.parameters.gidRangeStart}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The gidRangeStart value is %s", gidStartValue)
+	gidStartIntValue, err := strconv.Atoi(gidStartValue)
+	if err != nil {
+		e2e.Logf("Failed to convert with error %v\n", err)
+		return gidStartIntValue, err
+	}
+	return gidStartIntValue, nil
 }
 
 // Define CSI Driver Privisioners const

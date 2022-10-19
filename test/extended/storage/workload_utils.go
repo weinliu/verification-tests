@@ -26,12 +26,14 @@ type pod struct {
 	mountPath  string
 }
 
-// Define the global vSphere Storage Operator && Driver deploments object
+// Define the global Storage Operators && Driver deploments object
 var (
-	detectorOperator = newDeployment(setDeploymentName("vsphere-problem-detector-operator"), setDeploymentNamespace("openshift-cluster-storage-operator"),
+	vSphereDetectorOperator = newDeployment(setDeploymentName("vsphere-problem-detector-operator"), setDeploymentNamespace("openshift-cluster-storage-operator"),
 		setDeploymentApplabel("name=vsphere-problem-detector-operator"))
-	driverController = newDeployment(setDeploymentName("vmware-vsphere-csi-driver-controller"), setDeploymentNamespace("openshift-cluster-csi-drivers"),
+	vSphereDriverController = newDeployment(setDeploymentName("vmware-vsphere-csi-driver-controller"), setDeploymentNamespace("openshift-cluster-csi-drivers"),
 		setDeploymentApplabel("app=vmware-vsphere-csi-driver-controller"), setDeploymentReplicasNumber("2"))
+	efsDriverController = newDeployment(setDeploymentName("aws-efs-csi-driver-controller"), setDeploymentNamespace("openshift-cluster-csi-drivers"),
+		setDeploymentApplabel("app=aws-efs-csi-driver-controller"), setDeploymentReplicasNumber("2"))
 )
 
 // function option mode to change the default values of pod parameters, e.g. name, namespace, persistent volume claim, image etc.
@@ -879,6 +881,14 @@ func (dep *deployment) getLogs(oc *exutil.CLI, filterArgs ...string) string {
 	e2e.Logf(`Get deployment/%s logs with "--selector=%s" successfully, additional options is %v`, dep.name, dep.applabel, filterArgs)
 	debugLogf("Log details are:\n%s", depLogs)
 	return depLogs
+}
+
+// Add the volume to existing deployment via setVolume command and wait till it reaches to Running state
+func (dep *deployment) setVolumeAdd(oc *exutil.CLI, mPath string, volName string, claimName string) {
+	msg, err := oc.WithoutNamespace().Run("set").Args("volumes", "deployment", dep.name, "--add", "-t", "persistentVolumeClaim", "-m", mPath, "--name", volName, "--claim-name", claimName, "-n", oc.Namespace()).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(msg).To(o.ContainSubstring("volume updated"))
+	dep.waitReady(oc)
 }
 
 //Function to delete the project

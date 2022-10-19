@@ -17,20 +17,21 @@ import (
 
 // Define PersistVolume struct
 type persistentVolume struct {
-	name          string
-	accessmode    string
-	capacity      string
-	driver        string
-	volumeHandle  string
-	reclaimPolicy string
-	scname        string
-	template      string
-	volumeMode    string
-	volumeKind    string
-	nfsServerIP   string
-	iscsiServerIP string
-	secretName    string
-	iscsiPortals  []string
+	name            string
+	accessmode      string
+	capacity        string
+	driver          string
+	volumeHandle    string
+	reclaimPolicy   string
+	scname          string
+	template        string
+	volumeMode      string
+	volumeKind      string
+	nfsServerIP     string
+	iscsiServerIP   string
+	secretName      string
+	iscsiPortals    []string
+	encryptionValue string
 }
 
 // function option mode to change the default values of PersistentVolume Object attributes, e.g. name, namespace, accessmode, capacity, volumemode etc.
@@ -134,6 +135,13 @@ func setPersistentSecretName(secretName string) persistentVolumeOption {
 	}
 }
 
+// Replace the default value of PersistentVolume EncryptionIntransit attribute
+func setPersistentVolumeEncryptionInTransit(encryptionValue string) persistentVolumeOption {
+	return func(this *persistentVolume) {
+		this.encryptionValue = encryptionValue
+	}
+}
+
 //  Create a new customized PersistentVolume object
 func newPersistentVolume(opts ...persistentVolumeOption) persistentVolume {
 	var defaultVolSize string
@@ -224,6 +232,20 @@ func (pv *persistentVolume) create(oc *exutil.CLI) {
 	case "ali-max_sectors_kb":
 		volumeAttributes := map[string]string{
 			"sysConfig": "/queue/max_sectors_kb=128",
+		}
+		csiParameter := map[string]interface{}{
+			"driver":           pv.driver,
+			"volumeHandle":     pv.volumeHandle,
+			"volumeAttributes": volumeAttributes,
+		}
+		pvExtraParameters = map[string]interface{}{
+			"jsonPath": `items.0.spec.`,
+			"csi":      csiParameter,
+		}
+		// efs encryption in transit enabled
+	case "efs-encryption":
+		volumeAttributes := map[string]string{
+			"encryptInTransit": pv.encryptionValue,
 		}
 		csiParameter := map[string]interface{}{
 			"driver":           pv.driver,

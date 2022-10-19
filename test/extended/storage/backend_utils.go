@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/efs"
 	"github.com/tidwall/gjson"
 
 	o "github.com/onsi/gomega"
@@ -122,8 +123,14 @@ func deleteBackendVolumeByVolumeID(oc *exutil.CLI, volumeID string) (string, err
 	switch cloudProvider {
 	case "aws":
 		if strings.Contains(volumeID, "::") {
-			e2e.Logf("Delete EFS volume: \"%s\" access_points is under development", volumeID)
-			return "under development now", nil
+			volumeID = strings.Split(volumeID, "::")[1]
+			mySession := session.Must(session.NewSession())
+			svc := efs.New(mySession)
+			deleteAccessPointID := &efs.DeleteAccessPointInput{
+				AccessPointId: aws.String(volumeID),
+			}
+			req, resp := svc.DeleteAccessPointRequest(deleteAccessPointID)
+			return interfaceToString(resp), req.Send()
 		}
 		mySession := session.Must(session.NewSession())
 		svc := ec2.New(mySession, aws.NewConfig())
