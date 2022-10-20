@@ -41,5 +41,13 @@ describe('Workload Secrets test', () => {
     cy.exec(`diff ./fixtures/secret1.yaml ./fixtures/secret2.yaml`)
       .its('stdout')
       .should('eq', '')
-  })
+  });
+
+  it('(OCP-54213,yanpzhan) Trim whitespace to form inputs when create image pull secret', () => {
+    guidedTour.close();
+    Secrets.gotoSecretsPage(testName);
+    Secrets.createImagePullSecret('secrettest','  quay.io  ','  testuser  ','  testpassword  ','  test@redhat.com  ');
+    Secrets.revealValue();
+    cy.get('code').should('contain','{"auths":{"quay.io":{"username":"testuser","password":"testpassword","auth":"dGVzdHVzZXI6ICB0ZXN0cGFzc3dvcmQgIA==","email":"test@redhat.com"}}}');
+  });
 })
