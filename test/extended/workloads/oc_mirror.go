@@ -120,7 +120,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 	})
-	g.It("Author:yinzhou-Medium-46818-Low-46523-check the User Agent for oc-mirror", func() {
+	g.It("HyperShiftGUEST-Author:yinzhou-Medium-46818-Low-46523-check the User Agent for oc-mirror", func() {
 		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
 		operatorS := filepath.Join(ocmirrorBaseDir, "catlog-loggings.yaml")
 
