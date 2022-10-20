@@ -154,7 +154,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	// author: pmali@redhat.com
-	g.It("Author:pmali-High-12896-Init containers with restart policy Never", func() {
+	g.It("DEPRECATED-Author:pmali-High-12896-Init containers with restart policy Never", func() {
 		oc.SetupProject()
 		podModify.name = "init-never-fail"
 		podModify.namespace = oc.Namespace()
@@ -223,7 +223,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	// author: pmali@redhat.com
-	g.It("Author:pmali-High-12913-Init containers with volume work fine", func() {
+	g.It("DEPRECATED-Author:pmali-High-12913-Init containers with volume work fine", func() {
 
 		oc.SetupProject()
 		podModify.name = "init-volume"
