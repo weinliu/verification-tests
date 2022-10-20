@@ -1108,7 +1108,7 @@ func checkNodeStatus(oc *exutil.CLI, nodeName string, expectedStatus string) {
 		err1 := fmt.Errorf("TBD supported node status")
 		o.Expect(err1).NotTo(o.HaveOccurred())
 	}
-	err := wait.Poll(30*time.Second, 15*time.Minute, func() (bool, error) {
+	err := wait.Poll(10*time.Second, 15*time.Minute, func() (bool, error) {
 		statusOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeName, "-ojsonpath={.status.conditions[-1].status}").Output()
 		if err != nil {
 			e2e.Logf("\nGet node status with error : %v", err)
@@ -1903,4 +1903,27 @@ func findLogFromOvnMasterPod(oc *exutil.CLI, logs string) bool {
 		}
 	}
 	return findLog
+}
+
+// searchOVNDBForSpecCmd This is used for lr-policy-list and snat rules check in ovn db.
+func searchOVNDBForSpecCmd(oc *exutil.CLI, cmd, searchKeyword string, times int) error {
+	ovnPod := getOVNLeaderPod(oc, "north")
+	o.Expect(ovnPod).ShouldNot(o.Equal(""))
+	var cmdOutput string
+	checkOVNDbErr := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+		output, cmdErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, cmd)
+		if cmdErr != nil {
+			e2e.Logf("%v,Waiting for expected result to be synced, try next ...,", cmdErr)
+			return false, nil
+		}
+		cmdOutput = output
+		if strings.Count(output, searchKeyword) == times {
+			return true, nil
+		}
+		return false, nil
+	})
+	if checkOVNDbErr != nil {
+		e2e.Logf("The command check result in ovndb is not expected ! See below output \n %s ", cmdOutput)
+	}
+	return checkOVNDbErr
 }

@@ -1583,6 +1583,70 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		o.Expect(podLogs).To(o.ContainSubstring(expectedString))
 	})
 
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-High-Longduration-NonPreRelease-55030-After reboot egress node, lr-policy-list and snat should keep correct. [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressIP1Template := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
+		testPodFile := filepath.Join(buildPruningBaseDir, "testpod.yaml")
+
+		g.By("1 Get list of nodes \n")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
+		if !ok || egressNodes == nil || len(egressNodes) < 2 {
+			g.Skip("The prerequirement was not fullfilled, skip the case!!")
+		}
+
+		g.By("2 Apply EgressLabel Key to one node. \n")
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel)
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel, "true")
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel)
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel, "true")
+
+		g.By("3. create new namespace\n")
+		ns1 := oc.Namespace()
+
+		g.By("4. Apply label to namespace\n")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("5. Create test pods and scale test pods to 10 \n")
+		createResourceFromFile(oc, ns1, testPodFile)
+		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas=10", "-n", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+
+		g.By("6. Create an egressip object\n")
+		freeIPs := findFreeIPs(oc, egressNodes[0], 2)
+		o.Expect(len(freeIPs)).Should(o.Equal(2))
+		egressip1 := egressIPResource1{
+			name:      "egressip-55030",
+			template:  egressIP1Template,
+			egressIP1: freeIPs[0],
+			egressIP2: freeIPs[1],
+		}
+		defer egressip1.deleteEgressIPObject1(oc)
+		egressip1.createEgressIPObject1(oc)
+		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps1)).Should(o.Equal(2), "EgressIP object expected 2 items!!")
+
+		g.By("5.Reboot egress node.\n")
+		defer checkNodeStatus(oc, egressNodes[0], "Ready")
+		rebootNode(oc, egressNodes[0])
+		checkNodeStatus(oc, egressNodes[0], "NotReady")
+		checkNodeStatus(oc, egressNodes[0], "Ready")
+		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+
+		g.By("6. Check lr-policy-list and snat in northdb. \n")
+		lspCmd := "ovn-nbctl lr-policy-list ovn_cluster_router | grep -v inport"
+		lspErr := searchOVNDBForSpecCmd(oc, lspCmd, "100 ", 10)
+		exutil.AssertWaitPollNoErr(lspErr, ("The lr-policy-list was not synced correctly! "))
+		snatCmd := "ovn-nbctl --format=csv --no-heading find nat external_ids:name=" + egressip1.name
+		snatErr := searchOVNDBForSpecCmd(oc, snatCmd, egressip1.name, 20)
+		exutil.AssertWaitPollNoErr(snatErr, ("Snat rules for egressIP was not synced correctly! "))
+	})
+
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
