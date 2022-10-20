@@ -456,7 +456,7 @@ func createLdapService(oc *exutil.CLI, namespace string, podName string, initGro
 		oc.Run("delete").Args("pod/ldapserver", "-n", oc.Namespace()).Execute()
 		e2e.Failf("failed to copy the init group to ldap server")
 	}
-	err = oc.Run("exec").Args(podName, "-n", namespace, "--", "ldapadd", "-x", "-h", "127.0.0.1", "-p", "389", "-D", "cn=Manager,dc=example,dc=com", "-w", "admin", "-f", "/tmp/init.ldif").Execute()
+	err = oc.Run("exec").Args(podName, "-n", namespace, "--", "ldapadd", "-x", "-h", "[::1]", "-p", "389", "-D", "cn=Manager,dc=example,dc=com", "-w", "admin", "-f", "/tmp/init.ldif").Execute()
 	if err != nil {
 		oc.Run("delete").Args("pod/ldapserver", "-n", namespace).Execute()
 		e2e.Failf("failed to config the ldap server ")
