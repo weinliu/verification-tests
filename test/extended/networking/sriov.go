@@ -146,6 +146,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			sriovNeworkTemplate            = filepath.Join(buildPruningBaseDir, "sriovnetwork-template.yaml")
 			sriovTestPodTemplate           = filepath.Join(buildPruningBaseDir, "sriov-dpdk-template.yaml")
 			sriovOpNs                      = "openshift-sriov-network-operator"
+			sriovNodeLabel                 = "feature.node.kubernetes.io/sriov-capable=true"
 		)
 		sriovPolicy := sriovNetworkNodePolicy{
 			policyName:   "e810",
@@ -175,6 +176,12 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		defer rmSriovNetworkPolicy(oc, sriovPolicy.policyName, sriovOpNs)
 		waitForSriovPolicyReady(oc, sriovOpNs)
 
+		g.By("check the vhost is loaded")
+		sriovNode := getSriovNode(oc, sriovOpNs, sriovNodeLabel)
+		output, err := exutil.DebugNodeWithChroot(oc, sriovNode, "bash", "-c", "lsmod | grep vhost")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("vhost_net"))
+
 		g.By("Create sriovNetwork to generate net-attach-def on the target namespace")
 		sriovnetwork := sriovNetwork{
 			name:             sriovPolicy.policyName,
@@ -195,7 +202,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			template:    sriovTestPodTemplate,
 		}
 		sriovTestPod.createSriovTestPod(oc)
-		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=sriov-dpdk")
+		err = waitForPodWithLabelReady(oc, oc.Namespace(), "name=sriov-dpdk")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=sriov-dpdk not ready")
 
 		g.By("Check testpmd running well")
