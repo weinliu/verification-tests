@@ -803,4 +803,62 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("\"pod-security.kubernetes.io/enforce\":\"baseline\""))
 	})
+	// author: yinzhou@redhat.com
+	g.It("Author:yinzhou-Medium-10662-Cannot run process via user root in the container when using MustRunAsNonRoot as the RunAsUserStrategy[Disruptive]", func() {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("scc", "restricted-v2", "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		re := regexp.MustCompile("(?m)[\r\n]+^  (uid|resourceVersion):.*$")
+		output = re.ReplaceAllString(output, "")
+		path := "/tmp/scc_restricted_10662.yaml"
+		defer os.Remove(path)
+		err = ioutil.WriteFile(path, []byte(output), 0o644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			g.By("Restoring the restricted SCC before exiting the scenario")
+			err = oc.AsAdmin().WithoutNamespace().Run("replace").Args("-f", path).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		patchPath := `[{"op": "replace", "path": "/runAsUser/type", "value": "MustRunAsNonRoot"}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("scc", "restricted-v2", "--type=json", "-p", patchPath).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		oc.SetupProject()
+		namespace := oc.Namespace()
+
+		baseDir := exutil.FixturePath("testdata", "apiserverauth")
+		podTemplate := filepath.Join(baseDir, "pod-scc-runAsUser.yaml")
+
+		g.By("Create new pod with runAsUser=0")
+		image := "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83"
+		err = exutil.ApplyResourceFromTemplateWithNonAdminUser(oc, "--ignore-unknown-parameters=true", "-f", podTemplate, "-p", "NAME="+"pod10662-1", "NAMESPACE="+namespace, "IMAGE="+image, "USERID=0")
+		o.Expect(err).Should(o.HaveOccurred())
+
+		g.By("Create new pod without runAsUser specified and the pod's image is built to run as USER 0 by default")
+		// Below image is built to run as USER 0 by default. This can be checked either by "podman inspect <image> | grep User" or "podman run <image> whoami"
+		err = oc.Run("run").Args("pod10662-3", "--image", image).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check status of pod without runAsUser specified and the pod's image is built to run as USER 0 by default")
+		err = wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+			output, err := oc.Run("describe").Args("pod/pod10662-3").Output()
+			if err != nil {
+				e2e.Logf("Fail to describe the pod status, error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("container has runAsNonRoot and image will run as root", output); matched {
+				e2e.Logf(`Got expected output "container has runAsNonRoot and image will run as root"`)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Timed out to get expected error message")
+
+		g.By("Create new pod with runAsUser != 0")
+		pod1 := exutil.Pod{Name: "pod10662-2", Namespace: namespace, Template: podTemplate, Parameters: []string{"IMAGE=" + image, "USERID=97777"}}
+		pod1.Create(oc)
+		g.By("Check status of pod with runAsUser != 0")
+		output, err = oc.Run("get").Args("pod/pod10662-2", "-n", namespace, "-o=jsonpath=-o=jsonpath={.status.phase}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Running"))
+	})
 })
