@@ -1,6 +1,8 @@
 package mco
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 
 	g "github.com/onsi/ginkgo"
@@ -12,20 +14,28 @@ import (
 var _ = g.Describe("[sig-mco] MCO Layering", func() {
 	defer g.GinkgoRecover()
 
-	var oc = exutil.NewCLI("mco-layering", exutil.KubeConfigPath())
+	var (
+		// init cli object, temp namespace contains prefix mco.
+		// tip: don't put this in BeforeEach/JustBeforeEach, you will get error
+		// "You may only call AfterEach from within a Describe, Context or When"
+		oc = exutil.NewCLI("mco-layering", exutil.KubeConfigPath())
+		// temp dir to store all test files, and it will be recycled when test is finished
+		tmpdir string
+	)
 
 	g.JustBeforeEach(func() {
-		g.By("MCO Preconditions Checks")
+		tmpdir = createTmpDir()
 		preChecks(oc)
-		logger.Infof("End Of MCO Preconditions")
+	})
+
+	g.JustAfterEach(func() {
+		os.RemoveAll(tmpdir)
+		logger.Infof("test dir %s is cleaned up", tmpdir)
 	})
 
 	g.It("Author:sregidor-ConnectedOnly-VMonly-Longduration-NonPreRelease-Critical-54085-Update osImage changing /etc /usr and rpm [Disruptive]", func() {
 
-		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" && architecture != "arm64" {
-			g.Skip("Do not support " + architecture + "architecture")
-		}
+		skipTestIfSupportedArchNotMatched(oc.AsAdmin())
 
 		dockerFileCommands := `
 RUN mkdir /etc/tc_54085 && chmod 3770 /etc/tc_54085 && ostree container commit
@@ -39,49 +49,27 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
     systemctl enable tailscaled && \
     ostree container commit
 `
-		// Extract secret
+		// Capture current rpm-ostree status
 		g.By("Capture the current ostree deployment")
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
-		initialDeployment, err := workerNode.GetBootedOsTreeDeployment()
+		initialDeployment, err := workerNode.GetBootedOsTreeDeployment(true)
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error getting the booted ostree deployment")
 		logger.Infof("OK\n")
 
-		g.By("Extract pull-secret")
-		pullSecret := GetPullSecret(oc.AsAdmin())
-		secretExtractDir, err := pullSecret.Extract()
+		// Build the new osImage
+		osImageBuilder := OsImageBuilderInNode{node: workerNode, dockerFileCommands: dockerFileCommands}
+		defer func() { _ = osImageBuilder.DeleteRegistryAdminSA() }()
+		digestedImage, err := osImageBuilder.CreateAndDigestOsImage()
 		o.Expect(err).NotTo(o.HaveOccurred(),
-			"Error extracting pull-secret")
-		logger.Infof("Pull secret has been extracted to: %s\n", secretExtractDir)
-
-		// Build new osImage
-		g.By("Get base image for layering")
-		baseImage, err := getImageFromRelaseInfo(oc.AsAdmin(), LayeringBaseImageReleaseInfo, secretExtractDir)
-		o.Expect(err).NotTo(o.HaveOccurred(),
-			"Error getting the base image to build new osImages")
-		logger.Infof("Base image: %s\n", baseImage)
-
-		g.By("Build a new layered image using the Dockerfile")
-		layeringImageRepo := getLayeringTestImageRepository()
-
-		dockerFile := "FROM " + baseImage + "\n" + dockerFileCommands
-		logger.Infof(" Using Dockerfile:\n%s", dockerFile)
-
-		buildDir, err := prepareDockerfileDirectory(dockerFile)
-		o.Expect(err).NotTo(o.HaveOccurred(),
-			"Error creating the build directory with the Dockerfile")
-
-		berr := buildPushImage(architecture, buildDir, layeringImageRepo, secretExtractDir)
-		o.Expect(berr).NotTo(o.HaveOccurred(),
-			"Error building and pushing the image %s", layeringImageRepo)
-		logger.Infof("Image pushed to: %s\n", layeringImageRepo)
+			"Error creating the new osImage")
+		logger.Infof("OK\n")
 
 		// Create MC and wait for MCP
 		g.By("Create a MC to deploy the new osImage")
 		layeringMcName := "layering-mc"
-		genericMcTemplate := "generic-machine-config-template.yml"
-		layeringMC := MachineConfig{name: layeringMcName, Template: *NewMCOTemplate(oc, genericMcTemplate),
-			pool: MachineConfigPoolWorker, parameters: []string{"OS_IMAGE=" + layeringImageRepo}}
+		layeringMC := MachineConfig{name: layeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate),
+			pool: MachineConfigPoolWorker, parameters: []string{"OS_IMAGE=" + digestedImage}}
 
 		defer layeringMC.delete(oc)
 		layeringMC.create(oc.AsAdmin())
@@ -98,14 +86,14 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
 		logger.Infof("Current rpm-ostree status:\n%s\n", status)
 
-		deployment, err := workerNode.GetBootedOsTreeDeployment()
+		deployment, err := workerNode.GetBootedOsTreeDeployment(true)
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
 
 		containerRef, jerr := JSON(deployment).GetSafe("container-image-reference")
 		o.Expect(jerr).NotTo(o.HaveOccurred(),
 			"We cant get 'container-image-reference' from the deployment status. Wrong rpm-ostree status!")
-		o.Expect(containerRef.ToString()).To(o.Equal("ostree-unverified-registry:"+layeringImageRepo),
+		o.Expect(containerRef.ToString()).To(o.Equal("ostree-unverified-registry:"+digestedImage),
 			"container reference in the status is not the exepeced one")
 		logger.Infof("OK!\n")
 
@@ -117,29 +105,29 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		binHelloWorld := NewRemoteFile(workerNode, "/usr/bin/tc54085_helloworld")
 
 		o.Expect(tc54085Dir.Fetch()).ShouldNot(o.HaveOccurred(),
-			"Error getting information about file %s in node %s", tc54085Dir.GetName(), workerNode.GetName())
+			"Error getting information about file %s in node %s", tc54085Dir.GetFullPath(), workerNode.GetName())
 		o.Expect(tc54085File.Fetch()).ShouldNot(o.HaveOccurred(),
-			"Error getting information about file %s in node %s", tc54085File.GetName(), workerNode.GetName())
+			"Error getting information about file %s in node %s", tc54085File.GetFullPath(), workerNode.GetName())
 		o.Expect(binHelloWorld.Fetch()).ShouldNot(o.HaveOccurred(),
-			"Error getting information about file %s in node %s", binHelloWorld.GetName(), workerNode.GetName())
+			"Error getting information about file %s in node %s", binHelloWorld.GetFullPath(), workerNode.GetName())
 		logger.Infof("OK!\n")
 
 		g.By("Check that the directory in /etc exists and has the right permissions")
 		o.Expect(tc54085Dir.IsDirectory()).To(o.BeTrue(),
-			"Error, %s in node %s is not a directory", tc54085Dir.GetName(), workerNode.GetName())
+			"Error, %s in node %s is not a directory", tc54085Dir.GetFullPath(), workerNode.GetName())
 		o.Expect(tc54085Dir.GetNpermissions()).To(o.Equal("3770"),
-			"Error, permissions of %s in node %s are not the expected ones", tc54085Dir.GetName(), workerNode.GetName())
+			"Error, permissions of %s in node %s are not the expected ones", tc54085Dir.GetFullPath(), workerNode.GetName())
 		logger.Infof("OK!\n")
 
 		g.By("Check that the file in /etc exists and has the right permissions")
 		o.Expect(tc54085File.GetNpermissions()).To(o.Equal("5400"),
-			"Error, permissions of %s in node %s are not the expected ones", tc54085File.GetName(), workerNode.GetName())
+			"Error, permissions of %s in node %s are not the expected ones", tc54085File.GetFullPath(), workerNode.GetName())
 		o.Expect(tc54085File.GetTextContent()).To(o.Equal("Test case 54085 test file\n"),
-			"Error, content of %s in node %s are not the expected one", tc54085File.GetName(), workerNode.GetName())
+			"Error, content of %s in node %s are not the expected one", tc54085File.GetFullPath(), workerNode.GetName())
 
 		g.By("Check that the file in /usr/bin exists, has the right permissions and can be executed")
 		o.Expect(binHelloWorld.GetNpermissions()).To(o.Equal("5770"),
-			"Error, permissions of %s in node %s are not the expected ones", tc54085File.GetName(), workerNode.GetName())
+			"Error, permissions of %s in node %s are not the expected ones", tc54085File.GetFullPath(), workerNode.GetName())
 
 		output, herr := workerNode.DebugNodeWithChroot("/usr/bin/tc54085_helloworld")
 		o.Expect(herr).NotTo(o.HaveOccurred(),
@@ -170,14 +158,14 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		logger.Infof("OK!\n")
 
 		// Delete the MC and wait for MCP
-		g.By("Delete the MC so that original osImage is restored")
+		g.By("Delete the MC so that the original osImage is restored")
 		layeringMC.delete(oc)
 		mcp.waitForComplete()
 		logger.Infof("MC was successfully deleted\n")
 
 		// Check the rpm-ostree status after the MC deletion
 		g.By("Check that the original ostree deployment was restored")
-		deployment, derr := workerNode.GetBootedOsTreeDeployment()
+		deployment, derr := workerNode.GetBootedOsTreeDeployment(true)
 		o.Expect(derr).NotTo(o.HaveOccurred(),
 			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
 		o.Expect(deployment).To(o.MatchJSON(initialDeployment),
@@ -187,17 +175,17 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		// Check the image content after the MC deletion
 		g.By("Check that the directory in /etc does not exist anymore")
 		o.Expect(tc54085Dir.Fetch()).Should(o.HaveOccurred(),
-			"Error, file %s should not exist in node %s, but it exists", tc54085Dir.GetName(), workerNode.GetName())
+			"Error, file %s should not exist in node %s, but it exists", tc54085Dir.GetFullPath(), workerNode.GetName())
 		logger.Infof("OK!\n")
 
 		g.By("Check that the file in /etc does not exist anymore")
 		o.Expect(tc54085File.Fetch()).Should(o.HaveOccurred(),
-			"Error, file %s should not exist in node %s, but it exists", tc54085File.GetName(), workerNode.GetName())
+			"Error, file %s should not exist in node %s, but it exists", tc54085File.GetFullPath(), workerNode.GetName())
 		logger.Infof("OK!\n")
 
 		g.By("Check that the file in /usr/bin does not exist anymore")
 		o.Expect(binHelloWorld.Fetch()).Should(o.HaveOccurred(),
-			"Error, file %s should not exist in node %s, but it exists", binHelloWorld.GetName(), workerNode.GetName())
+			"Error, file %s should not exist in node %s, but it exists", binHelloWorld.GetFullPath(), workerNode.GetName())
 		logger.Infof("OK!\n")
 
 		g.By("Check that the tailscale rpm is not installed anymore")
@@ -240,6 +228,162 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		checkInvalidOsImagesDegradedStatus(oc.AsAdmin(), nonPullableImage, layeringMcName, expectedNDStatus, expectedNDMessage, expectedNDReason)
 	})
 
+	g.It("Author:sregidor-VMonly-ConnectedOnly-Longduration-NonPreRelease-Critical-54159-Apply a new osImage on a cluster with already installed rpms [Disruptive]", func() {
+		var (
+			rpmName     = "wget"
+			yumRepoFile = "/etc/yum.repos.d/ubi.repo"
+		)
+
+		skipTestIfSupportedArchNotMatched(oc.AsAdmin())
+
+		dockerFileCommands := `
+RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && chmod 1755 /usr/bin/tc_54159_rpm_and_osimage
+`
+		// Install rpm in first worker node
+		g.By("Installing rpm package in first working node")
+		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
+		logger.Infof("Copy ubi yum repo to node")
+		cpOut, err := workerNode.DebugNode("cp", yumRepoFile, "/host"+yumRepoFile)
+		logger.Debugf("copy output: %s", cpOut)
+		o.Expect(err).
+			NotTo(o.HaveOccurred(),
+				"Error copying  %s to /host%s in node %s", yumRepoFile, yumRepoFile, workerNode.GetName())
+
+		defer func() {
+			logger.Infof("Start defer logic to uninstall the %s rpm", rpmName)
+			waitErr := workerNode.WaitUntilRpmOsTreeIsIdle()
+			if waitErr != nil {
+				workerNode.CancelRpmOsTreeTransactions()
+			}
+			workerNode.UninstallRpm(rpmName)
+			workerNode.DebugNodeWithChroot("rm", yumRepoFile)
+			workerNode.Reboot()
+			// Printing the status, apart from tracing the exact status of rpm-ostree,
+			// is a way of waiting for the node to be ready after the reboot, so that the next test case
+			// can be executed without problems. Because the status cannot be retreived until the node is ready.
+			status, _ := workerNode.GetRpmOstreeStatus(false)
+			logger.Infof(status)
+		}()
+		// We wait, but we dont fail, if it does not become idle we cancel the transaction in the installation command
+		waitErr := workerNode.WaitUntilRpmOsTreeIsIdle()
+		if waitErr != nil {
+			logger.Infof("rpm-ostree state is NOT IDLE. We cancel the current transactions to continue the test!!!")
+			cOut, err := workerNode.CancelRpmOsTreeTransactions()
+			o.Expect(err).
+				NotTo(o.HaveOccurred(),
+					"Error cancelling transactions in node %s.\n%s", workerNode.GetName(), cOut)
+
+		}
+		instOut, err := workerNode.InstallRpm(rpmName)
+		logger.Debugf("Install rpm output: %s", instOut)
+		o.Expect(err).
+			NotTo(o.HaveOccurred(),
+				"Error installing '%s' rpm in node %s", rpmName, workerNode.GetName())
+
+		rebootOut, err := workerNode.Reboot()
+		o.Expect(err).
+			NotTo(o.HaveOccurred(),
+				"%s\n, Error rebooting node %s", rebootOut, rpmName, workerNode.GetName())
+
+		logger.Infof("Check that the wget binary is available")
+		whichOut, err := workerNode.DebugNodeWithChroot("which", "wget")
+		o.Expect(err).
+			NotTo(o.HaveOccurred(),
+				"Error. wget binay is not available after installing '%s' rpm in node %s.\n%s", rpmName, workerNode.GetName(), whichOut)
+
+		logger.Infof("OK\n")
+
+		// Capture current rpm-ostree status
+		g.By("Capture the current ostree deployment")
+		initialDeployment, err := workerNode.GetBootedOsTreeDeployment(false)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the booted ostree deployment")
+
+		o.Expect(initialDeployment).
+			To(o.ContainSubstring("LayeredPackages: %s", rpmName),
+				"rpm-ostree is not reporting the installed '%s' package in the rpm-ostree status command", rpmName)
+
+		logger.Infof("OK\n")
+
+		// Build the new osImage
+		osImageBuilder := OsImageBuilderInNode{node: workerNode, dockerFileCommands: dockerFileCommands}
+		digestedImage, err := osImageBuilder.CreateAndDigestOsImage()
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error creating the new osImage")
+		logger.Infof("OK\n")
+
+		// Create MC and wait for MCP
+		g.By("Create a MC to deploy the new osImage")
+		layeringMcName := "layering-mc-54159"
+		layeringMC := MachineConfig{name: layeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate),
+			pool: MachineConfigPoolWorker, parameters: []string{"OS_IMAGE=" + digestedImage}}
+
+		defer layeringMC.delete(oc)
+		layeringMC.create(oc.AsAdmin())
+
+		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		mcp.waitForComplete()
+		logger.Infof("The new osImage was deployed successfully\n")
+
+		// Check rpm-ostree status
+		g.By("Check that the rpm-ostree status is reporting the right booted image and installed rpm")
+
+		bootedDeployment, err := workerNode.GetBootedOsTreeDeployment(false)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
+		logger.Infof("Current rpm-ostree booted status:\n%s\n", bootedDeployment)
+		o.Expect(bootedDeployment).
+			To(o.ContainSubstring("* ostree-unverified-registry:"+digestedImage),
+				"container reference in the status is not reporting the right booted image")
+		o.Expect(bootedDeployment).
+			To(o.ContainSubstring("LayeredPackages: %s", rpmName),
+				"rpm-ostree is not reporting the installed 'wget' package in the rpm-ostree status command")
+
+		logger.Infof("OK!\n")
+
+		// Check rpm is installed
+		g.By("Check that the rpm is installed even if we use the new osImage")
+		rpmOut, err := workerNode.DebugNodeWithChroot("rpm", "-q", "wget")
+		o.Expect(err).
+			NotTo(o.HaveOccurred(),
+				"Error. %s rpm is not installed after changing the osImage in node %s.\n%s", rpmName, workerNode.GetName(), rpmOut)
+
+		wOut, err := workerNode.DebugNodeWithChroot("which", "wget")
+		o.Expect(err).
+			NotTo(o.HaveOccurred(),
+				"Error. wget binay is not available after installing '%s' rpm in node %s.\n%s", rpmName, workerNode.GetName(), wOut)
+
+		logger.Infof("OK\n")
+
+		// Check osImage content
+		g.By("Check that the new osImage content was deployed properly")
+		rf := NewRemoteFile(workerNode, "/usr/bin/tc_54159_rpm_and_osimage")
+		o.Expect(rf.Fetch()).
+			ShouldNot(o.HaveOccurred(),
+				"Error getting information about file %s in node %s", rf.GetFullPath(), workerNode.GetName())
+		o.Expect(rf.GetNpermissions()).To(o.Equal("1755"),
+			"Error, permissions of %s in node %s are not the expected ones", rf.GetFullPath(), workerNode.GetName())
+		o.Expect(rf.GetTextContent()).To(o.ContainSubstring("Hello world"),
+			"Error, content of %s in node %s is not the expected ones", rf.GetFullPath(), workerNode.GetName())
+		logger.Infof("OK\n")
+
+		// Delete the MC and wait for MCP
+		g.By("Delete the MC so that original osImage is restored")
+		layeringMC.delete(oc)
+		mcp.waitForComplete()
+		logger.Infof("MC was successfully deleted\n")
+
+		// Check the rpm-ostree status after the MC deletion
+		g.By("Check that the original ostree deployment was restored")
+		deployment, derr := workerNode.GetBootedOsTreeDeployment(false)
+		o.Expect(derr).NotTo(o.HaveOccurred(),
+			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
+		o.Expect(deployment).To(o.Equal(initialDeployment),
+			"Error! the initial deployment was not properly restored after deleting the MachineConfig")
+		logger.Infof("OK!\n")
+
+	})
+
 	g.It("Author:sregidor-NonPreRelease-Medium-54049-Verify base images in the release image", func() {
 		var (
 			oldMachineConfigOsImage = "machine-os-content"
@@ -253,15 +397,17 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error extracting pull-secret")
 		logger.Infof("Pull secret has been extracted to: %s\n", secretExtractDir)
+		dockerConfigFile := filepath.Join(secretExtractDir, ".dockerconfigjson")
 
 		g.By("Get base image for layering")
-		baseImage, err := getImageFromRelaseInfo(oc.AsAdmin(), LayeringBaseImageReleaseInfo, secretExtractDir)
+		baseImage, err := getImageFromReleaseInfo(oc.AsAdmin(), LayeringBaseImageReleaseInfo, dockerConfigFile)
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error getting the base image to build new osImages")
 		logger.Infof("Base image: %s\n", baseImage)
 
 		g.By("Inspect base image information")
-		inspectInfo, _, err := skopeoInspect(baseImage, secretExtractDir)
+		skopeoCLI := NewSkopeoCLI().SetAuthFile(dockerConfigFile)
+		inspectInfo, err := skopeoCLI.Run("inspect").Args("--tls-verify=false", "--config", "docker://"+baseImage).Output()
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error using 'skopeo' to inspect base image %s", baseImage)
 
@@ -274,7 +420,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		logger.Infof("OK!\n")
 
 		g.By("Verify that old machine config os content is not present in the release info")
-		mcOsIMage, mcErr := getImageFromRelaseInfo(oc.AsAdmin(), oldMachineConfigOsImage, secretExtractDir)
+		mcOsIMage, mcErr := getImageFromReleaseInfo(oc.AsAdmin(), oldMachineConfigOsImage, dockerConfigFile)
 		o.Expect(mcErr).NotTo(o.HaveOccurred(),
 			"Error getting the old machine config os content image")
 		o.Expect(mcOsIMage).To(o.BeEmpty(),
@@ -282,7 +428,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		logger.Infof("OK!\n")
 
 		g.By("Verify that new core extensions image is present in the release info")
-		coreExtensionsValue, exErr := getImageFromRelaseInfo(oc.AsAdmin(), coreExtensions, secretExtractDir)
+		coreExtensionsValue, exErr := getImageFromReleaseInfo(oc.AsAdmin(), coreExtensions, dockerConfigFile)
 		o.Expect(exErr).NotTo(o.HaveOccurred(),
 			"Error getting the new core extensions image")
 		o.Expect(coreExtensionsValue).NotTo(o.BeEmpty(),
@@ -301,12 +447,11 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 // expectedNDReason: expected value for the reason in the MCP NodeDegraded condition
 func checkInvalidOsImagesDegradedStatus(oc *exutil.CLI, image, layeringMcName, expectedNDStatus, expectedNDMessage, expectedNDReason string) {
 	var (
-		genericMcTemplate = "generic-machine-config-template.yml"
-		mcp               = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		mcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 	)
 	// Create MC and wait for MCP
 	g.By("Create a MC to deploy the new osImage that is non-bootable")
-	layeringMC := MachineConfig{name: layeringMcName, Template: *NewMCOTemplate(oc, genericMcTemplate), skipWaitForMcp: true,
+	layeringMC := MachineConfig{name: layeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate), skipWaitForMcp: true,
 		pool: mcp.GetName(), parameters: []string{"OS_IMAGE=" + image}}
 
 	// Defer the error recovery logic
@@ -319,8 +464,8 @@ func checkInvalidOsImagesDegradedStatus(oc *exutil.CLI, image, layeringMcName, e
 			logger.Infof("Recovering degraded nodes")
 			// At this point we dont know exactly the state of the cluster, so we make sure that
 			// all nodes (and not only the degraded ones) have the right desiredConfig annotation
-			degradedNodes, _ := NewNodeList(oc.AsAdmin()).GetAll()
-			for _, degradedNode := range degradedNodes {
+			allNodes, _ := NewNodeList(oc.AsAdmin()).GetAll()
+			for _, degradedNode := range allNodes {
 				logger.Infof("Recovering from errors in node: %s", degradedNode)
 				_ = degradedNode.RestoreDesiredConfig()
 			}
@@ -397,4 +542,11 @@ func checkInvalidOsImagesDegradedStatus(oc *exutil.CLI, image, layeringMcName, e
 
 	logger.Infof("OK!\n")
 
+}
+
+func skipTestIfSupportedArchNotMatched(oc *exutil.CLI) {
+	architecture := exutil.GetClusterArchitecture(oc)
+	if architecture != ArchitectureAMD64 && architecture != ArchitectureARM64 {
+		g.Skip("Do not support " + architecture + "architecture")
+	}
 }

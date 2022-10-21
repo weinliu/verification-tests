@@ -154,21 +154,37 @@ func (n Node) GetRpmOstreeStatus(asJSON bool) (string, error) {
 }
 
 // GetBootedOsTreeDeployment returns the ostree deployment currently booted. In json format
-func (n Node) GetBootedOsTreeDeployment() (string, error) {
-	stringStatus, err := n.GetRpmOstreeStatus(true)
-	if err != nil {
-		return "", err
-	}
+func (n Node) GetBootedOsTreeDeployment(asJSON bool) (string, error) {
+	if asJSON {
+		stringStatus, err := n.GetRpmOstreeStatus(true)
+		if err != nil {
+			return "", err
+		}
 
-	deployments := JSON(stringStatus).Get("deployments")
-	for _, item := range deployments.Items() {
-		booted := item.Get("booted").ToBool()
-		if booted {
-			return item.AsJSONString()
+		deployments := JSON(stringStatus).Get("deployments")
+		for _, item := range deployments.Items() {
+			booted := item.Get("booted").ToBool()
+			if booted {
+				return item.AsJSONString()
+			}
+		}
+	} else {
+
+		stringStatus, err := n.GetRpmOstreeStatus(false)
+		if err != nil {
+			return "", err
+		}
+		deployments := strings.Split(stringStatus, "\n\n")
+		for _, deployment := range deployments {
+			if strings.Contains(deployment, "*") {
+				return deployment, nil
+			}
 		}
 	}
+
 	logger.Infof("WARNING! No booted deployment found in node %s", n.GetName())
 	return "", nil
+
 }
 
 // PollIsCordoned returns a function that can be used by Gomega to poll the if the node is cordoned (with Eventually/Consistently)
@@ -399,6 +415,70 @@ func (n *Node) IsKernelArgEnabled(karg string) (bool, error) {
 	}
 
 	return (strings.Contains(unameOut, karg) || strings.Contains(cliOut, karg)), nil
+}
+
+// InstallRpm installs the rpm in the node using rpm-ostree command
+func (n *Node) InstallRpm(rpmName string) (string, error) {
+	logger.Infof("Installing rpm '%s' in node  %s", rpmName, n.GetName())
+	out, err := n.DebugNodeWithChroot("rpm-ostree", "install", rpmName)
+
+	return out, err
+}
+
+// UninstallRpm installs the rpm in the node using rpm-ostree command
+func (n *Node) UninstallRpm(rpmName string) (string, error) {
+	logger.Infof("Uninstalling rpm '%s' in node  %s", rpmName, n.GetName())
+	out, err := n.DebugNodeWithChroot("rpm-ostree", "uninstall", rpmName)
+
+	return out, err
+}
+
+// Reboot reboots the node after waiting 10 seconds. To know why look https://issues.redhat.com/browse/OCPBUGS-1306
+func (n *Node) Reboot() (string, error) {
+	logger.Infof("REBOOTING NODE %s !!", n.GetName())
+	return n.DebugNodeWithChroot("sh", "-c", "sleep 10s && systemctl reboot")
+}
+
+// IsRpmOsTreeIdle returns true if `rpm-ostree status` reports iddle state
+func (n *Node) IsRpmOsTreeIdle() (bool, error) {
+	status, err := n.GetRpmOstreeStatus(false)
+
+	if strings.Contains(status, "State: idle") {
+		return true, err
+	}
+
+	return false, err
+}
+
+// WaitUntilRpmOsTreeIsIdle waits until rpm-ostree reports an idle state. Returns an error if times out
+func (n *Node) WaitUntilRpmOsTreeIsIdle() error {
+	logger.Infof("Waiting for rpm-ostree state to be idle in node %s", n.GetName())
+	waitErr := wait.Poll(10*time.Second, 10*time.Minute, func() (bool, error) {
+		isIddle, err := n.IsRpmOsTreeIdle()
+		if err == nil {
+			if isIddle {
+				return true, nil
+			}
+			return false, nil
+		}
+
+		logger.Infof("Error waiting for rpm-ostree status to report idle state: %s.\nTry next round", err)
+		return false, nil
+	})
+
+	if waitErr != nil {
+		logger.Errorf("Timeout while waiting for rpm-ostree status to report idle state in node %s. Error: %s",
+			n.GetName(),
+			waitErr)
+	}
+
+	return waitErr
+
+}
+
+// CancelRpmOsTreeTransactions cancels rpm-ostree transactions
+func (n *Node) CancelRpmOsTreeTransactions() (string, error) {
+	return n.DebugNodeWithChroot("rpm-ostree", "cancel")
 }
 
 // GetAll returns a []Node list with all existing nodes

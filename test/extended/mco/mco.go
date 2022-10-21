@@ -195,7 +195,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42365-add real time kernel argument [Disruptive]", func() {
 		platform := exutil.CheckPlatform(oc)
-		if platform == "gcp" || platform == "aws" {
+		if platform == GCPPlatform || platform == AWSPlatform {
 			workerNode := skipTestIfOsIsNotCoreOs(oc)
 			textToVerify := TextToVerify{
 				textToVerifyForMC:   "realtime",
@@ -882,7 +882,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		mccPlatformStatus := NewResource(oc.AsAdmin(), "controllerconfig", "machine-config-controller").GetOrFail("{.spec.infra.status.platformStatus}")
 		logger.Infof("test mccPlatformStatus:\n %s", mccPlatformStatus)
 
-		if exutil.CheckPlatform(oc) == "azure" {
+		if exutil.CheckPlatform(oc) == AzurePlatform {
 			g.By("check cloudName field.")
 
 			var jsonMccPlatformStatus map[string]interface{}
@@ -2143,7 +2143,7 @@ nulla pariatur.`
 
 		// Skip if not AWS
 		platform := exutil.CheckPlatform(oc)
-		if platform != "aws" {
+		if platform != AWSPlatform {
 			g.Skip(fmt.Sprintf("Current platform is %s. AWS platform is required to execute this test case!.", platform))
 		}
 
@@ -2306,7 +2306,7 @@ nulla pariatur.`
 		// skip the test if fips is not enabled
 		skipTestIfFIPSIsNotEnabled(oc)
 		// skip the test if platform is not aws or gcp. realtime kargs currently supported on these platforms
-		skipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp")
+		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform, GCPPlatform)
 
 		g.By("create machine config to enable fips ")
 		fipsMcName := "50-fips-bz-poc"
@@ -2344,7 +2344,7 @@ nulla pariatur.`
 	})
 
 	g.It("Author:sregidor-NonPreRelease-Critical-53960-No failed units in the bootstrap machine", func() {
-		skipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
+		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform, AzurePlatform)
 
 		failedUnitsCommand := "sudo systemctl list-units --failed --all"
 

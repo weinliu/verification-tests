@@ -22,6 +22,11 @@ const (
 	// ControllerLabelValue value used to identify the controller pod
 	ControllerLabelValue = "machine-config-controller"
 
+	// ArchitectureARM64 value used to identify arm64 architecture
+	ArchitectureARM64 = "arm64"
+	// ArchitectureAMD64 value used to identify amd64 architecture
+	ArchitectureAMD64 = "amd64"
+
 	// TmplAddSSHAuthorizedKeyForWorker template file name: change-worker-add-ssh-authorized-key
 	TmplAddSSHAuthorizedKeyForWorker = "change-worker-add-ssh-authorized-key"
 
@@ -35,6 +40,8 @@ const (
 	LayeringBaseImageReleaseInfo = "rhel-coreos-8"
 	// TmplHypershiftMcConfigMap template file name:hypershift-cluster-mc-configmap.yaml, it's used to create mc for hosted cluster
 	TmplHypershiftMcConfigMap = "hypershift-cluster-mc-configmap.yaml"
+	// GenericMCTemplate is the name of a MachineConfig template that can be fully configured by parameters
+	GenericMCTemplate = "generic-machine-config-template.yml"
 
 	// HypershiftCrNodePool keyword: nodepool
 	HypershiftCrNodePool = "nodepool"
@@ -74,4 +81,11 @@ const (
 	TestCtxKeyFilePath = "filepath"
 	// TestCtxKeySkipCleanUp indicates whether clean up should be skipped
 	TestCtxKeySkipCleanUp = "skipCleanUp"
+
+	// AWSPlatform value used to identify aws infrastructure
+	AWSPlatform = "aws"
+	// GCPPlatform value used to identify gcp infrastructure
+	GCPPlatform = "gcp"
+	// AzurePlatform value used to identify azure infrastructure
+	AzurePlatform = "azure"
 )

@@ -214,3 +214,8 @@ func (rf RemoteFile) GetFilteredTextContent(regex string) ([]string, error) {
 
 	return filteredContent, nil
 }
+
+// GetFullPath returns the full path of the remote file
+func (rf RemoteFile) GetFullPath() string {
+	return rf.fullPath
+}

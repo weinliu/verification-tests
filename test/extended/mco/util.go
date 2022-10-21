@@ -323,6 +323,7 @@ func (mcp *MachineConfigPool) GetSortedUpdatedNodes(maxUnavailable int) []Node {
 		}
 
 		if degradedstdout != 0 {
+			logger.Errorf("Degraded MC:\n%s", mcp.PrettyString())
 			exutil.AssertWaitPollNoErr(fmt.Errorf("Degraded machines"), fmt.Sprintf("mcp %s has degraded %d machines", mcp.name, degradedstdout))
 		}
 
@@ -426,6 +427,7 @@ func (mcp *MachineConfigPool) waitForComplete() {
 		}
 
 		if degradedstdout != 0 {
+			logger.Errorf("Degraded MC:\n%s", mcp.PrettyString())
 			exutil.AssertWaitPollNoErr(fmt.Errorf("Degraded machines"), fmt.Sprintf("mcp %s has degraded %d machines", mcp.name, degradedstdout))
 		}
 
