@@ -3177,4 +3177,68 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The number of image signatures are not enough!"))
 	})
+
+	g.It("Author:xiuwang-High-21482-Set default externalRegistryHostname in image policy config globally[Serial]", func() {
+		g.By("Set registry default route")
+		defer restoreRouteExposeRegistry(oc)
+		createRouteExposeRegistry(oc)
+		regRoute := getRegistryDefaultRoute(oc)
+		waitRouteReady(oc, regRoute)
+
+		g.By("Save the external registry auth with the specific token")
+		authFile, err := saveImageRegistryAuth(oc, "builder", regRoute, oc.Namespace())
+		defer os.RemoveAll(authFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", "test21482:latest", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "test21482", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Copy internal image to another tag")
+		myimage1 := regRoute + "/" + oc.Namespace() + "/test21482:latest"
+		myimage2 := regRoute + "/" + oc.Namespace() + "/myimage:latest"
+		mirrorErr := oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", myimage1, myimage2, "--insecure", "-a", authFile).Execute()
+		o.Expect(mirrorErr).NotTo(o.HaveOccurred())
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-High-24167-Should display information about images via oc image info", func() {
+		g.By("Get external registry host")
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(oc, regRoute)
+
+		g.By("Save the external registry auth with the specific token")
+		authFile, err := saveImageRegistryAuth(oc, "default", regRoute, oc.Namespace())
+		defer os.RemoveAll(authFile)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check a internal image info with --insecure  and --registry-config option")
+		err = waitForAnImageStreamTag(oc, "openshift", "cli", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		info, err := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", regRoute+"/openshift/cli:latest", "--insecure", "-a", authFile).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(info)).To(o.ContainSubstring("application/vnd.docker.distribution.manifest.v2+json"))
+		o.Expect(string(info)).To(o.ContainSubstring("OS:          linux"))
+		o.Expect(string(info)).To(o.ContainSubstring("Image Size"))
+		o.Expect(string(info)).To(o.ContainSubstring("Layers"))
+
+		g.By("Check a manifest list image without option")
+		info, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c").Output()
+		if err == nil || !strings.Contains(info, "use --filter-by-os to select") {
+			e2e.Failf("Don't get expect info with manifest list image")
+		}
+
+		g.By("Check a manifest list image with --filter-by-os option for specific arch")
+		info, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", "--filter-by-os=linux/amd64").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(info)).To(o.ContainSubstring("Arch:          amd64"))
+
+		g.By("Check a manifest list image with --show-multiarch option")
+		info, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", "--filter-by-os=linux/arm64", "-o", "json").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(info, "arm64")).To(o.BeTrue())
+	})
 })
