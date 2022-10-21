@@ -43,9 +43,15 @@ func buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir string) {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Successfully"))
 	}
-	output, err := podmanCLI.Run("push").Args(imageTag).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(output).To(o.ContainSubstring("Storing signatures"))
+
+	waitErr := wait.Poll(30*time.Second, 60*time.Second, func() (bool, error) {
+		output, _ := podmanCLI.Run("push").Args(imageTag).Output()
+		if strings.Contains(output, "Storing signatures") {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, "Podman push bundle image failed.")
 
 }
 

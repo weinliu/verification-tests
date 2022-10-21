@@ -11,37 +11,40 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+// AuthInfo returns the error info
 type AuthInfo struct {
 	Authorization string `json:"authorization"`
 }
 
-// TagInfo
+// TagInfo returns the images tag info
 type TagInfo struct {
-	Name             string `json:"name"`
-	Reversion        bool   `json:"reversion"`
-	Start_ts         int64  `json:"start_ts"`
-	End_ts           int64  `json:"end_ts"`
-	Image_Id         string `json:"image_id"`
-	Last_modified    string `json:"last_modified"`
-	Expiration       string `json:"expiration"`
-	manifest_digest  string `json:"manifest_digest"`
-	Docker_image_id  string `json:"docker_image_id"`
-	Is_manifest_list bool   `json:"is_manifest_list"`
-	Size             int64  `json:"size"`
+	Name           string `json:"name"`
+	Reversion      bool   `json:"reversion"`
+	StartTs        int64  `json:"start_ts"`
+	EndTs          int64  `json:"end_ts"`
+	ManifestDigest string `json:"manifest_digest"`
+	ImageID        string `json:"image_id"`
+	LastModified   string `json:"last_modified"`
+	Expiration     string `json:"expiration"`
+	DockerImageID  string `json:"docker_image_id"`
+	IsManifestList bool   `json:"is_manifest_list"`
+	Size           int64  `json:"size"`
 }
 
+// TagsResult returns the images tag info
 type TagsResult struct {
-	has_additional bool      `json:"has_additional"`
-	page           int       `json:"page"`
-	Tags           []TagInfo `json:"tags"`
+	HasAdditional bool      `json:"has_additional"`
+	Page          int       `json:"page"`
+	Tags          []TagInfo `json:"tags"`
 }
 
-// PodmanCLI provides function to run the docker command
+// QuayCLI provides function to run the quay command
 type QuayCLI struct {
 	EndPointPre   string
 	Authorization string
 }
 
+// NewQuayCLI initialize the quay api
 func NewQuayCLI() *QuayCLI {
 	newclient := &QuayCLI{}
 	newclient.EndPointPre = "https://quay.io/api/v1/repository/"
@@ -59,11 +62,11 @@ func NewQuayCLI() *QuayCLI {
 		if err != nil {
 			e2e.Logf("File reading error")
 		} else {
-			var authJson AuthInfo
-			if err := json.Unmarshal(content, &authJson); err != nil {
+			var authJSON AuthInfo
+			if err := json.Unmarshal(content, &authJSON); err != nil {
 				e2e.Logf("parser json error")
 			} else {
-				authString = "Bearer " + authJson.Authorization
+				authString = "Bearer " + authJSON.Authorization
 			}
 		}
 	}
@@ -120,6 +123,7 @@ func (c *QuayCLI) DeleteTag(imageIndex string) (bool, error) {
 	return rc, error
 }
 
+// CheckTagNotExist check the image exist
 func (c *QuayCLI) CheckTagNotExist(imageIndex string) (bool, error) {
 	if strings.Contains(imageIndex, ":") {
 		imageIndex = strings.Replace(imageIndex, ":", "/tag/", 1)
@@ -142,13 +146,14 @@ func (c *QuayCLI) CheckTagNotExist(imageIndex string) (bool, error) {
 	if response.StatusCode == 404 {
 		e2e.Logf("tag %s not exist", imageIndex)
 		return true, nil
-	} else {
-		contents, _ := ioutil.ReadAll(response.Body)
-		e2e.Logf("responce is %s", string(contents))
-		return false, nil
 	}
+	contents, _ := ioutil.ReadAll(response.Body)
+	e2e.Logf("responce is %s", string(contents))
+	return false, nil
+
 }
 
+// GetTagNameList get the tag name list in quay
 func (c *QuayCLI) GetTagNameList(imageIndex string) ([]string, error) {
 	var TagNameList []string
 	tags, err := c.GetTags(imageIndex)
@@ -161,6 +166,7 @@ func (c *QuayCLI) GetTagNameList(imageIndex string) ([]string, error) {
 	return TagNameList, nil
 }
 
+// GetTags list all tags in repository
 func (c *QuayCLI) GetTags(imageIndex string) ([]TagInfo, error) {
 	var result []TagInfo
 	if strings.Contains(imageIndex, ":") {
@@ -187,18 +193,39 @@ func (c *QuayCLI) GetTags(imageIndex string) ([]TagInfo, error) {
 	if response.StatusCode != 200 {
 		e2e.Logf("get %s failed, response code is %d", imageIndex, response.StatusCode)
 		return result, fmt.Errorf("return code is %d, not 200", response.StatusCode)
-	} else {
-		contents, err := ioutil.ReadAll(response.Body)
-		if err != nil {
-			return result, err
-		}
-		//e2e.Logf(string(contents))
-		//unmarshal json file
-		var TagsResultOut TagsResult
-		if err := json.Unmarshal(contents, &TagsResultOut); err != nil {
-			return result, err
-		}
-		result = TagsResultOut.Tags
-		return result, nil
 	}
+	contents, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return result, err
+	}
+	//e2e.Logf(string(contents))
+	//unmarshal json file
+	var TagsResultOut TagsResult
+	if err := json.Unmarshal(contents, &TagsResultOut); err != nil {
+		return result, err
+	}
+	result = TagsResultOut.Tags
+	return result, nil
+
+}
+
+// GetImageDigest gets the ID of the specified image
+func (c *QuayCLI) GetImageDigest(imageIndex string) (string, error) {
+
+	var result string
+	tags, err := c.GetTags(imageIndex)
+	if err != nil {
+		e2e.Logf("Can't get the digest, GetTags list failed.")
+		return result, err
+	}
+	imageTag := strings.Split(imageIndex, ":")[1]
+	for image := range tags {
+		if tags[image].Name == imageTag {
+			result := tags[image].ManifestDigest
+			return result, nil
+		}
+	}
+	e2e.Logf("Can't get the digest, Manifest_digest not found.")
+	return result, nil
+
 }
