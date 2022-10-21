@@ -24,7 +24,7 @@ describe('Dynamic Plugins notification features', () => {
     cy.logout()
   })
 
-  it('(OCP-52366, xiangyli) ocp52366-failure add Dyamic Plugins to Cluster Overview Status card and notification drawer', () => {
+  it('(OCP-52366, xiangyli) ocp52366-failure add Dyamic Plugins to Cluster Overview Status card and notification drawer', {tags: ['e2e','admin']}, () => {
     Overview.goToDashboard()
     cy.get('[data-status-id="Dynamic Plugins-secondary-status"]').contains('Degraded')
     Overview.goToDashboard()

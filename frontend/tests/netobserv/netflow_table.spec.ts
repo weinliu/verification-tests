@@ -37,7 +37,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests',
             netflowPage.visit()
         })
 
-        it("should validate netflow table features", function () {
+        it("should validate netflow table features", {tags: ['e2e','admin']}, function () {
             cy.byTestID(genSelectors.timeDrop).then(btn => {
                 expect(btn).to.exist
                 cy.wrap(btn).click().then(drop => {
@@ -71,7 +71,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests',
             })
         })
 
-        it("should validate query summary panel", function () {
+        it("should validate query summary panel", {tags: ['e2e','admin']}, function () {
             let warningExists = false
             cy.get(querySumSelectors.queryStatsPanel).should('exist').then(qrySum => {
                 if (Cypress.$(querySumSelectors.queryStatsPanel + ' svg.query-summary-warning').length > 0) {
@@ -114,7 +114,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests',
             })
         })
 
-        it("should validate columns", function () {
+        it("should validate columns", {tags: ['e2e','admin']}, function () {
             cy.byTestID(colSelectors.mColumns).click().then(col => {
                 cy.get(colSelectors.columnsModal).should('be.visible')
             })
@@ -156,7 +156,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests',
             })
         })
 
-        it('should validate query options', function () {
+        it('should validate query options', {tags: ['e2e','admin']}, function () {
             cy.get('.pf-c-select__toggle').click()
             cy.byTestID('query-options-dropdown').should('be.visible').within(() => {
                 cy.byTestID('limit-100').click()
@@ -165,7 +165,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests',
             })
         })
 
-        it("should validate filters", function () {
+        it("should validate filters", {tags: ['e2e','admin']}, function () {
             cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
 
             // Verify Source namespace filter
@@ -209,7 +209,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests',
             cy.get('div.custom-chip').should('not.exist')
         })
 
-        it("should validate localstorage for plugin", function () {
+        it("should validate localstorage for plugin", {tags: ['e2e','admin']}, function () {
             // clear all filters if present
             cy.get('body').then((body) => {
                 if (body.find('[data-test="clear-all-filters-button"]').length > 0) {

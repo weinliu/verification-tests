@@ -18,7 +18,7 @@ describe("yaml editor tests", () => {
     cy.exec(`oc delete project ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
   });
 
-  it("(OCP-21956,xiyuzhao) drag and drop file for Import YAML page	", () => {
+  it("(OCP-21956,xiyuzhao) drag and drop file for Import YAML page", {tags: ['e2e','admin']}, () => {
     cy.visit(`/k8s/ns/${testName}/import`)
       .contains('[data-test-id="resource-title"]', "Import YAML");
     importYamlPage.dragDropYamlFile("./fixtures/fakelargefile.yaml");  

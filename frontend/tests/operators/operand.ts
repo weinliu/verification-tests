@@ -20,7 +20,7 @@ describe('operand tests', () => {
         cy.logout();
     });
 
-    it('(OCP-46583,xiyuzhao) Operator should be able to customize order of conditions table', () => {
+    it('(OCP-46583,xiyuzhao) Operator should be able to customize order of conditions table', {tags: ['e2e','admin']}, () => {
         // If a descriptor is defined on the status.conditions property, 
         // It will be rendered in the order it appears in the CSV descriptors array
         cy.visit(`/k8s/ns/${testName}/clusterserviceversions/mock-operator/test.tectonic.com~v1~MockResource/mock-resource-instance`)

@@ -13,7 +13,7 @@ describe('logs related features', () => {
         cy.logout;
     });
 
-    it('(OCP-43996,admin,yapei) View Master Node Logs', () => {
+    it('(OCP-43996,yapei) View Master Node Logs', {tags: ['e2e','admin']}, () => {
         cy.visit('/k8s/cluster/nodes?rowFilter-node-role=master');
         listPage.rows.shouldBeLoaded();
         listPage.rows.clickFirstLinkInFirstRow();
@@ -29,7 +29,7 @@ describe('logs related features', () => {
         logsPage.selectLogFile('audit.log');
         logsPage.logWindowLoaded();
     });
-    it('(OCP-43996,admin,yapei) View Worker Node logs', () => {
+    it('(OCP-43996,yapei) View Worker Node logs', {tags: ['e2e','admin']}, () => {
         cy.visit('/k8s/cluster/nodes?rowFilter-node-role=worker');
         listPage.rows.shouldBeLoaded();
         listPage.rows.clickFirstLinkInFirstRow();
@@ -40,7 +40,7 @@ describe('logs related features', () => {
         logsPage.filterByUnit('systemd-journald');
         logsPage.logLinesNotContain('crio');     
     });
-    it('(OCP-46636,admin,yanpzhan) Support for search and line number in pod/node log', () => {
+    it('(OCP-46636,yanpzhan) Support for search and line number in pod/node log', {tags: ['e2e','admin']}, () => {
         cy.visit('/k8s/ns/openshift-console/pods');
         listPage.rows.shouldBeLoaded();
         listPage.rows.clickFirstLinkInFirstRow();

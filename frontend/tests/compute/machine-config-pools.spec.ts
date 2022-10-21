@@ -22,7 +22,7 @@ describe("Improve MachineConfigPool list table for update status", () => {
     cy.logout();
   });
 
-  it("(OCP-51395, xiangyli) Improve MachineConfigPool list table for update status", () => {
+  it("(OCP-51395, xiangyli) Improve MachineConfigPool list table for update status", {tags: ['e2e','admin'] }, () => {
 
     cy.visit('/settings/cluster')
     ClusterSettingPage.configureChannel()

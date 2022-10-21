@@ -37,7 +37,7 @@ describe('Dynamic plugins features', () => {
     cy.exec(`oc patch console.operator cluster -p '{"spec":{"plugins":null}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     cy.exec(`oc delete consoleplugin console-demo-plugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
   });
-  it('(OCP-45629, admin,yapei) dynamic plugins proxy to services on the cluster', () => {
+  it('(OCP-45629,yapei) dynamic plugins proxy to services on the cluster', {tags: ['e2e','admin']}, () => {
     nav.sidenav.switcher.changePerspectiveTo('Developer');
     guidedTour.close();
     cy.wait(30000);
@@ -65,7 +65,7 @@ describe('Dynamic plugins features', () => {
     cy.contains('success').should('be.visible');
   });
 
-  it('(OCP-50757, admin,yapei) Support ordering of plugin nav sections in admin perspective', () => {
+  it('(OCP-50757,yapei) Support ordering of plugin nav sections in admin perspective', {tags: ['e2e','admin']}, () => {
     nav.sidenav.switcher.changePerspectiveTo('Administrator');
     // Demo Plugin nav is rendered after Workloads, before Networking
     cy.contains('button', 'Demo Plugin').should('have.attr', 'data-test', 'nav-demo-plugin');
@@ -80,7 +80,7 @@ describe('Dynamic plugins features', () => {
       .should('have.text', 'Networking');
   });
 
-  it('(OCP-52366, xiangyli) Add Dyamic Plugins to Cluster Overview Status card and notification drawer', () => {
+  it('(OCP-52366, xiangyli) Add Dyamic Plugins to Cluster Overview Status card and notification drawer', {tags: ['e2e','admin']}, () => {
     Overview.goToDashboard()
     statusCard.togglePluginPopover()
     let total = 0
@@ -93,7 +93,7 @@ describe('Dynamic plugins features', () => {
     })
   })
 
-  it('(OCP-53234,admin,yapei) Show alert when console operator is Unmanaged', () => {
+  it('(OCP-53234,yapei) Show alert when console operator is Unmanaged', {tags: ['e2e','admin']}, () => {
     cy.visit('/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins');
     cy.get('a[data-test-id="console-demo-plugin"]').should('exist');
     cy.contains('unmanaged').should('exist');

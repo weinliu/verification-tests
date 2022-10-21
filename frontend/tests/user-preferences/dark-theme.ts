@@ -11,7 +11,7 @@ describe('dark-theme related feature', () => {
     cy.logout;
   });
 
-  it('(OCP-49134,admin,yanpzhan) Support dark theme for admin console', () => {
+  it('(OCP-49134,yanpzhan) Support dark theme for admin console', {tags: ['e2e']}, () => {
     cy.visit('/user-preferences');
     consoleTheme.setLightTheme();
     cy.get('.pf-theme-dark').should('not.exist');

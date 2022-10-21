@@ -9,7 +9,7 @@ describe('Projects', () => {
     cy.logout;
   });
 
-  it('(OCP-44210,yanpzhan) check description and help text on project creation page', () => {
+  it('(OCP-44210,yanpzhan) check description and help text on project creation page', {tags: ['e2e']}, () => {
     projectsPage.goToProjectsPage();
     listPage.clickCreateYAMLbutton();
     projectsPage.checkCreationModalHelpText();

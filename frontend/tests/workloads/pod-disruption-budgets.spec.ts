@@ -23,7 +23,7 @@ describe('PDB List Page and Detail Page Test', () => {
     cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
   })
 
-  it('(OCP-50657, xiangyli) - Add support for PDB (Pod Disruption Budget)', () => {
+  it('(OCP-50657, xiangyli) - Add support for PDB (Pod Disruption Budget)', {tags: ['e2e','admin']}, () => {
     const pdbParams = {
       name: 'example-pdbd',
       label: 'app=name',

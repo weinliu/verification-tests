@@ -19,7 +19,7 @@ describe("namespace dropdown favorite test", () => {
     cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
   });
 
-  it("(OCP-45319, xiangyli) - Check the system namespaces that are Favorited will list in the Favorited list even if 'show default projects' is unselectedt", () => {
+  it("(OCP-45319, xiangyli) - Check the system namespaces that are Favorited will list in the Favorited list even if 'show default projects' is unselectedt", {tags: ['e2e','admin']}, () => {
     const namespaces = [
       'openshift-apiserver-operator',
       'openshift-authentication-operator'

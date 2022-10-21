@@ -13,7 +13,7 @@ describe('Projects dropdown tests', () => {
         cy.logout;
     });
 
-    it('(OCP-43130, admin) Check default projects toggle bar', () => {
+    it('(OCP-43130) Check default projects toggle bar', {tags: ['e2e','admin']}, () => {
         // podsPage.goToPodsInAllNamespaces()
         podsPage.goToPodsForGivenNamespace('openshift-apiserver')
         namespaceDropdown.clickTheDropdown()
