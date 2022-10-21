@@ -3,7 +3,6 @@ set -euo pipefail
 ARTIFACT_DIR=${ARTIFACT_DIR:=/tmp/artifacts}
 mkdir -p $ARTIFACT_DIR
 SCREENSHOTS_DIR=gui_test_screenshots
-SHARED_DIR=/tmp/cypresstest
 echo $SHARED_DIR
 function copyArtifacts {
   if [ -d "$ARTIFACT_DIR" ] && [ -d "$SCREENSHOTS_DIR" ]; then
