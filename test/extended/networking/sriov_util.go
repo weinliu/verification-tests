@@ -147,6 +147,7 @@ func chkPodsStatus(oc *exutil.CLI, ns, lable string) {
 func rmSriovNetworkPolicy(oc *exutil.CLI, policyname, ns string) {
 	_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("SriovNetworkNodePolicy", policyname, "-n", ns, "--ignore-not-found").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("remove sriovnetworknodepolicy %s", policyname)
 	waitForSriovPolicyReady(oc, ns)
 }
 
@@ -165,7 +166,7 @@ func (pod *sriovPod) waitForPodReady(oc *exutil.CLI) {
 	res := false
 	err := wait.Poll(5*time.Second, 15*time.Minute, func() (bool, error) {
 		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", pod.name, "-n", pod.namespace, "-o=jsonpath={.status.phase}").Output()
-		e2e.Logf("the status of pod is %v", status)
+		e2e.Logf("the status of pod is %s", status)
 		if strings.Contains(status, "NotFound") {
 			e2e.Logf("the pod was created fail.")
 			res = false
@@ -188,7 +189,7 @@ func (pod *sriovPod) waitForPodReady(oc *exutil.CLI) {
 
 // Wait for sriov network policy ready
 func waitForSriovPolicyReady(oc *exutil.CLI, ns string) {
-	err := wait.Poll(20*time.Second, 20*time.Minute, func() (bool, error) {
+	err := wait.Poll(30*time.Second, 30*time.Minute, func() (bool, error) {
 		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sriovnetworknodestates", "-n", ns, "-o=jsonpath={.items[*].status.syncStatus}").Output()
 		e2e.Logf("the status of sriov policy is %v", status)
 		if err != nil {
@@ -199,9 +200,11 @@ func waitForSriovPolicyReady(oc *exutil.CLI, ns string) {
 		statusList := strings.Split(nodesStatus, " ")
 		for _, nodeStat := range statusList {
 			if nodeStat != "Succeeded" {
+				e2e.Logf("nodes sync up not ready yet: %v, retrying...", err)
 				return false, nil
 			}
 		}
+		e2e.Logf("nodes sync up ready now")
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "sriovnetworknodestates is not ready")
@@ -319,4 +322,27 @@ func (rs *sriovNetResource) chkSriovPolicy(oc *exutil.CLI) bool {
 		return false
 	}
 	return true
+}
+
+// Wait for nodes starting to sync up for sriov policy
+func waitForSriovPolicySyncUpStart(oc *exutil.CLI, ns string) {
+	err := wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sriovnetworknodestates", "-n", ns, "-o=jsonpath={.items[*].status.syncStatus}").Output()
+		e2e.Logf("the status of sriov policy is %s", status)
+		if err != nil {
+			e2e.Logf("failed to get sriov policy status: %v, retrying...", err)
+			return false, nil
+		}
+		nodesStatus := strings.TrimSpace(status)
+		statusList := strings.Split(nodesStatus, " ")
+		for _, nodeStat := range statusList {
+			if nodeStat == "InProgress" {
+				e2e.Logf("nodes start to sync up ...", err)
+				return true, nil
+			}
+		}
+		e2e.Logf("nodes sync up hasn't started yet ...")
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "sriovnetworknodestates sync up is in progress")
 }

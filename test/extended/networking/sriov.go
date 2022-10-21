@@ -509,4 +509,65 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		o.Expect(testpmdOutput).Should(o.MatchRegexp("forwards packets on 1 streams"))
 
 	})
+
+	g.It("NonPreRelease-Longduration-Author:yingwang-Medium-50440-creating and deleting multiple sriovnetworknodepolicy, cluster can work well.[Disruptive]", func() {
+		var (
+			buildPruningBaseDir            = exutil.FixturePath("testdata", "networking/sriov")
+			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy-template.yaml")
+			sriovOpNs                      = "openshift-sriov-network-operator"
+
+			sriovNetPolicyName1 = "sriovpolicypf1"
+			sriovNetPolicyName2 = "sriovpolicypf2"
+		)
+
+		sriovNetPolicy1 := sriovNetworkNodePolicy{
+			policyName:   sriovNetPolicyName1,
+			deviceType:   "netdevice",
+			deviceID:     "1015",
+			pfName:       "ens2f0",
+			vondor:       "15b3",
+			numVfs:       2,
+			resourceName: sriovNetPolicyName1,
+			template:     sriovNetworkNodePolicyTemplate,
+			namespace:    sriovOpNs,
+		}
+		sriovNetPolicy2 := sriovNetworkNodePolicy{
+			policyName:   sriovNetPolicyName2,
+			deviceType:   "netdevice",
+			deviceID:     "1015",
+			pfName:       "ens2f1",
+			vondor:       "15b3",
+			numVfs:       2,
+			resourceName: sriovNetPolicyName2,
+			template:     sriovNetworkNodePolicyTemplate,
+			namespace:    sriovOpNs,
+		}
+
+		g.By("1) ####### Check openshift-sriov-network-operator is running well ##########")
+		chkSriovOperatorStatus(oc, sriovOpNs)
+
+		g.By("2) Check the deviceID exists on the cluster worker")
+		if !checkDeviceIDExist(oc, sriovOpNs, sriovNetPolicy1.deviceID) {
+			g.Skip("the cluster do not contain the sriov card. skip this testing!")
+		}
+
+		g.By("3) ####### create a new sriov policy before the previous one is ready ############")
+		//create one sriovnetworknodepolicy
+		defer rmSriovNetworkPolicy(oc, sriovNetPolicy1.policyName, sriovOpNs)
+		sriovNetPolicy1.createPolicy(oc)
+		waitForSriovPolicySyncUpStart(oc, sriovNetPolicy1.namespace)
+		//create a new sriov policy before nodes sync up ready
+		defer rmSriovNetworkPolicy(oc, sriovNetPolicy2.policyName, sriovOpNs)
+		sriovNetPolicy2.createPolicy(oc)
+		waitForSriovPolicyReady(oc, sriovOpNs)
+		g.By("4) ####### delete and recreate sriov network policy ############")
+		//delete sriov policy and recreate it before nodes sync up ready
+		_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("SriovNetworkNodePolicy", sriovNetPolicy1.policyName, "-n", sriovOpNs, "--ignore-not-found").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForSriovPolicySyncUpStart(oc, sriovNetPolicy1.namespace)
+		defer rmSriovNetworkPolicy(oc, sriovNetPolicy1.policyName, sriovOpNs)
+		sriovNetPolicy1.createPolicy(oc)
+		waitForSriovPolicyReady(oc, sriovOpNs)
+
+	})
 })
