@@ -27,7 +27,7 @@ objects:
           imagePullPolicy: IfNotPresent
           sampling: 50
           cacheActiveTimeout: 5s
-          cacheMaxFlows: 1000
+          cacheMaxFlows: 100000
           interfaces: [ ]
           excludeInterfaces: ["lo"]
           logLevel: info
@@ -38,6 +38,7 @@ objects:
               cpu: 100m
             limits:
               memory: 100Mi
+          kafkaBatchSize: 10485760
       processor:
         port: 2055
         image: "${FLOWLOGSPIPELINE_IMAGE}"
@@ -45,11 +46,15 @@ objects:
         logLevel: trace
         enableKubeProbes: true
         healthPort: 8080
-        metricsServer:
-          port: 9102
-          tls:
-            type: "${METRIC_SERVER_TLS_TYPE}"
-        ignoreMetrics: []
+        profilePort: 6060
+        metrics:
+          server:
+            port: 9102
+            tls:
+              type: "${METRIC_SERVER_TLS_TYPE}"
+          ignoreTags:
+            - egress
+            - packets
         dropUnusedFields: true
         resources:
           requests:
@@ -59,6 +64,8 @@ objects:
             memory: 300Mi
         kafkaConsumerReplicas: 3
         kafkaConsumerAutoscaler: null
+        kafkaConsumerQueueCapacity: 1000
+        kafkaConsumerBatchSize: 10485760
       kafka:
         address: "kafka-cluster-kafka-bootstrap.netobserv"
         topic: "network-flows"
@@ -76,10 +83,10 @@ objects:
       loki:
         url: "${LOKI_URL}"
         batchWait: 1s
-        batchSize: 102400
+        batchSize: 10485760
         minBackoff: 1s
-        maxBackoff: 300s
-        maxRetries: 10
+        maxBackoff: 5s
+        maxRetries: 2
         staticLabels:
           app: netobserv-flowcollector
         tls:
@@ -94,6 +101,7 @@ objects:
         imagePullPolicy: IfNotPresent
         port: 9001
         logLevel: info
+        autoscaler: null
         portNaming:
           enable: true
           portNames:
