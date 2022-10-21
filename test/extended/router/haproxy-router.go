@@ -1055,19 +1055,31 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	})
 
-	g.It("Author:aiyengar-High-50405-Multiple routers with hostnetwork endpoint strategy can be deployed on same worker node with different http/https/stat port numbers", func() {
-		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
-		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-hostnetwork-only.yaml")
+	g.It("Author:shudili-High-50405-Multiple routers with hostnetwork endpoint strategy can be deployed on same worker node with different http/https/stat port numbers", func() {
 		var (
-			ingctrlhp = ingctrlHostPortDescription{
-				name:      "ocp50405",
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-hostnetwork-only.yaml")
+			ingctrlhp1          = ingctrlHostPortDescription{
+				name:      "ocp50405one",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
-				httpport:  8080,
-				httpsport: 8443,
-				statsport: 11936,
+				httpport:  10080,
+				httpsport: 10443,
+				statsport: 10936,
 				template:  customTemp,
 			}
+
+			ingctrlhp2 = ingctrlHostPortDescription{
+				name:      "ocp50405two",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				httpport:  10090,
+				httpsport: 11433,
+				statsport: 12936,
+				template:  customTemp,
+			}
+			ingctrlResource1 = "ingresscontrollers/" + ingctrlhp1.name
+			ingctrlResource2 = "ingresscontrollers/" + ingctrlhp2.name
 		)
 
 		g.By("Pre-flight check for the platform type and number of worker nodes in the environment")
@@ -1090,34 +1102,53 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("Collect  nodename of one of the default haproxy pods")
 		defNodeName := getRouterNodeName(oc, "default")
+		nodeHostName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", defNodeName, "-n", ingctrlhp1.namespace, "-o=jsonpath={.metadata.labels.kubernetes\\.io/hostname}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Label the node with a custom value")
-		exutil.AddLabelToNode(oc, defNodeName, "custom", ingctrlhp.name)
-		defer exutil.DeleteLabelFromNode(oc, defNodeName, "custom")
-
-		g.By("Create a custom ingresscontroller")
+		g.By("Create two custom ingresscontrollers")
 		baseDomain := getBaseDomain(oc)
-		ingctrlhp.domain = ingctrlhp.name + "." + baseDomain
-		defer ingctrlhp.delete(oc)
-		ingctrlhp.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrlhp.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrlhp.name))
+		ingctrlhp1.domain = ingctrlhp1.name + "." + baseDomain
+		ingctrlhp2.domain = ingctrlhp2.name + "." + baseDomain
 
-		g.By("Patch the ingresscontroller with custom label matching the node")
-		patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontroller/"+ingctrlhp.name, "{\"spec\":{\"nodePlacement\":{\"nodeSelector\":{\"matchLabels\":{\"custom\":\""+ingctrlhp.name+"\"}}}}}")
-		err = waitForCustomIngressControllerAvailable(oc, ingctrlhp.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrlhp.name))
+		defer ingctrlhp1.delete(oc)
+		ingctrlhp1.create(oc)
+		err = waitForCustomIngressControllerAvailable(oc, ingctrlhp1.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrlhp1.name))
 
-		g.By("Check the location of the pod again to verify if it resides on the labelled node")
-		newRouterNodeName := getRouterNodeName(oc, "ocp50405")
-		o.Expect(newRouterNodeName).To(o.ContainSubstring(defNodeName))
+		defer ingctrlhp2.delete(oc)
+		ingctrlhp2.create(oc)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrlhp2.name))
+		err = waitForCustomIngressControllerAvailable(oc, ingctrlhp2.name)
+
+		g.By("Patch the two custom ingress-controllers with nodePlacement")
+		patchSelectNode := "{\"spec\":{\"nodePlacement\":{\"nodeSelector\":{\"matchLabels\":{\"kubernetes.io/hostname\": \"" + nodeHostName + "\"}}}}}"
+		routerpod1 := getRouterPod(oc, ingctrlhp1.name)
+		routerpod2 := getRouterPod(oc, ingctrlhp2.name)
+
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource1, "-p", patchSelectNode, "--type=merge", "-n", ingctrlhp1.namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource2, "-p", patchSelectNode, "--type=merge", "-n", ingctrlhp2.namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod1)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod1))
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod2)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod2))
+
+		g.By("Check the node names on which the route pods of the custom ingress-controllers reside on")
+		routerNodeName1 := getRouterNodeName(oc, ingctrlhp1.name)
+		routerNodeName2 := getRouterNodeName(oc, ingctrlhp2.name)
+		o.Expect(defNodeName).Should(o.And(
+			o.ContainSubstring(routerNodeName1),
+			o.ContainSubstring(routerNodeName2)))
 
 		g.By("Verify the http/https/statsport of the custom proxy pod")
-		customRouterPod := getRouterPod(oc, ingctrlhp.name)
+		customRouterPod := getRouterPod(oc, ingctrlhp1.name)
 		checkPodEnv := describePodResource(oc, customRouterPod, "openshift-ingress")
-		o.Expect(checkPodEnv).To(o.ContainSubstring("ROUTER_SERVICE_HTTPS_PORT:                 8443"))
-		o.Expect(checkPodEnv).To(o.ContainSubstring("ROUTER_SERVICE_HTTP_PORT:                  8080"))
-		o.Expect(checkPodEnv).To(o.ContainSubstring("STATS_PORT:                                11936"))
+		o.Expect(checkPodEnv).Should(o.And(
+			o.ContainSubstring("ROUTER_SERVICE_HTTPS_PORT:                 10443"),
+			o.ContainSubstring("ROUTER_SERVICE_HTTP_PORT:                  10080"),
+			o.ContainSubstring("STATS_PORT:                                10936")))
 
 	})
 
