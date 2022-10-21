@@ -217,52 +217,74 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 	g.It("Longduration-Author:skundu-NonPreRelease-Critical-51109-Delete an existing machine at first and then add a new one. [Disruptive]", func() {
 		g.By("Test for delete an existing machine at first and then add a new one")
 
-		g.By("Get all the master node name & count")
-		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
-		masterNodeCount := len(masterNodeList)
-
 		g.By("Make sure all the etcd pods are running")
 		defer o.Expect(checkEtcdPodStatus(oc)).To(o.BeTrue())
 		podAllRunning := checkEtcdPodStatus(oc)
 		if podAllRunning != true {
 			g.Skip("The ectd pods are not running")
 		}
+		g.By("Get all the master node name & count")
+		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
+		masterNodeCount := len(masterNodeList)
 
-		g.By("Export the machine config file for first master node")
+		g.By("Get master machine name list")
 		output, errMachineConfig := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(errMachineConfig).NotTo(o.HaveOccurred())
 		masterMachineNameList := strings.Fields(output)
-		machineYmlFile := ""
-		machineYmlFile, errMachineYaml := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", masterMachineNameList[0], "-o", "yaml").OutputToFile("machine.yaml")
-		o.Expect(errMachineYaml).NotTo(o.HaveOccurred())
-		newMachineConfigFile := strings.Replace(machineYmlFile, "machine.yaml", "machineUpd.yaml", -1)
-		defer func() { o.Expect(os.Remove(machineYmlFile)).NotTo(o.HaveOccurred()) }()
-		defer func() { o.Expect(os.Remove(newMachineConfigFile)).NotTo(o.HaveOccurred()) }()
-
-		g.By("Update machineYmlFile to newMachineYmlFile:")
-		newMasterMachineNameSuffix := masterMachineNameList[0] + "-new"
-		o.Expect(updateMachineYmlFile(machineYmlFile, masterMachineNameList[0], newMasterMachineNameSuffix)).To(o.BeTrue())
 
 		g.By("At first delete machine of the master node without adding new one")
 		errMachineDelete := oc.AsAdmin().Run("delete").Args("-n", "openshift-machine-api", "--wait=false", "machine", masterMachineNameList[0]).Execute()
 		o.Expect(errMachineDelete).NotTo(o.HaveOccurred())
-		g.By("Make sure the node count is not reduced. Machine deletion hooks will prevent the deletion of the node before addition of the new one")
-		o.Expect(len(getNodeListByLabel(oc, "node-role.kubernetes.io/master="))).To(o.Equal(masterNodeCount))
 
-		g.By("Verify that the machine is getting deleted...")
 		machineStatusOutput, errVerifyDelete := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o", "jsonpath={.items[*].status.phase}").Output()
 		o.Expect(errVerifyDelete).NotTo(o.HaveOccurred())
 		masterMachineStatus := strings.Fields(machineStatusOutput)
-		o.Expect(string(masterMachineStatus[0])).To(o.Equal("Deleting"))
 
-		g.By("Creating new machine")
-		resultFile, _ := exec.Command("bash", "-c", "cat "+newMachineConfigFile).Output()
-		e2e.Logf("####newMasterMachineNameSuffix is %s\n", string(resultFile))
-		errMachineCreation := oc.AsAdmin().Run("create").Args("-n", "openshift-machine-api", "-f", newMachineConfigFile).Execute()
-		o.Expect(errMachineCreation).NotTo(o.HaveOccurred())
-		waitMachineStatusRunning(oc, newMasterMachineNameSuffix)
-		g.By("Verify that the machine is deleted. The machine count is same as before.")
-		waitforDesiredMachineCount(oc, len(masterMachineNameList))
+		platform := exutil.CheckPlatform(oc)
+		if platform == "aws" {
+
+			g.By("Verify that the machine is getting deleted and new machine is automatically created")
+			o.Expect(in("Deleting", masterMachineStatus)).To(o.Equal(true))
+			o.Expect(in("Provisioning", masterMachineStatus)).To(o.Equal(true))
+			output, errMachineConfig := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath={.items[*].metadata.name}").Output()
+			o.Expect(errMachineConfig).NotTo(o.HaveOccurred())
+			masterMachineNameList := strings.Fields(output)
+			newMasterMachine := masterMachineNameList[masterNodeCount]
+
+			g.By("Verify that the new machine is in running state.")
+			waitMachineStatusRunning(oc, newMasterMachine)
+
+		} else {
+
+			g.By("Export the machine config file for first master node")
+
+			machineYmlFile := ""
+			machineYmlFile, errMachineYaml := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", masterMachineNameList[0], "-o", "yaml").OutputToFile("machine.yaml")
+			o.Expect(errMachineYaml).NotTo(o.HaveOccurred())
+			newMachineConfigFile := strings.Replace(machineYmlFile, "machine.yaml", "machineUpd.yaml", -1)
+			defer func() { o.Expect(os.Remove(machineYmlFile)).NotTo(o.HaveOccurred()) }()
+			defer func() { o.Expect(os.Remove(newMachineConfigFile)).NotTo(o.HaveOccurred()) }()
+
+			g.By("Update machineYmlFile to newMachineYmlFile:")
+			newMasterMachineNameSuffix := masterMachineNameList[0] + "-new"
+			o.Expect(updateMachineYmlFile(machineYmlFile, masterMachineNameList[0], newMasterMachineNameSuffix)).To(o.BeTrue())
+
+			g.By("Make sure the node count is not reduced. Machine deletion hooks will prevent the deletion of the node before addition of the new one")
+			o.Expect(len(getNodeListByLabel(oc, "node-role.kubernetes.io/master="))).To(o.Equal(masterNodeCount))
+
+			g.By("Verify that the machine is getting deleted...")
+
+			o.Expect(in("Deleting", masterMachineStatus)).To(o.Equal(true))
+
+			g.By("Creating new machine")
+			resultFile, _ := exec.Command("bash", "-c", "cat "+newMachineConfigFile).Output()
+			e2e.Logf("####newMasterMachineNameSuffix is %s\n", string(resultFile))
+			errMachineCreation := oc.AsAdmin().Run("create").Args("-n", "openshift-machine-api", "-f", newMachineConfigFile).Execute()
+			o.Expect(errMachineCreation).NotTo(o.HaveOccurred())
+			waitMachineStatusRunning(oc, newMasterMachineNameSuffix)
+		}
+		g.By("Verify that the old machine is deleted. The master machine count is same as initial one.")
+		waitforDesiredMachineCount(oc, masterNodeCount)
 
 	})
 

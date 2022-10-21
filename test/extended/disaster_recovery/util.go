@@ -181,7 +181,7 @@ func waitMachineStatusRunning(oc *exutil.CLI, newMasterMachineName string) {
 
 //make sure correct number of machines are present
 func waitforDesiredMachineCount(oc *exutil.CLI, machineCount int) {
-	err := wait.Poll(60*time.Second, 480*time.Second, func() (bool, error) {
+	err := wait.Poll(60*time.Second, 600*time.Second, func() (bool, error) {
 		output, errGetMachine := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath='{.items[*].metadata.name}'").Output()
 		o.Expect(errGetMachine).NotTo(o.HaveOccurred())
 		machineNameList := strings.Fields(output)
