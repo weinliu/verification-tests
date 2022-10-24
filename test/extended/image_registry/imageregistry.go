@@ -566,8 +566,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Check registry configs get updated")
 		masterNode, _ := exutil.GetFirstMasterNode(oc)
 		err := wait.Poll(25*time.Second, 2*time.Minute, func() (bool, error) {
-			output, err := exutil.DebugNodeWithChroot(oc, masterNode, "cat /etc/containers/registries.conf | grep fake.rhcloud.com")
-			o.Expect(err).NotTo(o.HaveOccurred())
+			output, _ := exutil.DebugNodeWithChroot(oc, masterNode, "cat /etc/containers/registries.conf | grep fake.rhcloud.com")
 			if !strings.Contains(output, "fake.rhcloud.com") {
 				e2e.Logf("Continue to next round")
 				return false, nil
@@ -3130,7 +3129,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Create configmap under ocm project")
 		cmFile := filepath.Join(imageRegistryBaseDir, "registry.access.redhat.com.yaml")
-		beforeGeneration, err := oc.AsAdmin().Run("get").Args("ds/controller-manager", "-o=jsonpath={.metadata.generation}", "-n", "openshift-controller-manager").Output()
+		beforeGeneration, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/controller-manager", "-o=jsonpath={.metadata.generation}", "-n", "openshift-controller-manager").Output()
 		beforeNum, err := strconv.Atoi(beforeGeneration)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().Run("delete").Args("cm/sigstore-config", "-n", "openshift-controller-manager").Execute()
@@ -3141,16 +3140,18 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring("sigstore-config"))
 
 		g.By("Configure controller-manager to load this configmap")
-		defer oc.AsAdmin().Run("set").Args("volume", "ds/controller-manager", "--remove", "--name=sigstore-config", "-n", "openshift-controller-manager").Execute()
-		err = oc.AsAdmin().Run("set").Args("volume", "ds/controller-manager", "--add", "--type=configmap", "--configmap-name=sigstore-config", "-m", "/etc/containers/registries.d/", "--name=sigstore-config", "-n", "openshift-controller-manager").Execute()
+		defer oc.AsAdmin().Run("set").Args("volume", "deployment/controller-manager", "--remove", "--name=sigstore-config", "-n", "openshift-controller-manager").Execute()
+		err = oc.AsAdmin().Run("set").Args("volume", "deployment/controller-manager", "--add", "--type=configmap", "--configmap-name=sigstore-config", "-m", "/etc/containers/registries.d/", "--name=sigstore-config", "-n", "openshift-controller-manager").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		output, err = oc.AsAdmin().Run("get").Args("ds/controller-manager", "-o=jsonpath={.spec.template.spec.containers[0].volumeMounts[4].name}", "-n", "openshift-controller-manager").Output()
+		output, err = oc.AsAdmin().Run("get").Args("deployment/controller-manager", "-o=jsonpath={.spec.template.spec.containers[0].volumeMounts[4].name}", "-n", "openshift-controller-manager").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.Equal("sigstore-config"))
 
 		g.By("Wait cm pods restart")
+		podNum, _ := oc.AsAdmin().Run("get").Args("deployment/controller-manager", "-o=jsonpath={.spec.replicas}", "-n", "openshift-controller-manager").Output()
+		podNumInt, _ := strconv.Atoi(podNum)
 		err = wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-			afterGeneration, _ := oc.AsAdmin().Run("get").Args("ds/controller-manager", "-o=jsonpath={.metadata.generation}", "-n", "openshift-controller-manager").Output()
+			afterGeneration, _ := oc.AsAdmin().Run("get").Args("deployment/controller-manager", "-o=jsonpath={.metadata.generation}", "-n", "openshift-controller-manager").Output()
 			afterNum, err := strconv.Atoi(afterGeneration)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if (afterNum - beforeNum) >= 1 {
@@ -3159,7 +3160,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pods are not restarted"))
-		checkPodsRunningWithLabel(oc, "openshift-controller-manager", "app=openshift-controller-manager", 3)
+		checkPodsRunningWithLabel(oc, "openshift-controller-manager", "controller-manager=true", podNumInt)
 
 		g.By("Import image")
 		err = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("registry.access.redhat.com/openshift3/ose", "--confirm", "-n", oc.Namespace()).Execute()
