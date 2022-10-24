@@ -3,7 +3,7 @@ kind: ConsolePlugin
 metadata:
   name: console-demo-plugin
   annotations:
-    console.openshift.io/use-i18n: "true" 
+    console.openshift.io/use-i18n: "false" 
 spec:
   displayName: 'OpenShift Console Demo Plugin'
   service:
