@@ -111,6 +111,16 @@ func processTemplate(oc *exutil.CLI, parameters ...string) (string, error) {
 	return configFile, err
 }
 
+func getProxyFromEnv() string {
+	var proxy string
+	if os.Getenv("http_proxy") != "" {
+		proxy = os.Getenv("http_proxy")
+	} else if os.Getenv("http_proxy") != "" {
+		proxy = os.Getenv("https_proxy")
+	}
+	return proxy
+}
+
 // waitForPackagemanifestAppear waits for the packagemanifest to appear in the cluster
 // chSource: bool value, true means the packagemanifests' source name must match the so.CatalogSource.SourceName, e.g.: oc get packagemanifests xxxx -l catalog=$source-name
 func (so *SubscriptionObjects) waitForPackagemanifestAppear(oc *exutil.CLI, chSource bool) {
@@ -658,13 +668,8 @@ func queryPrometheus(oc *exutil.CLI, token string, path string, query string, ac
 	}
 
 	var tr *http.Transport
-	if os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
-		var proxy string
-		if os.Getenv("http_proxy") != "" {
-			proxy = os.Getenv("http_proxy")
-		} else {
-			proxy = os.Getenv("https_proxy")
-		}
+	proxy := getProxyFromEnv()
+	if len(proxy) > 0 {
 		proxyURL, err := url.Parse(proxy)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		tr = &http.Transport{

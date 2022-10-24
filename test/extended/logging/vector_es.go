@@ -19,27 +19,26 @@ import (
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 
-	var (
-		oc             = exutil.NewCLI("vector-es-namespace", exutil.KubeConfigPath())
-		eo             = "elasticsearch-operator"
-		clo            = "cluster-logging-operator"
-		cloPackageName = "cluster-logging"
-		eoPackageName  = "elasticsearch-operator"
-	)
+	var oc = exutil.NewCLI("vector-es-namespace", exutil.KubeConfigPath())
 
 	g.Context("Vector collector tests", func() {
-		var (
-			subTemplate       = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
-			SingleNamespaceOG = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
-			AllNamespaceOG    = exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml")
-			loglabeltemplate  = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-		)
 		cloNS := "openshift-logging"
-		eoNS := "openshift-operators-redhat"
-		CLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, CatalogSourceObjects{}}
-		EO := SubscriptionObjects{eo, eoNS, AllNamespaceOG, subTemplate, eoPackageName, CatalogSourceObjects{}}
 		g.BeforeEach(func() {
 			g.By("deploy CLO and EO")
+			CLO := SubscriptionObjects{
+				OperatorName:  "cluster-logging-operator",
+				Namespace:     "openshift-logging",
+				PackageName:   "cluster-logging",
+				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+			}
+			EO := SubscriptionObjects{
+				OperatorName:  "elasticsearch-operator",
+				Namespace:     "openshift-operators-redhat",
+				PackageName:   "elasticsearch-operator",
+				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+			}
 			CLO.SubscribeOperator(oc)
 			EO.SubscribeOperator(oc)
 			oc.SetupProject()
@@ -57,6 +56,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create project for app logs and deploy the log generator app")
 			appProj := oc.Namespace()
+			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -85,7 +85,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.container_name\": \"collector\"}}}"
 			logs := searchDocByQuery(cloNS, podList.Items[0].Name, "*", checkLog)
-			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Vector logs should not be collected")
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Vector logs should not be collected")
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-Medium-49390-Vector Collecting Kubernetes events using event router[Serial][Slow]", func() {
@@ -102,6 +102,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create project for app logs and deploy the log generator app")
 			appProj := oc.Namespace()
+			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -302,7 +303,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkLog := "{\"size\": 1, \"query\": {\"bool\":{\"must_not\":{\"exists\":{\"field\":\"@timestamp\"}}}}}"
 			logs := searchDocByQuery(cloNS, podList.Items[0].Name, "app", checkLog)
-			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Audit logs are missing @timestamp field.")
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Audit logs are missing @timestamp field.")
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-High-53313-Vector collector deployed with tolerations[Serial][disruptive]", func() {
@@ -359,9 +360,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			pl.checkLogsFromRs(oc, "Vector has started", "collector")
 
 			g.By("Check if the ServiceMonitor object for Vector is created.")
-			svmn, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", cl.namespace, "servicemonitor", "collector", "-o", "name").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(svmn).Should(o.Equal("servicemonitor.monitoring.coreos.com/collector"))
+			resource{"servicemonitor", "collector", cl.namespace}.WaitForResourceToAppear(oc)
 
 			g.By("Check the Vector metrics")
 			bearerToken := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
@@ -467,18 +466,23 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	g.Context("Vector Elasticsearch tests", func() {
-		var (
-			subTemplate       = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
-			SingleNamespaceOG = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
-			AllNamespaceOG    = exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml")
-			loglabeltemplate  = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-		)
 		cloNS := "openshift-logging"
-		eoNS := "openshift-operators-redhat"
-		CLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, CatalogSourceObjects{}}
-		EO := SubscriptionObjects{eo, eoNS, AllNamespaceOG, subTemplate, eoPackageName, CatalogSourceObjects{}}
 		g.BeforeEach(func() {
 			g.By("deploy CLO and EO")
+			CLO := SubscriptionObjects{
+				OperatorName:  "cluster-logging-operator",
+				Namespace:     "openshift-logging",
+				PackageName:   "cluster-logging",
+				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+			}
+			EO := SubscriptionObjects{
+				OperatorName:  "elasticsearch-operator",
+				Namespace:     "openshift-operators-redhat",
+				PackageName:   "elasticsearch-operator",
+				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+			}
 			CLO.SubscribeOperator(oc)
 			EO.SubscribeOperator(oc)
 			oc.SetupProject()
@@ -495,6 +499,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
+			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -574,6 +579,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
+			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -653,6 +659,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
+			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -689,6 +696,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
+			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -717,6 +725,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:ikanse-High-48768-Vector ClusterLogForwarder Collect app logs from a predefined namespace[Serial][Slow]", func() {
 
 			g.By("Create project1 for app logs and deploy the log generator app")
+			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			oc.SetupProject()
 			appProj1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", loglabeltemplate).Execute()
@@ -751,18 +760,19 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Check for project1 logs in default ES")
 			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + appProj1 + "\"}}}"
 			logs := searchDocByQuery(cloNS, podList.Items[0].Name, "app", checkLog)
-			o.Expect(logs.Hits.Total).ShouldNot(o.Equal(0), "Project1 %s logs not found in default ES", appProj1)
+			o.Expect(logs.Hits.Total == 0).ShouldNot(o.BeTrue(), "Project1 %s logs not found in default ES", appProj1)
 
 			g.By("Check for project2 logs in default ES")
 			checkLog = "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.namespace_name\": \"" + appProj2 + "\"}}}"
 			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app", checkLog)
-			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Projec2 %s logs should not be collected", appProj2)
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Projec2 %s logs should not be collected", appProj2)
 
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-Medium-48786-Vector Forward logs from specified pods using label selector[Serial][Slow]", func() {
 
 			g.By("Create project1 for app logs and deploy the log generator app with run=centos-logtest-qa label")
+			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			oc.SetupProject()
 			appProj1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-p", "LABELS={\"run\": \"centos-logtest-qa\"}", "-f", loglabeltemplate).Execute()
@@ -797,18 +807,19 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Check for logs with run=centos-logtest-qa labels")
 			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"run=centos-logtest-qa\"}}}"
 			logs := searchDocByQuery(cloNS, podList.Items[0].Name, "app", checkLog)
-			o.Expect(logs.Hits.Total).ShouldNot(o.Equal(0), "Labels with run=centos-logtest-qa in logs not found in default ES")
+			o.Expect(logs.Hits.Total == 0).ShouldNot(o.BeTrue(), "Labels with run=centos-logtest-qa in logs not found in default ES")
 
 			g.By("Check for logs with run=centos-logtest-dev labels")
 			checkLog = "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"run=centos-logtest-dev\"}}}"
 			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app", checkLog)
-			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Logs with label with run=centos-logtest-dev should not be collected")
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Logs with label with run=centos-logtest-dev should not be collected")
 
 		})
 
 		g.It("CPaasrunOnly-Author:ikanse-Medium-48787-Vector Forward logs from specified pods using label and namespace selectors[Serial][Slow]", func() {
 
 			g.By("Create project1 for app logs and deploy the log generator app with run=centos-logtest-qa and run=centos-logtest-stage labels")
+			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			oc.SetupProject()
 			appProj1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-p", "LABELS={\"run\": \"centos-logtest-qa\"}", "-p", "REPLICATIONCONTROLLER=logging-centos-logtest-qa", "-p", "CONFIGMAP=logtest-config-qa", "-p", "CONTAINER=logging-centos-qa", "-f", loglabeltemplate).Execute()
@@ -845,17 +856,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Check for logs with run=centos-logtest-qa in label")
 			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"run=centos-logtest-qa\"}}}"
 			logs := searchDocByQuery(cloNS, podList.Items[0].Name, "app", checkLog)
-			o.Expect(logs.Hits.Total).ShouldNot(o.Equal(0), "Labels with run=centos-logtest-qa in logs not found in default ES")
+			o.Expect(logs.Hits.Total == 0).ShouldNot(o.BeTrue(), "Labels with run=centos-logtest-qa in logs not found in default ES")
 
 			g.By("Check for logs with run=centos-logtest-stage in label")
 			checkLog = "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"run=centos-logtest-stage\"}}}"
 			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app", checkLog)
-			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Labels with run=centos-logtest-dev in logs should not be collected")
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Labels with run=centos-logtest-dev in logs should not be collected")
 
 			g.By("Check for logs with run=centos-logtest-dev label")
 			checkLog = "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"run=centos-logtest-dev\"}}}"
 			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app", checkLog)
-			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Labels with run=centos-logtest-dev in logs should not be collected")
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Labels with run=centos-logtest-dev in logs should not be collected")
 
 		})
 
@@ -870,6 +881,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
+			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -906,6 +918,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
+			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -942,6 +955,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
+			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -978,6 +992,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create project for app logs and deploy the log generator app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
+			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1013,19 +1028,23 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	g.Context("JSON log tests", func() {
-		var (
-			subTemplate           = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
-			SingleNamespaceOG     = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
-			AllNamespaceOG        = exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml")
-			multiContainerJSONLog = exutil.FixturePath("testdata", "logging", "generatelog", "multi_container_json_log_template.yaml")
-			jsonLogFile           = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-		)
 		cloNS := "openshift-logging"
-		eoNS := "openshift-operators-redhat"
-		CLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, CatalogSourceObjects{}}
-		EO := SubscriptionObjects{eo, eoNS, AllNamespaceOG, subTemplate, eoPackageName, CatalogSourceObjects{}}
 		g.BeforeEach(func() {
 			g.By("deploy CLO and EO")
+			CLO := SubscriptionObjects{
+				OperatorName:  "cluster-logging-operator",
+				Namespace:     "openshift-logging",
+				PackageName:   "cluster-logging",
+				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+			}
+			EO := SubscriptionObjects{
+				OperatorName:  "elasticsearch-operator",
+				Namespace:     "openshift-operators-redhat",
+				PackageName:   "elasticsearch-operator",
+				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+			}
 			CLO.SubscribeOperator(oc)
 			EO.SubscribeOperator(oc)
 			oc.SetupProject()
@@ -1035,6 +1054,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:qitang-High-52128-Vector Send JSON logs from containers in the same pod to separate indices -- outputDefaults[Serial][Slow]", func() {
 			app := oc.Namespace()
 			containerName := "log-52128-" + getRandomString()
+			multiContainerJSONLog := exutil.FixturePath("testdata", "logging", "generatelog", "multi_container_json_log_template.yaml")
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", multiContainerJSONLog, "-n", app, "-p", "CONTAINER="+containerName).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1097,6 +1117,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:qitang-Medium-52129-Vector Send JSON logs from containers in the same pod to separate indices[Serial]", func() {
 			app := oc.Namespace()
 			containerName := "log-52129-" + getRandomString()
+			multiContainerJSONLog := exutil.FixturePath("testdata", "logging", "generatelog", "multi_container_json_log_template.yaml")
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", multiContainerJSONLog, "-n", app, "-p", "CONTAINER="+containerName).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1162,6 +1183,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:qitang-Medium-52130-Vector JSON logs from containers in the same pod are not sent to separate indices when enableStructuredContainerLogs is false[Serial]", func() {
 			app := oc.Namespace()
 			containerName := "log-52130-" + getRandomString()
+			multiContainerJSONLog := exutil.FixturePath("testdata", "logging", "generatelog", "multi_container_json_log_template.yaml")
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", multiContainerJSONLog, "-n", app, "-p", "CONTAINER="+containerName).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1202,6 +1224,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Medium-52131-Vector Logs from different projects are forwarded to the same index if the pods have same annotation[Serial]", func() {
 			containerName := "log-52131-" + getRandomString()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			app1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app1, "-p", "CONTAINER="+containerName).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1281,32 +1304,32 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Check for logs with label test=centos-logtest-qa")
 			checkLog := "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"test=centos-logtest-qa\"}}}"
 			logs := searchDocByQuery(cloNS, podList.Items[0].Name, "app-centos-logtest-qa-00", checkLog)
-			o.Expect(logs.Hits.Total).ShouldNot(o.Equal(0), "Labels with test=centos-logtest-qa in logs not found in default ES index app-centos-logtest-qa-00*")
+			o.Expect(logs.Hits.Total == 0).ShouldNot(o.BeTrue(), "Labels with test=centos-logtest-qa in logs not found in default ES index app-centos-logtest-qa-00*")
 			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
 			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app-centos-logtest-dev-00", checkLog)
-			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Labels with test=centos-logtest-qa in logs are in app-centos-logtest-dev-00* index")
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Labels with test=centos-logtest-qa in logs are in app-centos-logtest-dev-00* index")
 			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app-qa-fallback-index-00", checkLog)
-			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Labels with test=centos-logtest-qa in logs are in app-qa-fallback-index-00* index")
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Labels with test=centos-logtest-qa in logs are in app-qa-fallback-index-00* index")
 
 			g.By("Check for logs with label test=centos-logtest-dev")
 			checkLog = "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"test=centos-logtest-dev\"}}}"
 			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app-centos-logtest-dev-00", checkLog)
-			o.Expect(logs.Hits.Total).ShouldNot(o.Equal(0), "Labels with test=centos-logtest-dev in logs not found in default ES index app-centos-logtest-dev-00*")
+			o.Expect(logs.Hits.Total == 0).ShouldNot(o.BeTrue(), "Labels with test=centos-logtest-dev in logs not found in default ES index app-centos-logtest-dev-00*")
 			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
 			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app-centos-logtest-qa-00", checkLog)
-			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Labels with test=centos-logtest-dev in logs are in app-centos-logtest-qa-00* index")
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Labels with test=centos-logtest-dev in logs are in app-centos-logtest-qa-00* index")
 			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app-qa-fallback-index-00", checkLog)
-			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Labels with test=centos-logtest-dev in logs are in app-qa-fallback-index-00* index")
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Labels with test=centos-logtest-dev in logs are in app-qa-fallback-index-00* index")
 
 			g.By("Unmatch logs with label run=centos-logtest-stage should be sent to app-qa-fallback index")
 			checkLog = "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match\": {\"kubernetes.flat_labels\": \"run=centos-logtest-stage\"}}}"
 			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app-qa-fallback-index-00", checkLog)
-			o.Expect(logs.Hits.Total).ShouldNot(o.Equal(0), "Labels with run=centos-logtest-stage in logs not found in default ES app-qa-fallback-index-00*")
+			o.Expect(logs.Hits.Total == 0).ShouldNot(o.BeTrue(), "Labels with run=centos-logtest-stage in logs not found in default ES app-qa-fallback-index-00*")
 			o.Expect(logs.Hits.DataHits[0].Source.Structured.Message).Should(o.Equal("MERGE_JSON_LOG=true"))
 			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app-centos-logtest-qa-00", checkLog)
-			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Labels with run=centos-logtest-stage in logs are in app-centos-logtest-qa-00* index")
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Labels with run=centos-logtest-stage in logs are in app-centos-logtest-qa-00* index")
 			logs = searchDocByQuery(cloNS, podList.Items[0].Name, "app-centos-logtest-dev-00", checkLog)
-			o.Expect(logs.Hits.Total).Should(o.Equal(0), "Labels with run=centos-logtest-stage in logs are in app-centos-logtest-dev-99* index")
+			o.Expect(logs.Hits.Total == 0).Should(o.BeTrue(), "Labels with run=centos-logtest-stage in logs are in app-centos-logtest-dev-99* index")
 		})
 
 	})

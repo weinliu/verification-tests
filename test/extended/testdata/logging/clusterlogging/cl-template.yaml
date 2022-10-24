@@ -29,11 +29,11 @@ objects:
     visualization:
       type: "kibana"
       kibana:
-        replicas: 1
+        replicas: ${{KIBANA_REPLICAS}}
     collection:
       type: ${COLLECTOR}
       resources:
-        limits: 
+        limits:
           memory: ${COLLECTOR_LIMITS_MEMORY}
           cpu: ${COLLECTOR_LIMITS_CPU}
         requests:
@@ -64,3 +64,5 @@ parameters:
     value: "100m"
   - name: COLLECTOR_REQUESTS_MEMORY
     value: "736Mi"
+  - name: KIBANA_REPLICAS
+    value: "1"

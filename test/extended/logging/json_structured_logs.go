@@ -14,32 +14,30 @@ import (
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
 
-	var (
-		oc             = exutil.NewCLI("logging-json-log", exutil.KubeConfigPath())
-		eo             = "elasticsearch-operator"
-		clo            = "cluster-logging-operator"
-		cloPackageName = "cluster-logging"
-		eoPackageName  = "elasticsearch-operator"
-	)
+	var oc = exutil.NewCLI("logging-json-log", exutil.KubeConfigPath())
 
 	g.Context("JSON structured logs -- outputDefaults testing", func() {
-		var (
-			subTemplate           = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
-			SingleNamespaceOG     = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
-			AllNamespaceOG        = exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml")
-			jsonLogFile           = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-			nonJSONLogFile        = exutil.FixturePath("testdata", "logging", "generatelog", "container_non_json_log_template.json")
-			multiContainerJSONLog = exutil.FixturePath("testdata", "logging", "generatelog", "multi_container_json_log_template.yaml")
-		)
 		cloNS := "openshift-logging"
-		eoNS := "openshift-operators-redhat"
-		CLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, CatalogSourceObjects{}}
-		EO := SubscriptionObjects{eo, eoNS, AllNamespaceOG, subTemplate, eoPackageName, CatalogSourceObjects{}}
+
 		g.BeforeEach(func() {
 			//deploy CLO and EO
 			//CLO is deployed to `openshift-logging` namespace by default
 			//and EO is deployed to `openshift-operators-redhat` namespace
 			g.By("deploy CLO and EO")
+			CLO := SubscriptionObjects{
+				OperatorName:  "cluster-logging-operator",
+				Namespace:     "openshift-logging",
+				PackageName:   "cluster-logging",
+				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+			}
+			EO := SubscriptionObjects{
+				OperatorName:  "elasticsearch-operator",
+				Namespace:     "openshift-operators-redhat",
+				PackageName:   "elasticsearch-operator",
+				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+			}
 			CLO.SubscribeOperator(oc)
 			EO.SubscribeOperator(oc)
 			oc.SetupProject()
@@ -50,6 +48,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			// create a project, then create a pod in the project to generate some json logs
 			g.By("create some json logs")
 			appProj := oc.Namespace()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -103,6 +102,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			// create a project, then create a pod in the project to generate some json logs
 			g.By("create some json logs")
 			appProj := oc.Namespace()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -152,6 +152,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		// author: qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-42363-structured and default index[Serial]", func() {
 			//create 2 projects and generate json logs in each project
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			g.By("create some json logs")
 			appProj1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile).Execute()
@@ -234,6 +235,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			// create a project, then create a pod in the project to generate some non-json logs
 			g.By("create some non-json logs")
 			appProj := oc.Namespace()
+			nonJSONLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_non_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", nonJSONLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -268,6 +270,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author: qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-41742-Mix the structured index, non-structured and the default input type[Serial]", func() {
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			app1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app1).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -319,6 +322,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-50258-Send JSON logs from containers in the same pod to separate indices -- outputDefaults[Serial]", func() {
 			app := oc.Namespace()
+			multiContainerJSONLog := exutil.FixturePath("testdata", "logging", "generatelog", "multi_container_json_log_template.yaml")
 			containerName := "log-50258-" + getRandomString()
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", multiContainerJSONLog, "-n", app, "-p", "CONTAINER="+containerName).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -380,6 +384,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Medium-50279-JSON logs from containers in the same pod are not sent to separate indices when enableStructuredContainerLogs is false[Serial]", func() {
 			app := oc.Namespace()
+			multiContainerJSONLog := exutil.FixturePath("testdata", "logging", "generatelog", "multi_container_json_log_template.yaml")
 			containerName := "log-50279-" + getRandomString()
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", multiContainerJSONLog, "-n", app, "-p", "CONTAINER="+containerName).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -420,6 +425,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Medium-50357-Logs from different projects are forwarded to the same index if the pods have same annotation[Serial]", func() {
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			containerName := "log-50357-" + getRandomString()
 			app1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app1, "-p", "CONTAINER="+containerName).Execute()
@@ -460,19 +466,24 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	g.Context("JSON structured logs -- outputs testing", func() {
-		var (
-			subTemplate           = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
-			SingleNamespaceOG     = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
-			AllNamespaceOG        = exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml")
-			jsonLogFile           = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-			multiContainerJSONLog = exutil.FixturePath("testdata", "logging", "generatelog", "multi_container_json_log_template.yaml")
-		)
 		cloNS := "openshift-logging"
-		eoNS := "openshift-operators-redhat"
-		CLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, CatalogSourceObjects{}}
-		EO := SubscriptionObjects{eo, eoNS, AllNamespaceOG, subTemplate, eoPackageName, CatalogSourceObjects{}}
+
 		g.BeforeEach(func() {
 			g.By("deploy CLO and EO")
+			CLO := SubscriptionObjects{
+				OperatorName:  "cluster-logging-operator",
+				Namespace:     "openshift-logging",
+				PackageName:   "cluster-logging",
+				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+			}
+			EO := SubscriptionObjects{
+				OperatorName:  "elasticsearch-operator",
+				Namespace:     "openshift-operators-redhat",
+				PackageName:   "elasticsearch-operator",
+				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+			}
 			CLO.SubscribeOperator(oc)
 			EO.SubscribeOperator(oc)
 			oc.SetupProject()
@@ -481,6 +492,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		// author: qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-41300-dynamically index by openshift.labels[Serial]", func() {
 			app := oc.Namespace()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -513,6 +525,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		// author: qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-41729-structured index by indexName(Fall in indexName when index key is not available)[Serial]", func() {
 			app := oc.Namespace()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -546,6 +559,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		// author: qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-41730-High-41732-structured index by kubernetes.namespace_name or kubernetes.labels[Serial]", func() {
 			app := oc.Namespace()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -589,6 +603,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		// author: qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Medium-41785-No dynamically index when no type specified in output[Serial]", func() {
 			app := oc.Namespace()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -621,6 +636,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		// author: qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-41787-High-41788-The logs are sent to default app or structuredTypeName index when the label doesn't match the structuredIndexKey[Serial]", func() {
 			app := oc.Namespace()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -665,6 +681,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author: qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-High-41790-The unmatched pod logs fall into index structuredTypeName[Serial]", func() {
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			app1 := oc.Namespace()
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app1).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -707,6 +724,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		// author: qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Medium-41302-structuredTypeKey for external ES which doesn't enabled ingress plugin[Serial]", func() {
 			app := oc.Namespace()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -744,6 +762,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		g.It("CPaasrunOnly-Author:qitang-Medium-50276-Send JSON logs from containers in the same pod to separate indices[Serial]", func() {
 			app := oc.Namespace()
 			containerName := "log-50276-" + getRandomString()
+			multiContainerJSONLog := exutil.FixturePath("testdata", "logging", "generatelog", "multi_container_json_log_template.yaml")
 			err := oc.WithoutNamespace().Run("new-app").Args("-f", multiContainerJSONLog, "-n", app, "-p", "CONTAINER="+containerName).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 

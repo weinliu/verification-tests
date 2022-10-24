@@ -24,19 +24,26 @@ import (
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-logging-operator should", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc                = exutil.NewCLI("logging-clo", exutil.KubeConfigPath())
-		cloNS             = "openshift-logging"
-		eoNS              = "openshift-operators-redhat"
-		subTemplate       = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
-		SingleNamespaceOG = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
-		AllNamespaceOG    = exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml")
+		oc    = exutil.NewCLI("logging-clo", exutil.KubeConfigPath())
+		cloNS = "openshift-logging"
 	)
-
-	CLO := SubscriptionObjects{"cluster-logging-operator", cloNS, SingleNamespaceOG, subTemplate, "cluster-logging", CatalogSourceObjects{}}
-	EO := SubscriptionObjects{"elasticsearch-operator", eoNS, AllNamespaceOG, subTemplate, "elasticsearch-operator", CatalogSourceObjects{}}
 
 	g.BeforeEach(func() {
 		g.By("deploy CLO and EO")
+		CLO := SubscriptionObjects{
+			OperatorName:  "cluster-logging-operator",
+			Namespace:     "openshift-logging",
+			PackageName:   "cluster-logging",
+			Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+		}
+		EO := SubscriptionObjects{
+			OperatorName:  "elasticsearch-operator",
+			Namespace:     "openshift-operators-redhat",
+			PackageName:   "elasticsearch-operator",
+			Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+		}
 		CLO.SubscribeOperator(oc)
 		EO.SubscribeOperator(oc)
 	})
@@ -118,19 +125,26 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-operator should", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc                = exutil.NewCLI("logging-eo", exutil.KubeConfigPath())
-		cloNS             = "openshift-logging"
-		eoNS              = "openshift-operators-redhat"
-		subTemplate       = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
-		SingleNamespaceOG = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
-		AllNamespaceOG    = exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml")
+		oc    = exutil.NewCLI("logging-eo", exutil.KubeConfigPath())
+		cloNS = "openshift-logging"
 	)
-
-	CLO := SubscriptionObjects{"cluster-logging-operator", cloNS, SingleNamespaceOG, subTemplate, "cluster-logging", CatalogSourceObjects{}}
-	EO := SubscriptionObjects{"elasticsearch-operator", eoNS, AllNamespaceOG, subTemplate, "elasticsearch-operator", CatalogSourceObjects{}}
 
 	g.BeforeEach(func() {
 		g.By("deploy CLO and EO")
+		CLO := SubscriptionObjects{
+			OperatorName:  "cluster-logging-operator",
+			Namespace:     "openshift-logging",
+			PackageName:   "cluster-logging",
+			Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+		}
+		EO := SubscriptionObjects{
+			OperatorName:  "elasticsearch-operator",
+			Namespace:     "openshift-operators-redhat",
+			PackageName:   "elasticsearch-operator",
+			Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+		}
 		CLO.SubscribeOperator(oc)
 		EO.SubscribeOperator(oc)
 	})
@@ -429,7 +443,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 
 	// author qitang@redhat.com
 	g.It("CPaasrunOnly-Author:qitang-Medium-49211-bz 1923788 Elasticsearch operator should always update ES cluster after secret changed[Serial][Slow]", func() {
-		g.By("deploy EFK pods")
+		g.By("deploy ECK pods")
 		sc, err := getStorageClassName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")
@@ -467,7 +481,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 	// author qitang@redhat.com
 	g.It("CPaasrunOnly-Author:qitang-High-49209-Elasticsearch operator should expose metrics", func() {
 		// create clusterlogging instance
-		g.By("deploy EFK pods")
+		g.By("deploy ECK pods")
 		sc, err := getStorageClassName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")
@@ -487,6 +501,46 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 				o.Expect(value == 0).Should(o.BeTrue())
 			}
 		}
+	})
+
+	// author qitang@redhat.com
+	g.It("CPaasrunOnly-Author:qitang-Medium-55152-[BZ 1890825]Recreate route/kibana after being removed.[Serial]", func() {
+		g.By("deploy ECK pods")
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+		cl := resource{"clusterlogging", "instance", "openshift-logging"}
+		defer cl.deleteClusterLogging(oc)
+		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
+		g.By("waiting for the EFK pods to be ready...")
+		WaitForECKPodsToBeReady(oc, cl.namespace)
+
+		g.By("check if the route/kibana exists")
+		route := resource{"route", "kibana", cl.namespace}
+		route.WaitForResourceToAppear(oc)
+
+		g.By("remove route/kibana and wait for it to be recreated")
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("route/"+route.name, "-n", cl.namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		route.WaitForResourceToAppear(oc)
+	})
+
+	// author qitang@redhat.com
+	g.It("CPaasrunOnly-Author:qitang-Low-55198-[BZ 1942609]Should not deploy kibana pods when the kibana.replicas is set to 0.[Serial]", func() {
+		g.By("deploy ECK pods")
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+		cl := resource{"clusterlogging", "instance", "openshift-logging"}
+		defer cl.deleteClusterLogging(oc)
+		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "KIBANA_REPLICAS=0")
+		g.By("waiting for collector pods to be ready...")
+		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+		kibanaPods, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(metav1.ListOptions{LabelSelector: "component=kibana"})
+		o.Expect(len(kibanaPods.Items) == 0).Should(o.BeTrue())
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("scale up kibana pods")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogging/instance", "-n", cl.namespace, "-p", "{\"spec\": {\"visualization\": {\"kibana\": {\"replicas\": 1}}}}", "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForPodReadyWithLabel(oc, cl.namespace, "component=kibana")
 	})
 
 })

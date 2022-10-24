@@ -16,29 +16,27 @@ import (
 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	defer g.GinkgoRecover()
-
-	var (
-		oc             = exutil.NewCLI("logging-es", exutil.KubeConfigPath())
-		eo             = "elasticsearch-operator"
-		clo            = "cluster-logging-operator"
-		cloPackageName = "cluster-logging"
-		eoPackageName  = "elasticsearch-operator"
-	)
+	var oc = exutil.NewCLI("logging-es", exutil.KubeConfigPath())
 
 	g.Context("Cluster Logging Instance tests", func() {
-		var (
-			subTemplate       = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
-			SingleNamespaceOG = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
-			AllNamespaceOG    = exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml")
-			jsonLogFile       = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-		)
 		cloNS := "openshift-logging"
-		eoNS := "openshift-operators-redhat"
-		CLO := SubscriptionObjects{clo, cloNS, SingleNamespaceOG, subTemplate, cloPackageName, CatalogSourceObjects{}}
-		EO := SubscriptionObjects{eo, eoNS, AllNamespaceOG, subTemplate, eoPackageName, CatalogSourceObjects{}}
 
 		g.BeforeEach(func() {
 			g.By("deploy CLO and EO")
+			CLO := SubscriptionObjects{
+				OperatorName:  "cluster-logging-operator",
+				Namespace:     "openshift-logging",
+				PackageName:   "cluster-logging",
+				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+			}
+			EO := SubscriptionObjects{
+				OperatorName:  "elasticsearch-operator",
+				Namespace:     "openshift-operators-redhat",
+				PackageName:   "elasticsearch-operator",
+				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+			}
 			CLO.SubscribeOperator(oc)
 			EO.SubscribeOperator(oc)
 		})
@@ -112,6 +110,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create an instance of the logtest app")
 			oc.SetupProject()
 			appProj := oc.Namespace()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			cerr := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(cerr).NotTo(o.HaveOccurred())
 			waitForPodReadyWithLabel(oc, appProj, "run=centos-logtest")
@@ -146,7 +145,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("Logcount for the logtest app in %s project is %d", appProj, LogCount)
 
 			g.By("Check if the logtest application logs are discarded")
-			o.Expect(LogCount).To(o.Equal(0), "The log count for the %s namespace should be 0", appProj)
+			o.Expect(LogCount == 0).To(o.BeTrue(), "The log count for the %s namespace should be 0", appProj)
 		})
 
 		// author ikanse@redhat.com
@@ -333,19 +332,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch should", func() {
 	defer g.GinkgoRecover()
 
-	var (
-		oc                = exutil.NewCLI("logging-es-"+getRandomString(), exutil.KubeConfigPath())
-		subTemplate       = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
-		SingleNamespaceOG = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
-		AllNamespaceOG    = exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml")
-		jsonLogFile       = exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-	)
+	var oc = exutil.NewCLI("logging-es-"+getRandomString(), exutil.KubeConfigPath())
+
 	cloNS := "openshift-logging"
-	eoNS := "openshift-operators-redhat"
-	CLO := SubscriptionObjects{"cluster-logging-operator", cloNS, SingleNamespaceOG, subTemplate, "cluster-logging", CatalogSourceObjects{}}
-	EO := SubscriptionObjects{"elasticsearch-operator", eoNS, AllNamespaceOG, subTemplate, "elasticsearch-operator", CatalogSourceObjects{}}
 	g.BeforeEach(func() {
 		g.By("deploy CLO and EO")
+		CLO := SubscriptionObjects{
+			OperatorName:  "cluster-logging-operator",
+			Namespace:     "openshift-logging",
+			PackageName:   "cluster-logging",
+			Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+		}
+		EO := SubscriptionObjects{
+			OperatorName:  "elasticsearch-operator",
+			Namespace:     "openshift-operators-redhat",
+			PackageName:   "elasticsearch-operator",
+			Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+		}
 		CLO.SubscribeOperator(oc)
 		EO.SubscribeOperator(oc)
 	})
@@ -451,6 +456,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch 
 		g.By("deploy a pod and try to connect to ES")
 		oc.SetupProject()
 		appProj := oc.Namespace()
+		jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 		err = oc.Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		token, err := oc.Run("whoami").Args("-t").Output()
@@ -513,18 +519,24 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Fluentd should", func() {
 	defer g.GinkgoRecover()
 
-	var (
-		oc                = exutil.NewCLI("logging-fluentd-"+getRandomString(), exutil.KubeConfigPath())
-		subTemplate       = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
-		SingleNamespaceOG = exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml")
-		AllNamespaceOG    = exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml")
-	)
+	var oc = exutil.NewCLI("logging-fluentd-"+getRandomString(), exutil.KubeConfigPath())
 	cloNS := "openshift-logging"
-	eoNS := "openshift-operators-redhat"
-	CLO := SubscriptionObjects{"cluster-logging-operator", cloNS, SingleNamespaceOG, subTemplate, "cluster-logging", CatalogSourceObjects{}}
-	EO := SubscriptionObjects{"elasticsearch-operator", eoNS, AllNamespaceOG, subTemplate, "elasticsearch-operator", CatalogSourceObjects{}}
 	g.BeforeEach(func() {
 		g.By("deploy CLO and EO")
+		CLO := SubscriptionObjects{
+			OperatorName:  "cluster-logging-operator",
+			Namespace:     "openshift-logging",
+			PackageName:   "cluster-logging",
+			Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+		}
+		EO := SubscriptionObjects{
+			OperatorName:  "elasticsearch-operator",
+			Namespace:     "openshift-operators-redhat",
+			PackageName:   "elasticsearch-operator",
+			Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+		}
 		CLO.SubscribeOperator(oc)
 		EO.SubscribeOperator(oc)
 	})

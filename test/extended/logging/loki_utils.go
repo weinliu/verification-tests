@@ -139,13 +139,8 @@ func newAWSS3Client(oc *exutil.CLI, cred s3Credential) *s3.Client {
 		// For ODF and Minio, they're deployed in OCP clusters
 		// In some clusters, we can't connect it without proxy, here add proxy settings to s3 client when there has http_proxy or https_proxy in the env var
 		httpClient := awshttp.NewBuildableClient().WithTransportOptions(func(tr *http.Transport) {
-			if os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
-				var proxy string
-				if os.Getenv("http_proxy") != "" {
-					proxy = os.Getenv("http_proxy")
-				} else {
-					proxy = os.Getenv("https_proxy")
-				}
+			proxy := getProxyFromEnv()
+			if len(proxy) > 0 {
 				proxyURL, err := url.Parse(proxy)
 				o.Expect(err).NotTo(o.HaveOccurred())
 				tr.Proxy = http.ProxyURL(proxyURL)
@@ -1115,13 +1110,8 @@ func (c *lokiClient) doRequest(path, query string, quiet bool, out interface{}) 
 	req.Header = h
 
 	var tr *http.Transport
-	if os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
-		var proxy string
-		if os.Getenv("http_proxy") != "" {
-			proxy = os.Getenv("http_proxy")
-		} else {
-			proxy = os.Getenv("https_proxy")
-		}
+	proxy := getProxyFromEnv()
+	if len(proxy) > 0 {
 		proxyURL, err := url.Parse(proxy)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		tr = &http.Transport{
