@@ -209,8 +209,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			g.Skip("Skip for non-gcp cluster!")
 		}
 
-		orgUpstream, _ := getCVObyJP(oc, ".spec.upstream")
-		orgChannel, _ := getCVObyJP(oc, ".spec.channel")
+		orgUpstream, err := getCVObyJP(oc, ".spec.upstream")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		orgChannel, err := getCVObyJP(oc, ".spec.channel")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Original upstream:%s, original channel:%s", orgUpstream, orgChannel)
 
 		g.By("Patch upstream")
@@ -278,8 +280,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			g.Skip("Skip for non-gcp cluster!")
 		}
 
-		orgUpstream, _ := getCVObyJP(oc, ".spec.upstream")
-		orgChannel, _ := getCVObyJP(oc, ".spec.channel")
+		orgUpstream, err := getCVObyJP(oc, ".spec.upstream")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		orgChannel, err := getCVObyJP(oc, ".spec.channel")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Original upstream:%s, original channel: %s", orgUpstream, orgChannel)
 
 		g.By("Patch upstream")
@@ -438,12 +442,13 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	//author: yanyang@redhat.com
 	g.It("Longduration-NonPreRelease-Author:yanyang-Medium-32138-cvo alert should not be fired when RetrievedUpdates failed due to nochannel [Serial][Slow]", func() {
-		orgChannel, _ := getCVObyJP(oc, ".spec.channel")
+		orgChannel, err := getCVObyJP(oc, ".spec.channel")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel", orgChannel).Execute()
 
 		g.By("Enable alert by clearing channel")
-		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check RetrievedUpdates condition")
@@ -471,8 +476,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			g.Skip("Skip for non-gcp cluster!")
 		}
 
-		orgUpstream, _ := getCVObyJP(oc, ".spec.upstream")
-		orgChannel, _ := getCVObyJP(oc, ".spec.channel")
+		orgUpstream, err := getCVObyJP(oc, ".spec.upstream")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		orgChannel, err := getCVObyJP(oc, ".spec.channel")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Original upstream:%s, original channel:%s", orgUpstream, orgChannel)
 
@@ -491,10 +498,12 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		// Prerequisite: the available channels are not present
 		g.By("The test requires the available channels are not present as a prerequisite")
-		cmdOut, _ := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
+		cmdOut, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(cmdOut).NotTo(o.ContainSubstring("available channels:"))
 
-		version, _ := getCVObyJP(oc, ".status.desired.version")
+		version, err := getCVObyJP(oc, ".status.desired.version")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Set to an unknown channel when available channels are not present")
 		cmdOut, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel", "unknown-channel").Output()
@@ -627,11 +636,13 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		defer os.RemoveAll(tempDataDir)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		manifestDir := filepath.Join(tempDataDir, "manifest")
-		out, _ := exec.Command("bash", "-c", fmt.Sprintf("grep -rl \"name: hello-openshift\" %s", manifestDir)).Output()
+		out, err := exec.Command("bash", "-c", fmt.Sprintf("grep -rl \"name: hello-openshift\" %s", manifestDir)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(out)).NotTo(o.BeEmpty())
 		file := strings.TrimSpace(string(out))
 		cmd := fmt.Sprintf("grep -A5 'name: hello-openshift' %s | grep 'release.openshift.io/delete: \"true\"'", file)
-		result, _ := exec.Command("bash", "-c", cmd).Output()
+		result, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(result)).NotTo(o.BeEmpty())
 
 		g.By("Check imagestream hello-openshift not present in a fresh installed cluster")
@@ -651,8 +662,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			g.Skip("Skip for non-gcp cluster!")
 		}
 
-		orgUpstream, _ := getCVObyJP(oc, ".spec.upstream")
-		orgChannel, _ := getCVObyJP(oc, ".spec.channel")
+		orgUpstream, err := getCVObyJP(oc, ".spec.upstream")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		orgChannel, err := getCVObyJP(oc, ".spec.channel")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Original upstream:%s, original channel:%s", orgUpstream, orgChannel)
 
@@ -959,7 +972,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			"grep -rlZ 'kind: Deployment' %s | xargs -0 grep -l 'name: %s\\|namespace: %s' | xargs grep replicas",
 			manifestDir, name, namespace)
 		e2e.Logf(cmd)
-		out, _ := exec.Command("bash", "-c", cmd).Output()
+		out, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).To(o.BeEmpty())
 
 		g.By("Check only one insights-operator pod in a fresh installed cluster")
@@ -1034,8 +1048,9 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		defer os.RemoveAll(tempDataDir)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		manifestDir := filepath.Join(tempDataDir, "manifest")
-		featuresetTechPreviewManifest, _ := exec.Command("bash", "-c", fmt.Sprintf(
+		featuresetTechPreviewManifest, err := exec.Command("bash", "-c", fmt.Sprintf(
 			"grep -rl 'release.openshift.io/feature-set: .*TechPreviewNoUpgrade.*' %s|grep 'clusteroperator.yaml'", manifestDir)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		tpOperatorFilePaths := strings.Split(strings.TrimSpace(string(featuresetTechPreviewManifest)), "\n")
 		o.Expect(len(tpOperatorFilePaths)).To(o.Equal(len(tpOperator)))
 		e2e.Logf("Expected number of cluster operator manifest files with correct annotation found!")
@@ -1080,7 +1095,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			"grep -rlZ 'kind: Deployment' %s | xargs -0 grep -l 'name: %s' | xargs grep strategy -A1 | sed -n 2p | cut -f2 -d ':'",
 			manifestDir, name)
 		e2e.Logf(cmd)
-		out, _ := exec.Command("bash", "-c", cmd).Output()
+		out, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(out).NotTo(o.BeEmpty())
 		expectStrategy := strings.TrimSpace(string(out))
 		e2e.Logf(expectStrategy)
@@ -1108,8 +1124,9 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		g.By("Check the strategy reverted after 5 minutes")
 		if pollErr := wait.Poll(30*time.Second, 5*time.Minute, func() (bool, error) {
-			curStrategy, _ := oc.AsAdmin().WithoutNamespace().Run("get").
+			curStrategy, err := oc.AsAdmin().WithoutNamespace().Run("get").
 				Args("deployment", name, "-o=jsonpath={.spec.strategy}", "-n", namespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(string(curStrategy), expectStrategy) {
 				return true, nil
 			}
@@ -1224,8 +1241,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			if strings.ToLower(platformType) != "gcp" {
 				g.Skip("Skip for non-gcp cluster!")
 			}
-			origUpstream, _ := getCVObyJP(oc, ".spec.upstream")
-			origChannel, _ := getCVObyJP(oc, ".spec.channel")
+			origUpstream, err := getCVObyJP(oc, ".spec.upstream")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			origChannel, err := getCVObyJP(oc, ".spec.channel")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("Original upstream:%s, original channel:%s", origUpstream, origChannel)
 			defer restoreCVSpec(origUpstream, origChannel, oc)
 
@@ -1365,8 +1384,9 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		g.By("Check the deployment was reconciled back.")
 		err = wait.Poll(30*time.Second, 5*time.Minute, func() (bool, error) {
-			valueMaxUnavailable, _ := oc.AsAdmin().WithoutNamespace().Run("get").
+			valueMaxUnavailable, err := oc.AsAdmin().WithoutNamespace().Run("get").
 				Args(resourceKindName, "-o=jsonpath={.spec.strategy.rollingUpdate.maxUnavailable}", "-n", resourceNamespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Compare(valueMaxUnavailable, defaultValueMaxUnavailable) != 0 {
 				e2e.Logf("valueMaxUnavailable is %v. Waiting for deployment being reconciled...", valueMaxUnavailable)
 				return false, nil
@@ -1416,8 +1436,9 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 		g.By("Check the deployment will not be reconciled back.")
 		err = wait.Poll(30*time.Second, 8*time.Minute, func() (bool, error) {
-			valueMaxUnavailable, _ := oc.AsAdmin().WithoutNamespace().Run("get").
+			valueMaxUnavailable, err := oc.AsAdmin().WithoutNamespace().Run("get").
 				Args(resourceKind, resourceName, "-o=jsonpath={.spec.strategy.rollingUpdate.maxUnavailable}", "-n", resourceNamespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Compare(valueMaxUnavailable, defaultValueMaxUnavailable) == 0 {
 				e2e.Logf("valueMaxUnavailable is %v. Waiting for deployment being reconciled...", valueMaxUnavailable)
 				return false, nil
@@ -1433,7 +1454,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	g.It("Author:jiajliu-Medium-53906-The architecture info in clusterversion’s status should be correct", func() {
 		const heterogeneousArchKeyword = "multi"
 		g.By("Get release info from current cluster")
-		releaseInfo, _ := getReleaseInfo(oc)
+		releaseInfo, err := getReleaseInfo(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(releaseInfo).NotTo(o.BeNil())
 
 		g.By("Check the arch info cv.status is expected")

@@ -445,22 +445,19 @@ func extractManifest(oc *exutil.CLI) (string, error) {
 	tempDataDir := filepath.Join("/tmp/", fmt.Sprintf("ota-%s", getRandomString()))
 	err := os.Mkdir(tempDataDir, 0755)
 	if err != nil {
-		e2e.Logf("Fail to create directory: %v", err)
-		return tempDataDir, err
+		return tempDataDir, fmt.Errorf("Fail to create directory: %v", err)
 	}
 	manifestDir := filepath.Join(tempDataDir, "manifest")
 	err = oc.AsAdmin().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--confirm", "--to="+tempDataDir).Execute()
 	if err != nil {
-		e2e.Logf("Fail to extract dockerconfig: %v", err)
-		return tempDataDir, err
+		return tempDataDir, fmt.Errorf("Fail to extract dockerconfig: %v", err)
 	}
 	err = oc.AsAdmin().Run("adm").Args("release", "extract", "--to", manifestDir, "-a", tempDataDir+"/.dockerconfigjson").Execute()
 	if err != nil {
 		cmd := fmt.Sprintf("cat %v/.dockerconfigjson |jq .|grep '{'", tempDataDir)
 		out, _ := exec.Command("bash", "-c", cmd).Output()
 		e2e.Logf("Debug info: %v", out)
-		e2e.Logf("Fail to extract manifests: %v", err)
-		return tempDataDir, err
+		return tempDataDir, fmt.Errorf("Fail to extract manifests: %v", err)
 	}
 	return tempDataDir, nil
 }
@@ -701,21 +698,18 @@ func getReleaseInfo(oc *exutil.CLI) (map[string]interface{}, error) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	err = oc.AsAdmin().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--confirm", "--to="+tempDataDir).Execute()
 	if err != nil {
-		e2e.Logf("Fail to extract dockerconfig: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("Fail to extract dockerconfig: %v", err)
 	}
 	output, err := oc.AsAdmin().Run("adm").Args("release", "info", "-a", tempDataDir+"/.dockerconfigjson", "-ojson").Output()
 	if err != nil {
 		cmd := fmt.Sprintf("cat %v/.dockerconfigjson |jq .|grep '{'", tempDataDir)
 		out, _ := exec.Command("bash", "-c", cmd).Output()
 		e2e.Logf("Debug info: %v", out)
-		e2e.Logf("Fail to get release info: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("Fail to get release info: %v", err)
 	}
 	err = json.Unmarshal([]byte(output), &releaseInfo)
 	if err != nil {
-		e2e.Logf("Unmarshal release info error:%v", err)
-		return nil, err
+		return nil, fmt.Errorf("Unmarshal release info error: %v", err)
 	}
 	return releaseInfo, nil
 }
