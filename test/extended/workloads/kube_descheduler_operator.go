@@ -656,6 +656,10 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		}
 
 		// Test for PodTopologySpreadConstriant
+		nodeNum := 3
+		if len(nodeList.Items) < nodeNum {
+			g.Skip("Not enough worker nodes for this test, skip the case!!")
+		}
 
 		g.By("Cordon all nodes in the cluster")
 		nodeName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
@@ -1077,7 +1081,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		}
 
 		g.By("Check the descheduler deploy logs, should see config error logs")
-		checkLogsFromRs(oc, kubeNamespace, "pod", podName, regexp.QuoteMeta(`"Evicted pod"`)+".*"+regexp.QuoteMeta(oc.Namespace())+".*"+regexp.QuoteMeta(`reason=""`)+".*"+regexp.QuoteMeta(`strategy="PodLifeTime"`))
+		checkLogsFromRs(oc, kubeNamespace, "pod", podName, regexp.QuoteMeta(`"Evicted pod in dry run mode"`)+".*"+regexp.QuoteMeta(oc.Namespace())+".*"+regexp.QuoteMeta(`reason=""`)+".*"+regexp.QuoteMeta(`strategy="PodLifeTime"`))
 
 		// Collect PodLifetime metrics from prometheus
 		g.By("Checking PodLifetime metrics from prometheus")
@@ -1133,7 +1137,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the descheduler deploy logs, should see config error logs")
-		checkLogsFromRs(oc, kubeNamespace, "pod", podName, regexp.QuoteMeta(`"Evicted pod"`)+".*"+regexp.QuoteMeta(oc.Namespace())+".*"+regexp.QuoteMeta(`reason="PodLifeTime"`))
+		checkLogsFromRs(oc, kubeNamespace, "pod", podName, regexp.QuoteMeta(`"Evicted pod"`)+".*"+regexp.QuoteMeta(oc.Namespace())+".*"+regexp.QuoteMeta(`reason=""`)+".*"+regexp.QuoteMeta(`strategy="PodLifeTime"`))
 
 		// Collect PodLifetime metrics from prometheus
 		g.By("Checking PodLifetime metrics from prometheus")
