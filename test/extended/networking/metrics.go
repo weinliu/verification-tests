@@ -216,7 +216,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.AssertWaitPollNoErr(podErr2, "egressrouterPod is not running")
 
 		podName := getPodName(oc, "openshift-multus", "app=multus-admission-controller")
-		output, err := oc.AsAdmin().Run("exec").Args("-n", "openshift-multus", podName[1], "--", "curl", "localhost:9091/metrics").OutputToFile("metrics.txt")
+		output, err := oc.AsAdmin().Run("exec").Args("-n", "openshift-multus", podName[0], "--", "curl", "localhost:9091/metrics").OutputToFile("metrics.txt")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		metricOutput, _ := exec.Command("bash", "-c", "cat "+output+" | grep egress-router | awk '{print $2}'").Output()
 		metricValue := strings.TrimSpace(string(metricOutput))
