@@ -2906,7 +2906,7 @@ spec:
 		oc.SetupProject()
 		namespace := oc.Namespace()
 
-		filename := "ocp10933-hello-pod.json"
+		filename := "hello-pod.json"
 		g.By(fmt.Sprintf("2) Create pod with resource file %s", filename))
 		template := getTestDataFilePath(filename)
 		err := oc.Run("create").Args("-f", template, "-n", namespace).Execute()
@@ -2920,5 +2920,45 @@ spec:
 		getOutput, err := oc.Run("get").Args("pods", "--loglevel", "8", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(getOutput).NotTo(o.ContainSubstring("protobuf"))
+	})
+
+	// author: zxiao@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Medium-9853-patch operation should use patched object to check admission control", func() {
+		g.By("This case is for bug 1297910")
+		g.By("1) Create new project required for this test execution")
+		oc.SetupProject()
+		namespace := oc.Namespace()
+
+		g.By("2) Use admin user to create quota and limits for project")
+
+		g.By("2.1) Create quota")
+		template := getTestDataFilePath("ocp9853-quota.yaml")
+		err := oc.AsAdmin().Run("create").Args("-f", template, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("2.2) Create limits")
+		template = getTestDataFilePath("ocp9853-limits.yaml")
+		err = oc.AsAdmin().Run("create").Args("-f", template, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By(`2.3) Create pod and wait for "hello-openshift" pod to be ready`)
+		template = getTestDataFilePath("hello-pod.json")
+		err = oc.Run("create").Args("-f", template, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		podName := "hello-openshift"
+		exutil.AssertPodToBeReady(oc, podName, namespace)
+
+		g.By("3) Update pod's image using patch command")
+		patch := `{"spec":{"containers":[{"name":"hello-openshift","image":"quay.io/openshifttest/hello-openshift:multiarch"}]}}`
+		err = oc.Run("patch").Args("pod", podName, "-n", namespace, "-p", patch).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("4) Check pod status using get command")
+		describeOutput, err := oc.Run("get").Args("pod", podName, "-n", namespace, "-o=jsonpath={.status.containerStatuses[0].image}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(describeOutput).To(o.ContainSubstring("openshifttest/hello-openshift"))
+
+		g.By("5) Check if pod running")
+		exutil.AssertPodToBeReady(oc, podName, namespace)
 	})
 })
