@@ -347,4 +347,92 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("keep-younger-than=1m30s"))
 	})
+
+	//author: wewang@redhat.com
+	g.It("ConnectedOnly-Author:wewang-High-16495-High-19196-No prune layer of a valid Image due to minimum aging and prune images when DC reference to invalid image [Disruptive]", func() {
+		//Check if openshift-sample operator installed
+		sampleOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/openshift-samples").Output()
+		if err != nil && strings.Contains(sampleOut, `openshift-samples" not found`) {
+			g.Skip("Skip test for openshift-samples which managed templates and imagestream are not installed")
+		}
+
+		g.By("Get server host")
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		refRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(oc, refRoute)
+
+		g.By("Add system:image-pruner role to user")
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "system:image-pruner", oc.Username()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "system:image-pruner", oc.Username()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		token, err := oc.Run("whoami").Args("-t").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Start a new build")
+		createAppError := oc.WithoutNamespace().AsAdmin().Run("new-build").Args("openshift/ruby:2.7~https://github.com/sclorg/ruby-ex.git", "-n", oc.Namespace()).Execute()
+		o.Expect(createAppError).NotTo(o.HaveOccurred())
+
+		g.By("waiting for build to finish")
+		err = exutil.WaitForABuild(oc.BuildClient().BuildV1().Builds(oc.Namespace()), "ruby-ex-1", nil, nil, nil)
+		if err != nil {
+			exutil.DumpBuildLogs("ruby-ex", oc)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+		firOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("is/ruby-ex", "-n", oc.Namespace(), "-o=jsonpath={.status.tags[0].items[0].image}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		time.Sleep(3 * time.Minute)
+
+		g.By("Create another build")
+		createAppError = oc.WithoutNamespace().AsAdmin().Run("new-build").Args("quay.io/openshifttest/ruby-27:1.2.0~https://github.com/sclorg/ruby-ex.git", "--name=test-16495", "-n", oc.Namespace()).Execute()
+		o.Expect(createAppError).NotTo(o.HaveOccurred())
+		g.By("waiting for build to finish")
+		err = exutil.WaitForABuild(oc.BuildClient().BuildV1().Builds(oc.Namespace()), "test-16495-1", nil, nil, nil)
+		if err != nil {
+			exutil.DumpBuildLogs("test-16495", oc)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForAnImageStreamTag(oc, oc.Namespace(), "test-16495", "latest")
+		secOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("is/test-16495", "-n", oc.Namespace(), "-o=jsonpath={.status.tags[0].items[0].image}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("all", "--all", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Prune images")
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "images", "--keep-younger-than=2m", "--token="+token, "--registry-url="+refRoute, "--confirm", "--loglevel=4").Output()
+		o.Expect(out).To(o.ContainSubstring("Deleting blob " + firOut))
+		o.Expect(out).To(o.ContainSubstring(secOut + ": keeping because of --keep-younger-than"))
+
+		g.By("OCP-19196 is as below:")
+		g.By("Create the app")
+		err = oc.WithoutNamespace().AsAdmin().Run("new-app").Args("registry.redhat.io/ubi8/ruby-30:latest~https://github.com/sclorg/ruby-ex.git", "--as-deployment-config", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("waiting for build to finish")
+		err = exutil.WaitForABuild(oc.BuildClient().BuildV1().Builds(oc.Namespace()), "ruby-ex-1", nil, nil, nil)
+		if err != nil {
+			exutil.DumpBuildLogs("ruby-ex", oc)
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("deployment complete")
+		err = exutil.WaitForDeploymentConfig(oc.KubeClient(), oc.AppsClient().AppsV1(), oc.Namespace(), "ruby-ex", 1, true, oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Edit dc, set invalid image as the value in 'image' field")
+		err = oc.AsAdmin().Run("patch").Args("dc/ruby-ex", "-p", `{"spec":{"triggers":[{"type":"ConfigChange"}]}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchInfo := fmt.Sprintf("{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"image\":\"%v/%v/ruby-ex@sha256:nonono\",\"name\":\"ruby-ex\"}]}}}}", refRoute, oc.Namespace())
+		err = oc.AsAdmin().Run("patch").Args("dc/ruby-ex", "-p", patchInfo, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Prune images without '--ignore-invalid-refs' options")
+		pruneout, _ := oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "images", "--keep-tag-revisions=1", "--keep-younger-than=0", "--token="+token, "--registry-url="+refRoute, "--confirm", "--loglevel=5").SilentOutput()
+		o.Expect(pruneout).To(o.ContainSubstring("invalid"))
+		o.Expect(pruneout).NotTo(o.ContainSubstring("skipping"))
+
+		g.By("Prune images with '--ignore-invalid-refs' options")
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "images", "--keep-tag-revisions=1", "--keep-younger-than=0", "--token="+token, "--registry-url="+refRoute, "--ignore-invalid-refs", "--confirm", "--loglevel=4").SilentOutput()
+		o.Expect(out).To(o.ContainSubstring("skipping"))
+	})
 })

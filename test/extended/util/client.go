@@ -956,3 +956,28 @@ func defaultClientTransport(rt http.RoundTripper) http.RoundTripper {
 	transport.MaxIdleConnsPerHost = 100
 	return transport
 }
+
+// SilentOutput executes the command and returns stdout/stderr combined into one string
+func (c *CLI) SilentOutput() (string, error) {
+	if c.verbose {
+		fmt.Printf("DEBUG: oc %s\n", c.printCmd())
+	}
+	cmd := exec.Command(c.execPath, c.finalArgs...)
+	cmd.Stdin = c.stdin
+	if c.showInfo {
+		e2e.Logf("Running '%s %s'", c.execPath, strings.Join(c.finalArgs, " "))
+	}
+	out, err := cmd.CombinedOutput()
+	trimmed := strings.TrimSpace(string(out))
+	switch err.(type) {
+	case nil:
+		c.stdout = bytes.NewBuffer(out)
+		return trimmed, nil
+	case *exec.ExitError:
+		e2e.Logf("Error running %v", cmd)
+		return trimmed, &ExitError{ExitError: err.(*exec.ExitError), Cmd: c.execPath + " " + strings.Join(c.finalArgs, " "), StdErr: trimmed}
+	default:
+		FatalErr(fmt.Errorf("unable to execute %q: %v", c.execPath, err))
+		return "", nil
+	}
+}
