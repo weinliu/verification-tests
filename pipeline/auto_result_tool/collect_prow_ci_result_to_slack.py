@@ -200,7 +200,6 @@ class SummaryClient:
                                 else:
                                     caseAuthor = ""
                                 FailedCase[subteamOut].append(caseids[0][4:]+"-"+caseAuthor)
-            #print(FailedCase)
             return FailedCase
         except BaseException as e:
             print(e)
@@ -233,7 +232,6 @@ class SummaryClient:
         
     def collectResultToSlack(self, launchID):
         result = self.collectResult(launchID)
-        #print(result)
         for testrun in result.keys():
             notificationList = []
             notificationHeader=[]
@@ -254,9 +252,9 @@ class SummaryClient:
                 notificationSub.append("---------- subteam: "+subteam+" -------------")
                 notificationSub.append("Failed Cases: "+"|".join(result[testrun]["caseResult"][subteam]))
                 notificationList.append("\n".join(notificationSub))
-                if subteam.strip("_cucushift") in self.SUBTEAM_OWNER.keys():
-                    if self.SUBTEAM_OWNER[subteam.strip("_cucushift")] not in faildTeamOwner:
-                        faildTeamOwner = faildTeamOwner + self.SUBTEAM_OWNER[subteam.strip("_cucushift")]+" "
+                if subteam.replace("_cucushift", "") in self.SUBTEAM_OWNER.keys():
+                    if self.SUBTEAM_OWNER[subteam.replace("_cucushift", "")] not in faildTeamOwner:
+                        faildTeamOwner = faildTeamOwner + self.SUBTEAM_OWNER[subteam.replace("_cucushift", "")]+" "
             if faildTeamOwner=="":
                 continue 
             notificationEnd = []
