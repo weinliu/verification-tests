@@ -46,7 +46,7 @@ func runDRBackup(oc *exutil.CLI, nodeNameList []string) (nodeName string, etcddb
 	var nodeN, etcdDb string
 	succBackup := false
 	for _, node := range nodeNameList {
-		backupout, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", oc.Namespace(), "node/"+node, "--", "chroot", "/host", "/usr/local/bin/cluster-backup.sh", "/home/core/assets/backup").Output()
+		backupout, err := exutil.DebugNodeWithOptionsAndChroot(oc, node, []string{"-q"}, "/usr/local/bin/cluster-backup.sh", "/home/core/assets/backup")
 		if err != nil {
 			e2e.Logf("Try for next master!")
 			continue
