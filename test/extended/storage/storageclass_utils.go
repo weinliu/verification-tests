@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ghodss/yaml"
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -23,6 +25,7 @@ type storageClass struct {
 	reclaimPolicy     string
 	volumeBindingMode string
 	negativeTest      bool
+	parameters        map[string]interface{}
 }
 
 // function option mode to change the default value of storageclass parameters, e.g. name, provisioner, reclaimPolicy, volumeBindingMode
@@ -77,6 +80,7 @@ func newStorageClass(opts ...storageClassOption) storageClass {
 		provisioner:       "ebs.csi.aws.com",
 		reclaimPolicy:     "Delete",
 		volumeBindingMode: "WaitForFirstConsumer",
+		parameters:        make(map[string]interface{}, 10),
 	}
 
 	for _, o := range opts {
@@ -100,6 +104,14 @@ func (sc *storageClass) deleteAsAdmin(oc *exutil.CLI) {
 
 //  Create a new customized storageclass with extra parameters
 func (sc *storageClass) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) error {
+	sc.getParametersFromTemplate()
+	if _, ok := extraParameters["parameters"]; ok && len(sc.parameters) > 0 {
+		finalParameters := make(map[string]interface{}, 10)
+		err := json.Unmarshal([]byte(fmt.Sprintf("%v", extraParameters["parameters"])), &finalParameters)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		finalParameters = mergeMaps(sc.parameters, finalParameters)
+		extraParameters["parameters"] = finalParameters
+	}
 	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", sc.template, "-p",
 		"SCNAME="+sc.name, "RECLAIMPOLICY="+sc.reclaimPolicy, "PROVISIONER="+sc.provisioner, "VOLUMEBINDINGMODE="+sc.volumeBindingMode)
 	if sc.negativeTest {
@@ -108,6 +120,20 @@ func (sc *storageClass) createWithExtraParameters(oc *exutil.CLI, extraParameter
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return err
+}
+
+// getParametersFromTemplate gets the storageClass parameters from yaml template
+func (sc *storageClass) getParametersFromTemplate() *storageClass {
+	output, err := ioutil.ReadFile(sc.template)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	output, err = yaml.YAMLToJSON([]byte(output))
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if gjson.Get(string(output), `objects.0.parameters`).Exists() {
+		err = json.Unmarshal([]byte(gjson.Get(string(output), `objects.0.parameters`).String()), &sc.parameters)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	debugLogf(`storageClass parameters is: "%+v"`, sc.parameters)
+	return sc
 }
 
 // Storageclass negative test enable

@@ -652,6 +652,19 @@ func stringSliceToIntSlice(strSlice []string) ([]int, []error) {
 	return intSlice, errSlice
 }
 
+// mergeMaps merges map objects to one map object
+// the same key's value will be covered by the newest value (the last map key's value)
+// no mutexes, doesn't support for concurrent operations
+func mergeMaps(mObj ...map[string]interface{}) map[string]interface{} {
+	resultObj := make(map[string]interface{}, 10)
+	for i := 0; i < len(mObj); i++ {
+		for k, v := range mObj[i] {
+			resultObj[k] = v
+		}
+	}
+	return resultObj
+}
+
 // Compare cluster versions
 // versionA, versionB should be the same length
 // E.g. [{versionA: "4.10.1", versionB: "4.10.12"}, {versionA: "4.10", versionB: "4.11}]
