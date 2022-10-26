@@ -196,6 +196,26 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(output).To(o.ContainSubstring("Error from server (Forbidden):"))
 	})
 
+	// author: juzhao@redhat.com
+	g.It("Author:juzhao-Low-43038-Should not have error for loading OpenAPI spec for v1beta1.metrics.k8s.io", func() {
+		var (
+			searchString string
+			result       string
+		)
+		searchString = "loading OpenAPI spec for \"v1beta1.metrics.k8s.io\" failed with:"
+		podList, err := exutil.GetAllPodsWithLabel(oc, "openshift-kube-apiserver", "app=openshift-kube-apiserver")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("kube-apiserver Pods: %v", podList)
+
+		g.By("check the kube-apiserver logs, should not have error for v1beta1.metrics.k8s.io")
+		for _, pod := range podList {
+			exutil.AssertPodToBeReady(oc, pod, "openshift-kube-apiserver")
+			result, _ = exutil.GetSpecificPodLogs(oc, "openshift-kube-apiserver", "kube-apiserver", pod, searchString)
+			e2e.Logf("output result in logs: %v", result)
+			o.Expect(len(result) == 0).To(o.BeTrue(), "found the error logs which is unexpected")
+		}
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
