@@ -56,6 +56,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		podName := "task-pv-pod"
 		pod := exutil.Pod{Name: podName, Namespace: "openshift-machine-api", Template: podTemplate, Parameters: []string{}}
 
+		storageclassExists, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "-o", "jsonpath={.items}").Output()
+		//If no storage class then items string is returned as []
+		if len(storageclassExists) < 3 {
+			g.Skip("Storage class not available by default")
+		}
+
 		g.By("Create pvc")
 		defer pvc.deletePvc(oc)
 		pvc.createPvc(oc)
