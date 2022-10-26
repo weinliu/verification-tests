@@ -29,6 +29,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		)
 
 		g.By("install load-sctp-module in all workers")
+		masterNodes, nodeErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(masterNodes) == 1 {
+			g.Skip("Skip sctp testing on SNO cluster.")
+		}
 		installSctpModule(oc, sctpModule)
 
 		g.By("check load-sctp-module in all workers")
@@ -121,6 +126,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		)
 
 		g.By("install load-sctp-module in all workers")
+		masterNodes, nodeErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(masterNodes) == 1 {
+			g.Skip("Skip sctp testing on SNO cluster.")
+		}
 		installSctpModule(oc, sctpModule)
 
 		g.By("check load-sctp-module in all workers")
