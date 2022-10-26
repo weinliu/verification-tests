@@ -293,7 +293,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	// author: pmali@redhat.com
-	g.It("NonPreRelease-Author:pmali-High-46306-Node should not becomes NotReady with error creating container storage layer not known[Disruptive][Slow]", func() {
+	g.It("DEPRECATED-NonPreRelease-Author:pmali-High-46306-Node should not becomes NotReady with error creating container storage layer not known[Disruptive][Slow]", func() {
 
 		oc.SetupProject()
 		podSleep.namespace = oc.Namespace()
@@ -318,6 +318,9 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		g.By("Reboot Worker node\n")
 		go rebootNode(oc, workerNodeName)
 
+		//g.By("****** Reboot Worker Node ****** ")
+		//exutil.DebugNodeWithChroot(oc, workerNodeName, "reboot")
+
 		g.By("Check Nodes Status\n")
 		err = checkNodeStatus(oc, workerNodeName)
 		exutil.AssertWaitPollNoErr(err, "node is not ready")
@@ -331,7 +334,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 	})
 
 	// author: pmali@redhat.com
-	g.It("Longduration-NonPreRelease-Author:pmali-Medium-11600-kubelet will evict pod immediately when met hard eviction threshold memory [Disruptive][Slow]", func() {
+	g.It("DEPRECATED-Longduration-NonPreRelease-Author:pmali-Medium-11600-kubelet will evict pod immediately when met hard eviction threshold memory [Disruptive][Slow]", func() {
 
 		oc.SetupProject()
 		kubeletConfig.name = "kubeletconfig-ocp11600"
