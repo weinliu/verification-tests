@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"strconv"
+	"strings"
 
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
@@ -256,5 +258,77 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		matches2 := r2.FindAllString(aclLogs2, -1)
 		o.Expect(len(matches2) == 0).To(o.BeTrue())
 
+	})
+
+	// author: huirwang@redhat.com
+	g.It("ConnectedOnly-Author:huirwang-High-55345-Drop ACL for EgressFirewall should have priority lower than allow ACL despite being last in the chain.", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+			egressFWTemplate2   = filepath.Join(buildPruningBaseDir, "egressfirewall2-template.yaml")
+			egressFWTemplate1   = filepath.Join(buildPruningBaseDir, "egressfirewall1-template.yaml")
+		)
+
+		g.By("Obtain the namespace \n")
+		ns1 := oc.Namespace()
+
+		g.By("create hello pod in ns1 \n")
+		pod1 := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns1,
+			template:  pingPodNodeTemplate,
+		}
+		pod1.createPingPodNode(oc)
+		waitPodReady(oc, ns1, pod1.name)
+
+		g.By("Create an EgressFirewall \n")
+		egressFW2 := egressFirewall2{
+			name:      "default",
+			namespace: ns1,
+			ruletype:  "Deny",
+			cidr:      "0.0.0.0/0",
+			template:  egressFWTemplate2,
+		}
+		egressFW2.createEgressFW2Object(oc)
+		efErr := waitEgressFirewallApplied(oc, egressFW2.name, ns1)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		g.By("Apply another EgressFirewall with allow rules under same namespace \n")
+		egressFW := egressFirewall1{
+			name:      "default",
+			namespace: ns1,
+			template:  egressFWTemplate1,
+		}
+		egressFW.createEgressFWObject1(oc)
+		errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressfirewall.k8s.ovn.org/default", "-n", ns1, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Allow\",\"to\":{\"dnsName\":\"www.test.com\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}}]}}", "--type=merge").Execute()
+		o.Expect(errPatch).NotTo(o.HaveOccurred())
+		efErr = waitEgressFirewallApplied(oc, egressFW.name, ns1)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		g.By("Check the result, default deny rules should have lower priority than allow rules\n")
+		ovnACLCmd := fmt.Sprintf("ovn-nbctl --format=table --no-heading  --columns=action,priority,match find acl external_ids=egressFirewall=%s", ns1)
+		ovnMasterPodName := getOVNLeaderPod(oc, "north")
+		listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, ovnACLCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+
+		strLines := strings.Split(listOutput, "\n")
+		o.Expect(len(strLines) >= 2).Should(o.BeTrue(), fmt.Sprintf("The output of acl list is not as expected,\n%s", listOutput))
+		var allowRules []int
+		var denyRule int
+		for _, line := range strLines {
+			slice := strings.Fields(line)
+			if strings.Contains(line, "allow") {
+				priority := slice[1]
+				intVar, _ := strconv.Atoi(priority)
+				allowRules = append(allowRules, intVar)
+			}
+			if strings.Contains(line, "drop") {
+				priority := slice[1]
+				denyRule, _ = strconv.Atoi(priority)
+			}
+		}
+		for _, allow := range allowRules {
+			o.Expect(allow > denyRule).Should(o.BeTrue(), fmt.Sprintf("The allow rule priority is %v, the deny rule priority is %v.", allow, denyRule))
+		}
 	})
 })

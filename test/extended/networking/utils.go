@@ -1927,3 +1927,20 @@ func searchOVNDBForSpecCmd(oc *exutil.CLI, cmd, searchKeyword string, times int)
 	}
 	return checkOVNDbErr
 }
+
+// waitEgressFirewallApplied Wait egressfirewall applied
+func waitEgressFirewallApplied(oc *exutil.CLI, efName, ns string) error {
+	checkErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		output, efErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressfirewall", "-n", ns, efName).Output()
+		if efErr != nil {
+			e2e.Logf("Failed to get egressfirewall %v, error: %s. Trying again", efName, efErr)
+			return false, nil
+		}
+		if !strings.Contains(output, "EgressFirewall Rules applied") {
+			e2e.Logf("The egressfirewall was not applied, trying again. \n %s", output)
+			return false, nil
+		}
+		return true, nil
+	})
+	return checkErr
+}
