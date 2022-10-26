@@ -462,7 +462,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 
 		g.By("2.5 Verify the bridge is up and active, vlan-filtering is enabled")
 		ifaceList1, ifaceErr1 := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
-		vlanFilter1, vlanErr1 := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show", bridgePolicy.ifacename, "|", "grep", "vlan-filtering")
+		vlanFilter1, vlanErr1 := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show", bridgePolicy.ifacename)
 		o.Expect(ifaceErr1).NotTo(o.HaveOccurred())
 		o.Expect(vlanErr1).NotTo(o.HaveOccurred())
 		matched1, matchErr1 := regexp.MatchString("bridge\\s+"+bridgePolicy.ifacename, ifaceList1)
@@ -506,7 +506,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 		e2e.Logf("SUCCESS - no linux-bridge vlan-filtering found in node network state")
 
 		g.By("3.5 Verify the linux-bridge vlan-filtering is disabled")
-		vlanFilter2, vlanErr2 := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show", bridgePolicy.ifacename, "|", "grep", "vlan-filtering")
+		vlanFilter2, vlanErr2 := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show", bridgePolicy.ifacename)
 		o.Expect(vlanErr2).NotTo(o.HaveOccurred())
 		matched3, matchErr3 := regexp.MatchString("bridge.vlan-filtering:\\s+no", vlanFilter2)
 		o.Expect(matchErr3).NotTo(o.HaveOccurred())
