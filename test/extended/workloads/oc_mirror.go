@@ -1,7 +1,9 @@
 package workloads
 
 import (
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -211,7 +213,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 	g.It("Author:yinzhou-Low-51093-oc-mirror init", func() {
 		g.By("Set podman registry config")
-		dirname := "/tmp/case44061"
+		dirname := "/tmp/case51093"
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(dirname)
@@ -229,6 +231,35 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			e2e.Failf("Can't find the storageconfig of registry")
 		}
 		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("init", "--registry", "localhost:5000/test:latest", "--output", "json").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+	g.It("ConnectedOnly-Author:yinzhou-High-46769-Critical-46515-High-46767-registry backend test", func() {
+		g.By("Set podman registry config")
+		dirname := "/tmp/case46769"
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Set registry app")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		operatorConfigS := filepath.Join(ocmirrorBaseDir, "registry_backend_operator_helm.yaml")
+		g.By("update the operator mirror config file")
+		sedCmd := fmt.Sprintf(`sed -i 's/registryroute/%s/g' %s`, serInfo.serviceName, operatorConfigS)
+		e2e.Logf("Check sed cmd %s description:", sedCmd)
+		_, err = exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Mirroring selected operator and helm image")
+		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", operatorConfigS, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--continue-on-error").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 })
