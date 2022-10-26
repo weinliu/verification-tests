@@ -1104,4 +1104,42 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 
+	// author: anusaxen@redhat.com
+	g.It("Author:anusaxen-Medium-55287-Default network policy ACLs to a namespace should not be present with arp but arp||nd for ARPAllowPolicies", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			ingressTypeFile     = filepath.Join(buildPruningBaseDir, "networkpolicy/default-deny-ingress.yaml")
+		)
+		g.By("This is for BZ 2095852")
+		networkType := exutil.CheckNetworkType(oc)
+		o.Expect(networkType).NotTo(o.BeEmpty())
+		if networkType != "ovnkubernetes" {
+			g.Skip("This case requires OVNKubernetes as network backend")
+		}
+		g.By("create new namespace")
+		oc.SetupProject()
+
+		g.By("create test pods")
+		createResourceFromFile(oc, oc.Namespace(), testPodFile)
+		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+
+		g.By("create ingress default-deny type networkpolicy")
+		createResourceFromFile(oc, oc.Namespace(), ingressTypeFile)
+		output, err := oc.Run("get").Args("networkpolicy").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("default-deny"))
+
+		ovnMasterPodName := getOVNLeaderPod(oc, "north")
+		g.By("get ACLs related to ns")
+		//list ACLs only related namespace in test
+		listACLCmd := "ovn-nbctl list ACL | grep -C 5 " + oc.Namespace() + "_ARPallowPolicy"
+		listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listACLCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		e2e.Logf("Output %s", listOutput)
+		o.Expect(listOutput).To(o.ContainSubstring("&& (arp || nd)"))
+		o.Expect(listOutput).ShouldNot(o.ContainSubstring("&& arp"))
+	})
+
 })
