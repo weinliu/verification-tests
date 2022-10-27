@@ -106,10 +106,13 @@ func (sc *storageClass) deleteAsAdmin(oc *exutil.CLI) {
 func (sc *storageClass) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) error {
 	sc.getParametersFromTemplate()
 	if _, ok := extraParameters["parameters"]; ok && len(sc.parameters) > 0 {
+		parametersByte, err := json.Marshal(extraParameters["parameters"])
+		o.Expect(err).NotTo(o.HaveOccurred())
 		finalParameters := make(map[string]interface{}, 10)
-		err := json.Unmarshal([]byte(fmt.Sprintf("%v", extraParameters["parameters"])), &finalParameters)
+		err = json.Unmarshal(parametersByte, &finalParameters)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		finalParameters = mergeMaps(sc.parameters, finalParameters)
+		debugLogf("StorageClass/%s final parameter is %v", sc.name, finalParameters)
 		extraParameters["parameters"] = finalParameters
 	}
 	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", sc.template, "-p",
@@ -132,7 +135,7 @@ func (sc *storageClass) getParametersFromTemplate() *storageClass {
 		err = json.Unmarshal([]byte(gjson.Get(string(output), `objects.0.parameters`).String()), &sc.parameters)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
-	debugLogf(`storageClass parameters is: "%+v"`, sc.parameters)
+	debugLogf(`StorageClass/%s using template/%s's parameters is: "%+v"`, sc.name, sc.template, sc.parameters)
 	return sc
 }
 
