@@ -54,7 +54,7 @@ describe('Dynamic plugins features', () => {
     cy.wait('@getConsoleCustomizaitonPluginLocales',{timeout: 60000});
   });
   it('(OCP-51743,yapei) Lazy - do not load locale files during enablement', {tags: ['e2e','admin']},() => {
-    nav.sidenav.switcher.changePerspectiveTo('Developer');
+    cy.switchPerspective('Developer');
     // enable console-demo-plugin
     cy.exec(`oc patch console.operator cluster -p '{"spec":{"plugins":["console-customization", "console-demo-plugin"]}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
       .then(result => expect(result.stdout).contains('patched'));
@@ -84,7 +84,7 @@ describe('Dynamic plugins features', () => {
     cy.get('.pf-c-nav__link').should('include.text', 'Dynamic Nav 1');
     cy.get('.pf-c-nav__link').should('include.text', 'Dynamic Nav 2');
     // demo plugin in Administrator perspective
-    nav.sidenav.switcher.changePerspectiveTo('Administrator');
+    cy.switchPerspective('Administrator');
     nav.sidenav.clickNavLink(['Demo Plugin']);
     cy.get('.pf-c-nav__link').should('include.text', 'Dynamic Nav 1');
     cy.get('.pf-c-nav__link').should('include.text', 'Dynamic Nav 2');
@@ -97,7 +97,7 @@ describe('Dynamic plugins features', () => {
   });
 
   it('(OCP-50757,yapei) Support ordering of plugin nav sections in admin perspective', {tags: ['e2e','admin']}, () => {
-    nav.sidenav.switcher.changePerspectiveTo('Administrator');
+    cy.switchPerspective('Administrator');
     // Demo Plugin nav is rendered after Workloads, before Networking
     cy.contains('button', 'Demo Plugin').should('have.attr', 'data-test', 'nav-demo-plugin');
     cy.get('button.pf-c-nav__link')
@@ -122,7 +122,25 @@ describe('Dynamic plugins features', () => {
       cy.get('a:contains(View all)').should('have.attr', 'href', '/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins')
       cy.contains(`${2}/${total} enabled`).should('exist')
     })
-  })
+  });
+  
+  it('(OCP-42537,yapei) Allow disabling dynamic plugins through a query parameter', {tags: ['e2e','admin']}, () => {
+    cy.switchPerspective('Administrator');
+    // disable non-existing plugin will make no changes
+    cy.visit('?disable-plugins=foo,bar')
+    cy.get('.pf-c-nav__link',{timeout: 60000}).should('include.text','Demo Plugin');
+    cy.get('.pf-c-nav__link',{timeout: 60000}).should('include.text','Customization');
+
+    // disable one plugin
+    cy.visit('?disable-plugins=console-demo-plugin')
+    cy.get('.pf-c-nav__link',{timeout: 60000}).should('not.have.text','Demo Plugin');
+    cy.get('.pf-c-nav__link',{timeout: 60000}).should('include.text','Customization');
+
+    // disable all plugins
+    cy.visit('?disable-plugins')
+    cy.get('.pf-c-nav__link',{timeout: 60000}).should('not.have.text','Demo Plugin');
+    cy.get('.pf-c-nav__link',{timeout: 60000}).should('not.have.text','Customization');
+  });
 
   it('(OCP-53234,yapei) Show alert when console operator is Unmanaged', {tags: ['e2e','admin']}, () => {
     // set console to Unmanaged
@@ -133,5 +151,5 @@ describe('Dynamic plugins features', () => {
     cy.get('a[data-test-id="console-demo-plugin"]').should('exist');
     cy.contains('unmanaged').should('exist');
     cy.contains('anges to plugins will have no effect').should('exist');
-  })
+  });
 });
