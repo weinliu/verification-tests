@@ -59,6 +59,21 @@ func getPodListByLabel(oc *exutil.CLI, labelKey string) []string {
 	return podNameList
 }
 
+func verifyImageIDInDebugNode(oc *exutil.CLI, nodeNameList []string, imageID string, cVersion string) bool {
+	found := false
+	for _, node := range nodeNameList {
+		resultOutput, err := exutil.DebugNodeWithChroot(oc, node, "oc", "adm", "release", "info", "--registry-config=/var/lib/kubelet/config.json", cVersion, "--image-for=etcd")
+		if strings.Contains(resultOutput, imageID) && err == nil {
+			e2e.Logf("Image %v successfully deployed on node %v", imageID, node)
+			found = true
+		} else {
+			found = false
+			e2e.Failf("expected mage %v not found on node %v", imageID, node)
+		}
+	}
+	return found
+}
+
 func runDRBackup(oc *exutil.CLI, nodeNameList []string) (nodeName string, etcddb string) {
 	var nodeN, etcdDb string
 	for nodeindex, node := range nodeNameList {

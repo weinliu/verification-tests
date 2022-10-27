@@ -1,11 +1,10 @@
 package etcd
 
 import (
-	"os/exec"
-	"strings"
-
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
+	"os/exec"
+	"strings"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -89,4 +88,31 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 
 	})
 
+	// author: skundu@redhat.com
+	g.It("PstChkUpgrade-Author:skundu-NonPreRelease-Critical-22665-Check etcd image have been update to target release value after upgrade [Serial]", func() {
+		g.By("Test for case OCP-22665 Check etcd image have been update to target release value after upgrade.")
+		e2e.Logf("Discover all the etcd pods")
+		etcdPodList := getPodListByLabel(oc, "etcd=true")
+
+		e2e.Logf("get the image id from the etcd pod")
+		etcdImageID, errImg := oc.AsAdmin().Run("get").Args("-n", "openshift-etcd", "pod", etcdPodList[0], "-o=jsonpath={.status.containerStatuses[?(@.name==\"etcd\")].imageID}").Output()
+		o.Expect(errImg).NotTo(o.HaveOccurred())
+		e2e.Logf("etcd imagid is %v", etcdImageID)
+
+		e2e.Logf("select all the master nodes")
+		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
+
+		e2e.Logf("get the clusterVersion")
+		clusterVersion, errClvr := oc.AsAdmin().Run("get").Args("clusterversions", "version", "-o=jsonpath={.status.desired.image}").Output()
+		o.Expect(errClvr).NotTo(o.HaveOccurred())
+		e2e.Logf("clusterVersion is %v", clusterVersion)
+
+		g.By("Run the command on node(s)")
+		res := verifyImageIDInDebugNode(oc, masterNodeList, etcdImageID, clusterVersion)
+		if res {
+			e2e.Logf("Image version of etcd successfully updated to the target release")
+		} else {
+			e2e.Failf("etcd Image update to target release failed")
+		}
+	})
 })
