@@ -341,6 +341,22 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusNotIngestingSamples"}'`, token, `"result":[]`, uwmLoadTime)
 		})
 
+		// author: tagao@redhat.com
+		g.It("Author:tagao-Medium-46301-Allow OpenShift users to configure query log file for Prometheus", func() {
+			g.By("make sure all pods in openshift-monitoring/openshift-user-workload-monitoring are ready")
+			exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+			exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
+
+			g.By("check query log file for prometheus in openshift-monitoring")
+			oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "http://localhost:9090/api/v1/query?query=prometheus_build_info").Execute()
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "cat", "/tmp/promethues_query.log").Output()
+			o.Expect(output).To(o.ContainSubstring("prometheus_build_info"))
+
+			g.By("check query log file for prometheus in openshift-user-workload-monitoring")
+			oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-user-workload-monitoring", "-c", "prometheus", "prometheus-user-workload-0", "--", "curl", "http://localhost:9090/api/v1/query?query=up").Execute()
+			output2, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-user-workload-monitoring", "-c", "prometheus", "prometheus-user-workload-0", "--", "cat", "/tmp/uwm_query.log").Output()
+			o.Expect(output2).To(o.ContainSubstring("up"))
+		})
 	})
 
 	// author: hongyli@redhat.com

@@ -6,6 +6,8 @@ metadata:
 data:
   config.yaml: |
     prometheus:
+      logLevel: warn
+      queryLogFile: /tmp/uwm_query.log
       enforcedTargetLimit: 1
       externalLabels:
         labelmy: test
