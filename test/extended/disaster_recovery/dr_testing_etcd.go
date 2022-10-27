@@ -88,14 +88,32 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		e2e.Logf("platform is  : %v", iaasPlatform)
 		e2e.Logf("user on bastion is  : %v", userForBastion)
 
+		g.By("Make sure all the nodes are normal")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
+		checkMessage := []string{
+			"SchedulingDisabled",
+			"NotReady",
+		}
+		for _, v := range checkMessage {
+			if !o.Expect(out).ShouldNot(o.ContainSubstring(v)) {
+				g.Skip("The cluster nodes is abnormal, skip this case")
+			}
+		}
+
 		g.By("Run the backup on the first master")
 		defer runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo rm -rf /home/core/assets/backup", privateKeyForBastion, userForBastion)
-		msg, err := runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo /usr/local/bin/cluster-backup.sh /home/core/assets/backup", privateKeyForBastion, userForBastion)
-		if err != nil {
-			e2e.Logf("backup is failed , the msg is : %v", msg)
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-		o.Expect(msg).To(o.ContainSubstring("snapshot db and kube resources are successfully saved"))
+		err = wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
+			msg, err := runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo /usr/local/bin/cluster-backup.sh /home/core/assets/backup", privateKeyForBastion, userForBastion)
+			if err != nil {
+				e2e.Logf("backup failed with the err:%v, and try next round", err)
+				return false, nil
+			}
+			if o.Expect(msg).To(o.ContainSubstring("snapshot db and kube resources are successfully saved")) {
+				e2e.Logf("backup succeed")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("backup is failed with error"))
 
 		g.By("Stop the static pods on any other control plane nodes")
 		//if assert err the cluster will be unavailable
@@ -113,7 +131,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		}
 
 		g.By("Run the restore script on the recovery control plane host")
-		msg, err = runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo -E /usr/local/bin/cluster-restore.sh /home/core/assets/backup", privateKeyForBastion, userForBastion)
+		msg, err := runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo -E /usr/local/bin/cluster-restore.sh /home/core/assets/backup", privateKeyForBastion, userForBastion)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("static-pod-resources"))
 
