@@ -5015,14 +5015,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				template:  ogSingleTemplate,
 			}
 			subD = subscriptionDescription{
-				subName:                "mta-operator",
+				subName:                "oadp-operator",
 				namespace:              "",
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "mta-operator",
-				catalogSourceName:      "community-operators",
-				catalogSourceNamespace: "openshift-marketplace",
-				startingCSV:            "",
+				operatorPackage:        "oadp-operator",
+				catalogSourceName:      "",
+				catalogSourceNamespace: "",
+				startingCSV:            "oadp-operator.v0.5.3",
 				currentCSV:             "",
 				installedCSV:           "",
 				template:               subTemplate,
@@ -5034,7 +5034,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
 				template:    catsrcImageTemplate,
 			}
 			repeatedCount = 2
@@ -5051,11 +5051,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		g.By("Create og")
 		og.create(oc, itName, dr)
-
-		g.By("Get address of catalogsource and name")
-		imageAddress := getResource(oc, asAdmin, withoutNamespace, "catsrc", "community-operators", "-n", "openshift-marketplace", "-o=jsonpath={.spec.image}")
-		o.Expect(imageAddress).NotTo(o.BeEmpty())
-		catsrc.address = imageAddress
 
 		for i := 0; i < repeatedCount; i++ {
 			g.By("Create Catalogsource")
