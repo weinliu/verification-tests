@@ -20,6 +20,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		iaasPlatform         string
 		gpuMachinesetName    = "openshift-psap-qe-gpu"
 		gpuClusterPolicyName = "gpu-cluster-policy"
+		ManualPickup         = true
 	)
 
 	g.BeforeEach(func() {
@@ -51,6 +52,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet and is only supported on AWS - skipping test ...")
 		}
 
+		if ManualPickup {
+			g.Skip("This is the test case that execute mannually in shared cluster ...")
+		}
 		// Code here to check for GPU instance and create a new machineset and substitute name and instance type to g4dn.xlarge
 		g.By("Check if we have an existing \"g4dn\" GPU enabled worker node, if not reate a new machineset of instance type \"g4dn.xlarge\" on OCP")
 		checkGPU, err := checkIfWorkerNodesHaveGPUInstances(oc, "g4dn")

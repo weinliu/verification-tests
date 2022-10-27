@@ -154,3 +154,90 @@ func assertNTOPodLogsLastLinesInHostedCluster(oc *exutil.CLI, namespace string, 
 func getTunedRenderInHostedCluster(oc *exutil.CLI, namespace string) (string, error) {
 	return oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "tuned", "rendered", "-ojsonpath={.spec.profile[*].name}").Output()
 }
+
+// assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster use to check if custom profile applied to a node
+func assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc *exutil.CLI, namespace string, nodePoolName string, tunedName string) {
+
+	var (
+		matchTunedProfile     bool
+		matchAppliedStatus    bool
+		matchNum              int
+		expectedAppliedStatus string
+	)
+
+	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+		nodeNames, err := exutil.GetAllNodesByNodePoolNameInHostedCluster(oc, nodePoolName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		matchNum = 0
+		for i := 0; i < len(nodeNames); i++ {
+			expectedTunedName, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile", nodeNames[i], "-ojsonpath={.status.tunedProfile}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(expectedTunedName).NotTo(o.BeEmpty())
+			matchTunedProfile = strings.Contains(expectedTunedName, tunedName)
+
+			expectedAppliedStatus, err = oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile", nodeNames[i], `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(expectedAppliedStatus).NotTo(o.BeEmpty())
+			matchAppliedStatus = strings.Contains(expectedAppliedStatus, "True")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(expectedAppliedStatus).NotTo(o.BeEmpty())
+
+			if matchTunedProfile && matchAppliedStatus {
+				matchNum++
+				e2e.Logf("Profile '%s' matchs on  %s - match times is:%v", tunedName, nodeNames[i], matchNum)
+
+			}
+		}
+
+		if matchNum == len(nodeNames) {
+			tunedProfiles, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("Current profiles on each node : \n %v ", tunedProfiles)
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Profile was not applied to %s within timeout limit (30 seconds)", nodePoolName))
+}
+
+//compareSpecifiedValueByNameOnNodePoolLevelwithRetryInHostedCluster
+func compareSpecifiedValueByNameOnNodePoolLevelwithRetryInHostedCluster(oc *exutil.CLI, ntoNamespace, nodePoolName, oscommand, sysctlparm, specifiedvalue string) {
+
+	var (
+		isMatch  bool
+		matchNum int
+	)
+
+	err := wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
+		nodeNames, err := exutil.GetAllNodesByNodePoolNameInHostedCluster(oc, nodePoolName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodesNum := len(nodeNames)
+		matchNum = 0
+		//all worker node in the nodepool should match the tuned profile settings
+		for i := 0; i < nodesNum; i++ {
+			tunedSettings := getTunedSystemSetValueByParmNameInHostedCluster(oc, ntoNamespace, nodeNames[i], oscommand, sysctlparm)
+			expectedSettings := sysctlparm + " = " + specifiedvalue
+			if strings.Contains(tunedSettings, expectedSettings) {
+				matchNum++
+				isMatch = true
+			}
+		}
+		if isMatch && matchNum == nodesNum {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "The value sysctl mismatch, please check")
+}
+
+//assertMisMatchTunedSystemSettingsByParmNameOnNodePoolLevelInHostedCluster used to compare the the value shouldn't match specified name
+func assertMisMatchTunedSystemSettingsByParmNameOnNodePoolLevelInHostedCluster(oc *exutil.CLI, ntoNamespace, nodePoolName, oscommand, sysctlparm, expectedMisMatchValue string) {
+	nodeNames, err := exutil.GetAllNodesByNodePoolNameInHostedCluster(oc, nodePoolName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	nodesNum := len(nodeNames)
+	for i := 0; i < nodesNum; i++ {
+		stdOut := getTunedSystemSetValueByParmNameInHostedCluster(oc, ntoNamespace, nodeNames[i], oscommand, sysctlparm)
+		o.Expect(stdOut).NotTo(o.BeEmpty())
+		o.Expect(stdOut).NotTo(o.ContainSubstring(expectedMisMatchValue))
+	}
+}

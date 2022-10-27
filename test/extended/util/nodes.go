@@ -2,6 +2,8 @@ package util
 
 import (
 	"strings"
+
+	o "github.com/onsi/gomega"
 )
 
 // GetFirstLinuxWorkerNode returns the first linux worker node in the cluster
@@ -207,4 +209,17 @@ func GetFirstLinuxWorkerNodeInHostedCluster(oc *CLI) (string, error) {
 		workerNode, err = getFirstNodeByOsIDInHostedCluster(oc, "worker", "rhel")
 	}
 	return workerNode, err
+}
+
+// GetAllNodesByNodePoolNameInHostedCluster return all node names of specified nodepool in hosted cluster.
+func GetAllNodesByNodePoolNameInHostedCluster(oc *CLI, nodePoolName string) ([]string, error) {
+	nodes, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("node", "-l", "hypershift.openshift.io/nodePool="+nodePoolName, "-ojsonpath='{.items[*].metadata.name}'").Output()
+	return strings.Split(strings.Trim(nodes, "'"), " "), err
+}
+
+// GetFirstWorkerNodeByNodePoolNameInHostedCluster returns the first linux worker node in the cluster
+func GetFirstWorkerNodeByNodePoolNameInHostedCluster(oc *CLI, nodePoolName string) (string, error) {
+	workerNodes, err := GetAllNodesByNodePoolNameInHostedCluster(oc, nodePoolName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return workerNodes[0], err
 }

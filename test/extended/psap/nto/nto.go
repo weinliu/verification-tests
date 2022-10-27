@@ -1767,6 +1767,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
+		if iaasPlatform == "vsphere" {
+			g.Skip("IAAS platform: " + iaasPlatform + " doesn't support cloud provider profile - skipping test ...")
+		}
+
 		//Use the first worker node as labeled node
 		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2014,17 +2018,19 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
+
+		if iaasPlatform == "vsphere" {
+			g.Skip("IAAS platform: " + iaasPlatform + " doesn't support cloud provider profile - skipping test ...")
+		}
+
+		if ManualPickup {
+			g.Skip("This is the test case that execute mannually in shared cluster ...")
+		}
+
 		//Use the first worker node as labeled node
 		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
-
-		stalldStdout, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot /host which stalld").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(stalldStdout).NotTo(o.BeEmpty())
-		if !strings.Contains(stalldStdout, "stalld") {
-			g.Skip("No stalld service found - skipping test ...")
-		}
 
 		//Get the tuned pod name in the same node that labeled node
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
@@ -2032,10 +2038,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-stalld-").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "openshift-stalld", "-n", ntoNamespace, "--ignore-not-found").Execute()
-		defer exutil.DebugNodeWithChroot(oc, tunedNodeName, "/usr/bin/throttlectl", "on")
+		defer exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "/usr/bin/throttlectl", "on")
 
-		g.By("Set off for /usr/bin/throttlectl before enable stalld")
-		_, err = exutil.DebugNodeWithChroot(oc, tunedNodeName, "/usr/bin/throttlectl", "off")
+		//Switch off throttlectl to improve sucessfull rate of stalld starting
+		_, _, err = exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "/usr/bin/throttlectl", "off")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Label the node with node-role.kubernetes.io/worker-stalld=")
@@ -2079,18 +2085,21 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Check if stalld service is running ...")
-		stalldStatus, err := exutil.DebugNodeWithChroot(oc, tunedNodeName, "systemctl", "status", "stalld")
+		//stalldStatus, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot /host", "systemctl", "status", "stalld").Output()
+		stalldStatus, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "systemctl", "status", "stalld")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stalldStatus).NotTo(o.BeEmpty())
 		o.Expect(stalldStatus).To(o.ContainSubstring("active (running)"))
 
 		g.By("Get stalld PID on labeled node ...")
-		stalldPID, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "/bin/bash", "-c", "ps -efL| grep stalld | grep -v grep | awk '{print $2}'").Output()
+		//stalldPID, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot /host", "/bin/bash", "-c", "ps -efL| grep stalld | grep -v grep | awk '{print $2}'").Output()
+		stalldPID, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "ps -efL| grep stalld | grep -v grep | awk '{print $2}'")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stalldPID).NotTo(o.BeEmpty())
 
 		g.By("Get status of chrt -p stalld PID on labeled node ...")
-		chrtStalldPIDOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "/bin/bash", "-c", "chrt -ap "+stalldPID).Output()
+		chrtStalldPIDOutput, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "chrt -ap "+stalldPID)
+		//chrtStalldPIDOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot /host", "/bin/bash", "-c", "chrt -ap "+stalldPID).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(chrtStalldPIDOutput).NotTo(o.BeEmpty())
 		o.Expect(chrtStalldPIDOutput).To(o.ContainSubstring("SCHED_FIFO"))

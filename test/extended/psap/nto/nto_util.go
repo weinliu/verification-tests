@@ -592,7 +592,6 @@ func compareSpecifiedValueByNameOnLabelNodewithRetry(oc *exutil.CLI, ntoNamespac
 
 	err := wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
 
-		//sysctlOutput, err := exutil.DebugNodeWithChroot(oc, nodeName, "sysctl", sysctlparm)
 		sysctlOutput, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, nodeName, []string{"-q"}, "sysctl", sysctlparm)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
