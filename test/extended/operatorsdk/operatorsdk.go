@@ -1506,7 +1506,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "kubeturbo", "-n", oc.Namespace(), "-o=jsonpath={.status.channels[*].name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("stable"))
+		o.Expect(output).To(o.ContainSubstring("operator-sdk-run-bundle"))
 
 		g.By("step: upgrade bundle")
 		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/kubeturbo-bundle:v8.5.0", "-n", ns, "--timeout", "5m").Output()
@@ -1557,9 +1557,10 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "kubeturbo", "-n", oc.Namespace(), "-o=jsonpath={.status.channels[*].currentCSV}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("kubeturbo-operator.v8.5.0"))
+
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "kubeturbo", "-n", oc.Namespace(), "-o=jsonpath={.status.channels[*].name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("stable"))
+		o.Expect(output).To(o.ContainSubstring("operator-sdk-run-bundle"))
 
 		g.By("SUCCESS")
 	})
