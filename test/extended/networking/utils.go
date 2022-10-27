@@ -494,7 +494,7 @@ func getRandomString() string {
 }
 
 func getPodStatus(oc *exutil.CLI, namespace string, podName string) (string, error) {
-	podStatus, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.phase}").Output()
+	podStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.phase}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The pod  %s status in namespace %s is %q", podName, namespace, podStatus)
 	return podStatus, err
