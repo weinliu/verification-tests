@@ -87,6 +87,16 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		e2e.Logf("Etcd db successfully backed up on node %v", masterN)
 
 	})
+	// author: geliu@redhat.com
+	g.It("Author:geliu-Critical-54129-New etcd alerts to be added to the monitoring stack in ocp 4.12", func() {
+		g.By("Test for case OCP-54129-New etcd alerts to be added to the monitoring stack in ocp 4.12")
+		e2e.Logf("Check new alert msg have been updated")
+		output, err := exec.Command("bash", "-c", "oc -n openshift-monitoring get cm prometheus-k8s-rulefiles-0 -oyaml | grep \"alert: etcd\"").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("etcdHighFsyncDurations"))
+		o.Expect(output).To(o.ContainSubstring("etcdDatabaseQuotaLowSpace"))
+		o.Expect(output).To(o.ContainSubstring("etcdExcessiveDatabaseGrowth"))
+	})
 
 	// author: skundu@redhat.com
 	g.It("PstChkUpgrade-Author:skundu-NonPreRelease-Critical-22665-Check etcd image have been update to target release value after upgrade [Serial]", func() {
