@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -29,4 +30,16 @@ func waitForClusterHealthy(oc *exutil.CLI) {
 		e2e.Failf("Expected cluster is not healthy after waiting up to 25 minutes ...")
 	}
 	e2e.Logf("Cluster is healthy ...")
+}
+
+//SkipIfCloudControllerManagerNotDeployed check if ccm is deployed
+func SkipIfCloudControllerManagerNotDeployed(oc *exutil.CLI) {
+	var ccm string
+	var err error
+	ccm, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
+	if err == nil {
+		if len(ccm) == 0 {
+			g.Skip("Skip for cloud-controller-manager is not deployed!")
+		}
+	}
 }

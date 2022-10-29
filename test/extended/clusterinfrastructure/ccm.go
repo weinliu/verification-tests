@@ -49,12 +49,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-High-44212-The KAPI and KCM cloud-provider should be external", func() {
-		g.By("Check if cloud-controller-manager is deployed")
-		ccm, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(ccm) == 0 {
-			g.Skip("Skip for cloud-controller-manager is not deployed!")
-		}
+		SkipIfCloudControllerManagerNotDeployed(oc)
 		if iaasPlatform == "azure" {
 			g.By("Check if cloud-node-manager daemonset is deployed")
 			ds, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ds", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
@@ -137,5 +132,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(cccmoPodLogs).Should(o.And(
 			o.ContainSubstring("Syncing cloud-conf ConfigMap"),
 			o.ContainSubstring("source and target cloud-config content are equal, no sync needed")))
+	})
+	// author: miyadav@redhat.com
+	g.It("Author:miyadav-High-45971-Implement the in-tree to out-of-tree code owner migration", func() {
+		SkipIfCloudControllerManagerNotDeployed(oc)
+		g.By("Check cloud-controller-manager-operator owns cloud-controllers")
+		owner, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-controller-manager", "-o=jsonpath={.status.conditions[*]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(owner).To(o.ContainSubstring("Cluster Cloud Controller Manager Operator owns cloud controllers"))
+
 	})
 })
