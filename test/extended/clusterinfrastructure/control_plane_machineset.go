@@ -1,6 +1,9 @@
 package clusterinfrastructure
 
 import (
+	"strconv"
+	"strings"
+
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -91,24 +94,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("Longduration-NonPreRelease-Author:huliu-Medium-53323-[CPMS] Implement update logic for RollingUpdate CPMS strategy [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
-
-		g.By("Check if controlplanemachineset exists")
-		controlplanemachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(controlplanemachineset) == 0 {
-			g.Skip("Skip for controlplanemachineset doesn't exist!")
-		}
-
-		g.By("Check if RollingUpdate is onging")
-		readyReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		currentReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.replicas}", "-n", machineAPINamespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		desiredReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.replicas}", "-n", machineAPINamespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !(desiredReplicas == currentReplicas && desiredReplicas == readyReplicas) {
-			g.Skip("Skip for the previous RollingUpdate is onging!")
-		}
+		SkipForCPMSNotExist(oc)
+		SkipForUpdateIsOngoing(oc)
 
 		var changeInstanceType, backupInstanceType, getInstanceTypeJSON string
 		var patchstrPrefix, patchstrSuffix string
@@ -157,6 +144,53 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		e2e.Logf("updatedMachineName:%s", updatedMachineName)
 		suffix := updatedMachineName[len(updatedMachineName)-2:]
 		e2e.Logf("suffix:%s", suffix)
+		exutil.WaitForMachineDisappear(oc, suffix, labelsBefore)
+	})
+
+	// author: huliu@redhat.com
+	g.It("Longduration-NonPreRelease-Author:huliu-Medium-55485-[CPMS] Implement update logic for RollingUpdate CPMS strategy - Delete a failureDomain [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
+		SkipForCPMSNotExist(oc)
+		//SkipForUpdateIsOngoing(oc)
+
+		g.By("Get failureDomains")
+		getAvailabilityZonesJSON := "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.aws[*].placement.availabilityZone}"
+		availabilityZonesStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getAvailabilityZonesJSON, "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		availabilityZones := strings.Split(availabilityZonesStr, " ")
+		e2e.Logf("availabilityZones:%s", availabilityZones)
+		if len(availabilityZones) <= 1 {
+			g.Skip("Skip for the failureDomains is no more than 1")
+		}
+
+		g.By("Pick the failureDomain which has only one master machine")
+		var key int
+		var value, suffix string
+		for key, value = range availabilityZones {
+			labels := "machine.openshift.io/zone=" + value + ",machine.openshift.io/cluster-api-machine-type=master"
+			namesStr, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+			names := strings.Split(namesStr, " ")
+			number := len(names)
+			if number == 1 {
+				start := strings.LastIndex(names[0], "-")
+				suffix = names[0][start:]
+				e2e.Logf("failureDomain:%s, master machine suffix:%s", value, suffix)
+				break
+			}
+		}
+		deleteFailureDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.aws["+strconv.Itoa(key)+"]}", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		labelsBefore := "machine.openshift.io/zone=" + value + ",machine.openshift.io/cluster-api-machine-type=master"
+		labelsAfter := "machine.openshift.io/zone!=" + value + ",machine.openshift.io/cluster-api-machine-type=master"
+
+		g.By("Delete the failureDomain to trigger RollingUpdate")
+		defer e2e.Logf(oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output())
+		defer WaitForRollingUpdateCompleted(oc, 1)
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/aws/0","value":`+deleteFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"remove","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/aws/`+strconv.Itoa(key)+`"}]`, "--type=json", "-n", machineAPINamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.WaitForMachineRunning(oc, suffix, labelsAfter)
 		exutil.WaitForMachineDisappear(oc, suffix, labelsBefore)
 	})
 })

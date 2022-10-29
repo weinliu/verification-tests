@@ -3,6 +3,8 @@ package clusterinfrastructure
 import (
 	"time"
 
+	g "github.com/onsi/ginkgo"
+	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -25,4 +27,26 @@ func WaitForRollingUpdateCompleted(oc *exutil.CLI, replicas int) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "Wait RollingUpdate failed.")
+}
+
+// SkipForCPMSNotExist skip the test if controlplanemachineset doesn't exist
+func SkipForCPMSNotExist(oc *exutil.CLI) {
+	controlplanemachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if len(controlplanemachineset) == 0 {
+		g.Skip("Skip for controlplanemachineset doesn't exist!")
+	}
+}
+
+// SkipForUpdateIsOngoing skip the test if the previous Update is onging
+func SkipForUpdateIsOngoing(oc *exutil.CLI) {
+	readyReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	currentReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.replicas}", "-n", machineAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	desiredReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.replicas}", "-n", machineAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if !(desiredReplicas == currentReplicas && desiredReplicas == readyReplicas) {
+		g.Skip("Skip for the previous Update is onging!")
+	}
 }
