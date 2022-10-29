@@ -851,15 +851,22 @@ func checkResource(oc *exutil.CLI, expect bool, compare bool, expectedContent st
 }
 
 type rsyslog struct {
-	serverName string //the name of the rsyslog server, it's also used to name the svc/cm/sa/secret
-	namespace  string //the namespace where the rsyslog server deployed in
-	tls        bool
-	secretName string //the name of the secret for the collector to use
-	loggingNS  string //the namespace where the collector pods deployed in
+	serverName          string //the name of the rsyslog server, it's also used to name the svc/cm/sa/secret
+	namespace           string //the namespace where the rsyslog server deployed in
+	tls                 bool
+	secretName          string //the name of the secret for the collector to use
+	loggingNS           string //the namespace where the collector pods deployed in
+	clientKeyPassphrase string //client private key passphrase
 }
 
 func (r rsyslog) createPipelineSecret(oc *exutil.CLI, keysPath string) {
-	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", r.secretName, "-n", r.loggingNS, "--from-file=ca-bundle.crt="+keysPath+"/ca.crt").Execute()
+	secret := resource{"secret", r.secretName, r.loggingNS}
+	cmd := []string{"secret", "generic", secret.name, "-n", secret.namespace, "--from-file=ca-bundle.crt=" + keysPath + "/ca.crt"}
+	if r.clientKeyPassphrase != "" {
+		cmd = append(cmd, "--from-file=tls.key="+keysPath+"/client.key", "--from-file=tls.crt="+keysPath+"/client.crt", "--from-literal=passphrase="+r.clientKeyPassphrase)
+	}
+
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args(cmd...).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	resource{"secret", r.secretName, r.loggingNS}.WaitForResourceToAppear(oc)
 }
@@ -883,7 +890,7 @@ func (r rsyslog) deploy(oc *exutil.CLI) {
 		err = os.MkdirAll(keysPath, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		cert := certsConf{r.serverName, r.namespace, ""}
+		cert := certsConf{r.serverName, r.namespace, r.clientKeyPassphrase}
 		cert.generateCerts(keysPath)
 		// create pipelinesecret
 		r.createPipelineSecret(oc, keysPath)
@@ -1024,14 +1031,10 @@ func (f fluentdServer) deploy(oc *exutil.CLI) {
 		cmFileName = "configmap.yaml"
 	} else {
 		if f.clientAuth {
-			if f.sharedKey != "" && f.clientPrivateKeyPassphrase == "" {
+			if f.sharedKey != "" {
 				cmFileName = "cm-mtls-share.yaml"
-			} else if f.sharedKey == "" && f.clientPrivateKeyPassphrase == "" {
-				cmFileName = "cm-mtls.yaml"
-			} else if f.sharedKey != "" && f.clientPrivateKeyPassphrase != "" {
-				cmFileName = "cm-mtls-passphrase-share.yaml"
 			} else {
-				cmFileName = "cm-mtls-passphrase.yaml"
+				cmFileName = "cm-mtls.yaml"
 			}
 		} else {
 			if f.sharedKey != "" {
@@ -1046,9 +1049,6 @@ func (f fluentdServer) deploy(oc *exutil.CLI) {
 	cCmCmd := []string{"-f", cmFile, "-n", f.namespace, "-p", "NAMESPACE=" + f.namespace, "-p", "NAME=" + f.serverName}
 	if f.sharedKey != "" {
 		cCmCmd = append(cCmCmd, "-p", "SHARED_KEY="+f.sharedKey)
-	}
-	if f.clientPrivateKeyPassphrase != "" {
-		cCmCmd = append(cCmCmd, "-p", "PRIVATE_KEY_PASSPHRASE="+f.clientPrivateKeyPassphrase)
 	}
 	err = cm.applyFromTemplate(oc, cCmCmd...)
 	o.Expect(err).NotTo(o.HaveOccurred())

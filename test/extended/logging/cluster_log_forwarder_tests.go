@@ -342,7 +342,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("deploy rsyslog server")
 			oc.SetupProject()
 			syslogProj := oc.Namespace()
-			rsyslog := rsyslog{"rsyslog", syslogProj, false, "rsyslog", cloNS}
+			rsyslog := rsyslog{serverName: "rsyslog", namespace: syslogProj, tls: false, loggingNS: cloNS}
 			defer rsyslog.remove(oc)
 			rsyslog.deploy(oc)
 
@@ -383,12 +383,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("deploy rsyslog server")
 			oc.SetupProject()
 			syslogProj := oc.Namespace()
-			rsyslog := rsyslog{"rsyslog", syslogProj, true, "rsyslog", cloNS}
+			rsyslog := rsyslog{serverName: "rsyslog", namespace: syslogProj, tls: true, loggingNS: cloNS, secretName: "rsyslog-45419"}
 			defer rsyslog.remove(oc)
 			rsyslog.deploy(oc)
 
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "45419.yaml")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-rsyslog-with-secret.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
 			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=tls://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:6514", "-p", "OUTPUT_SECRET="+rsyslog.secretName)
@@ -406,6 +406,46 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			rsyslog.checkData(oc, true, "infra-container.log")
 			rsyslog.checkData(oc, true, "audit.log")
 			rsyslog.checkData(oc, true, "infra.log")
+		})
+
+		// author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-High-55014-[LOG-2843]Forward logs to remote-syslog - mtls with private key passphrase[Serial]", func() {
+			appProj := oc.Namespace()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("deploy rsyslog server")
+			oc.SetupProject()
+			syslogProj := oc.Namespace()
+			rsyslog := rsyslog{serverName: "rsyslog", namespace: syslogProj, tls: true, loggingNS: cloNS, clientKeyPassphrase: "test-rsyslog-55014", secretName: "rsyslog-55014"}
+			defer rsyslog.remove(oc)
+			rsyslog.deploy(oc)
+
+			g.By("create clusterlogforwarder/instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-rsyslog-with-secret.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=tls://"+rsyslog.serverName+"."+rsyslog.namespace+".svc:6514", "-p", "OUTPUT_SECRET="+rsyslog.secretName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("deploy collector pods")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=fluentd")
+			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
+
+			g.By("check logs in rsyslog server")
+			rsyslog.checkData(oc, true, "app-container.log")
+			rsyslog.checkData(oc, true, "infra-container.log")
+			rsyslog.checkData(oc, true, "audit.log")
+			rsyslog.checkData(oc, true, "infra.log")
+
+			g.By("check fluent.conf")
+			fluentConf, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", cl.namespace, "cm/collector", `-ojsonpath='{.data.fluent\.conf}'`).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(fluentConf).Should(o.ContainSubstring("client_cert_key_password"))
 		})
 
 		//Author: kbharti@redhat.com

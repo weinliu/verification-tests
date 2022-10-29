@@ -193,7 +193,7 @@ EOF
 function generate_request() {
   local component=$1
 
-  if [ -z "$PASS_PHRASE" ]; then
+  if [[ "$component" == "server" ]] || [[ -z "$PASS_PHRASE" ]]; then
     openssl req -new \
       -out ${WORKING_DIR}/${component}.csr \
       -newkey rsa:4096 \
