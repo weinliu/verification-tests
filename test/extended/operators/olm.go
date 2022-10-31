@@ -33,6 +33,84 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: jiazha@redhat.com
+	g.It("Author:jiazha-High-54233-Add the PO/rukpak components to the OCP payload", func() {
+		featureSet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec.featureSet}").Output()
+		if err != nil {
+			e2e.Failf("Fail to get the featureSet: %s, error:%v", featureSet, err)
+		}
+		// The FeatureGate "cluster" is invalid: spec.featureSet: Forbidden: once enabled, custom feature gates may not be disabled
+		if featureSet != "" && featureSet != "TechPreviewNoUpgrade" {
+			g.Skip(fmt.Sprintf("featureSet is not TechPreviewNoUpgrade, but %s", featureSet))
+		}
+		// skip it if featureSet is empty
+		if featureSet == "" {
+			g.Skip("featureSet is empty, skip it")
+			// _, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("featuregate", "cluster", "-p", "{\"spec\": {\"featureSet\": \"TechPreviewNoUpgrade\"}}", "--type=merge").Output()
+			// if err != nil {
+			// 	e2e.Failf("Fail to enable TechPreviewNoUpgrade, error:%v", err)
+			// }
+			// err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+			// 	_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("platformoperator").Output()
+			// 	if err != nil {
+			// 		e2e.Logf("The platformoperator resource not ready, re-try: %s", err)
+			// 		return false, nil
+			// 	}
+			// 	return true, nil
+			// })
+			// exutil.AssertWaitPollNoErr(err, "The platformoperator resource not ready after 120s!")
+		}
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		poTemplate := filepath.Join(buildPruningBaseDir, "platform_operator.yaml")
+		// install an invalid platform operator: cluster-logging, it should be failed as expected
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", poTemplate, "-p", "NAME=cluster-logging", "PACKAGE=cluster-logging")
+		if err != nil {
+			e2e.Failf("Failed to create PO cluster logging: %s", err)
+		}
+		// delete it once case done
+		defer func() {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("platformoperator", "cluster-logging").Output()
+			if err != nil {
+				e2e.Failf("! fail to delete PO cluster logging: %s", err)
+			}
+		}()
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("platformoperator", "cluster-logging", "-o=jsonpath={.status.conditions[0].message}").Output()
+			if err != nil {
+				e2e.Failf("! fail to get PO cluster logging message: %s", err)
+			}
+			if !strings.Contains(msg, "AllNamespace install mode must be enabled") {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "PO cluster logging not failed as expected!")
+		// install an valid platform operator: quay-operator, it should be created success
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", poTemplate, "-p", "NAME=quay-operator", "PACKAGE=quay-operator")
+		if err != nil {
+			e2e.Failf("Failed to create PO quay operator: %s", err)
+		}
+		// delete it once case done
+		defer func() {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("platformoperator", "quay-operator").Output()
+			if err != nil {
+				e2e.Failf("! fail to delete PO quay-operator: %s", err)
+			}
+		}()
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("platformoperator", "quay-operator", "-o=jsonpath={.status.conditions[0].status}").Output()
+			if err != nil {
+				e2e.Failf("! fail to PO quay operator: %s", err)
+			}
+			if status != "True" {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "failed to install PO quay operator!")
+	})
+
+	// author: jiazha@redhat.com
 	g.It("Author:jiazha-Medium-53759-Opeatorhub status shows errors after disabling default catalogSources [Disruptive]", func() {
 		g.By("1, check if the marketplace enabled")
 		cap, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.enabledCapabilities}").Output()
