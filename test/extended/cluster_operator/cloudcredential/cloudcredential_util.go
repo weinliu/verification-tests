@@ -53,6 +53,10 @@ func getCloudCredentialMode(oc *exutil.CLI) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if iaasPlatform == "none" || iaasPlatform == "baremetal" {
+		mode = "none" //mode none is for baremetal
+		return mode, nil
+	}
 	rootSecretName, err = getRootSecretName(oc)
 	if err != nil {
 		return "", err
