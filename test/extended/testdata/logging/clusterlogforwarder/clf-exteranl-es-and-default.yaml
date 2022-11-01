@@ -13,6 +13,8 @@ objects:
     - name: es-created-by-user
       type: elasticsearch
       url: ${ES_URL}
+      elasticsearch:
+        version: ${{ES_VERSION}}
     pipelines:
     - name: forward-to-external-es
       inputRefs:
@@ -29,3 +31,5 @@ parameters:
   value: "openshift-logging"
 - name: ES_URL
   value: http://elasticsearch-server.es-aosqe-qa.svc:9200
+- name: ES_VERSION
+  value: "6"

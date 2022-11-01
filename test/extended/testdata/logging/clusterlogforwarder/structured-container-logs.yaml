@@ -11,6 +11,7 @@ objects:
   spec:
     outputs:
     - elasticsearch:
+        version: ${{ES_VERSION}}
         enableStructuredContainerLogs: ${{STRUCTURED_CONTAINER}}
         structuredTypeKey: ${TYPE_KEY}
         structuredTypeName: ${TYPE_NAME}
@@ -41,3 +42,5 @@ parameters:
   value: https://elasticsearch.openshift-logging.svc:9200
 - name: SECRET
   value: collector
+- name: ES_VERSION
+  value: "6"
