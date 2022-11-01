@@ -10,6 +10,7 @@ objects:
     namespace: "${NAMESPACE}" 
   # Suite-specific settings
   autoApplyRemediations: ${{AUTOAPPLYREMEDIATIONS}}
+  autoUpdateRemediations: ${{AUTOUPDATEREMEDIATIONS}}
   schedule: "${SCHEDULE}"
   # Scan-specific settings
   strictNodeScan: ${{STRICTNODESCAN}}
@@ -25,6 +26,7 @@ parameters:
 - name: NAME
 - name: NAMESPACE
 - name: AUTOAPPLYREMEDIATIONS
+- name: AUTOUPDATEREMEDIATIONS
 - name: SCHEDULE
 - name: STRICTNODESCAN
 - name: SIZE

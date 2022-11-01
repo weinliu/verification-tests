@@ -49,16 +49,17 @@ type profileBundleDescription struct {
 }
 
 type scanSettingDescription struct {
-	autoapplyremediations bool
-	name                  string
-	namespace             string
-	roles1                string
-	roles2                string
-	rotation              int
-	schedule              string
-	size                  string
-	strictnodescan        bool
-	template              string
+	autoapplyremediations  bool
+	autoupdateremediations bool
+	name                   string
+	namespace              string
+	roles1                 string
+	roles2                 string
+	rotation               int
+	schedule               string
+	size                   string
+	strictnodescan         bool
+	template               string
 }
 
 type scanSettingBindingDescription struct {
@@ -177,7 +178,7 @@ func (pb *profileBundleDescription) create(oc *exutil.CLI) {
 func (ss *scanSettingDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ss.template, "-p", "NAME="+ss.name, "NAMESPACE="+ss.namespace,
 		"AUTOAPPLYREMEDIATIONS="+strconv.FormatBool(ss.autoapplyremediations), "SCHEDULE="+ss.schedule, "SIZE="+ss.size, "ROTATION="+strconv.Itoa(ss.rotation),
-		"ROLES1="+ss.roles1, "ROLES2="+ss.roles2, "STRICTNODESCAN="+strconv.FormatBool(ss.strictnodescan))
+		"ROLES1="+ss.roles1, "ROLES2="+ss.roles2, "STRICTNODESCAN="+strconv.FormatBool(ss.strictnodescan), "AUTOUPDATEREMEDIATIONS="+strconv.FormatBool(ss.autoupdateremediations))
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -821,7 +822,7 @@ func checkMachineConfigPoolStatus(oc *exutil.CLI, nodeSelector string) {
 		e2e.Logf("degradedMachineCount:%v", dmCount)
 		rmCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeSelector, "-n", oc.Namespace(), "-o=jsonpath={.status.readyMachineCount}").Output()
 		e2e.Logf("ReadyMachineCount:%v", rmCount)
-		if strings.Compare(mCount, rmCount) == 0 && strings.Compare(unmCount, dmCount) == 0 {
+		if strings.Compare(mCount, rmCount) == 0 && strings.Compare(unmCount, "0") == 0 && strings.Compare(dmCount, "0") == 0 {
 			return true, nil
 		}
 		return false, nil

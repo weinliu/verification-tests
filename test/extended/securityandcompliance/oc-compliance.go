@@ -68,14 +68,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 
 		var (
 			ss = scanSettingDescription{
-				autoapplyremediations: false,
-				name:                  "master-scansetting" + getRandomString(),
-				namespace:             "",
-				roles1:                "master",
-				rotation:              10,
-				schedule:              "0 1 * * *",
-				size:                  "2Gi",
-				template:              scansettingTemplate,
+				autoapplyremediations:  false,
+				autoupdateremediations: false,
+				name:                   "master-scansetting" + getRandomString(),
+				namespace:              "",
+				roles1:                 "master",
+				rotation:               10,
+				schedule:               "0 1 * * *",
+				size:                   "2Gi",
+				template:               scansettingTemplate,
 			}
 			ssb = scanSettingBindingDescription{
 				name:            "co-requirement" + getRandomString(),
@@ -196,14 +197,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 
 		var (
 			ss = scanSettingDescription{
-				autoapplyremediations: false,
-				name:                  "master-scansetting" + getRandomString(),
-				namespace:             "",
-				roles1:                "master",
-				rotation:              10,
-				schedule:              "0 1 * * *",
-				size:                  "2Gi",
-				template:              scansettingTemplate,
+				autoapplyremediations:  false,
+				autoupdateremediations: false,
+				name:                   "master-scansetting" + getRandomString(),
+				namespace:              "",
+				roles1:                 "master",
+				rotation:               10,
+				schedule:               "0 1 * * *",
+				size:                   "2Gi",
+				template:               scansettingTemplate,
 			}
 			ssb = scanSettingBindingDescription{
 				name:            "co-requirement" + getRandomString(),
@@ -259,14 +261,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 	g.It("Author:pdhamdhe-High-41182-The bind command of oc compliance plugin will take the given parameters and create a ScanSettingBinding object [Serial][Slow]", func() {
 		var (
 			ss = scanSettingDescription{
-				autoapplyremediations: false,
-				name:                  "master-scansetting" + getRandomString(),
-				namespace:             "",
-				roles1:                "master",
-				rotation:              10,
-				schedule:              "0 1 * * *",
-				size:                  "2Gi",
-				template:              scansettingTemplate,
+				autoapplyremediations:  false,
+				autoupdateremediations: false,
+				name:                   "master-scansetting" + getRandomString(),
+				namespace:              "",
+				roles1:                 "master",
+				rotation:               10,
+				schedule:               "0 1 * * *",
+				size:                   "2Gi",
+				template:               scansettingTemplate,
 			}
 			tp = tailoredProfileWithoutVarDescription{
 				name:         "ocp4-cis-custom",
@@ -342,14 +345,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 	g.It("NonPreRelease-Author:pdhamdhe-High-40714-The oc compliance helps to download the raw compliance results from the Persistent Volume [Serial][Slow]", func() {
 		var (
 			ss = scanSettingDescription{
-				autoapplyremediations: false,
-				name:                  "master-scansetting",
-				namespace:             "",
-				roles1:                "master",
-				rotation:              10,
-				schedule:              "0 1 * * *",
-				size:                  "2Gi",
-				template:              scansettingTemplate,
+				autoapplyremediations:  false,
+				autoupdateremediations: false,
+				name:                   "master-scansetting",
+				namespace:              "",
+				roles1:                 "master",
+				rotation:               10,
+				schedule:               "0 1 * * *",
+				size:                   "2Gi",
+				template:               scansettingTemplate,
 			}
 			ssb = scanSettingBindingDescription{
 				name:            "co-requirement" + getRandomString(),
@@ -395,14 +399,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 	g.It("Author:pdhamdhe-High-41195-The oc compliance plugin fetches the fixes or remediations from a rule profile or remediation objects [Serial][Slow]", func() {
 		var (
 			ss = scanSettingDescription{
-				autoapplyremediations: false,
-				name:                  "master-scansetting" + getRandomString(),
-				namespace:             "",
-				roles1:                "master",
-				rotation:              10,
-				schedule:              "0 1 * * *",
-				size:                  "2Gi",
-				template:              scansettingTemplate,
+				autoapplyremediations:  false,
+				autoupdateremediations: false,
+				name:                   "master-scansetting" + getRandomString(),
+				namespace:              "",
+				roles1:                 "master",
+				rotation:               10,
+				schedule:               "0 1 * * *",
+				size:                   "2Gi",
+				template:               scansettingTemplate,
 			}
 			ssb = scanSettingBindingDescription{
 				name:            "co-requirement" + getRandomString(),

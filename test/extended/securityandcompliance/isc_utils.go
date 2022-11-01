@@ -465,8 +465,9 @@ func SkipMissingRhcosWorkers(oc *exutil.CLI) {
 	}
 }
 
+// SkipForIBMCloud mean to skip test for IBMCloud as related test case not applicalbe
 func SkipForIBMCloud(oc *exutil.CLI) {
-	platform, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", oc.Namespace(), "-o=jsonpath={.status.platform}").Output()
+	platform, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-n", oc.Namespace(), "-o=jsonpath={.status.platform}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if strings.Compare(platform, "IBMCloud") == 0 {
 		g.Skip("Skip since it is IBMCloud")
