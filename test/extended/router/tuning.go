@@ -443,9 +443,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		_, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", podname, "--", "bash", "-c", cmd).Output()
 		o.Expect(err).To(o.HaveOccurred())
 
-		g.By("Check maxconn in haproxy.config which should be 20000")
+		g.By("Check maxconn in haproxy.config which should be 50000")
 		maxConnCfg = readRouterPodData(oc, podname, "cat haproxy.config", "maxconn")
-		o.Expect(maxConnCfg).To(o.ContainSubstring("maxconn 20000"))
+		o.Expect(maxConnCfg).To(o.ContainSubstring("maxconn 50000"))
 
 		g.By("Patch tuningOptions/maxConnections -1 to the ingress-controller, the env will be set to auto")
 		maxConnections = "-1"
@@ -504,6 +504,72 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		output, err2 = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", "{\"spec\": {\"tuningOptions\": {\"maxConnections\": \""+NegMaxConnections+"\"}}}", "--type=merge", "-n", ingctrl.namespace).Output()
 		o.Expect(err2).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Invalid value: \"string\": spec.tuningOptions.maxConnections in body must be of type integer"))
+	})
+
+	// author: shudili@redhat.com
+	g.It("Author:shudili-NonPreRelease-High-55367-Default HAProxy maxconn value to 50000 for OCP 4.12", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			ingctrl             = ingctrlNodePortDescription{
+				name:      "ocp55367",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		g.By("Create an custom ingresscontroller for testing ROUTER_MAX_CONNECTIONS")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		ingctrlResource := "ingresscontrollers/" + ingctrl.name
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("Check default value of ROUTER_MAX_CONNECTIONS env in a route pod, which shouldn't appear in it")
+		podname := getRouterPod(oc, ingctrl.name)
+		cmd := fmt.Sprintf("/usr/bin/env | grep %s", "ROUTER_MAX_CONNECTIONS")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", podname, "--", "bash", "-c", cmd).Output()
+		o.Expect(err).To(o.HaveOccurred())
+
+		g.By("Check maxconn in haproxy.config which should be 50000")
+		maxConnCfg := readRouterPodData(oc, podname, "cat haproxy.config", "maxconn")
+		o.Expect(maxConnCfg).To(o.ContainSubstring("maxconn 50000"))
+
+		g.By("Patch tuningOptions/maxConnections with null to the ingress-controller")
+		maxConnections := "null"
+		jpath := ".status.observedGeneration"
+		observedGen1 := fetchJSONPathValue(oc, "openshift-ingress", "deployment.apps/router-default", jpath)
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"maxConnections\": "+maxConnections+"}}}")
+		observedGen2 := fetchJSONPathValue(oc, "openshift-ingress", "deployment.apps/router-default", jpath)
+		o.Expect(observedGen1).To(o.ContainSubstring(observedGen2))
+
+		g.By("Check ROUTER_MAX_CONNECTIONS env in a route pod which shouldn't appear in it by default")
+		podname = getRouterPod(oc, ingctrl.name)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", podname, "--", "bash", "-c", cmd).Output()
+		o.Expect(err).To(o.HaveOccurred())
+
+		g.By("Check maxconn in haproxy.config which should be 50000")
+		maxConnCfg = readRouterPodData(oc, podname, "cat haproxy.config", "maxconn")
+		o.Expect(maxConnCfg).To(o.ContainSubstring("maxconn 50000"))
+
+		g.By("Patch tuningOptions/maxConnections 50000 to the ingress-controller")
+		maxConnections = "500000"
+		podname = getRouterPod(oc, ingctrl.name)
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"maxConnections\": "+maxConnections+"}}}")
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+
+		g.By("Check ROUTER_MAX_CONNECTIONS env in a route pod which should be " + maxConnections)
+		podname = getRouterPod(oc, ingctrl.name)
+		maxConnSearch := readRouterPodEnv(oc, podname, "ROUTER_MAX_CONNECTIONS")
+		o.Expect(maxConnSearch).To(o.ContainSubstring("ROUTER_MAX_CONNECTIONS=" + maxConnections))
+
+		g.By("Check maxconn in haproxy.config which should be 50000")
+		maxConnCfg = readRouterPodData(oc, podname, "cat haproxy.config", "maxconn")
+		o.Expect(maxConnCfg).To(o.ContainSubstring("maxconn 50000"))
 	})
 
 	// author: shudili@redhat.com
