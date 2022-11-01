@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	netutils "k8s.io/utils/net"
 )
 
@@ -1943,4 +1945,39 @@ func waitEgressFirewallApplied(oc *exutil.CLI, efName, ns string) error {
 		return true, nil
 	})
 	return checkErr
+}
+
+// switchOVNGatewayMode will switch to requested mode, shared or local
+func switchOVNGatewayMode(oc *exutil.CLI, mode string) {
+	currentMode := getOVNGatewayMode(oc)
+	if currentMode == "local" && mode == "shared" {
+		e2e.Logf("Migrating cluster to shared gateway mode")
+		patchResourceAsAdmin(oc, "network.operator/cluster", "{\"spec\":{\"defaultNetwork\":{\"ovnKubernetesConfig\":{\"gatewayConfig\":{\"routingViaHost\": false}}}}}")
+	} else if currentMode == "shared" && mode == "local" {
+		e2e.Logf("Migrating cluster to Local gw mode")
+		patchResourceAsAdmin(oc, "network.operator/cluster", "{\"spec\":{\"defaultNetwork\":{\"ovnKubernetesConfig\":{\"gatewayConfig\":{\"routingViaHost\": true}}}}}")
+	} else {
+		e2e.Logf("Cluster is already on requested gateway mode")
+	}
+	_, err := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", "openshift-ovn-kubernetes", "ds", "ovnkube-master").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	checkNetworkOperatorState(oc, 400, 400)
+}
+
+// getOVNGatewayMode will return configured OVN gateway mode, shared or local
+func getOVNGatewayMode(oc *exutil.CLI) string {
+	nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if len(nodeList.Items) < 1 {
+		g.Skip("This case requires at least one schedulable node")
+	}
+	output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("node", nodeList.Items[0].Name).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	str := "local"
+	modeString := strconv.Quote(str)
+	if strings.Contains(output, modeString) {
+		e2e.Logf("Cluster is running on OVN Local Gateway Mode")
+		return str
+	}
+	return "shared"
 }
