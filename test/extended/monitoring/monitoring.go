@@ -182,20 +182,6 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		exutil.WaitAndGetSpecificPodLogs(oc, "openshift-monitoring", "thanos-query", thanosQuerierPodName, "query=cluster_version")
 	})
 
-	//author: tagao@redhat.com
-	g.It("Author:tagao-Low-30088-User can not deploy ThanosRuler CRs in user namespaces", func() {
-		var (
-			ns                string
-			output            string
-			deployThanosRuler = filepath.Join(monitoringBaseDir, "deployThanosRuler.yaml")
-		)
-		g.By("deploy ThanosRuler under namespace as a common user (non-admin)")
-		oc.SetupProject()
-		ns = oc.Namespace()
-		output, _ = oc.Run("apply").Args("-n", ns, "-f", deployThanosRuler).Output()
-		o.Expect(output).To(o.ContainSubstring("Error from server (Forbidden):"))
-	})
-
 	// author: juzhao@redhat.com
 	g.It("Author:juzhao-Low-43038-Should not have error for loading OpenAPI spec for v1beta1.metrics.k8s.io", func() {
 		var (
@@ -357,6 +343,20 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			output2, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-user-workload-monitoring", "-c", "prometheus", "prometheus-user-workload-0", "--", "cat", "/tmp/uwm_query.log").Output()
 			o.Expect(output2).To(o.ContainSubstring("up"))
 		})
+	})
+
+	//author: tagao@redhat.com
+	g.It("Author:tagao-Low-30088-User can not deploy ThanosRuler CRs in user namespaces [Serial]", func() {
+		var (
+			ns                string
+			output            string
+			deployThanosRuler = filepath.Join(monitoringBaseDir, "deployThanosRuler.yaml")
+		)
+		g.By("deploy ThanosRuler under namespace as a common user (non-admin)")
+		oc.SetupProject()
+		ns = oc.Namespace()
+		output, _ = oc.Run("apply").Args("-n", ns, "-f", deployThanosRuler).Output()
+		o.Expect(output).To(o.ContainSubstring("Error from server (Forbidden):"))
 	})
 
 	// author: hongyli@redhat.com
