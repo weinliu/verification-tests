@@ -50,3 +50,9 @@ func SkipForUpdateIsOngoing(oc *exutil.CLI) {
 		g.Skip("Skip for the previous Update is onging!")
 	}
 }
+
+// PrintNodeInfo print the output of oc get node
+func PrintNodeInfo(oc *exutil.CLI) {
+	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
+	e2e.Logf("%v", output)
+}

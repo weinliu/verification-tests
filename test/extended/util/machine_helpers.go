@@ -231,6 +231,21 @@ func WaitForMachineDisappear(oc *CLI, machineNameSuffix string, labels string) {
 	AssertWaitPollNoErr(err, "Wait machine disappear failed.")
 }
 
+// WaitForOldMachineDisappear check if the machine is disappear
+func WaitForOldMachineDisappear(oc *CLI, machineName string) {
+	e2e.Logf("Waiting for the machine disappear ...")
+	err := wait.Poll(60*time.Second, 960*time.Second, func() (bool, error) {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, "-n", machineAPINamespace).Output()
+		if !strings.Contains(output, "not found") {
+			e2e.Logf("machine %s is not disappear and waiting up to 1 minutes ...", machineName)
+			return false, nil
+		}
+		e2e.Logf("machine %s is disappear", machineName)
+		return true, nil
+	})
+	AssertWaitPollNoErr(err, "Wait machine disappear failed.")
+}
+
 //CheckPlatform check the cluster's platform
 func CheckPlatform(oc *CLI) string {
 	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
