@@ -1647,6 +1647,29 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		exutil.AssertWaitPollNoErr(snatErr, ("Snat rules for egressIP was not synced correctly! "))
 	})
 
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-High-55632-After enable egress node, egress node shouldn't generate broadcast ARP for service IPs. [Serial]", func() {
+		e2e.Logf("This case is from customer bug: https://bugzilla.redhat.com/show_bug.cgi?id=2052975")
+		g.By("1 Get list of nodes \n")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		egessNode := nodeList.Items[0].Name
+
+		g.By("2 Apply EgressLabel Key to one node. \n")
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egessNode, egressNodeLabel)
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egessNode, egressNodeLabel, "true")
+
+		g.By("3. Check no ARP broadcast for service IPs\n")
+		e2e.Logf("Trying to get physical interface on the node,%s", egessNode)
+		phyInf, nicError := getSnifPhyInf(oc, egessNode)
+		o.Expect(nicError).NotTo(o.HaveOccurred())
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		tcpdumpCmd := fmt.Sprintf("tcpdump -c 10 -nni %s arp", phyInf)
+		outPut, tcpdumpErr := exutil.DebugNode(oc, egessNode, "bash", "-c", tcpdumpCmd)
+		o.Expect(tcpdumpErr).NotTo(o.HaveOccurred())
+		o.Expect(outPut).NotTo(o.ContainSubstring("172.30"), fmt.Sprintf("The output of tcpdump is %s", outPut))
+	})
+
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
