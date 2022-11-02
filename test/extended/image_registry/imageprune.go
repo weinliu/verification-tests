@@ -25,7 +25,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		priorityClassName  = "system-cluster-critical"
 		normalInfo         = "Creating image pruner with keepYoungerThan"
 		debugInfo          = "Examining ImageStream"
-		traceInfo          = "keeping because it is used by imagestreams"
+		traceInfo          = "keeping because it is used by imagestream"
 		traceAllInfo       = "Content-Type: application/json"
 		tolerationsInfo    = `[{"effect":"NoSchedule","key":"key","operator":"Equal","value":"value"}]`
 	)

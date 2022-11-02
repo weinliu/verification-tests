@@ -131,13 +131,19 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		if !strings.Contains(output, "httpProxy") {
 			g.Skip("Skip for non-proxy platform")
 		}
+		//Check if openshift-sample operator installed
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/openshift-samples").Output()
+		if err != nil && strings.Contains(output, `openshift-samples" not found`) {
+			g.Skip("Skip test for openshift-samples which managed templates and imagestream are not installed")
+		}
+
 		g.By("Start a build and pull image from internal registry")
 		oc.SetupProject()
 		buildsrc.namespace = oc.Namespace()
 		g.By("Create buildconfig")
 		buildsrc.create(oc)
 		g.By("starting a build to output internal imagestream")
-		err := oc.Run("start-build").Args(buildsrc.outname).Execute()
+		err = oc.Run("start-build").Args(buildsrc.outname).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("waiting for build to finish")
 		err = exutil.WaitForABuild(oc.BuildClient().BuildV1().Builds(oc.Namespace()), fmt.Sprintf("%s-1", buildsrc.outname), nil, nil, nil)
