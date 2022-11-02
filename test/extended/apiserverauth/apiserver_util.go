@@ -3,6 +3,7 @@ package apiserverauth
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
@@ -411,4 +412,144 @@ func CleanNamespace(oc *exutil.CLI, noOfNamespace int, ns string) {
 		}
 	}
 	o.Expect(deleteFail).To(o.BeFalse())
+}
+
+// LoadCPUMemWorkload load cpu and memory workload
+func LoadCPUMemWorkload(oc *exutil.CLI) {
+	workerCPUtopall := []int{}
+	var workerCPUtopstr string
+	var workerCPUtopint int
+	workerMEMtopall := []int{}
+	var workerMEMtopstr string
+	var workerMEMtopint int
+	preserveCPUP := 25
+	cpuMetric := 800
+	memMetric := 700
+	preserveMemP := 30
+	n := 0
+	m := 0
+	dn := 0
+	r := 0
+	c := 0
+	s := 0
+
+	randomStr := exutil.GetRandomString()
+	dirname := fmt.Sprintf("/tmp/-load-cpu-mem_%s/", randomStr)
+	defer os.RemoveAll(dirname)
+	os.MkdirAll(dirname, 0755)
+
+	workerNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker", "--no-headers").OutputToFile("load-cpu-mem_" + randomStr + "40667-log")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	cmd := fmt.Sprintf(`cat %v |head -1 | awk '{print $1}'`, workerNode)
+	worker1, err := exec.Command("bash", "-c", cmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	workerTop, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node", strings.Replace(string(worker1), "\n", "", 1), "--no-headers=true").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	cpuUsageCmd := fmt.Sprintf(`echo "%v" | awk '{print $2}'`, workerTop)
+	cpuUsage, err := exec.Command("bash", "-c", cpuUsageCmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	cpu1 := regexp.MustCompile(`[^0-9 ]+`).ReplaceAllString(string(cpuUsage), "")
+	cpu, err := strconv.Atoi(cpu1)
+	cpuUsageCmdP := fmt.Sprintf(`echo "%v" | awk '{print $3}'`, workerTop)
+	cpuUsageP, err := exec.Command("bash", "-c", cpuUsageCmdP).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	cpuP1 := regexp.MustCompile(`[^0-9 ]+`).ReplaceAllString(string(cpuUsageP), "")
+	cpuP, _ := strconv.Atoi(cpuP1)
+	totalCPU := int(float64(cpu) / (float64(cpuP) / 100))
+	cmd = fmt.Sprintf(`cat %v | awk '{print $1}'`, workerNode)
+	workerCPU1, err := exec.Command("bash", "-c", cmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	workerCPU := strings.Fields(string(workerCPU1))
+
+	for i := 0; i < len(workerCPU); i++ {
+		workerCPUtop, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node", workerCPU[i], "--no-headers=true").OutputToFile("load-cpu-mem_" + randomStr + "40667-log")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		workerCPUtopcmd := fmt.Sprintf(`cat %v | awk '{print $3}'`, workerCPUtop)
+		workerCPUUsage, err := exec.Command("bash", "-c", workerCPUtopcmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		workerCPUtopstr = regexp.MustCompile(`[^0-9 ]+`).ReplaceAllString(string(workerCPUUsage), "")
+		workerCPUtopint, err = strconv.Atoi(workerCPUtopstr)
+		workerCPUtopall = append(workerCPUtopall, workerCPUtopint)
+	}
+	for j := 1; j < len(workerCPU); j++ {
+		if workerCPUtopall[0] < workerCPUtopall[j] {
+			workerCPUtopall[0] = workerCPUtopall[j]
+		}
+	}
+	cpuMax := workerCPUtopall[0]
+	availableCPU := int(float64(totalCPU) * (100 - float64(preserveCPUP) - float64(cpuMax)) / 100)
+	n = int(availableCPU / int(cpuMetric))
+	workerNodeCount := len(workerCPU)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	p := workerNodeCount
+	if workerNodeCount == 1 {
+		dn = 1
+		r = 1
+		c = 3
+	} else {
+		r = 3
+		c = 2
+		dn = workerNodeCount
+	}
+	e2e.Logf("Start CPU load ...")
+	cpuloadCmd := fmt.Sprintf(`clusterbuster -N %v -B cpuload -P server -b 5 -r %v -p %v -d %v -c %v -m 1000 -D .2 -M 1 -t 36000 -x -v > %v`, n, r, p, dn, c, dirname+"clusterbuster-cpu-log")
+	e2e.Logf("%v", cpuloadCmd)
+	_, err = exec.Command("bash", "-c", cpuloadCmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	memUsageCmd := fmt.Sprintf(`echo "%v" | awk '{print $4}'`, workerTop)
+	memUsage, err := exec.Command("bash", "-c", memUsageCmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	mem1 := regexp.MustCompile(`[^0-9 ]+`).ReplaceAllString(string(memUsage), "")
+	mem, _ := strconv.Atoi(mem1)
+	memUsageCmdP := fmt.Sprintf(`echo "%v" | awk '{print $5}'`, workerTop)
+	memUsageP, err := exec.Command("bash", "-c", memUsageCmdP).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	memP1 := regexp.MustCompile(`[^0-9 ]+`).ReplaceAllString(string(memUsageP), "")
+	memP, _ := strconv.Atoi(memP1)
+	totalMem := int(float64(mem) / (float64(memP) / 100))
+
+	for i := 0; i < len(workerCPU); i++ {
+		workerMEMtop, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node", workerCPU[i], "--no-headers=true").OutputToFile("load-cpu-mem_" + randomStr + "40667-log")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		workerMEMtopcmd := fmt.Sprintf(`cat %v | awk '{print $5}'`, workerMEMtop)
+		workerMEMUsage, err := exec.Command("bash", "-c", workerMEMtopcmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		workerMEMtopstr = regexp.MustCompile(`[^0-9 ]+`).ReplaceAllString(string(workerMEMUsage), "")
+		workerMEMtopint, err = strconv.Atoi(workerMEMtopstr)
+		workerMEMtopall = append(workerMEMtopall, workerMEMtopint)
+	}
+	for j := 1; j < len(workerCPU); j++ {
+		if workerMEMtopall[0] < workerMEMtopall[j] {
+			workerMEMtopall[0] = workerMEMtopall[j]
+		}
+	}
+	memMax := workerMEMtopall[0]
+	availableMem := int(float64(totalMem) * (100 - float64(preserveMemP) - float64(memMax)) / 100)
+	m = int(availableMem / int(memMetric))
+	if workerNodeCount == 1 {
+		dn = 6
+		c = 7
+		s = 2
+	} else {
+		dn = workerNodeCount
+		c = 3
+		s = int(1000 / m / dn)
+	}
+	e2e.Logf("Start Memory load ...")
+	memloadCmd := fmt.Sprintf(`clusterbuster -N %v -B memload -P classic -r %v -p %v -d %v -c %v -s %v -W -t 36000 -x -v > %v`, m, m, p, dn, c, s, dirname+"clusterbuster-mem-log")
+	e2e.Logf("%v", memloadCmd)
+	_, err = exec.Command("bash", "-c", memloadCmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	keywords := "body: net/http: request canceled (Client.Timeout|panic"
+	bustercmd := fmt.Sprintf(`cat %v | grep -iE '%s' || true`, dirname+"clusterbuster*", keywords)
+	busterLogs, err := exec.Command("bash", "-c", bustercmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if len(busterLogs) > 0 {
+		e2e.Logf("%s", busterLogs)
+		e2e.Logf("Found some panic or timeout errors, if errors are  potential bug then file a bug.")
+	} else {
+		e2e.Logf("No errors found in clusterbuster logs")
+	}
 }

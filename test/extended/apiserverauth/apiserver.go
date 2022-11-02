@@ -719,9 +719,6 @@ spec:
 		var (
 			dirname    = "/tmp/-OCP-40667/"
 			exceptions = "panicked: false"
-			keywords   = "body: net/http: request canceled (Client.Timeout|panic"
-			// Creating below variable for clusterbuster commands "N" argument parameter.
-			namespaceCount = 0
 		)
 		defer os.RemoveAll(dirname)
 		err := os.MkdirAll(dirname, 0755)
@@ -734,38 +731,12 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.Equal(`20`))
 
-		g.By("Checking cluster worker load before running clusterbuster")
-		cpuAvgVal, memAvgVal := checkClusterLoad(oc, "worker", "OCP-40667/nodes.log")
-		node, err := exutil.GetAllNodes(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Number of nodes are %d", len(node))
-		noOfNodes := len(node)
-		if noOfNodes > 1 && cpuAvgVal < 50 && memAvgVal < 50 {
-			e2e.Logf("Cluster has load normal..CPU %d %% and Memory %d %%...So using value of N=8", cpuAvgVal, memAvgVal)
-			namespaceCount = 8
-		} else if noOfNodes == 1 && cpuAvgVal < 60 && memAvgVal < 60 {
-			e2e.Logf("Cluster is SNO...CPU %d %% and Memory %d %%....So using value of N=3", cpuAvgVal, memAvgVal)
-			namespaceCount = 3
-		} else {
-			e2e.Logf("Cluster has slighty high load...CPU %d %% and Memory %d %%....So using value of N=6", cpuAvgVal, memAvgVal)
-			namespaceCount = 6
-		}
-
 		g.By("Stress the cluster")
-		cmd := fmt.Sprintf(`clusterbuster -P server -b 5 -p 10 -D .01 -M 1 -N %d -r 4 -d 2 -c 10 -m 1000 -v -x > %v`, namespaceCount, dirname+"clusterbuster.log")
-		_, err = exec.Command("bash", "-c", cmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		// LoadSecrets no. of secrets per namespace
-		LoadSecrets(oc, 20, "test-ocp40667", 50)
-
-		cmd = fmt.Sprintf(`cat %v | grep -iE '%s' || true`, dirname+"clusterbuster.log", keywords)
-		busterLogs, err := exec.Command("bash", "-c", cmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(busterLogs) > 0 {
-			e2e.Logf("%s", busterLogs)
-			e2e.Logf("Found some panic or timeout errors, if errors are  potential bug then file a bug.")
-		} else {
-			e2e.Logf("No errors found in clusterbuster logs")
+		g.By("Checking cluster worker load before running clusterbuster")
+		cpuAvgValWorker, memAvgValWorker := checkClusterLoad(oc, "worker", "OCP-40667/nodes.log")
+		cpuAvgValMaster, memAvgValMaster := checkClusterLoad(oc, "master", "OCP-40667/nodes.log")
+		if cpuAvgValMaster < 75 || memAvgValMaster < 70 || cpuAvgValWorker < 75 || memAvgValWorker < 70 {
+			LoadCPUMemWorkload(oc)
 		}
 
 		g.By("Check the abnormal pods")
@@ -773,7 +744,7 @@ spec:
 		errPod := wait.Poll(15*time.Second, 900*time.Second, func() (bool, error) {
 			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile("OCP-40667/pod.log")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			cmd = fmt.Sprintf(`cat %v | grep -i 'clusterbuster' | grep -ivE 'Running|Completed|namespace' || true`, dirname+"pod.log")
+			cmd := fmt.Sprintf(`cat %v | grep -iE 'cpuload|memload' | grep -ivE 'Running|Completed|namespace|pending' || true`, dirname+"pod.log")
 			podLogs, err = exec.Command("bash", "-c", cmd).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if len(podLogs) > 0 {
@@ -791,7 +762,7 @@ spec:
 		g.By("Check the abnormal nodes")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--no-headers").OutputToFile("OCP-40667/node.log")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		cmd = fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, dirname+"node.log")
+		cmd := fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, dirname+"node.log")
 		nodeLogs, err := exec.Command("bash", "-c", cmd).Output()
 		e2e.Logf("%s", nodeLogs)
 		if len(nodeLogs) > 0 {
@@ -842,16 +813,23 @@ spec:
 		}
 
 		g.By("Check the all worker nodes workload are normal")
-		cpuAvgVal, memAvgVal = checkClusterLoad(oc, "worker", "OCP-40667/nodes_new.log")
-		if cpuAvgVal > 75 || memAvgVal > 75 {
-			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
-			o.Expect(errlog).NotTo(o.HaveOccurred())
-			e2e.Logf("Nodes CPU avg %d %% and Memory avg %d %% consumption is high, please investigate the consumption...", cpuAvgVal, memAvgVal)
-		} else {
+		var cpuAvgVal int
+		var memAvgVal int
+		errLoad := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
+			cpuAvgVal, memAvgVal := checkClusterLoad(oc, "worker", "OCP-40667/nodes_new.log")
+			if cpuAvgVal > 75 || memAvgVal > 85 {
+				return false, nil
+			}
 			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
 			o.Expect(errlog).NotTo(o.HaveOccurred())
 			e2e.Logf("Node CPU %d %% and Memory %d %% consumption is normal....", cpuAvgVal, memAvgVal)
+			return true, nil
+		})
+		if cpuAvgVal > 75 || memAvgVal > 85 {
+			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
+			o.Expect(errlog).NotTo(o.HaveOccurred())
 		}
+		exutil.AssertWaitPollNoErr(errLoad, fmt.Sprintf("Nodes CPU avg %d %% and Memory avg %d %% consumption is high, please investigate the consumption...", cpuAvgVal, memAvgVal))
 
 		g.By("Summary of resources used")
 		resourceDetails := checkResources(oc, "OCP-40667/resources.log")
@@ -859,7 +837,7 @@ spec:
 			e2e.Logf("Number of %s is %v\n", key, value)
 		}
 
-		if cpuAvgVal > 75 || memAvgVal > 75 || len(noRouteLogs) > 0 || len(panicLogs) > 0 || len(coLogs) > 0 || len(nodeLogs) > 0 || len(busterLogs) > 0 {
+		if cpuAvgVal > 75 || memAvgVal > 85 || len(noRouteLogs) > 0 || len(panicLogs) > 0 || len(coLogs) > 0 || len(nodeLogs) > 0 {
 			e2e.Failf("Prechk Test case: Failed.....Check above errors in case run logs.")
 		} else {
 			e2e.Logf("Prechk Test case: Passed.....There is no error abnormaliy found..")
@@ -874,8 +852,14 @@ spec:
 		)
 		defer os.RemoveAll(dirname)
 		defer func() {
-			cmd := fmt.Sprintf(`clusterbuster --cleanup`)
-			_, err := exec.Command("bash", "-c", cmd).Output()
+			cmdcpu := fmt.Sprintf(`clusterbuster --cleanup -B cpuload`)
+			_, err := exec.Command("bash", "-c", cmdcpu).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		defer func() {
+			cmdmem := fmt.Sprintf(`clusterbuster --cleanup -B memload`)
+			_, err := exec.Command("bash", "-c", cmdmem).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 
@@ -922,7 +906,7 @@ spec:
 		g.By("Check the abnormal pods")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile("OCP-40667/pod.log")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		cmd = fmt.Sprintf(`cat %v | grep -i 'clusterbuster' |grep -ivE 'Running|Completed|namespace' || true`, dirname+"pod.log")
+		cmd = fmt.Sprintf(`cat %v | grep -iE 'cpuload|memload' |grep -ivE 'Running|Completed|namespace|pending' || true`, dirname+"pod.log")
 		podLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(podLogs) > 0 {
@@ -956,7 +940,7 @@ spec:
 
 		g.By("Check the all worker nodes workload are normal")
 		cpuAvgVal, memAvgVal := checkClusterLoad(oc, "worker", "OCP-40667/nodes_new.log")
-		if cpuAvgVal > 75 || memAvgVal > 75 {
+		if cpuAvgVal > 75 || memAvgVal > 85 {
 			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
 			o.Expect(errlog).NotTo(o.HaveOccurred())
 			e2e.Logf("Nodes CPU avg %d %% and Memory avg %d %% consumption is high, please investigate the consumption...", cpuAvgVal, memAvgVal)
@@ -972,7 +956,7 @@ spec:
 			e2e.Logf("Number of %s is %v\n", key, value)
 		}
 
-		if cpuAvgVal > 75 || memAvgVal > 75 || len(noRouteLogs) > 0 || len(panicLogs) > 0 || len(coLogs) > 0 || len(nodeLogs) > 0 {
+		if cpuAvgVal > 75 || memAvgVal > 85 || len(noRouteLogs) > 0 || len(panicLogs) > 0 || len(coLogs) > 0 || len(nodeLogs) > 0 {
 			e2e.Failf("Postchk Test case: Failed.....Check above errors in case run logs.")
 		} else {
 			e2e.Logf("Postchk Test case: Passed.....There is no error abnormaliy found..")
@@ -984,17 +968,22 @@ spec:
 		var (
 			dirname    = "/tmp/-OCP-40861/"
 			exceptions = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
-			keywords   = "body: net/http: request canceled (Client.Timeout|panic"
-			// Creating below variable for clusterbuster commands "N" argument parameter.
-			namespaceCount = 0
 		)
 		defer os.RemoveAll(dirname)
 		defer CleanNamespace(oc, 50, "test-ocp40861")
+
 		defer func() {
-			cmd := fmt.Sprintf(`clusterbuster --cleanup`)
-			_, err := exec.Command("bash", "-c", cmd).Output()
+			cmdcpu := fmt.Sprintf(`clusterbuster --cleanup -B cpuload`)
+			_, err := exec.Command("bash", "-c", cmdcpu).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
+
+		defer func() {
+			cmdmem := fmt.Sprintf(`clusterbuster --cleanup -B memload`)
+			_, err := exec.Command("bash", "-c", cmdmem).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
 		err := os.MkdirAll(dirname, 0755)
 		g.By("Check the configuration of priority level")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "workload-low", "-o", `jsonpath={.spec.limited.assuredConcurrencyShares}`).Output()
@@ -1004,37 +993,11 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.Equal(`20`))
 
-		g.By("Checking cluster worker load before running clusterbuster")
-		cpuAvgVal, memAvgVal := checkClusterLoad(oc, "worker", "OCP-40861/nodes.log")
-		node, err := exutil.GetAllNodes(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Number of nodes are %d", len(node))
-		noOfNodes := len(node)
-		if noOfNodes > 1 && cpuAvgVal < 50 && memAvgVal < 50 {
-			e2e.Logf("Cluster has load normal..CPU %d %% and Memory %d %%...So using value of N=8", cpuAvgVal, memAvgVal)
-			namespaceCount = 10
-		} else if noOfNodes == 1 && cpuAvgVal < 60 && memAvgVal < 60 {
-			e2e.Logf("Cluster is SNO...CPU %d %% and Memory %d %%....So using value of N=3", cpuAvgVal, memAvgVal)
-			namespaceCount = 3
-		} else {
-			e2e.Logf("Cluster has slighty high load...CPU %d %% and Memory %d %%....So using value of N=6", cpuAvgVal, memAvgVal)
-			namespaceCount = 6
-		}
-
 		g.By("Stress the cluster")
-		cmd := fmt.Sprintf(`clusterbuster -P server -b 5 -p 10 -D .01 -M 1 -N %d -r 4 -d 2 -c 10 -m 1000 -v -t 1200 -x > %v`, namespaceCount, dirname+"clusterbuster.log")
-		_, err = exec.Command("bash", "-c", cmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		// LoadSecrets no. of secrets per namespace
-		LoadSecrets(oc, 20, "test-ocp40861", 50)
-		cmd = fmt.Sprintf(`cat %v | grep -iE '%s' || true`, dirname+"clusterbuster.log", keywords)
-		busterLogs, err := exec.Command("bash", "-c", cmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(busterLogs) > 0 {
-			e2e.Logf("%s", busterLogs)
-			e2e.Logf("Found some panic or timeout errors, if errors are  potential bug then file a bug.")
-		} else {
-			e2e.Logf("No errors found in clusterbuster logs")
+		cpuAvgValWorker, memAvgValWorker := checkClusterLoad(oc, "worker", "OCP-40667/nodes.log")
+		cpuAvgValMaster, memAvgValMaster := checkClusterLoad(oc, "master", "OCP-40667/nodes.log")
+		if cpuAvgValMaster < 75 || memAvgValMaster < 70 || cpuAvgValWorker < 75 || memAvgValWorker < 70 {
+			LoadCPUMemWorkload(oc)
 		}
 
 		g.By("Check the abnormal pods")
@@ -1042,7 +1005,7 @@ spec:
 		errPod := wait.Poll(15*time.Second, 600*time.Second, func() (bool, error) {
 			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile("OCP-40861/pod.log")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			cmd = fmt.Sprintf(`cat %v | grep -i 'clusterbuster' | grep -ivE 'Running|Completed|namespace' || true`, dirname+"pod.log")
+			cmd := fmt.Sprintf(`cat %v | grep -iE 'cpuload|memload' | grep -ivE 'Running|Completed|namespace|pending' || true`, dirname+"pod.log")
 			podLogs, err = exec.Command("bash", "-c", cmd).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if len(podLogs) > 0 {
@@ -1060,7 +1023,7 @@ spec:
 		g.By("Check the abnormal nodes")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--no-headers").OutputToFile("OCP-40861/node.log")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		cmd = fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, dirname+"node.log")
+		cmd := fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, dirname+"node.log")
 		nodeLogs, err := exec.Command("bash", "-c", cmd).Output()
 		e2e.Logf("%s", nodeLogs)
 		if len(nodeLogs) > 0 {
@@ -1111,16 +1074,23 @@ spec:
 		}
 
 		g.By("Check the all worker nodes workload are normal")
-		cpuAvgVal, memAvgVal = checkClusterLoad(oc, "worker", "OCP-40861/nodes_new.log")
-		if cpuAvgVal > 75 || memAvgVal > 75 {
-			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
-			o.Expect(errlog).NotTo(o.HaveOccurred())
-			e2e.Logf("Nodes CPU avg %d %% and Memory avg %d %% consumption is high, please investigate the consumption...", cpuAvgVal, memAvgVal)
-		} else {
+		var cpuAvgVal int
+		var memAvgVal int
+		errLoad := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
+			cpuAvgVal, memAvgVal := checkClusterLoad(oc, "worker", "OCP-40667/nodes_new.log")
+			if cpuAvgVal > 75 || memAvgVal > 85 {
+				return false, nil
+			}
 			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
 			o.Expect(errlog).NotTo(o.HaveOccurred())
 			e2e.Logf("Node CPU %d %% and Memory %d %% consumption is normal....", cpuAvgVal, memAvgVal)
+			return true, nil
+		})
+		if cpuAvgVal > 75 || memAvgVal > 85 {
+			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
+			o.Expect(errlog).NotTo(o.HaveOccurred())
 		}
+		exutil.AssertWaitPollNoErr(errLoad, fmt.Sprintf("Nodes CPU avg %d %% and Memory avg %d %% consumption is high, please investigate the consumption...", cpuAvgVal, memAvgVal))
 
 		g.By("Summary of resources used")
 		resourceDetails := checkResources(oc, "OCP-40861/resources.log")
@@ -1128,7 +1098,7 @@ spec:
 			e2e.Logf("Number of %s is %v\n", key, value)
 		}
 
-		if cpuAvgVal > 75 || memAvgVal > 75 || len(noRouteLogs) > 0 || len(panicLogs) > 0 || len(coLogs) > 0 || len(nodeLogs) > 0 || len(busterLogs) > 0 {
+		if cpuAvgVal > 75 || memAvgVal > 85 || len(noRouteLogs) > 0 || len(panicLogs) > 0 || len(coLogs) > 0 || len(nodeLogs) > 0 {
 			e2e.Failf("Test case: Failed.....Check above errors in case run logs.")
 		} else {
 			e2e.Logf("Test case: Passed.....There is no error abnormaliy found..")
