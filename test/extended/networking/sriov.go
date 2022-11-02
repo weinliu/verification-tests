@@ -152,7 +152,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			policyName:   "e810",
 			deviceType:   "vfio-pci",
 			deviceID:     "1593",
-			pfName:       "ens2f0",
+			pfName:       "ens2f2",
 			vondor:       "8086",
 			numVfs:       2,
 			resourceName: "e810dpdk",
@@ -168,9 +168,6 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			g.Skip("the cluster do not contain the sriov card. skip this testing!")
 		}
 
-		g.By("setup one namespace")
-		oc.SetupProject()
-
 		g.By("Create sriovnetworkpolicy to init VF and check they are inited successfully")
 		sriovPolicy.createPolicy(oc)
 		defer rmSriovNetworkPolicy(oc, sriovPolicy.policyName, sriovOpNs)
@@ -182,11 +179,15 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("vhost_net"))
 
+		g.By("setup one namespace")
+		ns1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns1)
+
 		g.By("Create sriovNetwork to generate net-attach-def on the target namespace")
 		sriovnetwork := sriovNetwork{
 			name:             sriovPolicy.policyName,
 			resourceName:     sriovPolicy.resourceName,
-			networkNamespace: oc.Namespace(),
+			networkNamespace: ns1,
 			template:         sriovNeworkTemplate,
 			namespace:        sriovOpNs,
 		}
@@ -197,18 +198,19 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 		sriovTestPod := sriovTestPod{
 			name:        "sriovdpdk",
-			namespace:   oc.Namespace(),
+			namespace:   ns1,
 			networkName: sriovnetwork.name,
 			template:    sriovTestPodTemplate,
 		}
 		sriovTestPod.createSriovTestPod(oc)
-		err = waitForPodWithLabelReady(oc, oc.Namespace(), "name=sriov-dpdk")
+		err = waitForPodWithLabelReady(oc, ns1, "name=sriov-dpdk")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=sriov-dpdk not ready")
 
 		g.By("Check testpmd running well")
 		pciAddress := getPciAddress(sriovTestPod.namespace, sriovTestPod.name)
 		command := "testpmd -l 2-3 --in-memory -w " + pciAddress + " --socket-mem 1024 -n 4 --proc-type auto --file-prefix pg -- --disable-rss --nb-cores=1 --rxq=1 --txq=1 --auto-start --forward-mode=mac"
 		testpmdOutput, err := e2e.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
+
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(testpmdOutput).Should(o.MatchRegexp("forwards packets on 1 streams"))
 
@@ -286,11 +288,15 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		sriovPolicy.createPolicy(oc)
 		waitForSriovPolicyReady(oc, sriovOpNs)
 
+		g.By("setup one namespace")
+		ns1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns1)
+
 		g.By("Create sriovNetwork to generate net-attach-def on the target namespace")
 		sriovnetwork := sriovNetwork{
 			name:             sriovPolicy.policyName,
 			resourceName:     sriovPolicy.resourceName,
-			networkNamespace: oc.Namespace(),
+			networkNamespace: ns1,
 			template:         sriovNeworkTemplate,
 			namespace:        sriovOpNs,
 		}
@@ -301,12 +307,12 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 		sriovTestPod := sriovTestPod{
 			name:        "sriovdpdk",
-			namespace:   oc.Namespace(),
+			namespace:   ns1,
 			networkName: sriovnetwork.name,
 			template:    sriovTestPodTemplate,
 		}
 		sriovTestPod.createSriovTestPod(oc)
-		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=sriov-dpdk")
+		err := waitForPodWithLabelReady(oc, ns1, "name=sriov-dpdk")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=sriov-dpdk not ready")
 
 		g.By("Check testpmd running well")
@@ -351,11 +357,15 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		sriovPolicy.createPolicy(oc)
 		waitForSriovPolicyReady(oc, sriovOpNs)
 
+		g.By("setup one namespace")
+		ns1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns1)
+
 		g.By("Create sriovNetwork to generate net-attach-def on the target namespace")
 		sriovnetwork := sriovNetwork{
 			name:             sriovPolicy.policyName,
 			resourceName:     sriovPolicy.resourceName,
-			networkNamespace: oc.Namespace(),
+			networkNamespace: ns1,
 			template:         sriovNeworkTemplate,
 			namespace:        sriovOpNs,
 		}
@@ -366,12 +376,12 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 		sriovTestPod := sriovTestPod{
 			name:        "e810netdevice",
-			namespace:   oc.Namespace(),
+			namespace:   ns1,
 			networkName: sriovnetwork.name,
 			template:    sriovTestPodTemplate,
 		}
 		sriovTestPod.createSriovTestPod(oc)
-		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=sriov-netdevice")
+		err := waitForPodWithLabelReady(oc, ns1, "name=sriov-netdevice")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=sriov-netdevice not ready")
 
 		g.By("Check test pod have second interface with assigned ip")
@@ -415,11 +425,15 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		sriovPolicy.createPolicy(oc)
 		waitForSriovPolicyReady(oc, sriovOpNs)
 
+		g.By("setup one namespace")
+		ns1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns1)
+
 		g.By("Create sriovNetwork to generate net-attach-def on the target namespace")
 		sriovnetwork := sriovNetwork{
 			name:             sriovPolicy.policyName,
 			resourceName:     sriovPolicy.resourceName,
-			networkNamespace: oc.Namespace(),
+			networkNamespace: ns1,
 			template:         sriovNeworkTemplate,
 			namespace:        sriovOpNs,
 		}
@@ -430,12 +444,12 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 		sriovTestPod := sriovTestPod{
 			name:        "xl710netdevice",
-			namespace:   oc.Namespace(),
+			namespace:   ns1,
 			networkName: sriovnetwork.name,
 			template:    sriovTestPodTemplate,
 		}
 		sriovTestPod.createSriovTestPod(oc)
-		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=sriov-netdevice")
+		err := waitForPodWithLabelReady(oc, ns1, "name=sriov-netdevice")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=sriov-netdevice not ready")
 
 		g.By("Check test pod have second interface with assigned ip")
@@ -478,11 +492,15 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		sriovPolicy.createPolicy(oc)
 		waitForSriovPolicyReady(oc, sriovOpNs)
 
+		g.By("setup one namespace")
+		ns1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns1)
+
 		g.By("Create sriovNetwork to generate net-attach-def on the target namespace")
 		sriovnetwork := sriovNetwork{
 			name:             sriovPolicy.policyName,
 			resourceName:     sriovPolicy.resourceName,
-			networkNamespace: oc.Namespace(),
+			networkNamespace: ns1,
 			template:         sriovNeworkTemplate,
 			namespace:        sriovOpNs,
 		}
@@ -493,12 +511,12 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 		sriovTestPod := sriovTestPod{
 			name:        "sriovdpdk",
-			namespace:   oc.Namespace(),
+			namespace:   ns1,
 			networkName: sriovnetwork.name,
 			template:    sriovTestPodTemplate,
 		}
 		sriovTestPod.createSriovTestPod(oc)
-		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=sriov-dpdk")
+		err := waitForPodWithLabelReady(oc, ns1, "name=sriov-dpdk")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=sriov-dpdk not ready")
 
 		g.By("Check testpmd running well")
