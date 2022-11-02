@@ -197,14 +197,16 @@ func WaitForSpecificMachinesRunning(oc *CLI, machineNumber int, labels string) [
 }
 
 // WaitForMachineRunning check if the machine is Running
-func WaitForMachineRunning(oc *CLI, machineNameSuffix string, labels string) {
+func WaitForMachineRunning(oc *CLI, machineNameSuffix string, labels string) string {
 	e2e.Logf("Waiting for the machine Running ...")
+	var newMachineName string
 	err := wait.Poll(60*time.Second, 720*time.Second, func() (bool, error) {
 		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
 		for _, machineName := range strings.Split(msg, " ") {
 			phase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, "-o=jsonpath={.status.phase}", "-n", machineAPINamespace).Output()
 			if phase == "Running" && strings.HasSuffix(machineName, machineNameSuffix) {
 				e2e.Logf("The machine with suffix %s is Running %s", machineNameSuffix, machineName)
+				newMachineName = machineName
 				return true, nil
 			}
 		}
@@ -212,6 +214,7 @@ func WaitForMachineRunning(oc *CLI, machineNameSuffix string, labels string) {
 		return false, nil
 	})
 	AssertWaitPollNoErr(err, "Wait machine Running failed.")
+	return newMachineName
 }
 
 // WaitForMachineDisappear check if the machine is disappear

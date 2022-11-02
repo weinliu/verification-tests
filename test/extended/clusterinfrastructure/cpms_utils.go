@@ -1,6 +1,7 @@
 package clusterinfrastructure
 
 import (
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo"
@@ -10,9 +11,9 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-// WaitForRollingUpdateCompleted check if the RollingUpdate is completed
-func WaitForRollingUpdateCompleted(oc *exutil.CLI, replicas int) {
-	e2e.Logf("Waiting for the RollingUpdate completed ...")
+// WaitForUpdateCompleted check if the Update is completed
+func WaitForUpdateCompleted(oc *exutil.CLI, replicas int) {
+	e2e.Logf("Waiting for the Update completed ...")
 	timeToWait := time.Duration(replicas*25) * time.Minute
 	err := wait.Poll(1*time.Minute, timeToWait, func() (bool, error) {
 		readyReplicas, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
@@ -20,13 +21,13 @@ func WaitForRollingUpdateCompleted(oc *exutil.CLI, replicas int) {
 		desiredReplicas, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.replicas}", "-n", machineAPINamespace).Output()
 		updatedReplicas, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.updatedReplicas}", "-n", machineAPINamespace).Output()
 		if !(desiredReplicas == currentReplicas && desiredReplicas == readyReplicas && desiredReplicas == updatedReplicas) {
-			e2e.Logf("The RollingUpdate is still ongoing and waiting up to 1 minutes ...")
+			e2e.Logf("The Update is still ongoing and waiting up to 1 minutes ...")
 			return false, nil
 		}
-		e2e.Logf("The RollingUpdate is completed!")
+		e2e.Logf("The Update is completed!")
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(err, "Wait RollingUpdate failed.")
+	exutil.AssertWaitPollNoErr(err, "Wait Update failed.")
 }
 
 // SkipForCPMSNotExist skip the test if controlplanemachineset doesn't exist
@@ -55,4 +56,27 @@ func SkipForUpdateIsOngoing(oc *exutil.CLI) {
 func PrintNodeInfo(oc *exutil.CLI) {
 	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
 	e2e.Logf("%v", output)
+}
+
+// GetMachineSuffix get the machine suffix
+func GetMachineSuffix(oc *exutil.CLI, machineName string) string {
+	start := strings.LastIndex(machineName, "-")
+	suffix := machineName[start+1:]
+	return suffix
+}
+
+// CheckIfUpdateIsCompleted check if the Update is completed
+func CheckIfUpdateIsCompleted(oc *exutil.CLI) bool {
+	readyReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	currentReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.replicas}", "-n", machineAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	desiredReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.replicas}", "-n", machineAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	updatedReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.updatedReplicas}", "-n", machineAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if !(desiredReplicas == currentReplicas && desiredReplicas == readyReplicas && desiredReplicas == updatedReplicas) {
+		return false
+	}
+	return true
 }
