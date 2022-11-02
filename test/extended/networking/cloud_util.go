@@ -628,6 +628,12 @@ func createSnifferDaemonset(oc *exutil.CLI, ns, dsName, nodeLabel, labelKey, dst
 		return &tcpdumpDS, dsErr
 	}
 
+	platform := exutil.CheckPlatform(oc)
+
+	// Due to slowness associated with OpenStack cluster through PSI, add a little wait time before checking tcpdumpDS for OSP
+	if platform == "openstack" {
+		time.Sleep(30 * time.Second)
+	}
 	dsReadyErr := waitDaemonSetReady(oc, ns, tcpdumpDS.name)
 	if dsReadyErr != nil {
 		return &tcpdumpDS, dsReadyErr
@@ -637,18 +643,23 @@ func createSnifferDaemonset(oc *exutil.CLI, ns, dsName, nodeLabel, labelKey, dst
 
 // waitDaemonSetReady by checking  if NumberReady == DesiredNumberScheduled.
 func waitDaemonSetReady(oc *exutil.CLI, ns, dsName string) error {
-	desiredNum, err := runOcWithRetry(oc.AsAdmin(), "get", "ds", dsName, "-n", ns, "-ojsonpath={.status.desiredNumberScheduled}")
-	if err != nil {
+	desiredNumStr, scheduledErr := runOcWithRetry(oc.AsAdmin(), "get", "ds", dsName, "-n", ns, "-ojsonpath={.status.desiredNumberScheduled}")
+	if scheduledErr != nil {
 		return fmt.Errorf("Cannot get DesiredNumberScheduled for daemonset :%s", dsName)
 	}
+	desiredNum, convertErr := strconv.Atoi(desiredNumStr)
+	o.Expect(convertErr).NotTo(o.HaveOccurred())
 
-	dsErr := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
-		readyNum, err1 := runOcWithRetry(oc.AsAdmin(), "get", "ds", dsName, "-n", ns, "-ojsonpath={.status.numberReady}")
-		if desiredNum != readyNum || err1 != nil {
-			e2e.Logf("The DesiredNumberScheduled for daemonset :%s, ready number is %s, wait for next try.", desiredNum, readyNum)
+	dsErr := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
+		readyNumStr, readyErr := runOcWithRetry(oc.AsAdmin(), "get", "ds", dsName, "-n", ns, "-ojsonpath={.status.numberReady}")
+		o.Expect(readyErr).NotTo(o.HaveOccurred())
+		readyNum, convertErr := strconv.Atoi(readyNumStr)
+		o.Expect(convertErr).NotTo(o.HaveOccurred())
+		if desiredNum != readyNum || readyErr != nil || readyNum == 0 || desiredNum == 0 {
+			e2e.Logf("The DesiredNumberScheduled for daemonset :%v, ready number is %v, wait for next try.", desiredNum, readyNum)
 			return false, nil
 		}
-		e2e.Logf("The DesiredNumberScheduled for daemonset :%s, ready number is %s.", desiredNum, readyNum)
+		e2e.Logf("The DesiredNumberScheduled for daemonset :%v, ready number is %v.", desiredNum, readyNum)
 		return true, nil
 	})
 	if dsErr != nil {
@@ -679,6 +690,7 @@ func checkMatchedIPs(oc *exutil.CLI, ns, dsName string, searchString, expectedIP
 
 		return true, nil
 	})
+	e2e.Logf("Checking expected result in tcpdump log got error message as: %v.", matchErr)
 	return matchErr
 }
 
@@ -701,12 +713,12 @@ func getSnifferLogs(oc *exutil.CLI, ns, dsName, searchString string) (map[string
 			if !strings.Contains(line, searchString) {
 				continue
 			}
-			e2e.Logf("Found hit in log line:\n %v", line)
+			e2e.Logf("Try to find source ip in this log line:\n %v", line)
 			matchLineSlice := strings.Fields(line)
 			ipPortSlice := strings.Split(matchLineSlice[9], ".")
 			e2e.Logf(matchLineSlice[9])
 			ip = strings.Join(ipPortSlice[:len(ipPortSlice)-1], ".")
-			e2e.Logf("Found source ip %s in log line.", ip)
+			e2e.Logf("Found source ip %s in this log line.", ip)
 			matchedIPs[ip]++
 		}
 
@@ -800,4 +812,68 @@ func verifyEgressIPinTCPDump(oc *exutil.CLI, pod, podNS, expectedEgressIP, dstHo
 	})
 
 	return egressipErr
+}
+
+type instance struct {
+	nodeName string
+	oc       *exutil.CLI
+}
+
+func (i *instance) GetName() string {
+	return i.nodeName
+}
+
+type ospInstance struct {
+	instance
+	ospObj exutil.Osp
+}
+
+// OspCredentials get creds of osp platform
+func OspCredentials(oc *exutil.CLI) {
+	credentials, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/openstack-credentials", "-n", "kube-system", "-o", `jsonpath={.data.clouds\.yaml}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	credential, err := base64.StdEncoding.DecodeString(credentials)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	var (
+		username       string
+		password       string
+		projectID      string
+		authURL        string
+		userDomainName string
+		regionName     string
+		projectName    string
+	)
+	credVars := []string{"auth_url", "username", "password", "project_id", "user_domain_name", "region_name", "project_name"}
+	for _, s := range credVars {
+		r, _ := regexp.Compile(`` + s + `:.*`)
+		match := r.FindAllString(string(credential), -1)
+		if strings.Contains(s, "username") {
+			username = strings.Split(match[0], " ")[1]
+			os.Setenv("OSP_DR_USERNAME", username)
+		}
+		if strings.Contains(s, "password") {
+			password = strings.Split(match[0], " ")[1]
+			os.Setenv("OSP_DR_PASSWORD", password)
+		}
+		if strings.Contains(s, "auth_url") {
+			authURL = strings.Split(match[0], " ")[1]
+			os.Setenv("OSP_DR_AUTH_URL", authURL)
+		}
+		if strings.Contains(s, "project_id") {
+			projectID = strings.Split(match[0], " ")[1]
+			os.Setenv("OSP_DR_PROJECT_ID", projectID)
+		}
+		if strings.Contains(s, "user_domain_name") {
+			userDomainName = strings.Split(match[0], " ")[1]
+			os.Setenv("OSP_DR_USER_DOMAIN_NAME", userDomainName)
+		}
+		if strings.Contains(s, "region_name") {
+			regionName = strings.Split(match[0], " ")[1]
+			os.Setenv("OSP_DR_REGION_NAME", regionName)
+		}
+		if strings.Contains(s, "project_name") {
+			projectName = strings.Split(match[0], " ")[1]
+			os.Setenv("OSP_DR_PROJECT_NAME", projectName)
+		}
+	}
 }

@@ -877,11 +877,16 @@ func checkNetworkOperatorState(oc *exutil.CLI, interval int, timeout int) {
 }
 
 func getNodeIPv4(oc *exutil.CLI, namespace string, nodeName string) string {
-	nodeipv4, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", oc.Namespace(), "node", nodeName, "-o=jsonpath={.status.addresses[?(@.type==\"InternalIP\")].address}").Output()
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", oc.Namespace(), "node", nodeName, "-o=jsonpath={.status.addresses[?(@.type==\"InternalIP\")].address}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if err != nil {
 		e2e.Logf("Cannot get node default interface ipv4 address, errors: %v", err)
 	}
+
+	// when egressIP is applied to a node, it would be listed as internal IP for the node, thus, there could be more than one IPs shown as internal IP
+	// use RE to match out to first internal IP
+	re := regexp.MustCompile(`(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}`)
+	nodeipv4 := re.FindAllString(output, -1)[0]
 	e2e.Logf("The IPv4 of node's default interface is %q", nodeipv4)
 	return nodeipv4
 }
@@ -983,7 +988,7 @@ func getEgressIPByKind(oc *exutil.CLI, kind string, kindName string, expectedNum
 		ip = strings.Split(iplist[2:len(iplist)-2], "\",\"")
 	}
 	if isIPListEmpty || len(ip) < expectedNum || err != nil {
-		err = wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
+		err = wait.Poll(30*time.Second, 5*time.Minute, func() (bool, error) {
 			iplist, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(kind, kindName, "-o=jsonpath={.egressIPs}").Output()
 			if len(iplist) > 0 {
 				ip = strings.Split(iplist[2:len(iplist)-2], "\",\"")
