@@ -159,7 +159,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = locatePodmanCred(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		out, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--config", operatorS, "file:///tmp/46770test", "-v", "3").Output()
+		out, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--config", operatorS, "file:///tmp/46770test", "--continue-on-error", "-v", "3").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(out, "Using local backend at location") {
 			e2e.Failf("Do not expect the backend setting")

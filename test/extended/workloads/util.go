@@ -530,15 +530,11 @@ func (registry *registry) createregistry(oc *exutil.CLI) serviceInfo {
 	if err != nil {
 		e2e.Failf("Failed to config the registry")
 	}
-	err = wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err = oc.AsAdmin().Run("get").Args("pod", "-l", "deployment=registry", "-n", registry.namespace).Execute()
-		if err != nil {
-			e2e.Logf("The err:%v, and try next round", err)
-			return false, nil
-		}
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(err, "pod of deployment=registry is not got")
+	if ok := waitForAvailableRsRunning(oc, "deployment", "registry", registry.namespace, "1"); ok {
+		e2e.Logf("All pods are runnnig now\n")
+	} else {
+		e2e.Failf("private registry pod is not running even afer waiting for about 3 minutes")
+	}
 
 	e2e.Logf("Get the service info of the registry")
 	regSvcIP, err := oc.AsAdmin().Run("get").Args("svc", "registry", "-n", registry.namespace, "-o=jsonpath={.spec.clusterIP}").Output()
