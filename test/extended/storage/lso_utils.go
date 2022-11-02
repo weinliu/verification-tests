@@ -316,12 +316,6 @@ func (lv *localVolume) createWithExtraParameters(oc *exutil.CLI, extraParameters
 // Delete localVolume CR
 func (lv *localVolume) deleteAsAdmin(oc *exutil.CLI) {
 	lvPvs, _ := getPvNamesOfSpecifiedSc(oc, lv.scname)
-	// Temp avoid known issue of PV couldn't become avaiable may cause delete LocalVolume CR stucked will remove the extra step later
-	// Delete the localvolume CR provisioned PVs before delete the CR accually it should do after delete the CR but just for temp avoid the known issue
-	// https://bugzilla.redhat.com/show_bug.cgi?id=2091873
-	for _, pv := range lvPvs {
-		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv/"+pv, "--ignore-not-found").Execute()
-	}
 	// Delete the localvolume CR
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("localvolume/"+lv.name, "-n", lv.namespace, "--ignore-not-found").Execute()
 	for _, pv := range lvPvs {
@@ -642,8 +636,8 @@ func (lvd *localVolumeDiscovery) waitDiscoveryResultsGenerated(oc *exutil.CLI) {
 	lvd.syncDiscoveryResults(oc)
 }
 
-// Get localVolumeDiscoveryResults from specific node
-func (lvd *localVolumeDiscovery) getSpecificNodeDiscoveryResults(oc *exutil.CLI, nodeName string) (nodeVolumeDiscoveryResults string) {
+// Get localVolumeDiscoveryResults from specified node
+func (lvd *localVolumeDiscovery) getSpecifiedNodeDiscoveryResults(oc *exutil.CLI, nodeName string) (nodeVolumeDiscoveryResults string) {
 	var getDiscoveryResultsErr error
 	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
 		nodeVolumeDiscoveryResults, getDiscoveryResultsErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", lvd.namespace, "localVolumeDiscoveryResults/discovery-result-"+nodeName, "-o", "json", "--ignore-not-found").Output()
@@ -666,7 +660,26 @@ func (lvd *localVolumeDiscovery) getSpecificNodeDiscoveryResults(oc *exutil.CLI,
 // Create localVolumeDiscovery CR with specific nodes
 func (lvd *localVolumeDiscovery) syncDiscoveryResults(oc *exutil.CLI) {
 	for _, discoverNode := range lvd.discoverNodes {
-		lvd.discoveryResults[discoverNode] = lvd.getSpecificNodeDiscoveryResults(oc, discoverNode)
+		lvd.discoveryResults[discoverNode] = lvd.getSpecifiedNodeDiscoveryResults(oc, discoverNode)
 	}
 	e2e.Logf("DiscoveryResults Sync Succeed")
+}
+
+// waitSpecifiedDeviceStatusAsExpected waits specified device status become expected status
+func (lvd *localVolumeDiscovery) waitSpecifiedDeviceStatusAsExpected(oc *exutil.CLI, nodeName string, devicePath string, expectedStatus string) {
+	var deviceStatus, nodeDevicesDiscoverResults string
+	err := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+		nodeDevicesDiscoverResults = lvd.getSpecifiedNodeDiscoveryResults(oc, nodeName)
+		if strings.HasPrefix(devicePath, "/dev/disk/by-id") {
+			deviceStatus = gjson.Get(nodeDevicesDiscoverResults, `status.discoveredDevices.#(deviceID==`+devicePath+`).status.state`).String()
+		} else {
+			deviceStatus = gjson.Get(nodeDevicesDiscoverResults, `status.discoveredDevices.#(path==`+devicePath+`).status.state`).String()
+		}
+		debugLogf(`Device: "%s" on node/%s status is "%s" now`, devicePath, nodeName, deviceStatus)
+		return strings.EqualFold(deviceStatus, expectedStatus), nil
+	})
+	if err != nil {
+		e2e.Logf(`Node/%s's LocalVolumeDiscoveryResult is`, nodeName, nodeDevicesDiscoverResults)
+	}
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf(`Waitting for device: "%s" on node/%s become "%s" timeout, last actual status is "%s".`, devicePath, nodeName, expectedStatus, deviceStatus))
 }

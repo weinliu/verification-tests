@@ -10,7 +10,6 @@ import (
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"github.com/tidwall/gjson"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -848,8 +847,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			o.ContainSubstring(myVolumeB.DeviceByID),
 		))
 		// Check the localvolumeDiscoveryResults devices (myVolumeA and myVolumeB) should available to use
-		o.Expect(gjson.Get(mylvd.discoveryResults[myWorker.name], `status.discoveredDevices.#(deviceID==`+myVolumeA.DeviceByID+`)#.status.state`).String()).Should(o.ContainSubstring("Available"))
-		o.Expect(gjson.Get(mylvd.discoveryResults[myWorker.name], `status.discoveredDevices.#(deviceID==`+myVolumeB.DeviceByID+`)#.status.state`).String()).Should(o.ContainSubstring("Available"))
+		mylvd.waitSpecifiedDeviceStatusAsExpected(oc, myWorker.name, myVolumeA.DeviceByID, "Available")
+		mylvd.waitSpecifiedDeviceStatusAsExpected(oc, myWorker.name, myVolumeB.DeviceByID, "Available")
 
 		if len(allSchedulableLinuxWorkers) > 1 {
 			// Check new LocalVolumeDiscoveryResults record is generated if new node is added to LocalVolumeDiscovery
@@ -875,7 +874,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}, 180*time.Second, 5*time.Second).ShouldNot(o.BeEmpty())
 		pvLocalPath, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", lvPvs[0], "-o=jsonpath={.spec.local.path}").Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
-		o.Expect(pvLocalPath).Should(o.ContainSubstring(strings.TrimPrefix(myVolumeA.volumeID, "vol-")))
+		if strings.HasPrefix(myVolumeA.DeviceByID, "/dev/disk/by-id") {
+			o.Expect(pvLocalPath).Should(o.ContainSubstring(strings.TrimPrefix(myVolumeA.volumeID, "vol-")))
+		} else {
+			o.Expect(pvLocalPath).Should(o.ContainSubstring(strings.TrimPrefix(myVolumeA.DeviceByID, "/dev/")))
+		}
 		pvStatus, getPvStatusError := getPersistentVolumeStatus(oc, lvPvs[0])
 		o.Expect(getPvStatusError).ShouldNot(o.HaveOccurred())
 		o.Expect(pvStatus).Should(o.ContainSubstring("Available"))
@@ -895,7 +898,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		pvLocalPath, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", lvsPvs[0], "-o=jsonpath={.spec.local.path}").Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
-		o.Expect(pvLocalPath).Should(o.ContainSubstring(strings.TrimPrefix(myVolumeB.volumeID, "vol-")))
+		if strings.HasPrefix(myVolumeB.DeviceByID, "/dev/disk/by-id") {
+			o.Expect(pvLocalPath).Should(o.ContainSubstring(strings.TrimPrefix(myVolumeB.volumeID, "vol-")))
+		} else {
+			o.Expect(pvLocalPath).Should(o.ContainSubstring(strings.TrimPrefix(myVolumeB.DeviceByID, "/dev/")))
+		}
 		pvStatus, getPvStatusError = getPersistentVolumeStatus(oc, lvsPvs[0])
 		o.Expect(getPvStatusError).ShouldNot(o.HaveOccurred())
 		o.Expect(pvStatus).Should(o.ContainSubstring("Available"))
