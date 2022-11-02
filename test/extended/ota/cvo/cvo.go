@@ -1221,7 +1221,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	})
 
 	//author: evakhoni@redhat.com
-	g.It("Author:evakhoni-Low-21771-Upgrade cluster when current version is not in the graph from upstream [Serial]", func() {
+	g.It("ConnectedOnly-Author:evakhoni-Low-21771-Upgrade cluster when current version is not in the graph from upstream [Serial]", func() {
 		var graphURL, bucket, object, targetVersion, targetPayload string
 		origVersion, err := getCVObyJP(oc, ".status.desired.version")
 		o.Expect(err).NotTo(o.HaveOccurred())
