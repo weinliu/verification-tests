@@ -1084,3 +1084,15 @@ func checkGivenStringPresentOrNot(shouldContain bool, iterateObject []string, se
 		o.Expect(iterateObject).NotTo(o.ContainElement(o.ContainSubstring(searchString)))
 	}
 }
+
+//this function check output of fetch command is polled
+func waitForOutput(oc *exutil.CLI, ns, svcName, searchString, value string) {
+	waitErr := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		sourceRange := fetchJSONPathValue(oc, ns, svcName, searchString)
+		if strings.Contains(sourceRange, value) {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the Load Balancer is not provisioned"))
+}
