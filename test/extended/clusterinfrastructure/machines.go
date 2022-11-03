@@ -573,8 +573,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		defer exutil.DeleteAwsCredentialTmpFile(c2sConfigPrefix, stsConfigPrefix)
 		awsClient := exutil.InitAwsSession()
 		newDhcpOptionsID, err := awsClient.CreateDhcpOptions()
+		if err != nil {
+			g.Skip("The credential is insufficient to perform create dhcpOptions operation, skip the cases!!")
+		}
 		defer awsClient.DeleteDhcpOptions(newDhcpOptionsID)
-		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Associate the VPC with the new dhcpOptionsId")
 		machineName := exutil.ListWorkerMachineNames(oc)[0]
