@@ -14,6 +14,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	defer g.GinkgoRecover()
 	var oc = exutil.NewCLI("storage-storageclass", exutil.KubeConfigPath())
 
+	g.BeforeEach(func() {
+		// Function to check optional enabled capabilities
+		checkOptionalCapability(oc, "Storage")
+	})
+
 	// author: wduan@redhat.com
 	// OCP-22019-The cluster-storage-operator should manage pre-defined storage class
 	g.It("Author:wduan-High-22019-The cluster-storage-operator should manage pre-defined storage class [Disruptive]", func() {

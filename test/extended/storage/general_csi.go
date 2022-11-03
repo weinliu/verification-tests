@@ -23,6 +23,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// aws-csi test suite cloud provider support check
 	g.BeforeEach(func() {
+		// Function to check optional enabled capabilities
+		checkOptionalCapability(oc, "Storage")
+
 		cloudProvider = getCloudProvider(oc)
 		generalCsiSupportCheck(cloudProvider)
 		cloudProviderSupportProvisioners = getSupportProvisionersByCloudProvider(oc)

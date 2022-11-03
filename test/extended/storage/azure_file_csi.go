@@ -24,6 +24,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// azure-file-csi test suite cloud provider support check
 	g.BeforeEach(func() {
+		// Function to check optional enabled capabilities
+		checkOptionalCapability(oc, "Storage")
+
 		cloudProvider = getCloudProvider(oc)
 		if !strings.Contains(cloudProvider, "azure") {
 			g.Skip("Skip for non-supported cloud provider: *" + cloudProvider + "* !!!")
@@ -37,7 +40,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvcTemplate = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 		podTemplate = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
 		deploymentTemplate = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
-
 	})
 
 	// author: wduan@redhat.com

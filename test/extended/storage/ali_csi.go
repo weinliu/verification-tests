@@ -23,6 +23,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	)
 
 	g.BeforeEach(func() {
+		// Function to check optional enabled capabilities
+		checkOptionalCapability(oc, "Storage")
+
 		cloudProvider = getCloudProvider(oc)
 		if !strings.Contains(cloudProvider, "alibabacloud") {
 			g.Skip("Skip for non-supported cloud provider!!!")
@@ -33,7 +36,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		pvTemplate = filepath.Join(storageTeamBaseDir, "csi-pv-template.yaml")
 		pvcTemplate = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 		depTemplate = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
-
 	})
 
 	// author: ropatil@redhat.com

@@ -376,6 +376,17 @@ func strSliceContains(sl []string, element string) bool {
 	return isInMap(convertStrSliceToMap(sl), element)
 }
 
+// Function to check optional enabled capabilities
+func checkOptionalCapability(oc *exutil.CLI, component string) {
+	enabledCapabilities, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-o=jsonpath={.items[*].status.capabilities.enabledCapabilities}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Cluster enabled capability parameters: %v\n", enabledCapabilities)
+
+	if !strings.Contains(enabledCapabilities, component) {
+		g.Skip("Skip for " + component + " not enabled optional capability")
+	}
+}
+
 // Common csi cloud provider support check
 func generalCsiSupportCheck(cloudProvider string) {
 	generalCsiSupportMatrix, err := ioutil.ReadFile(filepath.Join(exutil.FixturePath("testdata", "storage"), "general-csi-support-provisioners.json"))

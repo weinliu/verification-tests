@@ -26,6 +26,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// vsphere-problem-detector test suite infrastructure check
 	g.BeforeEach(func() {
+		// Function to check optional enabled capabilities
+		checkOptionalCapability(oc, "Storage")
+
 		cloudProvider = getCloudProvider(oc)
 		if !strings.Contains(cloudProvider, "vsphere") {
 			g.Skip("Skip for non-supported infrastructure!!!")
