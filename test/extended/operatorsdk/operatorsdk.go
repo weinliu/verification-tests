@@ -2886,6 +2886,52 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	})
 
+	// author: jitli@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:jitli-High-52514-SDK-Run bundle upgrade support large FBC index [Slow]", func() {
+
+		operatorsdkCLI.showInfo = true
+		oc.SetupProject()
+		g.By("Run bundle with large FBC index (size >3M)")
+		defer operatorsdkCLI.Run("cleanup").Args("upgradeindex", "-n", oc.Namespace()).Output()
+		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeindex-bundle:v0.1", "--index-image", "quay.io/olmqe/largefbcindexwithupgradefbc:v4.11", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
+
+		g.By("Run bundle-upgrade operator")
+		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeindex-bundle:v0.2", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
+		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "upgradeindex.v0.0.2", "-n", oc.Namespace()).Output()
+			if strings.Contains(msg, "Succeeded") {
+				e2e.Logf("upgrade to 0.0.2 success")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("upgradeindex upgrade failed in %s ", oc.Namespace()))
+
+	})
+
+	// author: jitli@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:jitli-High-51295-SDK-Run bundle-upgrade from bundle installation without index image", func() {
+
+		operatorsdkCLI.showInfo = true
+		oc.SetupProject()
+		g.By("Run bundle install operator without index image v0.1")
+		defer operatorsdkCLI.Run("cleanup").Args("upgradeindex", "-n", oc.Namespace()).Output()
+		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeindex-bundle:v0.1", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
+
+		g.By("Run bundle-upgrade from the csv v.0.1->v0.2")
+		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeindex-bundle:v0.2", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Generated a valid Upgraded File-Based Catalog"))
+		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
+
+	})
+
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-44553-SDK support go type operator for http_proxy env [Slow]", func() {
 		architecture := exutil.GetClusterArchitecture(oc)
