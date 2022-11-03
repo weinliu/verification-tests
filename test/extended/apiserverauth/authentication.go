@@ -273,37 +273,45 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		defer func() {
-			// sleep for 200 seconds to make sure the pod is restarted
+			// sleep for 200 seconds to make sure related clusteroperators start to change
 			time.Sleep(200 * time.Second)
-			var podStatus string
-			err := wait.Poll(15*time.Second, 15*time.Minute, func() (bool, error) {
-				e2e.Logf("Check if all pods are in Completed or Running state across all namespaces")
-				podStatus, err = oc.AsAdmin().Run("get").WithoutNamespace().Args("po", "-A", `--field-selector=metadata.namespace!=openshift-kube-apiserver,status.phase==Pending`).Output()
-				o.Expect(err).NotTo(o.HaveOccurred())
-				e2e.Logf(podStatus)
-				if podStatus == "No resources found" {
-					// Sleep for 100 seconds then double-check if all pods are up and running
+			e2e.Logf("Waiting for kube-controller-manager/kube-scheduler/kube-apiserver to rotate. The output may show some errors before completion, this is expected")
+			err := wait.Poll(15*time.Second, 20*time.Minute, func() (bool, error) {
+				// The renewing of signing-key will lead to cluster components to rotate automatically. Some components' pods complete rotation in relatively short time. Some other components take longer time. Below control plane components take the longest time.
+				output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "kube-controller-manager", "kube-scheduler", "kube-apiserver").Output()
+				// Just retry, need not o.Expect(err).NotTo(o.HaveOccurred()) here
+				matched1, _ := regexp.MatchString("kube-controller-manager.* True *False *False", output)
+				matched2, _ := regexp.MatchString("kube-scheduler.* True *False *False", output)
+				matched3, _ := regexp.MatchString("kube-apiserver.* True *False *False", output)
+				if matched1 && matched2 && matched3 {
+					e2e.Logf("The clusteroperators are in good status. Wait 100s to double check.")
+					// Sleep for 100 seconds then double-check if all still stay good. This is needed to know the rotation really completes.
 					time.Sleep(100 * time.Second)
-					podStatus, err = oc.AsAdmin().Run("get").WithoutNamespace().Args("po", "-A", `--field-selector=metadata.namespace!=openshift-kube-apiserver,status.phase==Pending`).Output()
-					if err == nil {
-						if podStatus == "No resources found" {
-							e2e.Logf("No pending pods found")
-							return true, nil
-						}
-						return false, err
+					output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "kube-controller-manager", "kube-scheduler", "kube-apiserver").Output()
+					e2e.Logf("\n" + output)
+					matched1, _ := regexp.MatchString("kube-controller-manager.* True *False *False", output)
+					matched2, _ := regexp.MatchString("kube-scheduler.* True *False *False", output)
+					matched3, _ := regexp.MatchString("kube-apiserver.* True *False *False", output)
+					if matched1 && matched2 && matched3 {
+						e2e.Logf("Double check shows the clusteroperators stay really in good status. The rotation really completes")
+						return true, nil
 					}
+				} else {
+					// The clusteroperators are still transitioning
+					e2e.Logf("\n" + output)
+					e2e.Logf("The clusteroperators are still transitioning")
 				}
-				return false, err
+				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, "These pods are still not back up after waiting for 15 minutes\n"+podStatus)
+			exutil.AssertWaitPollNoErr(err, "These clusteroperators are still not back after waiting for 20 minutes\n")
 		}()
 
 		// Waiting for the pod to be Ready, after several minutes(10 min ?) check the cert data in the configmap
 		g.By("Waiting for service-ca to be ready, then check if cert data is updated")
 		err = wait.Poll(15*time.Second, 5*time.Minute, func() (bool, error) {
-			podStatus, err := oc.AsAdmin().Run("get").WithoutNamespace().Args("po", "-n", "openshift-service-ca", `-o=jsonpath={.items[0].status.containerStatuses[0].ready}`).Output()
+			podStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("po", "-n", "openshift-service-ca", `-o=jsonpath={.items[0].status.containerStatuses[0].ready}`).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			podUID, err := oc.AsAdmin().Run("get").WithoutNamespace().Args("po", "-n", "openshift-service-ca", "-o=jsonpath={.items[0].metadata.uid}").Output()
+			podUID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("po", "-n", "openshift-service-ca", "-o=jsonpath={.items[0].metadata.uid}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			if podStatus == `true` && podOldUID != podUID {
