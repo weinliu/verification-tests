@@ -721,6 +721,8 @@ spec:
 			exceptions = "panicked: false"
 		)
 		defer os.RemoveAll(dirname)
+		// Skipped case on arm64 cluster
+		exutil.SkipARM64(oc)
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Check the configuration of priority level")
@@ -863,6 +865,8 @@ spec:
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 
+		// Skipped case on arm64 cluster
+		exutil.SkipARM64(oc)
 		err := os.MkdirAll(dirname, 0755)
 		g.By("Check the configuration of priority level")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "workload-low", "-o", `jsonpath={.spec.limited.assuredConcurrencyShares}`).Output()
