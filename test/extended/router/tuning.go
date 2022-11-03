@@ -639,4 +639,72 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		riSearch = readRouterPodEnv(oc, podname, "RELOAD_INTERVAL")
 		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=5s"))
 	})
+
+	// author: shudili@redhat.com
+	g.It("Author:shudili-Low-53608-Negative Test of Expose a Configurable Reload Interval in HAproxy", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			ingctrl             = ingctrlNodePortDescription{
+				name:      "ocp53608",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		g.By("Create an custom ingresscontroller for testing router reload interval")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("Try to patch tuningOptions/reloadInterval 121s which is larger than the max 120s, to the ingress-controller")
+		NegReloadInterval := "121s"
+		ingctrlResource := "ingresscontrollers/" + ingctrl.name
+		podname := getRouterPod(oc, ingctrl.name)
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \""+NegReloadInterval+"\"}}}")
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+
+		g.By("Check RELOAD_INTERVAL env in a route pod which should be the max 2m")
+		podname = getRouterPod(oc, ingctrl.name)
+		riSearch := readRouterPodEnv(oc, podname, "RELOAD_INTERVAL")
+		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=2m"))
+
+		g.By("Try to patch tuningOptions/reloadInterval 0.5s which is less than the min 1s, to the ingress-controller")
+		NegReloadInterval = "0.5s"
+		ingctrlResource = "ingresscontrollers/" + ingctrl.name
+		podname = getRouterPod(oc, ingctrl.name)
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \""+NegReloadInterval+"\"}}}")
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+podname)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
+
+		g.By("Check RELOAD_INTERVAL env in a route pod which should be the min 1s")
+		podname = getRouterPod(oc, ingctrl.name)
+		riSearch = readRouterPodEnv(oc, podname, "RELOAD_INTERVAL")
+		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=1s"))
+
+		g.By("Try to patch tuningOptions/reloadInterval -1s which is a minus value, to the ingress-controller")
+		NegReloadInterval = "-1s"
+		podname = getRouterPod(oc, ingctrl.name)
+		output, errCfg := patchResourceAsAdminAndGetLog(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \""+NegReloadInterval+"\"}}}")
+		o.Expect(errCfg).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Invalid value: \"" + NegReloadInterval + "\""))
+
+		g.By("Try to patch tuningOptions/reloadInterval 1abc which is a string, to the ingress-controller")
+		NegReloadInterval = "1abc"
+		output, errCfg = patchResourceAsAdminAndGetLog(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \""+NegReloadInterval+"\"}}}")
+		o.Expect(errCfg).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Invalid value: \"" + NegReloadInterval + "\""))
+
+		g.By("Try to patch tuningOptions/reloadInterval 012 s which contains a space character, to the ingress-controller")
+		NegReloadInterval = "012 s"
+		output, errCfg = patchResourceAsAdminAndGetLog(oc, ingctrl.namespace, ingctrlResource, "{\"spec\": {\"tuningOptions\": {\"reloadInterval\": \""+NegReloadInterval+"\"}}}")
+		o.Expect(errCfg).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Invalid value: \"" + NegReloadInterval + "\""))
+	})
+
 })

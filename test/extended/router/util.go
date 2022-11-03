@@ -227,6 +227,12 @@ func patchResourceAsAdmin(oc *exutil.CLI, ns, resource, patch string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// For Admin to patch a resource in the specified namespace, and then return the output after the patching operation
+func patchResourceAsAdminAndGetLog(oc *exutil.CLI, ns, resource, patch string) (string, error) {
+	outPut, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resource, "-p", patch, "--type=merge", "-n", ns).Output()
+	return outPut, err
+}
+
 func exposeRoute(oc *exutil.CLI, ns, resource string) {
 	err := oc.Run("expose").Args(resource, "-n", ns).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
