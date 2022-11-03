@@ -2931,4 +2931,98 @@ spec:
 		g.By("5) Check if pod running")
 		exutil.AssertPodToBeReady(oc, podName, namespace)
 	})
+
+	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-High-11138-[origin_platformexp_407] [Apiserver] Deploy will fail with incorrently formed pull secrets", func() {
+		g.By("1) Create a new project required for this test execution")
+		oc.SetupProject()
+
+		g.By("2) Build hello-world from external source")
+		helloWorldSource := "quay.io/openshifttest/ruby-27:1.2.0~https://github.com/openshift/ruby-hello-world"
+		buildName := fmt.Sprintf("ocp11138-test-%s", strings.ToLower(exutil.RandStr(5)))
+		err := oc.Run("new-build").Args(helloWorldSource, "--name="+buildName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("3) Wait for hello-world build to success")
+		err = exutil.WaitForABuild(oc.BuildClient().BuildV1().Builds(oc.Namespace()), buildName+"-1", nil, nil, nil)
+		if err != nil {
+			exutil.DumpBuildLogs(buildName+"-1", oc)
+		}
+		exutil.AssertWaitPollNoErr(err, "build is not complete")
+
+		g.By("4) Get dockerImageRepository value from imagestreams test")
+		dockerImageRepository1, err := oc.Run("get").Args("imagestreams", buildName, "-o=jsonpath={.status.dockerImageRepository}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("5) Create another project")
+		oc.SetupProject()
+
+		g.By("6) Create new deploymentconfig from the dockerImageRepository fetched in step 4")
+		deploymentConfigYaml, err := oc.Run("create").Args("deploymentconfig", "frontend", "--image="+dockerImageRepository1, "--dry-run=client", "-o=yaml").OutputToFile("ocp11138-dc.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("7) Modify the deploymentconfig and create a new deployment.")
+		exutil.ModifyYamlFileContent(deploymentConfigYaml, []exutil.YamlReplace{
+			{
+				Path:  "spec.template.spec.containers.0.imagePullPolicy",
+				Value: "Always",
+			},
+			{
+				Path:  "spec.template.spec.imagePullSecrets",
+				Value: "- name: notexist-secret",
+			},
+		})
+		err = oc.Run("create").Args("-f", deploymentConfigYaml).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("8) Check if pod is properly running with expected status.")
+		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			podOutput, err := oc.Run("get").Args("pod").Output()
+			if err == nil {
+				matched, _ := regexp.MatchString("frontend-1-.*(ImagePullBackOff|ErrImagePull)", podOutput)
+				if matched {
+					e2e.Logf("Pod is running with exptected status\n%s", podOutput)
+					return true, nil
+				}
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "pod did not showed up with the expected status")
+
+		g.By("9) Create generic secret from deploymentconfig in step 7.")
+		err = oc.Run("create").Run("secret", "generic", "notmatch-secret", "--from-file="+deploymentConfigYaml).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("10) Modify the deploymentconfig again and create a new deployment.")
+		buildName = fmt.Sprintf("ocp11138-new-test-%s", strings.ToLower(exutil.RandStr(5)))
+		exutil.ModifyYamlFileContent(deploymentConfigYaml, []exutil.YamlReplace{
+			{
+				Path:  "metadata.name",
+				Value: buildName,
+			},
+			{
+				Path:  "spec.template.spec.containers.0.imagePullPolicy",
+				Value: "Always",
+			},
+			{
+				Path:  "spec.template.spec.imagePullSecrets",
+				Value: "- name: notmatch-secret",
+			},
+		})
+		err = oc.Run("create").Args("-f", deploymentConfigYaml).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("11) Check if pod is properly running with expected status.")
+		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			podOutput, err := oc.Run("get").Args("pod").Output()
+			if err == nil {
+				matched, _ := regexp.MatchString(buildName+"-1-.*(ImagePullBackOff|ErrImagePull)", podOutput)
+				if matched {
+					e2e.Logf("Pod is running with exptected status")
+					return true, nil
+				}
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "pod did not showed up with the expected status")
+	})
 })
