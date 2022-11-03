@@ -454,9 +454,6 @@ func extractManifest(oc *exutil.CLI) (string, error) {
 	}
 	err = oc.AsAdmin().Run("adm").Args("release", "extract", "--to", manifestDir, "-a", tempDataDir+"/.dockerconfigjson").Execute()
 	if err != nil {
-		cmd := fmt.Sprintf("cat %v/.dockerconfigjson |jq .|grep '{'", tempDataDir)
-		out, _ := exec.Command("bash", "-c", cmd).Output()
-		e2e.Logf("Debug info: %v", out)
 		return tempDataDir, fmt.Errorf("Fail to extract manifests: %v", err)
 	}
 	return tempDataDir, nil
@@ -702,9 +699,6 @@ func getReleaseInfo(oc *exutil.CLI) (map[string]interface{}, error) {
 	}
 	output, err := oc.AsAdmin().Run("adm").Args("release", "info", "-a", tempDataDir+"/.dockerconfigjson", "-ojson").Output()
 	if err != nil {
-		cmd := fmt.Sprintf("cat %v/.dockerconfigjson |jq .|grep '{'", tempDataDir)
-		out, _ := exec.Command("bash", "-c", cmd).Output()
-		e2e.Logf("Debug info: %v", out)
 		return nil, fmt.Errorf("Fail to get release info: %v", err)
 	}
 	err = json.Unmarshal([]byte(output), &releaseInfo)
