@@ -23,12 +23,11 @@ ln -s ./upstream_console/frontend/packages/integration-tests-cypress upstream
 yarn install
 
 set +x
-console_route=`cat $SHARED_DIR/hostedcluster_console.url`
-export BRIDGE_BASE_ADDRESS=https://$console_route
+export BRIDGE_BASE_ADDRESS=`cat $SHARED_DIR/hostedcluster_console.url`
 export LOGIN_IDP=kube:admin
 export LOGIN_USERNAME=kubeadmin
 export LOGIN_PASSWORD=`cat $SHARED_DIR/hostedcluster_kubeadmin_password`
-export KUBECONFIG_PATH=`$SHARED_DIR/nested_kubeconfig`
+export KUBECONFIG_PATH="${KUBECONFIG}"
 ls -ltr
 echo "Triggering tests"
 set -x
