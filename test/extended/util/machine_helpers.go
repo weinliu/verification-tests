@@ -129,6 +129,12 @@ func ScaleMachineSet(oc *CLI, machineSetName string, replicas int) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// DeleteMachine delete a machine
+func DeleteMachine(oc *CLI, machineName string) error {
+	e2e.Logf("Deleting Machine ...")
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(MapiMachine, machineName, "-n", machineAPINamespace).Execute()
+}
+
 // WaitForMachinesRunning check if all the machines are Running in a MachineSet
 func WaitForMachinesRunning(oc *CLI, machineNumber int, machineSetName string) {
 	e2e.Logf("Waiting for the machines Running ...")
@@ -178,8 +184,8 @@ func WaitForMachineProvisioned(oc *CLI, machineSetName string) {
 	AssertWaitPollNoErr(err, "Check machine phase failed")
 }
 
-// WaitForSpecificMachinesRunning check if all the machines with the specific labels are Running
-func WaitForSpecificMachinesRunning(oc *CLI, machineNumber int, labels string) []string {
+// WaitForMachinesRunningByLabel check if all the machines with the specific labels are Running
+func WaitForMachinesRunningByLabel(oc *CLI, machineNumber int, labels string) []string {
 	e2e.Logf("Waiting for the machines Running ...")
 	err := wait.Poll(60*time.Second, 720*time.Second, func() (bool, error) {
 		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].status.phase}", "-n", machineAPINamespace).Output()
@@ -196,8 +202,8 @@ func WaitForSpecificMachinesRunning(oc *CLI, machineNumber int, labels string) [
 	return strings.Split(msg, " ")
 }
 
-// WaitForMachineRunning check if the machine is Running
-func WaitForMachineRunning(oc *CLI, machineNameSuffix string, labels string) string {
+// WaitForMachineRunningBySuffix check if the machine is Running by suffix
+func WaitForMachineRunningBySuffix(oc *CLI, machineNameSuffix string, labels string) string {
 	e2e.Logf("Waiting for the machine Running ...")
 	var newMachineName string
 	err := wait.Poll(60*time.Second, 720*time.Second, func() (bool, error) {
@@ -217,8 +223,8 @@ func WaitForMachineRunning(oc *CLI, machineNameSuffix string, labels string) str
 	return newMachineName
 }
 
-// WaitForMachineDisappear check if the machine is disappear
-func WaitForMachineDisappear(oc *CLI, machineNameSuffix string, labels string) {
+// WaitForMachineDisappearBySuffix check if the machine is disappear by machine suffix
+func WaitForMachineDisappearBySuffix(oc *CLI, machineNameSuffix string, labels string) {
 	e2e.Logf("Waiting for the machine disappear ...")
 	err := wait.Poll(60*time.Second, 960*time.Second, func() (bool, error) {
 		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
@@ -234,8 +240,8 @@ func WaitForMachineDisappear(oc *CLI, machineNameSuffix string, labels string) {
 	AssertWaitPollNoErr(err, "Wait machine disappear failed.")
 }
 
-// WaitForOldMachineDisappear check if the machine is disappear
-func WaitForOldMachineDisappear(oc *CLI, machineName string) {
+// WaitForMachineDisappearByName check if the machine is disappear by machine name
+func WaitForMachineDisappearByName(oc *CLI, machineName string) {
 	e2e.Logf("Waiting for the machine disappear ...")
 	err := wait.Poll(60*time.Second, 960*time.Second, func() (bool, error) {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, "-n", machineAPINamespace).Output()

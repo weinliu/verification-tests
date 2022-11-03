@@ -11,8 +11,8 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-// WaitForUpdateCompleted check if the Update is completed
-func WaitForUpdateCompleted(oc *exutil.CLI, replicas int) {
+// waitForCPMSUpdateCompleted check if the Update is completed
+func waitForCPMSUpdateCompleted(oc *exutil.CLI, replicas int) {
 	e2e.Logf("Waiting for the Update completed ...")
 	timeToWait := time.Duration(replicas*25) * time.Minute
 	err := wait.Poll(1*time.Minute, timeToWait, func() (bool, error) {
@@ -30,8 +30,8 @@ func WaitForUpdateCompleted(oc *exutil.CLI, replicas int) {
 	exutil.AssertWaitPollNoErr(err, "Wait Update failed.")
 }
 
-// SkipForCPMSNotExist skip the test if controlplanemachineset doesn't exist
-func SkipForCPMSNotExist(oc *exutil.CLI) {
+// skipForCPMSNotExist skip the test if controlplanemachineset doesn't exist
+func skipForCPMSNotExist(oc *exutil.CLI) {
 	controlplanemachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if len(controlplanemachineset) == 0 {
@@ -39,8 +39,8 @@ func SkipForCPMSNotExist(oc *exutil.CLI) {
 	}
 }
 
-// SkipForUpdateIsOngoing skip the test if the previous Update is onging
-func SkipForUpdateIsOngoing(oc *exutil.CLI) {
+// skipForCPMSNotStable skip the test if the cpms is not stable
+func skipForCPMSNotStable(oc *exutil.CLI) {
 	readyReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	currentReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.replicas}", "-n", machineAPINamespace).Output()
@@ -48,34 +48,32 @@ func SkipForUpdateIsOngoing(oc *exutil.CLI) {
 	desiredReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.replicas}", "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if !(desiredReplicas == currentReplicas && desiredReplicas == readyReplicas) {
-		g.Skip("Skip for the previous Update is onging!")
+		g.Skip("Skip for cpms is not stable!")
 	}
 }
 
-// PrintNodeInfo print the output of oc get node
-func PrintNodeInfo(oc *exutil.CLI) {
+// printNodeInfo print the output of oc get node
+func printNodeInfo(oc *exutil.CLI) {
 	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
 	e2e.Logf("%v", output)
 }
 
-// GetMachineSuffix get the machine suffix
-func GetMachineSuffix(oc *exutil.CLI, machineName string) string {
+// getMachineSuffix get the machine suffix
+func getMachineSuffix(oc *exutil.CLI, machineName string) string {
 	start := strings.LastIndex(machineName, "-")
 	suffix := machineName[start+1:]
 	return suffix
 }
 
-// CheckIfUpdateIsCompleted check if the Update is completed
-func CheckIfUpdateIsCompleted(oc *exutil.CLI) bool {
+// checkIfCPMSIsStable check if the Update is completed
+func checkIfCPMSIsStable(oc *exutil.CLI) bool {
 	readyReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	currentReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.replicas}", "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	desiredReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.replicas}", "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	updatedReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.updatedReplicas}", "-n", machineAPINamespace).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if !(desiredReplicas == currentReplicas && desiredReplicas == readyReplicas && desiredReplicas == updatedReplicas) {
+	if !(desiredReplicas == currentReplicas && desiredReplicas == readyReplicas) {
 		return false
 	}
 	return true
