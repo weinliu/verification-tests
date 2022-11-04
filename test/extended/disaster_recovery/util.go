@@ -253,3 +253,17 @@ func updateMachineYmlFile(machineYmlFile string, oldMachineName string, newMaste
 	e2e.Logf("Update Machine FINISH!")
 	return true
 }
+
+//make sure operator is not processing and degraded
+func checkOperator(oc *exutil.CLI, operatorName string) {
+	err := wait.Poll(60*time.Second, 900*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().Run("get").Args("clusteroperator", operatorName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString("True.*False.*False", output); !matched {
+			e2e.Logf("clusteroperator %s is abnormal, will try next time:\n", operatorName)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "clusteroperator abnormal")
+}

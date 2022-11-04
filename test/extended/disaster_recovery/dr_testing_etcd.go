@@ -36,6 +36,11 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		g.By("select all the master node")
 		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
 
+		g.By("Check etcd oprator status")
+		checkOperator(oc, "etcd")
+		g.By("Check kube-apiserver oprator status")
+		checkOperator(oc, "kube-apiserver")
+
 		g.By("Run the backup")
 		masterN, etcdDb := runDRBackup(oc, masterNodeList)
 
@@ -99,6 +104,11 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 				g.Skip("The cluster nodes is abnormal, skip this case")
 			}
 		}
+
+		g.By("Check etcd oprator status")
+		checkOperator(oc, "etcd")
+		g.By("Check kube-apiserver oprator status")
+		checkOperator(oc, "kube-apiserver")
 
 		g.By("Run the backup on the first master")
 		defer runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo rm -rf /home/core/assets/backup", privateKeyForBastion, userForBastion)
