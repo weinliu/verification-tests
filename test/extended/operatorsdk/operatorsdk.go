@@ -351,7 +351,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("pod quay-io-olmqe-all1support-bundle can't be deleted in %s", namespace))
 		// install the operator without og and installmode, the csv only support singlenamespace
-		msg, _ = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/singlesupport-bundle:v"+ocpversion, "-n", namespace, "--timeout", "5m").Output()
+		msg, _ = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/singlesupport-bundle:v4.11", "-n", namespace, "--timeout", "5m").Output()
 		o.Expect(msg).To(o.ContainSubstring("AllNamespaces InstallModeType not supported"))
 		output, _ = operatorsdkCLI.Run("cleanup").Args("singlesupport", "-n", namespace).Output()
 		o.Expect(output).To(o.ContainSubstring("uninstalled"))
