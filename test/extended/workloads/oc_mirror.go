@@ -262,4 +262,55 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", operatorConfigS, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--continue-on-error").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
+	g.It("Author:yinzhou-NonPreRelease-Medium-37372-High-40322-oc adm release extract pull from localregistry when given a localregistry image [Disruptive]", func() {
+		var imageDigest string
+		g.By("Set podman registry config")
+		dirname := "/tmp/case37372"
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Set registry app")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		g.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		ocpPlatformConfigS := filepath.Join(ocmirrorBaseDir, "registry_backend_ocp_latest.yaml")
+		g.By("update the operator mirror config file")
+		sedCmd := fmt.Sprintf(`sed -i 's/registryroute/%s/g' %s`, serInfo.serviceName, ocpPlatformConfigS)
+		e2e.Logf("Check sed cmd %s description:", sedCmd)
+		_, err = exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer removeOcMirrorLog()
+		g.By("Create the mapping file by oc-mirror dry-run command")
+		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ocpPlatformConfigS, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--dry-run").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Checkpoint for 40322, mirror with mapping")
+		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "-f", "oc-mirror-workspace/mapping.txt", "--max-per-registry", "1", "--skip-multiple-scopes=true", "--insecure").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Check for the mirrored image and get the image digest")
+		imageDigest = getDigestFromImageInfo(oc, serInfo.serviceName)
+
+		g.By("Run oc-mirror to create ICSP file")
+		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ocpPlatformConfigS, "docker://"+serInfo.serviceName, "--dest-skip-tls").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Checkpoint for 37372")
+		g.By("Remove the podman Cred")
+		os.RemoveAll(dirname)
+		g.By("Try to extract without icsp file, will failed")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", "--command=oc", "--to=oc-mirror-workspace/", serInfo.serviceName+"/openshift/release-images"+imageDigest, "--insecure").Execute()
+		o.Expect(err).Should(o.HaveOccurred())
+		g.By("Try to extract with icsp file, will extract from localregisty")
+		imageContentSourcePolicy := findImageContentSourcePolicy()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", "--command=oc", "--to=oc-mirror-workspace/", "--icsp-file="+imageContentSourcePolicy, serInfo.serviceName+"/openshift/release-images"+"@"+imageDigest, "--insecure").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
 })

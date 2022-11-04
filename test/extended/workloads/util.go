@@ -1050,3 +1050,35 @@ func nonAdminApplyResourceFromTemplate(oc *exutil.CLI, parameters ...string) err
 	e2e.Logf("the file of resource is %s", configFile)
 	return oc.WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
 }
+
+func getDigestFromImageInfo(oc *exutil.CLI, registryRoute string) string {
+	path := "/tmp/mirroredimageinfo.yaml"
+	defer os.Remove(path)
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		imageInfo, err := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", registryRoute+"/openshift/release-images", "--insecure").Output()
+		if err != nil {
+			e2e.Logf("the err:%v, and try next round", err)
+			return false, nil
+		}
+		e2e.Logf("the imageinfo is :%v", imageInfo)
+		err1 := ioutil.WriteFile(path, []byte(imageInfo), 0o644)
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("failed to get the mirrored image info"))
+	imageDigest, err := exec.Command("bash", "-c", "cat "+path+"|grep Digest | awk -F' ' '{print $2}'").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("the imagedeigest is :%v, ", string(imageDigest))
+	return strings.ReplaceAll(string(imageDigest), "\n", "")
+}
+
+func findImageContentSourcePolicy() string {
+	imageContentSourcePolicyFile, err := exec.Command("bash", "-c", "find . -name 'imageContentSourcePolicy.yaml'").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.ReplaceAll(string(imageContentSourcePolicyFile), "\n", "")
+}
+
+func removeOcMirrorLog() {
+	os.RemoveAll("oc-mirror-workspace")
+	os.RemoveAll(".oc-mirror.log")
+}
