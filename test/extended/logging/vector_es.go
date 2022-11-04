@@ -3,6 +3,7 @@ package logging
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -1025,6 +1026,93 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
+		//author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-Critical-51740-Vector Preserve k8s Common Labels[Serial]", func() {
+			loglabeltemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			labels := map[string]string{
+				"app.kubernetes.io/name":       "test",
+				"app.kubernetes.io/instance":   "functionaltest",
+				"app.kubernetes.io/version":    "123",
+				"app.kubernetes.io/component":  "thecomponent",
+				"app.kubernetes.io/part-of":    "clusterlogging",
+				"app.kubernetes.io/managed-by": "clusterloggingoperator",
+				"app.kubernetes.io/created-by": "anoperator",
+				"run":                          "test-51740",
+				"test":                         "test-logging-51740",
+			}
+			labelJSON, _ := json.Marshal(labels)
+			labelStr := string(labelJSON)
+			app := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-f", loglabeltemplate, "-n", app, "-p", "LABELS="+labelStr).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			//For this case, we need to cover ES and non-ES, and we need to check the log entity in log store,
+			//to make the functions simple, here use external loki as the non-ES log store
+			g.By("Create Loki project and deploy Loki Server")
+			oc.SetupProject()
+			lokiNS := oc.Namespace()
+			loki := externalLoki{"loki-server", lokiNS}
+			defer loki.remove(oc)
+			loki.deployLoki(oc)
+
+			g.By("Create ClusterLogForwarder instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-loki.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			inputs, _ := json.Marshal([]string{"application"})
+			outputs, _ := json.Marshal([]string{"loki-server", "default"})
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=http://"+loki.name+"."+lokiNS+".svc:3100", "-p", "INPUTREFS="+string(inputs), "-p", "OUTPUTREFS="+string(outputs))
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			// create clusterlogging instance
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "COLLECTOR=vector")
+			g.By("waiting for the ECK pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cl.namespace)
+
+			g.By("check data in ES")
+			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(cl.namespace, esPods.Items[0].Name, "app")
+			waitForProjectLogsAppear(cl.namespace, esPods.Items[0].Name, app, "app")
+			dataInES := searchDocByQuery(cl.namespace, esPods.Items[0].Name, "app", "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match_phrase\": {\"kubernetes.namespace_name\": \""+app+"\"}}}")
+			k8sLabelsInES := dataInES.Hits.DataHits[0].Source.Kubernetes.Lables
+			o.Expect(len(k8sLabelsInES) > 0).Should(o.BeTrue())
+			o.Expect(k8sLabelsInES["run"] == "").Should(o.BeTrue())
+			o.Expect(k8sLabelsInES["test"] == "").Should(o.BeTrue())
+
+			flatLabelsInES := dataInES.Hits.DataHits[0].Source.Kubernetes.FlatLabels
+			// convert array to map and compare it with labels
+			flatLabelsMap := make(map[string]string)
+			for _, flatLabel := range flatLabelsInES {
+				res := strings.Split(flatLabel, "=")
+				flatLabelsMap[res[0]] = res[1]
+			}
+			o.Expect(reflect.DeepEqual(labels, flatLabelsMap)).Should(o.BeTrue())
+
+			g.By("check data in Loki")
+			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
+			lc := newLokiClient(route)
+			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+				appLogs, err := lc.searchByNamespace("", app)
+				if err != nil {
+					return false, err
+				}
+				if appLogs.Status == "success" && len(appLogs.Data.Result) > 0 {
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "can't find app logs")
+			dataInLoki, _ := lc.searchByNamespace("", app)
+			lokiLog := extractLogEntities(dataInLoki)
+			k8sLabelsInLoki := lokiLog[0].Kubernetes.Lables
+			o.Expect(reflect.DeepEqual(labels, k8sLabelsInLoki)).Should(o.BeTrue())
+			flatLabelsInLoki := lokiLog[0].Kubernetes.FlatLabels
+			o.Expect(len(flatLabelsInLoki) == 0).Should(o.BeTrue())
+		})
 	})
 
 	g.Context("JSON log tests", func() {

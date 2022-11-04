@@ -10,23 +10,23 @@ objects:
     namespace: ${NAMESPACE}
   spec:
     outputs:
-    - name: loki-server
-      type: ${TYPE}
+    - name: ${OUTPUTNAME}
+      type: "loki"
       url: ${URL}
     pipelines:
     - name: forward-to-loki
-      inputRefs:
-      - infrastructure
-      - application
-      - audit
-      outputRefs:
-      - loki-server
+      inputRefs: ${{INPUTREFS}}
+      outputRefs: ${{OUTPUTREFS}}
 parameters:
 - name: NAME
   value: "instance"
 - name: NAMESPACE
   value: "openshift-logging"
-- name: TYPE
-  value: "loki"
+- name: OUTPUTNAME
+  value: "loki-server"
 - name: URL
   required: true
+- name: INPUTREFS
+  value: "[\"infrastructure\", \"audit\", \"application\"]"
+- name: OUTPUTREFS
+  value: "[\"loki-server\"]"

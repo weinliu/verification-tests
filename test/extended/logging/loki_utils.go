@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -1234,6 +1235,39 @@ func (c *lokiClient) searchByKey(logType, key, value string) (*lokiQueryResponse
 func (c *lokiClient) searchByNamespace(logType, projectName string) (*lokiQueryResponse, error) {
 	res, err := c.searchLogsInLoki(logType, "{kubernetes_namespace_name=\""+projectName+"\"}")
 	return res, err
+}
+
+//extractLogEntities extract the log entities from loki query response, designed for checking the content of log data in Loki
+func extractLogEntities(lokiQueryResult *lokiQueryResponse) []LogEntity {
+	var lokiLogs []LogEntity
+	// convert interface{} to []string
+	convert := func(t interface{}) []string {
+		var data []string
+		switch reflect.TypeOf(t).Kind() {
+		case reflect.Slice, reflect.Array:
+			s := reflect.ValueOf(t)
+			for i := 0; i < s.Len(); i++ {
+				data = append(data, fmt.Sprintln(s.Index(i)))
+			}
+		}
+		return data
+	}
+	/*
+		value example:
+		  [
+		    timestamp,
+			log data
+		  ]
+	*/
+	for _, res := range lokiQueryResult.Data.Result {
+		for _, value := range res.Values {
+			lokiLog := LogEntity{}
+			// only process log data, drop timestamp
+			json.Unmarshal([]byte(convert(value)[1]), &lokiLog)
+			lokiLogs = append(lokiLogs, lokiLog)
+		}
+	}
+	return lokiLogs
 }
 
 // listLabelValues uses the /api/v1/label endpoint to list label values
