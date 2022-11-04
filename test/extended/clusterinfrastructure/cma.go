@@ -24,7 +24,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		acquiredLeaseStr := "successfully acquired lease openshift-cluster-machine-approver/cluster-machine-approver-leader"
 
 		g.By("Check default pod is leader")
-		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-cluster-machine-approver").Output()
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-l", "app=machine-approver", "-n", "openshift-cluster-machine-approver").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(podName) == 0 {
 			g.Skip("Skip for no pod!")
@@ -52,7 +52,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.AssertWaitPollNoErr(err, "The new pod is not ready after 1 minute")
 
 		g.By("Check new pod is leader")
-		mewPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-cluster-machine-approver").Output()
+		mewPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-l", "app=machine-approver", "-n", "openshift-cluster-machine-approver").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
 			logsOfPod, _ = oc.AsAdmin().WithoutNamespace().Run("logs").Args(mewPodName, "-n", "openshift-cluster-machine-approver", "-c", "machine-approver-controller").Output()
