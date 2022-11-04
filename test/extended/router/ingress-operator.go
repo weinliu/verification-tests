@@ -254,20 +254,20 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		patchResourceAsAdmin(oc, ingctrl1.namespace, ingctrlResource1, "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"dnsManagementPolicy\":\"Unmanaged\"}}}}")
 
 		g.By("check the dnsManagementPolicy value of ingress-controller1, which should be Unmanaged")
-		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(ingctrlResource1, "-n", ingctrl1.namespace, "-o=jsonpath={.spec.endpointPublishingStrategy.loadBalancer.dnsManagementPolicy}").Output()
-		o.Expect(output).To(o.ContainSubstring("Unmanaged"))
+		jpath := ".spec.endpointPublishingStrategy.loadBalancer.dnsManagementPolicy"
+		waitForOutput(oc, ingctrl1.namespace, ingctrlResource1, jpath, "Unmanaged")
 
 		g.By("check ingress-controller1's status")
-		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(ingctrlResource1, "-n", ingctrl1.namespace, "-o=jsonpath={.status.conditions[?(@.type==\"DNSManaged\")].status}{.status.conditions[?(@.type==\"DNSReady\")].status}").Output()
-		o.Expect(output).To(o.ContainSubstring("FalseUnknown"))
+		jpath = ".status.conditions[?(@.type==\"DNSManaged\")].status}{.status.conditions[?(@.type==\"DNSReady\")].status"
+		waitForOutput(oc, ingctrl1.namespace, ingctrlResource1, jpath, "FalseUnknown")
 
 		g.By("check the dnsManagementPolicy value of dnsrecord ocp54868cus1, which should be Unmanaged, too")
-		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(dnsrecordResource1, "-n", ingctrl1.namespace, "-o=jsonpath={.spec.dnsManagementPolicy}").Output()
-		o.Expect(output).To(o.ContainSubstring("Unmanaged"))
+		jpath = ".spec.dnsManagementPolicy"
+		waitForOutput(oc, ingctrl1.namespace, dnsrecordResource1, jpath, "Unmanaged")
 
 		g.By("check dnsrecord ocp54868cus1's status")
-		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(dnsrecordResource1, "-n", ingctrl1.namespace, "-o=jsonpath={.status.zones[0].conditions[0].status}{.status.zones[0].conditions[0].reason}").Output()
-		o.Expect(output).To(o.ContainSubstring("UnknownUnmanagedDNS"))
+		jpath = ".status.zones[0].conditions[0].status}{.status.zones[0].conditions[0].reason"
+		waitForOutput(oc, ingctrl1.namespace, dnsrecordResource1, jpath, "UnknownUnmanagedDNS")
 
 		// there was a bug OCPBUGS-2247 in the below test step
 		// g.By("check the default dnsManagementPolicy value of ingress-controller2 not matching the base domain, which should be Unmanaged")
