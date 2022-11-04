@@ -230,12 +230,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Get clusterautoscaler log verbosity value for pod")
 		err = wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
-			msg, err := oc.AsAdmin().Run("get").Args("pods", podName, "-n", machineAPINamespace, "-o=jsonpath={.spec.containers[0]}").Output()
+			args, err := oc.AsAdmin().Run("get").Args("pods", podName, "-n", machineAPINamespace, "-o=jsonpath={.spec.containers[0].args}").Output()
 			if err != nil {
 				e2e.Logf("The failure needs to be reviewed by looking at logs of clusterautoscaler")
 				return false, nil
 			}
-			if !strings.Contains(msg, "--v=8") {
+			if !strings.Contains(args, "--v=8") {
 				e2e.Logf("Even after adding logverbosity log levels not changed")
 				return false, nil
 			}
