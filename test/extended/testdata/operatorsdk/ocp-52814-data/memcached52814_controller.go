@@ -17,12 +17,13 @@ limitations under the License.
 package controllers
 
 import (
+	"reflect"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"reflect"
 
 	"context"
 	"os"
@@ -173,10 +174,10 @@ func (r *Memcached52814Reconciler) deploymentForMemcached52814(m *testv1.Memcach
 					Containers: []corev1.Container{{
 						Image:   os.Getenv("RELATED_IMAGE_MEMCACHED"),
 						Name:    "memcached52814",
-						Command: []string{"memcached52814", "-m=64", "-o", "modern", "-v"},
+						Command: []string{"memcached", "-m=64", "-o", "modern", "-v"},
 						Ports: []corev1.ContainerPort{{
 							ContainerPort: 11211,
-							Name:          "memcached52814",
+							Name:          "memcached",
 						}},
 					}},
 				},
