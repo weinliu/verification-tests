@@ -17,7 +17,7 @@ spec:
             matchExpressions:
               - values:
                   - dev
-                key: app
+                key: app_54038
                 operator: In
           topologyKey: kubernetes.io/hostname
   probeSelector: {}

@@ -1664,8 +1664,8 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
 		g.By("3) Add app label")
-		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, firstNode, "app")
-		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, firstNode, "app", "dev")
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, firstNode, "app_54038")
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, firstNode, "app_54038", "dev")
 
 		g.By("4) Install the Prometheus CR")
 		_, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("-f", prometheusCR, "-n", oc.Namespace()).Output()
