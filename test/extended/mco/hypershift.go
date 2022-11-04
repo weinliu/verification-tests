@@ -352,17 +352,46 @@ func (np *HypershiftNodePool) WaitUntilConfigIsUpdating() {
 	logger.Infof("status of condition UpdatingConfig is True")
 }
 
-// WaitUnitUpdateIsCompleted poll condition UpdatingConfig until it is disappeared
-func (np *HypershiftNodePool) WaitUnitUpdateIsCompleted() {
-	logger.Infof("wait nodepool %s update to complete", np.GetName())
+// WaitUntilVersionIsUpdating wait for version update to start
+func (np *HypershiftNodePool) WaitUntilVersionIsUpdating() {
+	logger.Infof("wait condition UpdatingVersion to be true")
+	o.Eventually(func() map[string]interface{} {
+		updatingConfig := JSON(np.GetConditionByType("UpdatingVersion"))
+		if updatingConfig.Exists() {
+			return updatingConfig.ToMap()
+		}
+		logger.Infof("condition UpdatingVersion not found")
+		return nil
+	}, "5m", "10s").Should(o.SatisfyAll(
+		o.HaveKeyWithValue("status", "True"),
+		o.HaveKeyWithValue("message", o.ContainSubstring("Updating version in progress"))))
+	logger.Infof("status of condition UpdatingVersion is True")
+}
+
+// WaitUntilConfigUpdateIsCompleted poll condition UpdatingConfig until it is disappeared
+func (np *HypershiftNodePool) WaitUntilConfigUpdateIsCompleted() {
+	logger.Infof("wait nodepool %s config update to complete", np.GetName())
 	o.Eventually(func() bool {
 		updatingConfig := JSON(np.GetConditionByType("UpdatingConfig"))
 		if updatingConfig.Exists() { // if the condition is still there. update is in progress
 			return false
 		}
 		return true
-	}, np.EstimateTimeoutInMins(), "30s").Should(o.BeTrue(), "update is not completed")
-	logger.Infof("nodepool %s update is completed", np.GetName())
+	}, np.EstimateTimeoutInMins(), "30s").Should(o.BeTrue(), "config update is not completed")
+	logger.Infof("nodepool %s config update is completed", np.GetName())
+}
+
+// WaitUntilVersionUpdateIsCompleted poll condition UpdatingVersion until it is disappeared
+func (np *HypershiftNodePool) WaitUntilVersionUpdateIsCompleted() {
+	logger.Infof("wait nodepool %s version update to complete", np.GetName())
+	o.Eventually(func() bool {
+		updatingVersion := JSON(np.GetConditionByType("UpdatingVersion"))
+		if updatingVersion.Exists() {
+			return false
+		}
+		return true
+	}, np.EstimateTimeoutInMins(), "30s").Should(o.BeTrue(), "version update is not completed")
+	logger.Infof("nodepool %s version update is completed", np.GetName())
 }
 
 // EstimateTimeoutInMins caculate wait timeout based on replica number
@@ -372,6 +401,11 @@ func (np *HypershiftNodePool) EstimateTimeoutInMins() string {
 		desiredNodes = 2 // use 2 replicas as default
 	}
 	return fmt.Sprintf("%dm", desiredNodes*10)
+}
+
+// GetVersion get version of nodepool
+func (np *HypershiftNodePool) GetVersion() string {
+	return np.GetOrFail(`{.status.version}`)
 }
 
 // CloudCredential interface to describe test requirement for credential config of cloud platforms

@@ -900,3 +900,33 @@ func getFirstHostedCluster(oc *exutil.CLI) string {
 	o.Expect(clusters).NotTo(o.BeEmpty())
 	return clusters[0].GetName()
 }
+
+// get image url of latest nightly build
+// command is like `oc image info registry.ci.openshift.org/ocp/release:4.12 -a /tmp/config.json -ojson|jq -r '.config.config.Labels."io.openshift.release"'`
+// this func does not support negative scenario, if any error occurred, fail the test directly
+// return imageURL and build version
+func getLatestImageURL(oc *exutil.CLI, release string) (string, string) {
+	if release == "" {
+		release = "4.12" // TODO: need to update default major version to 4.13 when 4.12 is GA
+	}
+	imageURLFormat := "%s:%s"
+	registryBaseURL := "registry.ci.openshift.org/ocp/release"
+	registryQueryURL := fmt.Sprintf(imageURLFormat, registryBaseURL, release)
+	registryConfig, extractErr := getPullSecret(oc)
+	defer os.Remove(registryConfig)
+	o.Expect(extractErr).NotTo(o.HaveOccurred(), "extract registry config from pull secret error")
+
+	imageInfo, getImageInfoErr := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", registryQueryURL, "-a", registryConfig, "-ojson").Output()
+	o.Expect(getImageInfoErr).NotTo(o.HaveOccurred(), "get image info error")
+	o.Expect(imageInfo).NotTo(o.BeEmpty())
+
+	imageJSON := JSON(imageInfo)
+	buildVersion := imageJSON.Get("config").Get("config").Get("Labels").Get(`io.openshift.release`).ToString()
+	o.Expect(buildVersion).NotTo(o.BeEmpty(), "nightly build version is empty")
+
+	imageURL := fmt.Sprintf(imageURLFormat, registryBaseURL, buildVersion)
+	logger.Infof("Get latest nigthtly build of %s: %s", release, imageURL)
+
+	return imageURL, buildVersion
+
+}

@@ -27,52 +27,54 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		tmpdir string
 		// whether hypershift is enabled
 		hypershiftEnabled bool
+		// declare hypershift test driver
+		ht *HypershiftTest
 	)
 
 	g.JustBeforeEach(func() {
-		tmpdir = createTmpDir()
-		hypershiftEnabled = isHypershiftEnabled(oc)
-		preChecks(oc)
-	})
-
-	g.JustAfterEach(func() {
-		os.RemoveAll(tmpdir)
-		logger.Infof("test dir %s is cleaned up", tmpdir)
-	})
-
-	g.It("HyperShiftMGMT-Author:rioliu-Longduration-NonPreRelease-High-54328-hypershift Add new file on hosted cluster node via config map [Disruptive]", func() {
 		// check support platform for this test. only aws is support
 		skipTestIfSupportedPlatformNotMatched(oc, "aws")
-		// get cloud credential from cluster resources, depends on platform
-		// aws cred is used for both operator install and hosted cluster creation
-		cc := GetCloudCredential(oc)
+		preChecks(oc)
 
-		ht := &HypershiftTest{
-			*NewSharedContext(),
+		tmpdir = createTmpDir()
+		hypershiftEnabled = isHypershiftEnabled(oc)
+
+		ht = &HypershiftTest{
+			NewSharedContext(),
 			oc,
 			HypershiftCli{},
-			cc,
+			GetCloudCredential(oc),
 			tmpdir,
 		}
 
 		// in hypershift enabled env, like prow or cluster installed with hypershift template
 		// operator and hosted cluster are available by default
 		// skip operator and hosted cluster install steps
-		if hypershiftEnabled {
-			// need to get cluster name for subsequent tests
-			ht.Put(TestCtxKeyCluster, getFirstHostedCluster(oc))
-		} else {
+		if !hypershiftEnabled {
 			// create/recycle aws s3 bucket
-			defer ht.DeleteBucket()
 			ht.CreateBucket()
-			// install/uninstall hypershift
-			defer ht.Uninstall()
+			// install hypershift
 			ht.InstallOnAws()
 			// create hosted cluster w/o node pool
-			// destroy it in defer statement
-			defer ht.DestroyClusterOnAws()
 			ht.CreateClusterOnAws()
+		} else {
+			ht.Put(TestCtxKeyCluster, getFirstHostedCluster(oc))
 		}
+
+	})
+
+	g.JustAfterEach(func() {
+		os.RemoveAll(tmpdir)
+		logger.Infof("test dir %s is cleaned up", tmpdir)
+		// only do clean up (destroy hostedcluster/uninstall hypershift/delete bucket) for env that hypershift is not pre-installed
+		if !hypershiftEnabled {
+			ht.DestroyClusterOnAws()
+			ht.Uninstall()
+			ht.DeleteBucket()
+		}
+	})
+
+	g.It("HyperShiftMGMT-Author:rioliu-Longduration-NonPreRelease-High-54328-hypershift Add new file on hosted cluster node via config map [Disruptive]", func() {
 
 		// create node pool with replica=2
 		// destroy node pool then delete config map
@@ -89,8 +91,32 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		// create kubeconfig for hosted cluster
 		ht.CreateKubeConfigForCluster()
 
-		// check machine config is updated on hosted cluster nodes
-		ht.CheckMcIsUpdatedOnNode()
+		// check machine config annotations on nodes to make sure update is done
+		ht.CheckMcAnnotationsOnNode()
+
+		// check file content on hosted cluster nodes
+		ht.VerifyFileContent()
+
+	})
+
+	g.It("HyperShiftMGMT-Author:rioliu-Longduration-NonPreRelease-High-54366-hypershift Update release image of node pool [Disruptive]", func() {
+		// check arch, only support amd64
+		exutil.SkipARM64(oc)
+
+		// create a nodepool with 2 replicas and enable in place upgrade
+		defer ht.DestroyNodePoolOnAws()
+		ht.CreateNodePoolOnAws("2")
+
+		// patch nodepool with latest nightly build and wait until version update to complete
+		// compare nodepool version and build version. they should be same
+		ht.PatchNodePoolToUpdateReleaseImage()
+
+		// create kubeconfig for hosted cluster
+		ht.CreateKubeConfigForCluster()
+
+		// check machine config annotations on nodes to make sure update is done
+		ht.CheckMcAnnotationsOnNode()
+
 	})
 })
 
@@ -113,7 +139,7 @@ func GetCloudCredential(oc *exutil.CLI) CloudCredential {
 
 // HypershiftTest tester for hypershift, contains required tool e.g client, cli, cred, shared context etc.
 type HypershiftTest struct {
-	SharedContext
+	*SharedContext
 	oc   *exutil.CLI
 	cli  HypershiftCli
 	cred CloudCredential
@@ -377,7 +403,28 @@ func (ht *HypershiftTest) PatchNodePoolToTriggerUpdate() {
 	g.By("wait node pool update to complete")
 
 	np.WaitUntilConfigIsUpdating()
-	np.WaitUnitUpdateIsCompleted()
+	np.WaitUntilConfigUpdateIsCompleted()
+
+}
+
+// PatchNodePoolToUpdateReleaseImage patch node pool to update spec.release.image
+// this operation will update os image on hosted cluster nodes
+func (ht *HypershiftTest) PatchNodePoolToUpdateReleaseImage() {
+
+	g.By("patch node pool to update release image")
+	npName := ht.StrValue(HypershiftCrNodePool)
+	// the latest version supported is: "4.12.0"
+	imageURL, version := getLatestImageURL(ht.oc, "4.11")
+	np := NewHypershiftNodePool(ht.oc.AsAdmin(), npName)
+	o.Expect(np.Patch("merge", fmt.Sprintf(`{"spec":{"release":{"image": "%s"}}}`, imageURL))).NotTo(o.HaveOccurred(), "patch node pool with release image failed")
+	o.Expect(np.GetOrFail(`{.spec.release.image}`)).Should(o.ContainSubstring(imageURL), "node pool does not have update release image config")
+	logger.Debugf(np.PrettyString())
+
+	g.By("wait node pool update to complete")
+
+	np.WaitUntilVersionIsUpdating()
+	np.WaitUntilVersionUpdateIsCompleted()
+	o.Expect(np.GetVersion()).Should(o.Equal(version), "version of node pool is not updated correctly")
 
 }
 
@@ -396,8 +443,8 @@ func (ht *HypershiftTest) CreateKubeConfigForCluster() {
 	ht.Put(TestCtxKeyKubeConfig, file)
 }
 
-// CheckMcIsUpdatedOnNode check machine config is updated successfully
-func (ht *HypershiftTest) CheckMcIsUpdatedOnNode() {
+// CheckMcAnnotationsOnNode check machine config is updated successfully
+func (ht *HypershiftTest) CheckMcAnnotationsOnNode() {
 
 	g.By("check machine config annotation to verify update is done")
 	clusterName := ht.StrValue(TestCtxKeyCluster)
@@ -448,9 +495,16 @@ func (ht *HypershiftTest) CheckMcIsUpdatedOnNode() {
 	// state is 'Done'
 	o.Expect(state).Should(o.Equal("Done"))
 
+}
+
+// VerifyFileContent verify whether config file on node is expected
+func (ht *HypershiftTest) VerifyFileContent() {
+
 	g.By("check whether the test file content is matched ")
 	filePath := ht.StrValue(TestCtxKeyFilePath)
-
+	kubeconf := ht.StrValue(TestCtxKeyKubeConfig)
+	ht.oc.SetGuestKubeconf(kubeconf)
+	workerNode := NewNodeList(ht.oc.AsAdmin().AsGuestKubeconf()).GetAllLinuxWorkerNodesOrFail()[0]
 	// when we call oc debug with guest kubeconfig, temp namespace oc.Namespace()
 	// cannot be found in hosted cluster.
 	// copy node object to change namespace to default
