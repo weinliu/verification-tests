@@ -3240,16 +3240,16 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		newCheck("expect", asAdmin, withoutNamespace, contain, "Applied", ok, []string{"complianceremediations", csuiteD.scanname + "-audit-rules-dac-modification-chmod", "-n", csuiteD.namespace,
 			"-o=jsonpath={.status.applicationState}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "75-"+csuiteD.scanname+"-audit-rules-dac-modification-chmod", ok, []string{"mc", "-n", csuiteD.namespace,
-			"--selector=compliance.openshift.io/scan-name=" + csuiteD.scanname, "-o=jsonpath={.items[0].metadata.name}"}).check(oc)
+			"--selector=compliance.openshift.io/scan-name=" + csuiteD.scanname, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "Applied", ok, []string{"complianceremediations", csuite.scanname + "-no-empty-passwords", "-n", csuiteD.namespace,
 			"-o=jsonpath={.status.applicationState}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "75-"+csuite.scanname+"-no-empty-passwords", ok, []string{"mc", "-n", csuiteD.namespace,
-			"--selector=compliance.openshift.io/scan-name=" + csuite.scanname, "-o=jsonpath={.items[0].metadata.name}"}).check(oc)
+			"--selector=compliance.openshift.io/scan-name=" + csuite.scanname, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		newCheck("expect", asAdmin, withoutNamespace, contain, "Applied", ok, []string{"complianceremediations", csuiteCD.scanname + "-chronyd-or-ntpd-specify-multiple-servers", "-n", csuiteCD.namespace,
 			"-o=jsonpath={.status.applicationState}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "75-"+csuiteCD.scanname+"-chronyd-or-ntpd-specify-multiple-servers", ok, []string{"mc", "-n", csuiteD.namespace,
-			"--selector=compliance.openshift.io/scan-name=" + csuiteCD.scanname, "-o=jsonpath={.items[0].metadata.name}"}).check(oc)
+			"--selector=compliance.openshift.io/scan-name=" + csuiteCD.scanname, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check worker machineconfigpool status.. !!!\n")
 		checkMachineConfigPoolStatus(oc, csuiteD.nodeSelector)
@@ -4346,6 +4346,43 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 		assertKeywordsExists(oc, 10, keywordsInstr, "rule", "ocp4-api-server-request-timeout", "-o=jsonpath={.description}", "-n", subD.namespace)
 		assertKeywordsExists(oc, 10, keywordsAnnot, "rule", "ocp4-api-server-request-timeout", "-o=jsonpath={.metadata.annotations}", "-n", subD.namespace)
 		assertKeywordsExists(oc, 10, keywordsVariableValue, "variables", "ocp4-var-api-min-request-timeout", "-o=jsonpath={.value}", "-n", subD.namespace)
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-48643-Check if the prometheusRule that verifies the Compliance alerts [Serial]", func() {
+		var (
+			ssb = scanSettingBindingDescription{
+				name:            "pci-test",
+				namespace:       "",
+				profilekind1:    "Profile",
+				profilename1:    "ocp4-pci-dss",
+				scansettingname: "default",
+				template:        scansettingbindingSingleTemplate,
+			}
+		)
+		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssb.name})
+
+		newCheck("expect", asAdmin, withoutNamespace, contain, "openshift.io/cluster-monitoring", ok, []string{"namespace", subD.namespace, "-o=jsonpath={.metadata.labels}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "metrics", ok, []string{"service", "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Create scansettingbinding !!!\n")
+		ssb.namespace = subD.namespace
+		ssb.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check ComplianceSuite status !!!\n")
+		checkComplianceSuiteStatus(oc, ssb.name, subD.namespace, "DONE")
+		g.By("Check complianceSuite name and result.. !!!\n")
+		subD.complianceSuiteName(oc, ssb.name)
+		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
+
+		g.By("Get token of SA prometheus-k8s")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+		g.By("check alerts")
+		alertString := "annotations.*The compliance suite pci-test returned as.*The cluster is out-of-compliance"
+		checkAlert(oc, token, alertString, 200)
 	})
 
 	// author: xiyuan@redhat.com

@@ -299,7 +299,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 
 		g.By("Verify scansettingbinding, ScanSetting, profile objects created..!!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssbName, ok, []string{"scansettingbinding", "-n", subD.namespace,
-			"-o=jsonpath={.items[0].metadata.name}"}).check(oc)
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "ocp4-moderate", ok, []string{"scansettingbinding", ssbName, "-n", subD.namespace,
 			"-o=jsonpath={.profiles}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "default", ok, []string{"scansettingbinding", ssbName, "-n", subD.namespace,
@@ -323,7 +323,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 
 		g.By("Verify scansettingbinding, ScanSetting, profile objects created..!!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssbName, ok, []string{"scansettingbinding", "-n", subD.namespace,
-			"-o=jsonpath={.items[0].metadata.name}"}).check(oc)
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "ocp4-cis-custom", ok, []string{"scansettingbinding", ssbName, "-n", subD.namespace,
 			"-o=jsonpath={.profiles}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, ss.name, ok, []string{"scansettingbinding", ssbName, "-n", subD.namespace,
@@ -383,7 +383,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 		g.By("Create scansettingbinding !!!\n")
 		ssb.create(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
-			"-o=jsonpath={.items[0].metadata.name}"}).check(oc)
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status and result.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
@@ -437,7 +437,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 		g.By("Create scansettingbinding !!!\n")
 		ssb.create(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
-			"-o=jsonpath={.items[0].metadata.name}"}).check(oc)
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status and result.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,

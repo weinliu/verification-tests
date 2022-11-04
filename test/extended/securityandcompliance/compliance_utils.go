@@ -1006,3 +1006,25 @@ func assertKeywordsExists(oc *exutil.CLI, timeout int, keywords string, paramete
 	})
 	exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("The keywords %s not exists", keywords))
 }
+
+func getAlertManager(oc *exutil.CLI) string {
+	alertManager, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "alertmanager-main", "-n", "openshift-monitoring", "-o=jsonpath={.spec.host}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(alertManager).NotTo(o.BeEmpty())
+	return alertManager
+}
+
+func checkAlert(oc *exutil.CLI, token, alertString string, timeout time.Duration) {
+	alertManager := getAlertManager(oc)
+	url := "https://" + alertManager + "/api/v1/alerts"
+	getCmd := "curl -G -k -s -H \"Authorization:Bearer " + token + "\" " + url
+	err := wait.Poll(3*time.Second, timeout*time.Second, func() (bool, error) {
+		alerts, err1 := exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", getCmd)
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString(alertString, string(alerts)); matched {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The alerts NOT to contain %s", alertString))
+}
