@@ -332,9 +332,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patch, "--type=merge", "-n", ingctrl.namespace).Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("dnsManagementPolicy: Unsupported value: 123: supported values: \"Managed\", \"Unmanaged\""))
-
 	})
 
+	// author: mjoseph@redhat.com
 	g.It("Author:mjoseph-Critical-55223-Configuring list of IP address ranges using allowedSourceRanges in LoadBalancerService", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
@@ -370,23 +370,145 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.AssertWaitPollNoErr(ingressErr, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
 
 		g.By("Patch the custom ingress-controller with IP address ranges to which access to the load balancer should be restricted")
-		patch := "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"allowedSourceRanges\":[\"10.0.0.0/8\"]}}}}"
-		output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patch, "--type=merge", "-n", ingctrl.namespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		output, errCfg := patchResourceAsAdminAndGetLog(oc, ingctrl.namespace, ingctrlResource,
+			"{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"allowedSourceRanges\":[\"10.0.0.0/8\"]}}}}")
+		o.Expect(errCfg).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("ingresscontroller.operator.openshift.io/ocp55223 patched"))
 
-		g.By("Check the LB svc of the internal controller")
+		g.By("Check the LB svc of the custom controller")
 		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55223", ".spec.loadBalancerSourceRanges", `10.0.0.0/8`)
 
 		g.By("Patch the custom ingress-controller with more 'allowedSourceRanges' value")
-		patch = "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"allowedSourceRanges\":[\"20.0.0.0/8\", \"50.0.0.0/16\", \"3dee:ef5::/12\"]}}}}"
-		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patch, "--type=merge", "-n", ingctrl.namespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		output, errCfg = patchResourceAsAdminAndGetLog(oc, ingctrl.namespace, ingctrlResource,
+			"{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"allowedSourceRanges\":[\"20.0.0.0/8\", \"50.0.0.0/16\", \"3dee:ef5::/12\"]}}}}")
+		o.Expect(errCfg).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("ingresscontroller.operator.openshift.io/ocp55223 patched"))
 
-		g.By("Check the LB svc of the internal controller for additional values")
+		g.By("Check the LB svc of the custom controller for additional values")
 		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55223", ".spec.loadBalancerSourceRanges", `20.0.0.0/8`)
 		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55223", ".spec.loadBalancerSourceRanges", `50.0.0.0/16`)
 		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55223", ".spec.loadBalancerSourceRanges", `3dee:ef5::/12`)
+	})
+
+	// author: mjoseph@redhat.com
+	g.It("Author:mjoseph-High-55341-configuring list of IP address ranges using load-balancer-source-ranges annotation", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-external.yaml")
+		var (
+			ingctrl = ingctrlNodePortDescription{
+				name:      "ocp55341",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		// skip if platform is not AWS, GCP, AZURE or IBM
+		g.By("Pre-flight check for the platform type")
+		platformtype := exutil.CheckPlatform(oc)
+		platforms := map[string]bool{
+			"aws":      true,
+			"azure":    true,
+			"gcp":      true,
+			"ibmcloud": true,
+		}
+		if !platforms[platformtype] {
+			g.Skip("Skip for non-supported platform")
+		}
+
+		g.By("Create one custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("Add the IP address ranges for an custom IngressController using annotation")
+		err1 := oc.AsAdmin().WithoutNamespace().Run("annotate").Args(
+			"-n", "openshift-ingress", "svc/router-ocp55341", "service.beta.kubernetes.io/load-balancer-source-ranges=10.0.0.0/8", "--overwrite").Execute()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+
+		g.By("Verify the annotation presence")
+		findAnnotation := getAnnotation(oc, "openshift-ingress", "svc", "router-ocp55341")
+		o.Expect(findAnnotation).To(o.ContainSubstring("service.beta.kubernetes.io/load-balancer-source-ranges"))
+		o.Expect(findAnnotation).To(o.ContainSubstring("10.0.0.0/8"))
+
+		g.By("Check the annotation value in the allowedSourceRanges in the controller status")
+		sourceRange := fetchJSONPathValue(oc, "openshift-ingress-operator", "ingresscontroller/ocp55341", ".status.endpointPublishingStrategy.loadBalancer.allowedSourceRanges")
+		o.Expect(sourceRange).To(o.ContainSubstring(`10.0.0.0/8`))
+
+		g.By("Patch the loadBalancerSourceRanges in the LB service")
+		patchResourceAsAdmin(oc, "openshift-ingress", "svc/router-ocp55341", "{\"spec\":{\"loadBalancerSourceRanges\":[\"30.0.0.0/16\"]}}")
+
+		g.By("Check the annotation value and sourcerange value in LB svc")
+		findAnnotation = getAnnotation(oc, "openshift-ingress", "svc", "router-ocp55341")
+		o.Expect(findAnnotation).To(o.ContainSubstring("service.beta.kubernetes.io/load-balancer-source-ranges"))
+		o.Expect(findAnnotation).To(o.ContainSubstring("10.0.0.0/8"))
+		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55341", ".spec.loadBalancerSourceRanges", `30.0.0.0/16`)
+
+		g.By("Check the controller status and confirm the sourcerange value's precedence over the annotation")
+		sourceRange = fetchJSONPathValue(oc, "openshift-ingress-operator", "ingresscontroller/ocp55341", ".status.endpointPublishingStrategy.loadBalancer.allowedSourceRanges")
+		o.Expect(sourceRange).To(o.ContainSubstring(`30.0.0.0/16`))
+	})
+
+	// author: mjoseph@redhat.com
+	g.It("Author:mjoseph-Medium-55381-Configuring wrong data for allowedSourceRanges in LoadBalancerService", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-external.yaml")
+			ingctrl             = ingctrlNodePortDescription{
+				name:      "ocp55381",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+			ingctrlResource = "ingresscontrollers/ocp55381"
+		)
+
+		// skip if platform is not AWS, GCP, AZURE or IBM
+		g.By("Pre-flight check for the platform type")
+		platformtype := exutil.CheckPlatform(oc)
+		platforms := map[string]bool{
+			"aws":      true,
+			"azure":    true,
+			"gcp":      true,
+			"ibmcloud": true,
+		}
+		if !platforms[platformtype] {
+			g.Skip("Skip for non-supported platform")
+		}
+
+		g.By("Create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		ingressErr := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(ingressErr, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("Patch the custom ingress-controller with only IP address")
+		output, errCfg := patchResourceAsAdminAndGetLog(oc, ingctrl.namespace, ingctrlResource,
+			"{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"allowedSourceRanges\":[\"10.0.0.0\"]}}}}")
+		o.Expect(errCfg).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("The IngressController \"ocp55381\" is invalid"))
+
+		g.By("Patch the custom ingress-controller with a invalid IPv6 address")
+		output, errCfg = patchResourceAsAdminAndGetLog(oc, ingctrl.namespace, ingctrlResource,
+			"{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"allowedSourceRanges\":[\"3dee:ef5:/12\"]}}}}")
+		o.Expect(errCfg).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("The IngressController \"ocp55381\" is invalid"))
+
+		g.By("Patch the custom ingress-controller with IP address ranges")
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"allowedSourceRanges\":[\"10.0.0.0/8\"]}}}}")
+
+		g.By("Delete the allowedSourceRanges from custom controller")
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"allowedSourceRanges\":[]}}}}")
+
+		g.By("Check the ingress operator status to confirm whether it is still in Progress")
+		ensureClusterOperatorProgress(oc, "ingress")
+
+		g.By("Patch the same loadBalancerSourceRanges value in the LB service to remove the Progressing from the ingress operator")
+		patchResourceAsAdmin(oc, "openshift-ingress", "svc/router-ocp55381", "{\"spec\":{\"loadBalancerSourceRanges\":[]}}")
 	})
 })

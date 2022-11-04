@@ -227,6 +227,13 @@ func patchResourceAsAdmin(oc *exutil.CLI, ns, resource, patch string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// To patch global resources as Admin. Can used for patching resources such as ingresses or CVO
+func patchGlobalResourceAsAdmin(oc *exutil.CLI, resource, patch string) {
+	patchOut, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resource, "--patch="+patch, "--type=json").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The output from the patch is:- %q ", patchOut)
+}
+
 // For Admin to patch a resource in the specified namespace, and then return the output after the patching operation
 func patchResourceAsAdminAndGetLog(oc *exutil.CLI, ns, resource, patch string) (string, error) {
 	outPut, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resource, "-p", patch, "--type=merge", "-n", ns).Output()
@@ -241,6 +248,14 @@ func exposeRoute(oc *exutil.CLI, ns, resource string) {
 func setAnnotation(oc *exutil.CLI, ns, resource, annotation string) {
 	err := oc.Run("annotate").Args("-n", ns, resource, annotation, "--overwrite").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// this function will read the annotation from the given resource
+func getAnnotation(oc *exutil.CLI, ns, resource, resourceName string) string {
+	findAnnotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+		resource, resourceName, "-n", ns, "-o=jsonpath={.metadata.annotations}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return findAnnotation
 }
 
 func setEnvVariable(oc *exutil.CLI, ns, resource, envstring string) {
@@ -433,13 +448,6 @@ func getIngressctlDomain(oc *exutil.CLI, icname string) string {
 func exposeRouteEdge(oc *exutil.CLI, ns, route, service, hostname string) {
 	_, err := oc.WithoutNamespace().Run("create").Args("-n", ns, "route", "edge", route, "--service="+service, "--hostname="+hostname).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-}
-
-// To patch global resources as Admin. Can used for patching resources such as ingresses or CVO
-func patchGlobalResourceAsAdmin(oc *exutil.CLI, resource, patch string) {
-	patchOut, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resource, "--patch="+patch, "--type=json").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("The output from the patch is:- %q ", patchOut)
 }
 
 // this function helps to get the ipv4 address of the given pod
