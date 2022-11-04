@@ -1,6 +1,7 @@
 import { nav } from '../upstream/views/nav';
 import { Overview, statusCard } from '../views/overview';
 import { guidedTour } from '../upstream/views/guided-tour';
+import { listPage } from 'upstream/views/list-page';
 
 describe('Dynamic plugins features', () => {
   before(() => {
@@ -44,6 +45,14 @@ describe('Dynamic plugins features', () => {
     cy.exec(`oc patch console.operator cluster -p '{"spec":{"plugins":null}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     cy.exec(`oc delete consoleplugin --all --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`); 
   });
+
+  it('(OCP-54170, xiangyli) Promote ConsolePlugins API version to v1', {tags: ['e2e', 'admin']}, () => {
+      cy.visit('/k8s/cluster/customresourcedefinitions/consoleplugins.console.openshift.io/instances')
+      listPage.rows.shouldExist('console-demo-plugin')
+      cy.exec(`oc get consoleplugin console-demo-plugin -o yaml | grep 'apiVersion'`)
+        .its('stdout')
+        .should('contain', 'apiVersion: console.openshift.io/v1')        
+  })
 
   it('(OCP-51743,yapei) Preload - locale files are loaded once plugin is enabled', {tags: ['e2e','admin']},() => {
     // enable console-customization plugin
@@ -151,5 +160,5 @@ describe('Dynamic plugins features', () => {
     cy.get('a[data-test-id="console-demo-plugin"]').should('exist');
     cy.contains('unmanaged').should('exist');
     cy.contains('anges to plugins will have no effect').should('exist');
-  });
+  })
 });
