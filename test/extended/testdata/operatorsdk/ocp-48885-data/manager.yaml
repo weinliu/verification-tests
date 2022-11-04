@@ -41,7 +41,7 @@ spec:
         name: manager
         env:
         - name: RELATED_IMAGE_MEMCACHED
-          value: "quay.io/olmqe/memcached:1.4"
+          value: "quay.io/olmqe/memcached@sha256:c144b2fb90830bf40a19beed477345da27241d786fd6ebf377f66e4cf8128ba5"
         - name: ANSIBLE_GATHERING
           value: explicit
         securityContext:
