@@ -232,6 +232,11 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("nf-conntrack-max"))
 
+		g.By("All node's current profile is:")
+		stdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Profile Name Per Nodes: %v", stdOut)
+
 		// tuned nodes should have value of 1048578, others should be 1048576
 		for i := 0; i < nodeListSize; i++ {
 			output, err := exutil.DebugNodeWithChroot(oc, nodeList[i], "sysctl", "net.netfilter.nf_conntrack_max")
@@ -265,6 +270,11 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(logsCheck).To(o.ContainSubstring("tuned.daemon.daemon: static tuning from profile 'nf-conntrack-max' applied"))
 
+		g.By("All node's current profile is:")
+		stdOut, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Profile Name Per Nodes: %v", stdOut)
+
 		// tuned nodes should have value of 1048578, others should be 1048576
 		for i := 0; i < nodeListSize; i++ {
 			output, err := exutil.DebugNodeWithChroot(oc, nodeList[i], "sysctl", "net.netfilter.nf_conntrack_max")
@@ -293,6 +303,11 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("openshift-node"))
+
+		g.By("All node's current profile is:")
+		stdOut, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Profile Name Per Nodes: %v", stdOut)
 
 		for i := 0; i < nodeListSize; i++ {
 			output, err := exutil.DebugNodeWithChroot(oc, nodeList[i], "sysctl", "net.netfilter.nf_conntrack_max")
@@ -1626,8 +1641,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		defer exutil.DebugNodeWithChroot(oc, tunedNodeName, "/usr/bin/throttlectl", "on")
 
 		g.By("Set off for /usr/bin/throttlectl before enable stalld")
-		_, err = exutil.DebugNodeWithChroot(oc, tunedNodeName, "/usr/bin/throttlectl", "off")
-		o.Expect(err).NotTo(o.HaveOccurred())
+		switchThrottlectlOnOff(oc, tunedNodeName, "off", 30)
 
 		g.By("Label the node with node-role.kubernetes.io/worker-stalld=")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-stalld=", "--overwrite").Execute()
@@ -1677,9 +1691,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("Check if stalld service is inactive and stopped ...")
 		//Return an error when the systemctl status stalld is inactive, so err for o.Expect as expected.
-		stalldStatus, err = exutil.DebugNodeWithChroot(oc, tunedNodeName, "systemctl", "status", "stalld")
+		stalldStatus, _ = exutil.DebugNodeWithChroot(oc, tunedNodeName, "systemctl", "status", "stalld")
 		e2e.Logf("The service stalld status:\n%v", stalldStatus)
-		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stalldStatus).To(o.ContainSubstring("inactive (dead)"))
 
 		g.By("Apply openshift-stalld with start,enable tuned profile")
@@ -2023,10 +2036,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("IAAS platform: " + iaasPlatform + " doesn't support cloud provider profile - skipping test ...")
 		}
 
-		if ManualPickup {
-			g.Skip("This is the test case that execute mannually in shared cluster ...")
-		}
-
 		//Use the first worker node as labeled node
 		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2041,8 +2050,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		defer exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "/usr/bin/throttlectl", "on")
 
 		//Switch off throttlectl to improve sucessfull rate of stalld starting
-		_, _, err = exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "/usr/bin/throttlectl", "off")
-		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Set off for /usr/bin/throttlectl before enable stalld")
+		switchThrottlectlOnOff(oc, tunedNodeName, "off", 30)
 
 		g.By("Label the node with node-role.kubernetes.io/worker-stalld=")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-stalld=", "--overwrite").Execute()
@@ -2085,25 +2094,22 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Check if stalld service is running ...")
-		//stalldStatus, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot /host", "systemctl", "status", "stalld").Output()
 		stalldStatus, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "systemctl", "status", "stalld")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stalldStatus).NotTo(o.BeEmpty())
 		o.Expect(stalldStatus).To(o.ContainSubstring("active (running)"))
 
 		g.By("Get stalld PID on labeled node ...")
-		//stalldPID, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot /host", "/bin/bash", "-c", "ps -efL| grep stalld | grep -v grep | awk '{print $2}'").Output()
 		stalldPID, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "ps -efL| grep stalld | grep -v grep | awk '{print $2}'")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stalldPID).NotTo(o.BeEmpty())
 
 		g.By("Get status of chrt -p stalld PID on labeled node ...")
 		chrtStalldPIDOutput, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "chrt -ap "+stalldPID)
-		//chrtStalldPIDOutput, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot /host", "/bin/bash", "-c", "chrt -ap "+stalldPID).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(chrtStalldPIDOutput).NotTo(o.BeEmpty())
 		o.Expect(chrtStalldPIDOutput).To(o.ContainSubstring("SCHED_FIFO"))
-		e2e.Logf("chrtStalldPIDOutput is :\n %v", chrtStalldPIDOutput)
+		e2e.Logf("chrtStalldPIDOutput is :\n%v", chrtStalldPIDOutput)
 	})
 	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-51495-NTO PAO Shipped into NTO with basic function verification.[Disruptive][Slow].", func() {
 

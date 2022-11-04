@@ -20,7 +20,7 @@ func ValidHypershiftAndGetGuestKubeConf(oc *CLI) (string, string) {
 		"pods", "-n", "hypershift", "-ojsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if len(hypershiftOperator) <= 0 {
-		g.Skip("there is no hypeshift operagtor on host cluster, skip test run")
+		g.Skip("there is no hypeshift operator on host cluster, skip test run")
 	}
 
 	clusterNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(

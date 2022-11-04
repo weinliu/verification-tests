@@ -80,7 +80,7 @@ var _ = g.Describe("[sig-perfscale] PerfScale oc cli perf", func() {
 		e2e.Logf("scaleDuration is: %v Expected time is less than 50s.", scaleDuration)
 		o.Expect(scaleDuration).To(o.BeNumerically("<=", 50))
 
-		e2e.Logf("deleteDuration is: %v Expected time is less than 450s.", deleteDuration)
-		o.Expect(deleteDuration).To(o.BeNumerically("<=", 450))
+		e2e.Logf("deleteDuration is: %v Expected time is less than 500s.", deleteDuration)
+		o.Expect(deleteDuration).To(o.BeNumerically("<=", 500))
 	})
 })

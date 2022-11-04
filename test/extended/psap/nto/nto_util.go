@@ -651,3 +651,21 @@ func confirmedTunedReady(oc *exutil.CLI, ntoNamespace string, tunedName string, 
 	})
 	exutil.AssertWaitPollNoErr(err, "tuned is not ready")
 }
+
+func switchThrottlectlOnOff(oc *exutil.CLI, tunedNodeName string, throttlectlState string, timeDurationSec int) {
+
+	err := wait.Poll(10*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
+
+		_, err := exutil.DebugNodeWithChroot(oc, tunedNodeName, "/usr/bin/throttlectl", throttlectlState)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		schedRTRuntimeStatus, err := exutil.DebugNode(oc, tunedNodeName, "cat", "/proc/sys/kernel/sched_rt_runtime_us")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Sleep 10s each time and retry two times to improve sucessful rate of restarting stalld
+		if strings.Contains(schedRTRuntimeStatus, "-1") {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "throttlectl status isn't correct, retry")
+}

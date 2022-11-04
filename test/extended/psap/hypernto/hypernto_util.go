@@ -76,7 +76,7 @@ func getTunedConfigMapNameWithRetry(oc *exutil.CLI, namespace string, filter str
 }
 
 //getTunedSystemSettingsByParmName
-func getTunedSystemSetValueByParmNameInHostedCluster(oc *exutil.CLI, ntoNamespace, nodeName, oscommand, sysctlparm string) string {
+func getTunedSystemSetValueByParamNameInHostedCluster(oc *exutil.CLI, ntoNamespace, nodeName, oscommand, sysctlparm string) string {
 
 	debugNodeStdout, err := oc.AsAdmin().AsGuestKubeconf().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", oscommand, sysctlparm).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -92,7 +92,7 @@ func compareSpecifiedValueByNameOnLabelNodewithRetryInHostedCluster(oc *exutil.C
 
 	err := wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
 
-		tunedSettings := getTunedSystemSetValueByParmNameInHostedCluster(oc, ntoNamespace, nodeName, oscommand, sysctlparm)
+		tunedSettings := getTunedSystemSetValueByParamNameInHostedCluster(oc, ntoNamespace, nodeName, oscommand, sysctlparm)
 		expectedSettings := sysctlparm + " = " + specifiedvalue
 		if strings.Contains(tunedSettings, expectedSettings) {
 			return true, nil
@@ -215,7 +215,7 @@ func compareSpecifiedValueByNameOnNodePoolLevelwithRetryInHostedCluster(oc *exut
 		matchNum = 0
 		//all worker node in the nodepool should match the tuned profile settings
 		for i := 0; i < nodesNum; i++ {
-			tunedSettings := getTunedSystemSetValueByParmNameInHostedCluster(oc, ntoNamespace, nodeNames[i], oscommand, sysctlparm)
+			tunedSettings := getTunedSystemSetValueByParamNameInHostedCluster(oc, ntoNamespace, nodeNames[i], oscommand, sysctlparm)
 			expectedSettings := sysctlparm + " = " + specifiedvalue
 			if strings.Contains(tunedSettings, expectedSettings) {
 				matchNum++
@@ -236,7 +236,7 @@ func assertMisMatchTunedSystemSettingsByParmNameOnNodePoolLevelInHostedCluster(o
 	o.Expect(err).NotTo(o.HaveOccurred())
 	nodesNum := len(nodeNames)
 	for i := 0; i < nodesNum; i++ {
-		stdOut := getTunedSystemSetValueByParmNameInHostedCluster(oc, ntoNamespace, nodeNames[i], oscommand, sysctlparm)
+		stdOut := getTunedSystemSetValueByParamNameInHostedCluster(oc, ntoNamespace, nodeNames[i], oscommand, sysctlparm)
 		o.Expect(stdOut).NotTo(o.BeEmpty())
 		o.Expect(stdOut).NotTo(o.ContainSubstring(expectedMisMatchValue))
 	}
