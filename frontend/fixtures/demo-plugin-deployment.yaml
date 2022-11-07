@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: console-demo-plugin
-          image: quay.io/openshifttest/console-demo-plugin:411
+          image: quay.io/openshifttest/console-demo-plugin:412
           ports:
             - containerPort: 9001
               protocol: TCP

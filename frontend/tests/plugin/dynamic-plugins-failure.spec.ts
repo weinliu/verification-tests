@@ -1,4 +1,4 @@
-import { Overview, statusCard } from '../views/overview';
+import { Overview, statusCard } from '../../views/overview';
 
 describe('Dynamic Plugins notification features', () => {
   const testParams = {

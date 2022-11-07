@@ -1,7 +1,7 @@
-import { nav } from '../upstream/views/nav';
-import { Overview, statusCard } from '../views/overview';
-import { guidedTour } from '../upstream/views/guided-tour';
-import { listPage } from 'upstream/views/list-page';
+import { nav } from '../../upstream/views/nav';
+import { Overview, statusCard } from '../../views/overview';
+import { guidedTour } from '../../upstream/views/guided-tour';
+import { listPage } from '../../upstream/views/list-page';
 
 describe('Dynamic plugins features', () => {
   before(() => {
@@ -40,16 +40,16 @@ describe('Dynamic plugins features', () => {
   });
   after(() => {
     cy.exec(`oc patch console.operator cluster -p '{"spec":{"managementState":"Managed"}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.exec(`oc delete consoleplugin --all --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.exec(`oc patch console.operator cluster -p '{"spec":{"plugins":null}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     cy.exec(`oc delete namespace console-demo-plugin console-customization-plugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc patch console.operator cluster -p '{"spec":{"plugins":null}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc delete consoleplugin --all --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`); 
   });
 
   it('(OCP-54170, xiangyli) Promote ConsolePlugins API version to v1', {tags: ['e2e', 'admin']}, () => {
       cy.visit('/k8s/cluster/customresourcedefinitions/consoleplugins.console.openshift.io/instances')
       listPage.rows.shouldExist('console-demo-plugin')
-      cy.exec(`oc get consoleplugin console-demo-plugin -o yaml | grep 'apiVersion'`)
+      cy.exec(`oc get consoleplugin console-demo-plugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} -o yaml | grep 'apiVersion'`)
         .its('stdout')
         .should('contain', 'apiVersion: console.openshift.io/v1')        
   })
@@ -58,17 +58,20 @@ describe('Dynamic plugins features', () => {
     // enable console-customization plugin
     cy.exec(`oc patch console.operator cluster -p '{"spec":{"plugins":["console-customization"]}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
       .then(result => expect(result.stdout).contains('patched'));
-    cy.get('[data-test="toast-action"]', {timeout: 60000});
-    cy.contains('Refresh web console').click({force: true});
+    // Use visiting pages to refresh instead of click on 'Refresh console' button
+    // which is unreliable
+    cy.wait(30000);
+    cy.visit('/api-explorer');
     cy.wait('@getConsoleCustomizaitonPluginLocales',{timeout: 60000});
   });
   it('(OCP-51743,yapei) Lazy - do not load locale files during enablement', {tags: ['e2e','admin']},() => {
     cy.switchPerspective('Developer');
+    guidedTour.close();
     // enable console-demo-plugin
     cy.exec(`oc patch console.operator cluster -p '{"spec":{"plugins":["console-customization", "console-demo-plugin"]}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
       .then(result => expect(result.stdout).contains('patched'));
-    cy.get('[data-test="toast-action"]', {timeout: 60000});
-    cy.contains('Refresh web console').click({force: true});
+    cy.wait(30000);
+    cy.visit('/topology/all-namespaces');
     cy.wait('@getConsoleDemoPluginLocales', {timeout: 60000});
     cy.on('fail', (e)=>{
       console.log(e.message)
@@ -79,6 +82,7 @@ describe('Dynamic plugins features', () => {
   });
 
   it('(OCP-51743,yapei) Lazy - locale files are only loaded when visit plugin pages',{tags: ['e2e','admin']},() => {
+    cy.switchPerspective('Developer');
     cy.clickNavLink(['Demo Plugin', 'Test Consumer']);
     cy.wait('@getConsoleDemoPluginLocales', {timeout: 30000})
       .then((intercept)=>{
@@ -88,6 +92,7 @@ describe('Dynamic plugins features', () => {
   });
 
   it('(OCP-45629,yapei) dynamic plugins proxy to services on the cluster', {tags: ['e2e','admin']},() => {
+    cy.switchPerspective('Developer');
     nav.sidenav.shouldHaveNavSection(['Demo Plugin']);
     // demo plugin in Dev perspective
     cy.get('.pf-c-nav__link').should('include.text', 'Dynamic Nav 1');
@@ -120,10 +125,18 @@ describe('Dynamic plugins features', () => {
       .should('have.text', 'Networking');
   });
 
+  it('(OCP-54322,yapei) Expose ErrorBoundary capabilities', {tags: ['e2e','admin']}, () => {
+    cy.visit('/sample-error-boundary-page');
+    cy.contains('Launch buggy component').click({force: true});
+    cy.contains('Show details').click({force: true});
+    cy.contains('something went wrong in your dynamic plug-in').should('exist');
+    cy.contains('test error').should('exist');
+  });
+
   it('(OCP-52366, xiangyli) Add Dyamic Plugins to Cluster Overview Status card and notification drawer', {tags: ['e2e','admin']}, () => {
-    Overview.goToDashboard()
-    statusCard.togglePluginPopover()
-    let total = 0
+    Overview.goToDashboard();
+    statusCard.togglePluginPopover();
+    let total = 0;
     cy.exec(`oc get consoleplugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`).then((result) => {
       total = result.stdout.split(/\r\n|\r|\n/).length - 1
     })
@@ -132,11 +145,17 @@ describe('Dynamic plugins features', () => {
       cy.contains(`${2}/${total} enabled`).should('exist')
     })
   });
+
+  it('(OCP-54322,yapei) Improve overview detail item extension', {tags: ['e2e','admin']}, () =>{
+    Overview.goToDashboard();
+    cy.get('[data-test="detail-item-title"]').should('include.text','Custom Overview Detail Title');
+    cy.get('[data-test="detail-item-value"]').should('include.text','Custom Overview Detail Info');
+  });
   
   it('(OCP-42537,yapei) Allow disabling dynamic plugins through a query parameter', {tags: ['e2e','admin']}, () => {
     cy.switchPerspective('Administrator');
     // disable non-existing plugin will make no changes
-    cy.visit('?disable-plugins=foo,bar')
+    cy.visit('?disable-plugins=foo,bar');
     cy.get('.pf-c-nav__link',{timeout: 60000}).should('include.text','Demo Plugin');
     cy.get('.pf-c-nav__link',{timeout: 60000}).should('include.text','Customization');
 

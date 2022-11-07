@@ -3,9 +3,7 @@ import { nav } from '../../upstream/views/nav';
 declare global {
     namespace Cypress {
         interface Chainable<Subject> {
-            switchPerspective(
-                perspective: string,
-            );
+            switchPerspective(perspective: string);
         }
     }
 }
