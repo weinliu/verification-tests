@@ -6,7 +6,10 @@ export const namespaceDropdown = {
         cy.get(selector).click();
     },
     clickTheDropdown: () => {
-        cy.get('button.co-namespace-dropdown__menu-toggle').click();
+        cy.byLegacyTestID('namespace-bar-dropdown')
+            .within(($div) => {
+                cy.get('button').click()
+            })
     },
     getProjectsDisplayed: () => {
         return cy.get('li[data-test="dropdown-menu-item-link"]');
@@ -23,5 +26,11 @@ export const namespaceDropdown = {
         cy.get('[data-test="dropdown-menu-item-link"]').contains(name)
           .next('button.pf-m-favorite').click();
     },
+
+    selectNamespace: (name: string) => {
+        namespaceDropdown.clickTheDropdown()
+        namespaceDropdown.filterNamespace(name)
+        cy.contains('button', name).click()
+    }
 
 }
