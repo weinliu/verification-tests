@@ -1,6 +1,7 @@
 package mco
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -219,8 +220,9 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 			layeringMcName   = "not-pullable-image-tc54054"
 
 			expectedNDStatus  = "True"
-			expectedNDMessage = regexp.QuoteMeta("Error checking type of update image: failed to run command podman (6 tries): [timed out waiting for the condition, running podman pull") +
-				".*" + regexp.QuoteMeta(nonPullableImage) + ".*"
+			expectedNDMessage = regexp.QuoteMeta("Error checking type of update image: error running skopeo inspect --no-tags --retry-times 5") +
+				".*" + regexp.QuoteMeta(nonPullableImage) + ".*repository not found"
+
 			expectedNDReason = "1 nodes are reporting degraded status on sync"
 		)
 
@@ -436,6 +438,264 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		logger.Infof("OK!\n")
 
 	})
+	g.It("Author:sregidor-VMonly-ConnectedOnly-Longduration-NonPreRelease-High-54909-Configure extensions while using a custom osImage [Disruptive]", func() {
+		skipTestIfSupportedArchNotMatched(oc.AsAdmin())
+		var (
+			rpmName            = "zsh"
+			extensionRpmName   = "usbguard"
+			dockerFileCommands = fmt.Sprintf(`
+RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.centos.org/centos/$releasever-stream/BaseOS/$basearch/os/\ngpgcheck=0\nenabled=1\n\n[appstream]\nname=CentOS-$releasever - AppStream\nbaseurl=http://mirror.centos.org/centos/$releasever-stream/AppStream/$basearch/os/\ngpgcheck=0\nenabled=1\n\n' > /etc/yum.repos.d/centos.repo && \
+    rpm-ostree install %s && \
+    rpm-ostree cleanup -m && \
+    ostree container commit
+`, rpmName)
+			workerNode = NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
+			masterNode = NewNodeList(oc).GetAllMasterNodesOrFail()[0]
+			wMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			mMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+		)
+
+		defer mMcp.waitForComplete()
+		defer wMcp.waitForComplete()
+
+		// Build the new osImage
+		osImageBuilder := OsImageBuilderInNode{node: workerNode, dockerFileCommands: dockerFileCommands}
+		defer func() { _ = osImageBuilder.CleanUp() }()
+		digestedImage, err := osImageBuilder.CreateAndDigestOsImage()
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error creating the new osImage")
+		logger.Infof("OK\n")
+
+		// Create MC to apply the config to worker nodes
+		g.By("Create a MC to deploy the new osImage in 'worker' pool")
+		wLayeringMcName := "tc-54909-layering-extensions-worker"
+		wLayeringMC := MachineConfig{name: wLayeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate), skipWaitForMcp: true,
+			pool: MachineConfigPoolWorker, parameters: []string{"OS_IMAGE=" + digestedImage}}
+
+		defer wLayeringMC.deleteNoWait(oc)
+		wLayeringMC.create(oc.AsAdmin())
+
+		// Create MC to apply the config to master nodes
+		g.By("Create a MC to deploy the new osImage in 'master' pool")
+		mLayeringMcName := "tc-54909-layering-extensions-master"
+		mLayeringMC := MachineConfig{name: mLayeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate), skipWaitForMcp: true,
+			pool: MachineConfigPoolMaster, parameters: []string{"OS_IMAGE=" + digestedImage}}
+
+		defer mLayeringMC.deleteNoWait(oc)
+		mLayeringMC.create(oc.AsAdmin())
+
+		// Wait for pools
+		wMcp.waitForComplete()
+		logger.Infof("The new osImage was deployed successfully in 'worker' pool\n")
+
+		mMcp.waitForComplete()
+		logger.Infof("The new osImage was deployed successfully in 'master' pool\n")
+
+		// Check rpm-ostree status in worker node
+		g.By("Check that the rpm-ostree status is reporting the right booted image in worker nodes")
+
+		wStatus, err := workerNode.GetRpmOstreeStatus(false)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the rpm-ostree status value in worker node %s", workerNode.GetName())
+		logger.Infof("Current rpm-ostree status in worker node:\n%s\n", wStatus)
+
+		wDeployment, err := workerNode.GetBootedOsTreeDeployment(true)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the rpm-ostree status value in worker node %s", workerNode.GetName())
+
+		wContainerRef, jerr := JSON(wDeployment).GetSafe("container-image-reference")
+		o.Expect(jerr).NotTo(o.HaveOccurred(),
+			"We cant get 'container-image-reference' from the deployment status in worker node. Wrong rpm-ostree status!")
+		o.Expect(wContainerRef.ToString()).To(o.Equal("ostree-unverified-registry:"+digestedImage),
+			"container reference in the worker node's status is not the exepeced one")
+		logger.Infof("OK!\n")
+
+		// Check rpm-ostree status in master node
+		g.By("Check that the rpm-ostree status is reporting the right booted image in master nodes")
+
+		mStatus, err := masterNode.GetRpmOstreeStatus(false)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the rpm-ostree status value in master node %s", masterNode.GetName())
+		logger.Infof("Current rpm-ostree status in master node:\n%s\n", mStatus)
+
+		mDeployment, err := masterNode.GetBootedOsTreeDeployment(true)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the rpm-ostree status value in master node %s", masterNode.GetName())
+
+		mContainerRef, jerr := JSON(mDeployment).GetSafe("container-image-reference")
+		o.Expect(jerr).NotTo(o.HaveOccurred(),
+			"We cant get 'container-image-reference' from the deployment status in master node. Wrong rpm-ostree status!")
+		o.Expect(mContainerRef.ToString()).To(o.Equal("ostree-unverified-registry:"+digestedImage),
+			"container reference in the master node's status is not the exepeced one")
+		logger.Infof("OK!\n")
+
+		// Check rpm is installed in worker node
+		g.By("Check that the rpm is installed in worker node")
+		o.Expect(workerNode.RpmIsInstalled(rpmName)).
+			To(o.BeTrue(),
+				"Error. %s rpm is not installed after changing the osImage in worker node %s.", rpmName, workerNode.GetName())
+		logger.Infof("OK\n")
+
+		// Check rpm is installed in master node
+		g.By("Check that the rpm is installed in worker node")
+		o.Expect(masterNode.RpmIsInstalled(rpmName)).
+			To(o.BeTrue(),
+				"Error. %s rpm is not installed after changing the osImage in master node %s.", rpmName, workerNode.GetName())
+		logger.Infof("OK\n")
+
+		// Create MC to apply usbguard extension to worker nodes
+		g.By("Create a MC to deploy the new osImage in 'worker' pool")
+		wUsbguardMcName := "tc-54909-extension-usbguard-worker"
+		wUsbguardMC := MachineConfig{name: wUsbguardMcName, Template: *NewMCOTemplate(oc, "change-worker-extension-usbguard.yaml"),
+			skipWaitForMcp: true, pool: MachineConfigPoolWorker}
+
+		defer wUsbguardMC.deleteNoWait(oc)
+		wUsbguardMC.create(oc.AsAdmin())
+
+		// Create MC to apply usbguard extension to master nodes
+		g.By("Create a MC to deploy the new osImage in 'master' pool")
+		mUsbguardMcName := "tc-54909-extension-usbguard-master"
+		mUsbguardMC := MachineConfig{name: mUsbguardMcName, Template: *NewMCOTemplate(oc, "change-worker-extension-usbguard.yaml"),
+			skipWaitForMcp: true, pool: MachineConfigPoolMaster}
+
+		defer mUsbguardMC.deleteNoWait(oc)
+		mUsbguardMC.create(oc.AsAdmin())
+
+		// Wait for pools
+		wMcp.waitForComplete()
+		logger.Infof("The new config was applied successfully in 'worker' pool\n")
+
+		mMcp.waitForComplete()
+		logger.Infof("The new config was applied successfully in 'master' pool\n")
+
+		// Check that rpms are installed in worker node after the extension
+		g.By("Check that both rpms are installed in worker node after the extension")
+		o.Expect(workerNode.RpmIsInstalled(rpmName)).
+			To(o.BeTrue(),
+				"Error. %s rpm is not installed after changing the osImage in worker node %s.", rpmName, workerNode.GetName())
+
+		o.Expect(workerNode.RpmIsInstalled(extensionRpmName)).
+			To(o.BeTrue(),
+				"Error. %s rpm is not installed after changing the osImage in worker node %s.", extensionRpmName, workerNode.GetName())
+		logger.Infof("OK\n")
+
+		// Check that rpms are installed in master node after the extension
+		g.By("Check that both rpms are installed in master node after the extension")
+		o.Expect(masterNode.RpmIsInstalled(rpmName)).
+			To(o.BeTrue(),
+				"Error. %s rpm is not installed after changing the osImage in master node %s.", rpmName, masterNode.GetName())
+
+		o.Expect(masterNode.RpmIsInstalled(extensionRpmName)).
+			To(o.BeTrue(),
+				"Error. %s rpm is not installed after changing the osImage in master node %s.", extensionRpmName, masterNode.GetName())
+		logger.Infof("OK\n")
+
+		// Check rpm-ostree status in worker node after extension
+		g.By("Check that the rpm-ostree status is reporting the right booted image in worker nodes after the extension is installed")
+
+		wStatus, err = workerNode.GetRpmOstreeStatus(false)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the rpm-ostree status value in master node %s after the extension is installed", workerNode.GetName())
+		logger.Infof("Current rpm-ostree status in worker node after extension:\n%s\n", wStatus)
+		o.Expect(wStatus).To(o.ContainSubstring("LayeredPackages: usbguard"),
+			"Status in worker node %s is not reporting the Layered %s package", workerNode.GetName(), extensionRpmName)
+
+		wDeployment, err = workerNode.GetBootedOsTreeDeployment(true)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the rpm-ostree status value in worker node %s after the extension is installed", workerNode.GetName())
+
+		wContainerRef, jerr = JSON(wDeployment).GetSafe("container-image-reference")
+		o.Expect(jerr).NotTo(o.HaveOccurred(),
+			"We cant get 'container-image-reference' from the deployment status in worker node after the extension is installed. Wrong rpm-ostree status!")
+		o.Expect(wContainerRef.ToString()).To(o.Equal("ostree-unverified-registry:"+digestedImage),
+			"container reference in the worker node's status is not the exepeced one after the extension is installed")
+		logger.Infof("OK!\n")
+
+		// Check rpm-ostree status in master node after the extension
+		g.By("Check that the rpm-ostree status is reporting the right booted image in master nodes after the extension is installed")
+
+		mStatus, err = masterNode.GetRpmOstreeStatus(false)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the rpm-ostree status value in master node %s after the extension is installed", masterNode.GetName())
+		logger.Infof("Current rpm-ostree status in master node:\n%s\n", mStatus)
+		o.Expect(mStatus).To(o.ContainSubstring("LayeredPackages: usbguard"),
+			"Status in master node %s is not reporting the Layered %s package", workerNode.GetName(), extensionRpmName)
+
+		mDeployment, err = masterNode.GetBootedOsTreeDeployment(true)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the rpm-ostree status value in master node %s the extension is installed", masterNode.GetName())
+
+		mContainerRef, jerr = JSON(mDeployment).GetSafe("container-image-reference")
+		o.Expect(jerr).NotTo(o.HaveOccurred(),
+			"We cant get 'container-image-reference' from the deployment status in master node after the extension is installed. Wrong rpm-ostree status!")
+		o.Expect(mContainerRef.ToString()).To(o.Equal("ostree-unverified-registry:"+digestedImage),
+			"container reference in the master node's status is not the exepeced one after the extension is installed")
+		logger.Infof("OK!\n")
+
+		g.By("Remove custom layering MCs")
+		wLayeringMC.deleteNoWait(oc)
+		mLayeringMC.deleteNoWait(oc)
+		logger.Infof("OK!\n")
+
+		// Wait for pools
+		wMcp.waitForComplete()
+		logger.Infof("The new config was applied successfully in 'worker' pool\n")
+
+		mMcp.waitForComplete()
+		logger.Infof("The new config was applied successfully in 'master' pool\n")
+
+		// Check that extension rpm is installed in the worker node, but custom layering rpm is not
+		g.By("Check that extension rpm is installed in worker node but custom layering rpm is not")
+		o.Expect(workerNode.RpmIsInstalled(rpmName)).
+			To(o.BeFalse(),
+				"Error. %s rpm is  installed in worker node %s but it should not be installed.", rpmName, workerNode.GetName())
+
+		o.Expect(workerNode.RpmIsInstalled(extensionRpmName)).
+			To(o.BeTrue(),
+				"Error. %s rpm is not installed after changing the osImage in worker node %s.\n%s", extensionRpmName, workerNode.GetName())
+		logger.Infof("OK\n")
+
+		// Check that extension rpm is installed in the master node, but custom layering rpm is not
+		g.By("Check that both rpms are installed in master node")
+
+		o.Expect(masterNode.RpmIsInstalled(rpmName)).
+			To(o.BeFalse(),
+				"Error. %s rpm is installed in master node %s but it should not be installed.", rpmName, masterNode.GetName())
+
+		o.Expect(masterNode.RpmIsInstalled(extensionRpmName)).
+			To(o.BeTrue(),
+				"Error. %s rpm is not installed after changing the osImage in master node %s.", extensionRpmName, masterNode.GetName())
+		logger.Infof("OK\n")
+
+		// Check rpm-ostree status in worker node after deleting custom osImage
+		g.By("Check that the rpm-ostree status is reporting the right booted image in worker nodes after deleting custom osImage")
+
+		wStatus, err = workerNode.GetRpmOstreeStatus(false)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the rpm-ostree status value in worker node %s after deleting custom osImage", workerNode.GetName())
+		logger.Infof("Current rpm-ostree status in worker node after deleting custom osImage:\n%s\n", wStatus)
+		o.Expect(wStatus).To(o.ContainSubstring("LayeredPackages: usbguard"),
+			"Status in worker node %s is not reporting the Layered %s package after deleting custom osImage", workerNode.GetName(), extensionRpmName)
+		o.Expect(wStatus).NotTo(o.ContainSubstring(digestedImage),
+			"Status in worker node %s is reporting the custom osImage, but it shouldn't because custom osImage was deleted", workerNode.GetName(), extensionRpmName)
+
+		logger.Infof("OK!\n")
+
+		// Check rpm-ostree status in master node after deleting custom  osImage
+		g.By("Check that the rpm-ostree status is reporting the right booted image in master nodes after deleting custom osImage")
+
+		mStatus, err = masterNode.GetRpmOstreeStatus(false)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the rpm-ostree status value in master node %s after deleting custom osIMage", masterNode.GetName())
+		logger.Infof("Current rpm-ostree status in master node:\n%s\n", mStatus)
+		o.Expect(mStatus).To(o.ContainSubstring("LayeredPackages: usbguard"),
+			"Status in master node %s is not reporting the Layered %s package after deleting custom osImage", workerNode.GetName(), extensionRpmName)
+		o.Expect(mStatus).NotTo(o.ContainSubstring(digestedImage),
+			"Status in master node %s is reporting the custom osImage, but it shouldn't because custom osImage was deleted", workerNode.GetName(), extensionRpmName)
+
+		logger.Infof("OK!\n")
+
+	})
 })
 
 // oc: the CLI
@@ -491,7 +751,7 @@ func checkInvalidOsImagesDegradedStatus(oc *exutil.CLI, image, layeringMcName, e
 	// Verify that MCP is degraded
 	g.By("Check that the worker MCP becomes degraded")
 	logger.Infof("Wait for degraded status")
-	o.Eventually(mcp.pollDegradedStatus(), "25m", "30s").Should(o.Equal("True"),
+	o.Eventually(mcp.pollDegradedStatus(), "5m", "30s").Should(o.Equal("True"),
 		"The 'worker' MCP should become degraded when a non-bootable osImage is configure, but it didn't.")
 
 	logger.Infof("Wait for degraded machinecount")

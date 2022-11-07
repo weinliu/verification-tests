@@ -18,6 +18,7 @@ type OsImageBuilderInNode struct {
 	osImage,
 	dockerFileCommands, // Full docker file but the "FROM basOsImage..." that will be calculated
 	dockerConfig,
+	tmpDir,
 	remoteTmpDir,
 	remoteKubeconfig,
 	remoteDockerConfig,
@@ -161,10 +162,14 @@ func (b *OsImageBuilderInNode) buildImage() error {
 	dockerFile := "FROM " + baseImage + "\n" + b.dockerFileCommands
 	logger.Infof(" Using Dockerfile:\n%s", dockerFile)
 
-	dfRemote := NewRemoteFile(b.node, b.remoteDockerfile)
-	rfErr := dfRemote.PushNewTextContent(dockerFile)
-	if rfErr != nil {
-		return fmt.Errorf("Error creating the Dockerfile in the remote node. Error: %s", rfErr)
+	localBuildDir, err := prepareDockerfileDirectory(b.tmpDir, dockerFile)
+	if err != nil {
+		return fmt.Errorf("Error creating the build directory with the Dockerfile. Error: %s", err)
+	}
+
+	cpErr := b.node.CopyFromLocal(filepath.Join(localBuildDir, "Dockerfile"), b.remoteDockerfile)
+	if cpErr != nil {
+		return fmt.Errorf("Error creating the Dockerfile in the remote node. Error: %s", cpErr)
 	}
 	logger.Infof("OK!\n")
 

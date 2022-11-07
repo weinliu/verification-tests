@@ -2,6 +2,7 @@ package mco
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -479,6 +480,23 @@ func (n *Node) WaitUntilRpmOsTreeIsIdle() error {
 // CancelRpmOsTreeTransactions cancels rpm-ostree transactions
 func (n *Node) CancelRpmOsTreeTransactions() (string, error) {
 	return n.DebugNodeWithChroot("rpm-ostree", "cancel")
+}
+
+// CopyFromLocal Copy a local file or directory to the node
+func (n *Node) CopyFromLocal(from, to string) error {
+	logger.Infof("Copying local file %s to node %s in path %s",
+		from, n.GetName(), to)
+	mcDaemonName := n.GetMachineConfigDaemon()
+	toDaemon := filepath.Join("/rootfs", to)
+
+	return n.oc.Run("cp").Args("-n", MachineConfigNamespace, from, mcDaemonName+":"+toDaemon, "-c", MachineConfigDaemon).Execute()
+}
+
+// RpmIsInstalled returns true if the package is installed
+func (n *Node) RpmIsInstalled(rpmName string) bool {
+	rpmOutput, err := n.DebugNodeWithChroot("rpm", "-q", rpmName)
+	logger.Debugf(rpmOutput)
+	return err == nil
 }
 
 // GetAll returns a []Node list with all existing nodes

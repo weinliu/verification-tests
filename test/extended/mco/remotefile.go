@@ -84,6 +84,9 @@ func (rf *RemoteFile) PushNewPermissions(newperm string) error {
 }
 
 // PushNewTextContent modifies the remote file's content
+// WARNING: this way of pushing a file's content inside a node has problems dealing with single quotation <'>
+//		if we are going to push content that may use quotation intensively, we should use node.CopyFromLocal.
+// TODO: in the near future we probably should refactor this method to create the file content locally and to copy/rsync it to the node
 func (rf *RemoteFile) PushNewTextContent(newTextContent string) error {
 	logger.Infof("Push content `%s` to file %s in node %s", newTextContent, rf.fullPath, rf.node.GetName())
 	_, err := rf.node.DebugNodeWithChroot("sh", "-c", fmt.Sprintf("echo -n '%s' > '%s'", newTextContent, rf.fullPath))
