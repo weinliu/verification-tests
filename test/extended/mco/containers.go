@@ -20,8 +20,9 @@ type OsImageBuilder struct {
 	osImage,
 	dockerFileCommands, // Full docker file but the "FROM basOsImage..." that will be calculated
 	dockerConfig,
-	tmpDir,
-	saRegistryName string
+	tmpDir string
+	cleanupRegistryRoute,
+	UseInternalRegistry bool
 }
 
 func (b *OsImageBuilder) prepareEnvironment() error {
@@ -42,21 +43,118 @@ func (b *OsImageBuilder) prepareEnvironment() error {
 		b.architecture = exutil.GetClusterArchitecture(b.oc)
 		logger.Infof("Building using architecture: %s", b.architecture)
 	}
-	if b.osImage == "" {
+	if b.UseInternalRegistry {
+		if err := b.preparePushToInternalRegistry(); err != nil {
+			return err
+		}
+	} else if b.osImage == "" {
 		b.osImage = getLayeringTestImageRepository()
-		logger.Infof("Building image: %s", b.osImage)
 	}
+	logger.Infof("Building image: %s", b.osImage)
+
 	if b.tmpDir == "" {
 		b.tmpDir = e2e.TestContext.OutputDir
 	}
 
-	if b.saRegistryName == "" {
-		b.saRegistryName = "test-registry-sa"
-		if err := b.createRegistryAdminSA(); err != nil {
-			return err
+	return nil
+}
+
+func (b *OsImageBuilder) preparePushToInternalRegistry() error {
+
+	exposed, expErr := b.oc.Run("get").Args("configs.imageregistry.operator.openshift.io", "cluster", `-ojsonpath={.spec.defaultRoute}`).Output()
+	if expErr != nil {
+		return fmt.Errorf("Error getting internal registry configuration. Error: %s", expErr)
+	}
+
+	if exposed != "true" {
+		b.cleanupRegistryRoute = true
+		logger.Infof("The internal registry service is not exposed. Exposing internal registry service...")
+
+		expErr := b.oc.Run("patch").Args("configs.imageregistry.operator.openshift.io/cluster", "--patch", `{"spec":{"defaultRoute":true}}`, "--type=merge").Execute()
+		if expErr != nil {
+			return fmt.Errorf("Error exposing internal registry. Error: %s", expErr)
 		}
 	}
 
+	logger.Infof("Create namespace to store the imagestream")
+	nsExistsErr := b.oc.Run("get").Args("namespace", layeringImagestreamNamespace).Execute()
+	if nsExistsErr != nil {
+		err := b.oc.Run("create").Args("namespace", layeringImagestreamNamespace).Execute()
+		if err != nil {
+			return fmt.Errorf("Error creating namespace %s to store the layering imagestreams. Error: %s",
+				layeringImagestreamNamespace, err)
+		}
+	} else {
+		logger.Infof("Namespace %s already exists. Skip namespace creation", layeringImagestreamNamespace)
+	}
+
+	logger.Infof("Create registry admin service account to store the imagestream")
+	saExistsErr := b.oc.Run("get").Args("-n", layeringImagestreamNamespace, "serviceaccount", layeringRegistryAdminSAName).Execute()
+	if saExistsErr != nil {
+		cErr := b.oc.Run("create").Args("-n", layeringImagestreamNamespace, "serviceaccount", layeringRegistryAdminSAName).Execute()
+		if cErr != nil {
+			return fmt.Errorf("Error creating ServiceAccount %s/%s: %s", layeringImagestreamNamespace, layeringRegistryAdminSAName, cErr)
+		}
+	} else {
+		logger.Infof("SA %s/%s already exists. Skip SA creation", layeringImagestreamNamespace, layeringRegistryAdminSAName)
+	}
+
+	admErr := b.oc.Run("adm").Args("-n", layeringImagestreamNamespace, "policy", "add-cluster-role-to-user", "registry-admin", "-z", layeringRegistryAdminSAName).Execute()
+	if admErr != nil {
+		return fmt.Errorf("Error creating ServiceAccount %s: %s", layeringRegistryAdminSAName, admErr)
+	}
+
+	logger.Infof("Get SA token")
+	saToken, err := b.oc.Run("create").Args("-n", layeringImagestreamNamespace, "token", layeringRegistryAdminSAName).Output()
+	if err != nil {
+		logger.Errorf("Error getting token for SA %s", layeringRegistryAdminSAName)
+		return err
+	}
+	logger.Debugf("SA TOKEN: %s", saToken)
+	logger.Infof("OK!\n")
+
+	logger.Infof("Get current internal registry route")
+	internalRegistryURL, routeErr := b.oc.Run("get").Args("route", "default-route", "-n", "openshift-image-registry", "--template", `{{ .spec.host }}`).Output()
+	if routeErr != nil {
+		return fmt.Errorf("Error getting internal registry's route. Ourput: %s\nError: %s", internalRegistryURL, routeErr)
+	}
+	logger.Infof("Current internal registry route: %s", internalRegistryURL)
+
+	b.osImage = fmt.Sprintf("%s/%s/%s", internalRegistryURL, layeringImagestreamNamespace, "layering")
+	logger.Infof("Using image: %s", b.osImage)
+
+	logger.Infof("Loging as registry admin to internal registry")
+	podmanCLI := container.NewPodmanCLI()
+	loginOut, loginErr := podmanCLI.Run("login").Args(internalRegistryURL, "-u", layeringRegistryAdminSAName, "-p", saToken, "--tls-verify=false", "--authfile", b.dockerConfig).Output()
+	if loginErr != nil {
+		return fmt.Errorf("Error trying to login to internal registry:\nOutput:%s\nError:%s", loginOut, loginErr)
+	}
+	logger.Infof("OK!\n")
+
+	return nil
+}
+
+// CleanUp will clean up all the helper resources created by the builder
+func (b *OsImageBuilder) CleanUp() error {
+	logger.Infof("Cleanup image builder resources")
+	if b.UseInternalRegistry {
+		logger.Infof("Removing namespace %s", layeringImagestreamNamespace)
+		err := b.oc.Run("delete").Args("namespace", layeringImagestreamNamespace, "--ignore-not-found").Execute()
+		if err != nil {
+			return fmt.Errorf("Error creating namespace %s to store the layering imagestreams. Error: %s",
+				layeringImagestreamNamespace, err)
+		}
+
+		if b.cleanupRegistryRoute {
+			logger.Infof("The internal registry route was exposed. Remove the exposed internal registry route to restore initial state.")
+			expErr := b.oc.Run("patch").Args("configs.imageregistry.operator.openshift.io/cluster", "--patch", `{"spec":{"defaultRoute":false}}`, "--type=merge").Execute()
+			if expErr != nil {
+				return fmt.Errorf("Error exposing internal registry. Error: %s", expErr)
+			}
+		}
+	} else {
+		logger.Infof("Not using internal registry, nothing to clean")
+	}
 	return nil
 }
 
@@ -106,7 +204,7 @@ func (b *OsImageBuilder) pushImage() error {
 	g.By("Push osImage")
 	logger.Infof("Pushing image %s", b.osImage)
 	podmanCLI := container.NewPodmanCLI()
-	output, err := podmanCLI.Run("push").Args(b.osImage, "--authfile", b.dockerConfig).Output()
+	output, err := podmanCLI.Run("push").Args(b.osImage, "--tls-verify=false", "--authfile", b.dockerConfig).Output()
 	if err != nil {
 		msg := fmt.Sprintf("Podman failed pushing image %s:\n%s\n%s", b.osImage, output, err)
 		logger.Errorf(msg)
@@ -174,30 +272,6 @@ func (b *OsImageBuilder) CreateAndDigestOsImage() (string, error) {
 		return "", err
 	}
 	return b.digestImage()
-}
-
-// createRegistryAdminSA creates an auxiliary service account with registry-admin permissions
-func (b *OsImageBuilder) createRegistryAdminSA() error {
-	cErr := b.oc.Run("create").Args("serviceaccount", b.saRegistryName).Execute()
-	if cErr != nil {
-		return fmt.Errorf("Error creating ServiceAccount %s: %s", b.saRegistryName, cErr)
-	}
-
-	err := b.oc.Run("adm").Args("policy", "add-cluster-role-to-user", "registry-admin", "-z", b.saRegistryName).Execute()
-	if err != nil {
-		return fmt.Errorf("Error creating ServiceAccount %s: %s", b.saRegistryName, err)
-	}
-	return nil
-}
-
-// DeleteRegistryAdminSA delete the auxiliary service account
-func (b *OsImageBuilder) DeleteRegistryAdminSA() error {
-	cErr := b.oc.Run("delete").Args("serviceaccount", b.saRegistryName, "--ignore-not-found=true").Execute()
-	if cErr != nil {
-		return fmt.Errorf("Error creating ServiceAccount %s: %s", b.saRegistryName, cErr)
-	}
-
-	return nil
 }
 
 func prepareDockerfileDirectory(baseDir, dockerFileContent string) (string, error) {

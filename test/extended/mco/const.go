@@ -35,6 +35,8 @@ const (
 
 	// DefaultLayeringQuayRepository the quay repository that will be used by default to push auxiliary layering images
 	DefaultLayeringQuayRepository = "quay.io/mcoqe/layering"
+	// InternalRegistrySvcURL is the url to reach the internal registry service from inside a cluster
+	InternalRegistrySvcURL = "image-registry.openshift-image-registry.svc:5000"
 
 	// LayeringBaseImageReleaseInfo is the name of the layering base image in release info
 	LayeringBaseImageReleaseInfo = "rhel-coreos-8"
@@ -88,4 +90,7 @@ const (
 	GCPPlatform = "gcp"
 	// AzurePlatform value used to identify azure infrastructure
 	AzurePlatform = "azure"
+
+	layeringImagestreamNamespace = "layering-tests-imagestreams"
+	layeringRegistryAdminSAName  = "test-registry-sa"
 )

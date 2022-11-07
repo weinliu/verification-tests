@@ -21,8 +21,8 @@ type OsImageBuilderInNode struct {
 	remoteTmpDir,
 	remoteKubeconfig,
 	remoteDockerConfig,
-	remoteDockerfile,
-	saRegistryName string
+	remoteDockerfile string
+	UseInternalRegistry bool
 }
 
 func (b *OsImageBuilderInNode) prepareEnvironment() error {
@@ -43,10 +43,6 @@ func (b *OsImageBuilderInNode) prepareEnvironment() error {
 		b.architecture = exutil.GetClusterArchitecture(b.node.oc)
 		logger.Infof("Building using architecture: %s", b.architecture)
 	}
-	if b.osImage == "" {
-		b.osImage = getLayeringTestImageRepository()
-		logger.Infof("Building image: %s", b.osImage)
-	}
 
 	b.remoteTmpDir = filepath.Join("/root", e2e.TestContext.OutputDir, fmt.Sprintf("mco-test-%s", exutil.GetRandomString()))
 	_, err := b.node.DebugNodeWithChroot("mkdir", "-p", b.remoteTmpDir)
@@ -63,13 +59,6 @@ func (b *OsImageBuilderInNode) prepareEnvironment() error {
 	if b.remoteDockerfile == "" {
 		b.remoteDockerfile = filepath.Join(b.remoteTmpDir, "Dockerfile")
 	}
-	// It is not needed to create a new SA, but we will need it as soon as we support the internal registry
-	if b.saRegistryName == "" {
-		b.saRegistryName = "test-registry-sa"
-		if err := b.createRegistryAdminSA(); err != nil {
-			return err
-		}
-	}
 
 	g.By("Prepare remote docker config file")
 	logger.Infof("Copy cluster config.json file")
@@ -79,32 +68,83 @@ func (b *OsImageBuilderInNode) prepareEnvironment() error {
 		return cpErr
 	}
 
+	if b.UseInternalRegistry {
+		b.osImage = fmt.Sprintf("%s/%s/%s", InternalRegistrySvcURL, layeringImagestreamNamespace, "layering")
+		if err := b.preparePushToInternalRegistry(); err != nil {
+			return err
+		}
+	} else if b.osImage == "" {
+		b.osImage = getLayeringTestImageRepository()
+	}
+	logger.Infof("Building image: %s", b.osImage)
+
 	logger.Infof("OK!\n")
 
 	return nil
 }
 
-// createRegistryAdminSA creates an auxiliary service account with registry-admin permissions
-func (b *OsImageBuilderInNode) createRegistryAdminSA() error {
-	cErr := b.node.oc.Run("create").Args("serviceaccount", b.saRegistryName).Execute()
-	if cErr != nil {
-		return fmt.Errorf("Error creating ServiceAccount %s: %s", b.saRegistryName, cErr)
+func (b *OsImageBuilderInNode) preparePushToInternalRegistry() error {
+	logger.Infof("Create namespace to store the imagestream")
+	nsExistsErr := b.node.oc.Run("get").Args("namespace", layeringImagestreamNamespace).Execute()
+	if nsExistsErr != nil {
+		err := b.node.oc.Run("create").Args("namespace", layeringImagestreamNamespace).Execute()
+		if err != nil {
+			return fmt.Errorf("Error creating namespace %s to store the layering imagestreams. Error: %s",
+				layeringImagestreamNamespace, err)
+		}
+	} else {
+		logger.Infof("Namespace %s already exists. Skip namespace creation", layeringImagestreamNamespace)
 	}
 
-	err := b.node.oc.Run("adm").Args("policy", "add-cluster-role-to-user", "registry-admin", "-z", b.saRegistryName).Execute()
-	if err != nil {
-		return fmt.Errorf("Error creating ServiceAccount %s: %s", b.saRegistryName, err)
+	logger.Infof("Create registry admin service account to store the imagestream")
+	saExistsErr := b.node.oc.Run("get").Args("-n", layeringImagestreamNamespace, "serviceaccount", layeringRegistryAdminSAName).Execute()
+	if saExistsErr != nil {
+		cErr := b.node.oc.Run("create").Args("-n", layeringImagestreamNamespace, "serviceaccount", layeringRegistryAdminSAName).Execute()
+		if cErr != nil {
+			return fmt.Errorf("Error creating ServiceAccount %s/%s: %s", layeringImagestreamNamespace, layeringRegistryAdminSAName, cErr)
+		}
+	} else {
+		logger.Infof("SA %s/%s already exists. Skip SA creation", layeringImagestreamNamespace, layeringRegistryAdminSAName)
 	}
+
+	admErr := b.node.oc.Run("adm").Args("-n", layeringImagestreamNamespace, "policy", "add-cluster-role-to-user", "registry-admin", "-z", layeringRegistryAdminSAName).Execute()
+	if admErr != nil {
+		return fmt.Errorf("Error creating ServiceAccount %s: %s", layeringRegistryAdminSAName, admErr)
+	}
+
+	logger.Infof("Get SA token")
+	saToken, err := b.node.oc.Run("create").Args("-n", layeringImagestreamNamespace, "token", layeringRegistryAdminSAName).Output()
+	if err != nil {
+		logger.Errorf("Error getting token for SA %s", layeringRegistryAdminSAName)
+		return err
+	}
+	logger.Debugf("SA TOKEN: %s", saToken)
+	logger.Infof("OK!\n")
+
+	logger.Infof("Loging as registry admin to internal registry")
+	loginOut, loginErr := b.node.DebugNodeWithChroot("podman", "login", InternalRegistrySvcURL, "-u", layeringRegistryAdminSAName, "-p", saToken, "--authfile", b.remoteDockerConfig)
+	if loginErr != nil {
+		return fmt.Errorf("Error trying to login to internal registry:\nOutput:%s\nError:%s", loginOut, loginErr)
+	}
+	logger.Infof("OK!\n")
+
 	return nil
 }
 
-// DeleteRegistryAdminSA delete the auxiliary service account
-func (b *OsImageBuilderInNode) DeleteRegistryAdminSA() error {
-	cErr := b.node.oc.Run("delete").Args("serviceaccount", b.saRegistryName, "--ignore-not-found=true").Execute()
-	if cErr != nil {
-		return fmt.Errorf("Error creating ServiceAccount %s: %s", b.saRegistryName, cErr)
-	}
+// CleanUp will clean up all the helper resources created by the builder
+func (b *OsImageBuilderInNode) CleanUp() error {
+	logger.Infof("Cleanup image builder resources")
+	if b.UseInternalRegistry {
+		logger.Infof("Removing namespace %s", layeringImagestreamNamespace)
+		err := b.node.oc.Run("delete").Args("namespace", layeringImagestreamNamespace, "--ignore-not-found").Execute()
+		if err != nil {
+			return fmt.Errorf("Error creating namespace %s to store the layering imagestreams. Error: %s",
+				layeringImagestreamNamespace, err)
+		}
 
+	} else {
+		logger.Infof("Not using internal registry, nothing to clean")
+	}
 	return nil
 }
 
