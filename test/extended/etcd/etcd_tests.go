@@ -99,7 +99,7 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 	})
 
 	// author: skundu@redhat.com
-	g.It("PstChkUpgrade-Author:skundu-NonPreRelease-Critical-22665-Check etcd image have been update to target release value after upgrade [Serial]", func() {
+	g.It("PstChkUpgrade-ConnectedOnly-Author:skundu-NonPreRelease-Critical-22665-Check etcd image have been update to target release value after upgrade [Serial]", func() {
 		g.By("Test for case OCP-22665 Check etcd image have been update to target release value after upgrade.")
 		e2e.Logf("Discover all the etcd pods")
 		etcdPodList := getPodListByLabel(oc, "etcd=true")
