@@ -120,17 +120,24 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		if !strings.Contains(cap, "marketplace") {
 			g.Skip("marketplace is disabled, skip...")
 		}
-		g.By("2, Disable the OperatorHub")
-		// make sure the operatorhub enabled after this test
-		defer func() {
-			_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("operatorhub", "cluster", "-p", "{\"spec\": {\"disableAllDefaultSources\": false}}", "--type=merge").Output()
-			if err != nil {
-				e2e.Failf("Fail to re-enable operatorhub, error:%v", err)
-			}
-		}()
-		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("operatorhub", "cluster", "-p", "{\"spec\": {\"disableAllDefaultSources\": true}}", "--type=merge").Output()
+		g.By("2, check if the default catalogsource disabled")
+		disable, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhub", "cluster", "-o=jsonpath={.spec.disableAllDefaultSources}").Output()
 		if err != nil {
-			e2e.Failf("Fail to disable operatorhub, error:%v", err)
+			e2e.Failf("Fail to get operatorhub spec, error:%v", err)
+		}
+		if disable != "true" {
+			g.By("2-1, Disable the default catalogsource")
+			// make sure the operatorhub enabled after this test
+			defer func() {
+				_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("operatorhub", "cluster", "-p", "{\"spec\": {\"disableAllDefaultSources\": false}}", "--type=merge").Output()
+				if err != nil {
+					e2e.Failf("Fail to re-enable operatorhub, error:%v", err)
+				}
+			}()
+			_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("operatorhub", "cluster", "-p", "{\"spec\": {\"disableAllDefaultSources\": true}}", "--type=merge").Output()
+			if err != nil {
+				e2e.Failf("Fail to disable operatorhub, error:%v", err)
+			}
 		}
 		g.By("3, Check the OperatorHub status")
 		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhub", "cluster", "-o=jsonpath={.status.sources}").Output()
