@@ -78,3 +78,31 @@ func checkIfCPMSIsStable(oc *exutil.CLI) bool {
 	}
 	return true
 }
+
+// getCPMSAvailabilityZones get zones from cpms
+func getCPMSAvailabilityZones(oc *exutil.CLI) []string {
+	getAvailabilityZonesJSON := "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.aws[*].placement.availabilityZone}"
+	availabilityZonesStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getAvailabilityZonesJSON, "-n", machineAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	availabilityZones := strings.Split(availabilityZonesStr, " ")
+	e2e.Logf("availabilityZones:%s", availabilityZones)
+	return availabilityZones
+}
+
+// getZoneAndMachineFromCPMSZones get the zone only have one machine and return the machine name
+func getZoneAndMachineFromCPMSZones(oc *exutil.CLI, availabilityZones []string) (int, string, string) {
+	var key int
+	var value, machineName string
+	for key, value = range availabilityZones {
+		labels := "machine.openshift.io/zone=" + value + ",machine.openshift.io/cluster-api-machine-type=master"
+		machineNamesStr, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("machines.machine.openshift.io", "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+		machineNames := strings.Split(machineNamesStr, " ")
+		machineName = machineNames[0]
+		number := len(machineNames)
+		if number == 1 {
+			e2e.Logf("failureDomain:%s, master machine name:%s", value, machineName)
+			break
+		}
+	}
+	return key, value, machineName
+}
