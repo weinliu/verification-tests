@@ -369,4 +369,38 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(checkIfCPMSIsStable(oc)).To(o.BeTrue())
 	})
 
+	// author: zhsun@redhat.com
+	g.It("Author:zhsun-Medium-53328-[CPMS] It doesn't rearrange the availability zones if the order of the zones isn't matching in the CPMS and the Control Plane [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
+		skipForCPMSNotExist(oc)
+		skipForCPMSNotStable(oc)
+
+		g.By("Check failureDomains")
+		availabilityZones := getCPMSAvailabilityZones(oc)
+		if len(availabilityZones) <= 1 {
+			g.Skip("Skip for the failureDomains is no more than 1")
+		}
+
+		g.By("Update strategy to OnDelete so that it will not trigger update automaticly")
+		defer printNodeInfo(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"strategy":{"type":"RollingUpdate"}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"strategy":{"type":"OnDelete"}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Change the failureDomain's order by deleting/adding failureDomain")
+		changeFailureDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.aws[1]}", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"remove","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/aws/1"}]`, "--type=json", "-n", machineAPINamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/failureDomains/aws/0","value":`+changeFailureDomain+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Update strategy to RollingUpdate check if will rearrange the availability zones and no update for masters")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"strategy":{"type":"RollingUpdate"}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newAvailabilityZones := getCPMSAvailabilityZones(oc)
+		o.Expect(strings.Join(newAvailabilityZones, "")).To(o.ContainSubstring(availabilityZones[1] + availabilityZones[0] + strings.Join(availabilityZones[2:], "")))
+		o.Expect(checkIfCPMSIsStable(oc)).To(o.BeTrue())
+	})
 })
