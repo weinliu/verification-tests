@@ -297,6 +297,7 @@ const (
 	ClusterUninstallTimeout = 1800
 	HibernateAfterTimer     = 300
 	ClusterSuffixLen        = 4
+	LogsLimitLen            = 1024
 )
 
 //AWS Configurations
@@ -682,32 +683,28 @@ func cleanupObjects(oc *exutil.CLI, objs ...objectTableRef) {
 	for _, v := range objs {
 		e2e.Logf("Start to remove: %v", v)
 		//Print out debugging info if CD installed is false
-		if v.kind == "ClusterDeployment" {
-			var installedFlag, statusConditions string
+		var provisionPodOutput, installedFlag string
+		if v.kind == "ClusterPool" {
 			if v.namespace != "" {
-				installedFlag, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(v.kind, "-n", v.namespace, v.name, "-o=jsonpath={.spec.installed}").Output()
-				if installedFlag == "false" {
-					//Print out status.conditions
-					statusConditions, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(v.kind, "-n", v.namespace, v.name, "-o=jsonpath={.status.conditions}").Output()
-					e2e.Logf("CD Installed is false, .status.conditions is %s", statusConditions)
-					//print out provision pod logs
-					provisionPodOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "hive.openshift.io/job-type=provision", "-n", v.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
-					e2e.Logf("provisionPodOutput is %s", provisionPodOutput)
-					if err == nil {
-						var provisionPod []string
-						provisionPod = strings.Split(strings.TrimSpace(provisionPodOutput), " ")
-						e2e.Logf("provisionPod is %s", provisionPod)
-						if len(provisionPod) > 0 {
-							e2e.Logf("provisionPod len is %d. provisionPod[0] is %s", len(provisionPod), provisionPod[0])
-							provisionPodLogs, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args(provisionPod[0], "-c", "hive", "-n", v.namespace).Output()
-							if len(provisionPodLogs) <= 2000 {
-								e2e.Logf("provisionPodLogs is %s", provisionPodLogs)
-							} else {
-								e2e.Logf("provisionPodLogs is %s", provisionPodLogs[len(provisionPodLogs)-2000:])
-							}
-						}
+				cdListStr := getCDlistfromPool(oc, v.name)
+				var cdArray []string
+				cdArray = strings.Split(strings.TrimSpace(cdListStr), "\n")
+				for i := range cdArray {
+					installedFlag, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterDeployment", "-n", cdArray[i], cdArray[i], "-o=jsonpath={.spec.installed}").Output()
+					if installedFlag == "false" {
+						failedCdName := cdArray[i]
+						e2e.Logf("failedCdName is %s", failedCdName)
+						//At present, the maximum size of clusterpool in auto test is 2, we can print them all to get more information if cd installed is false
+						printStatusConditions(oc, "ClusterDeployment", failedCdName, failedCdName)
+						printProvisionPodLogs(oc, provisionPodOutput, failedCdName)
 					}
 				}
+			}
+		} else if v.kind == "ClusterDeployment" {
+			installedFlag, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(v.kind, "-n", v.namespace, v.name, "-o=jsonpath={.spec.installed}").Output()
+			if installedFlag == "false" {
+				printStatusConditions(oc, v.kind, v.namespace, v.name)
+				printProvisionPodLogs(oc, provisionPodOutput, v.namespace)
 			}
 		}
 		if v.namespace != "" {
@@ -719,6 +716,40 @@ func cleanupObjects(oc *exutil.CLI, objs ...objectTableRef) {
 		if v.kind == "ClusterPool" || v.kind == "ClusterDeployment" {
 			e2e.Logf("Wait ClusterDeployment delete done for %s", v.name)
 			newCheck("expect", "get", asAdmin, withoutNamespace, contain, v.name, nok, ClusterUninstallTimeout, []string{"ClusterDeployment", "-A"}).check(oc)
+		}
+	}
+}
+
+//print out the status conditions
+func printStatusConditions(oc *exutil.CLI, kind, namespace, name string) {
+	statusConditions, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(kind, "-n", namespace, name, "-o=jsonpath={.status.conditions}").Output()
+	if len(statusConditions) <= LogsLimitLen {
+		e2e.Logf("statusConditions is %s", statusConditions)
+	} else {
+		e2e.Logf("statusConditions is %s", statusConditions[:LogsLimitLen])
+	}
+}
+
+//print out provision pod logs
+func printProvisionPodLogs(oc *exutil.CLI, provisionPodOutput, namespace string) {
+	provisionPodOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "hive.openshift.io/job-type=provision", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+	e2e.Logf("provisionPodOutput is %s", provisionPodOutput)
+	//if err == nil , print out provision pod logs
+	if err == nil {
+		var provisionPod []string
+		provisionPod = strings.Split(strings.TrimSpace(provisionPodOutput), " ")
+		e2e.Logf("provisionPod is %s", provisionPod)
+		if len(provisionPod) > 0 {
+			e2e.Logf("provisionPod len is %d. provisionPod[0] is %s", len(provisionPod), provisionPod[0])
+			provisionPodLogsFile := "logs_output_" + getRandomString()[:ClusterSuffixLen] + ".txt"
+			provisionPodLogs, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args(provisionPod[0], "-c", "hive", "-n", namespace).OutputToFile(provisionPodLogsFile)
+			defer os.Remove(provisionPodLogs)
+			failLogs, _ := exec.Command("bash", "-c", "grep -E 'level=error|level=fatal' "+provisionPodLogs).Output()
+			if len(failLogs) <= LogsLimitLen {
+				e2e.Logf("provisionPodLogs is %s", failLogs)
+			} else {
+				e2e.Logf("provisionPodLogs is %s", failLogs[len(failLogs)-LogsLimitLen:])
+			}
 		}
 	}
 }
