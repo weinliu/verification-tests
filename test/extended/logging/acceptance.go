@@ -37,7 +37,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	})
 
 	// author qitang@redhat.com
-	g.It("Author:qitang-Critical-53817-Logging acceptance testing: vector to loki[Slow][Serial]", func() {
+	g.It("HyperShiftGUEST-Author:qitang-Critical-53817-Logging acceptance testing: vector to loki[Slow][Serial]", func() {
 		if !compareClusterResources(oc, "6", "10Gi") {
 			g.Skip("Current cluster doesn't have sufficient cpu/memory for this test!")
 		}
