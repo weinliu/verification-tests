@@ -103,7 +103,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	})
 	// author: wewang@redhat.com
-	g.It("Author:wewang-Medium-44113-Image pruner should use custom tolerations [Serial]", func() {
+	g.It("HyperShiftGUEST-Author:wewang-Medium-44113-Image pruner should use custom tolerations [Serial]", func() {
 		g.By("Set tolerations for imagepruner cluster")
 		err := oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"tolerations":[{"effect":"NoSchedule","key":"key","operator":"Equal","value":"value"}]}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -114,7 +114,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//Author: xiuwang@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:xiuwang-Medium-44107-Image pruner should skip images that has already been deleted [Serial]", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-ConnectedOnly-Author:xiuwang-Medium-44107-Image pruner should skip images that has already been deleted [Serial]", func() {
 		g.By("Setup imagepruner")
 		defer oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"keepTagRevisions":3,"keepYoungerThanDuration":null,"schedule":""}}`, "--type=merge").Execute()
 		err := oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"keepTagRevisions":0,"keepYoungerThanDuration":"0s","schedule": "* * * * *"}}`, "--type=merge").Execute()
@@ -146,7 +146,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-33708-Verify spec.ignoreInvalidImageReference with invalid image reference [Serial]", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-33708-Verify spec.ignoreInvalidImageReference with invalid image reference [Serial]", func() {
 		var (
 			imageRegistryBaseDir = exutil.FixturePath("testdata", "image_registry")
 			podFile              = filepath.Join(imageRegistryBaseDir, "single-pod.yaml")
@@ -218,7 +218,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("Author:xiuwang-Medium-52705-Medium-11623-Could delete recently created images when --prune-over-size-limit is used", func() {
+	g.It("HyperShiftGUEST-Author:xiuwang-Medium-52705-Medium-11623-Could delete recently created images when --prune-over-size-limit is used", func() {
 		var (
 			imageRegistryBaseDir = exutil.FixturePath("testdata", "image_registry")
 			limitFile            = filepath.Join(imageRegistryBaseDir, "project-limitRange-image.yaml")
@@ -306,7 +306,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("Author:wewang-High-27577-Explain and check the custom resource definition for the prune", func() {
+	g.It("HyperShiftGUEST-Author:wewang-High-27577-Explain and check the custom resource definition for the prune", func() {
 		g.By("Check the custom resource definition for the prune")
 		result, explainErr := oc.WithoutNamespace().AsAdmin().Run("explain").Args("imagepruners", "--api-version=imageregistry.operator.openshift.io/v1").Output()
 		o.Expect(explainErr).NotTo(o.HaveOccurred())
@@ -316,7 +316,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:wewang-Medium-17167-Image soft prune via 'prune-registry' option with invalid argument", func() {
+	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:wewang-Medium-17167-Image soft prune via 'prune-registry' option with invalid argument", func() {
 		result, _ := oc.WithoutNamespace().AsAdmin().Run("adm").Args("prune", "images", "--keep-tag-revisions=abc").Output()
 		o.Expect(result).To(o.ContainSubstring("invalid argument"))
 		result, _ = oc.WithoutNamespace().AsAdmin().Run("adm").Args("prune", "images", "--confirm=abc").Output()
