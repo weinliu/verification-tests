@@ -26,6 +26,11 @@ objects:
               ports:
                 - containerPort: 8080
               securityContext:
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                  - ALL              
                 seccompProfile:
                   type: RuntimeDefault
 
