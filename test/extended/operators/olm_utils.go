@@ -124,6 +124,7 @@ func (sub *subscriptionDescription) update(oc *exutil.CLI, itName string, dr des
 }
 
 //the method is to just create sub, and save it to dr, do not check its state.
+// Note that, this func doesn't get the installedCSV, this may lead to your operator CSV won't be deleted when calling sub.deleteCSV()
 func (sub *subscriptionDescription) createWithoutCheck(oc *exutil.CLI, itName string, dr describerResrouce) {
 	//isAutomatic := strings.Compare(sub.ipApproval, "Automatic") == 0
 
@@ -1196,7 +1197,21 @@ func expectedResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, isCom
 		return ret
 	}
 	e2e.Logf("Running: oc get asAdmin(%t) withoutNamespace(%t) %s", asAdmin, withoutNamespace, strings.Join(parameters, " "))
-	return wait.Poll(3*time.Second, 150*time.Second, func() (bool, error) {
+
+	// The detault timeout
+	timeString := "150s"
+	// extract the custom timeout
+	if strings.Contains(content, "-") {
+		timeString = strings.Split(content, "-")[1]
+		content = strings.Split(content, "-")[0]
+		e2e.Logf("! reset the timeout to %s", timeString)
+	}
+	timeout, err := time.ParseDuration(timeString)
+	if err != nil {
+		e2e.Failf("! Fail to parse the timeout value:%s, err:%v", content, err)
+	}
+
+	return wait.Poll(3*time.Second, timeout, func() (bool, error) {
 		output, err := doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
 		if err != nil {
 			e2e.Logf("the get error is %v, and try next", err)

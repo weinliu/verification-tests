@@ -33,6 +33,152 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: jiazha@redhat.com
+	g.It("Author:jiazha-Medium-53914-OLM controller plug-in for openshift-* namespace labelling [Serial]", func() {
+		// openshifttest-53914 without openshift- prefix
+		// openshift-test-53914 without the `security.openshift.io/scc.podSecurityLabelSync=true` label
+		// openshift-test-53914 with the `security.openshift.io/scc.podSecurityLabelSync=true` label
+		g.By("Starting ../ prepare projects")
+		projects := []string{"openshifttest-53914", "openshift-test1-53914", "openshift-test2-53914", "default", "openshift-test3-53914", "openshift-operators"}
+		dr := make(describerResrouce)
+		itName := g.CurrentGinkgoTestDescription().TestText
+		dr.addIr(itName)
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+		for i, project := range projects {
+			g.By(fmt.Sprintf("step-%d, subscribe to learn perator v0.0.3 in project %s", i, project))
+			if project != "default" && project != "openshift-operators" {
+				g.By(fmt.Sprintf("step-%d, create project %s", i, project))
+				_, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("new-project", project).Output()
+				if err != nil {
+					e2e.Failf("Fail to create project %s, error:%v", project, err)
+				}
+				defer func(ns string) {
+					g.By(fmt.Sprintf(">>>delete project %s", ns))
+					_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns).Output()
+					if err != nil {
+						e2e.Failf("Defer !!!Fail to delete project %s, error:%v", ns, err)
+					}
+				}(project)
+			}
+			// this project just for verifying the Copied CSV
+			if project == "openshift-test3-53914" {
+				continue
+			}
+			if project == "openshift-test2-53914" {
+				_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", project, "security.openshift.io/scc.podSecurityLabelSync=false").Output()
+				if err != nil {
+					e2e.Failf("Fail to label project %s with security.openshift.io/scc.podSecurityLabelSync=false, error:%v", project, err)
+				}
+			}
+			var og operatorGroupDescription
+			if project != "openshift-operators" {
+				og = operatorGroupDescription{
+					name:      fmt.Sprintf("og%d-53914", i),
+					namespace: project,
+					template:  ogSingleTemplate,
+				}
+				defer og.delete(itName, dr)
+				og.createwithCheck(oc, itName, dr)
+			}
+
+			var single bool
+			if project == "openshift-operators" {
+				single = false
+			} else {
+				single = true
+			}
+
+			sub := subscriptionDescription{
+				subName:                fmt.Sprintf("sub%d-53914", i),
+				namespace:              project,
+				catalogSourceName:      "qe-app-registry",
+				catalogSourceNamespace: "openshift-marketplace",
+				channel:                "beta",
+				ipApproval:             "Automatic",
+				operatorPackage:        "learn",
+				startingCSV:            "learn-operator.v0.0.3",
+				singleNamespace:        single,
+				template:               subTemplate,
+			}
+			defer sub.deleteCSV(itName, dr)
+			defer sub.delete(itName, dr)
+			sub.create(oc, itName, dr)
+			// skip default namespace's csv status checking since it will fail due to PSA issue
+			if project == "default" {
+				// it takes a long time to update to the Failed status
+				// newCheck("expect", asAdmin, withoutNamespace, compare, "Failed-300s", ok, []string{"csv", "learn-operator.v0.0.3", "-n", project, "-o=jsonpath={.status.phase}"}).check(oc)
+				newCheck("present", asAdmin, withoutNamespace, true, "", ok, []string{"csv", "learn-operator.v0.0.3", "-n", project}).check(oc)
+			} else {
+				newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded-120s", ok, []string{"csv", "learn-operator.v0.0.3", "-n", project, "-o=jsonpath={.status.phase}"}).check(oc)
+			}
+			labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", project, "-o=jsonpath={.metadata.labels}").Output()
+			if err != nil {
+				e2e.Failf("Fail to get project %s labels, error:%v", project, err)
+			}
+			switch {
+			case project == "openshifttest-53914":
+				if strings.Contains(labels, "\"security.openshift.io/scc.podSecurityLabelSync\":\"true\"") {
+					e2e.Failf("project %s should NOT be labeled with security.openshift.io/scc.podSecurityLabelSync=true, labels:%s", project, labels)
+				}
+			case project == "openshift-test-53914":
+				if !strings.Contains(labels, "\"security.openshift.io/scc.podSecurityLabelSync\":\"true\"") {
+					e2e.Failf("project %s should be labeled with security.openshift.io/scc.podSecurityLabelSync=true, labels:%s", project, labels)
+				}
+			case project == "openshift-test2-53914":
+				if strings.Contains(labels, "\"security.openshift.io/scc.podSecurityLabelSync\":\"true\"") {
+					e2e.Failf("project %s should NOT be updated with security.openshift.io/scc.podSecurityLabelSync=true, labels:%s", project, labels)
+				}
+				// project should be re-labeled  with `security.openshift.io/scc.podSecurityLabelSync=true` after `security.openshift.io/scc.podSecurityLabelSync=false` removed
+				_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", project, "security.openshift.io/scc.podSecurityLabelSync-").Output()
+				if err != nil {
+					e2e.Failf("Fail to unlabel project %s with security.openshift.io/scc.podSecurityLabelSync-, error:%v", project, err)
+				}
+				err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+					labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", project, "-o=jsonpath={.metadata.labels}").Output()
+					if err != nil || !strings.Contains(labels, "\"security.openshift.io/scc.podSecurityLabelSync\":\"true\"") {
+						e2e.Logf("The label not updated, re-try: %s", err)
+						return false, nil
+					}
+					return true, nil
+				})
+				exutil.AssertWaitPollNoErr(err, "Fail to re-label project openshift-test2-53914 after 60s!")
+			case project == "default":
+				if strings.Contains(labels, "\"security.openshift.io/scc.podSecurityLabelSync\":\"true\"") {
+					e2e.Failf("project %s should NOT be labeled with security.openshift.io/scc.podSecurityLabelSync=true, labels:%s", project, labels)
+				}
+			case project == "openshift-operators":
+				if !strings.Contains(labels, "\"security.openshift.io/scc.podSecurityLabelSync\":\"true\"") {
+					e2e.Failf("project %s should be labeled with security.openshift.io/scc.podSecurityLabelSync=true, labels:%s", project, labels)
+				}
+				// The project with a copied CSV in should NOT be labeled with security.openshift.io/scc.podSecurityLabelSync=true
+				labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "openshift-test3-53914", "-o=jsonpath={.metadata.labels}").Output()
+				if err != nil {
+					e2e.Failf("Fail to get project openshift-test3-53914 labels:%s, error:%v", err, labels)
+				}
+				if strings.Contains(labels, "\"security.openshift.io/scc.podSecurityLabelSync\":\"true\"") {
+					e2e.Failf("project openshift-test-53914 should NOT be labeled with security.openshift.io/scc.podSecurityLabelSync=true since copied CSV, labels:%s", labels)
+				}
+			}
+			sub.delete(itName, dr)
+			sub.deleteCSV(itName, dr)
+
+			if project != "openshifttest-53914" && project != "default" {
+				//  The `security.openshift.io/scc.podSecurityLabelSync=true` won't be removed.
+				err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+					labels, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", project, "-o=jsonpath={.metadata.labels}").Output()
+					if err != nil || !strings.Contains(labels, "\"security.openshift.io/scc.podSecurityLabelSync\":\"true\"") {
+						e2e.Logf("security.openshift.io/scc.podSecurityLabelSync=true should NOT be removed from project %s after CSV removed, labels:%s", project, labels)
+						return false, nil
+					}
+					return true, nil
+				})
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The security.openshift.io/scc.podSecurityLabelSync=true label of project:%s should NOT be removed!", project))
+			}
+		}
+	})
+
+	// author: jiazha@redhat.com
 	g.It("Author:jiazha-High-54233-Add the PO/rukpak components to the OCP payload", func() {
 		featureSet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec.featureSet}").Output()
 		if err != nil {
