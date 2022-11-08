@@ -871,11 +871,12 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: gkarager@redhat.com
-	g.It("NonPreRelease-PreChkUpgrade-Author:gkarager-Medium-55213-[Upgrade]Upgrade should succeed when custom SCC is created with readOnlyRootFilesystem set to true", func() {
+	g.It("NonPreRelease-PreChkUpgrade-Author:gkarager-Medium-55213-Upgrade should succeed when custom SCC is created with readOnlyRootFilesystem set to true", func() {
 		g.By("Create a custom SCC that has `readOnlyRootFilesystem: true`")
-		BaseDir := exutil.FixturePath("testdata", "apiserverauth")
-		customSCC := filepath.Join(BaseDir, "custom_scc.yaml")
+		baseDir := exutil.FixturePath("testdata", "apiserverauth")
+		customSCC := filepath.Join(baseDir, "custom_scc.yaml")
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f" + customSCC).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		// This case intentionally does not the post-upgrade check. Successful upgrade itself is the post-upgrade expected result.
 	})
 })

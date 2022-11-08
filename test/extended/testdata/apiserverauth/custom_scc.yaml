@@ -13,7 +13,7 @@ fsGroup:
 groups: []
 kind: SecurityContextConstraints
 metadata:
-  name: kube-aad-proxy-scc
+  name: case-55213-custom-scc
 priority: null
 readOnlyRootFilesystem: true
 requiredDropCapabilities: []
