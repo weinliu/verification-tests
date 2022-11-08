@@ -672,48 +672,6 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get csv catalogtest.v0.0.1 in %s", namespace))
 	})
 
-	// author: jfan@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-48359-SDK init plugin about hybird helm operator", func() {
-		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
-		var hybirdtest = filepath.Join(buildPruningBaseDir, "cache_v1_hybirdtest.yaml")
-		var memcachedbackup = filepath.Join(buildPruningBaseDir, "cache_v1_memcachedbackup.yaml")
-		operatorsdkCLI.showInfo = true
-		oc.SetupProject()
-		namespace := oc.Namespace()
-		defer operatorsdkCLI.Run("cleanup").Args("hybird-operator", "-n", namespace).Output()
-		_, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/hybird-bundle:v4.11", "-n", namespace, "--timeout", "5m").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		createHybird, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", hybirdtest, "-p", "NAME=hybirdtest-sample").OutputToFile("config-48359.json")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		createMemback, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", memcachedbackup, "-p", "NAME=memcachedbackup-sample").OutputToFile("config-backup-48359.json")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "anyuid", "system:serviceaccount:"+namespace+":memcached-sample").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createHybird, "-n", namespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
-			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace).Output()
-			if strings.Contains(msg, "hybirdtest-sample") {
-				e2e.Logf("hybirdtest created success")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get hybirdtest helm type pods in %s", namespace))
-
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createMemback, "-n", namespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
-			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace).Output()
-			if strings.Contains(msg, "memcachedbackup-sample") {
-				e2e.Logf("memcachedbackup-sample created success")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get hybirdtest go type pods in %s", namespace))
-	})
-
 	// author: chuo@redhat.com
 	g.It("Author:chuo-Medium-27718-scorecard remove version flag", func() {
 		operatorsdkCLI.showInfo = true
@@ -4299,5 +4257,141 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(metricsMsg).To(o.ContainSubstring("counter"))
 		o.Expect(metricsMsg).To(o.ContainSubstring("Observe my histogram"))
 		o.Expect(metricsMsg).To(o.ContainSubstring("Observe my summary"))
+	})
+
+	// author: jfan@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-48359-SDK init plugin about hybird helm operator [Slow]", func() {
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture != "amd64" {
+			g.Skip("Do not support " + architecture)
+		}
+		tmpBasePath := "/tmp/ocp-48359-" + getRandomString()
+		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-48359")
+		err := os.MkdirAll(tmpPath, 0o755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(tmpBasePath)
+		operatorsdkCLI.ExecCommandPath = tmpPath
+		makeCLI.ExecCommandPath = tmpPath
+		nsOperator := "memcached-operator-48359-system"
+		imageTag := "quay.io/olmqe/memcached-operator:48359-" + getRandomString()
+		dataPath := "test/extended/testdata/operatorsdk/ocp-48359-data/"
+		crFilePath := filepath.Join(dataPath, "cache6_v1_memcachedbackup.yaml")
+		quayCLI := container.NewQuayCLI()
+		defer quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
+
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", crFilePath, "-n", nsOperator).Output()
+			g.By("step: undeploy")
+			_, err = makeCLI.Run("undeploy").Args().Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("step: init Helm Based Operator")
+		output, err := operatorsdkCLI.Run("init").Args("--plugins=hybrid.helm.sdk.operatorframework.io", "--domain=hybird.com", "--project-version=3", "--repo=github.com/example/memcached-operator").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("go mod tidy"))
+
+		g.By("step: create the apis")
+		// Create helm api
+		output, err = operatorsdkCLI.Run("create").Args("api", "--plugins=helm.sdk.operatorframework.io/v1", "--group=cache6", "--version=v1", "--kind=Memcached").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Created helm-charts"))
+		// Create go api
+		output, err = operatorsdkCLI.Run("create").Args("api", "--group=cache6", "--version=v1", "--kind=MemcachedBackup", "--resource", "--controller", "--plugins=go/v3").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("make manifests"))
+
+		g.By("step: modify files to generate the operator image.")
+		// update the rbac file
+		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		// update the Makefile
+		makefileFilePath := filepath.Join(tmpPath, "Makefile")
+		replaceContent(makefileFilePath, "controller:latest", imageTag)
+		replaceContent(makefileFilePath, "docker build -t ${IMG}", "docker build -t ${IMG} .")
+		// copy memcachedbackup_types.go
+		err = copy(filepath.Join(dataPath, "memcachedbackup_types.go"), filepath.Join(tmpPath, "api", "v1", "memcachedbackup_types.go"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// copy memcachedbackup_controller.go ./controllers/memcachedbackup_controller.go
+		err = copy(filepath.Join(dataPath, "memcachedbackup_controller.go"), filepath.Join(tmpPath, "controllers", "memcachedbackup_controller.go"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// copy kubmize
+		g.By("step: Install kustomize")
+		kustomizePath := "/root/kustomize"
+		binPath := filepath.Join(tmpPath, "bin", "kustomize")
+		err = copy(filepath.Join(kustomizePath), filepath.Join(binPath))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// chmod 644 watches.yaml
+		err = os.Chmod(filepath.Join(tmpPath, "watches.yaml"), 0o644)
+
+		g.By("step: Build and push the operator image")
+		tokenDir := "/tmp/ocp-48359" + getRandomString()
+		err = os.MkdirAll(tokenDir, os.ModePerm)
+		defer os.RemoveAll(tokenDir)
+		if err != nil {
+			e2e.Failf("fail to create the token folder:%s", tokenDir)
+		}
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", tokenDir), "--confirm").Output()
+		if err != nil {
+			e2e.Failf("Fail to get the cluster auth %v", err)
+		}
+		buildPushOperatorImage(architecture, tmpPath, imageTag, tokenDir)
+
+		g.By("step: Deploy the operator")
+		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("deployment.apps/memcached-operator-48359-controller-manager"))
+
+		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lines := strings.Split(podList, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "memcached-operator-48359-controller-manager") {
+					e2e.Logf("found pod memcached-operator-48359-controller-manager")
+					if strings.Contains(line, "Running") {
+						e2e.Logf("the status of pod memcached-operator-48359-controller-manager is Running")
+						return true, nil
+					}
+					e2e.Logf("the status of pod memcached-operator-48359-controller-manager is not Running")
+					return false, nil
+				}
+			}
+			return false, nil
+		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("No memcached-operator-48359-controller-manager in project %s", nsOperator))
+		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/memcached-operator-48359-controller-manager", "-c", "manager", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(msg, "Starting workers") {
+				e2e.Logf("Starting workers successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "container manager doesn't work")
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
+
+		g.By("step: Create the resource")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crFilePath, "-n", nsOperator).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(msg, "memcachedbackup-sample") {
+				e2e.Logf("found pod memcachedbackup-sample")
+				return true, nil
+			}
+			return false, nil
+		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("hybird test: No memcachedbackup-sample in project %s", nsOperator))
 	})
 })
