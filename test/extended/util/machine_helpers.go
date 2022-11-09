@@ -119,7 +119,11 @@ func GetNodeNameFromMachine(oc *CLI, machineName string) string {
 // GetRandomMachineSetName get a random MachineSet name
 func GetRandomMachineSetName(oc *CLI) string {
 	e2e.Logf("Getting a random MachineSet ...")
-	return ListWorkerMachineSetNames(oc)[0]
+	machinesetName := ListWorkerMachineSetNames(oc)[0]
+	if machinesetName == "" {
+		g.Skip("Skip this test scenario because there are no machinesets in this cluster")
+	}
+	return machinesetName
 }
 
 // ScaleMachineSet scale a MachineSet by replicas
