@@ -11,7 +11,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	defer g.GinkgoRecover()
 	var oc = exutil.NewCLI("coredns-upstream-resolvers-log", exutil.KubeConfigPath())
 	// author: shudili@redhat.com
-	g.It("Author:shudili-NonPreRelease-Critical-46868-Configure forward policy for CoreDNS flag [Disruptive]", func() {
+	g.It("HyperShiftGUEST-Author:shudili-NonPreRelease-Critical-46868-Configure forward policy for CoreDNS flag [Disruptive]", func() {
 		var (
 			resourceName        = "dns.operator.openshift.io/default"
 			cfgMulIPv4Upstreams = "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/upstreams\", \"value\":[" +
@@ -89,7 +89,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: shudili@redhat.com
-	g.It("Author:shudili-Critical-46872-Configure logLevel for CoreDNS under DNS operator flag [Disruptive]", func() {
+	g.It("HyperShiftGUEST-Author:shudili-Critical-46872-Configure logLevel for CoreDNS under DNS operator flag [Disruptive]", func() {
 		var (
 			resourceName      = "dns.operator.openshift.io/default"
 			cfgLogLevelDebug  = "[{\"op\":\"replace\", \"path\":\"/spec/logLevel\", \"value\":\"Debug\"}]"
@@ -135,7 +135,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(logOutput).To(o.ContainSubstring("class error"))
 	})
 
-	g.It("Author:shudili-NonPreRelease-Critical-46867-Configure upstream resolvers for CoreDNS flag [Disruptive]", func() {
+	g.It("HyperShiftGUEST-Author:shudili-NonPreRelease-Critical-46867-Configure upstream resolvers for CoreDNS flag [Disruptive]", func() {
 		var (
 			resourceName        = "dns.operator.openshift.io/default"
 			cfgDefaultUpstreams = "[{\"op\":\"replace\", \"path\":\"/spec/upstreamResolvers/upstreams\", \"value\":[" +
@@ -231,7 +231,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(upstreams).To(o.ContainSubstring("forward . /etc/resolv.conf"))
 	})
 
-	g.It("Author:shudili-Medium-46869-Negative test of configuring upstream resolvers and policy flag [Disruptive]", func() {
+	g.It("HyperShiftGUEST-Author:shudili-Medium-46869-Negative test of configuring upstream resolvers and policy flag [Disruptive]", func() {
 		var (
 			resourceName       = "dns.operator.openshift.io/default"
 			cfgAddOneUpstreams = "[{\"op\":\"add\", \"path\":\"/spec/upstreamResolvers/upstreams\", \"value\":[" +
@@ -286,7 +286,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).To(o.ContainSubstring("Unsupported value: \"random\""))
 	})
 
-	g.It("Author:shudili-Medium-46874-negative test for configuring logLevel and operatorLogLevel flag [Disruptive]", func() {
+	g.It("HyperShiftGUEST-Author:shudili-Medium-46874-negative test for configuring logLevel and operatorLogLevel flag [Disruptive]", func() {
 		var (
 			resourceName               = "dns.operator.openshift.io/default"
 			invalidCfgStringLogLevel   = "[{\"op\":\"replace\", \"path\":\"/spec/logLevel\", \"value\":\"string_test\"}]"
@@ -323,7 +323,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).To(o.ContainSubstring("Unsupported value: \"trace\""))
 	})
 
-	g.It("Author:shudili-NonPreRelease-Low-46875-Different LogLevel logging function of CoreDNS flag [Disruptive]", func() {
+	g.It("HyperShiftGUEST-Author:shudili-NonPreRelease-Low-46875-Different LogLevel logging function of CoreDNS flag [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")

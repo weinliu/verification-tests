@@ -16,7 +16,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	var oc = exutil.NewCLI("router-tls", exutil.KubeConfigPath())
 
 	// author: hongli@redhat.com
-	g.It("Author:hongli-Critical-43300-enable client certificate with optional policy", func() {
+	g.It("HyperShiftGUEST-Author:hongli-Critical-43300-enable client certificate with optional policy", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		cmFile := filepath.Join(buildPruningBaseDir, "ca-bundle.pem")
@@ -55,7 +55,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: hongli@redhat.com
-	g.It("Author:hongli-Medium-43301-enable client certificate with required policy", func() {
+	g.It("HyperShiftGUEST-Author:hongli-Medium-43301-enable client certificate with required policy", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		cmFile := filepath.Join(buildPruningBaseDir, "ca-bundle.pem")
@@ -95,7 +95,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: mjoseph@redhat.com
-	g.It("Author:mjoseph-Critical-43284-setting tlssecurityprofile to TLSv1.3", func() {
+	g.It("HyperShiftGUEST-Author:mjoseph-Critical-43284-setting tlssecurityprofile to TLSv1.3", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
@@ -137,7 +137,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: mjoseph@redhat.com
-	g.It("Author:mjoseph-Critical-50842-destination-ca-certificate-secret annotation for destination CA Opaque certifcate", func() {
+	g.It("HyperShiftGUEST-Author:mjoseph-Critical-50842-destination-ca-certificate-secret annotation for destination CA Opaque certifcate", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
 		ingressTemp := filepath.Join(buildPruningBaseDir, "ingress-destCA.yaml")
@@ -206,7 +206,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: mjoseph@redhat.com
-	g.It("Author:mjoseph-Critical-51980-destination-ca-certificate-secret annotation for destination CA TLS certifcate", func() {
+	g.It("HyperShiftGUEST-Author:mjoseph-Critical-51980-destination-ca-certificate-secret annotation for destination CA TLS certifcate", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
 		ingressTemp := filepath.Join(buildPruningBaseDir, "ingress-destCA.yaml")
