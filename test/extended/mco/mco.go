@@ -2439,22 +2439,6 @@ func skipTestIfFIPSIsNotEnabled(oc *exutil.CLI) {
 	}
 }
 
-// skipTestIfSupportedPlatformNotMatched skip the test if supported platforms are not matched
-func skipTestIfSupportedPlatformNotMatched(oc *exutil.CLI, supported ...string) {
-	var match bool
-	p := exutil.CheckPlatform(oc)
-	for _, sp := range supported {
-		if strings.EqualFold(sp, p) {
-			match = true
-			break
-		}
-	}
-
-	if !match {
-		g.Skip(fmt.Sprintf("skip test because current platform %s is not in supported list %v", p, supported))
-	}
-}
-
 func createMcAndVerifyIgnitionVersion(oc *exutil.CLI, stepText, mcName, ignitionVersion string) {
 	g.By(fmt.Sprintf("Create machine config with %s", stepText))
 	mcTemplate := "change-worker-ign-version.yaml"

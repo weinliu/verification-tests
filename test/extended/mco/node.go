@@ -418,6 +418,12 @@ func (n *Node) IsKernelArgEnabled(karg string) (bool, error) {
 	return (strings.Contains(unameOut, karg) || strings.Contains(cliOut, karg)), nil
 }
 
+// IsRealTimeKernel returns true if the node is using a realtime kernel
+func (n *Node) IsRealTimeKernel() (bool, error) {
+	// we can use the IsKernelArgEnabled to check the realtime kernel
+	return n.IsKernelArgEnabled("PREEMPT_RT")
+}
+
 // InstallRpm installs the rpm in the node using rpm-ostree command
 func (n *Node) InstallRpm(rpmName string) (string, error) {
 	logger.Infof("Installing rpm '%s' in node  %s", rpmName, n.GetName())

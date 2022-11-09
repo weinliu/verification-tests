@@ -376,6 +376,9 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 
 		// Check the rpm-ostree status after the MC deletion
 		g.By("Check that the original ostree deployment was restored")
+		o.Expect(workerNode.WaitUntilRpmOsTreeIsIdle()).
+			NotTo(o.HaveOccurred(), "rpm-ostree status didn't become idle after restoring the original osImage")
+
 		deployment, derr := workerNode.GetBootedOsTreeDeployment(false)
 		o.Expect(derr).NotTo(o.HaveOccurred(),
 			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
@@ -694,6 +697,202 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.cent
 			"Status in master node %s is reporting the custom osImage, but it shouldn't because custom osImage was deleted", workerNode.GetName(), extensionRpmName)
 
 		logger.Infof("OK!\n")
+
+	})
+
+	g.It("Author:sregidor-VMonly-ConnectedOnly-Longduration-NonPreRelease-High-54915-Configure kerneltype while using a custom osImage [Disruptive]", func() {
+		skipTestIfSupportedArchNotMatched(oc.AsAdmin())
+		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform, GCPPlatform)
+
+		var (
+			rpmName            = "zsh"
+			dockerFileCommands = fmt.Sprintf(`
+RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.centos.org/centos/$releasever-stream/BaseOS/$basearch/os/\ngpgcheck=0\nenabled=1\n\n[appstream]\nname=CentOS-$releasever - AppStream\nbaseurl=http://mirror.centos.org/centos/$releasever-stream/AppStream/$basearch/os/\ngpgcheck=0\nenabled=1\n\n' > /etc/yum.repos.d/centos.repo && \
+    rpm-ostree install %s && \
+    rpm-ostree cleanup -m && \
+    ostree container commit
+`, rpmName)
+			rtMcTemplate = "change-worker-kernel-argument.yaml"
+			workerNode   = NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()[0]
+			masterNode   = NewNodeList(oc).GetAllMasterNodesOrFail()[0]
+			wMcp         = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			mMcp         = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+		)
+
+		defer mMcp.waitForComplete()
+		defer wMcp.waitForComplete()
+
+		// Create a MC to use realtime kernel in the worker pool
+		g.By("Create machine config to enable RT kernel in worker pool")
+		wRtMcName := "50-realtime-kernel-worker"
+		wRtMc := MachineConfig{name: wRtMcName, Template: *NewMCOTemplate(oc, rtMcTemplate),
+			skipWaitForMcp: true, pool: MachineConfigPoolWorker}
+
+		defer wRtMc.deleteNoWait(oc)
+		wRtMc.create(oc)
+		logger.Infof("OK!\n")
+
+		// Create a MC to use realtime kernel in the master pool
+		g.By("Create machine config to enable RT kernel in master pool")
+		mRtMcName := "50-realtime-kernel-master"
+		mRtMc := MachineConfig{name: mRtMcName, Template: *NewMCOTemplate(oc, rtMcTemplate),
+			skipWaitForMcp: true, pool: MachineConfigPoolMaster}
+
+		defer mRtMc.deleteNoWait(oc)
+		mRtMc.create(oc)
+		logger.Infof("OK!\n")
+
+		// Wait for the pools to be updated
+		g.By("Wait for pools to be updated after applying the new realtime kernel")
+		wMcp.waitForComplete()
+		mMcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		// Check that realtime kernel is active in worker nodes
+		g.By("Check realtime kernel in worker nodes")
+		o.Expect(workerNode.IsRealTimeKernel()).Should(o.BeTrue(),
+			"Kernel is not realtime kernel in worker node %s", workerNode.GetName())
+		logger.Infof("OK!\n")
+
+		// Check that realtime kernel is active in master nodes
+		g.By("Check realtime kernel in master nodes")
+		o.Expect(masterNode.IsRealTimeKernel()).Should(o.BeTrue(),
+			"Kernel is not realtime kernel in master node %s", masterNode.GetName())
+		logger.Infof("OK!\n")
+
+		// Build the new osImage
+		g.By("Build a custom osImage")
+		osImageBuilder := OsImageBuilderInNode{node: workerNode, dockerFileCommands: dockerFileCommands}
+		digestedImage, err := osImageBuilder.CreateAndDigestOsImage()
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error creating the new osImage")
+		logger.Infof("OK\n")
+
+		// Create MC to apply the config to worker nodes
+		g.By("Create a MC to deploy the new osImage in 'worker' pool")
+		wLayeringMcName := "tc-54915-layering-kerneltype-worker"
+		wLayeringMC := MachineConfig{name: wLayeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate), skipWaitForMcp: true,
+			pool: MachineConfigPoolWorker, parameters: []string{"OS_IMAGE=" + digestedImage}}
+
+		defer wLayeringMC.deleteNoWait(oc)
+		wLayeringMC.create(oc.AsAdmin())
+		logger.Infof("OK!\n")
+
+		// Create MC to apply the config to master nodes
+		g.By("Create a MC to deploy the new osImage in 'master' pool")
+		mLayeringMcName := "tc-54915-layering-kerneltype-master"
+		mLayeringMC := MachineConfig{name: mLayeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate), skipWaitForMcp: true,
+			pool: MachineConfigPoolMaster, parameters: []string{"OS_IMAGE=" + digestedImage}}
+
+		defer mLayeringMC.deleteNoWait(oc)
+		mLayeringMC.create(oc.AsAdmin())
+		logger.Infof("OK!\n")
+
+		// Wait for the pools to be updated
+		g.By("Wait for pools to be updated after applying the new osImage")
+		wMcp.waitForComplete()
+		mMcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		// Check rpm is installed in worker node
+		g.By("Check that the rpm is installed in worker node")
+		o.Expect(workerNode.RpmIsInstalled(rpmName)).
+			To(o.BeTrue(),
+				"Error. %s rpm is not installed after changing the osImage in worker node %s.", rpmName, workerNode.GetName())
+
+		wStatus, err := workerNode.GetRpmOstreeStatus(false)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the rpm-ostree status value in worker node %s", masterNode.GetName())
+
+		o.Expect(wStatus).Should(o.And(
+			o.MatchRegexp("(?s)LayeredPackages: kernel-rt-core.*kernel-rt-kvm.*kernel-rt-modules.*kernel-rt-modules-extra"),
+			o.ContainSubstring("RemovedBasePackages: kernel-core kernel-modules kernel kernel-modules-extra")),
+			"rpm-ostree status is not reporting the kernel layered packages properly")
+		logger.Infof("OK\n")
+
+		// Check rpm is installed in master node
+		g.By("Check that the rpm is installed in master node")
+		o.Expect(masterNode.RpmIsInstalled(rpmName)).
+			To(o.BeTrue(),
+				"Error. %s rpm is not installed after changing the osImage in master node %s.", rpmName, workerNode.GetName())
+
+		mStatus, err := masterNode.GetRpmOstreeStatus(false)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the rpm-ostree status value in master node %s", masterNode.GetName())
+
+		o.Expect(mStatus).Should(o.And(
+			o.MatchRegexp("(?s)LayeredPackages: kernel-rt-core.*kernel-rt-kvm.*kernel-rt-modules.*kernel-rt-modules-extra"),
+			o.ContainSubstring("RemovedBasePackages: kernel-core kernel-modules kernel kernel-modules-extra")),
+			"rpm-ostree status is not reporting the kernel layered packages properly")
+		logger.Infof("OK\n")
+
+		// Check that realtime kernel is active in worker nodes
+		g.By("Check realtime kernel in worker nodes")
+		o.Expect(workerNode.IsRealTimeKernel()).Should(o.BeTrue(),
+			"Kernel is not realtime kernel in worker node %s", workerNode.GetName())
+		logger.Infof("OK!\n")
+
+		// Check that realtime kernel is active in master nodes
+		g.By("Check realtime kernel in master nodes")
+		o.Expect(masterNode.IsRealTimeKernel()).Should(o.BeTrue(),
+			"Kernel is not realtime kernel in master node %s", masterNode.GetName())
+		logger.Infof("OK!\n")
+
+		// Delete realtime configs
+		g.By("Delete the realtime kernel MCs")
+		wRtMc.deleteNoWait(oc)
+		mRtMc.deleteNoWait(oc)
+		logger.Infof("OK!\n")
+
+		// Wait for the pools to be updated
+		g.By("Wait for pools to be updated after deleting the realtime kernel configs")
+		wMcp.waitForComplete()
+		mMcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		// Check that realtime kernel is not active in worker nodes anymore
+		g.By("Check realtime kernel in worker nodes")
+		o.Expect(workerNode.IsRealTimeKernel()).Should(o.BeFalse(),
+			"Realtime kernel should not be active anymore in worker node %s", workerNode.GetName())
+		logger.Infof("OK!\n")
+
+		// Check that realtime kernel is not active in master nodes anymore
+		g.By("Check realtime kernel in master nodes")
+		o.Expect(masterNode.IsRealTimeKernel()).Should(o.BeFalse(),
+			"Realtime kernel should not be active anymore in master node %s", masterNode.GetName())
+		logger.Infof("OK!\n")
+
+		// Check rpm is installed in worker node
+		g.By("Check that the rpm is installed in worker node")
+		o.Expect(workerNode.RpmIsInstalled(rpmName)).
+			To(o.BeTrue(),
+				"Error. %s rpm is not installed after changing the osImage in worker node %s.", rpmName, workerNode.GetName())
+
+		wStatus, err = workerNode.GetRpmOstreeStatus(false)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the rpm-ostree status value in worker node %s", masterNode.GetName())
+
+		o.Expect(wStatus).ShouldNot(o.And(
+			o.ContainSubstring("LayeredPackages"),
+			o.ContainSubstring("RemovedBasePackages")),
+			"rpm-ostree status is not reporting the kernel layered packages properly in worker node %s", workerNode.GetName())
+		logger.Infof("OK\n")
+
+		// Check rpm is installed in master node
+		g.By("Check that the rpm is installed in master node")
+		o.Expect(masterNode.RpmIsInstalled(rpmName)).
+			To(o.BeTrue(),
+				"Error. %s rpm is not installed after changing the osImage in master node %s.", rpmName, workerNode.GetName())
+
+		mStatus, err = masterNode.GetRpmOstreeStatus(false)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the rpm-ostree status value in worker node %s", masterNode.GetName())
+
+		o.Expect(mStatus).ShouldNot(o.And(
+			o.ContainSubstring("LayeredPackages"),
+			o.ContainSubstring("RemovedBasePackages")),
+			"rpm-ostree status is not reporting the kernel layered packages properly in master node %s", workerNode.GetName())
+		logger.Infof("OK\n")
 
 	})
 })

@@ -930,3 +930,19 @@ func getLatestImageURL(oc *exutil.CLI, release string) (string, string) {
 	return imageURL, buildVersion
 
 }
+
+// skipTestIfSupportedPlatformNotMatched skip the test if supported platforms are not matched
+func skipTestIfSupportedPlatformNotMatched(oc *exutil.CLI, supported ...string) {
+	var match bool
+	p := exutil.CheckPlatform(oc)
+	for _, sp := range supported {
+		if strings.EqualFold(sp, p) {
+			match = true
+			break
+		}
+	}
+
+	if !match {
+		g.Skip(fmt.Sprintf("skip test because current platform %s is not in supported list %v", p, supported))
+	}
+}
