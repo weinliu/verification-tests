@@ -1,10 +1,11 @@
 package router
 
 import (
+	"path/filepath"
+
 	g "github.com/onsi/ginkgo"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"path/filepath"
 )
 
 var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
@@ -420,4 +421,38 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	})
 
+	// Bug: 1949361
+	g.It("Author:mjoseph-High-55821-CoreDNS default bufsize should be 512", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodLabel         = "app=hello-pod"
+			cltPodName          = "hello-pod"
+		)
+		project1 := oc.Namespace()
+
+		g.By("Check updated value in dns operator file")
+		output1, err1 := oc.AsAdmin().Run("get").Args("cm/dns-default", "-n", "openshift-dns", "-o=jsonpath={.data.Corefile}").Output()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		o.Expect(output1).To(o.ContainSubstring("bufsize 512"))
+
+		g.By("Check the cache value in Corefile of coredns under all dns-default-xxx pods")
+		podList := getAllDNSPodsNames(oc)
+		keepSearchInAllDNSPods(oc, podList, "bufsize 512")
+
+		g.By("Create a client pod")
+		createResourceFromFile(oc, project1, clientPod)
+		err := waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+
+		g.By("Client send out a dig for google.com to check response")
+		digOutput, err := oc.Run("exec").Args(cltPodName, "--", "dig", "google.com").Output()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		o.Expect(digOutput).To(o.ContainSubstring("udp: 512"))
+
+		g.By("Client send out a dig for NXDOMAIN to check response")
+		digOutput, err = oc.Run("exec").Args(cltPodName, "--", "dig", "nxdomain.google.com").Output()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		o.Expect(digOutput).To(o.ContainSubstring("udp: 512"))
+	})
 })
