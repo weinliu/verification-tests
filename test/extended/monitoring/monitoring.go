@@ -35,13 +35,13 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	// author: hongyli@redhat.com
-	g.It("Author:hongyli-High-49073-Retention size settings for platform", func() {
+	g.It("HyperShiftGUEST-Author:hongyli-High-49073-Retention size settings for platform", func() {
 		checkRetention(oc, "openshift-monitoring", "prometheus-k8s", "storage.tsdb.retention.size=10GiB", platformLoadTime)
 		checkRetention(oc, "openshift-monitoring", "prometheus-k8s", "storage.tsdb.retention.time=45d", 20)
 	})
 
 	// author: hongyli@redhat.com
-	g.It("Author:hongyli-High-49514-federate service endpoint and route of platform Prometheus", func() {
+	g.It("HyperShiftGUEST-Author:hongyli-High-49514-federate service endpoint and route of platform Prometheus", func() {
 		var err error
 		g.By("Bind cluster-monitoring-view cluster role to current user")
 		clusterRoleBindingName := "clusterMonitoringViewFederate"
@@ -60,7 +60,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	// author: juzhao@redhat.com
-	g.It("Author:juzhao-Medium-49172-Enable validating webhook for AlertmanagerConfig customer resource", func() {
+	g.It("HyperShiftGUEST-Author:juzhao-Medium-49172-Enable validating webhook for AlertmanagerConfig customer resource", func() {
 		var (
 			err                       error
 			output                    string
@@ -91,13 +91,13 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	//author: tagao@redhat.com
-	g.It("Author:tagao-Medium-42800-Allow configuration of the log level for Alertmanager in the CMO configmap", func() {
+	g.It("HyperShiftGUEST-Author:tagao-Medium-42800-Allow configuration of the log level for Alertmanager in the CMO configmap", func() {
 		g.By("Check alertmanager container logs")
 		exutil.WaitAndGetSpecificPodLogs(oc, "openshift-monitoring", "alertmanager", "alertmanager-main-0", "level=debug")
 	})
 
 	// author: juzhao@redhat.com
-	g.It("Author:juzhao-Medium-43748-Ensure label namespace exists on all alerts", func() {
+	g.It("HyperShiftGUEST-Author:juzhao-Medium-43748-Ensure label namespace exists on all alerts", func() {
 		g.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
@@ -106,7 +106,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	//author: tagao@redhat.com
-	g.It("Author:tagao-Medium-47307-Add external label of origin to platform alerts", func() {
+	g.It("HyperShiftGUEST-Author:tagao-Medium-47307-Add external label of origin to platform alerts", func() {
 		g.By("Get token of SA prometheus-k8s")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
@@ -115,7 +115,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	//author: tagao@redhat.com
-	g.It("Author:tagao-Medium-45163-Show labels for pods/nodes/namespaces/PV/PVC/PDB in metrics", func() {
+	g.It("HyperShiftGUEST-Author:tagao-Medium-45163-Show labels for pods/nodes/namespaces/PV/PVC/PDB in metrics", func() {
 		var (
 			ns          string
 			helloPodPvc = filepath.Join(monitoringBaseDir, "helloPodPvc.yaml")
@@ -146,7 +146,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	// author: juzhao@redhat.com
-	g.It("Author:juzhao-Medium-45271-Allow OpenShift users to configure audit logs for prometheus-adapter", func() {
+	g.It("HyperShiftGUEST-Author:juzhao-Medium-45271-Allow OpenShift users to configure audit logs for prometheus-adapter", func() {
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 		podList, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus-adapter")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -162,7 +162,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	//author: tagao@redhat.com
-	g.It("Author:tagao-Medium-48432-Allow OpenShift users to configure request logging for Thanos Querier query endpoint", func() {
+	g.It("HyperShiftGUEST-Author:tagao-Medium-48432-Allow OpenShift users to configure request logging for Thanos Querier query endpoint", func() {
 		var (
 			thanosQuerierPodName string
 		)
@@ -183,7 +183,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	// author: juzhao@redhat.com
-	g.It("Author:juzhao-Low-43038-Should not have error for loading OpenAPI spec for v1beta1.metrics.k8s.io", func() {
+	g.It("HyperShiftGUEST-Author:juzhao-Low-43038-Should not have error for loading OpenAPI spec for v1beta1.metrics.k8s.io", func() {
 		var (
 			searchString string
 			result       string
@@ -229,7 +229,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			})
 
 			// author: hongyli@redhat.com
-			g.It("Author:hongyli-Critical-43341-Exclude namespaces from user workload monitoring based on label", func() {
+			g.It("HyperShiftGUEST-Author:hongyli-Critical-43341-Exclude namespaces from user workload monitoring based on label", func() {
 				var (
 					exampleAppRule = filepath.Join(monitoringBaseDir, "example-alert-rule.yaml")
 				)
@@ -260,7 +260,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			})
 
 			// author: hongyli@redhat.com
-			g.It("Author:hongyli-High-50024-High-49515-Check federate route and service of user workload Prometheus", func() {
+			g.It("HyperShiftGUEST-Author:hongyli-High-50024-High-49515-Check federate route and service of user workload Prometheus", func() {
 				var err error
 				g.By("Bind cluster-monitoring-view RBAC to default service account")
 				uwmFederateRBACViewName := "uwm-federate-rbac-" + ns
@@ -280,7 +280,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			})
 
 			// author: tagao@redhat.com
-			g.It("Author:tagao-Medium-50241-Prometheus (uwm) externalLabels not showing always in alerts", func() {
+			g.It("HyperShiftGUEST-Author:tagao-Medium-50241-Prometheus (uwm) externalLabels not showing always in alerts", func() {
 				var (
 					exampleAppRule = filepath.Join(monitoringBaseDir, "in-cluster_query_alert_rule.yaml")
 				)
@@ -295,7 +295,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			})
 
 			// author: tagao@redhat.com
-			g.It("Author:tagao-Medium-42825-Expose EnforcedTargetLimit in the CMO configuration for UWM", func() {
+			g.It("HyperShiftGUEST-Author:tagao-Medium-42825-Expose EnforcedTargetLimit in the CMO configuration for UWM", func() {
 				g.By("check user metrics")
 				token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version{namespace=\""+ns+"\"}'", token, "prometheus-example-app", 2*uwmLoadTime)
@@ -309,7 +309,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		})
 
 		// author: hongyli@redhat.com
-		g.It("Author:hongyli-High-49745-High-50519-Retention for UWM Prometheus and thanos ruler", func() {
+		g.It("HyperShiftGUEST-Author:hongyli-High-49745-High-50519-Retention for UWM Prometheus and thanos ruler", func() {
 			g.By("Check retention size of prometheus user workload")
 			checkRetention(oc, "openshift-user-workload-monitoring", "prometheus-user-workload", "storage.tsdb.retention.size=5GiB", uwmLoadTime)
 			g.By("Check retention of prometheus user workload")
@@ -319,7 +319,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		})
 
 		// author: juzhao@redhat.com
-		g.It("Author:juzhao-Medium-42956-Should not have PrometheusNotIngestingSamples alert if enabled user workload monitoring only", func() {
+		g.It("HyperShiftGUEST-Author:juzhao-Medium-42956-Should not have PrometheusNotIngestingSamples alert if enabled user workload monitoring only", func() {
 			g.By("Get token of SA prometheus-k8s")
 			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 
@@ -328,7 +328,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		})
 
 		// author: tagao@redhat.com
-		g.It("Author:tagao-Medium-46301-Allow OpenShift users to configure query log file for Prometheus", func() {
+		g.It("HyperShiftGUEST-Author:tagao-Medium-46301-Allow OpenShift users to configure query log file for Prometheus", func() {
 			g.By("make sure all pods in openshift-monitoring/openshift-user-workload-monitoring are ready")
 			exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 			exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
@@ -346,7 +346,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	//author: tagao@redhat.com
-	g.It("Author:tagao-Low-30088-User can not deploy ThanosRuler CRs in user namespaces [Serial]", func() {
+	g.It("HyperShiftGUEST-Author:tagao-Low-30088-User can not deploy ThanosRuler CRs in user namespaces [Serial]", func() {
 		var (
 			ns                string
 			output            string
@@ -360,7 +360,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 	})
 
 	// author: hongyli@redhat.com
-	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
+	g.It("HyperShiftGUEST-Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 		g.By("Delete config map user-workload--monitoring-config")
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
