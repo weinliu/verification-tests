@@ -7332,7 +7332,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// Test case: OCP-24566, author:xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-24566-OLM automatically configures operators with global proxy config", func() {
-		exutil.SkipARM64(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -7346,32 +7345,32 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				template:  ogSingleTemplate,
 			}
 			catsrc = catalogSourceDescription{
-				name:        "catsrc-planetscale-operator",
+				name:        "catsrc-nginx-operator",
 				namespace:   oc.Namespace(),
-				displayName: "Test planetscale Operators",
+				displayName: "Test 24566 Operators",
 				publisher:   "OLM QE",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/planetscale-index:v1-4.8",
+				address:     "quay.io/olmqe/nginxolm-operator-index:v1",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
-				subName:                "planetscale-sub",
+				subName:                "nginx-operator-24566",
 				namespace:              oc.Namespace(),
-				catalogSourceName:      "catsrc-planetscale-operator",
+				catalogSourceName:      "catsrc-nginx-operator",
 				catalogSourceNamespace: oc.Namespace(),
-				channel:                "beta",
+				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "planetscale",
+				operatorPackage:        "nginx-operator",
 				singleNamespace:        true,
 				template:               subTemplate,
 			}
-			subP = subscriptionDescription{subName: "planetscale-sub",
+			subP = subscriptionDescription{subName: "nginx-operator-24566",
 				namespace:              oc.Namespace(),
-				catalogSourceName:      "catsrc-planetscale-operator",
+				catalogSourceName:      "catsrc-nginx-operator",
 				catalogSourceNamespace: oc.Namespace(),
-				channel:                "beta",
+				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "planetscale",
+				operatorPackage:        "nginx-operator",
 				singleNamespace:        true,
 				template:               subTemplateProxy}
 			subProxyTest = subscriptionDescriptionProxy{
@@ -7411,26 +7410,47 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.create(oc, itName, dr)
 		g.By("install operator SUCCESS")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "planetscale-operator", ok, []string{"deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "nginx-operator-controller-manager", ok, []string{"deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..metadata.name}"}).check(oc)
 		if httpProxy == "" {
-			nodeHTTPProxy := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"planetscale-operator\")].env[?(.name==\"HTTP_PROXY\")].value}")
+			nodeHTTPProxy := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"HTTP_PROXY\")].value}")
 			o.Expect(nodeHTTPProxy).To(o.BeEmpty())
-			nodeHTTPSProxy := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"planetscale-operator\")].env[?(.name==\"HTTPS_PROXY\")].value}")
+			nodeHTTPSProxy := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"HTTPS_PROXY\")].value}")
 			o.Expect(nodeHTTPSProxy).To(o.BeEmpty())
-			nodeNoProxy := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"planetscale-operator\")].env[?(.name==\"NO_PROXY\")].value}")
+			nodeNoProxy := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"NO_PROXY\")].value}")
 			o.Expect(nodeNoProxy).To(o.BeEmpty())
 			g.By("CHECK proxy configure SUCCESS")
 			sub.delete(itName, dr)
 			sub.deleteCSV(itName, dr)
+
+			g.By("3) create subscription and set variables ( HTTP_PROXY, HTTPS_PROXY and NO_PROXY ) with non-empty values. ")
+			subProxyTest.create(oc, itName, dr)
+			err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+				status := getResource(oc, asAdmin, withoutNamespace, "csv", subProxyTest.installedCSV, "-n", subProxyTest.namespace, "-o=jsonpath={.status.phase}")
+				if (strings.Compare(status, "Succeeded") == 0) || (strings.Compare(status, "Installing") == 0) {
+					e2e.Logf("csv status is Succeeded or Installing")
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("csv %s is not Succeeded or Installing", subProxyTest.installedCSV))
+			newCheck("expect", asAdmin, withoutNamespace, contain, "nginx-operator-controller-manager", ok, []string{"deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyTest.installedCSV), "-n", subProxyTest.namespace, "-o=jsonpath={..metadata.name}"}).check(oc)
+			nodeHTTPProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyTest.installedCSV), "-n", subProxyTest.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"HTTP_PROXY\")].value}")
+			o.Expect(nodeHTTPProxy).To(o.Equal("test_http_proxy"))
+			nodeHTTPSProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyTest.installedCSV), "-n", subProxyTest.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"HTTPS_PROXY\")].value}")
+			o.Expect(nodeHTTPSProxy).To(o.Equal("test_https_proxy"))
+			nodeNoProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyTest.installedCSV), "-n", subProxyTest.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"NO_PROXY\")].value}")
+			o.Expect(nodeNoProxy).To(o.Equal("test_no_proxy"))
+			subProxyTest.delete(itName, dr)
+			subProxyTest.getCSV().delete(itName, dr)
 		} else {
 			o.Expect(httpProxy).NotTo(o.BeEmpty())
 			o.Expect(httpsProxy).NotTo(o.BeEmpty())
 			o.Expect(noProxy).NotTo(o.BeEmpty())
-			nodeHTTPProxy := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"planetscale-operator\")].env[?(.name==\"HTTP_PROXY\")].value}")
+			nodeHTTPProxy := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"HTTP_PROXY\")].value}")
 			o.Expect(nodeHTTPProxy).To(o.Equal(httpProxy))
-			nodeHTTPSProxy := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"planetscale-operator\")].env[?(.name==\"HTTPS_PROXY\")].value}")
+			nodeHTTPSProxy := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"HTTPS_PROXY\")].value}")
 			o.Expect(nodeHTTPSProxy).To(o.Equal(httpsProxy))
-			nodeNoProxy := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"planetscale-operator\")].env[?(.name==\"NO_PROXY\")].value}")
+			nodeNoProxy := getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-n", sub.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"NO_PROXY\")].value}")
 			o.Expect(nodeNoProxy).To(o.Equal(noProxy))
 			g.By("CHECK proxy configure SUCCESS")
 			sub.delete(itName, dr)
@@ -7447,12 +7467,12 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				return false, nil
 			})
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("csv %s is not Succeeded or Installing", subProxyTest.installedCSV))
-			newCheck("expect", asAdmin, withoutNamespace, contain, "planetscale-operator", ok, []string{"deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyTest.installedCSV), "-n", subProxyTest.namespace, "-o=jsonpath={..metadata.name}"}).check(oc)
-			nodeHTTPProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyTest.installedCSV), "-n", subProxyTest.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"planetscale-operator\")].env[?(.name==\"HTTP_PROXY\")].value}")
+			newCheck("expect", asAdmin, withoutNamespace, contain, "nginx-operator-controller-manager", ok, []string{"deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyTest.installedCSV), "-n", subProxyTest.namespace, "-o=jsonpath={..metadata.name}"}).check(oc)
+			nodeHTTPProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyTest.installedCSV), "-n", subProxyTest.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"HTTP_PROXY\")].value}")
 			o.Expect(nodeHTTPProxy).To(o.Equal("test_http_proxy"))
-			nodeHTTPSProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyTest.installedCSV), "-n", subProxyTest.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"planetscale-operator\")].env[?(.name==\"HTTPS_PROXY\")].value}")
+			nodeHTTPSProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyTest.installedCSV), "-n", subProxyTest.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"HTTPS_PROXY\")].value}")
 			o.Expect(nodeHTTPSProxy).To(o.Equal("test_https_proxy"))
-			nodeNoProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyTest.installedCSV), "-n", subProxyTest.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"planetscale-operator\")].env[?(.name==\"NO_PROXY\")].value}")
+			nodeNoProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyTest.installedCSV), "-n", subProxyTest.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"NO_PROXY\")].value}")
 			o.Expect(nodeNoProxy).To(o.Equal("test_no_proxy"))
 			subProxyTest.delete(itName, dr)
 			subProxyTest.getCSV().delete(itName, dr)
@@ -7468,12 +7488,12 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				return false, nil
 			})
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("csv %s is not Succeeded or Installing", subProxyFake.installedCSV))
-			newCheck("expect", asAdmin, withoutNamespace, contain, "planetscale-operator", ok, []string{"deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyFake.installedCSV), "-n", subProxyFake.namespace, "-o=jsonpath={..metadata.name}"}).check(oc)
-			nodeHTTPProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyFake.installedCSV), "-n", subProxyFake.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"planetscale-operator\")].env[?(.name==\"HTTP_PROXY\")].value}")
+			newCheck("expect", asAdmin, withoutNamespace, contain, "nginx-operator-controller-manager", ok, []string{"deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyFake.installedCSV), "-n", subProxyFake.namespace, "-o=jsonpath={..metadata.name}"}).check(oc)
+			nodeHTTPProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyFake.installedCSV), "-n", subProxyFake.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"HTTP_PROXY\")].value}")
 			o.Expect(nodeHTTPProxy).To(o.Equal("fake_http_proxy"))
-			nodeHTTPSProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyFake.installedCSV), "-n", subProxyFake.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"planetscale-operator\")].env[?(.name==\"HTTPS_PROXY\")].value}")
+			nodeHTTPSProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyFake.installedCSV), "-n", subProxyFake.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"HTTPS_PROXY\")].value}")
 			o.Expect(nodeHTTPSProxy).To(o.Equal("fake_https_proxy"))
-			nodeNoProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyFake.installedCSV), "-n", subProxyFake.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"planetscale-operator\")].env[?(.name==\"NO_PROXY\")].value}")
+			nodeNoProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyFake.installedCSV), "-n", subProxyFake.namespace, "-o=jsonpath={..spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"NO_PROXY\")].value}")
 			o.Expect(nodeNoProxy).To(o.Equal("fake_no_proxy"))
 			subProxyFake.delete(itName, dr)
 			subProxyFake.getCSV().delete(itName, dr)
@@ -7489,12 +7509,12 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				return false, nil
 			})
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("csv %s is not Succeeded or Installing", subProxyEmpty.installedCSV))
-			newCheck("expect", asAdmin, withoutNamespace, contain, "planetscale-operator", ok, []string{"deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyEmpty.installedCSV), "-n", subProxyEmpty.namespace, "-o=jsonpath={..metadata.name}"}).check(oc)
-			nodeHTTPProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=marketplace.operatorSource=%s", subProxyEmpty.installedCSV), "-n", subProxyEmpty.namespace, "-o=jsonpath={.spec.template.spec.containers[?(.name==\"planetscale-operator\")].env[?(.name==\"HTTP_PROXY\")].value}")
+			newCheck("expect", asAdmin, withoutNamespace, contain, "nginx-operator-controller-manager", ok, []string{"deployment", fmt.Sprintf("--selector=olm.owner=%s", subProxyEmpty.installedCSV), "-n", subProxyEmpty.namespace, "-o=jsonpath={..metadata.name}"}).check(oc)
+			nodeHTTPProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=marketplace.operatorSource=%s", subProxyEmpty.installedCSV), "-n", subProxyEmpty.namespace, "-o=jsonpath={.spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"HTTP_PROXY\")].value}")
 			o.Expect(nodeHTTPProxy).To(o.BeEmpty())
-			nodeHTTPSProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=marketplace.operatorSource=%s", subProxyEmpty.installedCSV), "-n", subProxyEmpty.namespace, "-o=jsonpath={.spec.template.spec.containers[?(.name==\"planetscale-operator\")].env[?(.name==\"HTTPS_PROXY\")].value}")
+			nodeHTTPSProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=marketplace.operatorSource=%s", subProxyEmpty.installedCSV), "-n", subProxyEmpty.namespace, "-o=jsonpath={.spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"HTTPS_PROXY\")].value}")
 			o.Expect(nodeHTTPSProxy).To(o.BeEmpty())
-			nodeNoProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=marketplace.operatorSource=%s", subProxyEmpty.installedCSV), "-n", subProxyEmpty.namespace, "-o=jsonpath={.spec.template.spec.containers[?(.name==\"planetscale-operator\")].env[?(.name==\"NO_PROXY\")].value}")
+			nodeNoProxy = getResource(oc, asAdmin, withoutNamespace, "deployment", fmt.Sprintf("--selector=marketplace.operatorSource=%s", subProxyEmpty.installedCSV), "-n", subProxyEmpty.namespace, "-o=jsonpath={.spec.template.spec.containers[?(.name==\"manager\")].env[?(.name==\"NO_PROXY\")].value}")
 			o.Expect(nodeNoProxy).To(o.BeEmpty())
 			subProxyEmpty.delete(itName, dr)
 			subProxyEmpty.getCSV().delete(itName, dr)
