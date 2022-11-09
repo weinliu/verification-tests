@@ -49,4 +49,19 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		}
 
 	})
+
+	g.It("Author:rioliu-PstChkUpgrade-NonPreRelease-High-55748-Upgrade failed with Transaction in progress", func() {
+
+		g.By("check machine config daemon log to verify no error `Transaction in progress` found")
+
+		allNodes, getNodesErr := NewNodeList(oc).GetAllLinux()
+		o.Expect(getNodesErr).NotTo(o.HaveOccurred(), "Get all linux nodes error")
+		for _, node := range allNodes {
+			logger.Infof("checking mcd log on %s", node.GetName())
+			errLog, getLogErr := node.GetMCDaemonLogs("'Transaction in progress: (null)'")
+			o.Expect(getLogErr).Should(o.HaveOccurred(), "Unexpected error found in MCD log")
+			o.Expect(errLog).Should(o.BeEmpty(), "Transaction in progress error found, it is unexpected")
+			logger.Infof("no error found")
+		}
+	})
 })
