@@ -22,10 +22,11 @@ objects:
         terminationGracePeriodSeconds: 10
         containers:
           - name: example-statefulset
-            image: 'ubi:latest'
+            image: "${IMAGE}"
             command:
               - /bin/sleep
               - '300'
 parameters:
   - name: NAME
   - name: NAMESPACE
+  - name: IMAGE

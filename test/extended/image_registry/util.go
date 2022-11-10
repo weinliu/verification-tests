@@ -415,11 +415,12 @@ func checkRegistrypodsRemoved(oc *exutil.CLI) {
 type staSource struct {
 	name      string
 	namespace string
+	image     string
 	template  string
 }
 
 func (stafulsrc *staSource) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", stafulsrc.template, "-p", "NAME="+stafulsrc.name, "NAMESPACE="+stafulsrc.namespace)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", stafulsrc.template, "-p", "NAME="+stafulsrc.name, "NAMESPACE="+stafulsrc.namespace, "IMAGE="+stafulsrc.image)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -1179,4 +1180,16 @@ func checkPodsRemovedWithLabel(oc *exutil.CLI, namespace string, label string) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "Pods are not removed")
+}
+
+type dsSource struct {
+	name      string
+	namespace string
+	image     string
+	template  string
+}
+
+func (dssrc *dsSource) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", dssrc.template, "-p", "NAME="+dssrc.name, "NAMESPACE="+dssrc.namespace, "IMAGE="+dssrc.image)
+	o.Expect(err).NotTo(o.HaveOccurred())
 }

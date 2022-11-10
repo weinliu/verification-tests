@@ -482,6 +482,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			statefulsetsrc  = staSource{
 				namespace: "",
 				name:      "example-statefulset",
+				image:     "ubi:latest",
 				template:  statefulsetFile,
 			}
 		)
@@ -1448,7 +1449,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: jitli@redhat.com
 	// Cover test case: OCP-46069 and 49886
-	g.It("NonPreRelease-Author:jitli-Critical-46069-Could override the default topology constraints and Topology Constraints works well in non zone cluster [Disruptive]", func() {
+	g.It("NonPreRelease-Author:jitli-Critical-46069-High-49886-Could override the default topology constraints and Topology Constraints works well in non zone cluster [Disruptive]", func() {
 
 		g.By("Get image registry pod replicas num")
 		podNum := getImageRegistryPodNumber(oc)
@@ -3248,5 +3249,119 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		info, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", "--filter-by-os=linux/arm64", "-o", "json").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(info, "arm64")).To(o.BeTrue())
+	})
+
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-High-55007-ImageStreamChange triggers using annotations should work on statefulset", func() {
+		var (
+			statefulsetFile = filepath.Join(imageRegistryBaseDir, "statefulset-trigger-annoation.yaml")
+			statefulsetsrc  = staSource{
+				namespace: "",
+				name:      "example-statefulset",
+				image:     "",
+				template:  statefulsetFile,
+			}
+		)
+		g.By("Import an imagestream")
+		err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("test:v1", "--from=quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "--confirm", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "test", "v1")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Tag v1 to latest tag")
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("test:v1", "st:latest", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the imagestream imported image")
+		imagev1, err := exutil.GetDockerImageReference(oc.ImageClient().ImageV1().ImageStreams(oc.Namespace()), "st", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		imagev1id := strings.Split(imagev1, "@")[1]
+
+		g.By("Create the initial statefulset")
+		statefulsetsrc.namespace = oc.Namespace()
+		statefulsetsrc.image = "image-registry.openshift-image-registry.svc:5000/" + statefulsetsrc.namespace + "/st:latest"
+		g.By("Create statefulset")
+		statefulsetsrc.create(oc)
+		g.By("Check the pods are running")
+		checkPodsRunningWithLabel(oc, oc.Namespace(), "app=example-statefulset", 3)
+		podImage, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app=example-statefulset", "-o=jsonpath={.items[0].status.containerStatuses[0].imageID}", "-n", statefulsetsrc.namespace).Output()
+		o.Expect(strings.Contains(podImage, imagev1id)).To(o.BeTrue())
+
+		g.By("Import second image to the imagestream")
+		err = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("test:v2", "--from=quay.io/openshifttest/hello-openshift@sha256:f79669a4290b8917fc6f93eb1d2508a9517f36d8887e38745250db2ef4b0bc40", "-n", statefulsetsrc.namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForAnImageStreamTag(oc, statefulsetsrc.namespace, "test", "v2")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("test:v2", "st:latest", "-n", statefulsetsrc.namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the imagestream imported image")
+		imagev2, err := exutil.GetDockerImageReference(oc.ImageClient().ImageV1().ImageStreams(statefulsetsrc.namespace), "st", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the statefulset used image have been updated")
+		err = wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+			podImage, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("statefulset", "-o=jsonpath={..containers[0].image}", "-n", statefulsetsrc.namespace).Output()
+			if strings.Contains(podImage, imagev2) {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "The imagestreamchange trigger doesn't work, not update to use new image")
+	})
+
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Critical-55008-ImageStreamChange triggers using annotations should work on daemonset", func() {
+		var (
+			dsFile = filepath.Join(imageRegistryBaseDir, "daemonset-trigger-annoation.yaml")
+			dssrc  = dsSource{
+				namespace: "",
+				name:      "example-daemonset",
+				image:     "",
+				template:  dsFile,
+			}
+		)
+		g.By("Import an imagestream")
+		err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("test:v1", "--from=quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "--confirm", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "test", "v1")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Tag v1 to latest tag")
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("test:v1", "ds:latest", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the imagestream imported image")
+		imagev1, err := exutil.GetDockerImageReference(oc.ImageClient().ImageV1().ImageStreams(oc.Namespace()), "ds", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		imagev1id := strings.Split(imagev1, "@")[1]
+
+		g.By("Create the initial daemonset")
+		dssrc.namespace = oc.Namespace()
+		dssrc.image = "image-registry.openshift-image-registry.svc:5000/" + dssrc.namespace + "/ds:latest"
+		g.By("Create daemonset")
+		dssrc.create(oc)
+		g.By("Check the pods are running")
+		checkPodsRunningWithLabel(oc, oc.Namespace(), "app=example-daemonset", 3)
+		podImage, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app=example-daemonset", "-o=jsonpath={.items[0].status.containerStatuses[0].imageID}", "-n", dssrc.namespace).Output()
+		o.Expect(strings.Contains(podImage, imagev1id)).To(o.BeTrue())
+
+		g.By("Import second image to the imagestream")
+		err = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("test:v2", "--from=quay.io/openshifttest/hello-openshift@sha256:f79669a4290b8917fc6f93eb1d2508a9517f36d8887e38745250db2ef4b0bc40", "-n", dssrc.namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForAnImageStreamTag(oc, dssrc.namespace, "test", "v2")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("test:v2", "ds:latest", "-n", dssrc.namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the imagestream imported image")
+		imagev2, err := exutil.GetDockerImageReference(oc.ImageClient().ImageV1().ImageStreams(dssrc.namespace), "ds", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the daemonset used image have been updated")
+		err = wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+			podImage, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", "-o=jsonpath={..containers[0].image}", "-n", dssrc.namespace).Output()
+			if strings.Contains(podImage, imagev2) {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "The imagestreamchange trigger doesn't work, not update to use new image")
 	})
 })
