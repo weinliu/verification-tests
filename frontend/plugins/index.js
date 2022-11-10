@@ -69,5 +69,6 @@ module.exports = (on, config) => {
   config.env.BRIDGE_KUBEADMIN_PASSWORD = process.env.BRIDGE_KUBEADMIN_PASSWORD;
   config.env.KUBECONFIG_PATH = process.env.KUBECONFIG_PATH;
   config.env.LOGIN_UP_PAIR = process.env.LOGIN_UP_PAIR;
+  config.env.HOST_API = process.env.BRIDGE_BASE_ADDRESS.replace(/console-openshift-console.apps/, 'api').concat(':6443');
   return config;
 };

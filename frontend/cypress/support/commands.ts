@@ -4,6 +4,8 @@ declare global {
     namespace Cypress {
         interface Chainable<Subject> {
             switchPerspective(perspective: string);
+            cliLogin();
+            cliLogout();
         }
     }
 }
@@ -19,4 +21,20 @@ Cypress.Commands.add("switchPerspective", (perspective: string) => {
     });
     nav.sidenav.switcher.changePerspectiveTo(perspective);
     nav.sidenav.switcher.shouldHaveText(perspective);
+});
+
+Cypress.Commands.add("cliLogin", () => {
+  cy.exec(`oc login -u ${Cypress.env('LOGIN_USERNAME')} -p ${Cypress.env('LOGIN_PASSWORD')} ${Cypress.env('HOST_API')} --insecure-skip-tls-verify=true`).then(result => {
+    cy.log(result.stderr)
+    cy.log(result.stdout)
+    expect(result.stderr).to.be.empty
+  });
+});
+
+Cypress.Commands.add("cliLogout", () => {
+  cy.exec(`oc logout`).then(result => {
+    cy.log(result.stderr)
+    cy.log(result.stdout)
+    expect(result.stderr).to.be.empty
+  });
 });
