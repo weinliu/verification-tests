@@ -32,7 +32,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("ConnectedOnly-Author:huirwang-HyperShiftGUEST-High-53223-Verify ACL audit logs can be generated for traffic hit EgressFirewall rules.", func() {
+	g.It("ConnectedOnly-Author:huirwang-High-53223-Verify ACL audit logs can be generated for traffic hit EgressFirewall rules.", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -91,7 +91,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("ConnectedOnly-Author:huirwang-HyperShiftGUEST-Medium-53224-Disable and enable acl logging for EgressFirewall.", func() {
+	g.It("ConnectedOnly-Author:huirwang-Medium-53224-Disable and enable acl logging for EgressFirewall.", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -171,7 +171,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("ConnectedOnly-Author:huirwang-HyperShiftGUEST-Medium-53226-The namespace enabled acl logging will not affect the namespace not enabling acl logging.", func() {
+	g.It("ConnectedOnly-Author:huirwang-Medium-53226-The namespace enabled acl logging will not affect the namespace not enabling acl logging.", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -261,7 +261,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("ConnectedOnly-Author:huirwang-High-55345-Drop ACL for EgressFirewall should have priority lower than allow ACL despite being last in the chain.", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-High-55345-Drop ACL for EgressFirewall should have priority lower than allow ACL despite being last in the chain.", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")

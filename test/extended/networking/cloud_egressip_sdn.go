@@ -91,7 +91,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-46701-High-47470-Pods will lose external access if same egressIP is assigned to different netnamespace, error should be logged on master node. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-46701-High-47470-Pods will lose external access if same egressIP is assigned to different netnamespace, error should be logged on master node. [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
@@ -216,7 +216,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("ConnectedOnly-Author:jechen-High-46709-Master balance egressIPs across nodes when there are multiple nodes handling egressIP. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jechen-High-46709-Master balance egressIPs across nodes when there are multiple nodes handling egressIP. [Disruptive]", func() {
 		g.By("1. Get list of nodes, get subnet from two worker nodes that have same subnet, add egressCIDRs to them")
 		var egressNode1, egressNode2 string
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -259,7 +259,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("ConnectedOnly-Author:jechen-High-46554-[Automatic EgressIP] no more than one egress IP per node for each namespace. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jechen-High-46554-[Automatic EgressIP] no more than one egress IP per node for each namespace. [Disruptive]", func() {
 		g.By("1. Get list of nodes, get subnet from two worker nodes that have same subnet, add egressCIDRs to them")
 		var egressNode1, egressNode2 string
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -297,7 +297,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("ConnectedOnly-Author:jechen-High-46556-[Automatic EgressIP] A pod that is on a node hosting egressIP, it will always use the egressIP of the node . [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jechen-High-46556-[Automatic EgressIP] A pod that is on a node hosting egressIP, it will always use the egressIP of the node . [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -374,7 +374,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-46705-The egressIP should still work fine after the node or network service restarted. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-46705-The egressIP should still work fine after the node or network service restarted. [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
@@ -477,7 +477,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("ConnectedOnly-Author:jechen-High-46555-Medium-46962-[Automatic EgressIP] Random egressIP is used on a pod that is not on a node hosting an egressIP, and random outages with egressIP . [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jechen-High-46555-Medium-46962-[Automatic EgressIP] Random egressIP is used on a pod that is not on a node hosting an egressIP, and random outages with egressIP . [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -595,7 +595,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("ConnectedOnly-Author:jechen-High-46557-[Manual EgressIP] Random egressIP is used on a pod that is not on a node hosting an egressIP . [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jechen-High-46557-[Manual EgressIP] Random egressIP is used on a pod that is not on a node hosting an egressIP . [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -700,7 +700,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("ConnectedOnly-Author:jechen-High-46558-[Manual EgressIP] A pod that is on a node hosting egressIP, it will always use the egressIP of the node . [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jechen-High-46558-[Manual EgressIP] A pod that is on a node hosting egressIP, it will always use the egressIP of the node . [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -776,7 +776,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("ConnectedOnly-Author:jechen-Medium-46963-Should remove the egressIP from the array if it was not being used. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jechen-Medium-46963-Should remove the egressIP from the array if it was not being used. [Disruptive]", func() {
 		g.By("1. Pick a node as egressIP node, add egressCIDRs to it")
 		// get CIDR on the node
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -810,7 +810,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-47054-The egressIP can be HA if netnamespace has single egressIP . [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:jechen-High-47054-The egressIP can be HA if netnamespace has single egressIP . [Disruptive][Slow]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -926,7 +926,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-46559-[Automatic EgressIP] If some egress node is unavailable, pods continue use other available egressIPs after a short delay. [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-46559-[Automatic EgressIP] If some egress node is unavailable, pods continue use other available egressIPs after a short delay. [Disruptive][Slow]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -1139,7 +1139,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-46561-[Manual EgressIP] If some egress node is unavailable, pods continue use other available egressIPs after a short delay. [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-46561-[Manual EgressIP] If some egress node is unavailable, pods continue use other available egressIPs after a short delay. [Disruptive][Slow]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 
@@ -1347,7 +1347,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-47455-The egressIP could be assigned to project automatically once it is defined in hostsubnet egressCIDR. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-47455-The egressIP could be assigned to project automatically once it is defined in hostsubnet egressCIDR. [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 
@@ -1525,7 +1525,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-47456-High-47457-Can change egressIP of project when there are multiple egressIP, can access outside with nodeIP after egressIP is removed. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:jechen-High-47456-High-47457-Can change egressIP of project when there are multiple egressIP, can access outside with nodeIP after egressIP is removed. [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 
@@ -1698,7 +1698,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-47458-High-47459-EgressIP works when reusing the egressIP that was held by a deleted project, EgressIP works well after removed egressIP is added back. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:jechen-High-47458-High-47459-EgressIP works when reusing the egressIP that was held by a deleted project, EgressIP works well after removed egressIP is added back. [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 
@@ -1880,7 +1880,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-47463-Pod will not be affected by the egressIP set on other netnamespace. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:jechen-High-47463-Pod will not be affected by the egressIP set on other netnamespace. [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 
@@ -1993,7 +1993,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-47464-The egressIP will be unavailable if it is set to multiple hostsubnets. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-47464-The egressIP will be unavailable if it is set to multiple hostsubnets. [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 
@@ -2071,7 +2071,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-47468-High-47469-Pod access external through egressIP if egress node hosts the egressIP that assigned to netns, or it lose access to external if no node hosts the egressIP that assigned to netns. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-47468-High-47469-Pod access external through egressIP if egress node hosts the egressIP that assigned to netns, or it lose access to external if no node hosts the egressIP that assigned to netns. [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 
@@ -2258,7 +2258,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-47055-Should be able to access to the service's externalIP with egressIP [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:jechen-High-47055-Should be able to access to the service's externalIP with egressIP [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		externalIPServiceTemplate := filepath.Join(buildPruningBaseDir, "externalip_service1-template.yaml")
@@ -2347,7 +2347,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("ConnectedOnly-Author:jechen-High-47057-NodePort works when configuring an egressIP address [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jechen-High-47057-NodePort works when configuring an egressIP address [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		nodeServiceTemplate := filepath.Join(buildPruningBaseDir, "nodeservice-template.yaml")
@@ -2417,7 +2417,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("ConnectedOnly-Author:jechen-High-47462-EgressNetworkPolicy should work well with egressIP [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jechen-High-47462-EgressNetworkPolicy should work well with egressIP [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressPolicyTemplate := filepath.Join(buildPruningBaseDir, "egress-limit-policy-template.yaml")
@@ -2538,7 +2538,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("ConnectedOnly-Author:jechen-Medium-47461-Should not be able to access the node via the egressIP [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jechen-Medium-47461-Should not be able to access the node via the egressIP [Disruptive]", func() {
 
 		g.By("1. Get list of nodes, choose first node as egressNode, get 1 unused IP from the node that will be used as egressIP")
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -2611,7 +2611,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-46960- EgressIP can failover if the node is NotReady. [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-46960- EgressIP can failover if the node is NotReady. [Disruptive][Slow]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -2807,7 +2807,7 @@ var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-Low-47460-Invalid egressIP should not be acceptable", func() {
+	g.It("NonHyperShiftHOST-Author:jechen-Low-47460-Invalid egressIP should not be acceptable", func() {
 
 		g.By("1. Get list of nodes, use the first node as egressIP node")
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -2867,7 +2867,7 @@ var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-47466-High-47467-Related iptables/openflow and egressIP to node's primary NIC will be added/removed once egressIP is added/removed to/from netnamespace. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:jechen-High-47466-High-47467-Related iptables/openflow and egressIP to node's primary NIC will be added/removed once egressIP is added/removed to/from netnamespace. [Disruptive]", func() {
 
 		g.By("1. Get list of nodes, choose first node as egressNode, get subnet and 1 unused ip address from the egressNode")
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -2922,7 +2922,7 @@ var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
 		checkPrimaryNIC(oc, egressNode, freeIPs[0], false)
 	})
 
-	g.It("NonPreRelease-ConnectedOnly-Author:jechen-Medium-47472-Meduim-47473-Cluster admin can add/remove egressIPs on netnamespace and hostsubnet. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:jechen-Medium-47472-Meduim-47473-Cluster admin can add/remove egressIPs on netnamespace and hostsubnet. [Disruptive]", func() {
 
 		g.By("1. Get list of nodes, use the first node as egressIP node")
 		nodeList, getNodeErr := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -2999,7 +2999,7 @@ var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
 		o.Expect(ipReturned == "<none>").Should(o.BeTrue())
 	})
 
-	g.It("NonPreRelease-ConnectedOnly-Author:jechen-High-47570-EgressIP capacity test. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:jechen-High-47570-EgressIP capacity test. [Disruptive]", func() {
 		g.By("1. Get list of nodes, use the first node as egressIP node, patch egressCIDRs to the egressNode")
 		nodeList, getNodeErr := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		o.Expect(getNodeErr).NotTo(o.HaveOccurred())

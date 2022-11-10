@@ -29,7 +29,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-Medium-43466-EgressIP works well with ipv6 address. [Serial]", func() {
+	g.It("NonHyperShiftHOST-Author:huirwang-Medium-43466-EgressIP works well with ipv6 address. [Serial]", func() {
 		ipStackType := checkIPStackType(oc)
 		if ipStackType == "ipv4single" {
 			g.Skip("Current env is ipv4 single stack cluster, skip this test!!!")
@@ -88,7 +88,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-High-43465-Both ipv4 and ipv6 addresses can be configured on dualstack as egressip. [Serial]", func() {
+	g.It("NonHyperShiftHOST-Author:huirwang-High-43465-Both ipv4 and ipv6 addresses can be configured on dualstack as egressip. [Serial]", func() {
 		ipStackType := checkIPStackType(oc)
 		if ipStackType != "dualstack" {
 			g.Skip("Current env is not dualstack cluster, skip this case!!!")
@@ -156,7 +156,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-High-43464-EgressFirewall works with IPv6 address.", func() {
+	g.It("NonHyperShiftHOST-Author:huirwang-High-43464-EgressFirewall works with IPv6 address.", func() {
 		ipStackType := checkIPStackType(oc)
 		if ipStackType == "ipv4single" {
 			g.Skip("Current env is ipv4 single cluster, skip the test!!!")

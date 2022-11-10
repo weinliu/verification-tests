@@ -26,7 +26,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-High-33633-EgressIP works well with EgressFirewall. [Serial]", func() {
+	g.It("NonHyperShiftHOST-Author:huirwang-High-33633-EgressIP works well with EgressFirewall. [Serial]", func() {
 		networkType := checkNetworkType(oc)
 		if !strings.Contains(networkType, "ovn") {
 			g.Skip("Skip for not ovn cluster !!!")
@@ -99,7 +99,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-High-49161-[Bug 2014202] Service IP should be accessed when egressIP set to the namespace. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:huirwang-High-49161-[Bug 2014202] Service IP should be accessed when egressIP set to the namespace. [Disruptive]", func() {
 		networkType := checkNetworkType(oc)
 		if !strings.Contains(networkType, "ovn") {
 			g.Skip("Skip for not ovn cluster !!!")

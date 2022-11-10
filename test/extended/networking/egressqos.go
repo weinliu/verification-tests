@@ -62,7 +62,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: yingwang@redhat.com
-	g.It("ConnectedOnly-Author:yingwang-Medium-51732-Only one EgressQoS CRD is allowed per namespace.", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yingwang-Medium-51732-Only one EgressQoS CRD is allowed per namespace.", func() {
 		var (
 			networkBaseDir   = exutil.FixturePath("testdata", "networking")
 			egressBaseDir    = filepath.Join(networkBaseDir, "egressqos")
@@ -164,7 +164,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: yingwang@redhat.com
-	g.It("ConnectedOnly-Author:yingwang-Medium-51749-if ipv4 egress traffic matches multiple egressqos rules, the first one will take effect.", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yingwang-Medium-51749-if ipv4 egress traffic matches multiple egressqos rules, the first one will take effect.", func() {
 		g.By("1) ############## create egressqos and testpod #################")
 
 		var (
@@ -212,7 +212,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: yingwang@redhat.com
-	g.It("ConnectedOnly-Author:yingwang-Medium-51751-if egress traffic doesn't match egressqos rules, dscp value will not change.", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yingwang-Medium-51751-if egress traffic doesn't match egressqos rules, dscp value will not change.", func() {
 
 		var (
 			dscpValue1       = 40
@@ -265,7 +265,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: yingwang@redhat.com
-	g.It("ConnectedOnly-Author:yingwang-Medium-51839-egressqos can work fine when new/update/delete matching pods.", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yingwang-Medium-51839-egressqos can work fine when new/update/delete matching pods.", func() {
 
 		var (
 			dscpValue1       = 40
@@ -360,7 +360,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: yingwang@redhat.com
-	g.It("ConnectedOnly-Author:yingwang-Medium-51840-egressqos can work fine when new/update/delete egressqos rules", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yingwang-Medium-51840-egressqos can work fine when new/update/delete egressqos rules", func() {
 		var (
 			dscpValue1       = 40
 			dscpValue2       = 30

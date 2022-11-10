@@ -23,7 +23,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: anusaxen@redhat.com
-	g.It("Author:anusaxen-HyperShiftGUEST-Medium-49216-ovnkube-node logs should not print api token in logs. ", func() {
+	g.It("Author:anusaxen-Medium-49216-ovnkube-node logs should not print api token in logs. ", func() {
 		g.By("it's for bug 2009857")
 		workerNode, err := exutil.GetFirstWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -36,14 +36,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	//author: zzhao@redhat.com
-	g.It("Author:zzhao-Medium-54742- Completed pod ip can be released. ", func() {
+	g.It("NonHyperShiftHOST-Author:zzhao-Medium-54742- Completed pod ip can be released. ", func() {
 		g.By("it's for bug 2091157,Check the ovnkube-master logs to see if completed pod already release ip")
 		result := findLogFromOvnMasterPod(oc, "Releasing IPs for Completed pod")
 		o.Expect(result).To(o.BeTrue())
 	})
 
 	// author: anusaxen@redhat.com
-	g.It("Author:anusaxen-High-55144-Switching OVN gateway modes should not delete custom routes created on node logical routers.[Disruptive] ", func() {
+	g.It("NonHyperShiftHOST-Author:anusaxen-High-55144-Switching OVN gateway modes should not delete custom routes created on node logical routers.[Disruptive] ", func() {
 		g.By("it's for bug 2042516")
 		var desiredMode string
 		networkType := exutil.CheckNetworkType(oc)

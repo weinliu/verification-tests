@@ -14,7 +14,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	var oc = exutil.NewCLI("networking-alerts", exutil.KubeConfigPath())
 
-	g.It("Author:weliang-Medium-51438-Upgrade NoRunningOvnMaster to critical severity and inclue runbook.", func() {
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-51438-Upgrade NoRunningOvnMaster to critical severity and inclue runbook.", func() {
 		networkType := exutil.CheckNetworkType(oc)
 		if !strings.Contains(networkType, "ovn") {
 			g.Skip("Skip testing on non-ovn cluster!!!")
@@ -36,7 +36,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(alertRunbook).To(o.ContainSubstring("https://github.com/openshift/runbooks/blob/master/alerts/cluster-network-operator/NoRunningOvnMaster.md"))
 	})
 
-	g.It("Author:weliang-Medium-51439-Upgrade NoOvnMasterLeader to critical severity and inclue runbook.", func() {
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-51439-Upgrade NoOvnMasterLeader to critical severity and inclue runbook.", func() {
 		networkType := exutil.CheckNetworkType(oc)
 		if !strings.Contains(networkType, "ovn") {
 			g.Skip("Skip testing on non-ovn cluster!!!")
@@ -58,7 +58,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(alertRunbook).To(o.ContainSubstring("https://github.com/openshift/runbooks/blob/master/alerts/cluster-network-operator/NoOvnMasterLeader.md"))
 	})
 
-	g.It("Author:weliang-Medium-51722-Create runbook and link SOP for SouthboundStale alert", func() {
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-51722-Create runbook and link SOP for SouthboundStale alert", func() {
 		networkType := exutil.CheckNetworkType(oc)
 		if !strings.Contains(networkType, "ovn") {
 			g.Skip("Skip testing on non-ovn cluster!!!")
@@ -80,7 +80,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(alertRunbook).To(o.ContainSubstring("https://github.com/openshift/runbooks/blob/master/alerts/cluster-network-operator/SouthboundStaleAlert.md"))
 	})
 
-	g.It("Author:weliang-Medium-51724-Create runbook and link SOP for V4SubnetAllocationThresholdExceeded alert", func() {
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-51724-Create runbook and link SOP for V4SubnetAllocationThresholdExceeded alert", func() {
 		networkType := exutil.CheckNetworkType(oc)
 		if !strings.Contains(networkType, "ovn") {
 			g.Skip("Skip testing on non-ovn cluster!!!")
@@ -102,7 +102,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(alertRunbook).To(o.ContainSubstring("https://github.com/openshift/runbooks/blob/master/alerts/cluster-network-operator/V4SubnetAllocationThresholdExceeded.md"))
 	})
 
-	g.It("Author:weliang-HyperShiftGUEST-Medium-51726-Create runbook and link SOP for NodeWithoutOVNKubeNodePodRunning alert", func() {
+	g.It("Author:weliang-Medium-51726-Create runbook and link SOP for NodeWithoutOVNKubeNodePodRunning alert", func() {
 		networkType := exutil.CheckNetworkType(oc)
 		if !strings.Contains(networkType, "ovn") {
 			g.Skip("Skip testing on non-ovn cluster!!!")
@@ -124,7 +124,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(alertRunbook).To(o.ContainSubstring("https://github.com/openshift/runbooks/blob/master/alerts/cluster-network-operator/NodeWithoutOVNKubeNodePodRunning.md"))
 	})
 
-	g.It("Author:weliang-Medium-51723-bug 2094068 Create runbook and link SOP for NorthboundStale alert", func() {
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-51723-bug 2094068 Create runbook and link SOP for NorthboundStale alert", func() {
 		networkType := exutil.CheckNetworkType(oc)
 		if !strings.Contains(networkType, "ovn") {
 			g.Skip("Skip testing on non-ovn cluster!!!")

@@ -21,7 +21,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	var oc = exutil.NewCLI("networking-networkpolicy", exutil.KubeConfigPath())
 
 	// author: zzhao@redhat.com
-	g.It("Author:zzhao-HyperShiftGUEST-Critical-49076-service domain can be resolved when egress type is enabled", func() {
+	g.It("Author:zzhao-Critical-49076-service domain can be resolved when egress type is enabled", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
@@ -67,7 +67,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-HyperShiftGUEST-Critical-49186-[Bug 2035336] Networkpolicy egress rule should work for statefulset pods.", func() {
+	g.It("Author:huirwang-Critical-49186-[Bug 2035336] Networkpolicy egress rule should work for statefulset pods.", func() {
 		var (
 			buildPruningBaseDir  = exutil.FixturePath("testdata", "networking")
 			testPodFile          = filepath.Join(buildPruningBaseDir, "testpod.yaml")
@@ -137,7 +137,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: anusaxen@redhat.com
-	g.It("Author:anusaxen-HyperShiftGUEST-High-49437-[BZ 2037647] Ingress network policy shouldn't be overruled by egress network policy on another pod", func() {
+	g.It("Author:anusaxen-High-49437-[BZ 2037647] Ingress network policy shouldn't be overruled by egress network policy on another pod", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			egressTypeFile      = filepath.Join(buildPruningBaseDir, "networkpolicy/default-allow-egress.yaml")
@@ -214,7 +214,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: anusaxen@redhat.com
-	g.It("Author:anusaxen-Medium-49686-network policy with ingress rule with ipBlock", func() {
+	g.It("NonHyperShiftHOST-Author:anusaxen-Medium-49686-network policy with ingress rule with ipBlock", func() {
 		var (
 			buildPruningBaseDir          = exutil.FixturePath("testdata", "networking")
 			ipBlockIngressTemplateDual   = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-ingress-dual-CIDRs-template.yaml")
@@ -395,7 +395,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: zzhao@redhat.com
-	g.It("Author:zzhao-HyperShiftGUEST-Critical-49696-mixed ingress and egress policies can work well", func() {
+	g.It("Author:zzhao-Critical-49696-mixed ingress and egress policies can work well", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
@@ -443,7 +443,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: anusaxen@redhat.com
-	g.It("Author:anusaxen-HyperShiftGUEST-High-46246-Network Policies should work with OVNKubernetes when traffic hairpins back to the same source through a service", func() {
+	g.It("Author:anusaxen-High-46246-Network Policies should work with OVNKubernetes when traffic hairpins back to the same source through a service", func() {
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
 			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -539,7 +539,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-High-41879-ipBlock should not ignore all other cidr's apart from the last one specified	", func() {
+	g.It("NonHyperShiftHOST-Author:huirwang-High-41879-ipBlock should not ignore all other cidr's apart from the last one specified	", func() {
 		var (
 			buildPruningBaseDir          = exutil.FixturePath("testdata", "networking")
 			ipBlockIngressTemplateDual   = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-ingress-dual-multiple-CIDRs-template.yaml")
@@ -628,7 +628,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: asood@redhat.com
-	g.It("Author:asood-HyperShiftGUEST-Medium-46807-network policy with egress rule with ipBlock", func() {
+	g.It("Author:asood-Medium-46807-network policy with egress rule with ipBlock", func() {
 		var (
 			buildPruningBaseDir         = exutil.FixturePath("testdata", "networking")
 			ipBlockEgressTemplateDual   = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-egress-dual-CIDRs-template.yaml")
@@ -748,7 +748,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: asood@redhat.com
-	g.It("Author:asood-HyperShiftGUEST-Medium-46808-network policy with egress rule with ipBlock and except", func() {
+	g.It("Author:asood-Medium-46808-network policy with egress rule with ipBlock and except", func() {
 		var (
 			buildPruningBaseDir         = exutil.FixturePath("testdata", "networking")
 			ipBlockEgressTemplateDual   = filepath.Join(buildPruningBaseDir, "networkpolicy/ipblock/ipBlock-egress-except-dual-CIDRs-template.yaml")
@@ -892,7 +892,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: asood@redhat.com
-	g.It("Author:asood-HyperShiftGUEST-Medium-41082-Check ACL audit logs can be extracted", func() {
+	g.It("Author:asood-Medium-41082-Check ACL audit logs can be extracted", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			allowFromSameNS     = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-from-same-namespace.yaml")
@@ -955,7 +955,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 	// author: asood@redhat.com
-	g.It("Author:asood-HyperShiftGUEST-Medium-41407-Check networkpolicy ACL audit message is logged with correct policy name", func() {
+	g.It("Author:asood-Medium-41407-Check networkpolicy ACL audit message is logged with correct policy name", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			allowFromSameNS     = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-from-same-namespace.yaml")
@@ -1027,7 +1027,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	})
 	// author: asood@redhat.com
-	g.It("Author:asood-HyperShiftGUEST-Medium-41080-Check network policy ACL audit messages are logged to journald", func() {
+	g.It("Author:asood-Medium-41080-Check network policy ACL audit messages are logged to journald", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			allowFromSameNS     = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-from-same-namespace.yaml")
@@ -1105,7 +1105,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: anusaxen@redhat.com
-	g.It("Author:anusaxen-Medium-55287-Default network policy ACLs to a namespace should not be present with arp but arp||nd for ARPAllowPolicies", func() {
+	g.It("NonHyperShiftHOST-Author:anusaxen-Medium-55287-Default network policy ACLs to a namespace should not be present with arp but arp||nd for ARPAllowPolicies", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")

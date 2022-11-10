@@ -12,7 +12,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	var oc = exutil.NewCLI("networking-ipv6", exutil.KubeConfigPath())
 
 	// author: weliang@redhat.com
-	g.It("Author:weliang-High-55193-Dual stack cluster fails on installation when multi-path routing entries exist. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:weliang-High-55193-Dual stack cluster fails on installation when multi-path routing entries exist. [Disruptive]", func() {
 		// Customer bug https://issues.redhat.com/browse/OCPBUGS-1318
 		ipStackType := checkIPStackType(oc)
 		g.By("Skip testing on ipv4 or ipv6 single stack cluster")

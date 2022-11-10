@@ -20,7 +20,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	var oc = exutil.NewCLI("networking-metrics", exutil.KubeConfigPath())
 
-	g.It("Author:weliang-Medium-47524-Metrics for ovn-appctl stopwatch/show command.", func() {
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-47524-Metrics for ovn-appctl stopwatch/show command.", func() {
 		var (
 			namespace = "openshift-ovn-kubernetes"
 			cmName    = "ovn-kubernetes-master"
@@ -73,7 +73,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		checkSDNMetrics(oc, prometheusURL, metricName20)
 	})
 
-	g.It("Author:weliang-Medium-47471-Record update to cache versus port binding.", func() {
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-47471-Record update to cache versus port binding.", func() {
 		var (
 			namespace = "openshift-ovn-kubernetes"
 			cmName    = "ovn-kubernetes-master"
@@ -94,7 +94,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		checkSDNMetrics(oc, prometheusURL, metricName4)
 	})
 
-	g.It("Author:weliang-Medium-45841-Add OVN flow count metric.", func() {
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-45841-Add OVN flow count metric.", func() {
 		var (
 			namespace = "openshift-ovn-kubernetes"
 			cmName    = "ovn-kubernetes-master"
@@ -109,7 +109,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		checkSDNMetrics(oc, prometheusURL, metricName)
 	})
 
-	g.It("Author:weliang-Medium-45688-Metrics for egress firewall. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-45688-Metrics for egress firewall. [Disruptive]", func() {
 		var (
 			ovnnamespace        = "openshift-ovn-kubernetes"
 			ovncmName           = "ovn-kubernetes-master"
@@ -173,7 +173,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 	})
 
-	g.It("Author:weliang-Medium-45842-Metrics for IPSec enabled/disabled", func() {
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-45842-Metrics for IPSec enabled/disabled", func() {
 		var (
 			namespace = "openshift-ovn-kubernetes"
 			cmName    = "ovn-kubernetes-master"
@@ -200,7 +200,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 	})
 
-	g.It("Author:weliang-Medium-45687-Metrics for egress router", func() {
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-45687-Metrics for egress router", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking/metrics")
 			egressrouterPod     = filepath.Join(buildPruningBaseDir, "egressrouter.yaml")
@@ -224,7 +224,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(metricValue).To(o.ContainSubstring("1"))
 	})
 
-	g.It("Author:weliang-Medium-45685-Metrics for Metrics for egressIP. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-45685-Metrics for Metrics for egressIP. [Disruptive]", func() {
 		var (
 			ovnnamespace        = "openshift-ovn-kubernetes"
 			ovncmName           = "ovn-kubernetes-master"
@@ -321,7 +321,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 	})
 
-	g.It("Author:weliang-Medium-45689-Metrics for idling enable/disabled.", func() {
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-45689-Metrics for idling enable/disabled.", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			testPodFile         = filepath.Join(buildPruningBaseDir, "metrics/metrics-pod.json")
@@ -428,7 +428,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.AssertWaitPollNoErr(metricsOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricsOutput))
 	})
 
-	g.It("Author:weliang-Medium-52072- Add mechanism to record duration for k8 kinds.", func() {
+	g.It("NonHyperShiftHOST-Author:weliang-Medium-52072- Add mechanism to record duration for k8 kinds.", func() {
 		var (
 			namespace = "openshift-ovn-kubernetes"
 			cmName    = "ovn-kubernetes-master"
@@ -445,7 +445,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		checkovnkubeMasterNetworkProgrammingetrics(oc, prometheusURL, metricName2)
 	})
 
-	g.It("Author:zzhao-Medium-53030-bug2060079- NodeProxyApplySlow should have correct value.", func() {
+	g.It("NonHyperShiftHOST-Author:zzhao-Medium-53030-bug2060079- NodeProxyApplySlow should have correct value.", func() {
 		networkType := checkNetworkType(oc)
 		if !strings.Contains(networkType, "openshiftsdn") {
 			g.Skip("Skip testing on non-sdn cluster!!!")
