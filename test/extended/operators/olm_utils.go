@@ -1203,9 +1203,9 @@ func expectedResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, isCom
 	// The detault timeout
 	timeString := "150s"
 	// extract the custom timeout
-	if strings.Contains(content, "-") {
-		timeString = strings.Split(content, "-")[1]
-		content = strings.Split(content, "-")[0]
+	if strings.Contains(content, "-TIME-WAIT-") {
+		timeString = strings.Split(content, "-TIME-WAIT-")[1]
+		content = strings.Split(content, "-TIME-WAIT-")[0]
 		e2e.Logf("! reset the timeout to %s", timeString)
 	}
 	timeout, err := time.ParseDuration(timeString)

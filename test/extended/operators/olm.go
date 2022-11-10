@@ -107,10 +107,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			// skip default namespace's csv status checking since it will fail due to PSA issue
 			if project == "default" {
 				// it takes a long time to update to the Failed status
-				// newCheck("expect", asAdmin, withoutNamespace, compare, "Failed-300s", ok, []string{"csv", "learn-operator.v0.0.3", "-n", project, "-o=jsonpath={.status.phase}"}).check(oc)
 				newCheck("present", asAdmin, withoutNamespace, true, "", ok, []string{"csv", "learn-operator.v0.0.3", "-n", project}).check(oc)
 			} else {
-				newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded-120s", ok, []string{"csv", "learn-operator.v0.0.3", "-n", project, "-o=jsonpath={.status.phase}"}).check(oc)
+				newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded-TIME-WAIT-120s", ok, []string{"csv", "learn-operator.v0.0.3", "-n", project, "-o=jsonpath={.status.phase}"}).check(oc)
 			}
 			labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", project, "-o=jsonpath={.metadata.labels}").Output()
 			if err != nil {
