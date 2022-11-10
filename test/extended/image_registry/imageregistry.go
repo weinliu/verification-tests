@@ -267,7 +267,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:xiuwang-Low-43669-Update openshift-image-registry/node-ca DaemonSet using maxUnavailable", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Low-43669-Update openshift-image-registry/node-ca DaemonSet using maxUnavailable", func() {
 		g.By("Check node-ca updatepolicy")
 		out := getResource(oc, asAdmin, withoutNamespace, "daemonset/node-ca", "-n", "openshift-image-registry", "-o=jsonpath={.spec.updateStrategy.rollingUpdate}")
 		o.Expect(out).To(o.ContainSubstring(updatePolicy))
@@ -476,7 +476,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:wewang-High-45952-ConnectedOnly-Imported imagestreams should success in deploymentconfig", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wewang-High-45952-ConnectedOnly-Imported imagestreams should success in deploymentconfig", func() {
 		var (
 			statefulsetFile = filepath.Join(imageRegistryBaseDir, "statefulset.yaml")
 			statefulsetsrc  = staSource{
@@ -603,7 +603,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:wewang-Medium-23583-Registry should not try to pullthrough himself by any name ", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wewang-Medium-23583-Registry should not try to pullthrough himself by any name ", func() {
 		g.By("Create route to expose the registry")
 		defer restoreRouteExposeRegistry(oc)
 		createRouteExposeRegistry(oc)
@@ -981,7 +981,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: tbuskey@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:tbuskey-High-22056-Registry operator configure prometheus metric gathering", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:tbuskey-High-22056-Registry operator configure prometheus metric gathering", func() {
 		var (
 			authHeader         string
 			after              = make(map[string]int)
@@ -1055,7 +1055,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-47933-DeploymentConfigs template should respect resolve-names annotation", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-47933-DeploymentConfigs template should respect resolve-names annotation", func() {
 		var (
 			imageRegistryBaseDir = exutil.FixturePath("testdata", "image_registry")
 			podFile              = filepath.Join(imageRegistryBaseDir, "dc-template.yaml")
@@ -1397,7 +1397,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:jitli-Critical-48959-Should be able to get public images connect to the server and have basic auth credentials", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:jitli-Critical-48959-Should be able to get public images connect to the server and have basic auth credentials", func() {
 
 		g.By("Create route to expose the registry")
 		routeName := getRandomString()
@@ -1694,7 +1694,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:xiuwang-Critical-49455-disableRedirect should work when image registry configured object storage", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Critical-49455-disableRedirect should work when image registry configured object storage", func() {
 		g.By("Get registry storage info")
 		storagetype, _ := getRegistryStorageConfig(oc)
 		if storagetype == "pvc" || storagetype == "emptyDir" {
@@ -1765,7 +1765,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:xiuwang-Low-51055-Image pullthrough does pass 429 errors back to capable clients", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Low-51055-Image pullthrough does pass 429 errors back to capable clients", func() {
 
 		g.By("Create a registry could limit quota")
 		oc.SetupProject()
@@ -1982,7 +1982,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:jitli-Medium-12766-Allow imagestream request build config triggers by different mode", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:jitli-Medium-12766-Allow imagestream request build config triggers by different mode", func() {
 
 		oc.SetupProject()
 		g.By("Import an image to create imagestream")
@@ -2162,7 +2162,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: yyou@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yyou-Critical-24160-lookupPolicy can be set by oc set image-lookup", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:yyou-Critical-24160-lookupPolicy can be set by oc set image-lookup", func() {
 
 		g.By("Import an image stream")
 		operationErr := oc.WithoutNamespace().AsAdmin().Run("import-image").Args("is24160-1-lookup", "--from=quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", "--confirm=true", "-n", oc.Namespace()).Execute()
@@ -2284,7 +2284,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-ConnectedOnly-Author:xiuwang-Medium-29706-Node secret takes effect when common secret is removed", func() {
+	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:xiuwang-Medium-29706-Node secret takes effect when common secret is removed", func() {
 		g.By("Add the secret of registry.redhat.io to project")
 		tempDataDir, err := extractPullSecret(oc)
 		defer os.RemoveAll(tempDataDir)
@@ -2351,7 +2351,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("HyperShiftGUEST-NonPreRelease-Author:jitli-Medium-21926-Check function of oc registry info command [Serial]", func() {
+	g.It("NonPreRelease-Author:jitli-Medium-21926-Check function of oc registry info command [Serial]", func() {
 
 		g.By("Check options for oc registry info")
 		output, err := oc.AsAdmin().Run("registry").Args("info", "--internal=true").Output()
@@ -2396,7 +2396,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:jitli-Medium-11252-ImageRegistry Check the registry-admin permission", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:jitli-Medium-11252-ImageRegistry Check the registry-admin permission", func() {
 
 		g.By("Add registry-admin role to a project")
 		defer oc.AsAdmin().WithoutNamespace().Run("policy").Args("remove-role-from-user", "registry-admin", oc.Username(), "-n", oc.Namespace()).Execute()
@@ -2521,7 +2521,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:xiuwang-Low-18994-Copy internal image to another tag via 'oc image mirror'", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Low-18994-Copy internal image to another tag via 'oc image mirror'", func() {
 
 		g.By("Get external registry host")
 		routeName := getRandomString()
@@ -2586,7 +2586,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	})
 	//author: yyou@redhat.com
-	g.It("HyperShiftGUEST-NonPreRelease-Author:yyou-High-34991-Add logLevel to registry config object [Serial]", func() {
+	g.It("NonPreRelease-Author:yyou-High-34991-Add logLevel to registry config object [Serial]", func() {
 		g.By("Check image registry config")
 		podNum := getImageRegistryPodNumber(oc)
 		defer checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
@@ -2640,7 +2640,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	})
 	//author: yyou@redhat.com
-	g.It("HyperShiftGUEST-Author:yyou-Medium-23030-Enable must-gather object refs in image-registry cluster", func() {
+	g.It("Author:yyou-Medium-23030-Enable must-gather object refs in image-registry cluster", func() {
 		g.By("Check if cluster operator image-registry include related Objects")
 		output, checkErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath=`{.status.relatedObjects}`").Output()
 		o.Expect(checkErr).NotTo(o.HaveOccurred())
@@ -2710,7 +2710,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:xiuwang-High-12958-Read and write image signatures with registry endpoint", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-High-12958-Read and write image signatures with registry endpoint", func() {
 		g.By("Create signature file")
 		var signFile = `'{"schemaVersion": 2,"type":"atomic","name":"digestid","content": "MjIK"}'`
 		err := oc.AsAdmin().Run("tag").Args("quay.io/openshifttest/skopeo@sha256:d5f288968744a8880f983e49870c0bfcf808703fe126e4fb5fc393fb9e599f65", "ho12958:latest", "-n", oc.Namespace()).Execute()
@@ -2810,7 +2810,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-10909-Add/update/remove signatures to the images", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-10909-Add/update/remove signatures to the images", func() {
 		var (
 			signFile = filepath.Join(imageRegistryBaseDir, "imagesignature.yaml")
 			signsrc  = signatureSource{
@@ -2870,7 +2870,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:xiuwang-Low-10585-Low-10637-Do not create tags for imageStream if image repository does not have tags", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Low-10585-Low-10637-Do not create tags for imageStream if image repository does not have tags", func() {
 		var (
 			isFile = filepath.Join(imageRegistryBaseDir, "imagestream-notag.yaml")
 			issrc  = isSource{
@@ -2896,7 +2896,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:xiuwang-Critical-10721-Could not import the tag when reference is true", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Critical-10721-Could not import the tag when reference is true", func() {
 		var (
 			isFile = filepath.Join(imageRegistryBaseDir, "imagestream-reference-true.yaml")
 			issrc  = isSource{
@@ -2915,7 +2915,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:wewang-High-18984-Request to view all imagestreams via registry catalog api [Serial]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wewang-High-18984-Request to view all imagestreams via registry catalog api [Serial]", func() {
 		g.By("Tag an imagestream under project")
 		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "test18984:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -3023,7 +3023,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: wewang@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:wewang-Critical-30231-Warning appears if use invalid value for image registry virtual-hosted buckets", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wewang-Critical-30231-Warning appears if use invalid value for image registry virtual-hosted buckets", func() {
 		g.By("Use invalid value for image registry virtual-hosted buckets")
 		output, _ := oc.AsAdmin().Run("patch").Args("config.imageregistry/cluster", "-p", `{"spec": {"storage": {"s3": {"virtualHostedStyle": "invalid"}}}}`, "--type=merge").Output()
 		o.Expect(string(output)).To(o.ContainSubstring("Invalid value: \"string\""))
