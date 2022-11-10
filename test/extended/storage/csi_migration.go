@@ -37,7 +37,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// [CSI-Migration] PVCs created with in-tree storageclass are processed by CSI Driver after CSI migration is enabled
-	g.It("NonPreRelease-PstChkUpgrade-Author:ropatil-Medium-49496-Upgrade [CSIMigration] PVCs created with in-tree storageclass are processed by CSI Driver after CSI migration is enabled", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:ropatil-Medium-49496-Upgrade [CSIMigration] PVCs created with in-tree storageclass are processed by CSI Driver after CSI migration is enabled", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"kubernetes.io/aws-ebs", "kubernetes.io/gce-pd"}
 		caseID = "49496"
@@ -72,7 +72,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// [CSI-Migration] PVCs created with in-tree storageclass, block volume are processed by CSI Driver after CSI migration is enabled
-	g.It("NonPreRelease-PstChkUpgrade-Author:ropatil-Medium-49678-Upgrade [CSIMigration] PVCs created with in-tree storageclass, block volume are processed by CSI Driver after CSI migration is enabled", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-PstChkUpgrade-Author:ropatil-Medium-49678-Upgrade [CSIMigration] PVCs created with in-tree storageclass, block volume are processed by CSI Driver after CSI migration is enabled", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"kubernetes.io/aws-ebs", "kubernetes.io/gce-pd"}
 		caseID = "49678"

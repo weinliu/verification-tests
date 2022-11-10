@@ -40,7 +40,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// [Alibaba-CSI-Driver] [Dynamic PV] should have diskTags attribute for volume mode: file system [ext4/ext3/xfs]
-	g.It("Author:ropatil-Medium-47918-[Alibaba-CSI-Driver] [Dynamic PV] should have diskTags attribute for volume mode: file system [ext4/ext3/xfs]", func() {
+	g.It("NonHyperShiftHOST-Author:ropatil-Medium-47918-[Alibaba-CSI-Driver] [Dynamic PV] should have diskTags attribute for volume mode: file system [ext4/ext3/xfs]", func() {
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
@@ -95,7 +95,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// [Alibaba-CSI-Driver] [Dynamic PV] should have diskTags attribute for volume mode: Block
-	g.It("Author:ropatil-Medium-47919-[Alibaba-CSI-Driver] [Dynamic PV] should have diskTags attribute for volume mode: Block", func() {
+	g.It("NonHyperShiftHOST-Author:ropatil-Medium-47919-[Alibaba-CSI-Driver] [Dynamic PV] should have diskTags attribute for volume mode: Block", func() {
 
 		// Set up a specified project share for all the phases
 		g.By("Create new project for the scenario")
@@ -147,7 +147,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// [Alibaba-CSI-Driver] [Dynamic PV] [Filesystem default] support mountOptions, mkfsOptions
-	g.It("Author:ropatil-High-47999-[Alibaba-CSI-Driver] [Dynamic PV] [Filesystem default] support mountOptions, mkfsOptions", func() {
+	g.It("NonHyperShiftHOST-Author:ropatil-High-47999-[Alibaba-CSI-Driver] [Dynamic PV] [Filesystem default] support mountOptions, mkfsOptions", func() {
 		// Set up a specified project share for all the phases
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
@@ -221,7 +221,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// [Alibaba-CSI-Driver] [Dynamic PV] with resource group id and allow volumes to store data
-	g.It("Author:ropatil-Medium-49498-[Alibaba-CSI-Driver] [Dynamic PV] with resource group id and allow volumes to store data", func() {
+	g.It("NonHyperShiftHOST-Author:ropatil-Medium-49498-[Alibaba-CSI-Driver] [Dynamic PV] with resource group id and allow volumes to store data", func() {
 		g.By("Get the resource group id for the cluster")
 		rgid := getResourceGroupID(oc)
 
@@ -295,7 +295,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	for i := 0; i < len(caseIds); i++ {
 		volumeType := alivolTypeTestSuit[caseIds[i]]
 		// author: ropatil@redhat.com
-		g.It("Author:ropatil-High-"+caseIds[i]+"-[Alibaba-CSI-Driver] [Dynamic PV] "+volumeType+" type volumes should store data and allow exec of file", func() {
+		g.It("NonHyperShiftHOST-Author:ropatil-High-"+caseIds[i]+"-[Alibaba-CSI-Driver] [Dynamic PV] "+volumeType+" type volumes should store data and allow exec of file", func() {
 			// Set the resource objects definition for the scenario
 			var (
 				storageClass           = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("diskplugin.csi.alibabacloud.com"))
@@ -353,7 +353,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// [Alibaba-CSI-Driver] [Dynamic PV] with invalid resource group id
-	g.It("Author:ropatil-Medium-50271-[Alibaba-CSI-Driver] [Dynamic PV] with invalid resource group id", func() {
+	g.It("NonHyperShiftHOST-Author:ropatil-Medium-50271-[Alibaba-CSI-Driver] [Dynamic PV] with invalid resource group id", func() {
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
@@ -396,7 +396,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: ropatil@redhat.com
 	// [Alibaba-CSI-Driver][Dynamic PV][max_sectors_kb][Static PV] should allow volumes to store data
 	// https://github.com/kubernetes-sigs/alibaba-cloud-csi-driver/blob/master/examples/disk/sysconfig/pv.yaml
-	g.It("Author:ropatil-Medium-49497-[Alibaba-CSI-Driver][Dynamic PV][max_sectors_kb][Static PV] should allow volumes to store data", func() {
+	g.It("NonHyperShiftHOST-Author:ropatil-Medium-49497-[Alibaba-CSI-Driver][Dynamic PV][max_sectors_kb][Static PV] should allow volumes to store data", func() {
 
 		// Set up a specified project share for all the phases
 		g.By("Create new project for the scenario")

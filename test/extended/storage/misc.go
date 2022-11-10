@@ -24,7 +24,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		cloudProviderSupportProvisioners = getSupportProvisionersByCloudProvider(oc)
 	})
 	// author: miyadav@redhat.com
-	g.It("Longduration-NonPreRelease-Author:miyadav-High-49809-Enable the capability to use UltraSSD disks in Azure worker VMs provisioned by machine-api", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:miyadav-High-49809-Enable the capability to use UltraSSD disks in Azure worker VMs provisioned by machine-api", func() {
 		scenarioSupportProvisioners := []string{"disk.csi.azure.com"}
 		var (
 			testMachineset         = exutil.MachineSetwithLabelDescription{"machineset-49809", 1, "ultrassd", "Enabled"}

@@ -27,7 +27,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: wduan@redhat.com
-	g.It("Author:wduan-High-44257-[vSphere CSI Driver Operator] Create StorageClass along with a vSphere Storage Policy", func() {
+	g.It("NonHyperShiftHOST-Author:wduan-High-44257-[vSphere CSI Driver Operator] Create StorageClass along with a vSphere Storage Policy", func() {
 		var (
 			storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
 			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
@@ -75,7 +75,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// This Validating admission controller also helps prevent user from creating or updating StorageClass using "kubernetes.io/vsphere-volume" as provisioner with AllowVolumeExpansion to true.
 	// Reference: https://github.com/kubernetes-sigs/vsphere-csi-driver/blob/release-2.4/docs/book/features/vsphere_csi_migration.md
 	// https://issues.redhat.com/browse/STOR-562
-	g.It("Author:pewang-High-47387-[vSphere CSI Driver Webhook] should prevent user from creating or updating StorageClass with unsupported parameters", func() {
+	g.It("NonHyperShiftHOST-Author:pewang-High-47387-[vSphere CSI Driver Webhook] should prevent user from creating or updating StorageClass with unsupported parameters", func() {
 		// Set the resource definition for the scenario
 		var (
 			storageTeamBaseDir    = exutil.FixturePath("testdata", "storage")

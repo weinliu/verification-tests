@@ -56,7 +56,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("ROSA-OSD_CCS-Author:pewang-Critical-24523-[LSO] [block volume] LocalVolume CR related pv could be used by Pod", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-Critical-24523-[LSO] [block volume] LocalVolume CR related pv could be used by Pod", func() {
 		// Set the resource definition for the scenario
 		var (
 			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
@@ -133,7 +133,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("ROSA-OSD_CCS-Author:pewang-Critical-24524-[LSO] [Filesystem xfs] LocalVolume CR related pv could be used by Pod", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-Critical-24524-[LSO] [Filesystem xfs] LocalVolume CR related pv could be used by Pod", func() {
 		// Set the resource definition for the scenario
 		var (
 			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
@@ -198,7 +198,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("ROSA-OSD_CCS-Author:pewang-Critical-24525-[LSO] [Filesystem ext4] LocalVolume CR related pv could be used by Pod", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-Critical-24525-[LSO] [Filesystem ext4] LocalVolume CR related pv could be used by Pod", func() {
 		// Set the resource definition for the scenario
 		var (
 			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
@@ -263,7 +263,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("ROSA-OSD_CCS-Author:pewang-Critical-26743-[LSO] [Filesystem ext4] LocalVolume CR with tolerations should work", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-Critical-26743-[LSO] [Filesystem ext4] LocalVolume CR with tolerations should work", func() {
 		// Set the resource definition for the scenario
 		var (
 			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
@@ -315,7 +315,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("NonPreRelease-ROSA-OSD_CCS-Author:pewang-Critical-48791-[LSO] [Filesystem ext4] LocalVolume CR related pv should be cleaned up after pvc is deleted and could be reused", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-OSD_CCS-Author:pewang-Critical-48791-[LSO] [Filesystem ext4] LocalVolume CR related pv should be cleaned up after pvc is deleted and could be reused", func() {
 		// Set the resource definition for the scenario
 		var (
 			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
@@ -393,7 +393,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	caseIds := []string{"50951", "51171", "51172"}
 	for i := 0; i < len(caseIds); i++ {
 		fsType := lsoFsTypesResizeTestSuit[caseIds[i]]
-		g.It("ROSA-OSD_CCS-Author:pewang-High-"+caseIds[i]+"-[LSO] [Filesystem "+fsType+"] [Resize] LocalVolume CR related pv could be expanded capacity manually", func() {
+		g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-High-"+caseIds[i]+"-[LSO] [Filesystem "+fsType+"] [Resize] LocalVolume CR related pv could be expanded capacity manually", func() {
 			// Set the resource definition for the scenario
 			var (
 				pvcTemplate       = filepath.Join(lsoBaseDir, "pvc-template.yaml")
@@ -482,7 +482,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	}
 
 	// author: pewang@redhat.com
-	g.It("ROSA-OSD_CCS-Author:pewang-High-32978-Medium-33905-[LSO] [block volume] LocalVolumeSet CR with maxDeviceCount should provision matched device and could be used by Pod [Serial]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-High-32978-Medium-33905-[LSO] [block volume] LocalVolumeSet CR with maxDeviceCount should provision matched device and could be used by Pod [Serial]", func() {
 		// Set the resource definition for the scenario
 		var (
 			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
@@ -573,7 +573,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("ROSA-OSD_CCS-Author:pewang-Medium-33725-Medium-33726-High-32979-[LSO] [Filesystem ext4] LocalVolumeSet CR with minSize and maxSize should provision matched device and could be used by Pod [Serial]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-Medium-33725-Medium-33726-High-32979-[LSO] [Filesystem ext4] LocalVolumeSet CR with minSize and maxSize should provision matched device and could be used by Pod [Serial]", func() {
 		// Set the resource definition for the scenario
 		var (
 			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
@@ -664,7 +664,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// https://bugzilla.redhat.com/show_bug.cgi?id=2023614
 	// https://bugzilla.redhat.com/show_bug.cgi?id=2014083#c18
 	// https://access.redhat.com/support/cases/#/case/03078926
-	g.It("ROSA-OSD_CCS-Author:pewang-Critical-50071-[LSO] LocalVolume CR provisioned volume should be umount when its consumed pod is force deleted", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-Critical-50071-[LSO] LocalVolume CR provisioned volume should be umount when its consumed pod is force deleted", func() {
 		// Set the resource definition for the scenario
 		var (
 			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
@@ -731,7 +731,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: pewang@redhat.com
 	// Customer Scenario:
 	// https://bugzilla.redhat.com/show_bug.cgi?id=2061447
-	g.It("ROSA-OSD_CCS-Author:pewang-High-51520-[LSO] LocalVolume CR provisioned volume should have no ownerReferences with Node [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-High-51520-[LSO] LocalVolume CR provisioned volume should have no ownerReferences with Node [Disruptive]", func() {
 		// Set the resource definition for the scenario
 		var (
 			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
@@ -800,7 +800,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-32972 - [LSO] LocalVolumeDiscovery is created successfully
 	// OCP-32976 - [LSO] New device is discovered if node is added to LocalVolumeDiscovery
 	// OCP-32981 - [LSO] CR localvolumeset and localvolume not using same device
-	g.It("ROSA-OSD_CCS-Longduration-Author:pewang-Medium-24498-High-32972-Medium-32976-High-32981-[LSO] All kinds of CR lifecycle should work well [Serial]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Longduration-Author:pewang-Medium-24498-High-32972-Medium-32976-High-32981-[LSO] All kinds of CR lifecycle should work well [Serial]", func() {
 		// Set the resource definition for the scenario
 		var (
 			lvTemplate  = filepath.Join(lsoBaseDir, "/lso/localvolume-template.yaml")

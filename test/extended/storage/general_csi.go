@@ -33,7 +33,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: pewang@redhat.com
 	// OCP-44903 [CSI Driver] [Dynamic PV] [ext4] volumes should store data and allow exec of files on the volume
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:pewang-High-44903-[CSI Driver] [Dynamic PV] [ext4] volumes should store data and allow exec of files on the volume", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-44903-[CSI Driver] [Dynamic PV] [ext4] volumes should store data and allow exec of files on the volume", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
@@ -119,7 +119,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: pewang@redhat.com
 	// [CSI Driver] [Dynamic PV] [Filesystem default] volumes should store data and allow exec of files
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:pewang-Critical-24485-[CSI Driver] [Dynamic PV] [Filesystem default] volumes should store data and allow exec of files", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:pewang-Critical-24485-[CSI Driver] [Dynamic PV] [Filesystem default] volumes should store data and allow exec of files", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
@@ -171,7 +171,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// OCP-44911 -[CSI Driver] [Dynamic PV] [Filesystem] could not write into read-only volume
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:pewang-High-44911-[CSI Driver] [Dynamic PV] [Filesystem] could not write into read-only volume", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-44911-[CSI Driver] [Dynamic PV] [Filesystem] could not write into read-only volume", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
@@ -246,7 +246,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-44910 - [CSI-Driver] [Dynamic PV] [Filesystem default] support mountOptions
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:wduan-High-44910-[CSI Driver] [Dynamic PV] [Filesystem default] support mountOptions", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wduan-High-44910-[CSI Driver] [Dynamic PV] [Filesystem default] support mountOptions", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		// Set the resource template for the scenario
@@ -332,7 +332,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: pewang@redhat.com
 	// OCP-44904 [CSI Driver] [Dynamic PV] [xfs] volumes should store data and allow exec of files on the volume
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:pewang-High-44904-[CSI Driver] [Dynamic PV] [xfs] volumes should store data and allow exec of files on the volume", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-44904-[CSI Driver] [Dynamic PV] [xfs] volumes should store data and allow exec of files on the volume", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
@@ -417,7 +417,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// OCP-47370 -[CSI Driver] [Dynamic PV] [Filesystem] provisioning volume with subpath
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:pewang-High-47370-[CSI Driver] [Dynamic PV] [Filesystem] provisioning volume with subpath", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-47370-[CSI Driver] [Dynamic PV] [Filesystem] provisioning volume with subpath", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com"}
 		// Set the resource template for the scenario
@@ -507,7 +507,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-44905 - [CSI-Driver] [Dynamic PV] [block volume] volumes should store data
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:wduan-Critical-44905-[CSI-Driver] [Dynamic PV] [block volume] volumes should store data", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-44905-[CSI-Driver] [Dynamic PV] [block volume] volumes should store data", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
@@ -565,7 +565,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-46358 - [CSI Driver] [CSI Clone] Clone a pvc with filesystem VolumeMode
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:wduan-Critical-46358-[CSI Driver] [CSI Clone] Clone a pvc with filesystem VolumeMode", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-46358-[CSI Driver] [CSI Clone] Clone a pvc with filesystem VolumeMode", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io"}
 		// Set the resource template for the scenario
@@ -634,7 +634,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-47224 - [CSI Driver] [CSI Clone] [Filesystem] provisioning volume with pvc data source larger than original volume
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:wduan-High-47224-[CSI Driver] [CSI Clone] [Filesystem] provisioning volume with pvc data source larger than original volume", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wduan-High-47224-[CSI Driver] [CSI Clone] [Filesystem] provisioning volume with pvc data source larger than original volume", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org"}
 		// Set the resource template for the scenario
@@ -713,7 +713,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-46813 - [CSI Driver] [CSI Clone] Clone a pvc with Raw Block VolumeMode
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:wduan-Critical-46813-[CSI Driver][CSI Clone] Clone a pvc with Raw Block VolumeMode", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-46813-[CSI Driver][CSI Clone] Clone a pvc with Raw Block VolumeMode", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io"}
 		// Set the resource template for the scenario
@@ -775,7 +775,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-47225 - [CSI Driver] [CSI Clone] [Raw Block] provisioning volume with pvc data source larger than original volume
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:wduan-High-47225-[CSI Driver] [CSI Clone] [Raw Block] provisioning volume with pvc data source larger than original volume", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wduan-High-47225-[CSI Driver] [CSI Clone] [Raw Block] provisioning volume with pvc data source larger than original volume", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io"}
 		// Set the resource template for the scenario
@@ -846,7 +846,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: pewang@redhat.com
 	// OCP-44909 [CSI Driver] Volume should mount again after `oc adm drain`
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:pewang-High-44909-[CSI Driver] Volume should mount again after `oc adm drain` [Disruptive]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-44909-[CSI Driver] Volume should mount again after `oc adm drain` [Disruptive]", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		// Set the resource template for the scenario
@@ -925,7 +925,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: pewang@redhat.com
 	// https://kubernetes.io/docs/concepts/storage/persistent-volumes/#delete
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:pewang-High-44906-[CSI Driver] [Dynamic PV] [Delete reclaimPolicy] volumes should be deleted after the pvc deletion", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-44906-[CSI Driver] [Dynamic PV] [Delete reclaimPolicy] volumes should be deleted after the pvc deletion", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
@@ -986,7 +986,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: pewang@redhat.com
 	// https://kubernetes.io/docs/concepts/storage/persistent-volumes/#retain
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:pewang-High-44907-[CSI Driver] [Dynamic PV] [Retain reclaimPolicy] [Static PV] volumes could be re-used after the pvc/pv deletion", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-44907-[CSI Driver] [Dynamic PV] [Retain reclaimPolicy] [Static PV] volumes could be re-used after the pvc/pv deletion", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		// Set the resource template for the scenario
@@ -1106,7 +1106,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// [CSI Driver] [Dynamic PV] [Filesystem default] volumes resize on-line
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:ropatil-Critical-45984-[CSI Driver] [Dynamic PV] [Filesystem default] volumes resize on-line", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-Critical-45984-[CSI Driver] [Dynamic PV] [Filesystem default] volumes resize on-line", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
@@ -1139,7 +1139,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// [CSI Driver] [Dynamic PV] [Filesystem ext4] volumes resize on-line
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:ropatil-Critical-51160-[CSI Driver] [Dynamic PV] [Filesystem ext4] volumes resize on-line", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-Critical-51160-[CSI Driver] [Dynamic PV] [Filesystem ext4] volumes resize on-line", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
@@ -1186,7 +1186,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// [CSI Driver] [Dynamic PV] [Filesystem xfs] volumes resize on-line
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:ropatil-Critical-51139-[CSI Driver] [Dynamic PV] [Filesystem xfs] volumes resize on-line", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-Critical-51139-[CSI Driver] [Dynamic PV] [Filesystem xfs] volumes resize on-line", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
@@ -1233,7 +1233,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// [CSI Driver] [Dynamic PV] [Raw Block] volumes resize on-line
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:ropatil-Critical-45985-[CSI Driver] [Dynamic PV] [Raw block] volumes resize on-line", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-Critical-45985-[CSI Driver] [Dynamic PV] [Raw block] volumes resize on-line", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
@@ -1266,7 +1266,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// [CSI Driver] [Dynamic PV] [Filesystem default] volumes resize off-line
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:ropatil-Critical-41452-[CSI Driver] [Dynamic PV] [Filesystem default] volumes resize off-line", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-Critical-41452-[CSI Driver] [Dynamic PV] [Filesystem default] volumes resize off-line", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "csi.vsphere.vmware.com"}
 		// Set the resource template for the scenario
@@ -1299,7 +1299,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// [CSI Driver] [Dynamic PV] [Filesystem ext4] volumes resize off-line
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:ropatil-Critical-51161-[CSI Driver] [Dynamic PV] [Filesystem ext4] volumes resize off-line", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-Critical-51161-[CSI Driver] [Dynamic PV] [Filesystem ext4] volumes resize off-line", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "csi.vsphere.vmware.com"}
 		// Set the resource template for the scenario
@@ -1346,7 +1346,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// [CSI Driver] [Dynamic PV] [Filesystem xfs] volumes resize off-line
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:ropatil-Critical-51140-[CSI Driver] [Dynamic PV] [Filesystem xfs] volumes resize off-line", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-Critical-51140-[CSI Driver] [Dynamic PV] [Filesystem xfs] volumes resize off-line", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "csi.vsphere.vmware.com"}
 		// Set the resource template for the scenario
@@ -1393,7 +1393,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// [CSI Driver] [Dynamic PV] [Raw block] volumes resize off-line
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:ropatil-Critical-44902-[CSI Driver] [Dynamic PV] [Raw block] volumes resize off-line", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-Critical-44902-[CSI Driver] [Dynamic PV] [Raw block] volumes resize off-line", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "csi.vsphere.vmware.com"}
 		// Set the resource template for the scenario
@@ -1425,7 +1425,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 	// author: chaoyang@redhat.com
 	//[CSI Driver] [Dynamic PV] [Security] CSI volume security testing when privileged is false
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:chaoyang-Critical-44908-[CSI Driver] [Dynamic PV] CSI volume security testing when privileged is false ", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Critical-44908-[CSI Driver] [Dynamic PV] CSI volume security testing when privileged is false ", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
@@ -1502,7 +1502,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-48911 - [CSI Driver] [fsgroup] should be updated with new defined value when volume attach to another pod
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:wduan-Critical-48911-[CSI Driver] [fsgroup] should be updated with new defined value when volume attach to another pod", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-48911-[CSI Driver] [fsgroup] should be updated with new defined value when volume attach to another pod", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
@@ -1575,7 +1575,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-47879 - [CSI Driver] [Snapshot] [Filesystem default] provisioning should provision storage with snapshot data source and restore it succesffully
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:wduan-Critical-47879-[CSI Driver] [Snapshot] [Filesystem default] provisioning should provision storage with snapshot data source and restore it succesffully", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-47879-[CSI Driver] [Snapshot] [Filesystem default] provisioning should provision storage with snapshot data source and restore it succesffully", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
@@ -1657,7 +1657,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-47930 - [CSI Driver] [Snapshot] [Filesystem ext4] provisioning should provision storage with snapshot data source and restore it succesffully
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:wduan-Critical-47930-[CSI Driver] [Snapshot] [Filesystem ext4] provisioning should provision storage with snapshot data source and restore it succesffully", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-47930-[CSI Driver] [Snapshot] [Filesystem ext4] provisioning should provision storage with snapshot data source and restore it succesffully", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
@@ -1756,7 +1756,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: wduan@redhat.com
 	// OCP-47931 - [CSI Driver] [Snapshot] [Filesystem xfs] provisioning should provision storage with snapshot data source and restore it succesffully
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:wduan-Critical-47931-[CSI Driver] [Snapshot] [Filesystem xfs] provisioning should provision storage with snapshot data source and restore it succesffully", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-47931-[CSI Driver] [Snapshot] [Filesystem xfs] provisioning should provision storage with snapshot data source and restore it succesffully", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
@@ -1854,7 +1854,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 	// author: chaoyang@redhat.com
 	// OCP-48723 - [CSI Driver] [Snapshot] [Block] provisioning should provision storage with snapshot data source and restore it succesffully
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:chaoyang-Critical-48723-[CSI Driver] [Snapshot] [block] provisioning should provision storage with snapshot data source and restore it succesffully", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Critical-48723-[CSI Driver] [Snapshot] [block] provisioning should provision storage with snapshot data source and restore it succesffully", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
@@ -1936,7 +1936,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 	//author: chaoyang@redhat.com
 	//OCP-48913 - [CSI Driver] [Snapshot] [Filesystem ext4] provisioning should provision storage with snapshot data source larger than original volume
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-48913-[CSI Driver] [Snapshot] [Filesystem ext4] provisioning should provision storage with snapshot data source larger than original volume", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-48913-[CSI Driver] [Snapshot] [Filesystem ext4] provisioning should provision storage with snapshot data source larger than original volume", func() {
 		// Define the test scenario support provisioners
 		// https://bugzilla.redhat.com/show_bug.cgi?id=1877261
 		//scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com","vpc.block.csi.ibm.io"}
@@ -2030,7 +2030,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	//author: chaoyang@redhat.com
 	//OCP-48933 - [CSI Driver] [Snapshot] [Filesystem xfs] provisioning should provision storage with snapshot data source larger than original volume
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-48933-[CSI Driver] [Snapshot] [Filesystem xfs] provisioning should provision storage with snapshot data source larger than original volume", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-48933-[CSI Driver] [Snapshot] [Filesystem xfs] provisioning should provision storage with snapshot data source larger than original volume", func() {
 		// Define the test scenario support provisioners
 		//scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com","vpc.block.csi.ibm.io"}
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com"}
@@ -2122,7 +2122,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: chaoyang@redhat.com
 	//OCP-48934 - [CSI Driver] [Snapshot] [Raw Block] provisioning should provision storage with snapshot data source larger than original volume
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-48934-[CSI Driver] [Snapshot] [Raw Block] provisioning should provision storage with snapshot data source larger than original volume", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-48934-[CSI Driver] [Snapshot] [Raw Block] provisioning should provision storage with snapshot data source larger than original volume", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
@@ -2205,7 +2205,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// OCP-43971 - [CSI Driver] [Dynamic PV] [FileShare] provisioning with VolumeBindingModes WaitForFirstConsumer, Immediate and volumes should store data and allow exec of files
-	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-Critical-43971-CSI Driver [Dynamic PV] [FileShare] provisioning with VolumeBindingModes WaitForFirstConsumer, Immediate and volumes should store data and allow exec of files", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:ropatil-Critical-43971-CSI Driver [Dynamic PV] [FileShare] provisioning with VolumeBindingModes WaitForFirstConsumer, Immediate and volumes should store data and allow exec of files", func() {
 
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"efs.csi.aws.com"}
@@ -2325,7 +2325,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// OCP-48666 - [CSI Driver] [Statefulset] [Filesystem] volumes should store data and allow exec of files on the volume
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:ropatil-High-48666-[CSI Driver] [Statefulset] [Filesystem default] volumes should store data and allow exec of files on the volume", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-High-48666-[CSI Driver] [Statefulset] [Filesystem default] volumes should store data and allow exec of files on the volume", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "diskplugin.csi.alibabacloud.com", "vpc.block.csi.ibm.io"}
 
@@ -2376,7 +2376,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// OCP-49478 - [CSI Driver] [Statefulset] [block volume] volumes should store data
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:ropatil-High-49478-[CSI Driver] [Statefulset] [block volume] volumes should store data", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-High-49478-[CSI Driver] [Statefulset] [block volume] volumes should store data", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "diskplugin.csi.alibabacloud.com", "vpc.block.csi.ibm.io"}
 
@@ -2423,7 +2423,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	//author: chaoyang@redhat.com
 	//OCP-49372 - [CSI Driver] [Snapshot] [Delete deletionPolicy] delete snapshotcontent after the snapshot deletion
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-49372-[CSI Driver] [Snapshot] [Delete deletionPolicy] delete snapshotcontent after the snapshot deletion", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-49372-[CSI Driver] [Snapshot] [Delete deletionPolicy] delete snapshotcontent after the snapshot deletion", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
@@ -2502,7 +2502,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	//author: wduan@redhat.com
 	// Known issue(BZ2073617) for ibm CSI Driver
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:wduan-Critical-37570-[CSI Driver][Dynamic PV][FileSystem] topology should provision a volume and schedule a pod with AllowedTopologies", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-37570-[CSI Driver][Dynamic PV][FileSystem] topology should provision a volume and schedule a pod with AllowedTopologies", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
@@ -2601,7 +2601,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	//author: wduan@redhat.com
 	// Known issue(BZ2073617) for ibm CSI Driver
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:wduan-Critical-50202-[CSI Driver][Dynamic PV][Block] topology should provision a volume and schedule a pod with AllowedTopologies", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-50202-[CSI Driver][Dynamic PV][Block] topology should provision a volume and schedule a pod with AllowedTopologies", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
@@ -2697,7 +2697,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	//author: chaoyang@redhat.com
 	//OCP-27733 - [CSI Driver] [Snapshot] [Retain deletionPolicy] [Pre-provison] could re-used snapshotcontent after the snapshot/snapshotcontent deletion
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-27733-[CSI Driver] [Snapshot] [Retain deletionPolicy] [Pre-provison] could re-used snapshotcontent after the snapshot/snapshotcontent deletion", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-27733-[CSI Driver] [Snapshot] [Retain deletionPolicy] [Pre-provison] could re-used snapshotcontent after the snapshot/snapshotcontent deletion", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
@@ -2959,7 +2959,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: pewang@redhat.com
 	// OCP-52239-Critical [CSI Driver] [Generic ephemeral volumes] lifecycle should be the same with pod level
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:pewang-Critical-52239-[CSI Driver] [Generic ephemeral volumes] lifecycle should be the same with pod level", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:pewang-Critical-52239-[CSI Driver] [Generic ephemeral volumes] lifecycle should be the same with pod level", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com",
 			"cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
@@ -3040,7 +3040,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: pewang@redhat.com
 	// OCP-52301-High [CSI Driver][Generic ephemeral volumes] [reclaimPolicy Retain] pvc's lifecycle should the same with pod but pv should be reused by pod
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:pewang-High-52301-[CSI Driver][Generic ephemeral volumes] [reclaimPolicy Retain] pvc's lifecycle should the same with pod but pv should be reused by pod", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-52301-[CSI Driver][Generic ephemeral volumes] [reclaimPolicy Retain] pvc's lifecycle should the same with pod but pv should be reused by pod", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com",
 			"cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
@@ -3168,7 +3168,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: pewang@redhat.com
 	// OCP-52330-Medium [CSI Driver][Generic ephemeral volumes] remove pvc's ownerReferences should decouple lifecycle with its pod
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:pewang-Medium-52330-[CSI Driver][Generic ephemeral volumes] remove pvc's ownerReferences should decouple lifecycle with its pod", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:pewang-Medium-52330-[CSI Driver][Generic ephemeral volumes] remove pvc's ownerReferences should decouple lifecycle with its pod", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com",
 			"cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
@@ -3251,7 +3251,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// OCP-50398 - [CSI Driver] [Daemonset] [Filesystem default] could provide RWX access mode volume
-	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-High-50398-[CSI Driver] [Daemonset] [Filesystem default] could provide RWX access mode volume", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:ropatil-High-50398-[CSI Driver] [Daemonset] [Filesystem default] could provide RWX access mode volume", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"efs.csi.aws.com", "csi.vsphere.vmware.com"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
@@ -3326,7 +3326,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 	// author: chaoyang@redhat.com
 	// [CSI Driver] [Dynamic PV] [Filesystem with RWX Accessmode] volumes resize on-line
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:chaoyang-High-51258-[CSI Driver] [Dynamic PV] [Filesystem] volumes resize with RWX access mode", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-High-51258-[CSI Driver] [Dynamic PV] [Filesystem] volumes resize with RWX access mode", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"file.csi.azure.com"}
 		// Set the resource template for the scenario
@@ -3415,7 +3415,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: ropatil@redhat.com
 	// https://bugzilla.redhat.com/show_bug.cgi?id=2076671
 	// OCP-52335 - [CSI Driver][Dynamic PV][Filesystem] Should auto provision for smaller PVCs
-	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-High-52335-[CSI Driver][Dynamic PV][Filesystem] Should auto provision for smaller PVCs", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:ropatil-High-52335-[CSI Driver][Dynamic PV][Filesystem] Should auto provision for smaller PVCs", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"diskplugin.csi.alibabacloud.com"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
@@ -3475,7 +3475,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: ropatil@redhat.com
 	// https://bugzilla.redhat.com/show_bug.cgi?id=2076671
 	// OCP-52338 - [CSI Driver][Dynamic PV][Filesystem] should not auto provision for smaller PVCs
-	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-High-52338-[CSI Driver][Dynamic PV][Filesystem] should not auto provision for smaller PVCs", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:ropatil-High-52338-[CSI Driver][Dynamic PV][Filesystem] should not auto provision for smaller PVCs", func() {
 		// Define the test scenario support provisioners, Need to add values for ibm cloud
 		scenarioSupportProvisioners := []string{"diskplugin.csi.alibabacloud.com"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
@@ -3532,7 +3532,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 	})
 	//https://docs.openshift.com/container-platform/4.10/storage/expanding-persistent-volumes.html#expanding-recovering-from-failure_expanding-persistent-volumes
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:chaoyang-High-52513-[CSI Driver] [Dynamic PV] [Filesystem] Recovering from failure when expanding volumes", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-High-52513-[CSI Driver] [Dynamic PV] [Filesystem] Recovering from failure when expanding volumes", func() {
 
 		// Only pick up aws platform testing this function
 		cloudProvider = getCloudProvider(oc)
@@ -3623,7 +3623,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: chaoyang@redhat.com
 	// OCP-53309 - [CSI Driver] [CSI Clone] Clone volume support different storage class
-	g.It("HyperShiftGUEST-ARO-Author:chaoyang-Low-53309-[CSI Driver] [CSI Clone] [Filesystem] Clone volume support different storage class", func() {
+	g.It("ARO-Author:chaoyang-Low-53309-[CSI Driver] [CSI Clone] [Filesystem] Clone volume support different storage class", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"disk.csi.azure.com", "cinder.csi.openstack.org"}
 
