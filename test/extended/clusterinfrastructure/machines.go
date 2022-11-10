@@ -257,7 +257,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		var amiID string
 		switch region {
 		case "us-east-1", "us-iso-east-1":
-			amiID = "ami-0d9cdd823beb0f50b"
+			amiID = "ami-0e09e139aca053387"
 		case "us-east-2":
 			amiID = "ami-0d939f6eeb364cbc6"
 		case "cn-north-1":
