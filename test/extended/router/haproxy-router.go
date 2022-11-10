@@ -1152,4 +1152,58 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	})
 
+	// author: shudili@redhat.com
+	g.It("Author:shudili-Medium-53048-Ingresscontroller with private endpoint publishing strategy supports PROXY protocol", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-private.yaml")
+			ingctrl             = ingctrlNodePortDescription{
+				name:      "53048",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+			ingctrlResource = "ingresscontrollers/" + ingctrl.name
+		)
+
+		g.By("create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("check the default value of .status.endpointPublishingStrategy.private.protocol, which should be TCP")
+		jpath := ".status.endpointPublishingStrategy.private.protocol"
+		protocol := fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jpath)
+		o.Expect(protocol).To(o.ContainSubstring("TCP"))
+
+		g.By("patch the custom ingresscontroller with protocol proxy")
+		routerpod := getRouterPod(oc, ingctrl.name)
+		patchPath := "{\"spec\":{\"endpointPublishingStrategy\":{\"private\":{\"protocol\":\"PROXY\"}}}}"
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchPath)
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
+
+		g.By("check the changed value of .endpointPublishingStrategy.private.protocol, which should be PROXY")
+		jpath = ".spec.endpointPublishingStrategy.private.protocol}{.status.endpointPublishingStrategy.private.protocol"
+		protocol = fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jpath)
+		o.Expect(protocol).To(o.ContainSubstring("PROXYPROXY"))
+
+		g.By("check the ROUTER_USE_PROXY_PROTOCOL env, which should be true")
+		routerpod = getRouterPod(oc, ingctrl.name)
+		proxyEnv := readRouterPodEnv(oc, routerpod, "ROUTER_USE_PROXY_PROTOCOL")
+		o.Expect(proxyEnv).To(o.ContainSubstring("ROUTER_USE_PROXY_PROTOCOL=true"))
+
+		g.By("check the accept-proxy in haproxy.config of a router pod")
+		HTTPProxy := "bind :80"
+		HTTPSProxy := "bind :443"
+		HTTPCheck := readHaproxyConfig(oc, routerpod, HTTPProxy, "-A1", "accept-proxy")
+		o.Expect(HTTPCheck).To(o.ContainSubstring("bind :80 accept-proxy"))
+		HTTPSCheck := readHaproxyConfig(oc, routerpod, HTTPSProxy, "-A1", "accept-proxy")
+		o.Expect(HTTPSCheck).To(o.ContainSubstring("bind :443 accept-proxy"))
+
+	})
+
 })

@@ -28,6 +28,7 @@ type ingctrlNodePortDescription struct {
 	replicas    int
 	template    string
 }
+
 type ingctrlHostPortDescription struct {
 	name        string
 	namespace   string
@@ -39,6 +40,7 @@ type ingctrlHostPortDescription struct {
 	replicas    int
 	template    string
 }
+
 type ipfailoverDescription struct {
 	name        string
 	namespace   string
@@ -636,7 +638,7 @@ func keepSearchInAllDNSPods(oc *exutil.CLI, podList []string, expStr string) {
 				e2e.Logf("find " + expStr + " in the Corefile of pod " + podName)
 				primary = true
 			} else {
-				//reduce the logs
+				// reduce the logs
 				if count%2 == 1 {
 					e2e.Logf("can't find " + expStr + " in the Corefile of pod " + podName + ", wait and try again...")
 				}
@@ -704,7 +706,7 @@ func waitAllCorefilesUpdated(oc *exutil.CLI, attrList [][]string) [][]string {
 				updatedAttrList = append(updatedAttrList, []string{dnspodname, output})
 				primary = true
 			} else {
-				//reduce the logs
+				// reduce the logs
 				if count%10 == 1 {
 					e2e.Logf(dnspodname + " Corefile isn't updated , wait and try again...")
 				}
@@ -826,7 +828,7 @@ func createExternalDNSOperator(oc *exutil.CLI) {
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subscription).Output()
 	e2e.Logf("err %v, msg %v", err, msg)
 
-	//checking subscription status
+	// checking subscription status
 	errCheck := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 		subState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "external-dns-operator", "-n", operatorNamespace, "-o=jsonpath={.status.state}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -872,7 +874,7 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subscription).Output()
 	e2e.Logf("err %v, msg %v", err, msg)
 
-	//checking subscription status
+	// checking subscription status
 	errCheck := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 		subState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "aws-load-balancer-operator", "-n", ns, "-o=jsonpath={.status.state}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
