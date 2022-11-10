@@ -21,7 +21,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 
 	// author: yinzhou@redhat.com
 	//It is destructive case, will make kube-scheduler roll out, so adding [Disruptive]. One rollout costs about 5mins, so adding [Slow]
-	g.It("ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:yinzhou-Medium-31939-Verify logLevel settings in kube scheduler operator [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:yinzhou-Medium-31939-Verify logLevel settings in kube scheduler operator [Disruptive][Slow]", func() {
 		patchYamlToRestore := `[{"op": "replace", "path": "/spec/logLevel", "value":"Normal"}]`
 
 		g.By("Set the loglevel to TraceAll")
@@ -108,7 +108,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		}
 	})
 
-	g.It("HyperShiftGUEST-Author:knarra-High-44049-DefaultPodTopologySpread doesn't work in non-CloudProvider env in OpenShift 4.7 [Disruptive][Flaky]", func() {
+	g.It("Author:knarra-High-44049-DefaultPodTopologySpread doesn't work in non-CloudProvider env in OpenShift 4.7 [Disruptive][Flaky]", func() {
 		workerNodeList, err := exutil.GetClusterNodesBy(oc, "worker")
 		e2e.Logf("workernodeList is %v", workerNodeList)
 		// Create test project
@@ -205,7 +205,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 	//It is destructive case, will make kube-scheduler roll out, so adding [Disruptive]. One rollout costs about 5mins, so adding [Slow]
-	g.It("ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:knarra-High-50931-Validate HighNodeUtilization profile 4.10 and above [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:knarra-High-50931-Validate HighNodeUtilization profile 4.10 and above [Disruptive][Slow]", func() {
 		patchYamlToRestore := `[{"op": "remove", "path": "/spec/profile"}]`
 
 		g.By("Set profile to HighNodeUtilization")
@@ -251,7 +251,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 	//It is destructive case, will make kube-scheduler roll out, so adding [Disruptive]. One rollout costs about 5mins, so adding [Slow]
-	g.It("ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:knarra-High-50932-Validate NoScoring profile 4.10 and above [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:knarra-High-50932-Validate NoScoring profile 4.10 and above [Disruptive][Slow]", func() {
 		patchYamlToRestore := `[{"op": "remove", "path": "/spec/profile"}]`
 
 		g.By("Set profile to NoScoring")

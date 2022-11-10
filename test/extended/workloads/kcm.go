@@ -22,7 +22,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: yinzhou@redhat.com
-	g.It("Longduration-Author:yinzhou-High-28001-bug 1749478 KCM should recover when its temporary secrets are deleted [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Longduration-Author:yinzhou-High-28001-bug 1749478 KCM should recover when its temporary secrets are deleted [Disruptive]", func() {
 		var namespace = "openshift-kube-controller-manager"
 		var temporarySecretsList []string
 
@@ -66,7 +66,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-High-43039-openshift-object-counts quota dynamically updating as the resource is deleted", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-43039-openshift-object-counts quota dynamically updating as the resource is deleted", func() {
 		g.By("Test for case OCP-43039 openshift-object-counts quota dynamically updating as the resource is deleted")
 		g.By("create new namespace")
 		oc.SetupProject()
@@ -127,7 +127,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-43092-Namespaced dependents try to use cross-namespace owner references will be deleted", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-43092-Namespaced dependents try to use cross-namespace owner references will be deleted", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		deploydpT := filepath.Join(buildPruningBaseDir, "deploy_duplicatepodsrs.yaml")
 
@@ -183,7 +183,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		}
 	})
 	// author: yinzhou@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-43099-Cluster-scoped dependents with namespaced kind owner references will trigger warning Event [Flaky]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-43099-Cluster-scoped dependents with namespaced kind owner references will trigger warning Event [Flaky]", func() {
 		g.By("Create the first namespace")
 		err := oc.WithoutNamespace().Run("new-project").Args("p43099").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -227,7 +227,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-High-43035-KCM use internal LB to avoid outages during kube-apiserver rollout [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:yinzhou-High-43035-KCM use internal LB to avoid outages during kube-apiserver rollout [Disruptive]", func() {
 		g.By("Get the route")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route/console", "-n", "openshift-console", "-o=jsonpath={.spec.host}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -271,7 +271,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-High-50255-make sure disabled JobTrackingWithFinalizers", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-50255-make sure disabled JobTrackingWithFinalizers", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		cronjobF := filepath.Join(buildPruningBaseDir, "cronjob50255.yaml")
 		g.By("create new namespace")
@@ -297,7 +297,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		exutil.AssertWaitPollNoErr(err, "Failed to get running pods for cronjob")
 	})
 	// author: yinzhou@redhat.com
-	g.It("HyperShiftGUEST-Longduration-NonPreRelease-Author:yinzhou-High-51843-PodDisruptionBudgetAtLimit should not Warning alert when CR replica count is zero", func() {
+	g.It("Longduration-NonPreRelease-Author:yinzhou-High-51843-PodDisruptionBudgetAtLimit should not Warning alert when CR replica count is zero", func() {
 		g.By("create new namespace")
 		oc.SetupProject()
 		g.By("create app")

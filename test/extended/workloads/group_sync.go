@@ -16,7 +16,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: yinzhou@redhat.com
-	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:yinzhou-High-40053-Syncing the groups with valid format [Flaky]", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-High-40053-Syncing the groups with valid format [Flaky]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		initGroup := filepath.Join(buildPruningBaseDir, "init.ldif")
 		syncConfig := filepath.Join(buildPruningBaseDir, "sync-config-user-defined.yaml")

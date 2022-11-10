@@ -20,7 +20,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	var (
 		oc = exutil.NewCLI("ocmirror", exutil.KubeConfigPath())
 	)
-	g.It("Author:yinzhou-Medium-46517-List operator content with different options", func() {
+	g.It("NonHyperShiftHOST-Author:yinzhou-Medium-46517-List operator content with different options", func() {
 		dirname := "/tmp/case46517"
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -122,7 +122,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 	})
-	g.It("HyperShiftGUEST-Author:yinzhou-Medium-46818-Low-46523-check the User Agent for oc-mirror", func() {
+	g.It("Author:yinzhou-Medium-46818-Low-46523-check the User Agent for oc-mirror", func() {
 		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
 		operatorS := filepath.Join(ocmirrorBaseDir, "catlog-loggings.yaml")
 
@@ -148,7 +148,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		_, err = os.Stat("/tmp/case46523/oc-mirror-workspace/mapping.txt")
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
-	g.It("ConnectedOnly-Author:yinzhou-Medium-46770-Low-46520-Local backend support for oc-mirror", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-Medium-46770-Low-46520-Local backend support for oc-mirror", func() {
 		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
 		operatorS := filepath.Join(ocmirrorBaseDir, "ocmirror-localbackend.yaml")
 
@@ -170,7 +170,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
-	g.It("ConnectedOnly-Author:yinzhou-High-46506-High-46817-Mirror a single image works well", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-High-46506-High-46817-Mirror a single image works well", func() {
 		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
 		operatorS := filepath.Join(ocmirrorBaseDir, "config_singleimage.yaml")
 
@@ -211,7 +211,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			e2e.Failf("Can't see the stateless mode log")
 		}
 	})
-	g.It("Author:yinzhou-Low-51093-oc-mirror init", func() {
+	g.It("NonHyperShiftHOST-Author:yinzhou-Low-51093-oc-mirror init", func() {
 		g.By("Set podman registry config")
 		dirname := "/tmp/case51093"
 		err := os.MkdirAll(dirname, 0755)
@@ -233,7 +233,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("init", "--registry", "localhost:5000/test:latest", "--output", "json").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
-	g.It("ConnectedOnly-Author:yinzhou-High-46769-Critical-46515-High-46767-registry backend test", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-High-46769-Critical-46515-High-46767-registry backend test", func() {
 		g.By("Set podman registry config")
 		dirname := "/tmp/case46769"
 		err := os.MkdirAll(dirname, 0755)
@@ -262,7 +262,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", operatorConfigS, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--continue-on-error").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
-	g.It("Author:yinzhou-NonPreRelease-Medium-37372-High-40322-oc adm release extract pull from localregistry when given a localregistry image [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:yinzhou-NonPreRelease-Medium-37372-High-40322-oc adm release extract pull from localregistry when given a localregistry image [Disruptive]", func() {
 		var imageDigest string
 		g.By("Set podman registry config")
 		dirname := "/tmp/case37372"
