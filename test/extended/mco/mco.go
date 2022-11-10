@@ -28,7 +28,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		preChecks(oc)
 	})
 
-	g.It("Author:rioliu-Critical-42347-health check for machine-config-operator [Serial]", func() {
+	g.It("NonHyperShiftHOST-Author:rioliu-Critical-42347-health check for machine-config-operator [Serial]", func() {
 		g.By("checking mco status")
 		co := NewResource(oc.AsAdmin(), "co", "machine-config")
 		coStatus := co.GetOrFail(`{range .status.conditions[*]}{.type}{.status}{"\n"}{end}`)
@@ -1147,7 +1147,7 @@ nulla pariatur.`
 		o.Expect(rf.GetGIDName()).To(o.Equal("root"))
 	})
 
-	g.It("Author:sregidor-High-46424-Check run level", func() {
+	g.It("NonHyperShiftHOST-Author:sregidor-High-46424-Check run level", func() {
 		g.By("Validate openshift-machine-config-operator run level")
 		mcoNs := NewResource(oc.AsAdmin(), "ns", MachineConfigNamespace)
 		runLevel := mcoNs.GetOrFail(`{.metadata.labels.openshift\.io/run-level}`)
