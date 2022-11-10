@@ -140,7 +140,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ARO-ConnectedOnly-Author:pdhamdhe-Critical-27649-The ComplianceSuite reports the scan result as Compliant or Non-Compliant [Slow]", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Critical-27649-The ComplianceSuite reports the scan result as Compliant or Non-Compliant [Slow]", func() {
 		var (
 			csuiteD = complianceSuiteDescription{
 				name:         "worker-compliancesuite" + getRandomString(),
@@ -203,7 +203,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	/* Disabling the test case, it might be required in future release
 	// author: pdhamdhe@redhat.com
-	g.It("Author:pdhamdhe-Medium-32082-The ComplianceSuite shows the scan result NOT-APPLICABLE after all rules are skipped to scan", func() {
+	g.It("NonHyperShiftHOST-Author:pdhamdhe-Medium-32082-The ComplianceSuite shows the scan result NOT-APPLICABLE after all rules are skipped to scan", func() {
 
 		var (
 			csuite = complianceSuiteDescription{
@@ -251,7 +251,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})*/
 
 	// author: pdhamdhe@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-33398-The Compliance Operator supports to variables in tailored profile [Slow]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-33398-The Compliance Operator supports to variables in tailored profile [Slow]", func() {
 		var (
 			tprofileD = tailoredProfileDescription{
 				name:         "rhcos-tailoredprofile",
@@ -291,7 +291,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-32840-The ComplianceSuite generates through ScanSetting CR [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-32840-The ComplianceSuite generates through ScanSetting CR [Serial][Slow]", func() {
 		var (
 			tprofileD = tailoredProfileDescription{
 				name:         "rhcos-tp",
@@ -373,7 +373,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ARO-ConnectedOnly-Author:pdhamdhe-Medium-33381-Verify the ComplianceSuite could be generated from Tailored profiles [Slow]", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Medium-33381-Verify the ComplianceSuite could be generated from Tailored profiles [Slow]", func() {
 		var (
 			tprofileD = tailoredProfileDescription{
 				name:         "rhcos-e8-tp",
@@ -435,7 +435,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	})
 	// author: xiyuan@redhat.com
-	g.It("ARO-ConnectedOnly-Author:xiyuan-Medium-33611-Verify the tolerations could work for compliancescan when there is more than one taint on node [Exclusive]", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:xiyuan-Medium-33611-Verify the tolerations could work for compliancescan when there is more than one taint on node [Exclusive]", func() {
 		var cscanD = complianceScanDescription{
 			name:         "example-compliancescan3" + getRandomString(),
 			namespace:    "",
@@ -489,7 +489,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-Author:xiyuan-High-37121-The ComplianceSuite generates through ScanSettingBinding CR with cis profile and default scansetting [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:xiyuan-High-37121-The ComplianceSuite generates through ScanSettingBinding CR with cis profile and default scansetting [Serial][Slow]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "cis-test" + getRandomString(),
 			namespace:       "",
@@ -524,7 +524,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ARO-ConnectedOnly-Author:pdhamdhe-Medium-33713-The ComplianceSuite reports the scan result as Error", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Medium-33713-The ComplianceSuite reports the scan result as Error", func() {
 		var (
 			csuiteD = complianceSuiteDescription{
 				name:         "worker-compliancesuite" + getRandomString(),
@@ -565,7 +565,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ARO-ConnectedOnly-Author:pdhamdhe-Critical-27705-The ComplianceScan reports the scan result Compliant or Non-Compliant", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Critical-27705-The ComplianceScan reports the scan result Compliant or Non-Compliant", func() {
 
 		var (
 			cscanD = complianceScanDescription{
@@ -633,7 +633,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ARO-ConnectedOnly-Author:pdhamdhe-Medium-27762-The ComplianceScan reports the scan result Error", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Medium-27762-The ComplianceScan reports the scan result Error", func() {
 
 		var (
 			cscanD = complianceScanDescription{
@@ -673,7 +673,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ConnectedOnly-Author:pdhamdhe-Medium-27968-Perform scan only on a subset of nodes using ComplianceScan object [Slow]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:pdhamdhe-Medium-27968-Perform scan only on a subset of nodes using ComplianceScan object [Slow]", func() {
 		var (
 			cscanMD = complianceScanDescription{
 				name:         "master-scan" + getRandomString(),
@@ -706,7 +706,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ARO-ConnectedOnly-Author:pdhamdhe-High-33230-The compliance-operator raw result storage size is configurable", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-High-33230-The compliance-operator raw result storage size is configurable", func() {
 
 		var (
 			csuiteD = complianceSuiteDescription{
@@ -783,7 +783,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ARO-NonPreRelease-ConnectedOnly-Author:pdhamdhe-High-33609-Verify the tolerations could work for compliancesuite [Exclusive]", func() {
+	g.It("NonHyperShiftHOST-ARO-NonPreRelease-ConnectedOnly-Author:pdhamdhe-High-33609-Verify the tolerations could work for compliancesuite [Exclusive]", func() {
 		var (
 			csuiteD = complianceSuiteDescription{
 				name:         "worker-compliancesuite" + getRandomString(),
@@ -891,7 +891,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ConnectedOnly-Author:pdhamdhe-High-33610-Verify the tolerations could work for compliancescan [Exclusive]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:pdhamdhe-High-33610-Verify the tolerations could work for compliancescan [Exclusive]", func() {
 
 		var (
 			cscanD = complianceScanDescription{
@@ -993,7 +993,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-28949-The complianceSuite and ComplianeScan perform scan using Platform scan type", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-28949-The complianceSuite and ComplianeScan perform scan using Platform scan type", func() {
 
 		var (
 			csuiteD = complianceSuiteDescription{
@@ -1061,7 +1061,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-36988-The ComplianceScan could be triggered for cis profile for platform scanType", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-36988-The ComplianceScan could be triggered for cis profile for platform scanType", func() {
 
 		var (
 			cscanMD = complianceScanDescription{
@@ -1101,7 +1101,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-36990-The ComplianceSuite could be triggered for cis profiles for platform scanType", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-36990-The ComplianceSuite could be triggered for cis profiles for platform scanType", func() {
 
 		var (
 			csuiteD = complianceSuiteDescription{
@@ -1142,7 +1142,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-37063-The ComplianceSuite could be triggered for cis profiles for node scanType", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-37063-The ComplianceSuite could be triggered for cis profiles for node scanType", func() {
 
 		var (
 			csuiteD = complianceSuiteDescription{
@@ -1256,7 +1256,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-NonPreRelease-Longduration-High-32120-The ComplianceSuite performs schedule scan for Platform scan type [Slow]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-NonPreRelease-Longduration-High-32120-The ComplianceSuite performs schedule scan for Platform scan type [Slow]", func() {
 		var (
 			csuiteD = complianceSuiteDescription{
 				name:         "platform-compliancesuite" + getRandomString(),
@@ -1313,7 +1313,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ARO-ConnectedOnly-Author:pdhamdhe-High-33418-Medium-44062-The ComplianceSuite performs the schedule scan through cron job and also verify the suitererunner resources are doubled [Slow]", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-High-33418-Medium-44062-The ComplianceSuite performs the schedule scan through cron job and also verify the suitererunner resources are doubled [Slow]", func() {
 		var (
 			csuiteD = complianceSuiteDescription{
 				name:         "worker-compliancesuite" + getRandomString(),
@@ -1381,7 +1381,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ARO-ConnectedOnly-Author:xiyuan-NonPreRelease-Longduration-Medium-33456-The Compliance-Operator edits the scheduled cron job to scan from ComplianceSuite [Slow]", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:xiyuan-NonPreRelease-Longduration-Medium-33456-The Compliance-Operator edits the scheduled cron job to scan from ComplianceSuite [Slow]", func() {
 		var (
 			csuiteD = complianceSuiteDescription{
 				name:         "example-compliancesuite1" + getRandomString(),
@@ -1445,7 +1445,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ARO-ConnectedOnly-Author:pdhamdhe-NonPreRelease-Longduration-High-33453-The Compliance Operator rotates the raw scan results [Slow]", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-NonPreRelease-Longduration-High-33453-The Compliance Operator rotates the raw scan results [Slow]", func() {
 		var (
 			csuiteD = complianceSuiteDescription{
 				name:         "worker-compliancesuite" + getRandomString(),
@@ -1539,7 +1539,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ARO-ConnectedOnly-Author:pdhamdhe-High-33660-Verify the differences in nodes from the same role could be handled [Serial]", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-High-33660-Verify the differences in nodes from the same role could be handled [Serial]", func() {
 		var (
 			csuiteD = complianceSuiteDescription{
 				name:         "worker-compliancesuite" + getRandomString(),
@@ -1586,7 +1586,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:pdhamdhe-Medium-32814-High-45729-The compliance operator by default creates ProfileBundles and profiles", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Medium-32814-High-45729-The compliance operator by default creates ProfileBundles and profiles", func() {
 		g.By("Check default profilebundles name and status.. !!!\n")
 		subD.getProfileBundleNameandStatus(oc, "ocp4", "VALID")
 		subD.getProfileBundleNameandStatus(oc, "rhcos4", "VALID")
@@ -1609,7 +1609,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ARO-ConnectedOnly-Author:pdhamdhe-Medium-33431-Verify compliance check result shows in ComplianceCheckResult label for compliancesuite", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Medium-33431-Verify compliance check result shows in ComplianceCheckResult label for compliancesuite", func() {
 
 		var (
 			csuiteD = complianceSuiteDescription{
@@ -1660,7 +1660,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ARO-ConnectedOnly-Author:pdhamdhe-Medium-33435-Verify the compliance scan result shows in ComplianceCheckResult label for compliancescan", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Medium-33435-Verify the compliance scan result shows in ComplianceCheckResult label for compliancescan", func() {
 
 		var (
 			cscanD = complianceScanDescription{
@@ -1709,7 +1709,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ARO-ConnectedOnly-Author:pdhamdhe-Medium-33449-The compliance-operator raw results store in ARF format on a PVC", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Medium-33449-The compliance-operator raw results store in ARF format on a PVC", func() {
 
 		var (
 			csuiteD = complianceSuiteDescription{
@@ -1768,7 +1768,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-37171-Check compliancesuite status when there are multiple rhcos4 profiles added in scansettingbinding object [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-37171-Check compliancesuite status when there are multiple rhcos4 profiles added in scansettingbinding object [Serial][Slow]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "rhcos4" + getRandomString(),
 			namespace:       "",
@@ -1803,7 +1803,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-Author:xiyuan-High-37084-The ComplianceSuite generates through ScanSettingBinding CR with tailored cis profile [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:xiyuan-High-37084-The ComplianceSuite generates through ScanSettingBinding CR with tailored cis profile [Serial]", func() {
 		var (
 			tp = tailoredProfileWithoutVarDescription{
 				name:         "ocp4-cis-custom",
@@ -1886,7 +1886,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-High-34928-Storage class and access modes are configurable through ComplianceSuite and ComplianceScan", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-High-34928-Storage class and access modes are configurable through ComplianceSuite and ComplianceScan", func() {
 		SkipForIBMCloud(oc)
 
 		var (
@@ -1968,7 +1968,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-Medium-40372-Use a separate SA for resultserver", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-Medium-40372-Use a separate SA for resultserver", func() {
 		var csuiteMD = complianceSuiteDescription{
 			name:         "master-compliancesuite" + getRandomString(),
 			namespace:    "",
@@ -2004,7 +2004,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-40280-The infrastructure feature should show the Compliance operator when the disconnected filter gets applied", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-40280-The infrastructure feature should show the Compliance operator when the disconnected filter gets applied", func() {
 		g.By("check the infrastructure-features for csv!!!\n")
 		csvName := getResource(oc, asAdmin, withoutNamespace, "csv", "-n", subD.namespace, "-o=jsonpath={.items[0].metadata.name}")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "[\"disconnected\", \"fips\", \"proxy-aware\"]", ok, []string{"csv",
@@ -2012,7 +2012,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-Medium-41769-The compliance operator could get HTTP_PROXY and HTTPS_PROXY environment from OpenShift has global proxy settings	", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-Medium-41769-The compliance operator could get HTTP_PROXY and HTTPS_PROXY environment from OpenShift has global proxy settings	", func() {
 		g.By("Get the httpPoxy and httpsProxy info!!!\n")
 		httpProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-n", subD.namespace, "-o=jsonpath={.spec.httpProxy}")
 		httpsProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-n", subD.namespace, "-o=jsonpath={.spec.httpsProxy}")
@@ -2052,7 +2052,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-High-33859-Verify if the profileparser enables to get content updates when the image digest updated [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-High-33859-Verify if the profileparser enables to get content updates when the image digest updated [Serial][Slow]", func() {
 		var (
 			pb = profileBundleDescription{
 				name:         "test1",
@@ -2133,7 +2133,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-Medium-33578-Verify if the profileparser enables to get content updates when add a new ProfileBundle [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-Medium-33578-Verify if the profileparser enables to get content updates when add a new ProfileBundle [Serial][Slow]", func() {
 		var (
 			pb = profileBundleDescription{
 				name:         "test1",
@@ -2221,7 +2221,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ARO-ConnectedOnly-Author:xiyuan-High-33429-The Compliance Operator performs scan successfully on taint node without tolerations [Exclusive] [Slow]", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:xiyuan-High-33429-The Compliance Operator performs scan successfully on taint node without tolerations [Exclusive] [Slow]", func() {
 		var csuiteD = complianceSuiteDescription{
 			name:         "example-compliancesuite" + getRandomString(),
 			namespace:    "",
@@ -2265,7 +2265,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	/* Disabling the test, it may be needed in future
 	// author: xiyuan@redhat.com
-	g.It("Author:xiyuan-Medium-40226-NOT APPLICABLE rule should report NOT APPLICABLE status in 'ComplianceCheckResult' instead of SKIP [Slow]", func() {
+	g.It("NonHyperShiftHOST-Author:xiyuan-Medium-40226-NOT APPLICABLE rule should report NOT APPLICABLE status in 'ComplianceCheckResult' instead of SKIP [Slow]", func() {
 		var (
 			ssb = scanSettingBindingDescription{
 				name:            "cis-test",
@@ -2302,7 +2302,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})*/
 
 	// author: pdhamdhe@redhat.com
-	g.It("ARO-ConnectedOnly-Author:pdhamdhe-High-41861-Verify fips mode checking rules are working as expected [Slow]", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-High-41861-Verify fips mode checking rules are working as expected [Slow]", func() {
 
 		var (
 			csuiteD = complianceSuiteDescription{
@@ -2374,7 +2374,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-41093-Medium-44944-The instructions should be available for all rules in cis profiles and The nodeName shows in target and fact:identifier elements of complianceScan XCCDF format result [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-41093-Medium-44944-The instructions should be available for all rules in cis profiles and The nodeName shows in target and fact:identifier elements of complianceScan XCCDF format result [Serial][Slow]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "cis-instruction" + getRandomString(),
 			namespace:       "",
@@ -2408,7 +2408,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-47044-Verify the ocp4 moderate profiles perform scan as expected with default scanSettings [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-47044-Verify the ocp4 moderate profiles perform scan as expected with default scanSettings [Serial][Slow]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "moderate-test" + getRandomString(),
 			namespace:       "",
@@ -2443,7 +2443,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Low-42695-Verify the manual remediation for rule ocp4-moderate-compliancesuite-exists works as expected [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Low-42695-Verify the manual remediation for rule ocp4-moderate-compliancesuite-exists works as expected [Serial][Slow]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "moderate-test" + getRandomString(),
 			namespace:       "",
@@ -2479,7 +2479,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("Author:pdhamdhe-Longduration-CPaasrunOnly-NonPreRelease-Low-42719-Low-42810-Low-42834-Check manual remediation works for TokenMaxAge TokenInactivityTimeout and no-ldap-insecure rules for oauth cluster object [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-Author:pdhamdhe-Longduration-CPaasrunOnly-NonPreRelease-Low-42719-Low-42810-Low-42834-Check manual remediation works for TokenMaxAge TokenInactivityTimeout and no-ldap-insecure rules for oauth cluster object [Disruptive][Slow]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "moderate-test" + getRandomString(),
 			namespace:       "",
@@ -2581,7 +2581,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:pdhamdhe-Low-42960-Low-43098-Check that TokenMaxAge and TokenInactivityTimeout are configurable for oauthclient objects [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Low-42960-Low-43098-Check that TokenMaxAge and TokenInactivityTimeout are configurable for oauthclient objects [Disruptive][Slow]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "moderate-test" + getRandomString(),
 			namespace:       "",
@@ -2671,7 +2671,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonPreRelease-ConnectedOnly-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Low-42685-Low-46927-check the manual remediation for rules file-integrity-exists and file-integrity-notification-enabled working as expected [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Low-42685-Low-46927-check the manual remediation for rules file-integrity-exists and file-integrity-notification-enabled working as expected [Serial][Slow]", func() {
 		var (
 			ssb = scanSettingBindingDescription{
 				name:            "moderate-test" + getRandomString(),
@@ -2773,7 +2773,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("Author:pdhamdhe-NonPreRelease-CPaasrunOnly-Medium-40660-Low-42874-Check whether the audit logs are getting forwarded using TLS protocol [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-Medium-40660-Low-42874-Check whether the audit logs are getting forwarded using TLS protocol [Disruptive][Slow]", func() {
 		var (
 			ogL = operatorGroupDescription{
 				name:      "openshift-logging",
@@ -2912,7 +2912,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("Author:pdhamdhe-NonPreRelease-CPaasrunOnly-Low-42700-Check that a login banner is configured and login screen customised [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-Low-42700-Check that a login banner is configured and login screen customised [Disruptive][Slow]", func() {
 
 		var ssb = scanSettingBindingDescription{
 			name:            "moderate-test" + getRandomString(),
@@ -2994,7 +2994,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("Author:pdhamdhe-NonPreRelease-CPaasrunOnly-Low-42720-check manual remediation for rule ocp4-moderate-configure-network-policies-namespaces working as expected [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-Low-42720-check manual remediation for rule ocp4-moderate-configure-network-policies-namespaces working as expected [Disruptive][Slow]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "moderate-test" + getRandomString(),
 			namespace:       "",
@@ -3103,7 +3103,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-41153-There are OpenSCAP checks created to verify that the cluster is compliant  for the section 5 of the Kubernetes CIS profile [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-41153-There are OpenSCAP checks created to verify that the cluster is compliant  for the section 5 of the Kubernetes CIS profile [Serial][Slow]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "cis-test" + getRandomString(),
 			namespace:       "",
@@ -3139,7 +3139,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("Author:pdhamdhe-Longduration-CPaasrunOnly-NonPreRelease-High-27967-High-33782-Medium-33711-Medium-47346-The ComplianceSuite performs scan on a subset of nodes with autoApplyRemediations enable and ComplianceCheckResult shows remediation rule result in details and also supports array of values for remediation [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-Author:pdhamdhe-Longduration-CPaasrunOnly-NonPreRelease-High-27967-High-33782-Medium-33711-Medium-47346-The ComplianceSuite performs scan on a subset of nodes with autoApplyRemediations enable and ComplianceCheckResult shows remediation rule result in details and also supports array of values for remediation [Disruptive][Slow]", func() {
 		var (
 			csuiteD = complianceSuiteDescription{
 				name:         "worker-compliancesuite" + getRandomString(),
@@ -3285,7 +3285,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("Author:pdhamdhe-CPaasrunOnly-NonPreRelease-High-45421-Verify the scan scheduling option strict or not strict are configurable through scan objects [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-Author:pdhamdhe-CPaasrunOnly-NonPreRelease-High-45421-Verify the scan scheduling option strict or not strict are configurable through scan objects [Disruptive][Slow]", func() {
 		var (
 			ss = scanSettingDescription{
 				autoapplyremediations:  false,
@@ -3363,7 +3363,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("Author:pdhamdhe-NonPreRelease-CPaasrunOnly-Longduration-High-45692-Verify scan and manual fix work as expected for NERC CIP profiles with default scanSettings [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-Longduration-High-45692-Verify scan and manual fix work as expected for NERC CIP profiles with default scanSettings [Disruptive][Slow]", func() {
 		var (
 			ss = scanSettingDescription{
 				autoapplyremediations:  false,
@@ -3457,7 +3457,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-46991-Check the PCI DSS compliance profiles perform scan as expected with default scanSettings [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-46991-Check the PCI DSS compliance profiles perform scan as expected with default scanSettings [Serial][Slow]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "pci-dss-test" + getRandomString(),
 			namespace:       "",
@@ -3492,7 +3492,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-43066-check the metrics and alerts are available for Compliance Operator [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-High-43066-check the metrics and alerts are available for Compliance Operator [Serial][Slow]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "cis-test" + getRandomString(),
 			namespace:       "",
@@ -3537,7 +3537,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("ARO-ConnectedOnly-Author:pdhamdhe-Low-43072-check the metrics and alerts are available for compliance_operator_compliance_scan_error_total [Slow]", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:pdhamdhe-Low-43072-check the metrics and alerts are available for compliance_operator_compliance_scan_error_total [Slow]", func() {
 		var csuiteD = complianceSuiteDescription{
 			name:         "worker-compliancesuite" + getRandomString(),
 			namespace:    "",
@@ -3579,7 +3579,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("Author:pdhamdhe-Longduration-CPaasrunOnly-NonPreRelease-High-46419-Compliance operator supports remediation templating by setting custom variables in the tailored profile [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-Author:pdhamdhe-Longduration-CPaasrunOnly-NonPreRelease-High-46419-Compliance operator supports remediation templating by setting custom variables in the tailored profile [Disruptive][Slow]", func() {
 		var (
 			tprofileD = tailoredProfileDescription{
 				name:         "ocp4-audit-tailored",
@@ -3661,7 +3661,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("Author:pdhamdhe-Longduration-CPaasrunOnly-NonPreRelease-High-46100-High-54323-Verify autoremediations works for CIS profiles [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-Author:pdhamdhe-Longduration-CPaasrunOnly-NonPreRelease-High-46100-High-54323-Verify autoremediations works for CIS profiles [Disruptive][Slow]", func() {
 		var (
 			ss = scanSettingDescription{
 				autoapplyremediations:  true,
@@ -3781,7 +3781,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("Author:pdhamdhe-Longduration-CPaasrunOnly-NonPreRelease-High-46995-Verify autoremediations works for PCI-DSS profiles [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-Author:pdhamdhe-Longduration-CPaasrunOnly-NonPreRelease-High-46995-Verify autoremediations works for PCI-DSS profiles [Disruptive][Slow]", func() {
 		var (
 			ss = scanSettingDescription{
 				autoapplyremediations:  true,
@@ -3903,7 +3903,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("Author:xiyuan-Longduration-CPaasrunOnly-NonPreRelease-High-50518-Check remediation works for ocp4-high and ocp4-high-node profiles [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-Author:xiyuan-Longduration-CPaasrunOnly-NonPreRelease-High-50518-Check remediation works for ocp4-high and ocp4-high-node profiles [Disruptive][Slow]", func() {
 		var (
 			ss = scanSettingDescription{
 				autoapplyremediations:  true,
@@ -4025,7 +4025,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("Author:pdhamdhe-Longduration-CPaasrunOnly-NonPreRelease-High-47147-Check rules work if all non-openshift namespaces has resourcequota and route rate limit [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-Author:pdhamdhe-Longduration-CPaasrunOnly-NonPreRelease-High-47147-Check rules work if all non-openshift namespaces has resourcequota and route rate limit [Disruptive][Slow]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "moderate-test" + getRandomString(),
 			namespace:       "",
@@ -4111,7 +4111,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Medium-47173-Verify the rule that check for API Server audit error alerts [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Medium-47173-Verify the rule that check for API Server audit error alerts [Serial][Slow]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "ocp4-moderate-test" + getRandomString(),
 			namespace:       "",
@@ -4171,7 +4171,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Medium-47373-Low-47371-Enable TailoredProfiles without extending a Profile and also validate that title and description [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Medium-47373-Low-47371-Enable TailoredProfiles without extending a Profile and also validate that title and description [Serial][Slow]", func() {
 		var (
 			tprofileDN = tailoredProfileWithoutVarDescription{
 				name:         "new-profile-node",
@@ -4295,7 +4295,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Medium-47148-Check file and directory permissions for apiserver audit logs [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Medium-47148-Check file and directory permissions for apiserver audit logs [Serial][Slow]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "ocp4-moderate-test" + getRandomString(),
 			namespace:       "",
@@ -4339,7 +4339,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-47162-Check if the XCCDF variable values are getting render in the compliance rules", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-47162-Check if the XCCDF variable values are getting render in the compliance rules", func() {
 		keywordsInstr := "min-request-timeout.*3600"
 		keywordsAnnot := "compliance.openshift.io/rule-variable.*var-api-min-request-timeout"
 		keywordsVariableValue := "3600"
@@ -4349,7 +4349,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonPreRelease-ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-48643-Check if the prometheusRule that verifies the Compliance alerts [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:xiyuan-Medium-48643-Check if the prometheusRule that verifies the Compliance alerts [Serial]", func() {
 		var (
 			ssb = scanSettingBindingDescription{
 				name:            "pci-test",
@@ -4386,7 +4386,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("Author:xiyuan-High-54055-check compliance operator could be deleted successfully [Serial]", func() {
+	g.It("NonHyperShiftHOST-Author:xiyuan-High-54055-check compliance operator could be deleted successfully [Serial]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "cis-test" + getRandomString(),
 			namespace:       "",

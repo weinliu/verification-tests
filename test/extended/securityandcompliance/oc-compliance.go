@@ -64,7 +64,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonPreRelease-Author:pdhamdhe-High-40681-The oc compliance plugin rerun set of scans on command [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Author:pdhamdhe-High-40681-The oc compliance plugin rerun set of scans on command [Serial][Slow]", func() {
 
 		var (
 			ss = scanSettingDescription{
@@ -157,7 +157,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("Author:pdhamdhe-Longduration-NonPreRelease-High-41185-The oc compliance controls command reports the compliance standards and controls that is benchmark fulfil for profiles [Slow]", func() {
+	g.It("NonHyperShiftHOST-Author:pdhamdhe-Longduration-NonPreRelease-High-41185-The oc compliance controls command reports the compliance standards and controls that is benchmark fulfil for profiles [Slow]", func() {
 
 		g.By("Check default profilebundles name and status.. !!!\n")
 		subD.getProfileBundleNameandStatus(oc, "ocp4", "VALID")
@@ -193,7 +193,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonPreRelease-Author:pdhamdhe-High-41190-The view result command of oc compliance plugin exposes more information about a compliance result [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Author:pdhamdhe-High-41190-The view result command of oc compliance plugin exposes more information about a compliance result [Serial][Slow]", func() {
 
 		var (
 			ss = scanSettingDescription{
@@ -258,7 +258,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("Author:pdhamdhe-High-41182-The bind command of oc compliance plugin will take the given parameters and create a ScanSettingBinding object [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-Author:pdhamdhe-High-41182-The bind command of oc compliance plugin will take the given parameters and create a ScanSettingBinding object [Serial][Slow]", func() {
 		var (
 			ss = scanSettingDescription{
 				autoapplyremediations:  false,
@@ -342,7 +342,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonPreRelease-Author:pdhamdhe-High-40714-The oc compliance helps to download the raw compliance results from the Persistent Volume [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Author:pdhamdhe-High-40714-The oc compliance helps to download the raw compliance results from the Persistent Volume [Serial][Slow]", func() {
 		var (
 			ss = scanSettingDescription{
 				autoapplyremediations:  false,
@@ -396,7 +396,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The OC Compliance plugin m
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("Author:pdhamdhe-High-41195-The oc compliance plugin fetches the fixes or remediations from a rule profile or remediation objects [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-Author:pdhamdhe-High-41195-The oc compliance plugin fetches the fixes or remediations from a rule profile or remediation objects [Serial][Slow]", func() {
 		var (
 			ss = scanSettingDescription{
 				autoapplyremediations:  false,

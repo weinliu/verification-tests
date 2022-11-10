@@ -104,7 +104,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Pre-check and post-check f
 		})
 
 		// author: xiyuan@redhat.com
-		g.It("Author:xiyuan-CPaasrunOnly-NonPreRelease-High-37721-High-37824-High-45014-precheck for compliance operator", func() {
+		g.It("NonHyperShiftHOST-Author:xiyuan-CPaasrunOnly-NonPreRelease-High-37721-High-37824-High-45014-precheck for compliance operator", func() {
 			g.By("Create scansettingbinding !!!\n")
 			ssb.namespace = ns1
 			ssb2.namespace = ns2
@@ -135,7 +135,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Pre-check and post-check f
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("Author:pdhamdhe-CPaasrunOnly-NonPreRelease-High-45014-High-45956-precheck for compliance operator resources count and MachineConfigPool status", func() {
+		g.It("NonHyperShiftHOST-Author:pdhamdhe-CPaasrunOnly-NonPreRelease-High-45014-High-45956-precheck for compliance operator resources count and MachineConfigPool status", func() {
 			g.By("Check the MachineConfigPool status after upgrade.. !!\n")
 			newCheck("expect", asAdmin, withoutNamespace, contain, "false", ok, []string{"machineconfigpool", "master", "-n", ns1,
 				"-ojsonpath={.spec.paused}"}).check(oc)
@@ -160,7 +160,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Pre-check and post-check f
 		})
 
 		// author: xiyuan@redhat.com
-		g.It("Author:xiyuan-CPaasrunOnly-NonPreRelease-High-37721-High-37824-postcheck for compliance operator", func() {
+		g.It("NonHyperShiftHOST-Author:xiyuan-CPaasrunOnly-NonPreRelease-High-37721-High-37824-postcheck for compliance operator", func() {
 			defer cleanupObjects(oc,
 				objectTableRef{"scansettingbinding", ns1, ssb.name},
 				objectTableRef{"scansettingbinding", ns2, ssb2.name},
@@ -193,7 +193,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Pre-check and post-check f
 		})
 
 		// author: pdhamdhe@redhat.com
-		g.It("Author:pdhamdhe-CPaasrunOnly-NonPreRelease-High-45014-High-45956-postcheck for compliance operator resources count and MachineConfigPool status", func() {
+		g.It("NonHyperShiftHOST-Author:pdhamdhe-CPaasrunOnly-NonPreRelease-High-45014-High-45956-postcheck for compliance operator resources count and MachineConfigPool status", func() {
 			confmap.namespace = ns2
 			defer cleanupObjects(oc, objectTableRef{"configmap", confmap.namespace, confmap.name})
 			g.By("Check the MachineConfigPool status after upgrade.. !!\n")
