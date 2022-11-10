@@ -520,7 +520,8 @@ func ensureClusterOperatorProgress(oc *exutil.CLI, coName string) {
 		}
 		return primary, nil
 	})
-	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but CO %v didn't goto Progressing status."))
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf(
+		"reached max time allowed but CO %v didn't goto Progressing status.", coName))
 }
 
 // wait for the cluster operator back to normal status ("True False False")
@@ -561,7 +562,7 @@ func ensureDNSRollingUpdateDone(oc *exutil.CLI) {
 // patch the dns.operator/default with the original value
 func restoreDNSOperatorDefault(oc *exutil.CLI) {
 	// the json value might be different in different version
-	jsonPatch := "[{\"op\":\"replace\", \"path\":\"/spec\", \"value\":{\"logLevel\":\"Normal\",\"nodePlacement\":{},\"operatorLogLevel\":\"Normal\",\"upstreamResolvers\":{\"policy\":\"Sequential\",\"transportConfig\":{},\"upstreams\":[{\"port\":53,\"type\":\"SystemResolvConf\"}]}}}]"
+	jsonPatch := "[{\"op\":\"replace\", \"path\":\"/spec\", \"value\":{\"cache\":{\"negativeTTL\":\"0s\",\"positiveTTL\":\"0s\"},\"logLevel\":\"Normal\",\"nodePlacement\":{},\"operatorLogLevel\":\"Normal\",\"upstreamResolvers\":{\"policy\":\"Sequential\",\"transportConfig\":{},\"upstreams\":[{\"port\":53,\"type\":\"SystemResolvConf\"}]}}}]"
 	e2e.Logf("restore(patch) dns.operator/default with original settings.")
 	output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("dns.operator/default", "-p", jsonPatch, "--type=json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -844,8 +845,8 @@ func createExternalDNSOperator(oc *exutil.CLI) {
 		csvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", operatorNamespace, "-o=jsonpath={.status.phase}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Compare(csvState, "Succeeded") == 0 {
-			return true, nil
 			e2e.Logf("CSV check complete!!!")
+			return true, nil
 		}
 		return false, nil
 
@@ -890,8 +891,8 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 		csvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", ns, "-o=jsonpath={.status.phase}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Compare(csvState, "Succeeded") == 0 {
-			return true, nil
 			e2e.Logf("CSV check complete!!!")
+			return true, nil
 		}
 		return false, nil
 	})
@@ -1109,4 +1110,20 @@ func waitForOutput(oc *exutil.CLI, ns, resourceName, searchString, value string)
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the desired searchString does not appear"))
+}
+
+// this function check the polled output of config map
+func waitForConfigMapOutput(oc *exutil.CLI, ns, resourceName, searchString string) string {
+	var output string
+	var err error
+	waitErr := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, resourceName, "-ojsonpath={"+searchString+"}").Output()
+		if err != nil {
+			e2e.Logf("failed to get search string: %v, retrying...", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but cannot find the search string."))
+	return output
 }

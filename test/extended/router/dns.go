@@ -418,7 +418,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		patchGlobalResourceAsAdmin(oc, resourceName, cfgNormal)
 		waitCorefileUpdated(oc, attrList)
 		g.By("test done, will restore dns operator to default by the defer restoreDNSOperatorDefault code")
-
 	})
 
 	// Bug: 1949361
@@ -454,5 +453,47 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		digOutput, err = oc.Run("exec").Args(cltPodName, "--", "dig", "nxdomain.google.com").Output()
 		o.Expect(err1).NotTo(o.HaveOccurred())
 		o.Expect(digOutput).To(o.ContainSubstring("udp: 512"))
+	})
+
+	g.It("Author:mjoseph-Critical-54042-Configuring CoreDNS caching and TTL parameters [Disruptive]", func() {
+		var (
+			resourceName      = "dns.operator.openshift.io/default"
+			cacheDefaultValue = "[{\"op\":\"replace\", \"path\":\"/spec/cache\", \"value\":{\"negativeTTL\":\"0s\", \"positiveTTL\":\"0s\"}}]"
+			cacheValue        = "[{\"op\":\"replace\", \"path\":\"/spec/cache\", \"value\":{\"negativeTTL\":\"1800s\", \"positiveTTL\":\"604801s\"}}]"
+			cacheSmallValue   = "[{\"op\":\"replace\", \"path\":\"/spec/cache\", \"value\":{\"negativeTTL\":\"1s\", \"positiveTTL\":\"1s\"}}]"
+			cacheDecimalValue = "[{\"op\":\"replace\", \"path\":\"/spec/cache\", \"value\":{\"negativeTTL\":\"1.9s\", \"positiveTTL\":\"1.6m\"}}]"
+			cacheWrongValue   = "[{\"op\":\"replace\", \"path\":\"/spec/cache\", \"value\":{\"negativeTTL\":\"-9s\", \"positiveTTL\":\"1.6\"}}]"
+		)
+		defer patchGlobalResourceAsAdmin(oc, resourceName, cacheDefaultValue)
+
+		g.By("Patch dns operator with postive and negative cache values")
+		patchGlobalResourceAsAdmin(oc, resourceName, cacheValue)
+
+		g.By("Check updated value in dns config map")
+		output1 := waitForConfigMapOutput(oc, "openshift-dns", "cm/dns-default", ".data.Corefile")
+		o.Expect(output1).To(o.ContainSubstring("1800"))
+		o.Expect(output1).To(o.ContainSubstring("604801"))
+
+		g.By("Check the cache value in Corefile of coredns under all dns-default-xxx pods")
+		podList := getAllDNSPodsNames(oc)
+		keepSearchInAllDNSPods(oc, podList, "1800")
+		keepSearchInAllDNSPods(oc, podList, "604801")
+
+		g.By("Patch dns operator with smallest cache values and verify the same")
+		patchGlobalResourceAsAdmin(oc, resourceName, cacheSmallValue)
+		output2 := waitForConfigMapOutput(oc, "openshift-dns", "cm/dns-default", ".data.Corefile")
+		o.Expect(output2).To(o.ContainSubstring("cache 1"))
+		o.Expect(output2).To(o.ContainSubstring("denial 9984 1"))
+
+		g.By("Patch dns operator with decimal cache values and verify the same")
+		patchGlobalResourceAsAdmin(oc, resourceName, cacheDecimalValue)
+		output3 := waitForConfigMapOutput(oc, "openshift-dns", "cm/dns-default", ".data.Corefile")
+		o.Expect(output3).To(o.ContainSubstring("96"))
+		o.Expect(output3).To(o.ContainSubstring("denial 9984 2"))
+
+		g.By("Patch dns operator with unrelasitc cache values and check the error messages")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceName, "--patch="+cacheWrongValue, "--type=json").Output()
+		o.Expect(output).To(o.ContainSubstring("spec.cache.positiveTTL: Invalid value: \"1.6\""))
+		o.Expect(output).To(o.ContainSubstring("spec.cache.negativeTTL: Invalid value: \"-9s\""))
 	})
 })
