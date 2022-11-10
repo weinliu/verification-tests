@@ -19,7 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/prometheus/common/model"
@@ -70,7 +70,7 @@ type prometheusImageregistryQueryHTTP struct {
 
 func listPodStartingWith(prefix string, oc *exutil.CLI, namespace string) (pod []corev1.Pod) {
 	podsToAll := []corev1.Pod{}
-	podList, err := oc.AdminKubeClient().CoreV1().Pods(namespace).List(metav1.ListOptions{})
+	podList, err := oc.AdminKubeClient().CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		e2e.Logf("Error listing pods: %v", err)
 		return nil
@@ -185,7 +185,7 @@ func getRandomString() string {
 	return string(buffer)
 }
 
-//the method is to get something from resource. it is "oc get xxx" actaully
+// the method is to get something from resource. it is "oc get xxx" actaully
 func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) string {
 	var result string
 	var err error
@@ -202,7 +202,7 @@ func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters
 	return result
 }
 
-//the method is to do something with oc.
+// the method is to do something with oc.
 func doAction(oc *exutil.CLI, action string, asAdmin bool, withoutNamespace bool, parameters ...string) (string, error) {
 	if asAdmin && withoutNamespace {
 		return oc.AsAdmin().WithoutNamespace().Run(action).Args(parameters...).Output()
@@ -222,7 +222,7 @@ func doAction(oc *exutil.CLI, action string, asAdmin bool, withoutNamespace bool
 func comparePodHostIP(oc *exutil.CLI) (int, int) {
 	var hostsIP = []string{}
 	var numi, numj int
-	podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(metav1.ListOptions{LabelSelector: "docker-registry=default"})
+	podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(context.Background(), metav1.ListOptions{LabelSelector: "docker-registry=default"})
 	for _, pod := range podList.Items {
 		hostsIP = append(hostsIP, pod.Status.HostIP)
 	}
@@ -238,7 +238,7 @@ func comparePodHostIP(oc *exutil.CLI) (int, int) {
 	return numi, numj
 }
 
-//Check the latest image pruner pod logs
+// Check the latest image pruner pod logs
 func imagePruneLog(oc *exutil.CLI, matchLogs, notMatchLogs string) {
 	podsOfImagePrune := []corev1.Pod{}
 	err := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
@@ -272,7 +272,7 @@ func configureRegistryStorageToEmptyDir(oc *exutil.CLI) {
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"`+storagetype+`":null,"emptyDir":{}}, "replicas":1}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = wait.Poll(30*time.Second, 2*time.Minute, func() (bool, error) {
-			podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(metav1.ListOptions{LabelSelector: "docker-registry=default"})
+			podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(context.Background(), metav1.ListOptions{LabelSelector: "docker-registry=default"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if len(podList.Items) == 1 && podList.Items[0].Status.Phase == corev1.PodRunning {
 				return true, nil
@@ -312,7 +312,7 @@ func recoverRegistryDefaultReplicas(oc *exutil.CLI) {
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("config.imageregistry/cluster", "-p", `{"spec":{"replicas":2}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
-			podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(metav1.ListOptions{LabelSelector: "docker-registry=default"})
+			podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(context.Background(), metav1.ListOptions{LabelSelector: "docker-registry=default"})
 			if len(podList.Items) != 2 {
 				e2e.Logf("Continue to next round")
 			} else {
@@ -402,7 +402,7 @@ func waitRegistryDefaultPodsReady(oc *exutil.CLI) {
 
 func checkRegistrypodsRemoved(oc *exutil.CLI) {
 	err := wait.Poll(25*time.Second, 3*time.Minute, func() (bool, error) {
-		podList, err := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(metav1.ListOptions{LabelSelector: "docker-registry=default"})
+		podList, err := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(context.Background(), metav1.ListOptions{LabelSelector: "docker-registry=default"})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(podList.Items) == 0 {
 			return true, nil
@@ -425,7 +425,7 @@ func (stafulsrc *staSource) create(oc *exutil.CLI) {
 
 func checkPodsRunningWithLabel(oc *exutil.CLI, namespace string, label string, number int) {
 	err := wait.Poll(25*time.Second, 5*time.Minute, func() (bool, error) {
-		podList, _ := oc.AdminKubeClient().CoreV1().Pods(namespace).List(metav1.ListOptions{LabelSelector: label})
+		podList, _ := oc.AdminKubeClient().CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		if len(podList.Items) != number {
 			e2e.Logf("the pod number is not %d, Continue to next round", number)
 			return false, nil
@@ -607,20 +607,22 @@ func awsGetBucketTagging(client *s3.Client, bucket string) (string, error) {
 	return outputGetTag, nil
 }
 
-//the method is to make newCheck object.
-//the method paramter is expect, it will check something is expceted or not
-//the method paramter is present, it will check something exists or not
-//the executor is asAdmin, it will exectue oc with Admin
-//the executor is asUser, it will exectue oc with User
-//the inlineNamespace is withoutNamespace, it will execute oc with WithoutNamespace()
-//the inlineNamespace is withNamespace, it will execute oc with WithNamespace()
-//the expectAction take effective when method is expect, if it is contain, it will check if the strings contain substring with expectContent parameter
-//                                                       if it is compare, it will check the strings is samme with expectContent parameter
-//the expectContent is the content we expected
-//the expect is ok, contain or compare result is OK for method == expect, no error raise. if not OK, error raise
-//the expect is nok, contain or compare result is NOK for method == expect, no error raise. if OK, error raise
-//the expect is ok, resource existing is OK for method == present, no error raise. if resource not existing, error raise
-//the expect is nok, resource not existing is OK for method == present, no error raise. if resource existing, error raise
+// the method is to make newCheck object.
+// the method paramter is expect, it will check something is expceted or not
+// the method paramter is present, it will check something exists or not
+// the executor is asAdmin, it will exectue oc with Admin
+// the executor is asUser, it will exectue oc with User
+// the inlineNamespace is withoutNamespace, it will execute oc with WithoutNamespace()
+// the inlineNamespace is withNamespace, it will execute oc with WithNamespace()
+// the expectAction take effective when method is expect, if it is contain, it will check if the strings contain substring with expectContent parameter
+//
+//	if it is compare, it will check the strings is samme with expectContent parameter
+//
+// the expectContent is the content we expected
+// the expect is ok, contain or compare result is OK for method == expect, no error raise. if not OK, error raise
+// the expect is nok, contain or compare result is NOK for method == expect, no error raise. if OK, error raise
+// the expect is ok, resource existing is OK for method == present, no error raise. if resource not existing, error raise
+// the expect is nok, resource not existing is OK for method == present, no error raise. if resource existing, error raise
 func newCheck(method string, executor bool, inlineNamespace bool, expectAction bool,
 	expectContent string, expect bool, resource []string) checkDescription {
 	return checkDescription{
@@ -644,7 +646,7 @@ type checkDescription struct {
 	resource        []string
 }
 
-//the method is to check the resource per definition of the above described newCheck.
+// the method is to check the resource per definition of the above described newCheck.
 func (ck checkDescription) check(oc *exutil.CLI) {
 	switch ck.method {
 	case "present":
@@ -659,10 +661,10 @@ func (ck checkDescription) check(oc *exutil.CLI) {
 	}
 }
 
-//the method is to check the presence of the resource
-//asAdmin means if taking admin to check it
-//withoutNamespace means if take WithoutNamespace() to check it.
-//present means if you expect the resource presence or not. if it is ok, expect presence. if it is nok, expect not present.
+// the method is to check the presence of the resource
+// asAdmin means if taking admin to check it
+// withoutNamespace means if take WithoutNamespace() to check it.
+// present means if you expect the resource presence or not. if it is ok, expect presence. if it is nok, expect not present.
 func isPresentResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, present bool, parameters ...string) bool {
 	parameters = append(parameters, "--ignore-not-found")
 	err := wait.Poll(3*time.Second, 70*time.Second, func() (bool, error) {
@@ -682,13 +684,13 @@ func isPresentResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, pres
 	return err == nil
 }
 
-//the method is to check one resource's attribution is expected or not.
-//asAdmin means if taking admin to check it
-//withoutNamespace means if take WithoutNamespace() to check it.
-//isCompare means if containing or exactly comparing. if it is contain, it check result contain content. if it is compare, it compare the result with content exactly.
-//content is the substing to be expected
-//the expect is ok, contain or compare result is OK for method == expect, no error raise. if not OK, error raise
-//the expect is nok, contain or compare result is NOK for method == expect, no error raise. if OK, error raise
+// the method is to check one resource's attribution is expected or not.
+// asAdmin means if taking admin to check it
+// withoutNamespace means if take WithoutNamespace() to check it.
+// isCompare means if containing or exactly comparing. if it is contain, it check result contain content. if it is compare, it compare the result with content exactly.
+// content is the substing to be expected
+// the expect is ok, contain or compare result is OK for method == expect, no error raise. if not OK, error raise
+// the expect is nok, contain or compare result is NOK for method == expect, no error raise. if OK, error raise
 func expectedResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, isCompare bool, content string, expect bool, parameters ...string) error {
 	expectMap := map[bool]string{
 		true:  "do",
@@ -831,7 +833,7 @@ func updatePullSecret(oc *exutil.CLI, authFile string) {
 }
 
 func foundAffinityRules(oc *exutil.CLI, affinityRules string) bool {
-	podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(metav1.ListOptions{LabelSelector: "docker-registry=default"})
+	podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(context.Background(), metav1.ListOptions{LabelSelector: "docker-registry=default"})
 	for _, pod := range podList.Items {
 		out, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("pod/"+pod.Name, "-n", pod.Namespace, "-o=jsonpath={.spec.affinity.podAntiAffinity}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -882,14 +884,14 @@ func newAppUseImageStream(oc *exutil.CLI, ns, imagestream, expectInfo string) {
 	exutil.AssertWaitPollNoErr(err, "Pod doesn't pull expected image")
 }
 
-//Save deployment or daemonset generation to judge if update applied
+// Save deployment or daemonset generation to judge if update applied
 func saveGeneration(oc *exutil.CLI, ns, resource string) string {
 	num, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "-n", ns, "-o=jsonpath={.metadata.generation}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return num
 }
 
-//Create route to expose the registry
+// Create route to expose the registry
 func createRouteExposeRegistry(oc *exutil.CLI) {
 	//Don't forget to restore the environment use func restoreRouteExposeRegistry
 	output, err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"defaultRoute":true}}`, "--type=merge").Output()
@@ -1169,7 +1171,7 @@ func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]strin
 
 func checkPodsRemovedWithLabel(oc *exutil.CLI, namespace string, label string) {
 	err := wait.Poll(25*time.Second, 3*time.Minute, func() (bool, error) {
-		podList, err := oc.AdminKubeClient().CoreV1().Pods(namespace).List(metav1.ListOptions{LabelSelector: label})
+		podList, err := oc.AdminKubeClient().CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(podList.Items) == 0 {
 			return true, nil

@@ -2,6 +2,7 @@ package apiserverauth
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"math/rand"
 	"net"
@@ -15,7 +16,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"github.com/tidwall/gjson"
 
@@ -1304,7 +1305,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().Run("project").Args("defult").Execute() // switch to default project
 
-		podList, err := oc.AdminKubeClient().CoreV1().Pods("openshift-kube-apiserver").List(metav1.ListOptions{LabelSelector: "apiserver"})
+		podList, err := oc.AdminKubeClient().CoreV1().Pods("openshift-kube-apiserver").List(context.Background(), metav1.ListOptions{LabelSelector: "apiserver"})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(podList.Size()).NotTo(o.Equal(0))
 		e2e.Logf("Fetched all pods from openshift-kube-apiserver")

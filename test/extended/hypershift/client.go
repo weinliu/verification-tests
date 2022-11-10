@@ -8,7 +8,7 @@ import (
 	"runtime/debug"
 	"strings"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -317,7 +317,7 @@ type existMatcher struct {
 func (matcher *existMatcher) Match(actual interface{}) (success bool, err error) {
 	resource, ok := actual.(*Resource)
 	if !ok {
-		return false, fmt.Errorf("Exist matcher expects a Resource in case %v", g.CurrentGinkgoTestDescription().TestText)
+		return false, fmt.Errorf("Exist matcher expects a Resource in case %v", g.CurrentSpecReport().FullText())
 	}
 
 	return resource.Exists(), nil

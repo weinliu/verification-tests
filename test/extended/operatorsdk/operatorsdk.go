@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
 	"path/filepath"
@@ -3050,7 +3050,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		var (
 			dr                  = make(describerResrouce)
-			itName              = g.CurrentGinkgoTestDescription().TestText
+			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
@@ -3119,7 +3119,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		var (
 			dr                  = make(describerResrouce)
-			itName              = g.CurrentGinkgoTestDescription().TestText
+			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")

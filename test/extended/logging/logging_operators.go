@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -12,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -76,7 +77,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 		defer cl.deleteClusterLogging(oc)
 		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 		cl.WaitForResourceToAppear(oc)
-		clo, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "name=cluster-logging-operator"})
+		clo, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "name=cluster-logging-operator"})
 		err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", cloNS, clo.Items[0].Name, "--since=2m").Output()
 			if err != nil {
@@ -85,7 +86,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 			return (strings.Contains(output, "Error reconciling clusterlogging instance") && strings.Contains(output, "No valid inputs found in ClusterLogForwarder")), nil
 		})
 		exutil.AssertWaitPollNoErr(err, "Expected logs are not found in CLO")
-		_, err = oc.AdminKubeClient().CoreV1().ConfigMaps(cloNS).Get("collector", metav1.GetOptions{})
+		_, err = oc.AdminKubeClient().CoreV1().ConfigMaps(cloNS).Get(context.Background(), "collector", metav1.GetOptions{})
 		o.Expect(apierrors.IsNotFound(err)).Should(o.BeTrue())
 	})
 
@@ -161,7 +162,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		WaitForECKPodsToBeReady(oc, cloNS)
 
 		g.By("make ES disk usage > 95%")
-		podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+		podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		createFile := "dd if=/dev/urandom of=/elasticsearch/persistent/file.txt bs=1048576 count=19000"
 		_, _ = e2e.RunHostCmd(cloNS, podList.Items[0].Name, createFile)
@@ -230,7 +231,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		g.By("check ES status")
 		checkResource(oc, true, false, message, []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.status.conditions}"})
 		checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.status.cluster.status}"})
-		esPods1, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-data=true"})
+		esPods1, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-data=true"})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(esPods1.Items) == 5).To(o.BeTrue())
 
@@ -240,12 +241,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 
 		g.By("check ES status, no pod removed")
 		checkResource(oc, true, false, message, []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.status.conditions}"})
-		esPods2, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-data=true"})
+		esPods2, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-data=true"})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(esPods2.Items) == 5).To(o.BeTrue())
 
 		g.By("update index settings, change number_of_replicas to 1")
-		masterPods, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+		masterPods, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		for _, index := range []string{"app", "infra", "audit"} {
 			cmd := "es_util --query=" + index + "*/_settings?pretty -XPUT -d'{\"index\": {\"number_of_replicas\": 1}}'"
 			_, err = e2e.RunHostCmd(cloNS, masterPods.Items[0].Name, cmd)
@@ -254,7 +255,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 
 		g.By("check ES status, should have one pod removed")
 		err = wait.Poll(3*time.Second, 180*time.Second, func() (done bool, err error) {
-			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-data=true"})
+			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-data=true"})
 			if err != nil {
 				return false, err
 			}
@@ -272,7 +273,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 
 		g.By("check ES status, no pod removed")
 		checkResource(oc, true, false, message, []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.status.conditions}"})
-		esPods3, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-data=true"})
+		esPods3, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-data=true"})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(esPods3.Items) == 4).To(o.BeTrue())
 		checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.status.cluster.status}"})
@@ -319,7 +320,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "APP_NAMESPACE_SPEC="+string(out))
 		WaitForECKPodsToBeReady(oc, cloNS)
 		WaitForIMCronJobToAppear(oc, cloNS, "elasticsearch-im-prune-app")
-		masterPods, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+		masterPods, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		projects := []string{proj1, proj2, proj3, proj4}
 		for _, proj := range projects {
 			waitForProjectLogsAppear(cloNS, masterPods.Items[0].Name, proj, "app-00")
@@ -382,7 +383,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "APP_NAMESPACE_SPEC="+string(out), "-p", "PRUNE_INTERVAL=3m")
 		WaitForECKPodsToBeReady(oc, cloNS)
 		WaitForIMCronJobToAppear(oc, cloNS, "elasticsearch-im-prune-app")
-		masterPods, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+		masterPods, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		waitForProjectLogsAppear(cloNS, masterPods.Items[0].Name, proj1, "app-00")
 		waitForProjectLogsAppear(cloNS, masterPods.Items[0].Name, proj2, "app-00")
 
@@ -452,7 +453,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "ES_NODE_COUNT=3", "-p", "REDUNDANCY_POLICY=SingleRedundancy")
 		g.By("waiting for the EFK pods to be ready...")
 		WaitForECKPodsToBeReady(oc, cloNS)
-		esPODs, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=elasticsearch"})
+		esPODs, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "component=elasticsearch"})
 		signingES := resource{"secret", "signing-elasticsearch", cloNS}
 		esSVC := "https://elasticsearch." + cloNS + ".svc:9200"
 
@@ -468,11 +469,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.status.cluster.status}"})
 
 		g.By("test if kibana and collector pods can connect to ES again")
-		collectorPODs, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=collector"})
+		collectorPODs, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "component=collector"})
 		output, err := e2e.RunHostCmdWithRetries(cloNS, collectorPODs.Items[0].Name, "curl --cacert /var/run/ocp-collector/secrets/collector/ca-bundle.crt --cert /var/run/ocp-collector/secrets/collector/tls.crt --key /var/run/ocp-collector/secrets/collector/tls.key "+esSVC, 5*time.Second, 30*time.Second)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.ContainSubstring("You Know, for Search"))
-		kibanaPods, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "component=kibana"})
+		kibanaPods, _ := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "component=kibana"})
 		output, err = e2e.RunHostCmdWithRetries(cloNS, kibanaPods.Items[0].Name, "curl -s --cacert /etc/kibana/keys/ca --cert /etc/kibana/keys/cert --key /etc/kibana/keys/key "+esSVC, 5*time.Second, 30*time.Second)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.ContainSubstring("You Know, for Search"))
@@ -533,7 +534,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		g.By("waiting for collector pods to be ready...")
 		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
-		kibanaPods, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(metav1.ListOptions{LabelSelector: "component=kibana"})
+		kibanaPods, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "component=kibana"})
 		o.Expect(len(kibanaPods.Items) == 0).Should(o.BeTrue())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -656,7 +657,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 			WaitForECKPodsToBeReady(oc, cl.namespace)
 			checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", preCLO.Namespace, "-ojsonpath={.status.cluster.status}"})
 			//check PVC count, it should be equal to ES node count
-			pvc, _ := oc.AdminKubeClient().CoreV1().PersistentVolumeClaims(cl.namespace).List(metav1.ListOptions{LabelSelector: "logging-cluster=elasticsearch"})
+			pvc, _ := oc.AdminKubeClient().CoreV1().PersistentVolumeClaims(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "logging-cluster=elasticsearch"})
 			o.Expect(len(pvc.Items) == 3).To(o.BeTrue())
 
 			g.By("checking if the collector can collect logs after upgrading")
@@ -665,7 +666,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForProjectLogsAppear(cl.namespace, prePodList.Items[0].Name, appProj, "app-00")
 		}
@@ -741,7 +742,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 		checkResource(oc, true, true, "green", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", preCLO.Namespace, "-ojsonpath={.status.cluster.status}"})
 
 		//check PVC count, it should be equal to ES node count
-		pvc, _ := oc.AdminKubeClient().CoreV1().PersistentVolumeClaims(cl.namespace).List(metav1.ListOptions{LabelSelector: "logging-cluster=elasticsearch"})
+		pvc, _ := oc.AdminKubeClient().CoreV1().PersistentVolumeClaims(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "logging-cluster=elasticsearch"})
 		o.Expect(len(pvc.Items) == 3).To(o.BeTrue())
 
 		g.By("checking if the collector can collect logs after upgrading")
@@ -750,7 +751,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 		jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+		prePodList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForProjectLogsAppear(cl.namespace, prePodList.Items[0].Name, appProj, "app-00")
 	})

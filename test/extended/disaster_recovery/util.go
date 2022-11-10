@@ -1,18 +1,19 @@
 package disasterrecovery
 
 import (
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
 	"bufio"
 	"io"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"math/rand"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -142,7 +143,7 @@ func waitForContainerDisappear(bastionHost string, nodeInternalIP string, comman
 	exutil.AssertWaitPollNoErr(err, "The pod is not disappeared as expected")
 }
 
-//Check if the iaasPlatform in the supported list
+// Check if the iaasPlatform in the supported list
 func in(target string, strArray []string) bool {
 	for _, element := range strArray {
 		if target == element {
@@ -152,7 +153,7 @@ func in(target string, strArray []string) bool {
 	return false
 }
 
-//make sure all the ectd pods are running
+// make sure all the ectd pods are running
 func checkEtcdPodStatus(oc *exutil.CLI) bool {
 	output, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=etcd", "-n", "openshift-etcd", "-o=jsonpath='{.items[*].status.phase}'").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -166,7 +167,7 @@ func checkEtcdPodStatus(oc *exutil.CLI) bool {
 	return true
 }
 
-//make sure all the machine are running
+// make sure all the machine are running
 func waitMachineStatusRunning(oc *exutil.CLI, newMasterMachineName string) {
 	err := wait.Poll(60*time.Second, 480*time.Second, func() (bool, error) {
 		machineStatus, err := oc.AsAdmin().Run("get").Args("-n", "openshift-machine-api", exutil.MapiMachine, newMasterMachineName, "-o=jsonpath='{.status.phase}'").Output()
@@ -179,7 +180,7 @@ func waitMachineStatusRunning(oc *exutil.CLI, newMasterMachineName string) {
 	exutil.AssertWaitPollNoErr(err, "The machine is not Running as expected")
 }
 
-//make sure correct number of machines are present
+// make sure correct number of machines are present
 func waitforDesiredMachineCount(oc *exutil.CLI, machineCount int) {
 	err := wait.Poll(60*time.Second, 900*time.Second, func() (bool, error) {
 		output, errGetMachine := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath='{.items[*].metadata.name}'").Output()
@@ -193,7 +194,7 @@ func waitforDesiredMachineCount(oc *exutil.CLI, machineCount int) {
 	exutil.AssertWaitPollNoErr(err, "The machine count didn't match")
 }
 
-//update new machine file
+// update new machine file
 func updateMachineYmlFile(machineYmlFile string, oldMachineName string, newMasterMachineName string) bool {
 	fileName := machineYmlFile
 	in, err := os.OpenFile(fileName, os.O_RDONLY, 0666)
@@ -254,7 +255,7 @@ func updateMachineYmlFile(machineYmlFile string, oldMachineName string, newMaste
 	return true
 }
 
-//make sure operator is not processing and degraded
+// make sure operator is not processing and degraded
 func checkOperator(oc *exutil.CLI, operatorName string) {
 	err := wait.Poll(60*time.Second, 900*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().Run("get").Args("clusteroperator", operatorName).Output()

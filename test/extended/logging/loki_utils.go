@@ -434,7 +434,7 @@ func createSecretForGCSBucket(oc *exutil.CLI, bucketName, secretName, ns string)
 
 	// for GCP STS clusters, get gcp-credentials from env var GOOGLE_APPLICATION_CREDENTIALS
 	// TODO: support using STS token to create the secret
-	_, err = oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get("gcp-credentials", metav1.GetOptions{})
+	_, err = oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get(context.Background(), "gcp-credentials", metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		gcsCred := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 		return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "-n", ns, "--from-literal=bucketname="+bucketName, "--from-file=key.json="+gcsCred).Execute()
@@ -448,7 +448,7 @@ func createSecretForGCSBucket(oc *exutil.CLI, bucketName, secretName, ns string)
 // TODO: create a storage account and use that accout to manage azure container
 func getAzureStorageAccount(oc *exutil.CLI) (string, string) {
 	var accountName string
-	imageRegistry, err := oc.AdminKubeClient().AppsV1().Deployments("openshift-image-registry").Get("image-registry", metav1.GetOptions{})
+	imageRegistry, err := oc.AdminKubeClient().AppsV1().Deployments("openshift-image-registry").Get(context.Background(), "image-registry", metav1.GetOptions{})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	for _, container := range imageRegistry.Spec.Template.Spec.Containers {
 		for _, env := range container.Env {
@@ -744,11 +744,11 @@ func createSecretForSwiftContainer(oc *exutil.CLI, containerName, secretName, ns
 	return err
 }
 
-//checkODF check if the ODF is installed in the cluster or not
-//here only checks the sc/ocs-storagecluster-ceph-rbd and svc/s3
+// checkODF check if the ODF is installed in the cluster or not
+// here only checks the sc/ocs-storagecluster-ceph-rbd and svc/s3
 func checkODF(oc *exutil.CLI) bool {
 	scFound, svcFound := false, false
-	scs, err := oc.AdminKubeClient().StorageV1().StorageClasses().List(metav1.ListOptions{})
+	scs, err := oc.AdminKubeClient().StorageV1().StorageClasses().List(context.Background(), metav1.ListOptions{})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	for _, sc := range scs.Items {
 		if sc.Name == "ocs-storagecluster-ceph-rbd" {
@@ -756,22 +756,22 @@ func checkODF(oc *exutil.CLI) bool {
 			break
 		}
 	}
-	_, err = oc.AdminKubeClient().CoreV1().Services("openshift-storage").Get("s3", metav1.GetOptions{})
+	_, err = oc.AdminKubeClient().CoreV1().Services("openshift-storage").Get(context.Background(), "s3", metav1.GetOptions{})
 	if err == nil {
 		svcFound = true
 	}
 	return scFound && svcFound
 }
 
-//checkMinIO
+// checkMinIO
 func checkMinIO(oc *exutil.CLI, ns string) bool {
 	podReady, svcFound := false, false
-	pod, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(metav1.ListOptions{LabelSelector: "app=minio"})
+	pod, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: "app=minio"})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if len(pod.Items) > 0 && pod.Items[0].Status.Phase == "Running" {
 		podReady = true
 	}
-	_, err = oc.AdminKubeClient().CoreV1().Services(ns).Get("minio", metav1.GetOptions{})
+	_, err = oc.AdminKubeClient().CoreV1().Services(ns).Get(context.Background(), "minio", metav1.GetOptions{})
 	if err == nil {
 		svcFound = true
 	}
@@ -1192,13 +1192,13 @@ func (c *lokiClient) query(logType string, queryStr string, limit int, forward b
 }
 */
 
-//queryRange uses the /api/v1/query_range endpoint to execute a range query
-//logType: application, infrastructure, audit
-//queryStr: string to filter logs, for example: "{kubernetes_namespace_name="test"}"
-//limit: max log count
-//start: Start looking for logs at this absolute time(inclusive), e.g.: time.Now().Add(time.Duration(-1)*time.Hour) means 1 hour ago
-//end: Stop looking for logs at this absolute time (exclusive)
-//forward: true means scan forwards through logs, false means scan backwards through logs
+// queryRange uses the /api/v1/query_range endpoint to execute a range query
+// logType: application, infrastructure, audit
+// queryStr: string to filter logs, for example: "{kubernetes_namespace_name="test"}"
+// limit: max log count
+// start: Start looking for logs at this absolute time(inclusive), e.g.: time.Now().Add(time.Duration(-1)*time.Hour) means 1 hour ago
+// end: Stop looking for logs at this absolute time (exclusive)
+// forward: true means scan forwards through logs, false means scan backwards through logs
 func (c *lokiClient) queryRange(logType string, queryStr string, limit int, start, end time.Time, forward bool) (*lokiQueryResponse, error) {
 	direction := func() string {
 		if forward {
@@ -1237,7 +1237,7 @@ func (c *lokiClient) searchByNamespace(logType, projectName string) (*lokiQueryR
 	return res, err
 }
 
-//extractLogEntities extract the log entities from loki query response, designed for checking the content of log data in Loki
+// extractLogEntities extract the log entities from loki query response, designed for checking the content of log data in Loki
 func extractLogEntities(lokiQueryResult *lokiQueryResponse) []LogEntity {
 	var lokiLogs []LogEntity
 	// convert interface{} to []string
@@ -1382,7 +1382,7 @@ func (b *queryStringBuilder) encode() string {
 // os: linux, role: worker, status: ready, schedulable
 func getSchedulableLinuxWorkerNodes(oc *exutil.CLI) ([]v1.Node, error) {
 	var nodes, workers []v1.Node
-	linuxNodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
+	linuxNodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
 	// get schedulable linux worker nodes
 	for _, node := range linuxNodes.Items {
 		if _, ok := node.Labels["node-role.kubernetes.io/worker"]; ok && !node.Spec.Unschedulable {
@@ -1404,12 +1404,12 @@ func getSchedulableLinuxWorkerNodes(oc *exutil.CLI) ([]v1.Node, error) {
 // getPodsNodesMap returns all the running pods in each node
 func getPodsNodesMap(oc *exutil.CLI, nodes []v1.Node) map[string][]v1.Pod {
 	podsMap := make(map[string][]v1.Pod)
-	projects, err := oc.AdminKubeClient().CoreV1().Namespaces().List(metav1.ListOptions{})
+	projects, err := oc.AdminKubeClient().CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	// get pod list in each node
 	for _, project := range projects.Items {
-		pods, err := oc.AdminKubeClient().CoreV1().Pods(project.Name).List(metav1.ListOptions{})
+		pods, err := oc.AdminKubeClient().CoreV1().Pods(project.Name).List(context.Background(), metav1.ListOptions{})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, pod := range pods.Items {
 			if pod.Status.Phase != "Failed" && pod.Status.Phase != "Succeeded" {
@@ -1498,7 +1498,7 @@ func validateInfraAndResourcesForLoki(oc *exutil.CLI, supportedPlatforms []strin
 	currentPlatform := exutil.CheckPlatform(oc)
 	if currentPlatform == "aws" {
 		// skip the case on aws sts clusters
-		_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get("aws-creds", metav1.GetOptions{})
+		_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get(context.Background(), "aws-creds", metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
 			return false
 		}
@@ -1546,13 +1546,13 @@ func (l externalLoki) remove(oc *exutil.CLI) {
 
 func deployMinIO(oc *exutil.CLI) {
 	// create namespace
-	_, err := oc.AdminKubeClient().CoreV1().Namespaces().Get(minioNS, metav1.GetOptions{})
+	_, err := oc.AdminKubeClient().CoreV1().Namespaces().Get(context.Background(), minioNS, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", minioNS).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 	// create secret
-	_, err = oc.AdminKubeClient().CoreV1().Secrets(minioNS).Get(minioSecret, metav1.GetOptions{})
+	_, err = oc.AdminKubeClient().CoreV1().Secrets(minioNS).Get(context.Background(), minioSecret, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", minioSecret, "-n", minioNS, "--from-literal=access_key_id="+getRandomString(), "--from-literal=secret_access_key=passwOOrd"+getRandomString()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())

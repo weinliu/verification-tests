@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -23,9 +23,9 @@ func AssertWaitPollNoErr(e error, msg string) {
 	}
 	var err error
 	if strings.Compare(e.Error(), "timed out waiting for the condition") == 0 {
-		err = fmt.Errorf("case: %v\nerror: %s", g.CurrentGinkgoTestDescription().TestText, msg)
+		err = fmt.Errorf("case: %v\nerror: %s", g.CurrentSpecReport().FullText(), msg)
 	} else {
-		err = fmt.Errorf("case: %v\nerror: %s", g.CurrentGinkgoTestDescription().TestText, e.Error())
+		err = fmt.Errorf("case: %v\nerror: %s", g.CurrentSpecReport().FullText(), e.Error())
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -43,7 +43,7 @@ func AssertWaitPollWithErr(e error, msg string) {
 		return
 	}
 
-	err := fmt.Errorf("case: %v\nexpected error not got because of %v", g.CurrentGinkgoTestDescription().TestText, msg)
+	err := fmt.Errorf("case: %v\nexpected error not got because of %v", g.CurrentSpecReport().FullText(), msg)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 }

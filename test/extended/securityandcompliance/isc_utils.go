@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -431,7 +431,7 @@ func labelTaintNode(oc *exutil.CLI, parameters ...string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//SkipMissingCatalogsource mean to skip test when catalogsource/qe-app-registry not available
+// SkipMissingCatalogsource mean to skip test when catalogsource/qe-app-registry not available
 func SkipMissingCatalogsource(oc *exutil.CLI) {
 	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
 	if strings.Contains(output, "NotFound") {
@@ -439,7 +439,7 @@ func SkipMissingCatalogsource(oc *exutil.CLI) {
 	}
 }
 
-//SkipARM64AndHetegenous mean to skip test for RAM64 or Hetegenous as not supported
+// SkipARM64AndHetegenous mean to skip test for RAM64 or Hetegenous as not supported
 func SkipARM64AndHetegenous(oc *exutil.CLI) {
 	nodeArchs, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-o=jsonpath={.items[0].status.nodeInfo.architecture}", "-n", oc.Namespace()).Output()
 	if strings.Contains(nodeArchs, "arm64") {
@@ -447,7 +447,7 @@ func SkipARM64AndHetegenous(oc *exutil.CLI) {
 	}
 }
 
-//SkipMissingDefaultSC mean to skip test when default storageclass is not available
+// SkipMissingDefaultSC mean to skip test when default storageclass is not available
 func SkipMissingDefaultSC(oc *exutil.CLI) {
 	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "-o=jsonpath={.items[?(@.metadata.annotations.storageclass\\.kubernetes\\.io/is-default-class==\"true\")].metadata.name}", "-n", oc.Namespace()).Output()
 	if output == "" {
@@ -457,7 +457,7 @@ func SkipMissingDefaultSC(oc *exutil.CLI) {
 	}
 }
 
-//SkipMissingRhcosWorkers mean to skip test for env without rhcos workers. The Compliance Operator is available for rhcos deployments only.
+// SkipMissingRhcosWorkers mean to skip test for env without rhcos workers. The Compliance Operator is available for rhcos deployments only.
 func SkipMissingRhcosWorkers(oc *exutil.CLI) {
 	rhcosWorkerNodesNumber := getNodeNumberPerLabel(oc, "node.openshift.io/os_id=rhcos,node-role.kubernetes.io/worker=")
 	if rhcosWorkerNodesNumber == 0 {

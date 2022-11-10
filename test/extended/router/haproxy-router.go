@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"github.com/tidwall/gjson"
 

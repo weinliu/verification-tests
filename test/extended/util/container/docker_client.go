@@ -187,7 +187,7 @@ func (c *DockerCLI) ContainerCreate(imageName string, containerName string, entr
 		OpenStdin:  openStdin,
 		Tty:        true,
 		Entrypoint: []string{entrypoint},
-	}, nil, nil, containerName)
+	}, nil, nil, nil, containerName)
 	return resp.ID, err
 }
 

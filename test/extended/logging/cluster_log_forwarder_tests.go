@@ -1,12 +1,13 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -78,7 +79,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			//check app index in ES
 			g.By("check indices in ES pod")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-000")
 
@@ -142,7 +143,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			//check app index in ES
 			g.By("check indices in ES pod")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-00")
 
@@ -218,7 +219,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("Check audit index in ES pod")
-			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, esPods.Items[0].Name, "audit-00")
 
@@ -232,7 +233,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForDeploymentPodsToBeReady(oc, ovnProj, ovn.name)
 
 			g.By("Access the OVN app pod from another pod in the same project to generate OVN ACL messages")
-			ovnPods, err := oc.AdminKubeClient().CoreV1().Pods(ovnProj).List(metav1.ListOptions{LabelSelector: "app=ovn-app"})
+			ovnPods, err := oc.AdminKubeClient().CoreV1().Pods(ovnProj).List(context.Background(), metav1.ListOptions{LabelSelector: "app=ovn-app"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			podIP := ovnPods.Items[0].Status.PodIP
 			e2e.Logf("Pod IP is %s ", podIP)
@@ -361,7 +362,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check logs in internal ES")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app")
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "infra")
@@ -484,7 +485,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Searching for Application Logs in Loki")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
 			lc := newLokiClient(route)
-			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(metav1.ListOptions{LabelSelector: "run=centos-logtest"})
+			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
 				appLogs, err := lc.searchByNamespace("", appProj)
@@ -588,7 +589,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Searching for Application Logs in Loki using tenantKey")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
 			lc := newLokiClient(route)
-			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(metav1.ListOptions{LabelSelector: "run=centos-logtest"})
+			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
 				appLogs, err := lc.searchByKey("", tenantKey, appPodName.Items[0].Name)
@@ -640,7 +641,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Searching for Application Logs in Loki using tenantKey")
 			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
 			lc := newLokiClient(route)
-			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(metav1.ListOptions{LabelSelector: "run=centos-logtest"})
+			appPodName, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
 				appLogs, err := lc.searchByKey("", tenantKey, appProj)
@@ -735,7 +736,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if platform != "aws" {
 				g.Skip("Skip for non-supported platform, the support platform is AWS!!!")
 			}
-			_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get("aws-creds", metav1.GetOptions{})
+			_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get(context.Background(), "aws-creds", metav1.GetOptions{})
 			if apierrors.IsNotFound(err) {
 				g.Skip("Can not find secret/aws-creds. Maybe that is an aws STS cluster.")
 			}
@@ -877,7 +878,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Medium-41726-Forward logs to different kafka brokers[Serial][Slow]", func() {
-			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
+			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if nodes.Items[0].Status.NodeInfo.Architecture == "arm64" {
 				g.Skip("Current platform not supported/resources not available for this test!")

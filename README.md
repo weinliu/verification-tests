@@ -1,7 +1,7 @@
 # Extended Platform Tests
 This repository holds the non-kubernetes, end-to-end tests that need to pass on a running
 cluster before PRs merge and/or before we ship a release.
-These tests are based on [ginkgo](https://github.com/onsi/ginkgo) and the [kubernetes](https://github.com/kubernetes/kubernetes) e2e test framework.
+These tests are based on [ginkgo](https://github.com/onsi/ginkgo/v2) and the [kubernetes](https://github.com/kubernetes/kubernetes) e2e test framework.
 
 ## Prerequisites
 * Git installed. See [Installing Git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git).

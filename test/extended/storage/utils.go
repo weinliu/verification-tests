@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/ghodss/yaml"
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/gjson"
@@ -26,7 +26,7 @@ import (
 // Define the global cloudProvider
 var cloudProvider string
 
-//  Kubeadmin user use oc client apply yaml template
+// Kubeadmin user use oc client apply yaml template
 func applyResourceFromTemplateAsAdmin(oc *exutil.CLI, parameters ...string) error {
 	var configFile string
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
@@ -46,7 +46,7 @@ func applyResourceFromTemplateAsAdmin(oc *exutil.CLI, parameters ...string) erro
 	return oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
 }
 
-//  Common user use oc client apply yaml template
+// Common user use oc client apply yaml template
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 	var configFile string
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
@@ -66,7 +66,7 @@ func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 	return oc.WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
 }
 
-//  Get a random string of 8 byte
+// Get a random string of 8 byte
 func getRandomString() string {
 	chars := "abcdefghijklmnopqrstuvwxyz0123456789"
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -96,7 +96,7 @@ func getVaildDeviceForEbsVol() string {
 	return "/dev/sd" + validStr
 }
 
-//  Get the cloud provider type of the test environment
+// Get the cloud provider type of the test environment
 func getCloudProvider(oc *exutil.CLI) string {
 	var (
 		errMsg error
@@ -115,7 +115,7 @@ func getCloudProvider(oc *exutil.CLI) string {
 	return strings.ToLower(output)
 }
 
-//  Get the cluster infrastructureName(ClusterID)
+// Get the cluster infrastructureName(ClusterID)
 func getClusterID(oc *exutil.CLI) (string, error) {
 	clusterID, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
 	if err != nil || clusterID == "" {
@@ -126,7 +126,7 @@ func getClusterID(oc *exutil.CLI) (string, error) {
 	return clusterID, err
 }
 
-//  Get the cluster version channel x.x (e.g. 4.11)
+// Get the cluster version channel x.x (e.g. 4.11)
 func getClusterVersionChannel(oc *exutil.CLI) string {
 	// clusterbot env don't have ".spec.channel", So change to use desire version
 	clusterVersion, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clusterversion", "-o=jsonpath={.items[?(@.kind==\"ClusterVersion\")].status.desired.version}").Output()
@@ -137,7 +137,7 @@ func getClusterVersionChannel(oc *exutil.CLI) string {
 	return clusterVersion
 }
 
-//  Strings contain sub string check
+// Strings contain sub string check
 func contains(s []string, str string) bool {
 	for _, v := range s {
 		if v == str {
@@ -279,7 +279,7 @@ func jsonDeletePathsToFile(jsonInput string, deletePaths []string) (string, erro
 	return path, ioutil.WriteFile(path, pretty.Pretty([]byte(jsonInput)), 0644)
 }
 
-//  Kubeadmin user use oc client apply yaml template delete parameters
+// Kubeadmin user use oc client apply yaml template delete parameters
 func applyResourceFromTemplateDeleteParametersAsAdmin(oc *exutil.CLI, deletePaths []string, parameters ...string) error {
 	var configFile string
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
@@ -299,7 +299,7 @@ func applyResourceFromTemplateDeleteParametersAsAdmin(oc *exutil.CLI, deletePath
 	return oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
 }
 
-//  Kubeadmin user use oc client apply yaml template with extra parameters
+// Kubeadmin user use oc client apply yaml template with extra parameters
 func applyResourceFromTemplateWithExtraParametersAsAdmin(oc *exutil.CLI, extraParameters map[string]interface{}, parameters ...string) error {
 	var configFile string
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
@@ -505,7 +505,8 @@ func getZonesFromWorker(oc *exutil.CLI) []string {
 }
 
 // Common oc CLI
-//  Get the oc describe info, set namespace as "" for cluster-wide resource
+//
+//	Get the oc describe info, set namespace as "" for cluster-wide resource
 func getOcDescribeInfo(oc *exutil.CLI, namespace string, resourceKind string, resourceName string) string {
 	var ocDescribeInfo string
 	var err error
@@ -726,7 +727,7 @@ func patchResourceAsAdmin(oc *exutil.CLI, namespace, resourceKindAndName, JSONPa
 	}
 }
 
-//  Get the oc client version major.minor x.x (e.g. 4.11)
+// Get the oc client version major.minor x.x (e.g. 4.11)
 func getClientVersion(oc *exutil.CLI) string {
 	output, err := oc.WithoutNamespace().AsAdmin().Run("version").Args("-o", "json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
@@ -217,7 +217,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				nodeSelector:        "wscan",
 				template:            csuiteTemplate,
 			}
-			itName = g.CurrentGinkgoTestDescription().TestText
+			itName = g.CurrentSpecReport().FullText()
 		)
 
 		// These are special steps to overcome problem which are discussed in [1] so that namespace should not stuck in 'Terminating' state
@@ -2276,7 +2276,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 				scansettingname: "default",
 				template:        scansettingbindingTemplate,
 			}
-			itName = g.CurrentGinkgoTestDescription().TestText
+			itName = g.CurrentSpecReport().FullText()
 		)
 
 		g.By("Create scansettingbinding !!!\n")

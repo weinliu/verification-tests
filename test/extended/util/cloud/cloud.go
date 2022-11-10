@@ -1,6 +1,7 @@
 package cloud
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 
@@ -29,7 +30,7 @@ func LoadConfig() (string, *e2e.CloudConfig, error) {
 	}
 	client := configclient.NewForConfigOrDie(clientConfig)
 
-	infra, err := client.ConfigV1().Infrastructures().Get("cluster", metav1.GetOptions{})
+	infra, err := client.ConfigV1().Infrastructures().Get(context.Background(), "cluster", metav1.GetOptions{})
 	if err != nil {
 		return "", nil, err
 	}
@@ -41,7 +42,7 @@ func LoadConfig() (string, *e2e.CloudConfig, error) {
 		return "", nil, nil
 	}
 
-	masters, err := coreClient.CoreV1().Nodes().List(metav1.ListOptions{
+	masters, err := coreClient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{
 		LabelSelector: "node-role.kubernetes.io/master=",
 	})
 	if err != nil {
@@ -53,7 +54,7 @@ func LoadConfig() (string, *e2e.CloudConfig, error) {
 	}
 	zones.Delete("")
 
-	nonMasters, err := coreClient.CoreV1().Nodes().List(metav1.ListOptions{
+	nonMasters, err := coreClient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{
 		LabelSelector: "!node-role.kubernetes.io/master",
 	})
 	if err != nil {

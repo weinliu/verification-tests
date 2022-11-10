@@ -1,10 +1,11 @@
 package workloads
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,7 +26,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", "-n", "openshift-monitoring", "prometheus-k8s").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		foundMetrics := false
-		podList, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(metav1.ListOptions{})
+		podList, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{})
 		if err != nil {
 			e2e.Logf("Error listing pods: %v", err)
 		}

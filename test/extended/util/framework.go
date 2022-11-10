@@ -2,6 +2,7 @@ package util
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -15,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
 	authorizationapi "k8s.io/api/authorization/v1"
@@ -34,11 +35,11 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
+	quota "k8s.io/apiserver/pkg/quota/v1"
 	"k8s.io/client-go/kubernetes"
 	kclientset "k8s.io/client-go/kubernetes"
 	batchv1client "k8s.io/client-go/kubernetes/typed/batch/v1"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/kubernetes/pkg/quota/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/framework/pod"
 	"k8s.io/kubernetes/test/e2e/framework/statefulset"
@@ -76,7 +77,7 @@ func WaitForInternalRegistryHostname(oc *CLI) (string, error) {
 	isOCMProgressing := true
 	podLogs := map[string]string{}
 	err := wait.Poll(2*time.Second, 2*time.Minute, func() (bool, error) {
-		imageConfig, err := oc.AsAdmin().AdminConfigClient().ConfigV1().Images().Get("cluster", metav1.GetOptions{})
+		imageConfig, err := oc.AsAdmin().AdminConfigClient().ConfigV1().Images().Get(context.Background(), "cluster", metav1.GetOptions{})
 		if err != nil {
 			if errors.IsNotFound(err) {
 				e2e.Logf("Image config object not found")
@@ -97,7 +98,7 @@ func WaitForInternalRegistryHostname(oc *CLI) (string, error) {
 
 		// verify that the OCM config's internal registry hostname matches
 		// the image config's internal registry hostname
-		ocm, err := oc.AdminOperatorClient().OperatorV1().OpenShiftControllerManagers().Get("cluster", metav1.GetOptions{})
+		ocm, err := oc.AdminOperatorClient().OperatorV1().OpenShiftControllerManagers().Get(context.Background(), "cluster", metav1.GetOptions{})
 		if err != nil {
 			if errors.IsNotFound(err) {
 				return false, nil
@@ -121,7 +122,7 @@ func WaitForInternalRegistryHostname(oc *CLI) (string, error) {
 		}
 		// check pod logs for messages around image config's internal registry hostname has been observed and
 		// and that the build controller was started after that observation
-		pods, err := oc.AdminKubeClient().CoreV1().Pods("openshift-controller-manager").List(metav1.ListOptions{})
+		pods, err := oc.AdminKubeClient().CoreV1().Pods("openshift-controller-manager").List(context.Background(), metav1.ListOptions{})
 		if err != nil {
 			if errors.IsNotFound(err) {
 				return false, nil
@@ -130,7 +131,7 @@ func WaitForInternalRegistryHostname(oc *CLI) (string, error) {
 		}
 		for _, pod := range pods.Items {
 			req := oc.AdminKubeClient().CoreV1().Pods("openshift-controller-manager").GetLogs(pod.Name, &corev1.PodLogOptions{})
-			readCloser, err := req.Stream()
+			readCloser, err := req.Stream(context.Background())
 			if err == nil {
 				b, err := ioutil.ReadAll(readCloser)
 				if err == nil {
@@ -205,7 +206,7 @@ func WaitForOpenShiftNamespaceImageStreams(oc *CLI) error {
 	langs := []string{"ruby", "nodejs", "perl", "php", "python", "mysql", "postgresql", "mongodb", "jenkins"}
 	scan := func() bool {
 		// check the samples operator to see about imagestream import status
-		samplesOperatorConfig, err := oc.AdminConfigClient().ConfigV1().ClusterOperators().Get("openshift-samples", metav1.GetOptions{})
+		samplesOperatorConfig, err := oc.AdminConfigClient().ConfigV1().ClusterOperators().Get(context.Background(), "openshift-samples", metav1.GetOptions{})
 		if err != nil {
 			e2e.Logf("Samples Operator ClusterOperator Error: %#v", err)
 			return false
@@ -224,7 +225,7 @@ func WaitForOpenShiftNamespaceImageStreams(oc *CLI) error {
 					for _, lang := range langs {
 						if strings.Contains(msg, " "+lang+" ") || strings.HasSuffix(msg, " "+lang) {
 							e2e.Logf("SamplesOperator detected error during imagestream import: %s with details %s", condition.Reason, condition.Message)
-							stream, err := oc.AsAdmin().ImageClient().ImageV1().ImageStreams("openshift").Get(lang, metav1.GetOptions{})
+							stream, err := oc.AsAdmin().ImageClient().ImageV1().ImageStreams("openshift").Get(context.Background(), lang, metav1.GetOptions{})
 							if err != nil {
 								e2e.Logf("after seeing FailedImageImports for %s retrieval failed with %s", lang, err.Error())
 								return false
@@ -245,7 +246,7 @@ func WaitForOpenShiftNamespaceImageStreams(oc *CLI) error {
 									isi.Spec.Images = append(isi.Spec.Images, iis)
 								}
 							}
-							_, err = oc.AsAdmin().ImageClient().ImageV1().ImageStreamImports("openshift").Create(isi)
+							_, err = oc.AsAdmin().ImageClient().ImageV1().ImageStreamImports("openshift").Create(context.Background(), isi, metav1.CreateOptions{})
 							if err != nil {
 								e2e.Logf("after seeing FailedImageImports for %s the manual image import failed with %s", lang, err.Error())
 							}
@@ -268,7 +269,7 @@ func WaitForOpenShiftNamespaceImageStreams(oc *CLI) error {
 		}
 		for _, lang := range langs {
 			e2e.Logf("Checking language %v \n", lang)
-			is, err := oc.ImageClient().ImageV1().ImageStreams("openshift").Get(lang, metav1.GetOptions{})
+			is, err := oc.ImageClient().ImageV1().ImageStreams("openshift").Get(context.Background(), lang, metav1.GetOptions{})
 			if err != nil {
 				e2e.Logf("ImageStream Error: %#v \n", err)
 				return false
@@ -311,7 +312,7 @@ func WaitForOpenShiftNamespaceImageStreams(oc *CLI) error {
 	return fmt.Errorf("Failed to import expected imagestreams")
 }
 
-//DumpImageStreams will dump both the openshift namespace and local namespace imagestreams
+// DumpImageStreams will dump both the openshift namespace and local namespace imagestreams
 // as part of debugging when the language imagestreams in the openshift namespace seem to disappear
 func DumpImageStreams(oc *CLI) {
 	out, err := oc.AsAdmin().Run("get").Args("is", "-n", "openshift", "-o", "yaml", "--config", KubeConfigPath()).Output()
@@ -374,16 +375,16 @@ func DumpBuilds(oc *CLI) {
 }
 
 func GetDeploymentConfigPods(oc *CLI, dcName string, version int64) (*kapiv1.PodList, error) {
-	return oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).List(metav1.ListOptions{LabelSelector: ParseLabelsOrDie(fmt.Sprintf("%s=%s-%d",
+	return oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).List(context.Background(), metav1.ListOptions{LabelSelector: ParseLabelsOrDie(fmt.Sprintf("%s=%s-%d",
 		appsv1.DeployerPodForDeploymentLabel, dcName, version)).String()})
 }
 
 func GetApplicationPods(oc *CLI, dcName string) (*kapiv1.PodList, error) {
-	return oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).List(metav1.ListOptions{LabelSelector: ParseLabelsOrDie(fmt.Sprintf("deploymentconfig=%s", dcName)).String()})
+	return oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).List(context.Background(), metav1.ListOptions{LabelSelector: ParseLabelsOrDie(fmt.Sprintf("deploymentconfig=%s", dcName)).String()})
 }
 
 func GetStatefulSetPods(oc *CLI, setName string) (*kapiv1.PodList, error) {
-	return oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).List(metav1.ListOptions{LabelSelector: ParseLabelsOrDie(fmt.Sprintf("name=%s", setName)).String()})
+	return oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).List(context.Background(), metav1.ListOptions{LabelSelector: ParseLabelsOrDie(fmt.Sprintf("name=%s", setName)).String()})
 }
 
 // DumpDeploymentLogs will dump the latest deployment logs for a DeploymentConfig for debug purposes
@@ -437,7 +438,7 @@ func DumpPodStatesInNamespace(namespace string, oc *CLI) {
 // DumpPodLogsStartingWith will dump any pod starting with the name prefix provided
 func DumpPodLogsStartingWith(prefix string, oc *CLI) {
 	podsToDump := []kapiv1.Pod{}
-	podList, err := oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).List(metav1.ListOptions{})
+	podList, err := oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		e2e.Logf("Error listing pods: %v", err)
 		return
@@ -455,7 +456,7 @@ func DumpPodLogsStartingWith(prefix string, oc *CLI) {
 // DumpPodLogsStartingWith will dump any pod starting with the name prefix provided
 func DumpPodLogsStartingWithInNamespace(prefix, namespace string, oc *CLI) {
 	podsToDump := []kapiv1.Pod{}
-	podList, err := oc.AdminKubeClient().CoreV1().Pods(namespace).List(metav1.ListOptions{})
+	podList, err := oc.AdminKubeClient().CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		e2e.Logf("Error listing pods: %v", err)
 		return
@@ -499,7 +500,7 @@ func DumpPodLogs(pods []kapiv1.Pod, oc *CLI) {
 
 // DumpPodsCommand runs the provided command in every pod identified by selector in the provided namespace.
 func DumpPodsCommand(c kubernetes.Interface, ns string, selector labels.Selector, cmd string) {
-	podList, err := c.CoreV1().Pods(ns).List(metav1.ListOptions{LabelSelector: selector.String()})
+	podList, err := c.CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: selector.String()})
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	values := make(map[string]string)
@@ -717,7 +718,7 @@ func (t *BuildResult) dumpRegistryLogs() {
 	if t.Build != nil && !t.Build.CreationTimestamp.IsZero() {
 		buildStarted = &t.Build.CreationTimestamp.Time
 	} else {
-		proj, err := oc.ProjectClient().ProjectV1().Projects().Get(oc.Namespace(), metav1.GetOptions{})
+		proj, err := oc.ProjectClient().ProjectV1().Projects().Get(context.Background(), oc.Namespace(), metav1.GetOptions{})
 		if err != nil {
 			e2e.Logf("Failed to get project %s: %v\n", oc.Namespace(), err)
 		} else {
@@ -907,7 +908,7 @@ func WaitForABuild(c buildv1clienttyped.BuildInterface, name string, isOK, isFai
 
 	// wait 2 minutes for build to exist
 	err := wait.Poll(1*time.Second, 2*time.Minute, func() (bool, error) {
-		if _, err := c.Get(name, metav1.GetOptions{}); err != nil {
+		if _, err := c.Get(context.Background(), name, metav1.GetOptions{}); err != nil {
 			return false, nil
 		}
 		return true, nil
@@ -920,7 +921,7 @@ func WaitForABuild(c buildv1clienttyped.BuildInterface, name string, isOK, isFai
 	}
 	// wait longer for the build to run to completion
 	err = wait.Poll(5*time.Second, 10*time.Minute, func() (bool, error) {
-		list, err := c.List(metav1.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
+		list, err := c.List(context.Background(), metav1.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 		if err != nil {
 			e2e.Logf("error listing builds: %v", err)
 			return false, err
@@ -966,7 +967,7 @@ func CheckBuildCancelled(b *buildv1.Build) bool {
 // provisioned
 func WaitForServiceAccount(c corev1client.ServiceAccountInterface, name string) error {
 	waitFn := func() (bool, error) {
-		sc, err := c.Get(name, metav1.GetOptions{})
+		sc, err := c.Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			// If we can't access the service accounts, let's wait till the controller
 			// create it.
@@ -990,7 +991,7 @@ func WaitForAnImageStream(client imagev1typedclient.ImageStreamInterface,
 	name string,
 	isOK, isFailed func(*imagev1.ImageStream) bool) error {
 	for {
-		list, err := client.List(metav1.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
+		list, err := client.List(context.Background(), metav1.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 		if err != nil {
 			return err
 		}
@@ -1005,7 +1006,7 @@ func WaitForAnImageStream(client imagev1typedclient.ImageStreamInterface,
 		}
 
 		rv := list.ResourceVersion
-		w, err := client.Watch(metav1.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(), ResourceVersion: rv})
+		w, err := client.Watch(context.Background(), metav1.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(), ResourceVersion: rv})
 		if err != nil {
 			return err
 		}
@@ -1087,7 +1088,7 @@ func WaitForDeploymentConfig(kc kubernetes.Interface, dcClient appsv1clienttyped
 
 	start := time.Now()
 	err := wait.Poll(time.Second, 15*time.Minute, func() (done bool, err error) {
-		dc, err = dcClient.DeploymentConfigs(namespace).Get(name, metav1.GetOptions{})
+		dc, err = dcClient.DeploymentConfigs(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -1193,7 +1194,7 @@ func WaitForResourceQuotaSync(
 
 	expectedResourceNames := quota.ResourceNames(expectedUsage)
 
-	list, err := client.List(metav1.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
+	list, err := client.List(context.Background(), metav1.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
 		return nil, err
 	}
@@ -1206,7 +1207,7 @@ func WaitForResourceQuotaSync(
 	}
 
 	rv := list.ResourceVersion
-	w, err := client.Watch(metav1.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(), ResourceVersion: rv})
+	w, err := client.Watch(context.Background(), metav1.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(), ResourceVersion: rv})
 	if err != nil {
 		return nil, err
 	}
@@ -1234,7 +1235,7 @@ func WaitForResourceQuotaSync(
 
 // GetPodNamesByFilter looks up pods that satisfy the predicate and returns their names.
 func GetPodNamesByFilter(c corev1client.PodInterface, label labels.Selector, predicate func(kapiv1.Pod) bool) (podNames []string, err error) {
-	podList, err := c.List(metav1.ListOptions{LabelSelector: label.String()})
+	podList, err := c.List(context.Background(), metav1.ListOptions{LabelSelector: label.String()})
 	if err != nil {
 		return nil, err
 	}
@@ -1248,7 +1249,7 @@ func GetPodNamesByFilter(c corev1client.PodInterface, label labels.Selector, pre
 
 func WaitForAJob(c batchv1client.JobInterface, name string, timeout time.Duration) error {
 	return wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		j, e := c.Get(name, metav1.GetOptions{})
+		j, e := c.Get(context.Background(), name, metav1.GetOptions{})
 		if e != nil {
 			return true, e
 		}
@@ -1313,7 +1314,7 @@ func CheckPodNoOp(pod kapiv1.Pod) bool {
 // WaitUntilPodIsGone waits until the named Pod will disappear
 func WaitUntilPodIsGone(c corev1client.PodInterface, podName string, timeout time.Duration) error {
 	return wait.Poll(1*time.Second, timeout, func() (bool, error) {
-		_, err := c.Get(podName, metav1.GetOptions{})
+		_, err := c.Get(context.Background(), podName, metav1.GetOptions{})
 		if err != nil {
 			if strings.Contains(err.Error(), "not found") {
 				return true, nil
@@ -1327,7 +1328,7 @@ func WaitUntilPodIsGone(c corev1client.PodInterface, podName string, timeout tim
 // GetDockerImageReference retrieves the full Docker pull spec from the given ImageStream
 // and tag
 func GetDockerImageReference(c imagev1typedclient.ImageStreamInterface, name, tag string) (string, error) {
-	imageStream, err := c.Get(name, metav1.GetOptions{})
+	imageStream, err := c.Get(context.Background(), name, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -1363,7 +1364,7 @@ func KubeConfigPath() string {
 	return os.Getenv("KUBECONFIG")
 }
 
-//ArtifactDirPath returns the value of ARTIFACT_DIR environment variable
+// ArtifactDirPath returns the value of ARTIFACT_DIR environment variable
 func ArtifactDirPath() string {
 	path := os.Getenv("ARTIFACT_DIR")
 	o.Expect(path).NotTo(o.BeNil())
@@ -1371,8 +1372,8 @@ func ArtifactDirPath() string {
 	return path
 }
 
-//ArtifactPath returns the absolute path to the fix artifact file
-//The path is relative to ARTIFACT_DIR
+// ArtifactPath returns the absolute path to the fix artifact file
+// The path is relative to ARTIFACT_DIR
 func ArtifactPath(elem ...string) string {
 	return filepath.Join(append([]string{ArtifactDirPath()}, elem...)...)
 }
@@ -1442,9 +1443,11 @@ func FetchURL(oc *CLI, url string, retryTimeout time.Duration) (string, error) {
 
 	ns := oc.KubeFramework().Namespace.Name
 	execPodName := CreateExecPodOrFail(oc.AdminKubeClient().CoreV1(), ns, string(uuid.NewUUID()))
-	defer func() { oc.AdminKubeClient().CoreV1().Pods(ns).Delete(execPodName, metav1.NewDeleteOptions(1)) }()
+	defer func() {
+		oc.AdminKubeClient().CoreV1().Pods(ns).Delete(context.Background(), execPodName, *metav1.NewDeleteOptions(1))
+	}()
 
-	execPod, err := oc.AdminKubeClient().CoreV1().Pods(ns).Get(execPodName, metav1.GetOptions{})
+	execPod, err := oc.AdminKubeClient().CoreV1().Pods(ns).Get(context.Background(), execPodName, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -1512,10 +1515,9 @@ func LaunchWebserverPod(f *e2e.Framework, podName, nodeName string) (ip string) 
 		},
 	}
 	podClient := f.ClientSet.CoreV1().Pods(f.Namespace.Name)
-	_, err := podClient.Create(pod)
+	_, err := podClient.Create(context.Background(), pod, metav1.CreateOptions{})
 	e2e.ExpectNoError(err)
-	e2e.ExpectNoError(f.WaitForPodRunning(podName))
-	createdPod, err := podClient.Get(podName, metav1.GetOptions{})
+	createdPod, err := podClient.Get(context.Background(), podName, metav1.GetOptions{})
 	e2e.ExpectNoError(err)
 	ip = net.JoinHostPort(createdPod.Status.PodIP, strconv.Itoa(port))
 	e2e.Logf("Target pod IP:port is %s", ip)
@@ -1524,7 +1526,7 @@ func LaunchWebserverPod(f *e2e.Framework, podName, nodeName string) (ip string) 
 
 func WaitForEndpoint(c kclientset.Interface, ns, name string) error {
 	for t := time.Now(); time.Since(t) < 3*time.Minute; time.Sleep(5 * time.Second) {
-		endpoint, err := c.CoreV1().Endpoints(ns).Get(name, metav1.GetOptions{})
+		endpoint, err := c.CoreV1().Endpoints(ns).Get(context.Background(), name, metav1.GetOptions{})
 		if kapierrs.IsNotFound(err) {
 			e2e.Logf("Endpoint %s/%s is not ready yet", ns, name)
 			continue
@@ -1546,7 +1548,7 @@ func GetEndpointAddress(oc *CLI, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	endpoint, err := oc.KubeClient().CoreV1().Endpoints(oc.Namespace()).Get(name, metav1.GetOptions{})
+	endpoint, err := oc.KubeClient().CoreV1().Endpoints(oc.Namespace()).Get(context.Background(), name, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -1560,10 +1562,10 @@ func GetEndpointAddress(oc *CLI, name string) (string, error) {
 func CreateExecPodOrFail(client corev1client.CoreV1Interface, ns, name string) string {
 	e2e.Logf("Creating new exec pod")
 	execPod := pod.NewExecPodSpec(ns, name, false)
-	created, err := client.Pods(ns).Create(execPod)
+	created, err := client.Pods(ns).Create(context.Background(), execPod, metav1.CreateOptions{})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	err = wait.PollImmediate(e2e.Poll, 5*time.Minute, func() (bool, error) {
-		retrievedPod, err := client.Pods(execPod.Namespace).Get(created.Name, metav1.GetOptions{})
+		retrievedPod, err := client.Pods(execPod.Namespace).Get(context.Background(), created.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, nil
 		}
@@ -1649,15 +1651,15 @@ func RunOneShotCommandPod(
 	args := cmd[1:]
 	var output string
 
-	pod, err := oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).Create(newCommandPod(name, image, cmd[0], args,
-		volumeMounts, volumes, env))
+	pod, err := oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).Create(context.Background(), newCommandPod(name, image, cmd[0], args,
+		volumeMounts, volumes, env), metav1.CreateOptions{})
 	if err != nil {
 		return "", []error{err}
 	}
 
 	// Wait for command completion.
 	err = wait.PollImmediate(1*time.Second, timeout, func() (done bool, err error) {
-		cmdPod, getErr := oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).Get(pod.Name, v1.GetOptions{})
+		cmdPod, getErr := oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).Get(context.Background(), pod.Name, v1.GetOptions{})
 		if getErr != nil {
 			e2e.Logf("failed to get pod %q: %v", pod.Name, err)
 			return false, nil
@@ -1704,7 +1706,7 @@ func podHasErrored(pod *corev1.Pod) bool {
 }
 
 func getPodLogs(oc *CLI, pod *corev1.Pod) (string, error) {
-	reader, err := oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).GetLogs(pod.Name, &corev1.PodLogOptions{}).Stream()
+	reader, err := oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).GetLogs(pod.Name, &corev1.PodLogOptions{}).Stream(context.Background())
 	if err != nil {
 		return "", err
 	}
@@ -1807,7 +1809,7 @@ func WaitForUserBeAuthorized(oc *CLI, user, verb, resource string) error {
 	}
 	return wait.PollImmediate(1*time.Second, 1*time.Minute, func() (bool, error) {
 		e2e.Logf("Waiting for user '%v' to be authorized to %v the %v resource", user, verb, resource)
-		resp, err := oc.AdminKubeClient().AuthorizationV1().SubjectAccessReviews().Create(sar)
+		resp, err := oc.AdminKubeClient().AuthorizationV1().SubjectAccessReviews().Create(context.Background(), sar, metav1.CreateOptions{})
 		if err == nil && resp != nil && resp.Status.Allowed {
 			return true, nil
 		}
@@ -1828,21 +1830,21 @@ func GetRouterPodTemplate(oc *CLI) (*corev1.PodTemplateSpec, string, error) {
 	appsclient := oc.AdminAppsClient().AppsV1()
 	k8sappsclient := oc.AdminKubeClient().AppsV1()
 	for _, ns := range []string{"default", "openshift-ingress", "tectonic-ingress"} {
-		dc, err := appsclient.DeploymentConfigs(ns).Get("router", metav1.GetOptions{})
+		dc, err := appsclient.DeploymentConfigs(ns).Get(context.Background(), "router", metav1.GetOptions{})
 		if err == nil {
 			return dc.Spec.Template, ns, nil
 		}
 		if !errors.IsNotFound(err) {
 			return nil, "", err
 		}
-		deploy, err := k8sappsclient.Deployments(ns).Get("router", metav1.GetOptions{})
+		deploy, err := k8sappsclient.Deployments(ns).Get(context.Background(), "router", metav1.GetOptions{})
 		if err == nil {
 			return &deploy.Spec.Template, ns, nil
 		}
 		if !errors.IsNotFound(err) {
 			return nil, "", err
 		}
-		deploy, err = k8sappsclient.Deployments(ns).Get("router-default", metav1.GetOptions{})
+		deploy, err = k8sappsclient.Deployments(ns).Get(context.Background(), "router-default", metav1.GetOptions{})
 		if err == nil {
 			return &deploy.Spec.Template, ns, nil
 		}
@@ -1871,7 +1873,7 @@ func FindImageFormatString(oc *CLI) (string, bool) {
 
 func FindCLIImage(oc *CLI) (string, bool) {
 	// look up image stream
-	is, err := oc.AdminImageClient().ImageV1().ImageStreams("openshift").Get("cli", metav1.GetOptions{})
+	is, err := oc.AdminImageClient().ImageV1().ImageStreams("openshift").Get(context.Background(), "cli", metav1.GetOptions{})
 	if err == nil {
 		for _, tag := range is.Spec.Tags {
 			if tag.Name == "latest" && tag.From != nil && tag.From.Kind == "DockerImage" {
@@ -1886,7 +1888,7 @@ func FindCLIImage(oc *CLI) (string, bool) {
 
 func FindRouterImage(oc *CLI) (string, error) {
 	configclient := oc.AdminConfigClient().ConfigV1()
-	o, err := configclient.ClusterOperators().Get("ingress", metav1.GetOptions{})
+	o, err := configclient.ClusterOperators().Get(context.Background(), "ingress", metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -1900,7 +1902,7 @@ func FindRouterImage(oc *CLI) (string, error) {
 
 func IsClusterOperated(oc *CLI) bool {
 	configclient := oc.AdminConfigClient().ConfigV1()
-	o, err := configclient.Images().Get("cluster", metav1.GetOptions{})
+	o, err := configclient.Images().Get(context.Background(), "cluster", metav1.GetOptions{})
 	if o == nil || err != nil {
 		e2e.Logf("Could not find image config object, assuming non-4.0 installed cluster: %v", err)
 		return false

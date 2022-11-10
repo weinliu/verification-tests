@@ -1,10 +1,11 @@
 package logging
 
 import (
+	"context"
 	"fmt"
 	"time"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -289,13 +290,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("LokiStack deployed")
 
 			g.By("Checking Ingester Replica count for 1x.small tshirt size")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(ls.namespace).List(metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=ingester"})
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(ls.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=ingester"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(podList.Items) == 2).Should(o.BeTrue())
 			e2e.Logf("Ingester pod count is %d \n", len(podList.Items))
 
 			g.By("Checking Querier Replica count for 1x.small tshirt size")
-			podList, err = oc.AdminKubeClient().CoreV1().Pods(ls.namespace).List(metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=querier"})
+			podList, err = oc.AdminKubeClient().CoreV1().Pods(ls.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=querier"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(podList.Items) == 2).Should(o.BeTrue())
 			e2e.Logf("Querier pod count is %d \n", len(podList.Items))
@@ -309,13 +310,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("LokiStack redeployed")
 
 			g.By("Checking Ingester Replica count for 1x.medium tshirt size")
-			podList, err = oc.AdminKubeClient().CoreV1().Pods(newls.namespace).List(metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=ingester"})
+			podList, err = oc.AdminKubeClient().CoreV1().Pods(newls.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=ingester"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(podList.Items) == 3).Should(o.BeTrue())
 			e2e.Logf("Ingester pod count is %d \n", len(podList.Items))
 
 			g.By("Checking Querier Replica count for 1x.medium tshirt size")
-			podList, err = oc.AdminKubeClient().CoreV1().Pods(newls.namespace).List(metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=querier"})
+			podList, err = oc.AdminKubeClient().CoreV1().Pods(newls.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=querier"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(podList.Items) == 3).Should(o.BeTrue())
 			e2e.Logf("Querier pod count is %d \n", len(podList.Items))
@@ -348,7 +349,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("LokiStack deployed")
 
 			e2e.Logf("Getting List of configmaps managed by Loki Controller")
-			lokiCMList, err := oc.AdminKubeClient().CoreV1().ConfigMaps(ls.namespace).List(metav1.ListOptions{LabelSelector: "app.kubernetes.io/created-by=lokistack-controller"})
+			lokiCMList, err := oc.AdminKubeClient().CoreV1().ConfigMaps(ls.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/created-by=lokistack-controller"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(lokiCMList.Items) == 3).Should(o.BeTrue())
 
@@ -364,13 +365,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			e2e.Logf("Check to see reconciliation of Loki Distributor by Controller....")
 			ls.waitForLokiStackToBeReady(oc)
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(ls.namespace).List(metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=distributor"})
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(ls.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=distributor"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(podList.Items) == 1).Should(o.BeTrue())
 			e2e.Logf("Distributor deployment reconciled!")
 
 			e2e.Logf("Check to see reconciliation of configmaps by Controller....")
-			lokiCMList, err = oc.AdminKubeClient().CoreV1().ConfigMaps(ls.namespace).List(metav1.ListOptions{LabelSelector: "app.kubernetes.io/created-by=lokistack-controller"})
+			lokiCMList, err = oc.AdminKubeClient().CoreV1().ConfigMaps(ls.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/created-by=lokistack-controller"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(lokiCMList.Items) == 3).Should(o.BeTrue())
 			e2e.Logf("Loki Configmaps are reconciled \n")

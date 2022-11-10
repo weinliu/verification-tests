@@ -1,17 +1,19 @@
 package monitoring
 
 import (
+	"context"
 	"fmt"
+	"math/rand"
+	"os/exec"
+	"strings"
+	"time"
+
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
-	"math/rand"
-	"os/exec"
-	"strings"
-	"time"
 )
 
 const platformLoadTime = 120
@@ -72,7 +74,7 @@ func getRandomString() string {
 	return string(buffer)
 }
 
-//the method is to create one resource with template
+// the method is to create one resource with template
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) (string, error) {
 	var configFile string
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
@@ -107,7 +109,7 @@ func getSAToken(oc *exutil.CLI, account, ns string) string {
 	return token
 }
 
-//check data by running curl on a pod
+// check data by running curl on a pod
 func checkMetric(oc *exutil.CLI, url, token, metricString string, timeout time.Duration) {
 	var metrics string
 	var err error
@@ -129,12 +131,12 @@ func createResourceFromYaml(oc *exutil.CLI, ns, yamlFile string) {
 }
 
 func deleteBindMonitoringViewRoleToDefaultSA(oc *exutil.CLI, uwmFederateRBACViewName string) {
-	err := oc.AdminKubeClient().RbacV1().ClusterRoleBindings().Delete(uwmFederateRBACViewName, &metav1.DeleteOptions{})
+	err := oc.AdminKubeClient().RbacV1().ClusterRoleBindings().Delete(context.Background(), uwmFederateRBACViewName, metav1.DeleteOptions{})
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func bindMonitoringViewRoleToDefaultSA(oc *exutil.CLI, ns, uwmFederateRBACViewName string) (*rbacv1.ClusterRoleBinding, error) {
-	return oc.AdminKubeClient().RbacV1().ClusterRoleBindings().Create(&rbacv1.ClusterRoleBinding{
+	return oc.AdminKubeClient().RbacV1().ClusterRoleBindings().Create(context.Background(), &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: uwmFederateRBACViewName,
 		},
@@ -150,14 +152,14 @@ func bindMonitoringViewRoleToDefaultSA(oc *exutil.CLI, ns, uwmFederateRBACViewNa
 				Namespace: ns,
 			},
 		},
-	})
+	}, metav1.CreateOptions{})
 }
 func deleteClusterRoleBinding(oc *exutil.CLI, clusterRoleBindingName string) {
-	err := oc.AdminKubeClient().RbacV1().ClusterRoleBindings().Delete(clusterRoleBindingName, &metav1.DeleteOptions{})
+	err := oc.AdminKubeClient().RbacV1().ClusterRoleBindings().Delete(context.Background(), clusterRoleBindingName, metav1.DeleteOptions{})
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 func bindClusterRoleToUser(oc *exutil.CLI, clusterRoleName, userName, clusterRoleBindingName string) (*rbacv1.ClusterRoleBinding, error) {
-	return oc.AdminKubeClient().RbacV1().ClusterRoleBindings().Create(&rbacv1.ClusterRoleBinding{
+	return oc.AdminKubeClient().RbacV1().ClusterRoleBindings().Create(context.Background(), &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: clusterRoleBindingName,
 		},
@@ -172,7 +174,7 @@ func bindClusterRoleToUser(oc *exutil.CLI, clusterRoleName, userName, clusterRol
 				Name: userName,
 			},
 		},
-	})
+	}, metav1.CreateOptions{})
 }
 
 func checkRoute(oc *exutil.CLI, ns, name, token, queryString, metricString string, timeout time.Duration) {
@@ -201,10 +203,10 @@ func checkRoute(oc *exutil.CLI, ns, name, token, queryString, metricString strin
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The metrics %s failed to contain %s", metrics, metricString))
 }
 
-//check thanos_ruler retention
+// check thanos_ruler retention
 func checkRetention(oc *exutil.CLI, ns string, sts string, expectedRetention string, timeout time.Duration) {
 	err := wait.Poll(5*time.Second, timeout*time.Second, func() (bool, error) {
-		stsObject, err := oc.AdminKubeClient().AppsV1().StatefulSets(ns).Get(sts, metav1.GetOptions{})
+		stsObject, err := oc.AdminKubeClient().AppsV1().StatefulSets(ns).Get(context.Background(), sts, metav1.GetOptions{})
 		if err != nil {
 			return false, nil
 		}

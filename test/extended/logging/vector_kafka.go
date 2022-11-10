@@ -1,12 +1,13 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -198,7 +199,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Medium-47036-Vector Forward logs to different AMQ Kafka topics[Serial][Slow]", func() {
-			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
+			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if nodes.Items[0].Status.NodeInfo.Architecture == "arm64" {
 				g.Skip("Current platform not supported/resources not available for this test!")
@@ -300,7 +301,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Medium-48141-Vector Forward logs to different Kafka brokers.[Serial][Slow]", func() {
-			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
+			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if nodes.Items[0].Status.NodeInfo.Architecture == "arm64" {
 				g.Skip("Current platform not supported/resources not available for this test!")

@@ -1,10 +1,11 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -71,7 +72,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			// check data in ES
 			g.By("check indices in ES pod")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-centos-logtest")
 
@@ -88,7 +89,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
 			// check data in ES
 			g.By("check indices in ES pod")
-			podList, err = oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			podList, err = oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-qa-openshift-label")
 			//check if the JSON logs are parsed
@@ -125,7 +126,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			// check data in ES
 			g.By("check indices in ES pod")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-logging-centos-logtest")
 			//check if the JSON logs are parsed
@@ -140,7 +141,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
 			// check data in ES
 			g.By("check indices in ES pod")
-			podList, err = oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			podList, err = oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-"+appProj)
 			//check if the JSON logs are parsed
@@ -182,7 +183,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			// check indices name in ES
 			g.By("check indices in ES pod")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			for _, indexName := range []string{"app-" + appProj1, "app-00", "infra-00", "audit-00"} {
 				waitForIndexAppear(cloNS, podList.Items[0].Name, indexName)
@@ -259,7 +260,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check logs in ES pod")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-00")
 			waitForProjectLogsAppear(cloNS, podList.Items[0].Name, appProj, "app-00")
@@ -301,7 +302,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check indices in ES pod")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-centos-logtest")
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-00")
@@ -343,7 +344,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check indices in ES pod")
-			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, esPods.Items[0].Name, "app-"+containerName+"-0")
 			waitForIndexAppear(cloNS, esPods.Items[0].Name, "app-"+containerName+"-1")
@@ -405,7 +406,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check indices in ES pod")
-			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, esPods.Items[0].Name, "app-"+app)
 
@@ -452,7 +453,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check indices in ES pod")
-			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, esPods.Items[0].Name, "app-"+containerName)
 
@@ -512,7 +513,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check indices in ES pod")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-qa-openshift-label")
 
@@ -546,7 +547,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check indices in ES pod")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-ocp-41729")
 
@@ -580,7 +581,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check indices in ES pod")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-"+app)
 			//check if the JSON logs are parsed
@@ -623,7 +624,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check indices in ES pod")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-000")
 
@@ -656,7 +657,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check indices in ES pod")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-00")
 
@@ -708,7 +709,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForECKPodsToBeReady(oc, cloNS)
 
 			g.By("check indices in ES pod")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-centos-logtest")
 			waitForIndexAppear(cloNS, podList.Items[0].Name, "app-ocp-41790")

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -32,7 +32,7 @@ func waitForClusterHealthy(oc *exutil.CLI) {
 	e2e.Logf("Cluster is healthy ...")
 }
 
-//SkipIfCloudControllerManagerNotDeployed check if ccm is deployed
+// SkipIfCloudControllerManagerNotDeployed check if ccm is deployed
 func SkipIfCloudControllerManagerNotDeployed(oc *exutil.CLI) {
 	var ccm string
 	var err error

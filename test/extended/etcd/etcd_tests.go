@@ -1,10 +1,11 @@
 package etcd
 
 import (
-	g "github.com/onsi/ginkgo"
-	o "github.com/onsi/gomega"
 	"os/exec"
 	"strings"
+
+	g "github.com/onsi/ginkgo/v2"
+	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"

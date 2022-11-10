@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -259,7 +259,7 @@ func WaitForMachineDisappearByName(oc *CLI, machineName string) {
 	AssertWaitPollNoErr(err, "Wait machine disappear failed.")
 }
 
-//CheckPlatform check the cluster's platform
+// CheckPlatform check the cluster's platform
 func CheckPlatform(oc *CLI) string {
 	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 	return strings.ToLower(output)

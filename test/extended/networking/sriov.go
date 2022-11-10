@@ -1,10 +1,11 @@
 package networking
 
 import (
+	"context"
 	"path/filepath"
 	"regexp"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -20,7 +21,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 	)
 	g.BeforeEach(func() {
 		// for now skip sriov cases in temp in order to avoid cases always show failed in CI since sriov operator is not setup . will add install operator function after that
-		_, err := oc.AdminKubeClient().CoreV1().Namespaces().Get("openshift-sriov-network-operator", metav1.GetOptions{})
+		_, err := oc.AdminKubeClient().CoreV1().Namespaces().Get(context.Background(), "openshift-sriov-network-operator", metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				g.Skip("the cluster do not install sriov operator")

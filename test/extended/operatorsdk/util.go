@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	container "github.com/openshift/openshift-tests-private/test/extended/util/container"
@@ -68,7 +68,7 @@ type subscriptionDescription struct {
 	template               string
 }
 
-//the method is to just create sub, and save it to dr, do not check its state.
+// the method is to just create sub, and save it to dr, do not check its state.
 func (sub *subscriptionDescription) createWithoutCheck(oc *exutil.CLI, itName string, dr describerResrouce) {
 	// for most operator subscription failure, the reason is that there is a left cluster-scoped CSV.
 	// I'd like to print all CSV before create it.
@@ -124,9 +124,9 @@ func (sub *subscriptionDescription) createWithoutCheck(oc *exutil.CLI, itName st
 	dr.getIr(itName).add(newResource(oc, "sub", sub.subName, requireNS, sub.namespace))
 }
 
-//the method is to check if the sub's state is AtLatestKnown.
-//if it is AtLatestKnown, get installed csv from sub and save it to dr.
-//if it is not AtLatestKnown, raise error.
+// the method is to check if the sub's state is AtLatestKnown.
+// if it is AtLatestKnown, get installed csv from sub and save it to dr.
+// if it is not AtLatestKnown, raise error.
 func (sub *subscriptionDescription) findInstalledCSV(oc *exutil.CLI, itName string, dr describerResrouce) {
 	err := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
 		state := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}")
@@ -151,9 +151,9 @@ func (sub *subscriptionDescription) findInstalledCSV(oc *exutil.CLI, itName stri
 	e2e.Logf("the installed CSV name is %s", sub.installedCSV)
 }
 
-//the method is to create sub, and save the sub resrouce into dr. and more create csv possible depending on sub.ipApproval
-//if sub.ipApproval is Automatic, it will wait the sub's state become AtLatestKnown and get installed csv as sub.installedCSV, and save csv into dr
-//if sub.ipApproval is not Automatic, it will just wait sub's state become UpgradePending
+// the method is to create sub, and save the sub resrouce into dr. and more create csv possible depending on sub.ipApproval
+// if sub.ipApproval is Automatic, it will wait the sub's state become AtLatestKnown and get installed csv as sub.installedCSV, and save csv into dr
+// if sub.ipApproval is not Automatic, it will just wait sub's state become UpgradePending
 func (sub *subscriptionDescription) create(oc *exutil.CLI, itName string, dr describerResrouce) {
 	// for most operator subscription failure, the reason is that there is a left cluster-scoped CSV.
 	// I'd like to print all CSV before create it.
@@ -184,7 +184,7 @@ type catalogSourceDescription struct {
 	imageTemplate string
 }
 
-//the method is to create catalogsource with template, and save it to dr.
+// the method is to create catalogsource with template, and save it to dr.
 func (catsrc *catalogSourceDescription) create(oc *exutil.CLI, itName string, dr describerResrouce) {
 	if strings.Compare(catsrc.interval, "") == 0 {
 		catsrc.interval = "10m0s"
@@ -227,8 +227,8 @@ type operatorGroupDescription struct {
 	upgradeStrategy    string
 }
 
-//the method is to check if og exist. if not existing, create it with template and save it to dr.
-//if existing, nothing happen.
+// the method is to check if og exist. if not existing, create it with template and save it to dr.
+// if existing, nothing happen.
 func (og *operatorGroupDescription) createwithCheck(oc *exutil.CLI, itName string, dr describerResrouce) {
 	output, err := doAction(oc, "get", asAdmin, false, "operatorgroup")
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -241,9 +241,9 @@ func (og *operatorGroupDescription) createwithCheck(oc *exutil.CLI, itName strin
 
 }
 
-//the method is to create og and save it to dr
-//if og.multinslabel is not set, it will create og with ownnamespace or allnamespace depending on template
-//if og.multinslabel is set, it will create og with multinamespace.
+// the method is to create og and save it to dr
+// if og.multinslabel is not set, it will create og with ownnamespace or allnamespace depending on template
+// if og.multinslabel is set, it will create og with multinamespace.
 func (og *operatorGroupDescription) create(oc *exutil.CLI, itName string, dr describerResrouce) {
 	var err error
 	if strings.Compare(og.multinslabel, "") != 0 && strings.Compare(og.serviceAccountName, "") != 0 {
@@ -272,15 +272,15 @@ type resourceDescription struct {
 	namespace        string
 }
 
-//the method is to construc one resource so that it can be deleted with itResource and describerResrouce
-//oc is the oc client
-//asAdmin means when deleting resource, we take admin role
-//withoutNamespace means when deleting resource, we take WithoutNamespace
-//kind is the kind of resource
-//name is the name of resource
-//namespace is the namesapce of resoruce. it is "" for cluster level resource
-//if requireNS is requireNS, need to add "-n" parameter. used for project level resource
-//if requireNS is notRequireNS, no need to add "-n". used for cluster level resource
+// the method is to construc one resource so that it can be deleted with itResource and describerResrouce
+// oc is the oc client
+// asAdmin means when deleting resource, we take admin role
+// withoutNamespace means when deleting resource, we take WithoutNamespace
+// kind is the kind of resource
+// name is the name of resource
+// namespace is the namesapce of resoruce. it is "" for cluster level resource
+// if requireNS is requireNS, need to add "-n" parameter. used for project level resource
+// if requireNS is notRequireNS, no need to add "-n". used for cluster level resource
 func newResource(oc *exutil.CLI, kind string, name string, nsflag bool, namespace string) resourceDescription {
 	return resourceDescription{
 		oc:               oc,
@@ -293,7 +293,7 @@ func newResource(oc *exutil.CLI, kind string, name string, nsflag bool, namespac
 	}
 }
 
-//the method is to delete resource.
+// the method is to delete resource.
 func (r resourceDescription) delete() {
 	if r.withoutNamespace && r.requireNS {
 		removeResource(r.oc, r.asAdmin, r.withoutNamespace, r.kind, r.name, "-n", r.namespace)
@@ -302,7 +302,7 @@ func (r resourceDescription) delete() {
 	}
 }
 
-//the struct to save the resource created in g.It, and it take name+kind+namespace as key to save resoruce of g.It.
+// the struct to save the resource created in g.It, and it take name+kind+namespace as key to save resoruce of g.It.
 type itResource map[string]resourceDescription
 
 func (ir itResource) add(r resourceDescription) {
@@ -323,7 +323,7 @@ func (ir itResource) cleanup() {
 	}
 }
 
-//the struct is to save g.It in g.Describe, and map the g.It name to itResource so that it can get all resource of g.Describe per g.It.
+// the struct is to save g.It in g.Describe, and map the g.It name to itResource so that it can get all resource of g.Describe per g.It.
 type describerResrouce map[string]itResource
 
 func (dr describerResrouce) addIr(itName string) {
@@ -341,9 +341,9 @@ func (dr describerResrouce) rmIr(itName string) {
 	delete(dr, itName)
 }
 
-//the method is to get something from resource. it is "oc get xxx" actaully
-//asAdmin means if taking admin to get it
-//withoutNamespace means if take WithoutNamespace() to get it.
+// the method is to get something from resource. it is "oc get xxx" actaully
+// asAdmin means if taking admin to get it
+// withoutNamespace means if take WithoutNamespace() to get it.
 func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) string {
 	var result string
 	var err error
@@ -360,9 +360,9 @@ func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters
 	return result
 }
 
-//the method is to remove resource
-//asAdmin means if taking admin to remove it
-//withoutNamespace means if take WithoutNamespace() to remove it.
+// the method is to remove resource
+// asAdmin means if taking admin to remove it
+// withoutNamespace means if take WithoutNamespace() to remove it.
 func removeResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) {
 	output, err := doAction(oc, "delete", asAdmin, withoutNamespace, parameters...)
 	if err != nil && (strings.Contains(output, "NotFound") || strings.Contains(output, "No resources found")) {
@@ -382,9 +382,9 @@ func removeResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, paramet
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("can not remove %v", parameters))
 }
 
-//the method is to do something with oc.
-//asAdmin means if taking admin to do it
-//withoutNamespace means if take WithoutNamespace() to do it.
+// the method is to do something with oc.
+// asAdmin means if taking admin to do it
+// withoutNamespace means if take WithoutNamespace() to do it.
 func doAction(oc *exutil.CLI, action string, asAdmin bool, withoutNamespace bool, parameters ...string) (string, error) {
 	if asAdmin && withoutNamespace {
 		return oc.AsAdmin().WithoutNamespace().Run(action).Args(parameters...).Output()
@@ -411,20 +411,22 @@ type checkDescription struct {
 	resource        []string
 }
 
-//the method is to make newCheck object.
-//the method parameter is expect, it will check something is expceted or not
-//the method parameter is present, it will check something exists or not
-//the executor is asAdmin, it will exectue oc with Admin
-//the executor is asUser, it will exectue oc with User
-//the inlineNamespace is withoutNamespace, it will execute oc with WithoutNamespace()
-//the inlineNamespace is withNamespace, it will execute oc with WithNamespace()
-//the expectAction take effective when method is expect, if it is contain, it will check if the strings contain substring with expectContent parameter
-//                                                       if it is compare, it will check the strings is samme with expectContent parameter
-//the expectContent is the content we expected
-//the expect is ok, contain or compare result is OK for method == expect, no error raise. if not OK, error raise
-//the expect is nok, contain or compare result is NOK for method == expect, no error raise. if OK, error raise
-//the expect is ok, resource existing is OK for method == present, no error raise. if resource not existing, error raise
-//the expect is nok, resource not existing is OK for method == present, no error raise. if resource existing, error raise
+// the method is to make newCheck object.
+// the method parameter is expect, it will check something is expceted or not
+// the method parameter is present, it will check something exists or not
+// the executor is asAdmin, it will exectue oc with Admin
+// the executor is asUser, it will exectue oc with User
+// the inlineNamespace is withoutNamespace, it will execute oc with WithoutNamespace()
+// the inlineNamespace is withNamespace, it will execute oc with WithNamespace()
+// the expectAction take effective when method is expect, if it is contain, it will check if the strings contain substring with expectContent parameter
+//
+//	if it is compare, it will check the strings is samme with expectContent parameter
+//
+// the expectContent is the content we expected
+// the expect is ok, contain or compare result is OK for method == expect, no error raise. if not OK, error raise
+// the expect is nok, contain or compare result is NOK for method == expect, no error raise. if OK, error raise
+// the expect is ok, resource existing is OK for method == present, no error raise. if resource not existing, error raise
+// the expect is nok, resource not existing is OK for method == present, no error raise. if resource existing, error raise
 func newCheck(method string, executor bool, inlineNamespace bool, expectAction bool,
 	expectContent string, expect bool, resource []string) checkDescription {
 	return checkDescription{
@@ -438,7 +440,7 @@ func newCheck(method string, executor bool, inlineNamespace bool, expectAction b
 	}
 }
 
-//the method is to check the resource per definition of the above described newCheck.
+// the method is to check the resource per definition of the above described newCheck.
 func (ck checkDescription) check(oc *exutil.CLI) {
 	switch ck.method {
 	case "present":
@@ -453,10 +455,10 @@ func (ck checkDescription) check(oc *exutil.CLI) {
 	}
 }
 
-//the method is to check the presence of the resource
-//asAdmin means if taking admin to check it
-//withoutNamespace means if take WithoutNamespace() to check it.
-//present means if you expect the resource presence or not. if it is ok, expect presence. if it is nok, expect not present.
+// the method is to check the presence of the resource
+// asAdmin means if taking admin to check it
+// withoutNamespace means if take WithoutNamespace() to check it.
+// present means if you expect the resource presence or not. if it is ok, expect presence. if it is nok, expect not present.
 func isPresentResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, present bool, parameters ...string) bool {
 	parameters = append(parameters, "--ignore-not-found")
 	err := wait.Poll(3*time.Second, 70*time.Second, func() (bool, error) {
@@ -479,13 +481,13 @@ func isPresentResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, pres
 	return true
 }
 
-//the method is to check one resource's attribution is expected or not.
-//asAdmin means if taking admin to check it
-//withoutNamespace means if take WithoutNamespace() to check it.
-//isCompare means if containing or exactly comparing. if it is contain, it check result contain content. if it is compare, it compare the result with content exactly.
-//content is the substing to be expected
-//the expect is ok, contain or compare result is OK for method == expect, no error raise. if not OK, error raise
-//the expect is nok, contain or compare result is NOK for method == expect, no error raise. if OK, error raise
+// the method is to check one resource's attribution is expected or not.
+// asAdmin means if taking admin to check it
+// withoutNamespace means if take WithoutNamespace() to check it.
+// isCompare means if containing or exactly comparing. if it is contain, it check result contain content. if it is compare, it compare the result with content exactly.
+// content is the substing to be expected
+// the expect is ok, contain or compare result is OK for method == expect, no error raise. if not OK, error raise
+// the expect is nok, contain or compare result is NOK for method == expect, no error raise. if OK, error raise
 func expectedResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, isCompare bool, content string, expect bool, parameters ...string) error {
 	expectMap := map[bool]string{
 		true:  "do",

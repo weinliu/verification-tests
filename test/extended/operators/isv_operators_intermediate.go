@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -142,7 +142,7 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 	// author: tbuskey@redhat.com OCPQE-2169-Intermediate
 	g.It("ConnectedOnly-Author:tbuskey-Medium-27313-[Intermediate] Operator radanalytics-spark should work properly", func() {
 		var (
-			itName                   = g.CurrentGinkgoTestDescription().TestText
+			itName                   = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir      = exutil.FixturePath("testdata", "olm")
 			ogTemplate               = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 			subFile                  = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -198,7 +198,7 @@ var _ = g.Describe("[sig-operators] ISV_Operators [Suite:openshift/isv]", func()
 		)
 
 		dr := make(describerResrouce)
-		itName = g.CurrentGinkgoTestDescription().TestText
+		itName = g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 
 		g.By("Check " + packageName + " availability")

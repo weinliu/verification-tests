@@ -1,6 +1,7 @@
 package imageregistry
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -11,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	container "github.com/openshift/openshift-tests-private/test/extended/util/container"
@@ -214,7 +215,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Confirm 3 pods scaled up")
 		err = wait.Poll(1*time.Minute, 2*time.Minute, func() (bool, error) {
-			podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(metav1.ListOptions{LabelSelector: "docker-registry=default"})
+			podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(context.Background(), metav1.ListOptions{LabelSelector: "docker-registry=default"})
 			if len(podList.Items) != 3 {
 				e2e.Logf("Continue to next round")
 				return false, nil
@@ -245,7 +246,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Confirm 4 pods scaled up")
 		err = wait.Poll(50*time.Second, 2*time.Minute, func() (bool, error) {
-			podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(metav1.ListOptions{LabelSelector: "docker-registry=default"})
+			podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-image-registry").List(context.Background(), metav1.ListOptions{LabelSelector: "docker-registry=default"})
 			if len(podList.Items) != 4 {
 				e2e.Logf("Continue to next round")
 				return false, nil
@@ -1180,7 +1181,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		updatePullSecret(oc, newAuthFile)
 		defer updatePullSecret(oc, originAuth)
 		err = wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
-			podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-apiserver").List(metav1.ListOptions{LabelSelector: "apiserver=true"})
+			podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-apiserver").List(context.Background(), metav1.ListOptions{LabelSelector: "apiserver=true"})
 			for _, pod := range podList.Items {
 				output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-apiserver", pod.Name, "--", "bash", "-c", "cat /var/lib/kubelet/config.json").Output()
 				o.Expect(err).NotTo(o.HaveOccurred())

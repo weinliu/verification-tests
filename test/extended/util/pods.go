@@ -1,6 +1,7 @@
 package util
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -19,7 +20,7 @@ import (
 // given namespace
 func WaitForNoPodsAvailable(oc *CLI) error {
 	return wait.Poll(200*time.Millisecond, 3*time.Minute, func() (bool, error) {
-		pods, err := oc.KubeClient().CoreV1().Pods(oc.Namespace()).List(metav1.ListOptions{})
+		pods, err := oc.KubeClient().CoreV1().Pods(oc.Namespace()).List(context.Background(), metav1.ListOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -32,7 +33,7 @@ func WaitForNoPodsAvailable(oc *CLI) error {
 // supplied prefixes
 func RemovePodsWithPrefixes(oc *CLI, prefixes ...string) error {
 	e2e.Logf("Removing pods from namespace %s with prefix(es): %v", oc.Namespace(), prefixes)
-	pods, err := oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).List(metav1.ListOptions{})
+	pods, err := oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
@@ -40,7 +41,7 @@ func RemovePodsWithPrefixes(oc *CLI, prefixes ...string) error {
 	for _, prefix := range prefixes {
 		for _, pod := range pods.Items {
 			if strings.HasPrefix(pod.Name, prefix) {
-				if err := oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).Delete(pod.Name, &metav1.DeleteOptions{}); err != nil {
+				if err := oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).Delete(context.Background(), pod.Name, metav1.DeleteOptions{}); err != nil {
 					e2e.Logf("unable to remove pod %s/%s", oc.Namespace(), pod.Name)
 					errs = append(errs, err)
 				}
@@ -259,7 +260,7 @@ func AssertAllPodsToBeReady(oc *CLI, namespace string) {
 	AssertAllPodsToBeReadyWithPollerParams(oc, namespace, 10*time.Second, 2*time.Minute)
 }
 
-//GetPodNameInHostedCluster returns the pod name in hosted cluster of hypershift
+// GetPodNameInHostedCluster returns the pod name in hosted cluster of hypershift
 func GetPodNameInHostedCluster(oc *CLI, namespace string, podLabel string, node string) (string, error) {
 	args := []string{"pods", "-n", namespace, "-l", podLabel,
 		"--field-selector", "spec.nodeName=" + node, "-o", "jsonpath='{..metadata.name}'"}

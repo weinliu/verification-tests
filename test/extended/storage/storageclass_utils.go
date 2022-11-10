@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/ghodss/yaml"
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/gjson"
@@ -72,7 +72,7 @@ func setStorageClassVolumeBindingMode(volumeBindingMode string) storageClassOpti
 	}
 }
 
-//  Create a new customized storageclass object
+// Create a new customized storageclass object
 func newStorageClass(opts ...storageClassOption) storageClass {
 	defaultStorageClass := storageClass{
 		name:              "mystorageclass-" + getRandomString(),
@@ -90,19 +90,19 @@ func newStorageClass(opts ...storageClassOption) storageClass {
 	return defaultStorageClass
 }
 
-//  Create a new customized storageclass
+// Create a new customized storageclass
 func (sc *storageClass) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplateAsAdmin(oc, "--ignore-unknown-parameters=true", "-f", sc.template, "-p", "SCNAME="+sc.name, "RECLAIMPOLICY="+sc.reclaimPolicy,
 		"PROVISIONER="+sc.provisioner, "VOLUMEBINDINGMODE="+sc.volumeBindingMode)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Delete Specified storageclass
+// Delete Specified storageclass
 func (sc *storageClass) deleteAsAdmin(oc *exutil.CLI) {
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("sc", sc.name, "--ignore-not-found").Execute()
 }
 
-//  Create a new customized storageclass with extra parameters
+// Create a new customized storageclass with extra parameters
 func (sc *storageClass) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) error {
 	sc.getParametersFromTemplate()
 	if _, ok := extraParameters["parameters"]; ok && len(sc.parameters) > 0 {
@@ -203,14 +203,14 @@ func checkDefaultStorageclass(oc *exutil.CLI, sc string) bool {
 	return strings.EqualFold(stat, "true")
 }
 
-//  Get reclaimPolicy by storageclass name
+// Get reclaimPolicy by storageclass name
 func getReclaimPolicyByStorageClassName(oc *exutil.CLI, storageClassName string) string {
 	reclaimPolicy, err := oc.WithoutNamespace().Run("get").Args("sc", storageClassName, "-o", "jsonpath={.reclaimPolicy}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strings.ToLower(reclaimPolicy)
 }
 
-//  Get volumeBindingMode by storageclass name
+// Get volumeBindingMode by storageclass name
 func getVolumeBindingModeByStorageClassName(oc *exutil.CLI, storageClassName string) string {
 	volumeBindingMode, err := oc.WithoutNamespace().Run("get").Args("sc", storageClassName, "-o", "jsonpath={.volumeBindingMode}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())

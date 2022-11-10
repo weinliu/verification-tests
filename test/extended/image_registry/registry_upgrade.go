@@ -1,10 +1,11 @@
 package imageregistry
 
 import (
+	"context"
 	"strings"
 	"time"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	corev1 "k8s.io/api/core/v1"
@@ -204,7 +205,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("run").Args("prepare-24345", "--image", imagename, `--overrides={"spec":{"securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}}}`, "-n", oc.Namespace(), "--command", "--", "/bin/sleep", "120").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		errWait := wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
-			podList, _ := oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).List(metav1.ListOptions{LabelSelector: "run=prepare-24345"})
+			podList, _ := oc.AdminKubeClient().CoreV1().Pods(oc.Namespace()).List(context.Background(), metav1.ListOptions{LabelSelector: "run=prepare-24345"})
 			for _, pod := range podList.Items {
 				if pod.Status.Phase != corev1.PodRunning {
 					e2e.Logf("Continue to next round")

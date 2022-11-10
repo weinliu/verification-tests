@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -101,7 +101,7 @@ const InstallPlanManualMode = "Manual"
 // 		g.It(fmt.Sprintf("ConnectedOnly-Author:bandrade-Medium-%s-[Basic] Operator %s should work properly", CaseIDISVOperators[operator], operator), func() {
 // 			g.By("1) Constructing the subscription")
 // 			dr := make(describerResrouce)
-// 			itName := g.CurrentGinkgoTestDescription().TestText
+// 			itName := g.CurrentSpecReport().FullText()
 // 			dr.addIr(itName)
 
 // 			subItems := constructSubscription(operator, oc, INSTALLPLAN_AUTOMATIC_MODE)

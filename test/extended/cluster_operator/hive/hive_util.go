@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -155,7 +155,7 @@ type objectTableRef struct {
 	name      string
 }
 
-//Azure
+// Azure
 type azureInstallConfig struct {
 	name1      string
 	namespace  string
@@ -205,7 +205,7 @@ type azureClusterPool struct {
 	template       string
 }
 
-//GCP
+// GCP
 type gcpInstallConfig struct {
 	name1      string
 	namespace  string
@@ -283,7 +283,7 @@ type prometheusQueryResult struct {
 	Status string `json:"status"`
 }
 
-//Hive Configurations
+// Hive Configurations
 const (
 	HiveNamespace           = "hive" //Hive Namespace
 	OCP49ReleaseImage       = "quay.io/openshift-release-dev/ocp-release:4.9.0-rc.6-x86_64"
@@ -300,7 +300,7 @@ const (
 	LogsLimitLen            = 1024
 )
 
-//AWS Configurations
+// AWS Configurations
 const (
 	AWSBaseDomain  = "qe.devcluster.openshift.com" //AWS BaseDomain
 	AWSRegion      = "us-east-2"
@@ -308,7 +308,7 @@ const (
 	HiveManagedDNS = "hivemanageddns" //for all manage DNS Domain
 )
 
-//Azure Configurations
+// Azure Configurations
 const (
 	AzureClusterInstallTimeout = 4500
 	AzureBaseDomain            = "qe.azure.devcluster.openshift.com" //Azure BaseDomain
@@ -318,7 +318,7 @@ const (
 	AzurePublic                = "AzurePublicCloud"
 )
 
-//GCP Configurations
+// GCP Configurations
 const (
 	GCPBaseDomain  = "qe.gcp.devcluster.openshift.com" //GCP BaseDomain
 	GCPBaseDomain2 = "qe1.gcp.devcluster.openshift.com"
@@ -354,13 +354,13 @@ func getRandomString() string {
 	return string(buffer)
 }
 
-//Create hive namespace if not exist
+// Create hive namespace if not exist
 func (ns *hiveNameSpace) createIfNotExist(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ns.template, "-p", "NAME="+ns.name)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//Create operatorGroup for Hive if not exist
+// Create operatorGroup for Hive if not exist
 func (og *operatorGroup) createIfNotExist(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", og.template, "-p", "NAME="+og.name, "NAMESPACE="+og.namespace)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -377,7 +377,7 @@ func (sub *subscription) create(oc *exutil.CLI) {
 	}
 }
 
-//Create subscription for Hive if not exist and wait for resource is ready
+// Create subscription for Hive if not exist and wait for resource is ready
 func (sub *subscription) createIfNotExist(oc *exutil.CLI) {
 
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", sub.namespace).Output()
@@ -415,7 +415,7 @@ func (hc *hiveconfig) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//Create hivconfig if not exist and wait for resource is ready
+// Create hivconfig if not exist and wait for resource is ready
 func (hc *hiveconfig) createIfNotExist(oc *exutil.CLI) {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HiveConfig", "hive").Output()
 	if strings.Contains(output, "have a resource type") || err != nil {
@@ -486,7 +486,7 @@ func (syncsecret *syncSetSecret) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//Azure
+// Azure
 func (config *azureInstallConfig) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", config.template, "-p", "NAME1="+config.name1, "NAMESPACE="+config.namespace, "BASEDOMAIN="+config.baseDomain, "NAME2="+config.name2, "RESGROUP="+config.resGroup, "AZURETYPE="+config.azureType, "REGION="+config.region)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -502,7 +502,7 @@ func (pool *azureClusterPool) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//GCP
+// GCP
 func (config *gcpInstallConfig) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", config.template, "-p", "NAME1="+config.name1, "NAMESPACE="+config.namespace, "BASEDOMAIN="+config.baseDomain, "NAME2="+config.name2, "REGION="+config.region, "PROJECTID="+config.projectid)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -550,16 +550,16 @@ func doAction(oc *exutil.CLI, action string, asAdmin bool, withoutNamespace bool
 	return "", nil
 }
 
-//Check the resource meets the expect
-//parameter method: expect or present
-//parameter action: get, patch, delete, ...
-//parameter executor: asAdmin or not
-//parameter inlineNamespace: withoutNamespace or not
-//parameter expectAction: Compare or not
-//parameter expectContent: expected string
-//parameter expect: ok, expected to have expectContent; nok, not expected to have expectContent
-//parameter timeout: use CLUSTER_INSTALL_TIMEOUT de default, and CLUSTER_INSTALL_TIMEOUT, CLUSTER_RESUME_TIMEOUT etc in different scenarios
-//parameter resource: resource
+// Check the resource meets the expect
+// parameter method: expect or present
+// parameter action: get, patch, delete, ...
+// parameter executor: asAdmin or not
+// parameter inlineNamespace: withoutNamespace or not
+// parameter expectAction: Compare or not
+// parameter expectContent: expected string
+// parameter expect: ok, expected to have expectContent; nok, not expected to have expectContent
+// parameter timeout: use CLUSTER_INSTALL_TIMEOUT de default, and CLUSTER_INSTALL_TIMEOUT, CLUSTER_RESUME_TIMEOUT etc in different scenarios
+// parameter resource: resource
 func newCheck(method string, action string, executor bool, inlineNamespace bool, expectAction bool,
 	expectContent string, expect bool, timeout int, resource []string) checkDescription {
 	return checkDescription{
@@ -678,7 +678,7 @@ func expectedResource(oc *exutil.CLI, action string, asAdmin bool, withoutNamesp
 	})
 }
 
-//clean up the object resource
+// clean up the object resource
 func cleanupObjects(oc *exutil.CLI, objs ...objectTableRef) {
 	for _, v := range objs {
 		e2e.Logf("Start to remove: %v", v)
@@ -720,7 +720,7 @@ func cleanupObjects(oc *exutil.CLI, objs ...objectTableRef) {
 	}
 }
 
-//print out the status conditions
+// print out the status conditions
 func printStatusConditions(oc *exutil.CLI, kind, namespace, name string) {
 	statusConditions, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(kind, "-n", namespace, name, "-o=jsonpath={.status.conditions}").Output()
 	if len(statusConditions) <= LogsLimitLen {
@@ -730,7 +730,7 @@ func printStatusConditions(oc *exutil.CLI, kind, namespace, name string) {
 	}
 }
 
-//print out provision pod logs
+// print out provision pod logs
 func printProvisionPodLogs(oc *exutil.CLI, provisionPodOutput, namespace string) {
 	provisionPodOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "hive.openshift.io/job-type=provision", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 	e2e.Logf("provisionPodOutput is %s", provisionPodOutput)
@@ -767,7 +767,7 @@ func (hc *hiveconfig) delete(oc *exutil.CLI) {
 	removeResource(oc, "hiveconfig", "hive")
 }
 
-//Create pull-secret in current project namespace
+// Create pull-secret in current project namespace
 func createPullSecret(oc *exutil.CLI, namespace string) {
 	dirname := "/tmp/" + oc.Namespace() + "-pull"
 	err := os.MkdirAll(dirname, 0777)
@@ -781,7 +781,7 @@ func createPullSecret(oc *exutil.CLI, namespace string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//Create AWS credentials in current project namespace
+// Create AWS credentials in current project namespace
 func createAWSCreds(oc *exutil.CLI, namespace string) {
 	dirname := "/tmp/" + oc.Namespace() + "-creds"
 	err := os.MkdirAll(dirname, 0777)
@@ -793,7 +793,7 @@ func createAWSCreds(oc *exutil.CLI, namespace string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//Create Route53 AWS credentials in hive namespace
+// Create Route53 AWS credentials in hive namespace
 func createRoute53AWSCreds(oc *exutil.CLI, namespace string) {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "route53-aws-creds", "-n", HiveNamespace).Output()
 	if strings.Contains(output, "NotFound") || err != nil {
@@ -811,7 +811,7 @@ func createRoute53AWSCreds(oc *exutil.CLI, namespace string) {
 	}
 }
 
-//Create Azure credentials in current project namespace
+// Create Azure credentials in current project namespace
 func createAzureCreds(oc *exutil.CLI, namespace string) {
 	dirname := "/tmp/" + oc.Namespace() + "-creds"
 	err := os.MkdirAll(dirname, 0777)
@@ -842,7 +842,7 @@ func createAzureCreds(oc *exutil.CLI, namespace string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//Create GCP credentials in current project namespace
+// Create GCP credentials in current project namespace
 func createGCPCreds(oc *exutil.CLI, namespace string) {
 	dirname := "/tmp/" + oc.Namespace() + "-creds"
 	err := os.MkdirAll(dirname, 0777)
@@ -856,7 +856,7 @@ func createGCPCreds(oc *exutil.CLI, namespace string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//Reutrn Rlease version from Image
+// Reutrn Rlease version from Image
 func extractRelfromImg(image string) string {
 	index := strings.Index(image, ":")
 	if index != -1 {
@@ -871,8 +871,8 @@ func extractRelfromImg(image string) string {
 	return ""
 }
 
-//Get CD list from Pool
-//Return string CD list such as "pool-44945-2bbln5m47s\n pool-44945-f8xlv6m6s"
+// Get CD list from Pool
+// Return string CD list such as "pool-44945-2bbln5m47s\n pool-44945-f8xlv6m6s"
 func getCDlistfromPool(oc *exutil.CLI, pool string) string {
 	fileName := "cd_output_" + getRandomString() + ".txt"
 	cdOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cd", "-A").OutputToFile(fileName)
@@ -884,7 +884,7 @@ func getCDlistfromPool(oc *exutil.CLI, pool string) string {
 	return string(poolCdList)
 }
 
-//Get cluster kubeconfig file
+// Get cluster kubeconfig file
 func getClusterKubeconfig(oc *exutil.CLI, clustername, namespace, dir string) {
 	kubeconfigsecretname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cd", clustername, "-n", namespace, "-o=jsonpath={.spec.clusterMetadata.adminKubeconfigSecretRef.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -893,7 +893,7 @@ func getClusterKubeconfig(oc *exutil.CLI, clustername, namespace, dir string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//Check resource number after filtering
+// Check resource number after filtering
 func checkResourceNumber(oc *exutil.CLI, filterName string, resource []string) int {
 	resourceOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource...).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -937,7 +937,7 @@ const (
 	disable = false
 )
 
-//If enable hive exportMetric
+// If enable hive exportMetric
 func exportMetric(oc *exutil.CLI, action bool) {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HiveConfig", "hive", "-o=jsonpath={.spec.exportMetrics}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -988,7 +988,7 @@ func doPrometheusQuery(oc *exutil.CLI, token string, url string, query string) p
 	return data
 }
 
-//parameter expect: ok, expected to have expectContent; nok, not expected to have expectContent
+// parameter expect: ok, expected to have expectContent; nok, not expected to have expectContent
 func checkMetricExist(oc *exutil.CLI, expect bool, token string, url string, query []string) {
 	for _, v := range query {
 		e2e.Logf("Check metric %s", v)
@@ -1162,7 +1162,7 @@ func cleanCD(oc *exutil.CLI, clusterImageSetName string, ns string, secretName s
 	defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", ns, cdName})
 }
 
-//Install Hive Operator if not
+// Install Hive Operator if not
 func installHiveOperator(oc *exutil.CLI, ns *hiveNameSpace, og *operatorGroup, sub *subscription, hc *hiveconfig, testDataDir string) {
 	nsTemp := filepath.Join(testDataDir, "namespace.yaml")
 	ogTemp := filepath.Join(testDataDir, "operatorgroup.yaml")
@@ -1206,7 +1206,7 @@ func installHiveOperator(oc *exutil.CLI, ns *hiveNameSpace, og *operatorGroup, s
 	hc.createIfNotExist(oc)
 }
 
-//Get OCP Image for Hive testing
+// Get OCP Image for Hive testing
 func getTestOCPImage() string {
 	//get the latest 4-stable image for Hive testing
 	testOCPImage, err := exutil.GetLatest4StableImage()

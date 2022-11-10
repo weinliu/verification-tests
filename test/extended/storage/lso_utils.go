@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/gjson"
@@ -63,7 +63,7 @@ func setLsoTemplate(deployTemplate string) lsoOption {
 	}
 }
 
-//  Create a new customized lso object
+// Create a new customized lso object
 func newLso(opts ...lsoOption) localStorageOperator {
 	defaultLso := localStorageOperator{
 		// namespace:      "local-storage-" + getRandomString(),
@@ -270,7 +270,7 @@ func setLvTemplate(template string) localVolumeOption {
 	}
 }
 
-//  Create a new customized localVolume object
+// Create a new customized localVolume object
 func newLocalVolume(opts ...localVolumeOption) localVolume {
 	defaultLocalVolume := localVolume{
 		name:       "lv-" + getRandomString(),
@@ -416,7 +416,7 @@ func setLvsTemplate(template string) localVolumeSetOption {
 	}
 }
 
-//  Create a new customized localVolumeSet object
+// Create a new customized localVolumeSet object
 func newLocalVolumeSet(opts ...localVolumeSetOption) localVolumeSet {
 	defaultLocalVolumeSet := localVolumeSet{
 		name:           "lvs-" + getRandomString(),
@@ -553,7 +553,7 @@ func setLvdTemplate(template string) localVolumeDiscoveryOption {
 	}
 }
 
-//  Create a new customized localVolumeDiscovery object
+// Create a new customized localVolumeDiscovery object
 func newlocalVolumeDiscovery(opts ...localVolumeDiscoveryOption) localVolumeDiscovery {
 	initDiscoverResults := make(map[string]string, 10)
 	defaultlocalVolumeDiscovery := localVolumeDiscovery{

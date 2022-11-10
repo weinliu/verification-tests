@@ -1,7 +1,9 @@
 package logging
 
 import (
-	g "github.com/onsi/ginkgo"
+	"context"
+
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -22,7 +24,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if platform != "aws" {
 				g.Skip("Skip for non-supported platform, the supported platform is AWS!!!")
 			}
-			_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get("aws-creds", metav1.GetOptions{})
+			_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get(context.Background(), "aws-creds", metav1.GetOptions{})
 			if apierrors.IsNotFound(err) {
 				g.Skip("Can not find secret/aws-creds. You could be running tests on an AWS STS cluster.")
 			}

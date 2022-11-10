@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	container "github.com/openshift/openshift-tests-private/test/extended/util/container"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"

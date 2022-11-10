@@ -1,7 +1,7 @@
 package securityandcompliance
 
 import (
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
 	"path/filepath"

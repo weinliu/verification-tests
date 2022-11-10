@@ -1,6 +1,8 @@
 package nfd
 
 import (
+	"context"
+
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,7 +20,7 @@ var (
 // isPodInstalled will return true if any pod is found in the given namespace, and false otherwise
 func isPodInstalled(oc *exutil.CLI, namespace string) bool {
 	e2e.Logf("Checking if pod is found in namespace %s...", namespace)
-	podList, err := oc.AdminKubeClient().CoreV1().Pods(namespace).List(metav1.ListOptions{})
+	podList, err := oc.AdminKubeClient().CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if len(podList.Items) == 0 {
 		e2e.Logf("No pod found in namespace %s :(", namespace)

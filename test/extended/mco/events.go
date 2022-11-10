@@ -7,7 +7,7 @@ import (
 
 	"github.com/onsi/gomega/types"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
@@ -130,7 +130,7 @@ func (matcher *haveEventsSequenceMatcher) Match(actual interface{}) (success boo
 	logger.Infof("Start verifying events sequence: %s", matcher.sequence)
 	events, ok := actual.([]Event)
 	if !ok {
-		return false, fmt.Errorf("HaveSequence matcher expects a slice of Events in test case %v", g.CurrentGinkgoTestDescription().TestText)
+		return false, fmt.Errorf("HaveSequence matcher expects a slice of Events in test case %v", g.CurrentSpecReport().FullText())
 	}
 
 	// To avoid too many "oc" executions we store the events information in a cached struct list with "creationTimestamp" and "reason" fields.

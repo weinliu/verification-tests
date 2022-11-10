@@ -11,13 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/onsi/ginkgo/types"
+	"github.com/onsi/ginkgo/v2/types"
 )
 
 type testCase struct {
-	name     string
-	spec     ginkgoSpec
-	location types.CodeLocation
+	name      string
+	spec      types.TestSpec
+	locations []types.CodeLocation
 
 	// identifies which tests can be run in parallel (ginkgo runs suites linearly)
 	testExclusion string
@@ -33,22 +33,28 @@ type testCase struct {
 	previous *testCase
 }
 
-func newTestCase(spec ginkgoSpec) *testCase {
-	name := spec.ConcatenatedString()
-	name = strings.TrimPrefix(name, "[Top Level] ")
-	summary := spec.Summary("")
-	return &testCase{
-		name:     name,
-		spec:     spec,
-		location: summary.ComponentCodeLocations[len(summary.ComponentCodeLocations)-1],
+func newTestCaseFromGinkgoSpec(spec types.TestSpec) (*testCase, error) {
+	name := spec.Text()
+	if strings.Contains(name, "[Exclusive]") {
+		name = strings.ReplaceAll(name, "[Exclusive]", "[Exclusive] [Serial]")
 	}
+	if strings.Contains(name, "[Disruptive]") {
+		name = strings.ReplaceAll(name, "[Disruptive]", "[Disruptive] [Serial]")
+	}
+	tc := &testCase{
+		name:      name,
+		locations: spec.CodeLocations(),
+		spec:      spec,
+	}
+
+	return tc, nil
 }
 
 func (t *testCase) Retry() *testCase {
 	copied := &testCase{
 		name:          t.name,
 		spec:          t.spec,
-		location:      t.location,
+		locations:     t.locations,
 		testExclusion: t.testExclusion,
 
 		previous: t,

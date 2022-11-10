@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -195,7 +196,7 @@ func (es externalES) deploy(oc *exutil.CLI) {
 	}
 	// set xpack.ml.enable to false when testing ES 6.8 on arm64 cluster
 	if es.version == "6.8" {
-		nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
+		nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if nodes.Items[0].Status.NodeInfo.Architecture == "arm64" {
 			cmPatch = append(cmPatch, "-p", "MACHINE_LEARNING=false")
@@ -228,7 +229,7 @@ func (es externalES) remove(oc *exutil.CLI) {
 }
 
 func (es externalES) getPodName(oc *exutil.CLI) string {
-	esPods, err := oc.AdminKubeClient().CoreV1().Pods(es.namespace).List(metav1.ListOptions{LabelSelector: "app=" + es.serverName})
+	esPods, err := oc.AdminKubeClient().CoreV1().Pods(es.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app=" + es.serverName})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	var names []string
 	for i := 0; i < len(esPods.Items); i++ {

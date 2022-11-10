@@ -182,7 +182,7 @@ func (so *SubscriptionObjects) setCatalogSourceObjects(oc *exutil.CLI) {
 // SubscribeOperator is used to subcribe the CLO and EO
 func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 	// check if the namespace exists, if it doesn't exist, create the namespace
-	_, err := oc.AdminKubeClient().CoreV1().Namespaces().Get(so.Namespace, metav1.GetOptions{})
+	_, err := oc.AdminKubeClient().CoreV1().Namespaces().Get(context.Background(), so.Namespace, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			e2e.Logf("The project %s is not found, create it now...", so.Namespace)
@@ -268,10 +268,10 @@ func (so *SubscriptionObjects) getInstalledCSV(oc *exutil.CLI) string {
 	return installedCSV
 }
 
-//WaitForDeploymentPodsToBeReady waits for the specific deployment to be ready
+// WaitForDeploymentPodsToBeReady waits for the specific deployment to be ready
 func WaitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name string) {
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
-		deployment, err := oc.AdminKubeClient().AppsV1().Deployments(namespace).Get(name, metav1.GetOptions{})
+		deployment, err := oc.AdminKubeClient().AppsV1().Deployments(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				e2e.Logf("Waiting for availability of deployment/%s\n", name)
@@ -291,7 +291,7 @@ func WaitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name strin
 
 func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
-		ss, err := oc.AdminKubeClient().AppsV1().StatefulSets(namespace).Get(name, metav1.GetOptions{})
+		ss, err := oc.AdminKubeClient().AppsV1().StatefulSets(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				e2e.Logf("Waiting for availability of %s statefulset\n", name)
@@ -309,10 +309,10 @@ func waitForStatefulsetReady(oc *exutil.CLI, namespace string, name string) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("statefulset %s is not availabile", name))
 }
 
-//WaitForDaemonsetPodsToBeReady waits for all the pods controlled by the ds to be ready
+// WaitForDaemonsetPodsToBeReady waits for all the pods controlled by the ds to be ready
 func WaitForDaemonsetPodsToBeReady(oc *exutil.CLI, ns string, name string) {
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
-		daemonset, err := oc.AdminKubeClient().AppsV1().DaemonSets(ns).Get(name, metav1.GetOptions{})
+		daemonset, err := oc.AdminKubeClient().AppsV1().DaemonSets(ns).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				e2e.Logf("Waiting for availability of daemonset/%s\n", name)
@@ -332,7 +332,7 @@ func WaitForDaemonsetPodsToBeReady(oc *exutil.CLI, ns string, name string) {
 
 func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
-		pods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(metav1.ListOptions{LabelSelector: label})
+		pods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		if err != nil {
 			return false, err
 		}
@@ -357,10 +357,10 @@ func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The pod with label %s is not availabile", label))
 }
 
-//GetDeploymentsNameByLabel retruns a list of deployment name which have specific labels
+// GetDeploymentsNameByLabel retruns a list of deployment name which have specific labels
 func GetDeploymentsNameByLabel(oc *exutil.CLI, ns string, label string) []string {
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
-		deployList, err := oc.AdminKubeClient().AppsV1().Deployments(ns).List(metav1.ListOptions{LabelSelector: label})
+		deployList, err := oc.AdminKubeClient().AppsV1().Deployments(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				e2e.Logf("Waiting for availability of deployment\n")
@@ -375,7 +375,7 @@ func GetDeploymentsNameByLabel(oc *exutil.CLI, ns string, label string) []string
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment with label %s is not availabile", label))
 	if err == nil {
-		deployList, err := oc.AdminKubeClient().AppsV1().Deployments(ns).List(metav1.ListOptions{LabelSelector: label})
+		deployList, err := oc.AdminKubeClient().AppsV1().Deployments(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		expectedDeployments := make([]string, 0, len(deployList.Items))
 		for _, deploy := range deployList.Items {
@@ -386,7 +386,7 @@ func GetDeploymentsNameByLabel(oc *exutil.CLI, ns string, label string) []string
 	return nil
 }
 
-//WaitForECKPodsToBeReady checks if the EFK pods could become ready or not
+// WaitForECKPodsToBeReady checks if the EFK pods could become ready or not
 func WaitForECKPodsToBeReady(oc *exutil.CLI, ns string) {
 	//wait for ES
 	esDeployNames := GetDeploymentsNameByLabel(oc, ns, "cluster-name=elasticsearch")
@@ -405,7 +405,7 @@ type resource struct {
 	namespace string
 }
 
-//WaitUntilResourceIsGone waits for the resource to be removed cluster
+// WaitUntilResourceIsGone waits for the resource to be removed cluster
 func (r resource) WaitUntilResourceIsGone(oc *exutil.CLI) error {
 	return wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", r.namespace, r.kind, r.name).Output()
@@ -420,7 +420,7 @@ func (r resource) WaitUntilResourceIsGone(oc *exutil.CLI) error {
 	})
 }
 
-//delete the objects in the cluster
+// delete the objects in the cluster
 func (r resource) clear(oc *exutil.CLI) error {
 	msg, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", r.namespace, r.kind, r.name).Output()
 	if err != nil {
@@ -459,7 +459,7 @@ func (r resource) applyFromTemplate(oc *exutil.CLI, parameters ...string) error 
 	return err
 }
 
-//DeleteClusterLogging deletes the clusterlogging instance and ensures the related resources are removed
+// DeleteClusterLogging deletes the clusterlogging instance and ensures the related resources are removed
 func (r resource) deleteClusterLogging(oc *exutil.CLI) {
 	err := r.clear(oc)
 	if err != nil {
@@ -487,7 +487,7 @@ func (r resource) createClusterLogging(oc *exutil.CLI, parameters ...string) {
 }
 
 func deleteNamespace(oc *exutil.CLI, ns string) {
-	err := oc.AdminKubeClient().CoreV1().Namespaces().Delete(ns, &metav1.DeleteOptions{})
+	err := oc.AdminKubeClient().CoreV1().Namespaces().Delete(context.Background(), ns, metav1.DeleteOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			err = nil
@@ -495,7 +495,7 @@ func deleteNamespace(oc *exutil.CLI, ns string) {
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-		_, err := oc.AdminKubeClient().CoreV1().Namespaces().Get(ns, metav1.GetOptions{})
+		_, err := oc.AdminKubeClient().CoreV1().Namespaces().Get(context.Background(), ns, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				return true, nil
@@ -510,7 +510,7 @@ func deleteNamespace(oc *exutil.CLI, ns string) {
 // WaitForIMCronJobToAppear checks if the cronjob exists or not
 func WaitForIMCronJobToAppear(oc *exutil.CLI, ns string, name string) {
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
-		_, err = oc.AdminKubeClient().BatchV1beta1().CronJobs(ns).Get(name, metav1.GetOptions{})
+		_, err = oc.AdminKubeClient().BatchV1beta1().CronJobs(ns).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				e2e.Logf("Waiting for availability of cronjob\n")
@@ -526,7 +526,7 @@ func WaitForIMCronJobToAppear(oc *exutil.CLI, ns string, name string) {
 func waitForIMJobsToComplete(oc *exutil.CLI, ns string, timeout time.Duration) {
 	// wait for jobs to appear
 	err := wait.Poll(5*time.Second, timeout, func() (done bool, err error) {
-		jobList, err := oc.AdminKubeClient().BatchV1().Jobs(ns).List(metav1.ListOptions{LabelSelector: "component=indexManagement"})
+		jobList, err := oc.AdminKubeClient().BatchV1().Jobs(ns).List(context.Background(), metav1.ListOptions{LabelSelector: "component=indexManagement"})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				e2e.Logf("Waiting for availability of jobs\n")
@@ -541,11 +541,11 @@ func waitForIMJobsToComplete(oc *exutil.CLI, ns string, timeout time.Duration) {
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("jobs with label %s are not exist", "component=indexManagement"))
 	// wait for jobs to complete
-	jobList, err := oc.AdminKubeClient().BatchV1().Jobs(ns).List(metav1.ListOptions{LabelSelector: "component=indexManagement"})
+	jobList, err := oc.AdminKubeClient().BatchV1().Jobs(ns).List(context.Background(), metav1.ListOptions{LabelSelector: "component=indexManagement"})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	for _, job := range jobList.Items {
 		err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-			job, err := oc.AdminKubeClient().BatchV1().Jobs(ns).Get(job.Name, metav1.GetOptions{})
+			job, err := oc.AdminKubeClient().BatchV1().Jobs(ns).Get(context.Background(), job.Name, metav1.GetOptions{})
 			//succeeded, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "job", job.Name, "-o=jsonpath={.status.succeeded}").Output()
 			if err != nil {
 				return false, err
@@ -564,7 +564,7 @@ func waitForIMJobsToComplete(oc *exutil.CLI, ns string, timeout time.Duration) {
 func getStorageClassName(oc *exutil.CLI) (string, error) {
 	var scName string
 	defaultSC := ""
-	SCs, err := oc.AdminKubeClient().StorageV1().StorageClasses().List(metav1.ListOptions{})
+	SCs, err := oc.AdminKubeClient().StorageV1().StorageClasses().List(context.Background(), metav1.ListOptions{})
 	for _, sc := range SCs.Items {
 		if sc.ObjectMeta.Annotations["storageclass.kubernetes.io/is-default-class"] == "true" {
 			defaultSC = sc.Name
@@ -579,7 +579,7 @@ func getStorageClassName(oc *exutil.CLI) (string, error) {
 	return scName, err
 }
 
-//Assert the status of a resource
+// Assert the status of a resource
 func (r resource) assertResourceStatus(oc *exutil.CLI, content string, exptdStatus string) {
 	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
 		clStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(r.kind, r.name, "-n", r.namespace, "-o", content).Output()
@@ -595,13 +595,13 @@ func (r resource) assertResourceStatus(oc *exutil.CLI, content string, exptdStat
 }
 
 func getRouteAddress(oc *exutil.CLI, ns, routeName string) string {
-	route, err := oc.AdminRouteClient().RouteV1().Routes(ns).Get(routeName, metav1.GetOptions{})
+	route, err := oc.AdminRouteClient().RouteV1().Routes(ns).Get(context.Background(), routeName, metav1.GetOptions{})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return route.Spec.Host
 }
 
 func getSAToken(oc *exutil.CLI, name, ns string) string {
-	secrets, err := oc.AdminKubeClient().CoreV1().Secrets(ns).List(metav1.ListOptions{})
+	secrets, err := oc.AdminKubeClient().CoreV1().Secrets(ns).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return ""
 	}
@@ -705,7 +705,7 @@ func queryPrometheus(oc *exutil.CLI, token string, path string, query string, ac
 	return res, err
 }
 
-//WaitUntilPodsAreGone waits for pods selected with labelselector to be removed
+// WaitUntilPodsAreGone waits for pods selected with labelselector to be removed
 func WaitUntilPodsAreGone(oc *exutil.CLI, namespace string, labelSelector string) {
 	err := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "--selector="+labelSelector, "-n", namespace).Output()
@@ -721,7 +721,7 @@ func WaitUntilPodsAreGone(oc *exutil.CLI, namespace string, labelSelector string
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Error waiting for pods to be removed using label selector %s", labelSelector))
 }
 
-//Check logs from resource
+// Check logs from resource
 func (r resource) checkLogsFromRs(oc *exutil.CLI, expected string, containerName string) {
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(r.kind+`/`+r.name, "-n", r.namespace, "-c", containerName).Output()
@@ -759,7 +759,7 @@ func chkMustGather(oc *exutil.CLI, ns string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The cloImg is: " + cloImg)
 
-	cloPodList, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(metav1.ListOptions{LabelSelector: "name=cluster-logging-operator"})
+	cloPodList, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: "name=cluster-logging-operator"})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	cloImgID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "pods", cloPodList.Items[0].Name, "-o", "jsonpath={.status.containerStatuses[0].imageID}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -818,9 +818,9 @@ func (certs certsConf) generateCerts(keysPath string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//expect: true means we want the resource contain/compare with the expectedContent, false means the resource is expected not to compare with/contain the expectedContent;
-//compare: true means compare the expectedContent with the resource content, false means check if the resource contains the expectedContent;
-//args are the arguments used to execute command `oc.AsAdmin.WithoutNamespace().Run("get").Args(args...).Output()`;
+// expect: true means we want the resource contain/compare with the expectedContent, false means the resource is expected not to compare with/contain the expectedContent;
+// compare: true means compare the expectedContent with the resource content, false means check if the resource contains the expectedContent;
+// args are the arguments used to execute command `oc.AsAdmin.WithoutNamespace().Run("get").Args(args...).Output()`;
 func checkResource(oc *exutil.CLI, expect bool, compare bool, expectedContent string, args []string) {
 	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(args...).Output()
@@ -935,7 +935,7 @@ func (r rsyslog) remove(oc *exutil.CLI) {
 }
 
 func (r rsyslog) getPodName(oc *exutil.CLI) string {
-	pods, err := oc.AdminKubeClient().CoreV1().Pods(r.namespace).List(metav1.ListOptions{LabelSelector: "component=" + r.serverName})
+	pods, err := oc.AdminKubeClient().CoreV1().Pods(r.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "component=" + r.serverName})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	var names []string
 	for i := 0; i < len(pods.Items); i++ {
@@ -1076,7 +1076,7 @@ func (f fluentdServer) remove(oc *exutil.CLI) {
 }
 
 func (f fluentdServer) getPodName(oc *exutil.CLI) string {
-	pods, err := oc.AdminKubeClient().CoreV1().Pods(f.namespace).List(metav1.ListOptions{LabelSelector: "component=" + f.serverName})
+	pods, err := oc.AdminKubeClient().CoreV1().Pods(f.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "component=" + f.serverName})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	var names []string
 	for i := 0; i < len(pods.Items); i++ {
@@ -1433,10 +1433,11 @@ func (cw cloudwatchSpec) infrastructureLogsFound(client *cloudwatchlogs.Client, 
 // In this function, verify all type of audit logs can be found.
 // Note: ovc-audit logs only be present when OVN are enabled
 // LogStream Example:
-//    anli48022-gwbb4-master-2.k8s-audit.log
-//    anli48022-gwbb4-master-2.openshift-audit.log
-//    anli48022-gwbb4-master-1.k8s-audit.log
-//    ip-10-0-136-31.us-east-2.compute.internal.linux-audit.log
+//
+//	anli48022-gwbb4-master-2.k8s-audit.log
+//	anli48022-gwbb4-master-2.openshift-audit.log
+//	anli48022-gwbb4-master-1.k8s-audit.log
+//	ip-10-0-136-31.us-east-2.compute.internal.linux-audit.log
 func (cw cloudwatchSpec) auditLogsFound(client *cloudwatchlogs.Client, strict bool) bool {
 	var logFoundAll bool = true
 	var logFoundOne bool = false
@@ -1517,7 +1518,8 @@ func (cw cloudwatchSpec) auditLogsFound(client *cloudwatchlogs.Client, strict bo
 
 // In this function, verify the pod's groupNames can be found in cloudwatch
 // GroupName example:
-//   uuid-.0471c739-e38c-4590-8a96-fdd5298d47ae,uuid-.audit,uuid-.infrastructure
+//
+//	uuid-.0471c739-e38c-4590-8a96-fdd5298d47ae,uuid-.audit,uuid-.infrastructure
 func (cw cloudwatchSpec) applicationLogsFoundUUID(client *cloudwatchlogs.Client) bool {
 	var appLogGroupNames []string
 	var logFound bool = true
@@ -1553,7 +1555,8 @@ func (cw cloudwatchSpec) applicationLogsFoundUUID(client *cloudwatchlogs.Client)
 
 // In this function, we verify the pod's groupNames can be found in cloudwatch
 // GroupName:
-//   prefix.aosqe-log-json-1638788875,prefix.audit,prefix.infrastructure
+//
+//	prefix.aosqe-log-json-1638788875,prefix.audit,prefix.infrastructure
 func (cw cloudwatchSpec) applicationLogsFoundNamespaceName(client *cloudwatchlogs.Client) bool {
 	var appLogGroupNames []string
 	var logFoundAll bool = true
@@ -1589,13 +1592,16 @@ func (cw cloudwatchSpec) applicationLogsFoundNamespaceName(client *cloudwatchlog
 
 // In this function, verify the logStream can be found under application groupName
 // GroupName Example:
-//    anli48022-gwbb4.application
+//
+//	anli48022-gwbb4.application
+//
 // logStream Example:
-//    kubernetes.var.log.containers.centos-logtest-tvffh_aosqe-log-json-1638427743_centos-logtest-56a00a8f6a2e43281bce6d44d33e93b600352f2234610a093c4d254a49d9bf4e.log
-//    kubernetes.var.log.containers.loki-server-6f8485b8ff-b4p8w_loki-aosqe_loki-c7a4e4fa4370062e53803ac5acecc57f6217eb2bb603143ac013755819ed5fdb.log
-//    The stream name changed from containers to pods
-//    kubernetes.var.log.pods.openshift-image-registry_image-registry-7f5dbdbc69-vwddg_425a4fbc-6a20-4919-8cd2-8bebd5d9b5cd.registry.0.log
-//    pods.
+//
+//	kubernetes.var.log.containers.centos-logtest-tvffh_aosqe-log-json-1638427743_centos-logtest-56a00a8f6a2e43281bce6d44d33e93b600352f2234610a093c4d254a49d9bf4e.log
+//	kubernetes.var.log.containers.loki-server-6f8485b8ff-b4p8w_loki-aosqe_loki-c7a4e4fa4370062e53803ac5acecc57f6217eb2bb603143ac013755819ed5fdb.log
+//	The stream name changed from containers to pods
+//	kubernetes.var.log.pods.openshift-image-registry_image-registry-7f5dbdbc69-vwddg_425a4fbc-6a20-4919-8cd2-8bebd5d9b5cd.registry.0.log
+//	pods.
 func (cw cloudwatchSpec) applicationLogsFoundLogType(client *cloudwatchlogs.Client) bool {
 	var logFoundAll bool = true
 	var appLogGroupNames []string
@@ -1649,9 +1655,10 @@ func (cw cloudwatchSpec) applicationLogsFoundLogType(client *cloudwatchlogs.Clie
 
 // The index to find application logs
 // GroupType
-//   logType: anli48022-gwbb4.application
-//   namespaceName:  anli48022-gwbb4.aosqe-log-json-1638788875
-//   namespaceUUID:   anli48022-gwbb4.0471c739-e38c-4590-8a96-fdd5298d47ae,uuid.audit,uuid.infrastructure
+//
+//	logType: anli48022-gwbb4.application
+//	namespaceName:  anli48022-gwbb4.aosqe-log-json-1638788875
+//	namespaceUUID:   anli48022-gwbb4.0471c739-e38c-4590-8a96-fdd5298d47ae,uuid.audit,uuid.infrastructure
 func (cw cloudwatchSpec) applicationLogsFound(client *cloudwatchlogs.Client) bool {
 	var logFound bool = true
 	switch cw.groupType {
@@ -1736,7 +1743,7 @@ func (cw cloudwatchSpec) logsFound() bool {
 }
 
 func getDataFromKafkaConsumerPod(oc *exutil.CLI, ns string, consumerName string) (string, error) {
-	consumerPods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(metav1.ListOptions{LabelSelector: "job-name=" + consumerName})
+	consumerPods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: "job-name=" + consumerName})
 	if err != nil {
 		return "", err
 	}
@@ -1924,7 +1931,7 @@ func (r resource) createEventRouter(oc *exutil.CLI, parameters ...string) {
 // createSecretForGCL creates a secret for collector pods to forward logs to Google Cloud Logging
 func createSecretForGCL(oc *exutil.CLI, name, namespace string) error {
 	// for GCP STS clusters, get gcp-credentials from env var GOOGLE_APPLICATION_CREDENTIALS
-	_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get("gcp-credentials", metav1.GetOptions{})
+	_, err := oc.AdminKubeClient().CoreV1().Secrets("kube-system").Get(context.Background(), "gcp-credentials", metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		gcsCred := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 		return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", name, "-n", namespace, "--from-file=google-application-credentials.json="+gcsCred).Execute()

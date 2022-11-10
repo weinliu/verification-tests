@@ -3,6 +3,7 @@ package url
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,7 +16,7 @@ import (
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -35,7 +36,7 @@ func NewTester(client kclientset.Interface, ns string) *Tester {
 }
 
 func (ut *Tester) Close() {
-	if err := ut.client.CoreV1().Pods(ut.namespace).Delete(ut.podName, metav1.NewDeleteOptions(1)); err != nil {
+	if err := ut.client.CoreV1().Pods(ut.namespace).Delete(context.Background(), ut.podName, *metav1.NewDeleteOptions(1)); err != nil {
 		e2e.Logf("Failed to delete exec pod %s: %v", ut.podName, err)
 	}
 	ut.podName = ""
@@ -159,12 +160,12 @@ func createExecPod(clientset kclientset.Interface, ns, name string) (string, err
 		},
 	}
 	client := clientset.CoreV1()
-	created, err := client.Pods(ns).Create(execPod)
+	created, err := client.Pods(ns).Create(context.Background(), execPod, metav1.CreateOptions{})
 	if err != nil {
 		return "", err
 	}
 	err = wait.PollImmediate(e2e.Poll, 5*time.Minute, func() (bool, error) {
-		retrievedPod, err := client.Pods(execPod.Namespace).Get(created.Name, metav1.GetOptions{})
+		retrievedPod, err := client.Pods(execPod.Namespace).Get(context.Background(), created.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, nil
 		}
@@ -294,6 +295,7 @@ func (ut *Test) HasStatusCode(codes ...int) *Test {
 	return ut
 }
 
+// RedirectsTo func
 func (ut *Test) RedirectsTo(url string, codes ...int) *Test {
 	if len(codes) == 0 {
 		codes = []int{http.StatusFound, http.StatusPermanentRedirect, http.StatusTemporaryRedirect}
@@ -309,11 +311,13 @@ func (ut *Test) RedirectsTo(url string, codes ...int) *Test {
 	return ut
 }
 
+// SkipTLSVerification func
 func (ut *Test) SkipTLSVerification() *Test {
 	ut.SkipVerify = true
 	return ut
 }
 
+// Test func
 func (ut *Test) Test(i int, res *Response) error {
 	if len(res.Error) > 0 || res.ReturnCode != 0 {
 		return fmt.Errorf("test %d was not successful: %d %s", i, res.ReturnCode, res.Error)
@@ -331,6 +335,7 @@ func (ut *Test) Test(i int, res *Response) error {
 	return nil
 }
 
+// ToShell func
 func (ut *Test) ToShell(i int) string {
 	var lines []string
 	if len(ut.Name) > 0 {

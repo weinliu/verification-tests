@@ -1,6 +1,7 @@
 package nto
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -17,7 +18,7 @@ import (
 // isPodInstalled will return true if any pod is found in the given namespace, and false otherwise
 func isNTOPodInstalled(oc *exutil.CLI, namespace string) bool {
 	e2e.Logf("Checking if pod is found in namespace %s...", namespace)
-	podList, err := oc.AdminKubeClient().CoreV1().Pods(namespace).List(metav1.ListOptions{})
+	podList, err := oc.AdminKubeClient().CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if len(podList.Items) == 0 {
 		e2e.Logf("No pod found in namespace %s :(", namespace)
@@ -178,7 +179,7 @@ func getKernelPidMaxValue(kernel string) string {
 	return pidMaxValue
 }
 
-//Compare if the sysctl parameter is equal to specified value on all the node
+// Compare if the sysctl parameter is equal to specified value on all the node
 func compareSpecifiedValueByNameOnLabelNode(oc *exutil.CLI, labelNodeName, sysctlparm, specifiedvalue string) {
 
 	regexpstr, _ := regexp.Compile(sysctlparm + ".*")
@@ -191,7 +192,7 @@ func compareSpecifiedValueByNameOnLabelNode(oc *exutil.CLI, labelNodeName, sysct
 
 }
 
-//Compare if the sysctl parameter is not equal to specified value on all the node
+// Compare if the sysctl parameter is not equal to specified value on all the node
 func compareSysctlDifferentFromSpecifiedValueByName(oc *exutil.CLI, sysctlparm, specifiedvalue string) {
 	nodeList, err := exutil.GetAllNodesbyOSType(oc, "linux")
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -209,7 +210,7 @@ func compareSysctlDifferentFromSpecifiedValueByName(oc *exutil.CLI, sysctlparm, 
 
 }
 
-//Compare the sysctl parameter's value on specified node, it should different than other node
+// Compare the sysctl parameter's value on specified node, it should different than other node
 func compareSysctlValueOnSepcifiedNodeByName(oc *exutil.CLI, tunedNodeName, sysctlparm, defaultvalue, specifiedvalue string) {
 	nodeList, err := exutil.GetAllNodesbyOSType(oc, "linux")
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -398,7 +399,7 @@ func getDefaultSMPAffinityBitMaskbyCPUCores(oc *exutil.CLI, workerNodeName strin
 	return smpMaskStr
 }
 
-//Convert hex into int string
+// Convert hex into int string
 func hexToInt(x string) string {
 	base, err := strconv.ParseInt(x, 16, 64)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -437,7 +438,7 @@ func assertDefaultIRQSMPAffinityAffectedBitMask(defaultSMPBitMask string, isolat
 	return isMatch
 }
 
-//AssertTunedAppliedMC Check if customed tuned applied via MCP
+// AssertTunedAppliedMC Check if customed tuned applied via MCP
 func AssertTunedAppliedMC(oc *exutil.CLI, mcpName string, filter string) {
 	mcNameList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mc", "--no-headers", "-oname").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -456,7 +457,7 @@ func AssertTunedAppliedMC(oc *exutil.CLI, mcpName string, filter string) {
 	o.Expect(mcOutput).To(o.ContainSubstring(filter))
 }
 
-//AssertTunedAppliedToNode Check if customed tuned applied to a certain node
+// AssertTunedAppliedToNode Check if customed tuned applied to a certain node
 func AssertTunedAppliedToNode(oc *exutil.CLI, tunedNodeName string, filter string) bool {
 	//cmdLineOutput, err := exutil.DebugNode(oc, tunedNodeName, "cat", "/proc/cmdline")
 	cmdLineOutput, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "cat", "/proc/cmdline")
@@ -505,7 +506,7 @@ func getServiceENDPoint(oc *exutil.CLI, namespace string) string {
 	return endPointIP
 }
 
-//AssertNTOCertificateRotate used for check if NTO certificate rotate
+// AssertNTOCertificateRotate used for check if NTO certificate rotate
 func AssertNTOCertificateRotate(oc *exutil.CLI, ntoNamespace string, tunedNodeName string, encodeBase64OpenSSLOutputBefore string, encodeBase64OpenSSLExpireDateBefore string) {
 
 	metricEndpoint := getServiceENDPoint(oc, ntoNamespace)

@@ -37,12 +37,12 @@ ModifyYamlFileContent(file, []YamlReplace {
 func ModifyYamlFileContent(file string, replacements []YamlReplace) {
 	input, err := ioutil.ReadFile(file)
 	if err != nil {
-		e2e.FailfWithOffset(1, "read file %s failed: %v", file, err)
+		e2e.Failf("read file %s failed: %v", file, err)
 	}
 
 	var doc yaml.Node
 	if err = yaml.Unmarshal(input, &doc); err != nil {
-		e2e.FailfWithOffset(1, "unmarshal yaml for file %s failed: %v", file, err)
+		e2e.Failf("unmarshal yaml for file %s failed: %v", file, err)
 
 	}
 
@@ -57,11 +57,11 @@ func ModifyYamlFileContent(file string, replacements []YamlReplace) {
 
 	output, err := yaml.Marshal(doc.Content[0])
 	if err != nil {
-		e2e.FailfWithOffset(1, "marshal yaml for file %s failed: %v", file, err)
+		e2e.Failf("marshal yaml for file %s failed: %v", file, err)
 	}
 
 	if err = ioutil.WriteFile(file, output, 0o755); err != nil {
-		e2e.FailfWithOffset(1, "write file %s failed: %v", file, err)
+		e2e.Failf("write file %s failed: %v", file, err)
 	}
 }
 
@@ -100,7 +100,7 @@ func setYamlValue(root *yaml.Node, path []string, value yaml.Node) {
 	case yaml.SequenceNode:
 		index, err := strconv.Atoi(key)
 		if err != nil {
-			e2e.FailfWithOffset(1, "string to int failed: %v", err)
+			e2e.Failf("string to int failed: %v", err)
 		}
 		if index < len(root.Content) {
 			setYamlValue(root.Content[index], rest, value)

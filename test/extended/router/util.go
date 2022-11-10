@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	g "github.com/onsi/ginkgo"
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -290,7 +290,7 @@ func describePodResource(oc *exutil.CLI, podName, namespace string) string {
 }
 
 // for collecting a single pod name for general use.
-//usage example: podname := getRouterPod(oc, "default/labelname")
+// usage example: podname := getRouterPod(oc, "default/labelname")
 func getRouterPod(oc *exutil.CLI, icname string) string {
 	podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+icname, "-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-ingress").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -339,7 +339,7 @@ func readHaproxyConfig(oc *exutil.CLI, routerPodName, searchString1, grepOption,
 	return output
 }
 
-//this function is used to get haproxy's version
+// this function is used to get haproxy's version
 func getHAProxyVersion(oc *exutil.CLI) string {
 	var proxyVersion = "notFound"
 	routerpod := getRouterPod(oc, "default")
@@ -458,7 +458,7 @@ func getPodv4Address(oc *exutil.CLI, podName, namespace string) string {
 	return podIPv4
 }
 
-//this function will describe the given pod details
+// this function will describe the given pod details
 func describePod(oc *exutil.CLI, podName, namespace string) string {
 	podDescribe, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", "-n", podName, namespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -576,7 +576,7 @@ func restoreDNSOperatorDefault(oc *exutil.CLI) {
 	ensureClusterOperatorNormal(oc, "dns")
 }
 
-//this function is to get all dns pods' names, the return is the string slice of all dns pods' names, together with an error
+// this function is to get all dns pods' names, the return is the string slice of all dns pods' names, together with an error
 func getAllDNSPodsNames(oc *exutil.CLI) []string {
 	podList := []string{}
 	outputPods, err := oc.AsAdmin().Run("get").Args("pods", "-n", "openshift-dns").Output()
@@ -593,14 +593,14 @@ func getAllDNSPodsNames(oc *exutil.CLI) []string {
 	return podList
 }
 
-//this function is to select a dns pod randomly
+// this function is to select a dns pod randomly
 func getRandomDNSPodName(podList []string) string {
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
 	index := seed.Intn(len(podList))
 	return podList[index]
 }
 
-//this function is to delete all dns pods
+// this function is to delete all dns pods
 func delAllDNSPods(oc *exutil.CLI) {
 	podList := getAllDNSPodsNames(oc)
 	o.Expect(podList).NotTo(o.BeEmpty())
@@ -608,12 +608,12 @@ func delAllDNSPods(oc *exutil.CLI) {
 	waitForRangeOfResourceToDisappear(oc, "openshift-dns", podList)
 }
 
-//this function is to delete all dns pods without wait
+// this function is to delete all dns pods without wait
 func delAllDNSPodsNoWait(oc *exutil.CLI) {
 	oc.AsAdmin().Run("delete").Args("pods", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-n", "openshift-dns", "--wait=false").Execute()
 }
 
-//this function is to check whether the given resource pod's are deleted or not
+// this function is to check whether the given resource pod's are deleted or not
 func waitForRangeOfResourceToDisappear(oc *exutil.CLI, resource string, podList []string) {
 	for _, podName := range podList {
 		err := waitForResourceToDisappear(oc, resource, "pod/"+podName)
@@ -621,7 +621,7 @@ func waitForRangeOfResourceToDisappear(oc *exutil.CLI, resource string, podList 
 	}
 }
 
-//this function is to wait for the expStr appearing in the corefile of the coredns under all dns pods
+// this function is to wait for the expStr appearing in the corefile of the coredns under all dns pods
 func keepSearchInAllDNSPods(oc *exutil.CLI, podList []string, expStr string) {
 	cmd := fmt.Sprintf("grep \"%s\" /etc/coredns/Corefile", expStr)
 	o.Expect(podList).NotTo(o.BeEmpty())
@@ -646,7 +646,7 @@ func keepSearchInAllDNSPods(oc *exutil.CLI, podList []string, expStr string) {
 	}
 }
 
-//this function is to get desired logs from all dns pods
+// this function is to get desired logs from all dns pods
 func searchLogFromDNSPods(oc *exutil.CLI, podList []string, searchStr string) string {
 	o.Expect(podList).NotTo(o.BeEmpty())
 	for _, podName := range podList {
@@ -661,7 +661,7 @@ func searchLogFromDNSPods(oc *exutil.CLI, podList []string, searchStr string) st
 	return "none"
 }
 
-//this function is to wait the dns logs appearing by using searchLogFromDNSPods function repeatly
+// this function is to wait the dns logs appearing by using searchLogFromDNSPods function repeatly
 func waitDNSLogsAppear(oc *exutil.CLI, podList []string, searchStr string) string {
 	result := "none"
 	err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
@@ -676,7 +676,7 @@ func waitDNSLogsAppear(oc *exutil.CLI, podList []string, searchStr string) strin
 	return result
 }
 
-//this function to get one dns pod's Corefile info related to the modified time, it looks like {{"dns-default-0001", "2021-12-30 18.011111 Modified"}}
+// this function to get one dns pod's Corefile info related to the modified time, it looks like {{"dns-default-0001", "2021-12-30 18.011111 Modified"}}
 func getOneCorefileStat(oc *exutil.CLI, dnspodname string) [][]string {
 	attrList := [][]string{}
 	cmd := "stat /etc/coredns/..data/Corefile | grep Modify"
@@ -685,8 +685,8 @@ func getOneCorefileStat(oc *exutil.CLI, dnspodname string) [][]string {
 	return append(attrList, []string{dnspodname, output})
 }
 
-//this function is to make sure all Corefiles(or one Corefile) of the dns pods are updated
-//the value of parameter attrList should be from the getOneCorefileStat or getAllCorefilesStat function, it is related to the time before patching something to the dns operator
+// this function is to make sure all Corefiles(or one Corefile) of the dns pods are updated
+// the value of parameter attrList should be from the getOneCorefileStat or getAllCorefilesStat function, it is related to the time before patching something to the dns operator
 func waitAllCorefilesUpdated(oc *exutil.CLI, attrList [][]string) [][]string {
 	cmd := "stat /etc/coredns/..data/Corefile | grep Modify"
 	updatedAttrList := [][]string{}
@@ -718,7 +718,7 @@ func waitAllCorefilesUpdated(oc *exutil.CLI, attrList [][]string) [][]string {
 	return updatedAttrList
 }
 
-//this function is to wait for Corefile(s) is updated
+// this function is to wait for Corefile(s) is updated
 func waitCorefileUpdated(oc *exutil.CLI, attrList [][]string) [][]string {
 	updatedAttrList := waitAllCorefilesUpdated(oc, attrList)
 	return updatedAttrList
@@ -759,7 +759,7 @@ func slicingElement(element string, podList []string) []string {
 	return newPodList
 }
 
-//this function checks whether given pod becomes primary
+// this function checks whether given pod becomes primary
 func waitForPreemptPod(oc *exutil.CLI, ns string, pod string, vip string) {
 	cmd := fmt.Sprintf("ip address |grep %s", vip)
 	waitErr := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
@@ -776,7 +776,7 @@ func waitForPreemptPod(oc *exutil.CLI, ns string, pod string, vip string) {
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached, pod failed to become Primary"))
 }
 
-//this function will search the specific data from the given pod
+// this function will search the specific data from the given pod
 func readPodData(oc *exutil.CLI, podname string, ns string, executeCmd string, searchString string) string {
 	cmd := fmt.Sprintf("%s | grep \"%s\"", executeCmd, searchString)
 	output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, podname, "--", "bash", "-c", cmd).Output()
@@ -803,7 +803,7 @@ func pollReadPodData(oc *exutil.CLI, ns, routername, executeCmd, searchString st
 	return output
 }
 
-//this function create external dns operator
+// this function create external dns operator
 func createExternalDNSOperator(oc *exutil.CLI) {
 	buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 	extraRoles := filepath.Join(buildPruningBaseDir, "extra-roles.yaml")
@@ -853,7 +853,7 @@ func createExternalDNSOperator(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status", csvName))
 }
 
-//this function create aws-load-balancer-operator
+// this function create aws-load-balancer-operator
 func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 	buildPruningBaseDir := exutil.FixturePath("testdata", "router", "awslb")
 	credentials := filepath.Join(buildPruningBaseDir, "credentialsrequest.yaml")
@@ -903,7 +903,7 @@ func createAWSLoadBalancerOperator(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status", csvName))
 }
 
-//this function check if the load balancer provisioned
+// this function check if the load balancer provisioned
 func waitForLoadBalancerProvision(oc *exutil.CLI, ns string, ingressName string) {
 	waitErr := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "ingress", ingressName, "-o=jsonpath={.status.loadBalancer.ingress}").Output()
@@ -992,7 +992,7 @@ func getResourceName(oc *exutil.CLI, namespace, resourceName string) []string {
 	return resourceList
 }
 
-//  this function is used to check whether proxy is configured or not
+// this function is used to check whether proxy is configured or not
 func checkProxy(oc *exutil.CLI) bool {
 	httpProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -1099,7 +1099,7 @@ func checkGivenStringPresentOrNot(shouldContain bool, iterateObject []string, se
 	}
 }
 
-//this function check output of fetch command is polled
+// this function check output of fetch command is polled
 func waitForOutput(oc *exutil.CLI, ns, resourceName, searchString, value string) {
 	waitErr := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		sourceRange := fetchJSONPathValue(oc, ns, resourceName, searchString)
