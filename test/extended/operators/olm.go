@@ -4614,7 +4614,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 	})
 
 	// It will cover test case: OCP-22259, author: kuiwang@redhat.com
-	g.It("Author:kuiwang-Medium-22259-marketplace operator CR status on a running cluster [Exclusive]", func() {
+	g.It("NonHyperShiftHOST-Author:kuiwang-Medium-22259-marketplace operator CR status on a running cluster [Exclusive]", func() {
 
 		g.By("check marketplace status")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "TrueFalseFalse", ok, []string{"clusteroperator", "marketplace",
@@ -4637,7 +4637,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 	})
 
 	// It will cover test case: OCP-24076, author: kuiwang@redhat.com
-	g.It("ProdrunBoth-StagerunBoth-Author:kuiwang-Medium-24076-check the version of olm operator is appropriate in ClusterOperator", func() {
+	g.It("NonHyperShiftHOST-ProdrunBoth-StagerunBoth-Author:kuiwang-Medium-24076-check the version of olm operator is appropriate in ClusterOperator", func() {
 		var (
 			olmClusterOperatorName = "operator-lifecycle-manager"
 		)
@@ -4723,7 +4723,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 	})
 
 	// It will cover test case: OCP-21825, author: kuiwang@redhat.com
-	g.It("ConnectedOnly-Author:kuiwang-Medium-21825-Certs for packageserver can be rotated successfully", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-Medium-21825-Certs for packageserver can be rotated successfully", func() {
 		var (
 			packageserverName = "packageserver"
 		)
@@ -5162,7 +5162,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-24438, author: kuiwang@redhat.com
-	g.It("ConnectedOnly-Author:kuiwang-Medium-24438-check subscription CatalogSource Status", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-Medium-24438-check subscription CatalogSource Status", func() {
 		exutil.SkipARM64(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
@@ -9564,7 +9564,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 	})
 
 	// It will cover part of test case: OCP-29275, author: kuiwang@redhat.com
-	g.It("ConnectedOnly-Author:kuiwang-Medium-29275-label to target namespace of operator group with multi namespace", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-Medium-29275-label to target namespace of operator group with multi namespace", func() {
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
