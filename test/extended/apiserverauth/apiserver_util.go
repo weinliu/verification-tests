@@ -422,13 +422,13 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	workerMEMtopall := []int{}
 	var workerMEMtopstr string
 	var workerMEMtopint int
-	preserveCPUP := 25
+	preserveCPUP := 30
 	cpuMetric := 800
 	memMetric := 700
-	preserveMemP := 30
+	preserveMemP := 40
 	n := 0
 	m := 0
-	dn := 0
+	dn := 1
 	r := 0
 	c := 0
 	s := 0
@@ -527,6 +527,10 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	memMax := workerMEMtopall[0]
 	availableMem := int(float64(totalMem) * (100 - float64(preserveMemP) - float64(memMax)) / 100)
 	m = int(availableMem / int(memMetric))
+	// Avoid the case that the calculated value of zero availableMem above will result in a zero divisor at below code.
+	if m == 0 {
+		m = 1
+	}
 	if workerNodeCount == 1 {
 		dn = 6
 		c = 7
@@ -541,6 +545,9 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	e2e.Logf("%v", memloadCmd)
 	_, err = exec.Command("bash", "-c", memloadCmd).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// Wait for 5 mins(this time is based on many tests), when the load starts, it will reach a peak within a few minutes, then falls back.
+	time.Sleep(300 * time.Second)
 
 	keywords := "body: net/http: request canceled (Client.Timeout|panic"
 	bustercmd := fmt.Sprintf(`cat %v | grep -iE '%s' || true`, dirname+"clusterbuster*", keywords)
