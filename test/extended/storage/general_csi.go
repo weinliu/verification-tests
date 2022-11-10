@@ -2694,6 +2694,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
 	})
+
 	//author: chaoyang@redhat.com
 	//OCP-27733 - [CSI Driver] [Snapshot] [Retain deletionPolicy] [Pre-provison] could re-used snapshotcontent after the snapshot/snapshotcontent deletion
 	g.It("HyperShiftGUEST-ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-27733-[CSI Driver] [Snapshot] [Retain deletionPolicy] [Pre-provison] could re-used snapshotcontent after the snapshot/snapshotcontent deletion", func() {
@@ -2808,6 +2809,150 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).To(o.ContainSubstring("storage test"))
 			podRestore.checkMountedVolumeCouldRW(oc)
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
+	// author: ropatil@redhat.com
+	// https://bugzilla.redhat.com/show_bug.cgi?id=1842747
+	// OCP-33607 - [CSI Driver] [Snapshot] Not READYTOUSE volumesnapshot should be able to delete successfully
+	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-Medium-33607-[CSI Driver] [Snapshot] Not READYTOUSE volumesnapshot should be able to delete successfully", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
+			mo := newMonitor(oc.AsAdmin())
+			vcenterVersion, err := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			// Snapshot feature on vSphere needs both vCenter version and Esxi version at least 7.0.3
+			if !versionIsAbove(vcenterVersion, "7.0.2") {
+				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
+			}
+		}
+
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			volumesnapshotTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
+		)
+
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			// Set the resource definition
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("WaitForFirstConsumer"))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+			storageClass.create(oc)
+			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not
+
+			g.By("Create a pvc with the csi storageclass and wait for the pvc remain in Pending status")
+			pvc.scname = storageClass.name
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+			o.Consistently(func() string {
+				pvcState, _ := pvc.getStatus(oc)
+				return pvcState
+			}, 30*time.Second, 5*time.Second).Should(o.Equal("Pending"))
+
+			g.By("Create volumesnapshot with pre-defined volumesnapshotclass")
+			presetVscName := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
+			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvc.name), setVolumeSnapshotVscname(presetVscName))
+			volumesnapshot.create(oc)
+			defer volumesnapshot.delete(oc)
+
+			g.By("Check volumesnapshot status, Delete volumesnapshot and check it gets deleted successfully")
+			vsStatus, err := oc.WithoutNamespace().Run("get").Args("volumesnapshot", "-n", volumesnapshot.namespace, volumesnapshot.name, "-o=jsonpath={.status.readyToUse}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(vsStatus).To(o.ContainSubstring("false"))
+			e2e.Logf("The volumesnapshot %s ready_to_use status in namespace %s is in expected status %s", volumesnapshot.name, volumesnapshot.namespace, vsStatus)
+			deleteSpecifiedResource(oc, "volumesnapshot", volumesnapshot.name, volumesnapshot.namespace)
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
+	// author: ropatil@redhat.com
+	// https://bugzilla.redhat.com/show_bug.cgi?id=1842964
+	// OCP-33606 - [CSI Driver] [Snapshot] volumesnapshot instance could be deleted even if the volumesnapshotcontent instance's deletionpolicy changed from Delete to Retain
+	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-Medium-33606-[CSI Driver] [Snapshot] volumesnapshot instance could be deleted even if the volumesnapshotcontent instance's deletionpolicy changed from Delete to Retain", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+		if strSliceContains(cloudProviderSupportProvisioners, "csi.vsphere.vmware.com") {
+			mo := newMonitor(oc.AsAdmin())
+			vcenterVersion, err := mo.getSpecifiedMetricValue("vsphere_vcenter_info", `data.result.0.metric.version`)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			// Snapshot feature on vSphere needs both vCenter version and Esxi version at least 7.0.3
+			if !versionIsAbove(vcenterVersion, "7.0.2") {
+				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
+			}
+		}
+
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			volumesnapshotTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
+		)
+
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			// Set the resource definition
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+			storageClass.create(oc)
+			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+			g.By("Create a pvc with the csi storageclass")
+			pvc.scname = storageClass.name
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+			pvc.waitStatusAsExpected(oc, "Bound")
+
+			g.By("Create volumesnapshot with pre-defined volumesnapshotclass and wait for ready_to_use status")
+			presetVscName := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
+			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvc.name), setVolumeSnapshotVscname(presetVscName))
+			volumesnapshot.create(oc)
+			defer volumesnapshot.delete(oc)
+			volumesnapshot.waitReadyToUse(oc)
+
+			g.By("Change deletion policy of volumesnapshot content to Retain from Delete")
+			vsContentName := getVSContentByVSname(oc, volumesnapshot.namespace, volumesnapshot.name)
+			patchResourceAsAdmin(oc, volumesnapshot.namespace, "volumesnapshotcontent/"+vsContentName, `{"spec":{"deletionPolicy": "Retain"}}`, "merge")
+			deletionPolicy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("volumesnapshotcontent", vsContentName, "-o=jsonpath={.spec.deletionPolicy}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(deletionPolicy).To(o.ContainSubstring("Retain"))
+			e2e.Logf("The volumesnapshot content %s deletion policy changed successfully to Retain from Delete", vsContentName)
+
+			g.By("Delete volumesnapshot and check volumesnapshot content remains")
+			deleteSpecifiedResource(oc, "volumesnapshot", volumesnapshot.name, volumesnapshot.namespace)
+			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("volumesnapshotcontent", vsContentName).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Change deletion policy of volumesnapshot content to Delete from Retain")
+			patchResourceAsAdmin(oc, volumesnapshot.namespace, "volumesnapshotcontent/"+vsContentName, `{"spec":{"deletionPolicy": "Delete"}}`, "merge")
+			deletionPolicy, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("volumesnapshotcontent", vsContentName, "-o=jsonpath={.spec.deletionPolicy}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(deletionPolicy).To(o.ContainSubstring("Delete"))
+			e2e.Logf("The volumesnapshot content %s deletion policy changed successfully to Delete from Retain", vsContentName)
+
+			g.By("Delete volumesnapshotcontent and check volumesnapshot content doesn't remain")
+			deleteSpecifiedResource(oc.AsAdmin(), "volumesnapshotcontent", vsContentName, "")
+
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
 	})
