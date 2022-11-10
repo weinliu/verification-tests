@@ -4,10 +4,12 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -25,12 +27,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("Author:zhsun-Medium-53320-Owner reference could be added/removed to control plan machines [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
-		g.By("Check if controlplanemachineset exists")
-		controlplanemachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(controlplanemachineset) == 0 {
-			g.Skip("Skip for controlplanemachineset doesn't exist!")
-		}
+		skipForCPMSNotExist(oc)
 
 		g.By("Check ownerReferences is added to master machines")
 		masterMachineList := exutil.ListMasterMachineNames(oc)
@@ -41,31 +38,32 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 
 		g.By("Delete controlplanemachineset")
-		controlplanemachinesetJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace, "-o=json").OutputToFile("controlplanemachineset.json")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Execute()
-		defer oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", controlplanemachinesetJSON, "-n", machineAPINamespace).Execute()
+		defer printNodeInfo(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"state":"Active"}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check ownerReferences is removed from master machines")
-		for _, masterMachineName := range masterMachineList {
-			ownerReferences, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, masterMachineName, "-o=jsonpath={.metadata.ownerReferences}", "-n", machineAPINamespace).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(ownerReferences).Should(o.BeEmpty())
-		}
+
+		err = wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
+			cpmsState, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace, "-o=jsonpath={.spec.state}").Output()
+			if cpmsState == "Inactive" {
+				for _, masterMachineName := range masterMachineList {
+					ownerReferences, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, masterMachineName, "-o=jsonpath={.metadata.ownerReferences}", "-n", machineAPINamespace).Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					o.Expect(ownerReferences).Should(o.BeEmpty())
+				}
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "controlplanemachineset is not re-created")
 	})
 
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-Medium-53081-Finalizer should be added to control plan machineset [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "vsphere")
-
-		g.By("Check if controlplanemachineset exists")
-		controlplanemachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(controlplanemachineset) == 0 {
-			g.Skip("Skip for controlplanemachineset doesn't exist!")
-		}
+		skipForCPMSNotExist(oc)
 
 		g.By("Check finalizer is added to controlplanemachineset")
 		finalizers, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.metadata.finalizers[0]}", "-n", machineAPINamespace).Output()
@@ -401,6 +399,39 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newAvailabilityZones := getCPMSAvailabilityZones(oc)
 		o.Expect(strings.Join(newAvailabilityZones, "")).To(o.ContainSubstring(availabilityZones[1] + availabilityZones[0] + strings.Join(availabilityZones[2:], "")))
+		o.Expect(checkIfCPMSIsStable(oc)).To(o.BeTrue())
+	})
+
+	// author: zhsun@redhat.com
+	g.It("Author:zhsun-Medium-54895-[CPMS] CPMS generator controller will create a new CPMS if a CPMS is removed from cluster [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
+		skipForCPMSNotExist(oc)
+		skipForCPMSNotStable(oc)
+
+		g.By("Delete controlplanemachineset")
+		defer printNodeInfo(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"state":"Active"}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check a new controlplanemachineset will be created and state is Inactive ")
+		err = wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
+			cpmsState, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace, "-o=jsonpath={.spec.state}").Output()
+			if cpmsState != "Inactive" {
+				e2e.Logf("controlplanemachineset is not in Inactive state and waiting up to 2 seconds ...")
+				return false, nil
+			}
+			e2e.Logf("controlplanemachineset is in Inactive state")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "controlplanemachineset is not in Inactive state")
+
+		g.By("Check controlplanemachineset do not reconcile master machines if state is Inactive")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"instanceType":"invalid"}}}}}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"state":"Active"}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(checkIfCPMSIsStable(oc)).To(o.BeTrue())
 	})
 })
