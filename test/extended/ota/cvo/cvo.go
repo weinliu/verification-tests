@@ -950,11 +950,16 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(runLevel).To(o.Equal(""))
 
 		g.By("Check scc of cvo pod.")
-		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").
-			Args("pod", "-n", "openshift-cluster-version", "-oname").Output()
+		runningPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").
+			Args("pod", "-n", "openshift-cluster-version", "-o=jsonpath='{.items[?(@.status.phase == \"Running\")].metadata.name}'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(runningPodName).NotTo(o.Equal("''"))
+		runningPodList := strings.Fields(runningPodName)
+		if len(runningPodList) != 1 {
+			g.Fail("Unexpected running cvo pods detected:" + runningPodName)
+		}
 		scc, err := oc.AsAdmin().WithoutNamespace().Run("get").
-			Args("-n", "openshift-cluster-version", podName,
+			Args("pod", "-n", "openshift-cluster-version", strings.Trim(runningPodList[0], "'"),
 				"-o=jsonpath={.metadata.annotations.openshift\\.io/scc}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(scc).To(o.Equal("hostaccess"))
