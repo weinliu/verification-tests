@@ -1206,4 +1206,45 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	})
 
+	// author: shudili@redhat.com
+	g.It("Author:shudili-High-43454-The logEmptyRequests option only gets applied when the access logging is configured for the ingresscontroller", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			ingctrl             = ingressControllerDescription{
+				name:      "43454",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+			ingctrlResource = "ingresscontrollers/" + ingctrl.name
+		)
+
+		g.By("create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("check the default .spec.logging")
+		jpath := ".spec.logging"
+		logging := fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jpath)
+		o.Expect(logging).To(o.ContainSubstring(""))
+
+		g.By("patch the custom ingresscontroller with .spec.logging.access.destination.container")
+		routerpod := getRouterPod(oc, ingctrl.name)
+		patchPath := "{\"spec\":{\"logging\":{\"access\":{\"destination\":{\"type\":\"Container\"}}}}}"
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchPath)
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
+
+		g.By("check the .spec.logging")
+		logging = fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jpath)
+		expLogStr := "\"logEmptyRequests\":\"Log\""
+		o.Expect(logging).To(o.ContainSubstring(expLogStr))
+
+	})
+
 })
