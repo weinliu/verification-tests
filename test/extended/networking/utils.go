@@ -1077,8 +1077,9 @@ func checkIPsec(oc *exutil.CLI) string {
 }
 
 func getAssignedEIPInEIPObject(oc *exutil.CLI, egressIPObject string) []map[string]string {
+	timeout := estimateTimeoutForEgressIP(oc)
 	var egressIPs string
-	egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+	egressipErr := wait.Poll(10*time.Second, timeout, func() (bool, error) {
 		egressIPStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressip", egressIPObject, "-ojsonpath={.status.items}").Output()
 		if err != nil {
 			e2e.Logf("Wait to get EgressIP object applied,try next round. %v", err)
@@ -1132,20 +1133,21 @@ func checkNodeStatus(oc *exutil.CLI, nodeName string, expectedStatus string) {
 
 func updateEgressIPObject(oc *exutil.CLI, egressIPObjectName string, egressIP string) {
 	patchResourceAsAdmin(oc, "egressip/"+egressIPObjectName, "{\"spec\":{\"egressIPs\":[\""+egressIP+"\"]}}")
-	egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+	egressipErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("egressip", egressIPObjectName, "-o=jsonpath={.status.items[*]}").Output()
 		if err != nil {
 			e2e.Logf("Wait to get EgressIP object applied,try next round. %v", err)
 			return false, nil
 		}
 		if !strings.Contains(output, egressIP) {
-			e2e.Logf("Wait for new IP applied,try next round.")
+			e2e.Logf("Wait for new IP %s applied,try next round.", egressIP)
 			e2e.Logf(output)
 			return false, nil
 		}
+		e2e.Logf(output)
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to apply new egressIPs:%s", egressipErr))
+	exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to apply new egressIP %s:%v", egressIP, egressipErr))
 }
 
 func getTwoNodesSameSubnet(oc *exutil.CLI, nodeList *v1.NodeList) (bool, []string) {

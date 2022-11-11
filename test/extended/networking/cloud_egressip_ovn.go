@@ -23,17 +23,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		a               *exutil.AwsClient
 		egressNodeLabel = "k8s.ovn.org/egress-assignable"
 		flag            string
-
-		oc = exutil.NewCLI("networking-"+getRandomString(), exutil.KubeConfigPath())
+		oc              = exutil.NewCLI("networking-"+getRandomString(), exutil.KubeConfigPath())
 	)
 
 	g.BeforeEach(func() {
 		platform := exutil.CheckPlatform(oc)
 		networkType := checkNetworkType(oc)
 		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal")
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "azure")
 		if !acceptedPlatform || !strings.Contains(networkType, "ovn") {
-			g.Skip("Test cases should be run on AWS/GCP/Openstack/Vsphere/BareMetal cluster with ovn network plugin, skip for other platforms or other network plugin!!")
+			g.Skip("Test cases should be run on AWS/GCP/Azure/Openstack/Vsphere/BareMetal cluster with ovn network plugin, skip for other platforms or other network plugin!!")
 		}
 		if checkProxy(oc) {
 			g.Skip("This is proxy cluster, skip the test.")
@@ -79,6 +78,44 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 					} else {
 						e2e.Logf("No ip-echo service installed on the bastion host, %v, change to use tcpdump to verify", err)
 						flag = "tcpdump"
+					}
+				}
+			}
+		case "azure":
+			e2e.Logf("\n Azure is detected, running the case on Azure\n")
+			if ipEchoURL == "" {
+				// If an int-svc instance with external IP found, IpEcho service will be installed on the int-svc instance
+				// otherwise, use tcpdump to verify egressIP
+				creErr := getAzureCredentialFromCluster(oc)
+				if creErr != nil {
+					e2e.Logf("Cannot get azure credential, will use tcpdump tool to verify egressIP,%v", creErr)
+					flag = "tcpdump"
+				} else {
+					rg, azGroupErr := getAzureResourceGroup(oc)
+					if azGroupErr != nil {
+						e2e.Logf("Cannot get azure resource group, will use tcpdump tool to verify egressIP,%v", azGroupErr)
+						flag = "tcpdump"
+					} else {
+						az, err := exutil.NewAzureSessionFromEnv()
+						if err != nil {
+							e2e.Logf("Cannot get new azure session, will use tcpdump tool to verify egressIP,%v", err)
+							flag = "tcpdump"
+						} else {
+							_, intSvcErr := getAzureIntSvcVMPublicIP(oc, az, rg)
+							if intSvcErr != nil {
+								e2e.Logf("There is no int svc instance in this cluster, %v. Will use tcpdump tool to verify egressIP", intSvcErr)
+								flag = "tcpdump"
+							} else {
+								ipEchoURL, intSvcErr = installIPEchoServiceOnAzure(oc, az, rg)
+								if intSvcErr != nil && ipEchoURL != "" {
+									e2e.Logf("No ip-echo service installed on the bastion host, %v. Will use tcpdump tool to verify egressIP", intSvcErr)
+									flag = "tcpdump"
+								} else {
+									e2e.Logf("bastion host and ip-echo service instaled successfully, use ip-echo service to verify")
+									flag = "ipecho"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -204,14 +241,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		case "ipecho":
 			g.By(" Use IP-echo service to verify egressIP.")
 			e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
-			sourceIP, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(sourceIP).Should(o.Equal(freeIPs[0]))
+			verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, true, freeIPs[0])
 
 			g.By("5.2 Check source IP in second namespace using second egressip object")
-			sourceIP, err = e2e.RunHostCmd(pod2.namespace, pod2.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(sourceIP).Should(o.Equal(freeIPs[1]))
+			verifyEgressIPWithIPEcho(oc, pod2.namespace, pod2.name, ipEchoURL, true, freeIPs[1])
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
@@ -302,18 +335,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		case "ipecho":
 			g.By(" Use IP-echo service to verify egressIP.")
 			e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
-			sourceIP, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(sourceIP).Should(o.Equal(freeIPs[1]))
+			verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, true, freeIPs[1])
 
 			g.By("6. Remove labels from test pod.")
 			err = exutil.LabelPod(oc, ns1, pod1.name, "color-")
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("7. Check source IP is not EgressIP")
-			sourceIP, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(sourceIP).ShouldNot(o.Equal(freeIPs[1]))
+			verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, false, freeIPs[1])
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
@@ -452,9 +481,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		case "ipecho":
 			g.By(" Use IP-echo service to verify egressIP.")
 			e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
-			sourceIP, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(sourceIP).Should(o.Equal(egressIPMaps[0]["egressIP"]))
+			verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, true, egressIPMaps[0]["egressIP"])
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump")
@@ -536,14 +563,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
 
 		g.By("7. Check EgressIP assigned in the object.\n")
-		egressipObjErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
-			egressIPMaps2 := getAssignedEIPInEIPObject(oc, egressip1.name)
-			if len(egressIPMaps2) == 1 {
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(egressipObjErr, fmt.Sprintf("Failed to apply egressIPs:%s", egressipObjErr))
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
 
 		g.By("8. Check source IP is egressIP \n")
 		var dstHost, primaryInf string
@@ -553,9 +573,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		case "ipecho":
 			g.By(" Use IP-echo service to verify egressIP.")
 			e2e.Logf(" ipEchoURL is %v", ipEchoURL)
-			sourceIP, err := e2e.RunHostCmd(ns1, testPodName[0], "curl -s "+ipEchoURL+" --connect-timeout 5")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(sourceIP).Should(o.Equal(freeIPs[0]))
+			verifyEgressIPWithIPEcho(oc, ns1, testPodName[0], ipEchoURL, true, freeIPs[0])
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
@@ -904,30 +922,18 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		switch flag {
 		case "ipecho":
 			g.By("10. Check source IP from both namespace, should be egressip.  \n")
-			sourceIP, err := e2e.RunHostCmd(ns1, testPodNs1Name[0], "curl -s "+ipEchoURL+" --connect-timeout 5")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(sourceIP).Should(o.BeElementOf(freeIPs))
-			sourceIP, err = e2e.RunHostCmd(ns1, testPodNs1Name[1], "curl -s "+ipEchoURL+" --connect-timeout 5")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(sourceIP).Should(o.BeElementOf(freeIPs))
-			sourceIP, err = e2e.RunHostCmd(ns2, testPodNs2Name[0], "curl -s "+ipEchoURL+" --connect-timeout 5")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(sourceIP).Should(o.BeElementOf(freeIPs))
-			sourceIP, err = e2e.RunHostCmd(ns2, testPodNs2Name[1], "curl -s "+ipEchoURL+" --connect-timeout 5")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(sourceIP).Should(o.BeElementOf(freeIPs))
+			verifyEgressIPWithIPEcho(oc, ns1, testPodNs1Name[0], ipEchoURL, true, freeIPs...)
+			verifyEgressIPWithIPEcho(oc, ns1, testPodNs1Name[1], ipEchoURL, true, freeIPs...)
+			verifyEgressIPWithIPEcho(oc, ns2, testPodNs2Name[0], ipEchoURL, true, freeIPs...)
+			verifyEgressIPWithIPEcho(oc, ns2, testPodNs2Name[1], ipEchoURL, true, freeIPs...)
 
 			g.By("11. Remove matched labels from namespace ns1  \n")
 			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("12.  Check source IP from namespace ns1, should not be egressip. \n")
-			sourceIP, err = e2e.RunHostCmd(ns1, testPodNs1Name[0], "curl -s "+ipEchoURL+" --connect-timeout 5")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(sourceIP).ShouldNot(o.BeElementOf(freeIPs))
-			sourceIP, err = e2e.RunHostCmd(ns1, testPodNs1Name[1], "curl -s "+ipEchoURL+" --connect-timeout 5")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(sourceIP).ShouldNot(o.BeElementOf(freeIPs))
+			verifyEgressIPWithIPEcho(oc, ns1, testPodNs1Name[0], ipEchoURL, false, freeIPs...)
+			verifyEgressIPWithIPEcho(oc, ns1, testPodNs1Name[1], ipEchoURL, false, freeIPs...)
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
@@ -968,9 +974,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-Longduration-NonPreRelease-Medium-47033-If an egress node is NotReady traffic is still load balanced between available egress nodes. [Disruptive]", func() {
 		platform := exutil.CheckPlatform(oc)
 		e2e.Logf("\n\nThe platform is %v,\n", platform)
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp")
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "azure")
 		if !acceptedPlatform || ipEchoURL == "" {
-			g.Skip("Test cases should be run on AWS/GCP with int-svc host, skip for other platforms!!")
+			g.Skip("Test cases should be run on AWS/GCP/Azure with int-svc host, skip for other platforms!!")
 		}
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -1036,8 +1042,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		g.By("8. Check source IP is randomly one of egress ips.\n")
 		e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
-		egressIPMaps2 := getAssignedEIPInEIPObject(oc, egressip1.name)
-		o.Expect(len(egressIPMaps2) == 3).Should(o.BeTrue())
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 3)
 		sourceIP, err := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..15}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(sourceIP)
@@ -1048,6 +1053,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("9. Stop one egress node.\n")
 		var instance []string
 		var zone string
+		var az *exutil.AzureSession
+		var rg string
 		switch exutil.CheckPlatform(oc) {
 		case "aws":
 			e2e.Logf("\n AWS is detected \n")
@@ -1067,14 +1074,26 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			err = stopInstanceOnGcp(oc, instance[0], zone)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, nodeList.Items[1].Name, "NotReady")
+		case "azure":
+			e2e.Logf("\n Azure is detected \n")
+			err := getAzureCredentialFromCluster(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			rg, err = getAzureResourceGroup(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			az, err = exutil.NewAzureSessionFromEnv()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
+			defer startVMOnAzure(az, nodeList.Items[1].Name, rg)
+			stopVMOnAzure(az, nodeList.Items[1].Name, rg)
+			checkNodeStatus(oc, nodeList.Items[1].Name, "NotReady")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
 			g.Skip("Not support cloud provider for auto egressip cases for now.")
 		}
 
 		g.By("10. Check EgressIP updated in EIP object, sourceIP contains 2 IPs. \n")
-		egressipErr := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
-			egressIPMaps2 = getAssignedEIPInEIPObject(oc, egressip1.name)
+		egressipErr := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			egressIPMaps2 := getAssignedEIPInEIPObject(oc, egressip1.name)
 			if len(egressIPMaps2) != 2 {
 				return false, nil
 			}
@@ -1104,19 +1123,32 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			err = startInstanceOnGcp(oc, instance[0], zone)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
+		case "azure":
+			defer checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
+			startVMOnAzure(az, nodeList.Items[1].Name, rg)
+			checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
 			g.Skip("Not support cloud provider for auto egressip cases for now.")
 		}
 
 		g.By("12. Check source IP is randomly one of 3 egress IPs.\n")
-		e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
-		sourceIP, err = execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..15}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf(sourceIP)
-		o.Expect(sourceIP).Should(o.ContainSubstring(freeIP1[0]))
-		o.Expect(sourceIP).Should(o.ContainSubstring(freeIP2[0]))
-		o.Expect(sourceIP).Should(o.ContainSubstring(freeIP3[0]))
+		egressipErr = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			egressIPMaps2 := getAssignedEIPInEIPObject(oc, egressip1.name)
+			if len(egressIPMaps2) != 3 {
+				return false, nil
+			}
+			sourceIP, err := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..15}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
+			e2e.Logf(sourceIP)
+			if err != nil {
+				return false, nil
+			}
+			if strings.Contains(sourceIP, freeIP1[0]) && strings.Contains(sourceIP, freeIP2[0]) && strings.Contains(sourceIP, freeIP3[0]) {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("The source Ip is not same as the egressIP expected!"))
 	})
 
 	// author: huirwang@redhat.com
@@ -1174,9 +1206,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		case "ipecho":
 			g.By("5. Check the source ip.\n")
 			e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
-			sourceIP, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(sourceIP).Should(o.Equal(egressIPMaps[0]["egressIP"]))
+			verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, true, egressIPMaps[0]["egressIP"])
 
 			g.By("6. Delete the test pod and recreate it. \n")
 			pod1.deletePingPod(oc)
@@ -1184,9 +1214,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			waitPodReady(oc, pod1.namespace, pod1.name)
 
 			g.By("7. Check the source ip.\n")
-			sourceIP, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -s "+ipEchoURL+" --connect-timeout 5")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(sourceIP).Should(o.Equal(egressIPMaps[0]["egressIP"]))
+			verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, true, egressIPMaps[0]["egressIP"])
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
@@ -1230,9 +1258,10 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		platform := exutil.CheckPlatform(oc)
 		networkType := checkNetworkType(oc)
 		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp")
+		//acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "azure")
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "azure")
 		if !acceptedPlatform || !strings.Contains(networkType, "ovn") {
-			g.Skip("Test cases should be run on AWS or GCP cluster with ovn network plugin, skip for other platforms or other network plugin!!")
+			g.Skip("Test cases should be run on AWS/GCP/Azure/Openstack/Vsphere/Baremetal cluster with ovn network plugin, skip for other platforms or other network plugin!!")
 		}
 	})
 
@@ -1346,9 +1375,8 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
 
 		g.By("6. Create an egressip object\n")
-		sub1 := getIfaddrFromNode(egressNode, oc)
-		freeIPs := findUnUsedIPsOnNode(oc, egressNode, sub1, 2)
-		o.Expect(len(freeIPs) == 2).Should(o.BeTrue())
+		freeIPs := findFreeIPs(oc, egressNode, 2)
+		o.Expect(len(freeIPs)).Should(o.Equal(2))
 		egressip1 := egressIPResource1{
 			name:      "egressip-47021",
 			template:  egressIP1Template,
@@ -1627,8 +1655,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		}
 		defer egressip1.deleteEgressIPObject1(oc)
 		egressip1.createEgressIPObject1(oc)
-		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
-		o.Expect(len(egressIPMaps1)).Should(o.Equal(2), "EgressIP object expected 2 items!!")
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 2)
 
 		g.By("5.Reboot egress node.\n")
 		defer checkNodeStatus(oc, egressNodes[0], "Ready")
@@ -1664,9 +1691,8 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		phyInf, nicError := getSnifPhyInf(oc, egessNode)
 		o.Expect(nicError).NotTo(o.HaveOccurred())
 		exutil.SetNamespacePrivileged(oc, oc.Namespace())
-		tcpdumpCmd := fmt.Sprintf("tcpdump -c 10 -nni %s arp", phyInf)
-		outPut, tcpdumpErr := exutil.DebugNode(oc, egessNode, "bash", "-c", tcpdumpCmd)
-		o.Expect(tcpdumpErr).NotTo(o.HaveOccurred())
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 10 -nni %s arp", phyInf)
+		outPut, _ := exutil.DebugNode(oc, egessNode, "bash", "-c", tcpdumpCmd)
 		o.Expect(outPut).NotTo(o.ContainSubstring("172.30"), fmt.Sprintf("The output of tcpdump is %s", outPut))
 	})
 
@@ -1685,9 +1711,10 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		platform := exutil.CheckPlatform(oc)
 		networkType := checkNetworkType(oc)
 		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack")
+		//acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack")
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "azure")
 		if !acceptedPlatform || !strings.Contains(networkType, "ovn") {
-			g.Skip("Test cases should be run on AWS or GCP cluster with ovn network plugin, skip for other platforms or other network plugin!!")
+			g.Skip("Test cases should be run on AWS/GCP/Azure/Openstack/Vsphere/Baremetal cluster with ovn network plugin, skip for other platforms or other network plugin!!")
 		}
 	})
 
@@ -1725,14 +1752,13 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", oc.Namespace(), "name-").Output()
 
 		g.By("Create an egressip object")
-		sub1 := getIfaddrFromNode(egressNode, oc)
-		freeIps := findUnUsedIPsOnNode(oc, egressNode, sub1, 2)
-		o.Expect(len(freeIps) == 2).Should(o.BeTrue())
+		freeIPs := findFreeIPs(oc, egressNode, 2)
+		o.Expect(len(freeIPs)).Should(o.Equal(2))
 		egressip1 := egressIPResource1{
 			name:      "egressip-47163",
 			template:  egressIPTemplate,
-			egressIP1: freeIps[0],
-			egressIP2: freeIps[1],
+			egressIP1: freeIPs[0],
+			egressIP2: freeIPs[1],
 		}
 		egressip1.createEgressIPObject1(oc)
 		defer egressip1.deleteEgressIPObject1(oc)

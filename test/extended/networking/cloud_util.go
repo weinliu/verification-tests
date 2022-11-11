@@ -877,3 +877,114 @@ func OspCredentials(oc *exutil.CLI) {
 		}
 	}
 }
+
+// startVMOnAzure start one Azure VM
+func startVMOnAzure(az *exutil.AzureSession, nodeName, rg string) {
+	stateErr := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		vmState, stateErr := exutil.GetAzureVMInstanceState(az, nodeName, rg)
+		if stateErr != nil {
+			e2e.Logf("%v", stateErr)
+			return false, nil
+		}
+		if strings.EqualFold(vmState, "poweredOn") || strings.EqualFold(vmState, "running") || strings.EqualFold(vmState, "active") || strings.EqualFold(vmState, "ready") {
+			e2e.Logf("The instance  has been started with state:%s !", vmState)
+			return true, nil
+		}
+		if strings.EqualFold(vmState, "poweredOff") || strings.EqualFold(vmState, "stopped") || strings.EqualFold(vmState, "paused") || strings.EqualFold(vmState, "notready") {
+			e2e.Logf("Start instance %s\n", nodeName)
+			_, err := exutil.StartAzureVM(az, nodeName, rg)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return true, nil
+		}
+		e2e.Logf("The instance  is in %v,not in a state from which it can be started.", vmState)
+		return false, nil
+
+	})
+	exutil.AssertWaitPollNoErr(stateErr, fmt.Sprintf("The instance %s is not in a state from which it can be started.", nodeName))
+}
+
+// stopVMOnAzure stop one Azure VM
+func stopVMOnAzure(az *exutil.AzureSession, nodeName, rg string) {
+	stateErr := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
+		vmState, stateErr := exutil.GetAzureVMInstanceState(az, nodeName, rg)
+		if stateErr != nil {
+			e2e.Logf("%v", stateErr)
+			return false, nil
+		}
+		if strings.EqualFold(vmState, "poweredoff") || strings.EqualFold(vmState, "stopped") || strings.EqualFold(vmState, "stopping") || strings.EqualFold(vmState, "paused") || strings.EqualFold(vmState, "pausing") || strings.EqualFold(vmState, "deallocated") || strings.EqualFold(vmState, "notready") {
+			e2e.Logf("The instance %s has been stopped already, and now is with state:%s !", nodeName, vmState)
+			return true, nil
+		}
+		if strings.EqualFold(vmState, "poweredOn") || strings.EqualFold(vmState, "running") || strings.EqualFold(vmState, "active") || strings.EqualFold(vmState, "ready") {
+			e2e.Logf("Stop instance %s\n", nodeName)
+			_, err := exutil.StopAzureVM(az, nodeName, rg)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return true, nil
+		}
+		e2e.Logf("The instance  is in %v,not in a state from which it can be stopped.", vmState)
+		return false, nil
+
+	})
+	exutil.AssertWaitPollNoErr(stateErr, fmt.Sprintf("The instance %s is not in a state from which it can be stopped.", nodeName))
+}
+
+func verifyEgressIPWithIPEcho(oc *exutil.CLI, podNS, podName, ipEchoURL string, hit bool, expectedIPs ...string) {
+	timeout := estimateTimeoutForEgressIP(oc)
+	if hit {
+		egressErr := wait.Poll(5*time.Second, timeout, func() (bool, error) {
+			sourceIP, err := e2e.RunHostCmd(podNS, podName, "curl -s "+ipEchoURL+" --connect-timeout 5")
+			if err != nil {
+				e2e.Logf("error,%v", err)
+				return false, nil
+			}
+			if !contains(expectedIPs, sourceIP) {
+				e2e.Logf("Not expected IP,soure IP is %s", sourceIP)
+				return false, nil
+			}
+			return true, nil
+
+		})
+		exutil.AssertWaitPollNoErr(egressErr, fmt.Sprintf("sourceIP was not included in %v", expectedIPs))
+	} else {
+		egressErr := wait.Poll(5*time.Second, timeout, func() (bool, error) {
+			sourceIP, err := e2e.RunHostCmd(podNS, podName, "curl -s "+ipEchoURL+" --connect-timeout 5")
+			if err != nil {
+				e2e.Logf("error,%v", err)
+				return false, nil
+			}
+			if contains(expectedIPs, sourceIP) {
+				e2e.Logf("Not expected IP,soure IP is %s", sourceIP)
+				return false, nil
+			}
+			return true, nil
+
+		})
+		exutil.AssertWaitPollNoErr(egressErr, fmt.Sprintf("sourceIP was still included in %v", expectedIPs))
+	}
+}
+
+func verifyExpectedEIPNumInEIPObject(oc *exutil.CLI, egressIPObject string, expectedNumber int) {
+	timeout := estimateTimeoutForEgressIP(oc)
+	egressErr := wait.Poll(5*time.Second, timeout, func() (bool, error) {
+		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressIPObject)
+		if len(egressIPMaps1) != expectedNumber {
+			e2e.Logf("Current EgressIP object length is %v,but expected is %v \n", len(egressIPMaps1), expectedNumber)
+			return false, nil
+		}
+		return true, nil
+
+	})
+	exutil.AssertWaitPollNoErr(egressErr, fmt.Sprintf("Failed to get expected number egressIPs %v", expectedNumber))
+}
+
+func estimateTimeoutForEgressIP(oc *exutil.CLI) time.Duration {
+	// https://bugzilla.redhat.com/show_bug.cgi?id=2105801#c8
+	// https://issues.redhat.com/browse/OCPBUGS-684
+	// Due to above two bugs, Azure and openstack is much slower for egressIP taking effect after configuration.
+	timeout := 100 * time.Second
+	platform := exutil.CheckPlatform(oc)
+	if strings.Contains(platform, "azure") || strings.Contains(platform, "openstack") {
+		timeout = 180 * time.Second
+	}
+	return timeout
+}
