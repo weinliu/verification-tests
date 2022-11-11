@@ -700,64 +700,44 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.cent
 
 	})
 
-	g.It("Author:sregidor-VMonly-ConnectedOnly-Longduration-NonPreRelease-High-54915-Configure kerneltype while using a custom osImage [Disruptive]", func() {
-		skipTestIfSupportedArchNotMatched(oc.AsAdmin())
-		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform, GCPPlatform)
-
+	g.It("Author:sregidor-VMonly-ConnectedOnly-Longduration-NonPreRelease-Medium-55002-Get OSImageURL override related metric data available in telemetry [Disruptive]", func() {
 		var (
-			rpmName            = "zsh"
-			dockerFileCommands = fmt.Sprintf(`
-RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.centos.org/centos/$releasever-stream/BaseOS/$basearch/os/\ngpgcheck=0\nenabled=1\n\n[appstream]\nname=CentOS-$releasever - AppStream\nbaseurl=http://mirror.centos.org/centos/$releasever-stream/AppStream/$basearch/os/\ngpgcheck=0\nenabled=1\n\n' > /etc/yum.repos.d/centos.repo && \
-    rpm-ostree install %s && \
-    rpm-ostree cleanup -m && \
-    ostree container commit
-`, rpmName)
-			rtMcTemplate = "change-worker-kernel-argument.yaml"
-			workerNode   = NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()[0]
-			masterNode   = NewNodeList(oc).GetAllMasterNodesOrFail()[0]
-			wMcp         = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
-			mMcp         = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+			osImageURLOverrideQuery = `os_image_url_override`
+
+			dockerFileCommands = "RUN touch /etc/hello-world-file"
+
+			workerNode = NewNodeList(oc).GetAllCoreOsWokerNodesOrFail()[0]
+			wMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			mMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
 		)
 
-		defer mMcp.waitForComplete()
-		defer wMcp.waitForComplete()
+		g.By("Check that the metric is exposed to telemetry")
+		expectedExposedMetric := fmt.Sprintf(`{__name__=\"%s:sum\"}`, osImageURLOverrideQuery)
+		telemetryConfig := NewNamespacedResource(oc.AsAdmin(), "Configmap", "openshift-monitoring", "telemetry-config")
+		o.Expect(telemetryConfig.Get(`{.data}`)).To(o.ContainSubstring(expectedExposedMetric),
+			"Metric %s, is not exposed to telemetry", osImageURLOverrideQuery)
 
-		// Create a MC to use realtime kernel in the worker pool
-		g.By("Create machine config to enable RT kernel in worker pool")
-		wRtMcName := "50-realtime-kernel-worker"
-		wRtMc := MachineConfig{name: wRtMcName, Template: *NewMCOTemplate(oc, rtMcTemplate),
-			skipWaitForMcp: true, pool: MachineConfigPoolWorker}
+		g.By("Validating inital os_image_url_override values")
+		mon, err := exutil.NewPrometheusMonitor(oc.AsAdmin())
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error creating new thanos monitor")
 
-		defer wRtMc.deleteNoWait(oc)
-		wRtMc.create(oc)
-		logger.Infof("OK!\n")
+		osImageOverride, err := mon.SimpleQuery(osImageURLOverrideQuery)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error querying metric: %s", osImageURLOverrideQuery)
 
-		// Create a MC to use realtime kernel in the master pool
-		g.By("Create machine config to enable RT kernel in master pool")
-		mRtMcName := "50-realtime-kernel-master"
-		mRtMc := MachineConfig{name: mRtMcName, Template: *NewMCOTemplate(oc, rtMcTemplate),
-			skipWaitForMcp: true, pool: MachineConfigPoolMaster}
+		// Here we are logging both master and worker pools
+		logger.Infof("Initial %s query: %s", osImageURLOverrideQuery, osImageOverride)
 
-		defer mRtMc.deleteNoWait(oc)
-		mRtMc.create(oc)
-		logger.Infof("OK!\n")
+		logger.Infof("Validate worker pool's %s value", osImageURLOverrideQuery)
+		o.Expect(wMcp.GetReportedOsImageOverrideValue()).To(o.Equal("0"),
+			"Worker pool's %s initial value should be 0. Instead reported metric is: %s",
+			osImageURLOverrideQuery, osImageOverride)
 
-		// Wait for the pools to be updated
-		g.By("Wait for pools to be updated after applying the new realtime kernel")
-		wMcp.waitForComplete()
-		mMcp.waitForComplete()
-		logger.Infof("OK!\n")
-
-		// Check that realtime kernel is active in worker nodes
-		g.By("Check realtime kernel in worker nodes")
-		o.Expect(workerNode.IsRealTimeKernel()).Should(o.BeTrue(),
-			"Kernel is not realtime kernel in worker node %s", workerNode.GetName())
-		logger.Infof("OK!\n")
-
-		// Check that realtime kernel is active in master nodes
-		g.By("Check realtime kernel in master nodes")
-		o.Expect(masterNode.IsRealTimeKernel()).Should(o.BeTrue(),
-			"Kernel is not realtime kernel in master node %s", masterNode.GetName())
+		logger.Infof("Validate master pool's %s value", osImageURLOverrideQuery)
+		o.Expect(mMcp.GetReportedOsImageOverrideValue()).To(o.Equal("0"),
+			"Master pool's %s initial value should be 0. Instead reported metric is: %s",
+			osImageURLOverrideQuery, osImageOverride)
 		logger.Infof("OK!\n")
 
 		// Build the new osImage
@@ -770,17 +750,19 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.cent
 
 		// Create MC to apply the config to worker nodes
 		g.By("Create a MC to deploy the new osImage in 'worker' pool")
-		wLayeringMcName := "tc-54915-layering-kerneltype-worker"
+		wLayeringMcName := "tc-55002-layering-telemetry-worker"
 		wLayeringMC := MachineConfig{name: wLayeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate), skipWaitForMcp: true,
 			pool: MachineConfigPoolWorker, parameters: []string{"OS_IMAGE=" + digestedImage}}
 
+		defer mMcp.waitForComplete()
+		defer wMcp.waitForComplete()
 		defer wLayeringMC.deleteNoWait(oc)
 		wLayeringMC.create(oc.AsAdmin())
 		logger.Infof("OK!\n")
 
 		// Create MC to apply the config to master nodes
 		g.By("Create a MC to deploy the new osImage in 'master' pool")
-		mLayeringMcName := "tc-54915-layering-kerneltype-master"
+		mLayeringMcName := "tc-55002-layering-telemetry-master"
 		mLayeringMC := MachineConfig{name: mLayeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate), skipWaitForMcp: true,
 			pool: MachineConfigPoolMaster, parameters: []string{"OS_IMAGE=" + digestedImage}}
 
@@ -794,105 +776,72 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.cent
 		mMcp.waitForComplete()
 		logger.Infof("OK!\n")
 
-		// Check rpm is installed in worker node
-		g.By("Check that the rpm is installed in worker node")
-		o.Expect(workerNode.RpmIsInstalled(rpmName)).
-			To(o.BeTrue(),
-				"Error. %s rpm is not installed after changing the osImage in worker node %s.", rpmName, workerNode.GetName())
-
-		wStatus, err := workerNode.GetRpmOstreeStatus(false)
+		g.By("Validating os_image_url_override values with overridden master and worker pools")
+		osImageOverride, err = mon.SimpleQuery(osImageURLOverrideQuery)
 		o.Expect(err).NotTo(o.HaveOccurred(),
-			"Error getting the rpm-ostree status value in worker node %s", masterNode.GetName())
+			"Error querying metric: %s", osImageURLOverrideQuery)
 
-		o.Expect(wStatus).Should(o.And(
-			o.MatchRegexp("(?s)LayeredPackages: kernel-rt-core.*kernel-rt-kvm.*kernel-rt-modules.*kernel-rt-modules-extra"),
-			o.ContainSubstring("RemovedBasePackages: kernel-core kernel-modules kernel kernel-modules-extra")),
-			"rpm-ostree status is not reporting the kernel layered packages properly")
-		logger.Infof("OK\n")
+		// Here we are logging both master and worker pools
+		logger.Infof("Executed %s query: %s", osImageURLOverrideQuery, osImageOverride)
 
-		// Check rpm is installed in master node
-		g.By("Check that the rpm is installed in master node")
-		o.Expect(masterNode.RpmIsInstalled(rpmName)).
-			To(o.BeTrue(),
-				"Error. %s rpm is not installed after changing the osImage in master node %s.", rpmName, workerNode.GetName())
+		logger.Infof("Validate worker pool's %s value", osImageURLOverrideQuery)
+		o.Expect(wMcp.GetReportedOsImageOverrideValue()).To(o.Equal("1"),
+			"Worker pool's %s value with overridden master and worker pools should be 1. Instead reported metric is: %s",
+			osImageURLOverrideQuery, osImageOverride)
 
-		mStatus, err := masterNode.GetRpmOstreeStatus(false)
-		o.Expect(err).NotTo(o.HaveOccurred(),
-			"Error getting the rpm-ostree status value in master node %s", masterNode.GetName())
-
-		o.Expect(mStatus).Should(o.And(
-			o.MatchRegexp("(?s)LayeredPackages: kernel-rt-core.*kernel-rt-kvm.*kernel-rt-modules.*kernel-rt-modules-extra"),
-			o.ContainSubstring("RemovedBasePackages: kernel-core kernel-modules kernel kernel-modules-extra")),
-			"rpm-ostree status is not reporting the kernel layered packages properly")
-		logger.Infof("OK\n")
-
-		// Check that realtime kernel is active in worker nodes
-		g.By("Check realtime kernel in worker nodes")
-		o.Expect(workerNode.IsRealTimeKernel()).Should(o.BeTrue(),
-			"Kernel is not realtime kernel in worker node %s", workerNode.GetName())
+		logger.Infof("Validate master pool's %s value", osImageURLOverrideQuery)
+		o.Expect(mMcp.GetReportedOsImageOverrideValue()).To(o.Equal("1"),
+			"Master pool's %s value with overridden master and worker pools should be 1. Instead reported metric is: %s",
+			osImageURLOverrideQuery, osImageOverride)
 		logger.Infof("OK!\n")
 
-		// Check that realtime kernel is active in master nodes
-		g.By("Check realtime kernel in master nodes")
-		o.Expect(masterNode.IsRealTimeKernel()).Should(o.BeTrue(),
-			"Kernel is not realtime kernel in master node %s", masterNode.GetName())
-		logger.Infof("OK!\n")
-
-		// Delete realtime configs
-		g.By("Delete the realtime kernel MCs")
-		wRtMc.deleteNoWait(oc)
-		mRtMc.deleteNoWait(oc)
-		logger.Infof("OK!\n")
-
-		// Wait for the pools to be updated
-		g.By("Wait for pools to be updated after deleting the realtime kernel configs")
+		g.By("Delete the MC that overrides worker pool's osImage and wait for the pool to be updated")
+		wLayeringMC.deleteNoWait(oc)
 		wMcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		g.By("Validating os_image_url_override values with overridden master pool only")
+		osImageOverride, err = mon.SimpleQuery(osImageURLOverrideQuery)
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error querying metric: %s", osImageURLOverrideQuery)
+
+		// Here we are logging both master and worker pools
+		logger.Infof("Executed %s query: %s", osImageURLOverrideQuery, osImageOverride)
+
+		logger.Infof("Validate worker pool's %s value", osImageURLOverrideQuery)
+		o.Expect(wMcp.GetReportedOsImageOverrideValue()).To(o.Equal("0"),
+			"Worker pool's %s value should be 0 when only the master pool is overridden. Instead reported metric is: %s",
+			osImageURLOverrideQuery, osImageOverride)
+
+		logger.Infof("Validate master pool's %s value", osImageURLOverrideQuery)
+		o.Expect(mMcp.GetReportedOsImageOverrideValue()).To(o.Equal("1"),
+			"Master pool's %s value should be 1 when only the master pool is overridden. Instead reported metric is: %s",
+			osImageURLOverrideQuery, osImageOverride)
+		logger.Infof("OK!\n")
+
+		g.By("Delete the MC that overrides master pool's osImage and wait for the pool to be updated")
+		mLayeringMC.deleteNoWait(oc)
 		mMcp.waitForComplete()
 		logger.Infof("OK!\n")
 
-		// Check that realtime kernel is not active in worker nodes anymore
-		g.By("Check realtime kernel in worker nodes")
-		o.Expect(workerNode.IsRealTimeKernel()).Should(o.BeFalse(),
-			"Realtime kernel should not be active anymore in worker node %s", workerNode.GetName())
-		logger.Infof("OK!\n")
-
-		// Check that realtime kernel is not active in master nodes anymore
-		g.By("Check realtime kernel in master nodes")
-		o.Expect(masterNode.IsRealTimeKernel()).Should(o.BeFalse(),
-			"Realtime kernel should not be active anymore in master node %s", masterNode.GetName())
-		logger.Infof("OK!\n")
-
-		// Check rpm is installed in worker node
-		g.By("Check that the rpm is installed in worker node")
-		o.Expect(workerNode.RpmIsInstalled(rpmName)).
-			To(o.BeTrue(),
-				"Error. %s rpm is not installed after changing the osImage in worker node %s.", rpmName, workerNode.GetName())
-
-		wStatus, err = workerNode.GetRpmOstreeStatus(false)
+		g.By("Validating os_image_url_override when no pool is overridden")
+		osImageOverride, err = mon.SimpleQuery(osImageURLOverrideQuery)
 		o.Expect(err).NotTo(o.HaveOccurred(),
-			"Error getting the rpm-ostree status value in worker node %s", masterNode.GetName())
+			"Error querying metric: %s", osImageURLOverrideQuery)
 
-		o.Expect(wStatus).ShouldNot(o.And(
-			o.ContainSubstring("LayeredPackages"),
-			o.ContainSubstring("RemovedBasePackages")),
-			"rpm-ostree status is not reporting the kernel layered packages properly in worker node %s", workerNode.GetName())
-		logger.Infof("OK\n")
+		// Here we are logging both master and worker pools
+		logger.Infof("Executed %s query: %s", osImageURLOverrideQuery, osImageOverride)
 
-		// Check rpm is installed in master node
-		g.By("Check that the rpm is installed in master node")
-		o.Expect(masterNode.RpmIsInstalled(rpmName)).
-			To(o.BeTrue(),
-				"Error. %s rpm is not installed after changing the osImage in master node %s.", rpmName, workerNode.GetName())
+		logger.Infof("Validate worker pool's %s value", osImageURLOverrideQuery)
+		o.Expect(wMcp.GetReportedOsImageOverrideValue()).To(o.Equal("0"),
+			"Worker pool's %s value should be 0 when no pool is overridden. Instead reported metric is: %s",
+			osImageURLOverrideQuery, osImageOverride)
 
-		mStatus, err = masterNode.GetRpmOstreeStatus(false)
-		o.Expect(err).NotTo(o.HaveOccurred(),
-			"Error getting the rpm-ostree status value in worker node %s", masterNode.GetName())
-
-		o.Expect(mStatus).ShouldNot(o.And(
-			o.ContainSubstring("LayeredPackages"),
-			o.ContainSubstring("RemovedBasePackages")),
-			"rpm-ostree status is not reporting the kernel layered packages properly in master node %s", workerNode.GetName())
-		logger.Infof("OK\n")
+		logger.Infof("Validate master pool's %s value", osImageURLOverrideQuery)
+		o.Expect(mMcp.GetReportedOsImageOverrideValue()).To(o.Equal("0"),
+			"Master pool's %s value should be 0 when no pool is overridden. Instead reported metric is: %s",
+			osImageURLOverrideQuery, osImageOverride)
+		logger.Infof("OK!\n")
 
 	})
 })

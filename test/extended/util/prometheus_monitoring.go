@@ -20,9 +20,10 @@ const (
 
 // MonitorInstantQueryParams API doc
 // query parameters:
-//  query=<string>: Prometheus expression query string.
-//  time=<rfc3339 | unix_timestamp>: Evaluation timestamp. Optional.
-//  timeout=<duration>: Evaluation timeout. Optional. Defaults to and is capped by the value of the -query.timeout flag.
+//
+//	query=<string>: Prometheus expression query string.
+//	time=<rfc3339 | unix_timestamp>: Evaluation timestamp. Optional.
+//	timeout=<duration>: Evaluation timeout. Optional. Defaults to and is capped by the value of the -query.timeout flag.
 type MonitorInstantQueryParams struct {
 	Query   string
 	Time    string
@@ -31,11 +32,12 @@ type MonitorInstantQueryParams struct {
 
 // MonitorRangeQueryParams API doc
 // query range parameters
-//  query=<string>: Prometheus expression query string.
-//  start=<rfc3339 | unix_timestamp>: Start timestamp, inclusive.
-//  end=<rfc3339 | unix_timestamp>: End timestamp, inclusive.
-//  step=<duration | float>: Query resolution step width in duration format or float number of seconds.
-//  timeout=<duration>: Evaluation timeout. Optional. Defaults to and is capped by the value of the -query.timeout flag.
+//
+//	query=<string>: Prometheus expression query string.
+//	start=<rfc3339 | unix_timestamp>: Start timestamp, inclusive.
+//	end=<rfc3339 | unix_timestamp>: End timestamp, inclusive.
+//	step=<duration | float>: Query resolution step width in duration format or float number of seconds.
+//	timeout=<duration>: Evaluation timeout. Optional. Defaults to and is capped by the value of the -query.timeout flag.
 type MonitorRangeQueryParams struct {
 	Query   string
 	Start   string
@@ -94,54 +96,63 @@ func (mo *Monitor) SimpleQuery(query string) (string, error) {
 }
 
 // InstantQuery query executes a query in prometheus with time and timeout.
-//   Example:  curl 'http://host:port/api/v1/query?query=up&time=2015-07-01T20:10:51.781Z'
+//
+//	Example:  curl 'http://host:port/api/v1/query?query=up&time=2015-07-01T20:10:51.781Z'
 func (mo *Monitor) InstantQuery(queryParams MonitorInstantQueryParams) (string, error) {
-	queryString := ""
+	queryArgs := []string{"curl", "-k", "-s", "-H", fmt.Sprintf("Authorization: Bearer %v", mo.Token)}
+
 	if queryParams.Query != "" {
-		queryString = queryString + " --data-urlencode query=" + queryParams.Query
+		queryArgs = append(queryArgs, []string{"--data-urlencode", "query=" + queryParams.Query}...)
 	}
 	if queryParams.Time != "" {
-		queryString = queryString + " --data-urlencode time=" + queryParams.Time
+		queryArgs = append(queryArgs, []string{"--data-urlencode", "time=" + queryParams.Time}...)
 	}
 	if queryParams.Timeout != "" {
-		queryString = queryString + " --data-urlencode timeout=" + queryParams.Timeout
+		queryArgs = append(queryArgs, []string{"--data-urlencode", "timeout=" + queryParams.Timeout}...)
 	}
 
-	getCmd := "curl -k -s -H \"" + fmt.Sprintf("Authorization: Bearer %v", mo.Token) + "\" " + queryString + " " + mo.url + monitorInstantQuery
-	return RemoteShPod(mo.ocClient, monitorNamespace, "statefulsets/"+prometheusK8s, "sh", "-c", getCmd)
+	queryArgs = append(queryArgs, mo.url+monitorInstantQuery)
+
+	return RemoteShPod(mo.ocClient, monitorNamespace, "statefulsets/"+prometheusK8s, queryArgs...)
 }
 
 // RangeQuery executes a query range in prometheus with start, end, step and timeout
-//   Example: curl 'http://host:port/api/v1/query_range?query=metricname&start=2015-07-01T20:10:30.781Z&end=2015-07-01T20:11:00.781Z&step=15s'
+//
+//	Example: curl 'http://host:port/api/v1/query_range?query=metricname&start=2015-07-01T20:10:30.781Z&end=2015-07-01T20:11:00.781Z&step=15s'
 func (mo *Monitor) RangeQuery(queryParams MonitorRangeQueryParams) (string, error) {
-	queryString := ""
+	queryArgs := []string{"curl", "-k", "-s", "-H", fmt.Sprintf("Authorization: Bearer %v", mo.Token)}
+
 	if queryParams.Query != "" {
-		queryString = queryString + " --data-urlencode query=" + queryParams.Query
+		queryArgs = append(queryArgs, []string{"--data-urlencode", "query=" + queryParams.Query}...)
 	}
 	if queryParams.Start != "" {
-		queryString = queryString + " --data-urlencode start=" + queryParams.Start
+		queryArgs = append(queryArgs, []string{"--data-urlencode", "start=" + queryParams.Start}...)
 	}
 	if queryParams.End != "" {
-		queryString = queryString + " --data-urlencode end=" + queryParams.End
+		queryArgs = append(queryArgs, []string{"--data-urlencode", "end=" + queryParams.End}...)
 	}
 	if queryParams.Step != "" {
-		queryString = queryString + " --data-urlencode step=" + queryParams.Step
+		queryArgs = append(queryArgs, []string{"--data-urlencode", "step=" + queryParams.Step}...)
 	}
 	if queryParams.Timeout != "" {
-		queryString = queryString + " --data-urlencode timeout=" + queryParams.Timeout
+		queryArgs = append(queryArgs, []string{"--data-urlencode", "timeout=" + queryParams.Timeout}...)
 	}
 
-	getCmd := "curl -k -s -H \"" + fmt.Sprintf("Authorization: Bearer %v", mo.Token) + "\" " + queryString + " " + mo.url + monitorRangeQuery
-	return RemoteShPod(mo.ocClient, monitorNamespace, "statefulsets/"+prometheusK8s, "sh", "-c", getCmd)
+	queryArgs = append(queryArgs, mo.url+monitorRangeQuery)
+
+	return RemoteShPod(mo.ocClient, monitorNamespace, "statefulsets/"+prometheusK8s, queryArgs...)
 }
 
 func (mo *Monitor) queryRules(query string) (string, error) {
+	queryArgs := []string{"curl", "-k", "-s", "-H", fmt.Sprintf("Authorization: Bearer %v", mo.Token)}
 	queryString := ""
 	if query != "" {
 		queryString = "?" + query
 	}
-	getCmd := "curl -k -s -H \"" + fmt.Sprintf("Authorization: Bearer %v", mo.Token) + "\" " + mo.url + monitorRules + queryString
-	return RemoteShPod(mo.ocClient, monitorNamespace, "statefulsets/"+prometheusK8s, "sh", "-c", getCmd)
+
+	queryArgs = append(queryArgs, mo.url+monitorRules+queryString)
+
+	return RemoteShPod(mo.ocClient, monitorNamespace, "statefulsets/"+prometheusK8s, queryArgs...)
 }
 
 // GetAllRules returns all rules

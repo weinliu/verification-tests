@@ -447,6 +447,32 @@ func (mcp *MachineConfigPool) waitForComplete() {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("mc operation is not completed on mcp %s", mcp.name))
 }
 
+// GetReportedOsImageOverrideValue returns the value of the os_image_url_override prometheus metric for this pool
+func (mcp *MachineConfigPool) GetReportedOsImageOverrideValue() (string, error) {
+	query := fmt.Sprintf(`os_image_url_override{pool="%s"}`, strings.ToLower(mcp.GetName()))
+
+	mon, err := exutil.NewMonitor(mcp.oc.AsAdmin())
+	if err != nil {
+		return "", err
+	}
+
+	osImageOverride, err := mon.SimpleQuery(query)
+	if err != nil {
+		return "", err
+	}
+
+	jsonOsImageOverride := JSON(osImageOverride)
+	status := jsonOsImageOverride.Get("status").ToString()
+	if status != "success" {
+		return "", fmt.Errorf("Query %s execution failed: %s", query, osImageOverride)
+	}
+
+	logger.Infof("%s metric is:%s", query, osImageOverride)
+
+	metricValue := JSON(osImageOverride).Get("data").Get("result").Item(0).Get("value").Item(1).ToString()
+	return metricValue, nil
+}
+
 func getTimeDifferenceInMinute(oldTimestamp, newTimestamp string) float64 {
 	oldTimeValues := strings.Split(oldTimestamp, ":")
 	oldTimeHour, _ := strconv.Atoi(oldTimeValues[0])
