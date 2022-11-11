@@ -202,6 +202,24 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		}
 	})
 
+	g.It("Author:tagao-Low-55670-Prometheus should not collecting error messages for completed pods", func() {
+		var output string
+		g.By("check pod conditioning in openshift-kube-scheduler, all pods should be ready")
+		exutil.AssertAllPodsToBeReady(oc, "openshift-kube-scheduler")
+
+		g.By("get prometheus-adapter pod names")
+		prometheusAdapterPodNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus-adapter")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check prometheus-adapter pod logs")
+		for _, pod := range prometheusAdapterPodNames {
+			output, _ = oc.AsAdmin().WithoutNamespace().Run("logs").Args(pod, "-n", "openshift-monitoring").Output()
+			if strings.Contains(output, "unable to fetch CPU metrics for pod") {
+				e2e.Failf("found unexpected logs: unable to fetch CPU metrics for pod")
+			}
+		}
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string
