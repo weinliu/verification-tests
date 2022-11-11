@@ -49,7 +49,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// author: hongli@redhat.com
 	// might conflict with other ipfailover cases so set it as Serial
-	g.It("Author:hongli-ConnectedOnly-Critical-41025-support to deploy ipfailover [Serial]", func() {
+	g.It("NonHyperShiftHOST-Author:hongli-ConnectedOnly-Critical-41025-support to deploy ipfailover [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ipfailover.yaml")
 		var (
@@ -75,7 +75,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// author: mjoseph@redhat.com
 	// might conflict with other ipfailover cases so set it as Serial
-	g.It("Author:mjoseph-ConnectedOnly-Medium-41028-ipfailover configuration can be customized by ENV [Serial]", func() {
+	g.It("NonHyperShiftHOST-Author:mjoseph-ConnectedOnly-Medium-41028-ipfailover configuration can be customized by ENV [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ipfailover.yaml")
 		var (
@@ -142,7 +142,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// author: mjoseph@redhat.com
 	// might conflict with other ipfailover cases so set it as Serial
-	g.It("Author:mjoseph-ConnectedOnly-Medium-41029-ipfailover can support up to a maximum of 255 VIPs for the entire cluster [Serial]", func() {
+	g.It("NonHyperShiftHOST-Author:mjoseph-ConnectedOnly-Medium-41029-ipfailover can support up to a maximum of 255 VIPs for the entire cluster [Serial]", func() {
 		if exutil.CheckPlatform(oc) == "nutanix" {
 			g.Skip("This test will not works for Nutanix")
 		}
@@ -183,7 +183,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// author: mjoseph@redhat.com
 	// might conflict with other ipfailover cases so set it as Serial
-	g.It("Author:mjoseph-ConnectedOnly-Medium-41027-pod and service automatically switched over to standby when master fails [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:mjoseph-ConnectedOnly-Medium-41027-pod and service automatically switched over to standby when master fails [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ipfailover.yaml")
 		var (
@@ -232,7 +232,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// author: mjoseph@redhat.com
 	// might conflict with other ipfailover cases so set it as Serial
-	g.It("Author:mjoseph-ConnectedOnly-High-41030-preemption strategy for keepalived ipfailover [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:mjoseph-ConnectedOnly-High-41030-preemption strategy for keepalived ipfailover [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ipfailover.yaml")
 		var (
@@ -292,7 +292,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// author: mjoseph@redhat.com
 	// might conflict with other ipfailover cases so set it as Serial
-	g.It("Author:mjoseph-ConnectedOnly-Medium-49214-Excluding the existing VRRP cluster ID from ipfailover deployments [Serial]", func() {
+	g.It("NonHyperShiftHOST-Author:mjoseph-ConnectedOnly-Medium-49214-Excluding the existing VRRP cluster ID from ipfailover deployments [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ipfailover.yaml")
 		var (

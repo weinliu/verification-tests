@@ -39,7 +39,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: hongli@redhat.com
-	g.It("HyperShiftGUEST-ConnectedOnly-Author:hongli-High-48138-Support External DNS on AWS platform", func() {
+	g.It("ConnectedOnly-Author:hongli-High-48138-Support External DNS on AWS platform", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			sampleAWS           = filepath.Join(buildPruningBaseDir, "sample-aws-rt.yaml")

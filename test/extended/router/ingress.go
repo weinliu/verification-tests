@@ -16,7 +16,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	var oc = exutil.NewCLI("router-ingressclass", exutil.KubeConfigPath())
 
 	// author: hongli@redhat.com
-	g.It("HyperShiftGUEST-Author:hongli-Critical-41117-ingress operator manages the IngressClass for each ingresscontroller", func() {
+	g.It("Author:hongli-Critical-41117-ingress operator manages the IngressClass for each ingresscontroller", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
@@ -54,7 +54,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).To(o.ContainSubstring("NotFound"))
 	})
 	// author: hongli@redhat.com
-	g.It("HyperShiftGUEST-Author:hongli-Critical-41109-use IngressClass controller for ingress-to-route", func() {
+	g.It("Author:hongli-Critical-41109-use IngressClass controller for ingress-to-route", func() {
 		var (
 			output              string
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
@@ -82,7 +82,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: mjoseph@redhat.com
-	g.It("HyperShiftGUEST-Author:mjoseph-Critical-51148-host name of the route depends on the subdomain if provided", func() {
+	g.It("Author:mjoseph-Critical-51148-host name of the route depends on the subdomain if provided", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "subdomain-routes/ocp51148-route.yaml")
@@ -145,7 +145,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: mjoseph@redhat.com
-	g.It("HyperShiftGUEST-Author:mjoseph-High-51429-different router deployment with same route using subdomain", func() {
+	g.It("Author:mjoseph-High-51429-different router deployment with same route using subdomain", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp2         = filepath.Join(buildPruningBaseDir, "subdomain-routes/route.yaml")
@@ -216,7 +216,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: mjoseph@redhat.com
-	g.It("HyperShiftGUEST-Author:mjoseph-High-51437-Router deployment using different shard with same subdomain ", func() {
+	g.It("Author:mjoseph-High-51437-Router deployment using different shard with same subdomain ", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp2         = filepath.Join(buildPruningBaseDir, "subdomain-routes/alpha-shard-route.yaml")

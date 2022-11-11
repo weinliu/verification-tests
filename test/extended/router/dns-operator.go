@@ -12,7 +12,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	defer g.GinkgoRecover()
 	var oc = exutil.NewCLI("dns-operator", exutil.KubeConfigPath())
 	// author: mjoseph@redhat.com
-	g.It("Author:mjoseph-Longduration-NonPreRelease-Critical-41049-DNS controlls pod placement by node selector [Disruptive]", func() {
+	// no master nodes on HyperShift guest cluster so this case is not available
+	g.It("NonHyperShiftHOST-Author:mjoseph-Longduration-NonPreRelease-Critical-41049-DNS controlls pod placement by node selector [Disruptive]", func() {
 		var (
 			dnsWorkerNodeselector = "[{\"op\":\"add\", \"path\":\"/spec/nodePlacement/nodeSelector\", \"value\":{\"node-role.kubernetes.io/worker\":\"\"}}]"
 			dnsMasterNodeselector = "[{\"op\":\"replace\", \"path\":\"/spec/nodePlacement/nodeSelector\", \"value\":{\"node-role.kubernetes.io/master\":\"\"}}]"
@@ -60,7 +61,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: mjoseph@redhat.com
-	g.It("Author:mjoseph-NonPreRelease-Critical-41050-DNS controll pod placement by tolerations [Disruptive]", func() {
+	// no master nodes on HyperShift guest cluster so this case is not available
+	g.It("NonHyperShiftHOST-Author:mjoseph-NonPreRelease-Critical-41050-DNS controll pod placement by tolerations [Disruptive]", func() {
 		var (
 			dnsMasterToleration = "[{\"op\":\"replace\", \"path\":\"/spec/nodePlacement\", \"value\":{\"tolerations\":[" +
 				"{\"effect\":\"NoExecute\",\"key\":\"my-dns-test\", \"operators\":\"Equal\", \"value\":\"abc\"}]}}]"
@@ -95,7 +97,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// author: hongli@redhat.com
-	g.It("HyperShiftGUEST-Author:hongli-High-46183-DNS operator supports Random, RoundRobin and Sequential policy for servers.forwardPlugin [Disruptive]", func() {
+	g.It("Author:hongli-High-46183-DNS operator supports Random, RoundRobin and Sequential policy for servers.forwardPlugin [Disruptive]", func() {
 		resourceName := "dns.operator.openshift.io/default"
 		jsonPatch := "[{\"op\":\"add\", \"path\":\"/spec/servers\", \"value\":[{\"forwardPlugin\":{\"policy\":\"Random\",\"upstreams\":[\"8.8.8.8\"]},\"name\":\"test\",\"zones\":[\"mytest.ocp\"]}]}]"
 
