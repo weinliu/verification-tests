@@ -21,7 +21,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np-PROXY.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp40677",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -48,7 +48,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-hn-PROXY.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp40675",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -97,7 +97,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp43115",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -164,7 +164,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "43105",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -209,7 +209,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "43113",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -249,7 +249,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "43112",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -289,7 +289,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "43111",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -327,7 +327,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "43414",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -367,7 +367,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "43416",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -406,7 +406,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "46571",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -447,7 +447,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "46898",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -494,7 +494,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		timeout5 := "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"router\",\"livenessProbe\":{\"timeoutSeconds\":5},\"readinessProbe\":{\"timeoutSeconds\":5}}]}}}}"
 		timeoutmax := "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"router\",\"livenessProbe\":{\"timeoutSeconds\":2147483647},\"readinessProbe\":{\"timeoutSeconds\":2147483647}}]}}}}"
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp50074",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -579,7 +579,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		timeoutMinus := "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"router\",\"livenessProbe\":{\"timeoutSeconds\":-1},\"readinessProbe\":{\"timeoutSeconds\":-1}}]}}}}"
 		timeoutString := "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"router\",\"livenessProbe\":{\"timeoutSeconds\":\"abc\"},\"readinessProbe\":{\"timeoutSeconds\":\"abc\"}}]}}}}"
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp50075",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -621,7 +621,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			http503page         = filepath.Join(buildPruningBaseDir, "error-page-503.http")
 			cmName              = "my-custom-error-code-pages-42940"
 			patchHTTPErrorPage  = "{\"spec\": {\"httpErrorCodePages\": {\"name\": \"" + cmName + "\"}}}"
-			ingctrl             = ingctrlNodePortDescription{
+			ingctrl             = ingressControllerDescription{
 				name:      "ocp42940",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -726,7 +726,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			cmName              = "my-custom-error-code-pages-43292"
 			patchHTTPErrorPage  = "{\"spec\": {\"httpErrorCodePages\": {\"name\": \"" + cmName + "\"}}}"
 			rmHTTPErrorPage     = "{\"spec\": {\"httpErrorCodePages\": {\"name\": \"\"}}}"
-			ingctrl             = ingctrlNodePortDescription{
+			ingctrl             = ingressControllerDescription{
 				name:      "ocp43292",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -929,7 +929,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "41206",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -1157,7 +1157,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-private.yaml")
-			ingctrl             = ingctrlNodePortDescription{
+			ingctrl             = ingressControllerDescription{
 				name:      "53048",
 				namespace: "openshift-ingress-operator",
 				domain:    "",

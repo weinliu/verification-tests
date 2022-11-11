@@ -20,7 +20,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp41117",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -151,7 +151,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			customTemp2         = filepath.Join(buildPruningBaseDir, "subdomain-routes/route.yaml")
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			ingctrl             = ingctrlNodePortDescription{
+			ingctrl             = ingressControllerDescription{
 				name:      "ocp51429",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -222,14 +222,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			customTemp2         = filepath.Join(buildPruningBaseDir, "subdomain-routes/alpha-shard-route.yaml")
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-shard.yaml")
-			ingctrl1            = ingctrlNodePortDescription{
+			ingctrl1            = ingressControllerDescription{
 				name:      "alpha-ocp51437",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
 				shard:     "alpha",
 				template:  customTemp,
 			}
-			ingctrl2 = ingctrlNodePortDescription{
+			ingctrl2 = ingressControllerDescription{
 				name:      "beta-ocp51437",
 				namespace: "openshift-ingress-operator",
 				domain:    "",

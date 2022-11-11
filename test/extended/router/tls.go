@@ -21,7 +21,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		cmFile := filepath.Join(buildPruningBaseDir, "ca-bundle.pem")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp43300",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -60,7 +60,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		cmFile := filepath.Join(buildPruningBaseDir, "ca-bundle.pem")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp43301",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -99,7 +99,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp43284",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -144,7 +144,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		caCert := filepath.Join(buildPruningBaseDir, "ca-bundle.pem")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp50842",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -212,7 +212,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		ingressTemp := filepath.Join(buildPruningBaseDir, "ingress-destCA.yaml")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp51980",
 				namespace: "openshift-ingress-operator",
 				domain:    "",

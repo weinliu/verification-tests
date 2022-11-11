@@ -22,7 +22,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp42276",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -58,7 +58,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-syslog.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp46287",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -111,7 +111,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-syslog.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp46288",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -152,7 +152,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-clb.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp52837",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -198,13 +198,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-external.yaml")
-			ingctrl1            = ingctrlNodePortDescription{
+			ingctrl1            = ingressControllerDescription{
 				name:      "ocp54868cus1",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
 				template:  customTemp,
 			}
-			ingctrl2 = ingctrlNodePortDescription{
+			ingctrl2 = ingressControllerDescription{
 				name:      "ocp54868cus2",
 				namespace: "openshift-ingress-operator",
 				domain:    "ocp54868cus2.test.com",
@@ -294,7 +294,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-external.yaml")
-			ingctrl             = ingctrlNodePortDescription{
+			ingctrl             = ingressControllerDescription{
 				name:      "ocp54995",
 				namespace: "openshift-ingress-operator",
 				domain:    "ocp54995.test.com",
@@ -339,7 +339,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-external.yaml")
-			ingctrl             = ingctrlNodePortDescription{
+			ingctrl             = ingressControllerDescription{
 				name:      "ocp55223",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -395,7 +395,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-external.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp55341",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -457,7 +457,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-external.yaml")
-			ingctrl             = ingctrlNodePortDescription{
+			ingctrl             = ingressControllerDescription{
 				name:      "ocp55381",
 				namespace: "openshift-ingress-operator",
 				domain:    "",

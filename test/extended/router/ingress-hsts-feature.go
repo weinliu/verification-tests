@@ -23,7 +23,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp43476",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -89,7 +89,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp43478",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -147,7 +147,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp43474",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -213,7 +213,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp43475",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -271,7 +271,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp43479",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -332,13 +332,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
 		var (
-			ingctrl1 = ingctrlNodePortDescription{
+			ingctrl1 = ingressControllerDescription{
 				name:      "ocp43480-1",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
 				template:  customTemp,
 			}
-			ingctrl2 = ingctrlNodePortDescription{
+			ingctrl2 = ingressControllerDescription{
 				name:      "ocp43480-2",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -422,7 +422,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp43884",
 				namespace: "openshift-ingress-operator",
 				domain:    "",
@@ -479,7 +479,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
-			ingctrl = ingctrlNodePortDescription{
+			ingctrl = ingressControllerDescription{
 				name:      "ocp43966",
 				namespace: "openshift-ingress-operator",
 				domain:    "",

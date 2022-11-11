@@ -139,7 +139,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			ingctrl             = ingctrlNodePortDescription{
+			ingctrl             = ingressControllerDescription{
 				name:      "ocp53696",
 				namespace: "openshift-ingress-operator",
 				domain:    "",

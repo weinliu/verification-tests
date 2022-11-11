@@ -7,8 +7,6 @@ objects:
     name: ${NAME}
     namespace: ${NAMESPACE}
   spec:
-    defaultCertificate:
-      name: ${DEFAULT_CERT}
     domain:  ${SHARD}-${DOMAIN}
     replicas: 1
     routeSelector:
@@ -20,7 +18,5 @@ parameters:
 - name: NAME
 - name: NAMESPACE
   value: openshift-ingress-operator
-- name: DEFAULT_CERT
-  value: router-certs-default
 - name: DOMAIN
 - name: SHARD

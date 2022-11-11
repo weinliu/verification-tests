@@ -7,8 +7,6 @@ objects:
     name: ${NAME}
     namespace: ${NAMESPACE}
   spec:
-    defaultCertificate:
-      name: ${DEFAULT_CERT}
     domain: ${DOMAIN}
     replicas: 1
     endpointPublishingStrategy:
@@ -19,6 +17,4 @@ parameters:
 - name: NAME
 - name: NAMESPACE
   value: openshift-ingress-operator
-- name: DEFAULT_CERT
-  value: router-certs-default
 - name: DOMAIN

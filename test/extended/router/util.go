@@ -19,7 +19,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-type ingctrlNodePortDescription struct {
+type ingressControllerDescription struct {
 	name        string
 	namespace   string
 	defaultCert string
@@ -95,7 +95,7 @@ func exactNodeDetails(oc *exutil.CLI) (int, string) {
 	return nodeCount, workerNodeDetails
 }
 
-func (ingctrl *ingctrlNodePortDescription) create(oc *exutil.CLI) {
+func (ingctrl *ingressControllerDescription) create(oc *exutil.CLI) {
 	availableWorkerNode, _ := exactNodeDetails(oc)
 	if availableWorkerNode < 1 {
 		g.Skip("Skipping as there is no enough worker nodes")
@@ -104,7 +104,7 @@ func (ingctrl *ingctrlNodePortDescription) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func (ingctrl *ingctrlNodePortDescription) delete(oc *exutil.CLI) error {
+func (ingctrl *ingressControllerDescription) delete(oc *exutil.CLI) error {
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("--ignore-not-found", "-n", ingctrl.namespace, "ingresscontroller", ingctrl.name).Execute()
 }
 
