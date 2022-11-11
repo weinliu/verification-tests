@@ -145,4 +145,54 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		e2e.Logf("The alertRunbook is %v", alertRunbook)
 		o.Expect(alertRunbook).To(o.ContainSubstring("https://github.com/openshift/runbooks/blob/master/alerts/cluster-network-operator/NorthboundStaleAlert.md"))
 	})
+
+	g.It("Author:qiowang-Medium-55903-OVN-K alerts for ovn db leader", func() {
+		networkType := exutil.CheckNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+
+		dbLeaderAlertsList := []string{
+			"OVNKubernetesNorthboundDatabaseLeaderError",
+			"OVNKubernetesSouthboundDatabaseLeaderError",
+			"OVNKubernetesNorthboundDatabaseMultipleLeadersError",
+			"OVNKubernetesSouthboundDatabaseMultipleLeadersError",
+		}
+
+		alertName, NameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", "-o=jsonpath={.spec.groups[*].rules[*].alert}").Output()
+		o.Expect(NameErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The alertName is %v", alertName)
+		for _, dbLeaderAlerts := range dbLeaderAlertsList {
+			o.Expect(alertName).To(o.ContainSubstring(dbLeaderAlerts))
+
+			alertSeverity, severityErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", `-o=jsonpath={.spec.groups[*].rules[?(@.alert=="`+dbLeaderAlerts+`")].labels.severity}`).Output()
+			o.Expect(severityErr).NotTo(o.HaveOccurred())
+			e2e.Logf("alertSeverity of "+dbLeaderAlerts+" is %v", alertSeverity)
+			o.Expect(alertSeverity).To(o.ContainSubstring("critical"))
+		}
+	})
+
+	g.It("Author:qiowang-Medium-55909-OVN-K alerts for ovn db cluster ID error", func() {
+		networkType := exutil.CheckNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+
+		dbLeaderAlertsList := []string{
+			"OVNKubernetesNorthboundDatabaseClusterIDError",
+			"OVNKubernetesSouthboundDatabaseClusterIDError",
+		}
+
+		alertName, NameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", "-o=jsonpath={.spec.groups[*].rules[*].alert}").Output()
+		o.Expect(NameErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The alertName is %v", alertName)
+		for _, dbLeaderAlerts := range dbLeaderAlertsList {
+			o.Expect(alertName).To(o.ContainSubstring(dbLeaderAlerts))
+
+			alertSeverity, severityErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", `-o=jsonpath={.spec.groups[*].rules[?(@.alert=="`+dbLeaderAlerts+`")].labels.severity}`).Output()
+			o.Expect(severityErr).NotTo(o.HaveOccurred())
+			e2e.Logf("alertSeverity of "+dbLeaderAlerts+" is %v", alertSeverity)
+			o.Expect(alertSeverity).To(o.ContainSubstring("critical"))
+		}
+	})
 })
