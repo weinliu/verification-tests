@@ -72,7 +72,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		workerNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Worker Node: %v", workerNodeName)
-		tunedPodName, err := exutil.GetPodName(oc, ntoNamespace, "", workerNodeName)
+		tunedPodName, err := exutil.GetPodName(oc, ntoNamespace, "openshift-app=tuned", workerNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Tuned Pod: %v", tunedPodName)
 
@@ -145,6 +145,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			_ = patchTunedState(oc, ntoNamespace, "default", "Managed")
 		}()
 
+		isSNO := isSNOCluster(oc)
+		var profileCheck string
+
 		g.By("Create logging namespace")
 		oc.SetupProject()
 		loggingNamespace := oc.Namespace()
@@ -165,7 +168,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		tunedNodeName, err := exutil.GetPodNodeName(oc, loggingNamespace, "web")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Tuned Node: %v", tunedNodeName)
-		tunedPodName, err := exutil.GetPodName(oc, ntoNamespace, "", tunedNodeName)
+		tunedPodName, err := exutil.GetPodName(oc, ntoNamespace, "openshift-app=tuned", tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Tuned Pod: %v", tunedPodName)
 
@@ -181,9 +184,15 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(logsCheck).NotTo(o.ContainSubstring("nf-conntrack-max"))
 
-		profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(profileCheck).To(o.Equal("openshift-node"))
+		if isSNO {
+			profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(profileCheck).To(o.Equal("openshift-control-plane"))
+		} else {
+			profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(profileCheck).To(o.Equal("openshift-node"))
+		}
 
 		nodeList, err := exutil.GetAllNodesbyOSType(oc, "linux")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -214,7 +223,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		tunedNodeName, err = exutil.GetPodNodeName(oc, loggingNamespace, "web")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Tuned Node: %v", tunedNodeName)
-		tunedPodName, err = exutil.GetPodName(oc, ntoNamespace, "", tunedNodeName)
+		tunedPodName, err = exutil.GetPodName(oc, ntoNamespace, "openshift-app=tuned", tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Tuned Pod: %v", tunedPodName)
 
@@ -298,11 +307,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(renderCheck).NotTo(o.ContainSubstring("nf-conntrack-max"))
 
-		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-node")
-
-		profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(profileCheck).To(o.Equal("openshift-node"))
+		if isSNO {
+			assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-control-plane")
+			profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(profileCheck).To(o.Equal("openshift-control-plane"))
+		} else {
+			assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-node")
+			profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(profileCheck).To(o.Equal("openshift-node"))
+		}
 
 		g.By("All node's current profile is:")
 		stdOut, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile").Output()
@@ -320,8 +335,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-36881-Node Tuning Operator will provide machine config for the master machine config pool [Disruptive] [Slow]", func() {
 
 		// test requires NTO to be installed
-		if !isNTO {
-			g.Skip("NTO is not installed - skipping test ...")
+		isSNO := isSNOCluster(oc)
+		if !isNTO || isSNO {
+			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
 		}
 
 		defer func() {
@@ -992,9 +1008,11 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 	})
 
 	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-30589-NTO Use MachineConfigs to lay down files needed for tuned [Disruptive] [Slow]", func() {
+
 		// test requires NTO to be installed
-		if !isNTO {
-			g.Skip("NTO is not installed - skipping test ...")
+		isSNO := isSNOCluster(oc)
+		if !isNTO || isSNO {
+			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
 		}
 
 		//Use the first worker node as labeled node
@@ -1136,8 +1154,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 	})
 	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-39123-NTO Operator will update tuned after changing included profile [Disruptive] [Slow]", func() {
 		// test requires NTO to be installed
-		if !isNTO {
-			g.Skip("NTO is not installed - skipping test ...")
+		isSNO := isSNOCluster(oc)
+		if !isNTO || isSNO {
+			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
 		}
 
 		if ManualPickup {
@@ -1276,8 +1295,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-45686-NTO Creating tuned profile with references to not yet existing Performance Profile configuration.[Disruptive] [Slow]", func() {
 		// test requires NTO to be installed
-		if !isNTO {
-			g.Skip("NTO is not installed - skipping test ...")
+		isSNO := isSNOCluster(oc)
+		if !isNTO || isSNO {
+			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
 		}
 
 		if ManualPickup {
@@ -1320,7 +1340,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Assert if the MCP has been successfully applied ...")
 		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-optimize", 600)
 
-		isSNO := isSNOCluster(oc)
+		isSNO = isSNOCluster(oc)
 		if isSNO {
 			g.By("Apply include-performance-profile tuned profile")
 			exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", paoIncludePerformanceProfile, "-p", "ROLENAME=master")
@@ -1523,16 +1543,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		g.By("Assert timeout (120) to apply TuneD profile; restarting TuneD daemon in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "18", 60, `timeout \(120\) to apply TuneD profile; restarting TuneD daemon`)
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "26", 120, `timeout \(120\) to apply TuneD profile; restarting TuneD daemon`)
 
 		g.By("Assert error waiting for tuned: signal: terminated in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "18", 60, `error waiting for tuned: signal: terminated`)
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "26", 120, `error waiting for tuned: signal: terminated`)
 	})
 
 	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-49370-NTO add huge pages to boot time via bootloader [Disruptive] [Slow]", func() {
 		// test requires NTO to be installed
-		if !isNTO {
-			g.Skip("NTO is not installed - skipping test ...")
+		isSNO := isSNOCluster(oc)
+		if !isNTO || isSNO {
+			g.Skip("NTO is not installed or it's Single Node Cluster- skipping test ...")
 		}
 
 		//Use the first worker node as labeled node
@@ -2017,13 +2038,19 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
+		isSNO := isSNOCluster(oc)
 		//NTO will provides two default tuned, one is openshift-control-plane, another is openshift-node
 		g.By("Check the default tuned profile list per nodes")
 		profileOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("profile", "-n", ntoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileOutput).NotTo(o.BeEmpty())
-		o.Expect(profileOutput).To(o.ContainSubstring("openshift-control-plane"))
-		o.Expect(profileOutput).To(o.ContainSubstring("openshift-node"))
+		if isSNO {
+			o.Expect(profileOutput).To(o.ContainSubstring("openshift-control-plane"))
+		} else {
+			o.Expect(profileOutput).To(o.ContainSubstring("openshift-control-plane"))
+			o.Expect(profileOutput).To(o.ContainSubstring("openshift-node"))
+		}
+
 	})
 
 	g.It("Author:liqcui-Medium-50052-NTO RHCOS-shipped stalld systemd units should use SCHED_FIFO to run stalld[Disruptive].", func() {
@@ -2100,6 +2127,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(stalldStatus).To(o.ContainSubstring("active (running)"))
 
 		g.By("Get stalld PID on labeled node ...")
+		stalldPIDStatus, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "ps -efZ | grep stalld | grep -v grep")
+		e2e.Logf("stalldPIDStatus is :\n%v", stalldPIDStatus)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(stalldPIDStatus).NotTo(o.BeEmpty())
+		o.Expect(stalldPIDStatus).NotTo(o.ContainSubstring("unconfined_service_t"))
+		o.Expect(stalldPIDStatus).To(o.ContainSubstring("-t 20"))
+
+		g.By("Get stalld PID on labeled node ...")
 		stalldPID, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "ps -efL| grep stalld | grep -v grep | awk '{print $2}'")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stalldPID).NotTo(o.BeEmpty())
@@ -2119,8 +2154,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			paoBaseQoSPod     = exutil.FixturePath("testdata", "psap", "pao", "pao-baseqos-pod.yaml")
 		)
 		// test requires NTO to be installed
-		if !isNTO {
-			g.Skip("NTO is not installed - skipping test ...")
+		isSNO := isSNOCluster(oc)
+		if !isNTO || isSNO {
+			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
 		}
 
 		if ManualPickup {

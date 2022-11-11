@@ -12,7 +12,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-//IsHyperNTOPodInstalled will return true if any pod is found in the given namespace, and false otherwise
+// isHyperNTOPodInstalled will return true if any pod is found in the given namespace, and false otherwise
 func isHyperNTOPodInstalled(oc *exutil.CLI, hostedClusterName string) bool {
 
 	e2e.Logf("Checking if pod is found in namespace %s...", hostedClusterName)
@@ -28,7 +28,7 @@ func isHyperNTOPodInstalled(oc *exutil.CLI, hostedClusterName string) bool {
 	return true
 }
 
-//getNodePoolName used to get nodepool name in clusters
+// getNodePoolNamebyHostedClusterName used to get nodepool name in clusters
 func getNodePoolNamebyHostedClusterName(oc *exutil.CLI, hostedClusterName string) string {
 
 	nodePoolNameList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodepool", "-n", "clusters", "-ojsonpath='{.items[*].metadata.name}'").Output()
@@ -49,8 +49,8 @@ func getNodePoolNamebyHostedClusterName(oc *exutil.CLI, hostedClusterName string
 
 }
 
-//getTunedConfigMapName used to get tuned configmap name for specified node pool
-func getTunedConfigMapNameWithRetry(oc *exutil.CLI, namespace string, filter string) string {
+// getTuningConfigMapNameWithRetry used to get tuned configmap name for specified node pool
+func getTuningConfigMapNameWithRetry(oc *exutil.CLI, namespace string, filter string) string {
 
 	var configmapName string
 	configmapName = ""
@@ -64,9 +64,9 @@ func getTunedConfigMapNameWithRetry(oc *exutil.CLI, namespace string, filter str
 		configMapsReg := regexp.MustCompile(".*" + filter + ".*")
 		isMatch := configMapsReg.MatchString(configMaps)
 		if isMatch {
-			tunedConfigMap := configMapsReg.FindAllString(configMaps, -1)
-			e2e.Logf("The list of tuned configmap is: \n%v", tunedConfigMap)
-			configmapName = tunedConfigMap[0]
+			tuningConfigMap := configMapsReg.FindAllString(configMaps, -1)
+			e2e.Logf("The list of tuned configmap is: \n%v", tuningConfigMap)
+			configmapName = tuningConfigMap[0]
 			return true, nil
 		}
 		return false, nil
@@ -75,7 +75,7 @@ func getTunedConfigMapNameWithRetry(oc *exutil.CLI, namespace string, filter str
 	return configmapName
 }
 
-//getTunedSystemSettingsByParmName
+// getTunedSystemSetValueByParamNameInHostedCluster
 func getTunedSystemSetValueByParamNameInHostedCluster(oc *exutil.CLI, ntoNamespace, nodeName, oscommand, sysctlparm string) string {
 
 	debugNodeStdout, err := oc.AsAdmin().AsGuestKubeconf().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", oscommand, sysctlparm).Output()
@@ -87,7 +87,7 @@ func getTunedSystemSetValueByParamNameInHostedCluster(oc *exutil.CLI, ntoNamespa
 	return matchResult
 }
 
-//compareSpecifiedValueByNameOnLabelNodewithRetry
+// compareSpecifiedValueByNameOnLabelNodewithRetryInHostedCluster
 func compareSpecifiedValueByNameOnLabelNodewithRetryInHostedCluster(oc *exutil.CLI, ntoNamespace, nodeName, oscommand, sysctlparm, specifiedvalue string) {
 
 	err := wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
@@ -104,6 +104,7 @@ func compareSpecifiedValueByNameOnLabelNodewithRetryInHostedCluster(oc *exutil.C
 
 // assertIfTunedProfileAppliedOnSpecifiedNode use to check if custom profile applied to a node
 func assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc *exutil.CLI, namespace string, tunedNodeName string, tunedName string) {
+
 	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
 		expectedTunedName, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile", tunedNodeName, "-ojsonpath={.status.tunedProfile}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -129,8 +130,9 @@ func assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc *exutil.CLI, n
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Profile was not applied to %s within timeout limit (30 seconds)", tunedNodeName))
 }
 
-//assertNTOPodLogsLastLines
+// assertNTOPodLogsLastLinesInHostedCluster
 func assertNTOPodLogsLastLinesInHostedCluster(oc *exutil.CLI, namespace string, ntoPod string, lineN string, timeDurationSec int, filter string) {
+
 	err := wait.Poll(15*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
 
 		//Remove err assert for SNO, the OCP will can not access temporily when master node restart or certificate key removed
@@ -200,7 +202,7 @@ func assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc *exutil.CLI, n
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Profile was not applied to %s within timeout limit (30 seconds)", nodePoolName))
 }
 
-//compareSpecifiedValueByNameOnNodePoolLevelwithRetryInHostedCluster
+// compareSpecifiedValueByNameOnNodePoolLevelwithRetryInHostedCluster
 func compareSpecifiedValueByNameOnNodePoolLevelwithRetryInHostedCluster(oc *exutil.CLI, ntoNamespace, nodePoolName, oscommand, sysctlparm, specifiedvalue string) {
 
 	var (
@@ -230,7 +232,7 @@ func compareSpecifiedValueByNameOnNodePoolLevelwithRetryInHostedCluster(oc *exut
 	exutil.AssertWaitPollNoErr(err, "The value sysctl mismatch, please check")
 }
 
-//assertMisMatchTunedSystemSettingsByParmNameOnNodePoolLevelInHostedCluster used to compare the the value shouldn't match specified name
+// assertMisMatchTunedSystemSettingsByParmNameOnNodePoolLevelInHostedCluster used to compare the the value shouldn't match specified name
 func assertMisMatchTunedSystemSettingsByParmNameOnNodePoolLevelInHostedCluster(oc *exutil.CLI, ntoNamespace, nodePoolName, oscommand, sysctlparm, expectedMisMatchValue string) {
 	nodeNames, err := exutil.GetAllNodesByNodePoolNameInHostedCluster(oc, nodePoolName)
 	o.Expect(err).NotTo(o.HaveOccurred())

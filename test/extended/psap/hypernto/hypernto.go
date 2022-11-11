@@ -64,17 +64,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(workerNodeName).NotTo(o.BeEmpty())
 		e2e.Logf("Worker Node: %v", workerNodeName)
 
-		//Delete configmap in hosted cluster namespace and disable tunedConfig
+		//Delete configmap in hosted cluster namespace and disable tuningConfig
 		defer assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeName, "openshift-node")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-"+nodePoolName, "-n", guestClusterNS, "--ignore-not-found").Execute()
-		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tunedConfig\":[]}}").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[]}}").Execute()
 
 		//Enable tuned in hosted clusters
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tunedConfig\":[{\"name\": \"hc-nodepool-pidmax\"}]}}").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[{\"name\": \"hc-nodepool-pidmax\"}]}}").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check if the configmap hc-nodepool-pidmax created in hosted cluster nodepool")
-		configMaps := getTunedConfigMapNameWithRetry(oc, guestClusterNS, nodePoolName)
+		configMaps := getTuningConfigMapNameWithRetry(oc, guestClusterNS, nodePoolName)
 		o.Expect(configMaps).To(o.ContainSubstring("tuned-" + nodePoolName))
 
 		g.By("Check if the tuned hc-nodepool-pidmax is created in hosted cluster nodepool")
@@ -112,7 +112,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		compareSpecifiedValueByNameOnLabelNodewithRetryInHostedCluster(oc, ntoNamespace, workerNodeName, "sysctl", "kernel.pid_max", "868686")
 
 		g.By("Remove the custom tuned profile from node pool in hosted cluster ...")
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tunedConfig\":[]}}").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[]}}").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Remove custom tuned profile to check if kernel.pid_max rollback to origin value
@@ -163,17 +163,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(workerNodeName).NotTo(o.BeEmpty())
 		e2e.Logf("Worker Node: %v", workerNodeName)
 
-		//Delete configmap in hosted cluster namespace and disable tunedConfig
+		//Delete configmap in hosted cluster namespace and disable tuningConfig
 		defer assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeName, "openshift-node")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-"+nodePoolName, "-n", guestClusterNS, "--ignore-not-found").Execute()
-		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tunedConfig\":[]}}").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[]}}").Execute()
 
 		//Enable tuned in hosted clusters
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tunedConfig\":[{\"name\": \"hc-nodepool-invalid\"}]}}").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[{\"name\": \"hc-nodepool-invalid\"}]}}").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check if the configmap hc-nodepool-invalid created in hosted cluster nodepool")
-		configMaps := getTunedConfigMapNameWithRetry(oc, guestClusterNS, nodePoolName)
+		configMaps := getTuningConfigMapNameWithRetry(oc, guestClusterNS, nodePoolName)
 		o.Expect(configMaps).To(o.ContainSubstring("tuned-" + nodePoolName))
 
 		g.By("Check if the tuned hc-nodepool-invalid is created in hosted cluster nodepool")
@@ -222,7 +222,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		compareSpecifiedValueByNameOnLabelNodewithRetryInHostedCluster(oc, ntoNamespace, workerNodeName, "sysctl", "vm.dirty_ratio", "56")
 
 		g.By("Remove the custom tuned profile from node pool in hosted cluster ...")
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tunedConfig\":[{\"name\": \"\"}]}}").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[{\"name\": \"\"}]}}").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Remove custom tuned profile to check if kernel.pid_max and vm.dirty_ratio rollback to origin value
@@ -274,17 +274,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(workerNodeName).NotTo(o.BeEmpty())
 
-		//Delete configmap in hosted cluster namespace and disable tunedConfig
+		//Delete configmap in hosted cluster namespace and disable tuningConfig
 		defer assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeName, "openshift-node")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-"+nodePoolName, "-n", guestClusterNS, "--ignore-not-found").Execute()
-		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tunedConfig\":[]}}").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[]}}").Execute()
 
 		//Enable tuned in hosted clusters
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tunedConfig\":[{\"name\": \"hc-nodepool-vmdratio\"}]}}").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[{\"name\": \"hc-nodepool-vmdratio\"}]}}").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check if the configmap hc-nodepool-vmdratio created in hosted cluster nodepool")
-		configMaps := getTunedConfigMapNameWithRetry(oc, guestClusterNS, nodePoolName)
+		configMaps := getTuningConfigMapNameWithRetry(oc, guestClusterNS, nodePoolName)
 		o.Expect(configMaps).To(o.ContainSubstring("tuned-" + nodePoolName))
 
 		g.By("Check if the tuned hc-nodepool-vmdratio is created in hosted cluster nodepool")
@@ -315,7 +315,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		compareSpecifiedValueByNameOnNodePoolLevelwithRetryInHostedCluster(oc, ntoNamespace, nodePoolName, "sysctl", "vm.dirty_ratio", "56")
 
 		g.By("Remove the custom tuned profile from node pool in hosted cluster ...")
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tunedConfig\":[]}}").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[]}}").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Remove custom tuned profile to check if kernel.pid_max and vm.dirty_ratio rollback to origin value
@@ -364,17 +364,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(workerNodeName).NotTo(o.BeEmpty())
 		e2e.Logf("Worker Node: %v", workerNodeName)
 
-		//Delete configmap in hosted cluster namespace and disable tunedConfig
+		//Delete configmap in hosted cluster namespace and disable tuningConfig
 		defer assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeName, "openshift-node")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-"+nodePoolName, "-n", guestClusterNS, "--ignore-not-found").Execute()
-		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tunedConfig\":[]}}").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[]}}").Execute()
 
 		//Enable tuned in hosted clusters
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tunedConfig\":[{\"name\": \"hc-nodepool-pidmax-cm\"}]}}").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[{\"name\": \"hc-nodepool-pidmax-cm\"}]}}").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check if the configmap hc-nodepool-pidmax created in hosted cluster nodepool")
-		configMaps := getTunedConfigMapNameWithRetry(oc, guestClusterNS, nodePoolName)
+		configMaps := getTuningConfigMapNameWithRetry(oc, guestClusterNS, nodePoolName)
 		o.Expect(configMaps).To(o.ContainSubstring("tuned-" + nodePoolName))
 
 		g.By("Check if the tuned hc-nodepool-pidmax is created in hosted cluster nodepool")
@@ -412,7 +412,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		compareSpecifiedValueByNameOnLabelNodewithRetryInHostedCluster(oc, ntoNamespace, workerNodeName, "sysctl", "kernel.pid_max", "868686")
 
 		g.By("Remove the custom tuned profile from node pool in hosted cluster ...")
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tunedConfig\":[]}}").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", nodePoolName, "-n", "clusters", "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[]}}").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Remove custom tuned profile to check if kernel.pid_max rollback to origin value

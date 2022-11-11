@@ -17,6 +17,7 @@ import (
 
 // isPodInstalled will return true if any pod is found in the given namespace, and false otherwise
 func isNTOPodInstalled(oc *exutil.CLI, namespace string) bool {
+
 	e2e.Logf("Checking if pod is found in namespace %s...", namespace)
 	podList, err := oc.AdminKubeClient().CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{})
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -30,6 +31,7 @@ func isNTOPodInstalled(oc *exutil.CLI, namespace string) bool {
 
 // getNTOPodName checks all pods in a given namespace and returns the first NTO pod name found
 func getNTOPodName(oc *exutil.CLI, namespace string) (string, error) {
+
 	podList, err := exutil.GetAllPods(oc, namespace)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	podListSize := len(podList)
@@ -48,6 +50,7 @@ func getTunedState(oc *exutil.CLI, namespace string, tunedName string) (string, 
 
 // patchTunedState will patch the state of the specified tuned to that specified if supported, will throw an error if patch fails or state unsupported
 func patchTunedState(oc *exutil.CLI, namespace string, tunedName string, state string) error {
+
 	state = strings.ToLower(state)
 	if state == "unmanaged" {
 		return oc.AsAdmin().WithoutNamespace().Run("patch").Args("tuned", tunedName, "-p", `{"spec":{"managementState":"Unmanaged"}}`, "--type", "merge", "-n", namespace).Execute()
@@ -83,6 +86,7 @@ func getTunedProfile(oc *exutil.CLI, namespace string, tunedNodeName string) (st
 
 // assertIfTunedProfileApplied checks the logs for a given tuned pod in a given namespace to see if the expected profile was applied
 func assertIfTunedProfileApplied(oc *exutil.CLI, namespace string, tunedPodName string, profile string) {
+
 	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
 		podLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", namespace, "--tail=9", tunedPodName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -100,6 +104,7 @@ func assertIfTunedProfileApplied(oc *exutil.CLI, namespace string, tunedPodName 
 
 // assertIfNodeSchedulingDisabled checks all nodes in a cluster to see if 'SchedulingDisabled' status is present on any node
 func assertIfNodeSchedulingDisabled(oc *exutil.CLI) string {
+
 	var nodeNames []string
 	var nodeNameList []string
 	err := wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
@@ -179,7 +184,7 @@ func getKernelPidMaxValue(kernel string) string {
 	return pidMaxValue
 }
 
-// Compare if the sysctl parameter is equal to specified value on all the node
+// compareSpecifiedValueByNameOnLabelNode Compare if the sysctl parameter is equal to specified value on all the node
 func compareSpecifiedValueByNameOnLabelNode(oc *exutil.CLI, labelNodeName, sysctlparm, specifiedvalue string) {
 
 	regexpstr, _ := regexp.Compile(sysctlparm + ".*")
@@ -192,8 +197,9 @@ func compareSpecifiedValueByNameOnLabelNode(oc *exutil.CLI, labelNodeName, sysct
 
 }
 
-// Compare if the sysctl parameter is not equal to specified value on all the node
+// compareSysctlDifferentFromSpecifiedValueByName compare if the sysctl parameter is not equal to specified value on all the node
 func compareSysctlDifferentFromSpecifiedValueByName(oc *exutil.CLI, sysctlparm, specifiedvalue string) {
+
 	nodeList, err := exutil.GetAllNodesbyOSType(oc, "linux")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	nodeListSize := len(nodeList)
@@ -210,8 +216,9 @@ func compareSysctlDifferentFromSpecifiedValueByName(oc *exutil.CLI, sysctlparm, 
 
 }
 
-// Compare the sysctl parameter's value on specified node, it should different than other node
+// compareSysctlValueOnSepcifiedNodeByName compare the sysctl parameter's value on specified node, it should different than other node
 func compareSysctlValueOnSepcifiedNodeByName(oc *exutil.CLI, tunedNodeName, sysctlparm, defaultvalue, specifiedvalue string) {
+
 	nodeList, err := exutil.GetAllNodesbyOSType(oc, "linux")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	nodeListSize := len(nodeList)
@@ -236,6 +243,7 @@ func compareSysctlValueOnSepcifiedNodeByName(oc *exutil.CLI, tunedNodeName, sysc
 	}
 }
 
+// getTunedPodNamebyNodeName
 func getTunedPodNamebyNodeName(oc *exutil.CLI, tunedNodeName, namespace string) string {
 
 	podNames, err := exutil.GetPodName(oc, namespace, "", tunedNodeName)
@@ -259,6 +267,7 @@ type ntoResource struct {
 }
 
 func (ntoRes *ntoResource) createTunedProfileIfNotExist(oc *exutil.CLI) {
+
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("tuned", ntoRes.name, "-n", ntoRes.namespace).Output()
 	if strings.Contains(output, "NotFound") || strings.Contains(output, "No resources") || err != nil {
 		e2e.Logf(fmt.Sprintf("No tuned in project: %s, create one: %s", ntoRes.namespace, ntoRes.name))
@@ -269,6 +278,7 @@ func (ntoRes *ntoResource) createTunedProfileIfNotExist(oc *exutil.CLI) {
 }
 
 func (ntoRes *ntoResource) createDebugTunedProfileIfNotExist(oc *exutil.CLI, isDebug bool) {
+
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("tuned", ntoRes.name, "-n", ntoRes.namespace).Output()
 	if strings.Contains(output, "NotFound") || strings.Contains(output, "No resources") || err != nil {
 		e2e.Logf(fmt.Sprintf("No tuned in project: %s, create one: %s", ntoRes.namespace, ntoRes.name))
@@ -279,6 +289,7 @@ func (ntoRes *ntoResource) createDebugTunedProfileIfNotExist(oc *exutil.CLI, isD
 }
 
 func (ntoRes *ntoResource) createIRQSMPAffinityProfileIfNotExist(oc *exutil.CLI) {
+
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("tuned", ntoRes.name, "-n", ntoRes.namespace).Output()
 	if strings.Contains(output, "NotFound") || strings.Contains(output, "No resources") || err != nil {
 		e2e.Logf(fmt.Sprintf("No tuned in project: %s, create one: %s", ntoRes.namespace, ntoRes.name))
@@ -308,13 +319,16 @@ func (ntoRes ntoResource) assertTunedProfileApplied(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(err, "New tuned profile isn't applied correctly, please check")
 }
 
+// assertNTOOperatorLogs
 func assertNTOOperatorLogs(oc *exutil.CLI, namespace string, ntoOperatorPod string, profileName string) {
 	ntoOperatorLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", namespace, ntoOperatorPod, "--tail=3").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(ntoOperatorLogs).To(o.ContainSubstring(profileName))
 }
 
+// isOneMasterNode
 func isOneMasterNode(oc *exutil.CLI) bool {
+
 	masterNodes, _ := exutil.GetClusterNodesBy(oc, "master")
 	if len(masterNodes) == 1 {
 		return true
@@ -322,6 +336,7 @@ func isOneMasterNode(oc *exutil.CLI) bool {
 	return false
 }
 
+// isSNOCluster
 func isSNOCluster(oc *exutil.CLI) bool {
 
 	//Only 1 master, 1 worker node and with the same hostname.
@@ -333,6 +348,7 @@ func isSNOCluster(oc *exutil.CLI) bool {
 	return false
 }
 
+// assertAffineDefaultCPUSets
 func assertAffineDefaultCPUSets(oc *exutil.CLI, tunedPodName, namespace string) bool {
 
 	tunedCpusAllowedList, err := exutil.RemoteShPodWithBash(oc, namespace, tunedPodName, "grep ^Cpus_allowed_list /proc/`pgrep openshift-tuned`/status")
@@ -364,7 +380,9 @@ func assertAffineDefaultCPUSets(oc *exutil.CLI, tunedPodName, namespace string) 
 	return false
 }
 
+// assertDebugSettings
 func assertDebugSettings(oc *exutil.CLI, tunedNodeName string, ntoNamespace string, isDebug string) bool {
+
 	nodeProfile, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("profile", tunedNodeName, "-n", ntoNamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -377,7 +395,9 @@ func assertDebugSettings(oc *exutil.CLI, tunedNodeName string, ntoNamespace stri
 	return isMatch
 }
 
+// getDefaultSMPAffinityBitMaskbyCPUCores
 func getDefaultSMPAffinityBitMaskbyCPUCores(oc *exutil.CLI, workerNodeName string) string {
+
 	//Currently support 48core cpu worker nodes
 	smpbitMask := 0xffffffffffff
 	smpbitMaskIntStr := fmt.Sprintf("%d", smpbitMask)
@@ -399,13 +419,14 @@ func getDefaultSMPAffinityBitMaskbyCPUCores(oc *exutil.CLI, workerNodeName strin
 	return smpMaskStr
 }
 
-// Convert hex into int string
+// hexToInt Convert hex into int string
 func hexToInt(x string) string {
 	base, err := strconv.ParseInt(x, 16, 64)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strconv.FormatInt(base, 10)
 }
 
+// assertIsolateCPUCoresAffectedBitMask
 func assertIsolateCPUCoresAffectedBitMask(defaultSMPBitMask string, isolatedCPU string) string {
 
 	defaultSMPBitMaskStr := hexToInt(defaultSMPBitMask)
@@ -420,6 +441,7 @@ func assertIsolateCPUCoresAffectedBitMask(defaultSMPBitMask string, isolatedCPU 
 	return SMPBitMask
 }
 
+// assertDefaultIRQSMPAffinityAffectedBitMask
 func assertDefaultIRQSMPAffinityAffectedBitMask(defaultSMPBitMask string, isolatedCPU string) bool {
 
 	var isMatch bool
@@ -440,6 +462,7 @@ func assertDefaultIRQSMPAffinityAffectedBitMask(defaultSMPBitMask string, isolat
 
 // AssertTunedAppliedMC Check if customed tuned applied via MCP
 func AssertTunedAppliedMC(oc *exutil.CLI, mcpName string, filter string) {
+
 	mcNameList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mc", "--no-headers", "-oname").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -459,7 +482,7 @@ func AssertTunedAppliedMC(oc *exutil.CLI, mcpName string, filter string) {
 
 // AssertTunedAppliedToNode Check if customed tuned applied to a certain node
 func AssertTunedAppliedToNode(oc *exutil.CLI, tunedNodeName string, filter string) bool {
-	//cmdLineOutput, err := exutil.DebugNode(oc, tunedNodeName, "cat", "/proc/cmdline")
+
 	cmdLineOutput, _, err := exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, tunedNodeName, []string{"-q"}, "cat", "/proc/cmdline")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	var isMatch bool
@@ -475,7 +498,9 @@ func AssertTunedAppliedToNode(oc *exutil.CLI, tunedNodeName string, filter strin
 	return isMatch
 }
 
+// assertNTOPodLogsLastLines     s
 func assertNTOPodLogsLastLines(oc *exutil.CLI, namespace string, ntoPod string, lineN string, timeDurationSec int, filter string) {
+
 	err := wait.Poll(15*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
 
 		//Remove err assert for SNO, the OCP will can not access temporily when master node restart or certificate key removed
@@ -495,7 +520,9 @@ func assertNTOPodLogsLastLines(oc *exutil.CLI, namespace string, ntoPod string, 
 	exutil.AssertWaitPollNoErr(err, "The tuned pod's log doesn't contain the keywords, please check")
 }
 
+// getServiceENDPoint
 func getServiceENDPoint(oc *exutil.CLI, namespace string) string {
+
 	serviceOutput, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", namespace, "service/node-tuning-operator").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	endPointReg, _ := regexp.Compile(".*Endpoints.*")
@@ -533,6 +560,7 @@ func AssertNTOCertificateRotate(oc *exutil.CLI, ntoNamespace string, tunedNodeNa
 	exutil.AssertWaitPollNoErr(err, "The NTO certificate isn't rotate, please check")
 }
 
+// compareCertificateBetweenOpenSSLandTLSSecret
 func compareCertificateBetweenOpenSSLandTLSSecret(oc *exutil.CLI, ntoNamespace string, tunedNodeName string) {
 
 	metricEndpoint := getServiceENDPoint(oc, ntoNamespace)
@@ -558,6 +586,7 @@ func compareCertificateBetweenOpenSSLandTLSSecret(oc *exutil.CLI, ntoNamespace s
 	exutil.AssertWaitPollNoErr(err, "The certificate is different, please check")
 }
 
+// assertIFChannel
 func assertIFChannel(oc *exutil.CLI, namespace string, tunedNodeName string, shouldMatch bool) bool {
 
 	var isMatch bool
@@ -589,6 +618,7 @@ func assertIFChannel(oc *exutil.CLI, namespace string, tunedNodeName string, sho
 	return isMatch
 }
 
+// compareSpecifiedValueByNameOnLabelNodewithRetry
 func compareSpecifiedValueByNameOnLabelNodewithRetry(oc *exutil.CLI, ntoNamespace, nodeName, sysctlparm, specifiedvalue string) {
 
 	err := wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
@@ -609,6 +639,7 @@ func compareSpecifiedValueByNameOnLabelNodewithRetry(oc *exutil.CLI, ntoNamespac
 	exutil.AssertWaitPollNoErr(err, "The certificate is different, please check")
 }
 
+// skipDeployPAO
 func skipDeployPAO(oc *exutil.CLI) bool {
 
 	skipPAO := true
@@ -626,7 +657,9 @@ func skipDeployPAO(oc *exutil.CLI) bool {
 	return skipPAO
 }
 
+// assertIOTimeOutandMaxRetries
 func assertIOTimeOutandMaxRetries(oc *exutil.CLI, ntoNamespace string) {
+
 	nodeList, err := exutil.GetAllNodesbyOSType(oc, "linux")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	nodeListSize := len(nodeList)
@@ -639,7 +672,9 @@ func assertIOTimeOutandMaxRetries(oc *exutil.CLI, ntoNamespace string) {
 	}
 }
 
+// confirmedTunedReady
 func confirmedTunedReady(oc *exutil.CLI, ntoNamespace string, tunedName string, timeDurationSec int) {
+
 	err := wait.Poll(10*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
 
 		tunedStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("tuned", "-n", ntoNamespace).Output()
@@ -653,6 +688,7 @@ func confirmedTunedReady(oc *exutil.CLI, ntoNamespace string, tunedName string, 
 	exutil.AssertWaitPollNoErr(err, "tuned is not ready")
 }
 
+// switchThrottlectlOnOff
 func switchThrottlectlOnOff(oc *exutil.CLI, tunedNodeName string, throttlectlState string, timeDurationSec int) {
 
 	err := wait.Poll(10*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
