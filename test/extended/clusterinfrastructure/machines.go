@@ -294,8 +294,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		instanceID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-o=jsonpath={.items[0].status.providerStatus.instanceId}", "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		c2sConfigPrefix, stsConfigPrefix := exutil.GetAwsCredentialFromCluster(oc)
-		defer exutil.DeleteAwsCredentialTmpFile(c2sConfigPrefix, stsConfigPrefix)
+		exutil.GetAwsCredentialFromCluster(oc)
 
 		volumeInfo, err := exutil.GetAwsVolumeInfoAttachedToInstanceID(instanceID)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -579,8 +578,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Create a new dhcpOptions")
 		var newDhcpOptionsID, currentDhcpOptionsID string
-		c2sConfigPrefix, stsConfigPrefix := exutil.GetAwsCredentialFromCluster(oc)
-		defer exutil.DeleteAwsCredentialTmpFile(c2sConfigPrefix, stsConfigPrefix)
+		exutil.GetAwsCredentialFromCluster(oc)
 		awsClient := exutil.InitAwsSession()
 		newDhcpOptionsID, err := awsClient.CreateDhcpOptions()
 		if err != nil {

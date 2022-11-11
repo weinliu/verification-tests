@@ -320,74 +320,22 @@ func GetAwsVolumeInfoAttachedToInstanceID(instanceID string) (string, error) {
 }
 
 // GetAwsCredentialFromCluster get aws credential from cluster
-func GetAwsCredentialFromCluster(oc *CLI) (string, string) {
+func GetAwsCredentialFromCluster(oc *CLI) {
 	credential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system", "-o", "json").Output()
-	// Disconnected and STS type test clusters
-	newValue, _ := json.Marshal(err)
-	if strings.Contains(string(newValue), "not found") {
-		credential, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/ebs-cloud-credentials", "-n", "openshift-cluster-csi-drivers", "-o", "json").Output()
-	}
-	o.Expect(err).NotTo(o.HaveOccurred())
-	clusterRegion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	os.Setenv("AWS_REGION", clusterRegion)
-	var c2sConfigPrefix, stsConfigPrefix string
-	// C2S type test clusters
-	if gjson.Get(credential, `data.credentials`).Exists() && gjson.Get(credential, `data.role`).Exists() {
-		c2sConfigPrefix = "/tmp/storage-c2sconfig-" + getRandomString() + "-"
-		e2e.Logf("C2S config prefix is: %s", c2sConfigPrefix)
-		extraCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap/kube-cloud-config", "-n", "openshift-cluster-csi-drivers", "-o", "json").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(ioutil.WriteFile(c2sConfigPrefix+"ca.pem", []byte(gjson.Get(extraCA, `data.ca-bundle\.pem`).String()), 0644)).NotTo(o.HaveOccurred())
-		os.Setenv("AWS_CA_BUNDLE", c2sConfigPrefix+"ca.pem")
-	}
-	// STS type test clusters
-	if gjson.Get(credential, `data.credentials`).Exists() && !gjson.Get(credential, `data.aws_access_key_id`).Exists() {
-		stsConfigPrefix = "/tmp/storage-stsconfig-" + getRandomString() + "-"
-		e2e.Logf("STS config prefix is: %s", stsConfigPrefix)
-		stsConfigBase64 := gjson.Get(credential, `data.credentials`).String()
-		stsConfig, err := base64.StdEncoding.DecodeString(stsConfigBase64)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		var tokenPath, roleArn string
-		dataList := strings.Split(string(stsConfig), ` `)
-		for _, subStr := range dataList {
-			if strings.Contains(subStr, `/token`) {
-				tokenPath = subStr
-			}
-			if strings.Contains(subStr, `arn:`) {
-				roleArn = strings.Split(string(subStr), "\n")[0]
-			}
-		}
-		cfgStr := strings.Replace(string(stsConfig), tokenPath, stsConfigPrefix+"token", -1)
-		tempToken, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-cluster-csi-drivers", "deployment/aws-ebs-csi-driver-controller", "-c", "csi-driver", "--", "cat", tokenPath).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(ioutil.WriteFile(stsConfigPrefix+"config", []byte(cfgStr), 0644)).NotTo(o.HaveOccurred())
-		o.Expect(ioutil.WriteFile(stsConfigPrefix+"token", []byte(tempToken), 0644)).NotTo(o.HaveOccurred())
-		os.Setenv("AWS_ROLE_ARN", roleArn)
-		os.Setenv("AWS_WEB_IDENTITY_TOKEN_FILE", stsConfigPrefix+"token")
-		os.Setenv("AWS_CONFIG_FILE", stsConfigPrefix+"config")
-		os.Setenv("AWS_PROFILE", "storageAutotest"+getRandomString())
-	} else {
-		accessKeyIDBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).String(), gjson.Get(credential, `data.aws_secret_access_key`).String()
-		accessKeyID, err := base64.StdEncoding.DecodeString(accessKeyIDBase64)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		secureKey, err := base64.StdEncoding.DecodeString(secureKeyBase64)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		os.Setenv("AWS_ACCESS_KEY_ID", string(accessKeyID))
-		os.Setenv("AWS_SECRET_ACCESS_KEY", string(secureKey))
-	}
-	return c2sConfigPrefix, stsConfigPrefix
-}
+	// Skip for sts and c2s clusters.
+	if err != nil {
+		g.Skip("Did not get credential to access aws, skip the testing.")
 
-// DeleteAwsCredentialTmpFile delete aws credential tmp file
-func DeleteAwsCredentialTmpFile(c2sConfigPrefix string, stsConfigPrefix string) {
-	if c2sConfigPrefix != "" {
-		e2e.Logf("remove C2S config tmp file")
-		os.Remove(c2sConfigPrefix + "ca.pem")
 	}
-	if stsConfigPrefix != "" {
-		e2e.Logf("remove STS config tmp file")
-		os.Remove(stsConfigPrefix + "config")
-		os.Remove(stsConfigPrefix + "token")
-	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+	accessKeyIDBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).String(), gjson.Get(credential, `data.aws_secret_access_key`).String()
+	accessKeyID, err1 := base64.StdEncoding.DecodeString(accessKeyIDBase64)
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	secureKey, err2 := base64.StdEncoding.DecodeString(secureKeyBase64)
+	o.Expect(err2).NotTo(o.HaveOccurred())
+	clusterRegion, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
+	o.Expect(err3).NotTo(o.HaveOccurred())
+	os.Setenv("AWS_ACCESS_KEY_ID", string(accessKeyID))
+	os.Setenv("AWS_SECRET_ACCESS_KEY", string(secureKey))
+	os.Setenv("AWS_REGION", clusterRegion)
 }
