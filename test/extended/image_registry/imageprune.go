@@ -17,17 +17,18 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc                 = exutil.NewCLI("default-image-prune", exutil.KubeConfigPath())
-		monitoringns       = "openshift-monitoring"
-		promPod            = "prometheus-k8s-0"
-		queryImagePruner   = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=image_registry_operator_image_pruner_install_status"
-		queryImageRegistry = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=image_registry_operator_storage_reconfigured_total"
-		priorityClassName  = "system-cluster-critical"
-		normalInfo         = "Creating image pruner with keepYoungerThan"
-		debugInfo          = "Examining ImageStream"
-		traceInfo          = "keeping because it is used by imagestream"
-		traceAllInfo       = "Content-Type: application/json"
-		tolerationsInfo    = `[{"effect":"NoSchedule","key":"key","operator":"Equal","value":"value"}]`
+		oc                   = exutil.NewCLI("default-image-prune", exutil.KubeConfigPath())
+		monitoringns         = "openshift-monitoring"
+		promPod              = "prometheus-k8s-0"
+		queryImagePruner     = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=image_registry_operator_image_pruner_install_status"
+		queryImageRegistry   = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=image_registry_operator_storage_reconfigured_total"
+		priorityClassName    = "system-cluster-critical"
+		normalInfo           = "Creating image pruner with keepYoungerThan"
+		debugInfo            = "Examining ImageStream"
+		traceInfo            = "keeping because it is used by imagestream"
+		traceAllInfo         = "Content-Type: application/json"
+		tolerationsInfo      = `[{"effect":"NoSchedule","key":"key","operator":"Equal","value":"value"}]`
+		imageRegistryBaseDir = exutil.FixturePath("testdata", "image_registry")
 	)
 	// author: wewang@redhat.com
 	g.It("ConnectedOnly-Author:wewang-High-27613-registry operator can publish metrics reporting the status of image-pruner [Disruptive]", func() {
@@ -482,5 +483,58 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		output, err = oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-image-registry", "deployment.apps/image-registry", "/usr/bin/dockerregistry", "-prune=check").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(oc.Namespace() + "/oci is not found, will remove the whole repository"))
+	})
+
+	g.It("Author:wewang-High-54905-Critical-54904-Critical-54051-Critical-54050-Could import manifest lists via ImageStreamImport and sub-manifests did not be pruned when prune image", func() {
+		g.By("Create ImageStreamImport with docker multiarch image")
+		var (
+			isImportFile = filepath.Join(imageRegistryBaseDir, "imagestream-import-oci.yaml")
+			isimportsrc  = isImportSource{
+				namespace: "",
+				name:      "",
+				image:     "",
+				mode:      "",
+				template:  isImportFile,
+			}
+		)
+		isarr := [2]string{"ociapp", "dockerapp"}
+		imagearr := [2]string{"quay.io/openshifttest/ociimage@sha256:d58e3e003ddec723dd14f72164beaa609d24c5e5e366579e23bc8b34b9a58324", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f"}
+		shortimage := [2]string{"ociimage", "busybox"}
+		num := [2]int{7, 10}
+		g.By("Get server host")
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		refRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(oc, refRoute)
+
+		g.By("Prune the images")
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "system:image-pruner", oc.Username()).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "system:image-pruner", oc.Username()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		token, err := oc.Run("whoami").Args("-t").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		isimportsrc.namespace = oc.Namespace()
+		for i := 0; i < 2; i++ {
+			isimportsrc.mode = "PreserveOriginal"
+			isimportsrc.name = isarr[i]
+			isimportsrc.image = imagearr[i]
+			isimportsrc.create(oc)
+			pruneImage(oc, isarr[i], shortimage[i], refRoute, token, num[i])
+			isimportsrc.mode = "Legacy"
+			isimportsrc.create(oc)
+			importOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("is/"+isarr[i], "-o=jsonpath={.spec.tags[0].importPolicy.importMode}", "-n", oc.Namespace()).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(importOut).To(o.ContainSubstring("Legacy"))
+			err = wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
+				generationOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("is/"+isarr[i], "-o=jsonpath={.status.tags[0].items[0].generation}", "-n", oc.Namespace()).Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if generationOut != "2" {
+					e2e.Logf("Continue to next round")
+					return false, nil
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "generation is not 2")
+		}
 	})
 })

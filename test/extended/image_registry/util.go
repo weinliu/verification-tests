@@ -1193,3 +1193,36 @@ func (dssrc *dsSource) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", dssrc.template, "-p", "NAME="+dssrc.name, "NAMESPACE="+dssrc.namespace, "IMAGE="+dssrc.image)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
+
+type isImportSource struct {
+	name      string
+	namespace string
+	image     string
+	mode      string
+	template  string
+}
+
+func (issrc *isImportSource) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", issrc.template, "-p", "NAME="+issrc.name, "NAMESPACE="+issrc.namespace, "IMAGE="+issrc.image, "MODE="+issrc.mode)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func pruneImage(oc *exutil.CLI, isName string, imageName string, refRoute string, token string, num int) {
+	g.By("Check image object and sub-manifest created for the manifest list")
+	isOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("is/"+isName, "-n", oc.Namespace()).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(isOut).To(o.ContainSubstring(isName))
+	imageOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("images", "-n", oc.Namespace()).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	imageCount := strings.Count(imageOut, imageName)
+	o.Expect(imageCount).To(o.Equal(num))
+
+	g.By("Prune image")
+	out, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("prune", "images", "--token="+token, "--registry-url="+refRoute, "--confirm").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(out).To(o.ContainSubstring("Summary: deleted"))
+	imageOut, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("images", "-n", oc.Namespace()).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	imageCount = strings.Count(imageOut, imageName)
+	o.Expect(imageCount).To(o.Equal(num))
+}
