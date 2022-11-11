@@ -331,4 +331,28 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		exutil.AssertWaitPollWithErr(err, "Could not get alert from prometheus")
 	})
 
+	// author: yinzhou@redhat.com
+	g.It("NonPreRelease-PstChkUpgrade-Author:yinzhou-Medium-55823-make sure split the route controllers out from OCM", func() {
+		g.By("Check the ingress-ip and ingress-to-route are started under project openshift-route-controller-manager")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-route-controller-manager", "-l", "app=route-controller-manager").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkMessage := []string{
+			"ingress-to-route",
+			"ingress-ip",
+		}
+		for _, v := range checkMessage {
+			if !strings.Contains(out, v) {
+				e2e.Failf("can't see route contrller on openshift-route-controller-manager")
+			}
+		}
+		g.By("Check the ingress-ip and ingress-to-route should no see from OCM")
+		out, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-controller-manager", "-l", "app=openshift-controller-manager-a").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, v := range checkMessage {
+			if strings.Contains(out, v) {
+				e2e.Failf("Still see the controller on openshift-controller-manager")
+			}
+		}
+	})
+
 })
