@@ -3030,4 +3030,89 @@ spec:
 		})
 		exutil.AssertWaitPollNoErr(err, "pod did not showed up with the expected status")
 	})
+
+	// author: dpunia@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:dpunia-High-44738-The installer pod fall-backoff should not happen if latestAvailableRevision > targetRevision [Disruptive]", func() {
+
+		if !isSNOCluster(oc) {
+			g.Skip("This is not a SNO cluster, skip.")
+		}
+
+		defer func() {
+			g.By("4) Change Step 1 injection by updating unsupportedConfigOverrides to null")
+			patch := `[{"op": "replace", "path": "/spec/unsupportedConfigOverrides", "value": null}]`
+			rollOutError := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubeapiserver/cluster", "--type=json", "-p", patch).Execute()
+			o.Expect(rollOutError).NotTo(o.HaveOccurred())
+
+			g.By("5) Performed apiserver force rollout to test step 4 changes.")
+			patch = fmt.Sprintf(`[ {"op": "replace", "path": "/spec/forceRedeploymentReason", "value": "Force Redploy %v" } ]`, time.Now().UnixNano())
+			patchForceRedploymentError := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubeapiserver/cluster", "--type=json", "-p", patch).Execute()
+			o.Expect(patchForceRedploymentError).NotTo(o.HaveOccurred())
+
+			g.By("6) Check latestAvailableRevision > targetRevision")
+			rollOutError = wait.Poll(60*time.Second, 300*time.Second, func() (bool, error) {
+				targetRevisionOut, revisionGetErr := oc.WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", "jsonpath={.status.nodeStatuses[*].targetRevision}").Output()
+				o.Expect(revisionGetErr).NotTo(o.HaveOccurred())
+				targetRevision, _ := strconv.Atoi(targetRevisionOut)
+
+				latestAvailableRevisionOut, latestrevisionGetErr := oc.WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", "jsonpath={.status.latestAvailableRevision}").Output()
+				o.Expect(latestrevisionGetErr).NotTo(o.HaveOccurred())
+				latestAvailableRevision, _ := strconv.Atoi(latestAvailableRevisionOut)
+
+				if latestAvailableRevision > targetRevision {
+					e2e.Logf("Step 6, Test Passed: latestAvailableRevision > targetRevision")
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(rollOutError, "Step 6, Test Failed: latestAvailableRevision > targetRevision and rollout is not affected")
+
+			g.By("7) Check Kube-apiserver operator Roll Out Successfully & rollout is not affected")
+			rollOutError = wait.Poll(60*time.Second, 900*time.Second, func() (bool, error) {
+				operatorOutput, operatorChkError := oc.WithoutNamespace().Run("get").Args("co/kube-apiserver").Output()
+				if operatorChkError == nil {
+					matched, _ := regexp.MatchString("True.*False.*False", operatorOutput)
+					if matched {
+						e2e.Logf("Kube-apiserver operator Roll Out Successfully & rollout is not affected")
+						e2e.Logf("Step 7, Test Passed")
+						return true, nil
+					}
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(rollOutError, "Step 7, Test Failed: Kube-apiserver operator failed to Roll Out")
+		}()
+
+		g.By("1) Set the installer pods to fail and try backoff during rollout by injecting error")
+		patch := `[{"op": "replace", "path": "/spec/unsupportedConfigOverrides", "value": {"installerErrorInjection":{"failPropability":1.0}}}]`
+		patchConfigError := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubeapiserver/cluster", "--type=json", "-p", patch).Execute()
+		o.Expect(patchConfigError).NotTo(o.HaveOccurred())
+
+		g.By("2) Performed apiserver force rollout to test step 1 changes.")
+		patch = fmt.Sprintf(`[ {"op": "replace", "path": "/spec/forceRedeploymentReason", "value": "Force Redploy %v" } ]`, time.Now().UnixNano())
+		patchForceRedploymentError := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubeapiserver/cluster", "--type=json", "-p", patch).Execute()
+		o.Expect(patchForceRedploymentError).NotTo(o.HaveOccurred())
+
+		g.By("3) Check apiserver created retry installer pods with error and retrying backoff")
+		fallbackError := wait.Poll(60*time.Second, 600*time.Second, func() (bool, error) {
+			targetRevision, revisionGetErr := oc.WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", "jsonpath={.status.nodeStatuses[*].targetRevision}").Output()
+			o.Expect(revisionGetErr).NotTo(o.HaveOccurred())
+
+			// Check apiserver installer pod is failing with retry error
+			installerPod, installerPodErr := oc.WithoutNamespace().Run("get").Args("po", "-n", "openshift-kube-apiserver", "-l", "app=installer").Output()
+			o.Expect(installerPodErr).NotTo(o.HaveOccurred())
+			cmd := fmt.Sprintf("echo '%v' | grep 'Error' | grep -c 'installer-%v-retry' || true", installerPod, targetRevision)
+			retryPodOutput, retryPodChkerr := exec.Command("bash", "-c", cmd).Output()
+			o.Expect(retryPodChkerr).NotTo(o.HaveOccurred())
+
+			retryPodCount, strConvError := strconv.Atoi(strings.Trim(string(retryPodOutput), "\n"))
+			o.Expect(strConvError).NotTo(o.HaveOccurred())
+			if retryPodCount > 0 {
+				e2e.Logf("Step 3, Test Passed: Got retry error installer pod")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(fallbackError, "Step 3, Test Failed: Failed to get retry error installer pod")
+	})
 })
