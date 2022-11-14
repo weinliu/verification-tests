@@ -333,7 +333,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-Medium-53740-CatalogSource incorrect parsing validation", func() {
+	g.It("NonHyperShiftHOST-Author:jiazha-Medium-53740-CatalogSource incorrect parsing validation", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
@@ -452,7 +452,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-Medium-49352-SNO Leader election conventions for cluster topology", func() {
+	g.It("NonHyperShiftHOST-Author:jiazha-Medium-49352-SNO Leader election conventions for cluster topology", func() {
 		g.By("1) get the cluster topology")
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
 		if err != nil {
@@ -474,7 +474,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-High-49167-fatal error", func() {
+	g.It("NonHyperShiftHOST-Author:jiazha-High-49167-fatal error", func() {
 		g.By("1) Check OLM related resources' logs")
 		deps := []string{"catalog-operator", "olm-operator", "package-server-manager", "packageserver"}
 		for _, value := range deps {
@@ -915,7 +915,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-Medium-43978-Catalog pods don't report termination logs to catalog-operator", func() {
+	g.It("NonHyperShiftHOST-Author:jiazha-Medium-43978-Catalog pods don't report termination logs to catalog-operator", func() {
 		catalogs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "-n", "openshift-marketplace").Output()
 		if err != nil {
 			e2e.Failf("Fail to get the CatalogSource in openshift-marketplace project")
@@ -938,7 +938,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-Medium-43803-Only one of multiple subscriptions to the same package is honored [Flaky]", func() {
+	g.It("NonHyperShiftHOST-Author:jiazha-Medium-43803-Only one of multiple subscriptions to the same package is honored [Flaky]", func() {
 		g.By("1) create the OperatorGroup in a random project")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
@@ -1005,7 +1005,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-High-45411-packageserver isn't following the OpenShift HA conventions", func() {
+	g.It("NonHyperShiftHOST-Author:jiazha-High-45411-packageserver isn't following the OpenShift HA conventions", func() {
 		g.By("1) get the cluster infrastructure")
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
 		if err != nil {
@@ -1197,7 +1197,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: chuo@redhat.com
-	g.It("Author:jiazha-High-24028-need to set priorityClassName as system-cluster-critical", func() {
+	g.It("NonHyperShiftHOST-Author:jiazha-High-24028-need to set priorityClassName as system-cluster-critical", func() {
 		var deploymentResource = [3]string{"catalog-operator", "olm-operator", "packageserver"}
 		for _, v := range deploymentResource {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-operator-lifecycle-manager", "deployment", v, "-o=jsonpath={.spec.template.spec.priorityClassName}").Output()
@@ -2888,7 +2888,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: bandrade@redhat.com
-	g.It("ConnectedOnly-Author:bandrade-Medium-49130-Default CatalogSources deployed by marketplace do not have toleration for tainted nodes", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:bandrade-Medium-49130-Default CatalogSources deployed by marketplace do not have toleration for tainted nodes", func() {
 
 		podNameCertifiedOP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-marketplace", "-l", "olm.catalogSource=certified-operators", "-o", "name").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2908,7 +2908,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-High-32559-catalog operator crashed", func() {
+	g.It("NonHyperShiftHOST-Author:jiazha-High-32559-catalog operator crashed", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-without-image.yaml")
 		csTypes := []struct {
@@ -3011,7 +3011,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: bandrade@redhat.com
-	g.It("Author:bandrade-Low-24057-Have terminationMessagePolicy defined as FallbackToLogsOnError", func() {
+	g.It("NonHyperShiftHOST-Author:bandrade-Low-24057-Have terminationMessagePolicy defined as FallbackToLogsOnError", func() {
 		labels := [...]string{"app=packageserver", "app=catalog-operator", "app=olm-operator"}
 		for _, l := range labels {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-o=jsonpath={range .items[*].spec}{.containers[*].name}{\"\t\"}", "-n", "openshift-operator-lifecycle-manager", "-l", l).Output()
@@ -3028,7 +3028,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 	})
 
-	g.It("ConnectedOnly-Author:bandrade-High-40317-Check CatalogSources index images [Flaky]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:bandrade-High-40317-Check CatalogSources index images [Flaky]", func() {
 		clusterVersion, _, err := exutil.GetClusterVersion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -3175,7 +3175,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-Medium-20981-contain the source commit id [Flaky]", func() {
+	g.It("NonHyperShiftHOST-Author:jiazha-Medium-20981-contain the source commit id [Flaky]", func() {
 		sameCommit := ""
 		subPods := []string{"catalog-operator", "olm-operator", "packageserver"}
 
@@ -3403,7 +3403,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: scolange@redhat.com
-	g.It("Author:scolange-Medium-42041-Available=False despite unavailableReplicas <= maxUnavailable", func() {
+	g.It("NonHyperShiftHOST-Author:scolange-Medium-42041-Available=False despite unavailableReplicas <= maxUnavailable", func() {
 		g.By("get the cluster infrastructure")
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
 		if err != nil {
@@ -3447,7 +3447,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: scolange@redhat.com
-	g.It("Author:scolange-Medium-42068-Available condition set to false on any Deployment spec change", func() {
+	g.It("NonHyperShiftHOST-Author:scolange-Medium-42068-Available condition set to false on any Deployment spec change", func() {
 		available, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator", "operator-lifecycle-manager-packageserver", "-o=jsonpath={.status.conditions[1].type}").Output()
 		e2e.Logf(available)
 		o.Expect(err1).NotTo(o.HaveOccurred())
@@ -3460,7 +3460,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: scolange@redhat.com
-	g.It("Author:scolange-Medium-42069-component not found log should be debug level", func() {
+	g.It("NonHyperShiftHOST-Author:scolange-Medium-42069-component not found log should be debug level", func() {
 		var since = "--since=60s"
 		var snooze time.Duration = 90
 		var tail = "--tail=10"
@@ -3526,7 +3526,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: scolange@redhat.com
-	g.It("Author:scolange-Medium-42073-deployment sets neither CPU or memory request on the packageserver container", func() {
+	g.It("NonHyperShiftHOST-Author:scolange-Medium-42073-deployment sets neither CPU or memory request on the packageserver container", func() {
 		cpu, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={..containers..resources.requests.cpu}").Output()
 		e2e.Logf(cpu)
 		o.Expect(err1).NotTo(o.HaveOccurred())
@@ -7000,7 +7000,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-25644, author: tbuskey@redhat.com
-	g.It("ConnectedOnly-Author:bandrade-Medium-25644-OLM collect CSV health per version", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:bandrade-Medium-25644-OLM collect CSV health per version", func() {
 		exutil.SkipARM64(oc)
 		var err error
 		var (
@@ -7522,7 +7522,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// author: tbuskey@redhat.com, test case OCP-21080
-	g.It("Author:jiazha-High-21080-OLM Check OLM metrics [Serial]", func() {
+	g.It("NonHyperShiftHOST-Author:jiazha-High-21080-OLM Check OLM metrics [Serial]", func() {
 		type metrics struct {
 			csvCount              int
 			csvUpgradeCount       int
@@ -8008,7 +8008,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// author: xzha@redhat.com, test case OCP-40532
-	g.It("ConnectedOnly-Author:xzha-Medium-40532-OLM should not print debug logs", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:xzha-Medium-40532-OLM should not print debug logs", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -10864,7 +10864,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 	})
 
 	// OCP-45359 author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-Medium-45359-Default catalogs need to use the correct tags [Flaky]", func() {
+	g.It("NonHyperShiftHOST-Author:jitli-ConnectedOnly-Medium-45359-Default catalogs need to use the correct tags [Flaky]", func() {
 		g.By("step: get version")
 		currentVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.desired.version}").Output()
 		if err != nil {
@@ -11890,7 +11890,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 	})
 
 	// author: tbuskey@redhat.com
-	g.It("Author:jiazha-High-21953-Ensure that operator deployment is in the master node", func() {
+	g.It("NonHyperShiftHOST-Author:jiazha-High-21953-Ensure that operator deployment is in the master node", func() {
 		var (
 			err            error
 			msg            string
