@@ -6,6 +6,8 @@ const (
 	MachineConfigNamespace = "openshift-machine-config-operator"
 	// MachineConfigDaemon mcd container name
 	MachineConfigDaemon = "machine-config-daemon"
+	// MachineConfigOperator mco container name
+	MachineConfigOperator = "machine-config-operator"
 	// MachineConfigDaemonEvents cluster role binding
 	MachineConfigDaemonEvents = "machine-config-daemon-events"
 

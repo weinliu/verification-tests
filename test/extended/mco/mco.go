@@ -2394,6 +2394,39 @@ nulla pariatur.`
 		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason)
 
 	})
+
+	g.It("NonHyperShiftHOST-Author:rioliu-Medium-54937-logs and events are flood with clusterrole and clusterrolebinding [Disruptive]", func() {
+
+		g.By("get machine-config-operator pod name")
+		mcoPod, getMcoPodErr := getMachineConfigOperatorPod(oc)
+		o.Expect(getMcoPodErr).NotTo(o.HaveOccurred(), "get mco pod failed")
+
+		if exutil.CheckPlatform(oc) == "vsphere" { // check platformStatus.VSphere related log on vpshere cluster only
+			g.By("check infra/cluster info, make sure platformStatus.VSphere does not exist")
+			infra := NewResource(oc.AsAdmin(), "infrastructure", "cluster")
+			vsphereStatus, getStatusErr := infra.Get(`{.status.platformStatus.VSphere}`)
+			o.Expect(getStatusErr).NotTo(o.HaveOccurred(), "check vsphere status failed")
+			// check vsphereStatus exists or not, only check logs if it exists, otherwise skip the test
+			if vsphereStatus == "" {
+				g.By("check vsphere related log in machine-config-operator pod")
+				filteredVsphereLog, filterVsphereLogErr := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigOperator, mcoPod, "PlatformStatus.VSphere")
+				// if no platformStatus.Vsphere log found, the func will return error, that's expected
+				o.Expect(filterVsphereLogErr).Should(o.HaveOccurred(), "found vsphere related log in mco pod")
+				logger.Debugf("filtered vsphere log:\n %s", filteredVsphereLog)
+			}
+		}
+
+		// check below logs for all platforms
+		g.By("check clusterrole and clusterrolebinding related logs in machine-config-operator pod")
+		filteredClusterRoleLog, filterClusterRoleLogErr := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigOperator, mcoPod, "ClusterRoleUpdated")
+		logger.Debugf("filtered clusterrole log:\n %s", filteredClusterRoleLog)
+		o.Expect(filterClusterRoleLogErr).Should(o.HaveOccurred(), "found ClusterRoleUpdated log in mco pod")
+
+		filteredClusterRoleBindingLog, filterClusterRoleBindingLogErr := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigOperator, mcoPod, "ClusterRoleBindingUpdated")
+		logger.Debugf("filtered clusterrolebinding log:\n %s", filteredClusterRoleBindingLog)
+		o.Expect(filterClusterRoleBindingLogErr).Should(o.HaveOccurred(), "found ClusterRoleBindingUpdated log in mco pod")
+
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching xpectedNDStatus, expectedNDMessage, expectedNDReason

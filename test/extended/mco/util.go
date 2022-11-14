@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -826,27 +825,15 @@ func sortNodeList(nodes []Node) []Node {
 }
 
 func getMachineConfigControllerPod(oc *exutil.CLI) (string, error) {
+	pods, err := exutil.GetAllPodsWithLabel(oc.AsAdmin(), MachineConfigNamespace, "k8s-app=machine-config-controller")
+	logger.Infof("machine-config-controller pod name is %s", pods[0])
+	return pods[0], err
+}
 
-	pods, podsErr := exutil.GetAllPods(oc.AsAdmin(), "openshift-machine-config-operator")
-	if podsErr != nil {
-		return "", podsErr
-	}
-
-	var ctrlerPod string
-	if len(pods) > 0 {
-		for _, pod := range pods {
-			if strings.HasPrefix(pod, "machine-config-controller") {
-				ctrlerPod = pod
-				logger.Infof("machine config controller pod name is %s", ctrlerPod)
-				break
-			}
-		}
-	} else {
-		podsErr = errors.New("mco pod list is empty") // if get pod command returns empty list w/o error
-	}
-
-	return ctrlerPod, podsErr
-
+func getMachineConfigOperatorPod(oc *exutil.CLI) (string, error) {
+	pods, err := exutil.GetAllPodsWithLabel(oc.AsAdmin(), MachineConfigNamespace, "k8s-app=machine-config-operator")
+	logger.Infof("machine-config-operator pod name is %s", pods[0])
+	return pods[0], err
 }
 
 func getAlertsByName(oc *exutil.CLI, alertName string) ([]JSONData, error) {
