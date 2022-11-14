@@ -609,3 +609,9 @@ func (nl NodeList) GetAllDegraded() ([]Node, error) {
 	nl.SetItemsFilter(filter)
 	return nl.GetAll()
 }
+
+// McStateSnapshot get snapshot of machine config state for the nodes in this list
+// the output is like `Working Done Done`
+func (nl NodeList) McStateSnapshot() string {
+	return nl.GetOrFail(`{.items[*].metadata.annotations.machineconfiguration\.openshift\.io/state}`)
+}

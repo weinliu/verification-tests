@@ -64,14 +64,14 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	})
 
 	g.JustAfterEach(func() {
-		os.RemoveAll(tmpdir)
-		logger.Infof("test dir %s is cleaned up", tmpdir)
 		// only do clean up (destroy hostedcluster/uninstall hypershift/delete bucket) for env that hypershift is not pre-installed
 		if !hypershiftEnabled {
 			ht.DestroyClusterOnAws()
 			ht.Uninstall()
 			ht.DeleteBucket()
 		}
+		os.RemoveAll(tmpdir)
+		logger.Infof("test dir %s is cleaned up", tmpdir)
 	})
 
 	g.It("HyperShiftMGMT-Author:rioliu-Longduration-NonPreRelease-High-54328-hypershift Add new file on hosted cluster node via config map [Disruptive]", func() {
@@ -116,6 +116,30 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		// check machine config annotations on nodes to make sure update is done
 		ht.CheckMcAnnotationsOnNode()
+
+	})
+
+	g.It("HyperShiftMGMT-Author:rioliu-Longduration-NonPreRelease-High-55356-hypershift Honor MaxUnavailable for inplace upgrades [Disruptive]", func() {
+
+		// tip: for this test, 4.12 hosted cluster is required. e.g. hypershift create cluster aws ... --release-image quay.io/openshift-release-dev/ocp-release:4.12.0-ec.5-x86_64
+		skipTestIfHostedClusterVersionIsNotMatched(oc, "4.12")
+		// create node pool with replica=3
+		// destroy node pool then delete config map
+		defer ht.DeleteMcConfigMap()
+		defer ht.DestroyNodePoolOnAws()
+		ht.CreateNodePoolOnAws("3") // TODO: change the replica to 5 when bug https://issues.redhat.com/browse/OCPBUGS-2870 is fixed
+
+		// create config map which contains machine config
+		ht.CreateMcConfigMap()
+
+		// patch node pool to update config name with new config map
+		ht.PatchNodePoolToUpdateMaxUnavailable("2")
+
+		// create kubeconfig for hosted cluster
+		ht.CreateKubeConfigForCluster()
+
+		// check whether nodes are updating in parallel
+		ht.CheckNodesAreUpdatingInParallel(2)
 
 	})
 })
@@ -235,6 +259,7 @@ func (ht *HypershiftTest) CreateClusterOnAws() {
 		WithBaseDomain(baseDomain).
 		WithPullSecret(secretFile).
 		WithRegion(awscred.region).
+		WithReleaseImage("quay.io/openshift-release-dev/ocp-release:4.12.0-rc.0-x86_64").
 		WithName(name)
 
 	_, createClusterErr := ht.cli.CreateCluster(createClusterOpts)
@@ -413,9 +438,9 @@ func (ht *HypershiftTest) PatchNodePoolToUpdateReleaseImage() {
 
 	g.By("patch node pool to update release image")
 	npName := ht.StrValue(HypershiftCrNodePool)
-	// the latest version supported is: "4.12.0"
-	imageURL, version := getLatestImageURL(ht.oc, "4.11")
 	np := NewHypershiftNodePool(ht.oc.AsAdmin(), npName)
+	versionSlice := strings.Split(np.GetVersion(), ".")
+	imageURL, version := getLatestImageURL(ht.oc, fmt.Sprintf("%s.%s", versionSlice[0], versionSlice[1])) // get latest nightly build based on release version
 	o.Expect(np.Patch("merge", fmt.Sprintf(`{"spec":{"release":{"image": "%s"}}}`, imageURL))).NotTo(o.HaveOccurred(), "patch node pool with release image failed")
 	o.Expect(np.GetOrFail(`{.spec.release.image}`)).Should(o.ContainSubstring(imageURL), "node pool does not have update release image config")
 	logger.Debugf(np.PrettyString())
@@ -425,6 +450,53 @@ func (ht *HypershiftTest) PatchNodePoolToUpdateReleaseImage() {
 	np.WaitUntilVersionIsUpdating()
 	np.WaitUntilVersionUpdateIsCompleted()
 	o.Expect(np.GetVersion()).Should(o.Equal(version), "version of node pool is not updated correctly")
+
+}
+
+// PatchNodePoolToUpdateMaxUnavailable update node pool to enable maxUnavailable support
+func (ht *HypershiftTest) PatchNodePoolToUpdateMaxUnavailable(maxUnavailable string) {
+
+	g.By("patch node pool to update property spec.management.inPlace.maxUnavailable and spec.config")
+
+	npName := ht.StrValue(HypershiftCrNodePool)
+	cmName := ht.StrValue(TestCtxKeyConfigMap)
+	// update maxUnavailable
+	np := NewHypershiftNodePool(ht.oc.AsAdmin(), npName)
+	o.Expect(np.Patch("merge", fmt.Sprintf(`{"spec":{"management":{"inPlace":{"maxUnavailable":%s}}}}`, maxUnavailable))).NotTo(o.HaveOccurred(), "patch node pool with maxUnavailable setting failed")
+	o.Expect(np.GetOrFail(`{.spec.management.inPlace}`)).Should(o.ContainSubstring("maxUnavailable"), "node pool does not have maxUnavailable config")
+	// update config
+	o.Expect(np.Patch("merge", fmt.Sprintf(`{"spec":{"config":[{"name": "%s"}]}}`, cmName))).NotTo(o.HaveOccurred(), "patch node pool with cm setting failed")
+	o.Expect(np.GetOrFail(`{.spec.config}`)).Should(o.ContainSubstring(cmName), "node pool does not have cm config")
+
+	logger.Debugf(np.PrettyString())
+
+	g.By("check node pool update is started")
+	np.WaitUntilConfigIsUpdating()
+
+}
+
+// CheckNodesAreUpdatingInParallel check whether nodes are updating in parallel, nodeNum should be equal to maxUnavailable setting
+func (ht *HypershiftTest) CheckNodesAreUpdatingInParallel(nodeNum int) {
+
+	npName := ht.StrValue(HypershiftCrNodePool)
+	np := NewHypershiftNodePool(ht.oc.AsAdmin(), npName)
+	defer np.WaitUntilConfigUpdateIsCompleted()
+
+	g.By(fmt.Sprintf("checking whether nodes are updating in parallel, expected node num is %v", nodeNum))
+
+	kubeconf := ht.StrValue(TestCtxKeyKubeConfig)
+	ht.oc.SetGuestKubeconf(kubeconf)
+
+	nodesInfo := ""
+	mcStatePoller := func() int {
+		nodeStates := NewNodeList(ht.oc.AsAdmin().AsGuestKubeconf()).McStateSnapshot()
+		logger.Infof("machine-config state of all hosted cluster nodes: %s", nodeStates)
+		nodesInfo, _ = ht.oc.AsAdmin().AsGuestKubeconf().Run("get").Args("node").Output()
+		return strings.Count(nodeStates, "Working")
+	}
+
+	o.Eventually(mcStatePoller, "3m", "10s").Should(o.BeNumerically("==", nodeNum), "updating node num not equal to maxUnavailable value.\n%s", nodesInfo)
+	o.Consistently(mcStatePoller, "8m", "10s").Should(o.BeNumerically("<=", nodeNum), "updating node num is greater than maxUnavailable value.\n%s", nodesInfo)
 
 }
 
@@ -514,4 +586,17 @@ func (ht *HypershiftTest) VerifyFileContent() {
 	o.Expect(rf.Fetch()).NotTo(o.HaveOccurred(), "fetch remote file failed")
 	o.Expect(rf.GetTextContent()).Should(o.ContainSubstring("hello world"), "file content does not match machine config setting")
 
+}
+
+func skipTestIfHostedClusterVersionIsNotMatched(oc *exutil.CLI, version string) {
+
+	// in CI env, there is a preinstalled hostedcluster, get release image info from the 1st one
+	imageURL := NewNamespacedResource(oc.AsAdmin(),
+		HypershiftHostedCluster,
+		HypershiftNsClusters,
+		getFirstHostedCluster(oc)).GetOrFail("{.spec.release.image}")
+	logger.Infof("hosted cluster is running with image %s", imageURL)
+	if !strings.Contains(imageURL, version) {
+		g.Skip(fmt.Sprintf("skip this test, hosted cluster is not running with %s image", version))
+	}
 }

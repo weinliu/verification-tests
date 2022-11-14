@@ -157,6 +157,12 @@ func (opt *AwsCreateClusterOptions) WithRegion(region string) *AwsCreateClusterO
 	return opt
 }
 
+// WithReleaseImage builder func to append option release-image
+func (opt *AwsCreateClusterOptions) WithReleaseImage(releaseImage string) *AwsCreateClusterOptions {
+	opt.appendOption("--release-image", releaseImage)
+	return opt
+}
+
 // NewAwsDestroyClusterOptions constructor of destroy cluster on aws options
 func NewAwsDestroyClusterOptions() *AwsDestroyClusterOptions {
 	opts := &AwsDestroyClusterOptions{
