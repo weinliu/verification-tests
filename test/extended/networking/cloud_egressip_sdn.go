@@ -39,21 +39,26 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		case "aws":
 			e2e.Logf("\n AWS is detected, running the case on AWS\n")
 			if ipEchoURL == "" {
-				getAwsCredentialFromCluster(oc)
-				a = exutil.InitAwsSession()
-				_, err := getAwsIntSvcInstanceID(a, oc)
-				if err != nil {
+				creErr := getAwsCredentialFromCluster(oc)
+				if creErr != nil {
+					e2e.Logf("Cannot get AWS credential, will use tcpdump tool to verify egressIP,%v", creErr)
 					flag = "tcpdump"
-					e2e.Logf("There is no int svc instance in this cluster: %v, try tcpdump way", err)
 				} else {
-					ipEchoURL, err = installIPEchoServiceOnAWS(a, oc)
-					if ipEchoURL != "" && err == nil {
-						flag = "ipecho"
-						e2e.Logf("bastion host and ip-echo service instaled successfully, use ip-echo service to verify")
-					}
+					a = exutil.InitAwsSession()
+					_, err := getAwsIntSvcInstanceID(a, oc)
 					if err != nil {
 						flag = "tcpdump"
-						e2e.Logf("No ip-echo service installed on the bastion host, change to use tcpdump way %v", err)
+						e2e.Logf("There is no int svc instance in this cluster: %v, try tcpdump way", err)
+					} else {
+						ipEchoURL, err = installIPEchoServiceOnAWS(a, oc)
+						if ipEchoURL != "" && err == nil {
+							flag = "ipecho"
+							e2e.Logf("bastion host and ip-echo service instaled successfully, use ip-echo service to verify")
+						}
+						if err != nil {
+							flag = "tcpdump"
+							e2e.Logf("No ip-echo service installed on the bastion host, change to use tcpdump way %v", err)
+						}
 					}
 				}
 			}

@@ -56,15 +56,15 @@ func deleteTcpdumpDS(oc *exutil.CLI, dsName, dsNS string) {
 }
 
 // Get AWS credential from cluster
-func getAwsCredentialFromCluster(oc *exutil.CLI) {
+func getAwsCredentialFromCluster(oc *exutil.CLI) error {
 	if exutil.CheckPlatform(oc) != "aws" {
 		g.Skip("it is not aws platform and can not get credential, and then skip it.")
 	}
 	credential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system", "-o", "json").Output()
 	// Skip for sts and c2s clusters.
 	if err != nil {
-		g.Skip("Did not get credential to update security rule, skip the testing.")
-
+		e2e.Logf("Cannot get AWS basic auth credential,%v", err)
+		return err
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	accessKeyIDBase64, secureKeyBase64 := gjson.Get(credential, `data.aws_access_key_id`).String(), gjson.Get(credential, `data.aws_secret_access_key`).String()
@@ -77,7 +77,7 @@ func getAwsCredentialFromCluster(oc *exutil.CLI) {
 	os.Setenv("AWS_ACCESS_KEY_ID", string(accessKeyID))
 	os.Setenv("AWS_SECRET_ACCESS_KEY", string(secureKey))
 	os.Setenv("AWS_REGION", clusterRegion)
-
+	return nil
 }
 
 // Get AWS int svc instance ID

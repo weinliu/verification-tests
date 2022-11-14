@@ -42,20 +42,25 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		case "aws":
 			e2e.Logf("\n AWS is detected, running the case on AWS\n")
 			if ipEchoURL == "" {
-				getAwsCredentialFromCluster(oc)
-				a = exutil.InitAwsSession()
-				_, err := getAwsIntSvcInstanceID(a, oc)
-				if err != nil {
+				creErr := getAwsCredentialFromCluster(oc)
+				if creErr != nil {
+					e2e.Logf("Cannot get AWS credential, will use tcpdump tool to verify egressIP,%v", creErr)
 					flag = "tcpdump"
-					e2e.Logf("There is no int svc instance in this cluster: %v, try tcpdump way", err)
 				} else {
-					ipEchoURL, err = installIPEchoServiceOnAWS(a, oc)
-					if ipEchoURL != "" && err == nil {
-						flag = "ipecho"
-						e2e.Logf("bastion host and ip-echo service instaled successfully, use ip-echo service to verify")
-					} else {
+					a = exutil.InitAwsSession()
+					_, err := getAwsIntSvcInstanceID(a, oc)
+					if err != nil {
 						flag = "tcpdump"
-						e2e.Logf("No ip-echo service installed on the bastion host, change to use tcpdump way %v", err)
+						e2e.Logf("There is no int svc instance in this cluster: %v, try tcpdump way", err)
+					} else {
+						ipEchoURL, err = installIPEchoServiceOnAWS(a, oc)
+						if ipEchoURL != "" && err == nil {
+							flag = "ipecho"
+							e2e.Logf("bastion host and ip-echo service instaled successfully, use ip-echo service to verify")
+						} else {
+							flag = "tcpdump"
+							e2e.Logf("No ip-echo service installed on the bastion host, change to use tcpdump way %v", err)
+						}
 					}
 				}
 			}
@@ -139,7 +144,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-Medium-47272-Pods will not be affected by the egressIP set on other netnamespace. [Serial]", func() {
+	g.It("ConnectedOnly-Author:huirwang-Medium-47272-Pods will not be affected by the egressIP set on other netnamespace. [Serial]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
@@ -269,7 +274,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-Medium-47164-Medium-47025-Be able to update egressip object,The pods removed matched labels will not use EgressIP [Serial]", func() {
+	g.It("ConnectedOnly-Author:huirwang-Medium-47164-Medium-47025-Be able to update egressip object,The pods removed matched labels will not use EgressIP [Serial]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
@@ -372,7 +377,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-Medium-47030-An EgressIP object can not have multiple egress IP assignments on the same node. [Serial]", func() {
+	g.It("ConnectedOnly-Author:huirwang-Medium-47030-An EgressIP object can not have multiple egress IP assignments on the same node. [Serial]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
@@ -403,7 +408,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-Medium-47028-After remove EgressIP node tag, EgressIP will failover to other availabel egress nodes. [Serial]", func() {
+	g.It("ConnectedOnly-Author:huirwang-Medium-47028-After remove EgressIP node tag, EgressIP will failover to other availabel egress nodes. [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
@@ -502,7 +507,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-Longduration-NonPreRelease-High-47031-After reboot egress node EgressIP still work.  [Disruptive]", func() {
+	g.It("ConnectedOnly-Author:huirwang-Longduration-NonPreRelease-High-47031-After reboot egress node EgressIP still work.  [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		testPodFile := filepath.Join(buildPruningBaseDir, "testpod.yaml")
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
@@ -594,7 +599,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-Longduration-NonPreRelease-Critical-47032-High-47034-Traffic is load balanced between egress nodes,multiple EgressIP objects can have multiple egress IPs.[Serial]", func() {
+	g.It("ConnectedOnly-Author:huirwang-Longduration-NonPreRelease-Critical-47032-High-47034-Traffic is load balanced between egress nodes,multiple EgressIP objects can have multiple egress IPs.[Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
@@ -736,7 +741,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-High-47019-High-47023-EgressIP works well with networkpolicy and egressFirewall. [Serial]", func() {
+	g.It("ConnectedOnly-Author:huirwang-High-47019-High-47023-EgressIP works well with networkpolicy and egressFirewall. [Serial]", func() {
 		//EgressFirewall case cannot run in proxy cluster, skip if proxy cluster.
 		if checkProxy(oc) {
 			g.Skip("This is proxy cluster, skip the test.")
@@ -858,7 +863,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-Medium-47018-Medium-47017-Multiple projects use same EgressIP,EgressIP works for all pods in the namespace with matched namespaceSelector. [Serial]", func() {
+	g.It("ConnectedOnly-Author:huirwang-Medium-47018-Medium-47017-Multiple projects use same EgressIP,EgressIP works for all pods in the namespace with matched namespaceSelector. [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		testPodFile := filepath.Join(buildPruningBaseDir, "testpod.yaml")
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
@@ -1152,7 +1157,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-High-53069-[Bug2097243] EgressIP should work for recreated same name pod. [Serial]", func() {
+	g.It("ConnectedOnly-Author:huirwang-High-53069-[Bug2097243] EgressIP should work for recreated same name pod. [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
@@ -1266,7 +1271,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-Author:huirwang-NonPreRelease-Medium-47029-Low-47024-Any egress IP can only be assigned to one node only. Warning event will be triggered if applying EgressIP object but no EgressIP nodes. [Serial]", func() {
+	g.It("Author:huirwang-NonPreRelease-Medium-47029-Low-47024-Any egress IP can only be assigned to one node only. Warning event will be triggered if applying EgressIP object but no EgressIP nodes. [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
@@ -1675,7 +1680,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-Author:huirwang-High-55632-After enable egress node, egress node shouldn't generate broadcast ARP for service IPs. [Serial]", func() {
+	g.It("Author:huirwang-High-55632-After enable egress node, egress node shouldn't generate broadcast ARP for service IPs. [Serial]", func() {
 		e2e.Logf("This case is from customer bug: https://bugzilla.redhat.com/show_bug.cgi?id=2052975")
 		g.By("1 Get list of nodes \n")
 		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -1719,7 +1724,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-High-47163-High-47026-Deleting EgressIP object and recreating it works,EgressIP was removed after delete egressIP object. [Serial]", func() {
+	g.It("ConnectedOnly-Author:huirwang-High-47163-High-47026-Deleting EgressIP object and recreating it works,EgressIP was removed after delete egressIP object. [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
