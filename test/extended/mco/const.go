@@ -1,3 +1,4 @@
+// Package mco stores all MCO automated test cases
 package mco
 
 const (

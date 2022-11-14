@@ -2373,7 +2373,80 @@ nulla pariatur.`
 			"There are failed units in the bootstrap machine")
 
 	})
+	g.It("Author:sregidor-NonPreRelease-Medium-55879-Don't allow creating the force file via MachineConfig [Disruptive]", func() {
+		var (
+			filePath    = "/run/machine-config-daemon-force"
+			fileContent = ""
+			fileMode    = "0420" // decimal 272
+			fileConfig  = getURLEncodedFileConfig(filePath, fileContent, fileMode)
+			mcName      = "mco-tc-55879-create-force-file"
+			mcp         = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+
+			expectedNDMessage = regexp.QuoteMeta(fmt.Sprintf("cannot create %s via Ignition", filePath)) // quotemeta to scape regex characters in the file path
+			expectedNDReason  = "1 nodes are reporting degraded status on sync"
+		)
+
+		g.By("Create the force file using a MC")
+		mc := MachineConfig{name: mcName, pool: MachineConfigPoolWorker, skipWaitForMcp: true,
+			Template:   *NewMCOTemplate(oc, GenericMCTemplate),
+			parameters: []string{fmt.Sprintf("FILES=[%s]", fileConfig)}}
+
+		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason)
+
+	})
 })
+
+// validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching xpectedNDStatus, expectedNDMessage, expectedNDReason
+func validateMcpNodeDegraded(mc MachineConfig, mcp *MachineConfigPool, expectedNDMessage, expectedNDReason string) {
+
+	oc := mcp.oc // using mcp.oc is a workaround until MC is refactored to embed the Resource struct
+	defer mcp.RecoverFromDegraded()
+	defer mc.deleteNoWait(oc)
+	mc.create(mcp.oc.AsAdmin())
+	logger.Infof("OK!\n")
+
+	g.By("Wait until MCP becomes degraded")
+	o.Eventually(mcp.pollDegradedStatus(), "5m", "30s").Should(o.Equal("True"),
+		"The '%s' MCP should become degraded when a we try to create the force file via MC, but it didn't.", mcp.GetName())
+	o.Eventually(mcp.pollDegradedMachineCount(), "5m", "30s").Should(o.Equal("1"),
+		"The '%s' MCP should report '1' degraded machine count, but it doesn't.", mcp.GetName())
+
+	logger.Infof("OK!\n")
+
+	g.By("Validate the reported error")
+	nodeDegradedCondition := mcp.GetConditionByType("NodeDegraded")
+
+	nodeDegradedConditionJSON := JSON(nodeDegradedCondition)
+
+	nodeDegradedStatus := nodeDegradedConditionJSON.Get("status").ToString()
+	nodeDegradedMessage := nodeDegradedConditionJSON.Get("message").ToString()
+	nodeDegradedReason := nodeDegradedConditionJSON.Get("reason").ToString()
+
+	o.ExpectWithOffset(1, nodeDegradedStatus).Should(o.Equal("True"),
+		"'worker' MCP should report degraded status in the NodeDegraded condition: %s", nodeDegradedCondition)
+	o.ExpectWithOffset(1, nodeDegradedMessage).Should(o.MatchRegexp(expectedNDMessage),
+		"'worker' MCP is not reporting the expected message in the NodeDegraded condition: %s", nodeDegradedCondition)
+	o.ExpectWithOffset(1, nodeDegradedReason).Should(o.MatchRegexp(expectedNDReason),
+		"'worker' MCP is not reporting the expected reason in the NodeDegraded condition: %s", nodeDegradedCondition)
+	logger.Infof("OK!\n")
+
+	//
+	g.By("Get co machine config to verify status and reason for Upgradeable type")
+	mcDataMap, err := getStatusCondition(oc, "co/machine-config", "Upgradeable")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(mcDataMap).NotTo(o.BeNil())
+
+	// If the degraded node is true, then co/machine-config should not be upgradeable
+	o.Expect(mcDataMap["status"].(string)).Should(
+		o.Equal("False"),
+		"co/machine-config Upgradeable condition status is not the expected one: %s", mcDataMap)
+	o.Expect(mcDataMap["message"].(string)).Should(
+		o.ContainSubstring("One or more machine config pools are degraded, please see `oc get mcp` for further details and resolve before upgrading"),
+		"co/machine-config Upgradeable condition message is not the expected one: %s", mcDataMap)
+
+	logger.Infof("OK!\n")
+
+}
 
 func createMcAndVerifyMCValue(oc *exutil.CLI, stepText, mcName string, workerNode Node, textToVerify TextToVerify, cmd ...string) {
 	g.By(fmt.Sprintf("Create new MC to add the %s", stepText))

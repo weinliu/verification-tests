@@ -473,6 +473,34 @@ func (mcp *MachineConfigPool) GetReportedOsImageOverrideValue() (string, error) 
 	return metricValue, nil
 }
 
+// RecoverFromDegraded updates the curent and desired machine configs so that the pool can recover from degraded state once the offending MC is deleted
+func (mcp *MachineConfigPool) RecoverFromDegraded() error {
+	logger.Infof("Recovering %s pool from degraded status", mcp.GetName())
+	mcpNodes, _ := mcp.GetNodes()
+	for _, node := range mcpNodes {
+		logger.Infof("Restoring desired config in node: %s", node)
+		err := node.RestoreDesiredConfig()
+		if err != nil {
+			return fmt.Errorf("Error restoring desired config in node %s. Error: %s",
+				mcp.GetName(), err)
+		}
+	}
+
+	derr := mcp.WaitForNotDegradedStatus()
+	if derr != nil {
+		logger.Infof("Could not recover from the degraded status: %s", derr)
+		return derr
+	}
+
+	uerr := mcp.WaitForUpdatedStatus()
+	if uerr != nil {
+		logger.Infof("Could not recover from the degraded status: %s", uerr)
+		return uerr
+	}
+
+	return nil
+}
+
 func getTimeDifferenceInMinute(oldTimestamp, newTimestamp string) float64 {
 	oldTimeValues := strings.Split(oldTimestamp, ":")
 	oldTimeHour, _ := strconv.Atoi(oldTimeValues[0])
