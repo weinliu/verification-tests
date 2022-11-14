@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -699,7 +699,7 @@ func queryPrometheus(oc *exutil.CLI, token string, path string, query string, ac
 	response, err := client.Do(request)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	defer response.Body.Close()
-	responseData, err := ioutil.ReadAll(response.Body)
+	responseData, err := io.ReadAll(response.Body)
 	res := prometheusQueryResult{}
 	json.Unmarshal(responseData, &res)
 	return res, err

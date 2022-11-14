@@ -101,7 +101,7 @@ func queryInES(ns, pod, queryString string) (SearchResult, error) {
 
 type externalES struct {
 	namespace  string
-	version    string // support 6.8 and 7.16
+	version    string // support 6 and 7
 	serverName string // ES cluster name, configmap/sa/deploy/svc name
 	httpSSL    bool   // `true` means enable `xpack.security.http.ssl`
 	clientAuth bool   // `true` means `xpack.security.http.ssl.client_authentication: required`, only can be set to `true` when httpSSL is `true`
@@ -194,8 +194,9 @@ func (es externalES) deploy(oc *exutil.CLI) {
 			cmPatch = append(cmPatch, "-p", "CLIENT_AUTH=none")
 		}
 	}
-	// set xpack.ml.enable to false when testing ES 6.8 on arm64 cluster
-	if es.version == "6.8" {
+
+	// set xpack.ml.enable to false when testing ES 6 on arm64 cluster
+	if es.version == "6" {
 		nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if nodes.Items[0].Status.NodeInfo.Architecture == "arm64" {

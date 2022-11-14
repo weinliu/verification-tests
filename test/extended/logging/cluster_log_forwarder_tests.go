@@ -283,13 +283,23 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("deploy 2 external ES servers")
 			oc.SetupProject()
 			esProj1 := oc.Namespace()
-			ees1 := externalES{esProj1, "6.8", "elasticsearch-server-1", false, false, false, "", "", "", cloNS}
+			ees1 := externalES{
+				namespace:  esProj1,
+				version:    "6",
+				serverName: "elasticsearch-server-1",
+				loggingNS:  cloNS,
+			}
 			defer ees1.remove(oc)
 			ees1.deploy(oc)
 
 			oc.SetupProject()
 			esProj2 := oc.Namespace()
-			ees2 := externalES{esProj2, "7.16", "elasticsearch-server-2", false, false, false, "", "", "", cloNS}
+			ees2 := externalES{
+				namespace:  esProj2,
+				version:    "7",
+				serverName: "elasticsearch-server-2",
+				loggingNS:  cloNS,
+			}
 			defer ees2.remove(oc)
 			ees2.deploy(oc)
 

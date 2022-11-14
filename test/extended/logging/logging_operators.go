@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"os/exec"
@@ -53,7 +52,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 	g.It("CPaasrunOnly-Author:qitang-Medium-42405-No configurations when forward to external ES with only username or password set in pipeline secret[Serial]", func() {
 		oc.SetupProject()
 		esProj := oc.Namespace()
-		ees := externalES{esProj, "6.8", "elasticsearch-server", true, true, true, "test", "redhat", "external-es", cloNS}
+		ees := externalES{
+			namespace:  esProj,
+			version:    "7",
+			serverName: "elasticsearch-server",
+			httpSSL:    true,
+			clientAuth: true,
+			userAuth:   true,
+			username:   "test",
+			password:   getRandomString(),
+			secretName: "external-es-42405",
+			loggingNS:  cloNS,
+		}
 		defer ees.remove(oc)
 		ees.deploy(oc)
 		eesURL := "https://" + ees.serverName + "." + ees.namespace + ".svc:9200"
@@ -117,7 +127,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", cloNS, "cm/collector", "--confirm", "--to="+TestDataPath).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		data, _ := ioutil.ReadFile(filepath.Join(TestDataPath, "fluent.conf"))
+		data, _ := os.ReadFile(filepath.Join(TestDataPath, "fluent.conf"))
 		o.Expect(string(data)).Should(o.ContainSubstring("read_lines_limit 50"))
 	})
 

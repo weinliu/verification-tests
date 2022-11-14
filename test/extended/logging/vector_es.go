@@ -494,7 +494,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
-			ees := externalES{esProj, "6.8", "elasticsearch-server", false, false, false, "", "", "", cloNS}
+			ees := externalES{
+				namespace:  esProj,
+				version:    "6",
+				serverName: "elasticsearch-server",
+				loggingNS:  cloNS,
+			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
 
@@ -509,7 +514,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-exteranl-es-and-default.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200")
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_VERSION="+ees.version)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogging instance with Vector as collector")
@@ -545,12 +550,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			for i := 0; i < len(indexName); i++ {
 				err = wait.Poll(10*time.Second, 60*time.Second, func() (done bool, err error) {
 					logs := ees.searchDocByQuery(oc, indexName[i], checkLog)
-					if logs.Hits.Total > 0 {
+					if logs.Hits.Total > 0 || len(logs.Hits.DataHits) > 0 {
 						return true, nil
 					}
 					return false, nil
 				})
-				exutil.AssertWaitPollNoErr(err, "No logs found with pipeline label in extranl ES")
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("No %s logs found with pipeline label in extranl ES", indexName[i]))
 			}
 
 			g.By("Check logs with pipeline label in default ES")
@@ -565,7 +570,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 					}
 					return false, nil
 				})
-				exutil.AssertWaitPollNoErr(err, "No logs found with pipeline label in default ES instance")
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("No %s logs found with pipeline label in default ES instance", indexName[i]))
 			}
 
 		})
@@ -574,7 +579,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
-			ees := externalES{esProj, "6.8", "elasticsearch-server", false, false, false, "", "", "", cloNS}
+			ees := externalES{
+				namespace:  esProj,
+				version:    "6",
+				serverName: "elasticsearch-server",
+				loggingNS:  cloNS,
+			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
 
@@ -630,7 +640,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 					}
 					return false, nil
 				})
-				exutil.AssertWaitPollNoErr(err, "No logs found with pipeline label in extranl ES")
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("No %s logs found with pipeline label in extranl ES", indexName[i]))
 			}
 
 			g.By("Check logs with pipeline label in default ES")
@@ -645,7 +655,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 					}
 					return false, nil
 				})
-				exutil.AssertWaitPollNoErr(err, "No logs found with pipeline label in default ES instance")
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("No %s logs found with pipeline label in default ES instance", indexName[i]))
 			}
 
 		})
@@ -654,7 +664,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
-			ees := externalES{esProj, "6.8", "elasticsearch-server", false, false, false, "", "", "", cloNS}
+			ees := externalES{
+				namespace:  esProj,
+				version:    "6",
+				serverName: "elasticsearch-server",
+				httpSSL:    false,
+				loggingNS:  cloNS,
+			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
 
@@ -669,7 +685,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-es.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200")
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_VERSION="+ees.version)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogging instance with Vector as collector")
@@ -691,7 +707,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
-			ees := externalES{esProj, "6.8", "elasticsearch-server", true, false, false, "", "", "ees-https", cloNS}
+			ees := externalES{
+				namespace:  esProj,
+				version:    "6",
+				serverName: "elasticsearch-server",
+				httpSSL:    true,
+				secretName: "ees-https",
+				loggingNS:  cloNS,
+			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
 
@@ -706,7 +729,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_SECRET="+ees.secretName)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_SECRET="+ees.secretName, "-p", "ES_VERSION="+ees.version)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogging instance with Vector as collector")
@@ -876,7 +899,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
-			ees := externalES{esProj, "6.8", "elasticsearch-server", false, false, true, "user1", "redhat", "ees-http", cloNS}
+			ees := externalES{
+				namespace:  esProj,
+				version:    "6",
+				serverName: "elasticsearch-server",
+				userAuth:   true,
+				username:   "user1",
+				password:   getRandomString(),
+				secretName: "ees-http",
+				loggingNS:  cloNS,
+			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
 
@@ -891,7 +923,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_SECRET="+ees.secretName)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_SECRET="+ees.secretName, "-p", "ES_VERSION="+ees.version)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogging instance with Vector as collector")
@@ -913,7 +945,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
-			ees := externalES{esProj, "6.8", "elasticsearch-server", true, false, true, "user1", "redhat", "ees-https", cloNS}
+			ees := externalES{
+				namespace:  esProj,
+				version:    "6",
+				serverName: "elasticsearch-server",
+				httpSSL:    true,
+				userAuth:   true,
+				username:   "user1",
+				password:   getRandomString(),
+				secretName: "ees-47755",
+				loggingNS:  cloNS,
+			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
 
@@ -928,7 +970,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_SECRET="+ees.secretName)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_SECRET="+ees.secretName, "-p", "ES_VERSION="+ees.version)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogging instance with Vector as collector")
@@ -950,7 +992,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
-			ees := externalES{esProj, "6.8", "elasticsearch-server", true, true, true, "user1", "redhat", "ees-https", cloNS}
+			ees := externalES{
+				namespace:  esProj,
+				version:    "6",
+				serverName: "elasticsearch-server",
+				httpSSL:    true,
+				clientAuth: true,
+				userAuth:   true,
+				username:   "user1",
+				password:   getRandomString(),
+				secretName: "ees-47758",
+				loggingNS:  cloNS,
+			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
 
@@ -965,7 +1018,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-es-pipelinesecret.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_SECRET="+ees.secretName)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_SECRET="+ees.secretName, "-p", "ES_VERSION="+ees.version)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogging instance with Vector as collector")
@@ -987,7 +1040,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
-			ees := externalES{esProj, "6.8", "elasticsearch-server", false, false, false, "", "", "", cloNS}
+			ees := externalES{
+				namespace:  esProj,
+				version:    "6",
+				serverName: "elasticsearch-server",
+				loggingNS:  cloNS,
+			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
 
@@ -1002,7 +1060,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-exteranl-es-and-default.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200")
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_VERSION="+ees.version)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogging instance with Vector as collector")
@@ -1212,7 +1270,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			oc.SetupProject()
 			esProj := oc.Namespace()
-			ees := externalES{esProj, "6.8", "external-es", true, false, false, "", "", "json-log", cloNS}
+			ees := externalES{
+				namespace:  esProj,
+				version:    "6",
+				serverName: "external-es",
+				httpSSL:    true,
+				secretName: "json-log-52129",
+				loggingNS:  cloNS,
+			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
 			eesURL := "https://" + ees.serverName + "." + ees.namespace + ".svc:9200"
@@ -1221,7 +1286,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "structured-container-logs.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "STRUCTURED_CONTAINER=true", "URL="+eesURL, "SECRET="+ees.secretName)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "STRUCTURED_CONTAINER=true", "URL="+eesURL, "SECRET="+ees.secretName, "-p", "ES_VERSION="+ees.version)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			// create clusterlogging instance

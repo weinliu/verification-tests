@@ -731,7 +731,15 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			oc.SetupProject()
 			esProj := oc.Namespace()
-			ees := externalES{esProj, "6.8", "elasticsearch-server", true, true, false, "", "", "external-es", cloNS}
+			ees := externalES{
+				namespace:  esProj,
+				version:    "7",
+				serverName: "elasticsearch-server",
+				httpSSL:    true,
+				clientAuth: true,
+				secretName: "external-es-41302",
+				loggingNS:  cloNS,
+			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
 
@@ -769,7 +777,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			oc.SetupProject()
 			esProj := oc.Namespace()
-			ees := externalES{esProj, "6.8", "external-es", true, false, false, "", "", "json-log", cloNS}
+			ees := externalES{
+				namespace:  esProj,
+				version:    "7",
+				serverName: "external-es",
+				httpSSL:    true,
+				secretName: "json-log-50276",
+				loggingNS:  cloNS,
+			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
 			eesURL := "https://" + ees.serverName + "." + ees.namespace + ".svc:9200"

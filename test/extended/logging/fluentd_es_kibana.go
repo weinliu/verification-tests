@@ -214,7 +214,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create external Elasticsearch instance")
 			oc.SetupProject()
 			esProj := oc.Namespace()
-			ees := externalES{esProj, "6.8", "elasticsearch-server", false, false, false, "", "", "", cloNS}
+			ees := externalES{
+				namespace:  esProj,
+				version:    "6",
+				serverName: "elasticsearch-server",
+				loggingNS:  cloNS,
+			}
 			defer ees.remove(oc)
 			ees.deploy(oc)
 

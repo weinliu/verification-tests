@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -598,7 +598,7 @@ func getOpenStackCredentials(oc *exutil.CLI) (*openstackCredentials, error) {
 		return cred, err
 	}
 
-	confFile, err := ioutil.ReadFile(dirname + "/clouds.yaml")
+	confFile, err := os.ReadFile(dirname + "/clouds.yaml")
 	if err == nil {
 		err = yamlv3.Unmarshal(confFile, cred)
 	}
@@ -1080,7 +1080,7 @@ func (c *lokiClient) getHTTPRequestHeader() (http.Header, error) {
 	}
 
 	if c.bearerTokenFile != "" {
-		b, err := ioutil.ReadFile(c.bearerTokenFile)
+		b, err := os.ReadFile(c.bearerTokenFile)
 		if err != nil {
 			return nil, fmt.Errorf("unable to read authorization credentials file %s: %s", c.bearerTokenFile, err)
 		}
@@ -1140,7 +1140,7 @@ func (c *lokiClient) doRequest(path, query string, quiet bool, out interface{}) 
 			continue
 		}
 		if resp.StatusCode/100 != 2 {
-			buf, _ := ioutil.ReadAll(resp.Body) // nolint
+			buf, _ := io.ReadAll(resp.Body) // nolint
 			e2e.Logf("Error response from server: %s (%v) attempts remaining: %d", string(buf), err, attempts)
 			if err := resp.Body.Close(); err != nil {
 				e2e.Logf("error closing body", err)
