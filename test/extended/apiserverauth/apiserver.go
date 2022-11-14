@@ -2836,7 +2836,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-Medium-16295-[origin_platformexp_329] 3.7 User can expose the environment variables to pods", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Medium-16295-[origin_platformexp_329] 3.7 User can expose the environment variables to pods", func() {
 		g.By("1) Create new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
@@ -2876,7 +2876,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-Medium-10933-[platformmanagement_public_768] Check if client use protobuf data transfer scheme to communicate with master", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Medium-10933-[platformmanagement_public_768] Check if client use protobuf data transfer scheme to communicate with master", func() {
 		g.By("1) Create new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
@@ -2898,7 +2898,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-Medium-9853-patch operation should use patched object to check admission control", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Medium-9853-patch operation should use patched object to check admission control", func() {
 		g.By("This case is for bug 1297910")
 		g.By("1) Create new project required for this test execution")
 		oc.SetupProject()
@@ -2937,7 +2937,7 @@ spec:
 		exutil.AssertPodToBeReady(oc, podName, namespace)
 	})
 
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-High-11138-[origin_platformexp_407] [Apiserver] Deploy will fail with incorrently formed pull secrets", func() {
+	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-High-11138-[origin_platformexp_407] [Apiserver] Deploy will fail with incorrently formed pull secrets", func() {
 		g.By("1) Create a new project required for this test execution")
 		oc.SetupProject()
 
@@ -3032,7 +3032,7 @@ spec:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:dpunia-High-44738-The installer pod fall-backoff should not happen if latestAvailableRevision > targetRevision [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:dpunia-High-44738-The installer pod fall-backoff should not happen if latestAvailableRevision > targetRevision [Disruptive]", func() {
 
 		if !isSNOCluster(oc) {
 			g.Skip("This is not a SNO cluster, skip.")
