@@ -761,6 +761,80 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		g.By("10. curl should pass after deleting policy")
 		_, curl3Err := e2e.RunHostCmd(ns, "blue-pod-1", "curl --connect-timeout 5 -s "+net.JoinHostPort(podIPv4, "8888"))
 		o.Expect(curl3Err).NotTo(o.HaveOccurred())
+	})
 
+	// author: weliang@redhat.com
+	g.It("Author:weliang-Medium-55818-Rules are not removed after disabling multinetworkpolicy. [Serial]", func() {
+		//https://issues.redhat.com/browse/OCPBUGS-977: Rules are not removed after disabling multinetworkpolicy
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking/multinetworkpolicy")
+		policyFile := filepath.Join(buildPruningBaseDir, "creat-ten-rules.yaml")
+		patchSResource := "networks.operator.openshift.io/cluster"
+
+		ns1 := "project41171a"
+		ns2 := "project41171b"
+		patchInfo := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":true}}")
+		defer oc.AsAdmin().Run("delete").Args("project", ns1, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().Run("delete").Args("project", ns2, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args(patchSResource, "-p", `[{"op": "remove", "path": "/spec/useMultiNetworkPolicy"}]`, "--type=json").Execute()
+
+		g.By("1. Prepare multus multinetwork including 2 ns,5 pods and 2 NADs")
+		prepareMultinetworkTest(oc, ns1, ns2, patchInfo)
+
+		g.By("2. Get IPs of the pod2ns1's secondary interface in first namespace.")
+		pod2ns1IPv4, pod2ns1IPv6 := getPodMultiNetwork(oc, ns1, "blue-pod-2")
+
+		g.By("3. Get IPs of the pod3ns1's secondary interface in first namespace.")
+		pod3ns1IPv4, pod3ns1IPv6 := getPodMultiNetwork(oc, ns1, "red-pod-1")
+
+		g.By("4. Get IPs of the pod1ns2's secondary interface in second namespace.")
+		pod1ns2IPv4, pod1ns2IPv6 := getPodMultiNetwork(oc, ns2, "blue-pod-3")
+
+		g.By("5. Get IPs of the pod2ns2's secondary interface in second namespace.")
+		pod2ns2IPv4, pod2ns2IPv6 := getPodMultiNetwork(oc, ns2, "red-pod-2")
+
+		g.By("6. All curl should pass before applying policy")
+		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod2ns1IPv4, pod2ns1IPv6)
+		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod3ns1IPv4, pod3ns1IPv6)
+		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod1ns2IPv4, pod1ns2IPv6)
+		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod2ns2IPv4, pod2ns2IPv6)
+
+		g.By("7. Create egress-allow-same-podSelector-with-same-namespaceSelector policy in ns1")
+		o.Expect(oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", policyFile, "-n", ns1).Execute()).NotTo(o.HaveOccurred())
+		output, err := oc.AsAdmin().Run("get").Args("multi-networkpolicy", "-n", ns1).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		policyList := []string{
+			"egress-allow-same-podselector-with-same-namespaceselector1",
+			"egress-allow-same-podselector-with-same-namespaceselector2",
+			"egress-allow-same-podselector-with-same-namespaceselector3",
+			"egress-allow-same-podselector-with-same-namespaceselector4",
+			"egress-allow-same-podselector-with-same-namespaceselector5",
+			"egress-allow-same-podselector-with-same-namespaceselector6",
+			"egress-allow-same-podselector-with-same-namespaceselector7",
+			"egress-allow-same-podselector-with-same-namespaceselector8",
+			"egress-allow-same-podselector-with-same-namespaceselector9",
+			"egress-allow-same-podselector-with-same-namespaceselector10",
+		}
+		for _, policyRule := range policyList {
+			e2e.Logf("The policy rule is: %s", policyRule)
+			o.Expect(output).To(o.ContainSubstring(policyRule))
+		}
+
+		g.By("8. Same curl testing, one curl pass and three curls will fail after applying policy")
+		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-1", pod3ns1IPv4, pod3ns1IPv6)
+		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-1", pod1ns2IPv4, pod1ns2IPv6)
+		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-1", pod2ns2IPv4, pod2ns2IPv6)
+		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod2ns1IPv4, pod2ns1IPv6)
+
+		g.By("9. Disable MacvlanNetworkpolicy in the cluster")
+		patchDisableInfo := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":false}}")
+		patchResourceAsAdmin(oc, patchSResource, patchDisableInfo)
+
+		g.By("10. All curl should pass again after disabling MacvlanNetworkpolicy")
+		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod3ns1IPv4, pod3ns1IPv6)
+		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod1ns2IPv4, pod1ns2IPv6)
+		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod2ns2IPv4, pod2ns2IPv6)
+		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod2ns1IPv4, pod2ns1IPv6)
+
+		g.By("11. Delete two namespaces and disable useMultiNetworkPolicy")
 	})
 })
