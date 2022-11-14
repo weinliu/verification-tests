@@ -1247,4 +1247,51 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	})
 
+	// Bug: 1967228
+	g.It("Author:shudili-High-55825 503 Error page should not contain license for a vulnerable release of Bootstrap", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+			ingctrl             = ingressControllerDescription{
+				name:      "55825",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		g.By("create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("Deploy a project with a client pod used to send traffic")
+		project1 := oc.Namespace()
+		g.By("create a client pod")
+		createResourceFromFile(oc, project1, clientPod)
+		err = waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+
+		g.By("curl a non-existing route, and then check that Bootstrap portion of the license is removed")
+		podname := getRouterPod(oc, ingctrl.name)
+		podIP := getPodv4Address(oc, podname, "openshift-ingress")
+		notExistRoute := "notexistroute" + "-" + project1 + "." + ingctrl.domain
+		toDst := notExistRoute + ":80:" + podIP
+		output, err2 := oc.Run("exec").Args(cltPodName, "--", "curl", "-Iv", "http://"+notExistRoute, "--resolve", toDst).Output()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("503"))
+		o.Expect(output).ShouldNot(o.And(
+			o.ContainSubstring("Bootstrap"),
+			o.ContainSubstring("Copyright 2011-2015 Twitter"),
+			o.ContainSubstring("Licensed under MIT"),
+			o.ContainSubstring("normalize.css v3.0.3")))
+
+	})
+
 })
