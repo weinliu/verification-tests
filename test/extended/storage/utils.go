@@ -457,7 +457,12 @@ func getIntreeSupportProvisionersByCloudProvider(oc *exutil.CLI) []string {
 }
 
 // Get pre-defined storageclass by cloudplatform and provisioner
-func getPresetStorageClassNameByProvisioner(cloudProvider string, provisioner string) string {
+func getPresetStorageClassNameByProvisioner(oc *exutil.CLI, cloudProvider string, provisioner string) string {
+	// TODO: Adaptation for known product issue https://issues.redhat.com/browse/OCPBUGS-1964
+	// we need to remove the condition after the issue is solved
+	if isAwsOutpostCluster(oc) {
+		return "gp2-csi"
+	}
 	csiCommonSupportMatrix, err := ioutil.ReadFile(filepath.Join(exutil.FixturePath("testdata", "storage"), "general-csi-support-provisioners.json"))
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return gjson.GetBytes(csiCommonSupportMatrix, "support_Matrix.platforms.#(name="+cloudProvider+").provisioners.#(name="+provisioner+").preset_scname").String()
@@ -762,4 +767,12 @@ func getValidVolumeSize() (validVolSize string) {
 		validVolSize = strconv.FormatInt(getRandomNum(1, 10), 10) + "Gi"
 	}
 	return validVolSize
+}
+
+// isAwsOutpostCluster judges whether the aws test cluster has outpost workers
+func isAwsOutpostCluster(oc *exutil.CLI) bool {
+	if cloudProvider != "aws" {
+		return false
+	}
+	return strings.Contains(getWorkersInfo(oc), `topology.ebs.csi.aws.com/outpost-id`)
 }

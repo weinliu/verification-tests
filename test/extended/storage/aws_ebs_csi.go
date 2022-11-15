@@ -51,6 +51,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		volumeType := awsEBSvolTypeTestSuit[caseIds[i]]
 		// author: pewang@redhat.com
 		g.It("ROSA-OSD_CCS-Author:pewang-High-"+caseIds[i]+"-[AWS-EBS-CSI] [VOLUME-TYPES] dynamic "+volumeType+" type ebs volume should store data and allow exec of files", func() {
+			if isAwsOutpostCluster(oc) && volumeType != "gp2" {
+				g.Skip("Skipped: Currently volumeType/" + volumeType + "is not supported on Outpost clusters")
+			}
 			// Set the resource objects definition for the scenario
 			var (
 				storageClass = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("ebs.csi.aws.com"))

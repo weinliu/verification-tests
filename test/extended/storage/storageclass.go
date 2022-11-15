@@ -15,6 +15,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	var oc = exutil.NewCLI("storage-storageclass", exutil.KubeConfigPath())
 
 	g.BeforeEach(func() {
+		cloudProvider = getCloudProvider(oc)
 		// Function to check optional enabled capabilities
 		checkOptionalCapability(oc, "Storage")
 	})
@@ -81,7 +82,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 
 			g.By("Create a pvc without specifying storageclass")
-			pvc.createWithoutStorageclassname(oc)
+			// TODO: Adaptation for known product issue https://issues.redhat.com/browse/OCPBUGS-1964
+			// we need to remove the condition after the issue is solved
+			if isAwsOutpostCluster(oc) {
+				pvc.scname = "gp2-csi"
+				pvc.create(oc)
+			} else {
+				pvc.createWithoutStorageclassname(oc)
+			}
 			defer pvc.deleteAsAdmin(oc)
 
 			g.By("Create deployment with the created pvc and wait for the pod ready")
@@ -100,7 +108,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			scFromPV, err := getScNamesFromSpecifiedPv(oc, pvName)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			defaultSC := gjson.Get(allSCRes, "items.#(metadata.annotations.storageclass\\.kubernetes\\.io\\/is-default-class=true).metadata.name").String()
-			o.Expect(scFromPV).To(o.Equal(defaultSC))
+			if isAwsOutpostCluster(oc) {
+				o.Expect(scFromPV).To(o.Equal("gp2-csi"))
+			} else {
+				o.Expect(scFromPV).To(o.Equal(defaultSC))
+			}
 		default:
 			e2e.Logf("The result of \"oc get sc\": %v", allSCRes)
 			g.Fail("Something wrong when checking the default storageclass, please check.")

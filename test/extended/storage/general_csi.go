@@ -139,7 +139,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 			// Get the present scName and check it is installed or no
-			scName := getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			if provisioner == "efs.csi.aws.com" {
 				g.By("# Check the efs storage class " + scName + " exists")
 				checkStorageclassExists(oc, scName)
@@ -192,7 +192,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 			// Get the present scName and check it is installed or no
-			scName := getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			if provisioner == "efs.csi.aws.com" {
 				g.By("# Check the efs storage class " + scName + " exists")
 				checkStorageclassExists(oc, scName)
@@ -206,7 +206,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pod1.namespace, pod2.namespace = pvc.namespace, pvc.namespace
 
 			g.By("# Create a pvc with the preset csi storageclass")
-			pvc.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvc.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			e2e.Logf("The preset storage class name is: %s", pvc.scname)
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
@@ -452,7 +452,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podDWithNoneSubpath := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 
 			g.By("# Create a pvc with the preset csi storageclass")
-			pvc.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvc.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			e2e.Logf("The preset storage class name is: %s", pvc.scname)
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
@@ -530,7 +530,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
 			g.By("Create a pvc with the preset csi storageclass")
-			pvc.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvc.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
 
@@ -588,7 +588,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
 
 			g.By("Create a pvc with the preset csi storageclass")
-			pvcOri.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvcOri.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			e2e.Logf("%s", pvcOri.scname)
 			pvcOri.create(oc)
 			defer pvcOri.deleteAsAdmin(oc)
@@ -608,7 +608,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podClone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcClone.name))
 
 			g.By("Create a clone pvc with the preset csi storageclass")
-			pvcClone.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvcClone.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			e2e.Logf("%s", pvcOri.scname)
 			pvcClone.capacity = pvcOri.capacity
 			pvcClone.createWithCloneDataSource(oc)
@@ -657,7 +657,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
 
 			g.By("Create a pvc with the preset csi storageclass")
-			pvcOri.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvcOri.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			e2e.Logf("%s", pvcOri.scname)
 			pvcOri.create(oc)
 			defer pvcOri.deleteAsAdmin(oc)
@@ -677,7 +677,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podClone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcClone.name))
 
 			g.By("Create a clone pvc with the preset csi storageclass")
-			pvcClone.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvcClone.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			cloneCapacityInt64, err := strconv.ParseInt(strings.TrimRight(pvcOri.capacity, "Gi"), 10, 64)
 			o.Expect(err).To(o.Not(o.HaveOccurred()))
 			cloneCapacityInt64 = cloneCapacityInt64 + getRandomNum(1, 10)
@@ -737,7 +737,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
 			g.By("Create a pvc with the preset csi storageclass")
-			pvcOri.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvcOri.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			pvcOri.create(oc)
 			defer pvcOri.deleteAsAdmin(oc)
 
@@ -756,7 +756,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podClone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcClone.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
 			g.By("Create a clone pvc with the preset csi storageclass")
-			pvcClone.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvcClone.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			pvcClone.capacity = pvcOri.capacity
 			pvcClone.createWithCloneDataSource(oc)
 			defer pvcClone.deleteAsAdmin(oc)
@@ -799,7 +799,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
 			g.By("Create a pvc with the preset csi storageclass")
-			pvcOri.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvcOri.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			pvcOri.create(oc)
 			defer pvcOri.deleteAsAdmin(oc)
 
@@ -818,7 +818,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podClone := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcClone.name), setPodVolumeType("volumeDevices"), setPodPathType("devicePath"), setPodMountPath("/dev/dblock"))
 
 			g.By("Create a clone pvc with the preset csi storageclass")
-			pvcClone.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvcClone.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			cloneCapacityInt64, err := strconv.ParseInt(strings.TrimRight(pvcOri.capacity, "Gi"), 10, 64)
 			o.Expect(err).To(o.Not(o.HaveOccurred()))
 			cloneCapacityInt64 = cloneCapacityInt64 + getRandomNum(1, 10)
@@ -879,7 +879,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			func() {
 				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 				// Set the resource definition for the scenario
-				pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)))
+				pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)))
 				dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 
 				g.By("# Create a pvc with preset csi storageclass")
@@ -948,7 +948,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
 
 			g.By("# Make sure we have a csi storageclass with 'reclaimPolicy: Delete' and 'volumeBindingMode: Immediate'")
-			presetStorageClassName := getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			presetStorageClassName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			e2e.Logf("The preset storage class name is: %s", pvc.scname)
 			if getReclaimPolicyByStorageClassName(oc, presetStorageClassName) != "delete" || getVolumeBindingModeByStorageClassName(oc, presetStorageClassName) != "immediate" {
 				storageClass.create(oc)
@@ -1015,7 +1015,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("# Create csi storageclass with 'reclaimPolicy: retain'")
 			if provisioner == "efs.csi.aws.com" {
 				// Get the efs present scName and fsid
-				fsid := getFsIDFromStorageClass(oc, getPresetStorageClassNameByProvisioner(cloudProvider, provisioner))
+				fsid := getFsIDFromStorageClass(oc, getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner))
 				efsExtra := map[string]string{
 					"provisioningMode": "efs-ap",
 					"fileSystemId":     fsid,
@@ -1125,7 +1125,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
-			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)))
 			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 			pvc.namespace = oc.Namespace()
 			dep.namespace = pvc.namespace
@@ -1252,7 +1252,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
-			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)))
 			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name), setDeploymentVolumeType("volumeDevices"), setDeploymentVolumeTypePath("devicePath"), setDeploymentMountpath("/dev/dblock"))
 			pvc.namespace = oc.Namespace()
 			dep.namespace = pvc.namespace
@@ -1285,7 +1285,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
-			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)))
 			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 			pvc.namespace = oc.Namespace()
 			dep.namespace = pvc.namespace
@@ -1412,7 +1412,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
-			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)))
 			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name), setDeploymentVolumeType("volumeDevices"), setDeploymentVolumeTypePath("devicePath"), setDeploymentMountpath("/dev/dblock"))
 			pvc.namespace = oc.Namespace()
 			dep.namespace = pvc.namespace
@@ -1452,7 +1452,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvc.namespace = oc.Namespace()
 			pod.namespace = pvc.namespace
 			g.By("1. Create a pvc with the preset csi storageclass")
-			pvc.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvc.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			e2e.Logf("%s", pvc.scname)
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
@@ -1532,7 +1532,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 
 			g.By("Create a pvc with the preset storageclass")
-			pvc.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvc.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
 
@@ -1609,7 +1609,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
 
 			g.By("Create a pvc with the preset csi storageclass")
-			pvcOri.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvcOri.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			pvcOri.create(oc)
 			defer pvcOri.deleteAsAdmin(oc)
 
@@ -1635,7 +1635,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podRestore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name))
 
 			g.By("Create a restored pvc with the preset csi storageclass")
-			pvcRestore.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvcRestore.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			pvcRestore.capacity = pvcOri.capacity
 			pvcRestore.createWithSnapshotDataSource(oc)
 			defer pvcRestore.deleteAsAdmin(oc)
@@ -2243,7 +2243,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				g.By("****** volumeBindingMode: \"" + volumeBindingMode + "\" parameter test start ******")
 
 				// Get the present scName and check it is installed or no
-				scName := getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+				scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 				checkStorageclassExists(oc, scName)
 
 				if provisioner == "efs.csi.aws.com" {
@@ -2346,7 +2346,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 			// Get the present scName and check it is installed or no
-			scName := getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			checkStorageclassExists(oc, scName)
 
 			// Set the resource definition for the scenario
@@ -2400,7 +2400,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			sts := newSts(setStsTemplate(stsTemplate), setStsReplicasNumber("2"), setStsVolumeType("volumeDevices"), setStsVolumeTypePath("devicePath"), setStsMountpath("/dev/dblock"), setStsVolumeMode("Block"))
 
 			g.By("# Create StatefulSet with the preset csi storageclass")
-			sts.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			sts.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			e2e.Logf("%s", sts.scname)
 			sts.create(oc)
 			defer sts.deleteAsAdmin(oc)
@@ -2509,6 +2509,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+		if isAwsOutpostCluster(oc) {
+			g.Skip("Skip for scenario non-supported AWS Outpost clusters!!!")
+		}
 
 		// Set the resource template for the scenario
 		var (
@@ -2607,6 +2610,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+		if isAwsOutpostCluster(oc) {
+			g.Skip("Skip for scenario non-supported AWS Outpost clusters!!!")
 		}
 
 		// Set the resource template for the scenario
@@ -2795,7 +2801,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podRestore := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name))
 
 			g.By("Create a restored pvc with the preset csi storageclass")
-			pvcRestore.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvcRestore.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			pvcRestore.capacity = pvcOri.capacity
 			pvcRestore.createWithSnapshotDataSource(oc)
 			defer pvcRestore.deleteAsAdmin(oc)
@@ -2986,7 +2992,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			func() {
 				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 				// Set the resource definition for the scenario
-				presetStorageClassName := getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+				presetStorageClassName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 				dep := newDeployment(setDeploymentTemplate(deploymentTemplate))
 				inlineVolume := InlineVolume{
 					Kind:             "genericEphemeralVolume",
@@ -3081,7 +3087,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				g.By("# Create csi storageclass with 'reclaimPolicy: retain'")
 				if provisioner == "efs.csi.aws.com" {
 					// Get the efs present scName and fsid
-					fsid := getFsIDFromStorageClass(oc, getPresetStorageClassNameByProvisioner(cloudProvider, provisioner))
+					fsid := getFsIDFromStorageClass(oc, getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner))
 					efsExtra := map[string]string{
 						"provisioningMode": "efs-ap",
 						"fileSystemId":     fsid,
@@ -3196,7 +3202,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 				// Set the resource definition for the scenario
 				dep := newDeployment(setDeploymentTemplate(deploymentTemplate))
-				presetStorageClassName := getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+				presetStorageClassName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 				inlineVolume := InlineVolume{
 					Kind:             "genericEphemeralVolume",
 					VolumeDefination: newGenericEphemeralVolume(setGenericEphemeralVolumeWorkloadLabel(dep.name), setGenericEphemeralVolumeStorageClassName(presetStorageClassName)),
@@ -3282,7 +3288,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 			// Get the present scName and check it is installed or no
-			scName := getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			// This condition added only for EFS platform as per earlier merged codes
 			if provisioner == "efs.csi.aws.com" {
 				checkStorageclassExists(oc, scName)
@@ -3438,7 +3444,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 			// Get the present scName and check it is installed or no
-			scName := getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			e2e.Logf("The preset storage class name is: %s", scName)
 
 			if provisioner == "diskplugin.csi.alibabacloud.com" {
@@ -3648,7 +3654,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
 
 			g.By("Create a pvc with the preset csi storageclass")
-			pvcOri.scname = getPresetStorageClassNameByProvisioner(cloudProvider, provisioner)
+			pvcOri.scname = getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 			e2e.Logf("%s", pvcOri.scname)
 			pvcOri.create(oc)
 			defer pvcOri.deleteAsAdmin(oc)

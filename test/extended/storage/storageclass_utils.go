@@ -92,9 +92,16 @@ func newStorageClass(opts ...storageClassOption) storageClass {
 
 // Create a new customized storageclass
 func (sc *storageClass) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplateAsAdmin(oc, "--ignore-unknown-parameters=true", "-f", sc.template, "-p", "SCNAME="+sc.name, "RECLAIMPOLICY="+sc.reclaimPolicy,
-		"PROVISIONER="+sc.provisioner, "VOLUMEBINDINGMODE="+sc.volumeBindingMode)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	// Currently AWS Outpost only support gp2 type volumes
+	// https://github.com/kubernetes-sigs/aws-ebs-csi-driver/blob/master/docs/parameters.md
+	if isAwsOutpostCluster(oc) {
+		gp2VolumeTypeParameter := map[string]string{"type": "gp2"}
+		sc.createWithExtraParameters(oc, map[string]interface{}{"parameters": gp2VolumeTypeParameter})
+	} else {
+		err := applyResourceFromTemplateAsAdmin(oc, "--ignore-unknown-parameters=true", "-f", sc.template, "-p", "SCNAME="+sc.name, "RECLAIMPOLICY="+sc.reclaimPolicy,
+			"PROVISIONER="+sc.provisioner, "VOLUMEBINDINGMODE="+sc.volumeBindingMode)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
 }
 
 // Delete Specified storageclass
@@ -105,7 +112,12 @@ func (sc *storageClass) deleteAsAdmin(oc *exutil.CLI) {
 // Create a new customized storageclass with extra parameters
 func (sc *storageClass) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) error {
 	sc.getParametersFromTemplate()
-	if _, ok := extraParameters["parameters"]; ok && len(sc.parameters) > 0 {
+	// Currently AWS Outpost only support gp2 type volumes
+	// https://github.com/kubernetes-sigs/aws-ebs-csi-driver/blob/master/docs/parameters.md
+	if isAwsOutpostCluster(oc) {
+		sc.parameters["type"] = "gp2"
+	}
+	if _, ok := extraParameters["parameters"]; ok || len(sc.parameters) > 0 {
 		parametersByte, err := json.Marshal(extraParameters["parameters"])
 		o.Expect(err).NotTo(o.HaveOccurred())
 		finalParameters := make(map[string]interface{}, 10)
@@ -265,7 +277,7 @@ func gererateCsiScExtraParametersByVolType(oc *exutil.CLI, csiProvisioner string
 	// aws-efs-csi
 	// https://github.com/kubernetes-sigs/aws-efs-csi-driver
 	case efsCsiDriverPrivisioner:
-		fsID := getFsIDFromStorageClass(oc, getPresetStorageClassNameByProvisioner(cloudProvider, "efs.csi.aws.com"))
+		fsID := getFsIDFromStorageClass(oc, getPresetStorageClassNameByProvisioner(oc, cloudProvider, "efs.csi.aws.com"))
 		storageClassParameters = map[string]string{
 			"provisioningMode": volumeType,
 			"fileSystemId":     fsID,

@@ -38,7 +38,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 
 		// Check default sc exist
-		scName = getPresetStorageClassNameByProvisioner(cloudProvider, "efs.csi.aws.com")
+		scName = getPresetStorageClassNameByProvisioner(oc, cloudProvider, "efs.csi.aws.com")
 		checkStorageclassExists(oc, scName)
 
 		// Get the filesystem id
