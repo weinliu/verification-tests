@@ -1,0 +1,97 @@
+{
+    "kind": "DeploymentConfig",
+    "apiVersion": "apps.openshift.io/v1",
+    "metadata": {
+        "name": "hooks",
+        "creationTimestamp": null,
+        "labels": {
+            "name": "hello-openshift"
+        }
+    },
+    "spec": {
+        "strategy": {
+            "type": "Recreate",
+            "recreateParams": {
+            },
+            "resources": {}
+        },
+        "triggers": [
+            {
+                "type": "ConfigChange"
+            }
+        ],
+        "replicas": 1,
+        "selector": {
+            "name": "hello-openshift"
+        },
+        "template": {
+            "metadata": {
+                "creationTimestamp": null,
+                "labels": {
+                    "name": "hello-openshift"
+                }
+            },
+            "spec": {
+                "volumes": [
+                    {
+                        "name": "dataem",
+                        "emptyDir": {
+                           "medium": ""
+                        }
+                    }
+                ],
+                "containers": [
+                    {
+                        "name": "hello-openshift",
+                        "image": "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83",
+                        "ports": [
+                            {
+                                "containerPort": 8080,
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "env": [
+                            {
+                                "name": "MYSQL_USER",
+                                "value": "user8Y2"
+                            },
+                            {
+                                "name": "MYSQL_PASSWORD",
+                                "value": "Plqe5Wev"
+                            },
+                            {
+                                "name": "MYSQL_DATABASE",
+                                "value": "root"
+                            }
+                        ],
+                        "resources": {
+                            "limits": {
+                                "cpu": "120m",
+                                "memory": "256Mi"
+                            },
+                            "requests": {
+                                "cpu": "60m",
+                                "memory": "256Mi"
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "name": "dataem",
+                                "mountPath": "/var/lib/etcd"
+                            }
+                        ],
+                        "terminationMessagePath": "/dev/termination-log",
+                        "imagePullPolicy": "Always",
+                        "securityContext": {
+                            "capabilities": {},
+                            "privileged": false
+                        }
+                    }
+                ],
+                "restartPolicy": "Always",
+                "dnsPolicy": "ClusterFirst"
+            }
+        }
+    },
+    "status": {}
+}

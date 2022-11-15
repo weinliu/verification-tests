@@ -1,30 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: example-deployment
-  annotations: {}
+  name: hello-openshift
 spec:
   selector:
     matchLabels:
-      app: name
-  replicas: 3
+      app: hello-openshift
+  replicas: 1 
   template:
     metadata:
       labels:
-        app: name
+        app: hello-openshift
     spec:
       containers:
-        - name: container
-          image: >-
-            image-registry.openshift-image-registry.svc:5000/openshift/httpd:latest
-          ports:
-            - containerPort: 8080
-              protocol: TCP
-          env: []
-      imagePullSecrets: []
+      - name: hello-openshift
+        image: quay.io/openshifttest/hello-openshift@sha256:b6296396b632d15daf9b5e62cf26da20d76157161035fefddbd0e7f7749f4167
+        ports:
+        - containerPort: 80
   strategy:
-    type: RollingUpdate
     rollingUpdate:
       maxSurge: 25%
       maxUnavailable: 25%
-  paused: false
+    type: RollingUpdate
