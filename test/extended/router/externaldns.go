@@ -27,6 +27,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	)
 
 	g.BeforeEach(func() {
+		// skip ARM64 arch
+		exutil.SkipARM64(oc)
 		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
 		if strings.Contains(output, "NotFound") {
 			g.Skip("Skip since catalogsource/qe-app-registry is not installed")
