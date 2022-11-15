@@ -191,4 +191,53 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "default", false)
 		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "ocp53696", true)
 	})
+
+	// bugzilla: 2021446
+	g.It("Author:mjoseph-High-55895-When canary route is not available, Ingress should be in degarded state	[Disruptive]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+		)
+
+		g.By("Deploy a project with a client pod")
+		project1 := oc.Namespace()
+		baseDomain := getBaseDomain(oc)
+		g.By("create a client pod")
+		createResourceFromFile(oc, project1, clientPod)
+		err := waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+
+		g.By("Check the intial canary route status")
+		routerpods := getResourceName(oc, "openshift-ingress", "pods")
+		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status.ingress[*].routerName", "default", false)
+
+		g.By("Check the reachability of the canary route")
+		routehost := "canary-openshift-ingress-canary.apps." + baseDomain
+		cmdOnPod := []string{cltPodName, "--", "curl", "-Ik", "https://" + routehost}
+		result := repeatCmd(oc, cmdOnPod, "200 OK", 5)
+		o.Expect(result).To(o.ContainSubstring("passed"))
+
+		g.By("Patch the ingress controller and deleting the canary route")
+		defer ensureClusterOperatorNormal(oc, "ingress")
+		defer patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":null}}")
+		patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":{\"matchLabels\":{\"type\":\"default\"}}}}")
+		// Deleting canary route
+		err = oc.AsAdmin().Run("delete").Args("-n", "openshift-ingress-canary", "route", "canary").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForRangeOfResourceToDisappear(oc, "openshift-ingress", routerpods)
+
+		g.By("Check whether the canary route status cleared and route is not accessible")
+		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status", "default", true)
+		cmdOnPod = []string{cltPodName, "--", "curl", "-Ik", "https://" + routehost}
+		result = repeatCmd(oc, cmdOnPod, "503", 5)
+		o.Expect(result).To(o.ContainSubstring("passed"))
+
+		// Wait may be about 300 seconds
+		g.By("Check the ingress operator status to confirm it is in degraded state cause by canary route")
+		jpath := ".status.conditions[*].message"
+		waitForOutput(oc, "default", "co/ingress", jpath, "The \"default\" ingress controller reports Degraded=True")
+		waitForOutput(oc, "default", "co/ingress", jpath, "Canary route is not admitted by the default ingress controller")
+	})
 })
