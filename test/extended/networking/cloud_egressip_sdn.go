@@ -13,6 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+
+	"github.com/vmware/govmomi"
 )
 
 var _ = g.Describe("[sig-networking] SDN", func() {
@@ -30,7 +32,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		platform := exutil.CheckPlatform(oc)
 		networkType := checkNetworkType(oc)
 		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack")
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere")
 		if !acceptedPlatform || !strings.Contains(networkType, "sdn") {
 			g.Skip("Test cases should be run on AWS or GCP or OpenStack cluster with Openshift-SDN network plugin, skip for other platforms or other network plugin or ipv6 single stack type!!")
 		}
@@ -89,6 +91,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			e2e.Logf("\n OpenStack is detected, running the case on OpenStack\n")
 			flag = "tcpdump"
 			e2e.Logf("Use tcpdump way to verify egressIP on OpenStack")
+		case "vsphere":
+			e2e.Logf("\n vSphere is detected, running the case on vSphere\n")
+			flag = "tcpdump"
+			e2e.Logf("Use tcpdump way to verify egressIP on vSphere")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
 			g.Skip("Not support cloud provider for auto egressip cases for now.")
@@ -106,7 +112,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
-		sub1 := getIfaddrFromNode(egressNode, oc)
+
+		sub1 := getEgressCIDRsForNode(oc, egressNode)
 
 		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressCIDRs\":[\""+sub1+"\"]}")
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressCIDRs\":[]}")
@@ -134,7 +141,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		output := getEgressCIDRs(oc, egressNode)
 		o.Expect(output).To(o.ContainSubstring(sub1))
 
-		ip, err := getEgressIPByKind(oc, "hostsubnet", nodeList.Items[0].Name, 1)
+		ip, err := getEgressIPByKind(oc, "hostsubnet", egressNode, 1)
 		e2e.Logf("\n\n\n got egressIP as -->%v<--\n\n\n", ip)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(freeIPs[0]).Should(o.BeElementOf(ip))
@@ -233,7 +240,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressNode1 = egressNodes[0]
 		egressNode2 = egressNodes[1]
 
-		sub := getIfaddrFromNode(egressNode1, oc)
+		sub := getEgressCIDRsForNode(oc, egressNode1)
 
 		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[\""+sub+"\"]}")
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[]}")
@@ -276,7 +283,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressNode1 = egressNodes[0]
 		egressNode2 = egressNodes[1]
 
-		sub := getIfaddrFromNode(egressNode1, oc)
+		sub := getEgressCIDRsForNode(oc, egressNode1)
 
 		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[\""+sub+"\"]}")
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[]}")
@@ -318,7 +325,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressNode1 = egressNodes[0]
 		egressNode2 = egressNodes[1]
 
-		sub := getIfaddrFromNode(egressNode1, oc)
+		sub := getEgressCIDRsForNode(oc, egressNode1)
 
 		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[\""+sub+"\"]}")
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[]}")
@@ -389,7 +396,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
-		sub1 := getIfaddrFromNode(egressNode, oc)
+
+		sub1 := getEgressCIDRsForNode(oc, egressNode)
 
 		g.By("2. Create first namespace then create a test pod in it")
 		ns1 := oc.Namespace()
@@ -519,7 +527,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		countBaseline := strings.Count(podlogs, `may be offline`)
 
 		g.By("3. Get subnet from egressIP node, add egressCIDRs to both egressIP nodes")
-		sub := getIfaddrFromNode(egressNode1, oc)
+		sub := getEgressCIDRsForNode(oc, egressNode1)
+
 		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[\""+sub+"\"]}")
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[]}")
 		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[\""+sub+"\"]}")
@@ -548,9 +557,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(countCurrent-countBaseline).Should(o.Equal(0), "get additional `may be offline` error log")
 
 		g.By("7.Check source IP from the test pod for 10 times, it should use either egressIP address as its sourceIP")
-		var dstHost, primaryInf1, primaryInf2 string
+		var dstHost, primaryInf string
 		var infErr, snifErr error
-		var tcpdumpDS1, tcpdumpDS2 *tcpdumpDaemonSet
+		var tcpdumpDS *tcpdumpDaemonSet
 		switch flag {
 		case "ipecho":
 			g.By(" Use IP-echo service to verify egressIP.")
@@ -562,22 +571,16 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 				o.ContainSubstring(freeIPs[1])))
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump1")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump1", "true")
-			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump2")
-			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump2", "true")
+			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump")
+			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump", "true")
+			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump")
+			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, "tcpdump", "true")
 
-			primaryInf1, infErr = getSnifPhyInf(oc, egressNodes[0])
+			primaryInf, infErr = getSnifPhyInf(oc, egressNode1)
 			o.Expect(infErr).NotTo(o.HaveOccurred())
 			dstHost = nslookDomainName("ifconfig.me")
-			defer deleteTcpdumpDS(oc, "tcpdump-46555-1", ns)
-			tcpdumpDS1, snifErr = createSnifferDaemonset(oc, ns, "tcpdump-46555-1", "tcpdump1", "true", dstHost, primaryInf1, 80)
-			o.Expect(snifErr).NotTo(o.HaveOccurred())
-
-			primaryInf2, infErr = getSnifPhyInf(oc, egressNodes[0])
-			o.Expect(infErr).NotTo(o.HaveOccurred())
-			defer deleteTcpdumpDS(oc, "tcpdump-46555-2", ns)
-			tcpdumpDS2, snifErr = createSnifferDaemonset(oc, ns, "tcpdump-46555-2", "tcpdump2", "true", dstHost, primaryInf2, 80)
+			defer deleteTcpdumpDS(oc, "tcpdump-46555", ns)
+			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns, "tcpdump-46555", "tcpdump", "true", dstHost, primaryInf, 80)
 			o.Expect(snifErr).NotTo(o.HaveOccurred())
 
 			g.By("Verify all egressIP is randomly used as sourceIP.")
@@ -585,10 +588,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 				randomStr, url := getRequestURL(dstHost)
 				_, cmdErr := execCommandInSpecificPod(oc, podns.namespace, podns.name, "for i in {1..10}; do curl -s "+url+" --connect-timeout 5 ; sleep 2;echo ;done")
 				o.Expect(err).NotTo(o.HaveOccurred())
-				egressIPCheck1 := checkMatchedIPs(oc, ns, tcpdumpDS1.name, randomStr, freeIPs[0], true)
-				egressIPCheck2 := checkMatchedIPs(oc, ns, tcpdumpDS2.name, randomStr, freeIPs[1], true)
+				egressIPCheck1 := checkMatchedIPs(oc, ns, tcpdumpDS.name, randomStr, freeIPs[0], true)
+				egressIPCheck2 := checkMatchedIPs(oc, ns, tcpdumpDS.name, randomStr, freeIPs[1], true)
 				if egressIPCheck1 != nil || egressIPCheck2 != nil || cmdErr != nil {
-					e2e.Logf("Either of egressIPs %s or %s found in tcpdump log, try next round.", freeIPs[0], freeIPs[0])
+					e2e.Logf("Either of egressIPs %s or %s found in tcpdump log, try next round.", freeIPs[0], freeIPs[1])
 					return false, nil
 				}
 				return true, nil
@@ -630,7 +633,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		e2e.Logf("\nnonEgressNode: %v\n", nonEgressNode)
 
 		g.By("2. Find 2 unused IPs from one egress node")
-		sub := getIfaddrFromNode(egressNode1, oc)
+		sub := getEgressCIDRsForNode(oc, egressNode1)
 		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode1, sub, 2)
 
 		g.By("3. Patch egressIP address to egressIP nodes")
@@ -721,7 +724,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressNode1 = egressNodes[0]
 		egressNode2 = egressNodes[1]
 
-		sub := getIfaddrFromNode(egressNode1, oc)
+		sub := getEgressCIDRsForNode(oc, egressNode1)
 
 		g.By("2. Find 2 unused IPs from one egress node")
 		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode1, sub, 2)
@@ -760,7 +763,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			e2e.Logf(sourceIP)
 			o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs[0]))
 			o.Expect(sourceIP).ShouldNot(o.ContainSubstring(freeIPs[1]))
-		case "tcpdummp":
+		case "tcpdump":
 			g.By(" Using tcpDump to check source IP is egressIP.")
 			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump")
 			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode1, "tcpdump", "true")
@@ -787,7 +790,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
-		sub := getIfaddrFromNode(egressNode, oc)
+
+		sub := getEgressCIDRsForNode(oc, egressNode)
 
 		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressCIDRs\":[\""+sub+"\"]}")
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressCIDRs\":[]}")
@@ -815,7 +819,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:jechen-High-47054-The egressIP can be HA if netnamespace has single egressIP . [Disruptive][Slow]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-47054-The egressIP can be HA if netnamespace has single egressIP . [Disruptive][Slow]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -844,7 +848,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		e2e.Logf("\n non-egress node: %v\n", nonEgressNode)
 
 		g.By("2. Get subnet from egressIP node, add egressCIDRs to both egressIP nodes")
-		sub := getIfaddrFromNode(egressNode1, oc)
+		sub := getEgressCIDRsForNode(oc, egressNode1)
+
 		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[\""+sub+"\"]}")
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[]}")
 		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode2, "{\"egressCIDRs\":[\""+sub+"\"]}")
@@ -949,9 +954,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		for i := 0; i < (nodeNum - 1); i++ {
 			egressNodes = append(egressNodes, nodeList.Items[i].Name)
 		}
-		sub1 := getIfaddrFromNode(nodeList.Items[0].Name, oc)
-		sub2 := getIfaddrFromNode(nodeList.Items[1].Name, oc)
-		sub3 := getIfaddrFromNode(nodeList.Items[2].Name, oc)
+
+		sub1 := getEgressCIDRsForNode(oc, nodeList.Items[0].Name)
+		sub2 := getEgressCIDRsForNode(oc, nodeList.Items[1].Name)
+		sub3 := getEgressCIDRsForNode(oc, nodeList.Items[2].Name)
+
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNodes[0], "{\"egressCIDRs\":[]}")
 		patchResourceAsAdmin(oc, "hostsubnet/"+egressNodes[0], "{\"egressCIDRs\":[\""+sub1+"\"]}")
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNodes[1], "{\"egressCIDRs\":[]}")
@@ -1054,6 +1061,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		var instance []string
 		var zone string
 		var ospObj exutil.Osp
+		var vspObj *exutil.Vmware
+		var vspClient *govmomi.Client
 		switch exutil.CheckPlatform(oc) {
 		case "aws":
 			e2e.Logf("\n AWS is detected, stop the instance %v on AWS now \n", foundHost)
@@ -1080,6 +1089,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer checkNodeStatus(oc, foundHost, "Ready")
 			defer ospObj.GetStartOspInstance(foundHost)
 			err = ospObj.GetStopOspInstance(foundHost)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "NotReady")
+		case "vsphere":
+			e2e.Logf("\n vSphere is detected, stop the instance %v on OSP now \n", foundHost)
+			vspObj, vspClient = VsphereCloudClient(oc)
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			defer vspObj.StartVsphereInstance(vspClient, foundHost)
+			err = vspObj.StopVsphereInstance(vspClient, foundHost)
+			e2e.Logf("\n Did I get error while stopping instance: %v \n", err)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, foundHost, "NotReady")
 		default:
@@ -1136,6 +1154,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			err = ospObj.GetStartOspInstance(foundHost)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, foundHost, "Ready")
+		case "vsphere":
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			err = vspObj.StartVsphereInstance(vspClient, foundHost)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "Ready")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
 			g.Skip("Not support cloud provider for auto egressip cases for now.")
@@ -1161,9 +1184,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		for i := 0; i < (nodeNum - 1); i++ {
 			egressNodes = append(egressNodes, nodeList.Items[i].Name)
 		}
-		sub1 := getIfaddrFromNode(nodeList.Items[0].Name, oc)
-		sub2 := getIfaddrFromNode(nodeList.Items[1].Name, oc)
-		sub3 := getIfaddrFromNode(nodeList.Items[2].Name, oc)
+
+		sub1 := getEgressCIDRsForNode(oc, nodeList.Items[0].Name)
+		sub2 := getEgressCIDRsForNode(oc, nodeList.Items[1].Name)
+		sub3 := getEgressCIDRsForNode(oc, nodeList.Items[2].Name)
 
 		// Find 1 unused IPs from each egress node
 		freeIPs1 := findUnUsedIPsOnNodeOrFail(oc, egressNodes[0], sub1, 1)
@@ -1233,7 +1257,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 				return true, nil
 			})
 			exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to get all EgressIPs %s,%s, %s in tcpdump", freeIPs1[0], freeIPs2[0], freeIPs3[0]))
-			deleteTcpdumpDS(oc, "tcpdump-46561", ns)
 		default:
 			g.Skip("Skip for not support scenarios!")
 		}
@@ -1260,6 +1283,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		var instance []string
 		var zone string
 		var ospObj exutil.Osp
+		var vspObj *exutil.Vmware
+		var vspClient *govmomi.Client
 		switch exutil.CheckPlatform(oc) {
 		case "aws":
 			e2e.Logf("\n AWS is detected, stop the instance %v on AWS now \n", foundHost)
@@ -1288,6 +1313,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			err = ospObj.GetStopOspInstance(foundHost)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, foundHost, "NotReady")
+		case "vsphere":
+			e2e.Logf("\n vSphere is detected, stop the instance %v on OSP now \n", foundHost)
+			vspObj, vspClient = VsphereCloudClient(oc)
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			defer vspObj.StartVsphereInstance(vspClient, foundHost)
+			err = vspObj.StopVsphereInstance(vspClient, foundHost)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "NotReady")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
 			g.Skip("Not support cloud provider for auto egressip cases for now.")
@@ -1303,13 +1336,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs2[0]))
 			o.Expect(sourceIP).Should(o.ContainSubstring(freeIPs3[0]))
 		case "tcpdump":
-			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
-			primaryInf, infErr := getSnifPhyInf(oc, hostLeft[0])
-			o.Expect(infErr).NotTo(o.HaveOccurred())
-			defer deleteTcpdumpDS(oc, "tcpdump-46561-2", ns)
-			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns, "tcpdump-46561-2", "tcpdump", "true", dstHost, primaryInf, 80)
-			o.Expect(snifErr).NotTo(o.HaveOccurred())
-
+			g.By(" Use tcpdump to verify egressIP")
 			g.By("Verify other available egressIP is randomly used as sourceIP.")
 			egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
 				randomStr, url := getRequestURL(dstHost)
@@ -1345,6 +1372,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			err = ospObj.GetStartOspInstance(foundHost)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, foundHost, "Ready")
+		case "vsphere":
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			err = vspObj.StartVsphereInstance(vspClient, foundHost)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "Ready")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
 			g.Skip("Not support cloud provider for auto egressip cases for now.")
@@ -1360,7 +1392,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		egressNode := nodeList.Items[0].Name
-		sub := getIfaddrFromNode(egressNode, oc)
+
+		sub := getEgressCIDRsForNode(oc, egressNode)
 
 		// Find 3 unused IPs from the egress node
 		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode, sub, 3)
@@ -1496,8 +1529,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		g.By("7.Patch the namespace with a private IP that is definitely not within the CIDR, verify it is not added to node's primary NIC, curl command should not succeed, error is expected ")
-		//patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[\"192.168.1.100\"]}")
-
 		var ipOutOfCIDR string
 		switch exutil.CheckPlatform(oc) {
 		case "aws":
@@ -1506,6 +1537,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			ipOutOfCIDR = "192.168.1.100"
 		case "openstack":
 			ipOutOfCIDR = "172.16.1.100" //since OSP use 192.168.x.x as its CIDR, need to use some other private IP for this test
+		case "vsphere":
+			ipOutOfCIDR = "192.168.1.100"
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
 			g.Skip("Not support cloud provider for auto egressip cases for now.")
@@ -1543,8 +1576,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		egressNode1 := nodeList.Items[0].Name
 		egressNode2 := nodeList.Items[1].Name
-		sub1 := getIfaddrFromNode(egressNode1, oc)
-		sub2 := getIfaddrFromNode(nodeList.Items[1].Name, oc)
+
+		sub1 := getEgressCIDRsForNode(oc, egressNode1)
+		sub2 := getEgressCIDRsForNode(oc, egressNode2)
 
 		// Find 2 unused IPs from the first egress node and 1 unused IP from the second egress node
 		freeIPs1 := findUnUsedIPsOnNodeOrFail(oc, egressNode1, sub1, 2)
@@ -1712,7 +1746,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		egressNode := nodeList.Items[0].Name
-		sub := getIfaddrFromNode(egressNode, oc)
+
+		sub := getEgressCIDRsForNode(oc, egressNode)
 
 		// Find 1 unused IP from the egress node
 		freeIPs := findUnUsedIPsOnNodeOrFail(oc, nodeList.Items[0].Name, sub, 1)
@@ -1898,7 +1933,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		egressNode := nodeList.Items[0].Name
 		nonEgressNode := nodeList.Items[1].Name
-		sub := getIfaddrFromNode(egressNode, oc)
+
+		sub := getEgressCIDRsForNode(oc, egressNode)
 
 		// Find 1 unused IP from the egress node
 		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode, sub, 1)
@@ -2013,7 +2049,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		egressNode2 := egressNodes[1]
 
 		g.By("2. Get subnet from egressIP node, find 1 unused IPs from one egress node")
-		sub := getIfaddrFromNode(egressNode1, oc)
+
+		sub := getEgressCIDRsForNode(oc, egressNode1)
+
 		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode1, sub, 1)
 
 		g.By("3. Patch the same egressIP to both egress nodes")
@@ -2089,8 +2127,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 		egressNode := nodeList.Items[0].Name
 		nonEgressNode := nodeList.Items[1].Name
-		sub := getIfaddrFromNode(egressNode, oc)
 
+		sub := getEgressCIDRsForNode(oc, egressNode)
 		// Find 3 unused IP from the egress node
 		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode, sub, 3)
 
@@ -2277,7 +2315,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Not enough node available, need at least one node for the test, skip the case!!")
 		}
 		egressNode := nodeList.Items[0].Name
-		sub := getIfaddrFromNode(egressNode, oc)
+
+		sub := getEgressCIDRsForNode(oc, egressNode)
 
 		// Find 2 unused IP from the egress node, first one is used as externalIP, second one is used as egressIP
 		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode, sub, 2)
@@ -2365,7 +2404,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		egressNode := nodeList.Items[0].Name
-		sub := getIfaddrFromNode(egressNode, oc)
+
+		sub := getEgressCIDRsForNode(oc, egressNode)
+
 		// Find 1 unused IP from the egress node
 		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode, sub, 1)
 
@@ -2383,6 +2424,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			template:  nodeServiceTemplate,
 		}
 
+		_, labelNsErr := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "pod-security.kubernetes.io/audit=privileged", "pod-security.kubernetes.io/warn=privileged", "--overwrite").Output()
+		o.Expect(labelNsErr).NotTo(o.HaveOccurred())
 		defer removeResource(oc, true, true, "service", service.name, "-n", service.namespace)
 		parameters := []string{"--ignore-unknown-parameters=true", "-f", service.template, "-p", "NAME=" + service.name, "NODENAME=" + service.nodeName}
 		exutil.ApplyNsResourceFromTemplate(oc, service.namespace, parameters...)
@@ -2436,7 +2479,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		egressNode := nodeList.Items[0].Name
-		sub := getIfaddrFromNode(egressNode, oc)
+
+		sub := getEgressCIDRsForNode(oc, egressNode)
 
 		// Find 1 unused IP from the egress node
 		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode, sub, 1)
@@ -2556,8 +2600,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		ns := oc.Namespace()
 		egressNode := nodeList.Items[0].Name
 
-		// get subnet and unused IP from the egressNode
-		sub := getIfaddrFromNode(egressNode, oc)
+		sub := getEgressCIDRsForNode(oc, egressNode)
+
 		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode, sub, 1)
 
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressIPs\":[]}")
@@ -2649,7 +2693,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		e2e.Logf("\nEgressNode2: %v\n", egressNode2)
 		e2e.Logf("\nnonEgressNode: %v\n", nonEgressNode)
 
-		sub := getIfaddrFromNode(egressNode1, oc)
+		sub := getEgressCIDRsForNode(oc, egressNode1)
 
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[]}")
 		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode1, "{\"egressCIDRs\":[\""+sub+"\"]}")
@@ -2709,6 +2753,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		var instance []string
 		var zone string
 		var ospObj exutil.Osp
+		var vspObj *exutil.Vmware
+		var vspClient *govmomi.Client
 		switch exutil.CheckPlatform(oc) {
 		case "aws":
 			e2e.Logf("\n AWS is detected, stop the instance %v on AWS now \n", foundHost)
@@ -2735,6 +2781,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer checkNodeStatus(oc, foundHost, "Ready")
 			defer ospObj.GetStartOspInstance(foundHost)
 			err = ospObj.GetStopOspInstance(foundHost)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "NotReady")
+		case "vsphere":
+			e2e.Logf("\n vSphere is detected, stop the instance %v on OSP now \n", foundHost)
+			vspObj, vspClient = VsphereCloudClient(oc)
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			defer vspObj.StartVsphereInstance(vspClient, foundHost)
+			err = vspObj.StopVsphereInstance(vspClient, foundHost)
+			e2e.Logf("\n Did I get error while stopping instance: %v \n", err)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, foundHost, "NotReady")
 		default:
@@ -2788,6 +2843,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			err = ospObj.GetStartOspInstance(foundHost)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, foundHost, "Ready")
+		case "vsphere":
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			err = vspObj.StartVsphereInstance(vspClient, foundHost)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "Ready")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
 			g.Skip("Not support cloud provider for auto egressip cases for now.")
@@ -2805,9 +2865,9 @@ var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
 		platform := exutil.CheckPlatform(oc)
 		networkType := checkNetworkType(oc)
 		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp")
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere")
 		if !acceptedPlatform || !strings.Contains(networkType, "sdn") {
-			g.Skip("Test cases should be run on AWS or GCP cluster with Openshift-SDN network plugin, skip for other platforms or other network plugin!!")
+			g.Skip("Test cases should be run on AWS, GCP, OpenStack or vSphere cluster with Openshift-SDN network plugin, skip for other platforms or other network plugin!!")
 		}
 	})
 
@@ -2879,7 +2939,8 @@ var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		egressNode := nodeList.Items[0].Name
-		sub := getIfaddrFromNode(egressNode, oc)
+
+		sub := getEgressCIDRsForNode(oc, egressNode)
 
 		// Find 1 unused IP from the egress node
 		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode, sub, 1)
@@ -2934,7 +2995,8 @@ var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
 		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
 
 		egressNode := nodeList.Items[0].Name
-		sub := getIfaddrFromNode(egressNode, oc)
+
+		sub := getEgressCIDRsForNode(oc, egressNode)
 
 		// Find 2 unused IP from the egress node
 		freeIPs := findUnUsedIPsOnNodeOrFail(oc, egressNode, sub, 2)
@@ -3013,7 +3075,8 @@ var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
 		}
 
 		egressNode := nodeList.Items[0].Name
-		sub := getIfaddrFromNode(egressNode, oc)
+
+		sub := getEgressCIDRsForNode(oc, egressNode)
 
 		defer patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressCIDRs\":[]}")
 		patchResourceAsAdmin(oc, "hostsubnet/"+egressNode, "{\"egressCIDRs\":[\""+sub+"\"]}")
@@ -3043,10 +3106,6 @@ var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
 		ipReturned, checkErr := getEgressIPByKind(oc, "hostsubnet", nodeList.Items[0].Name, ipCap)
 		o.Expect(checkErr).NotTo(o.HaveOccurred())
 		o.Expect(len(ipReturned) == ipCap).Should(o.BeTrue())
-
-		// Note: Due to bug with JIRA ticket OCPBUGS-69, currently, we only check if the number of egressIP assigned to hostsubnet is equal to capacity limit, it does not exceeds capacity limit.
-		// Will add a check to verify event log for warning message after OCPBUGS-69 is fixed
-
 	})
 
 })

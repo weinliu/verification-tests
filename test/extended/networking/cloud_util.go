@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -22,6 +23,8 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+
+	"github.com/vmware/govmomi"
 )
 
 type tcpdumpDaemonSet struct {
@@ -876,6 +879,39 @@ func OspCredentials(oc *exutil.CLI) {
 			os.Setenv("OSP_DR_PROJECT_NAME", projectName)
 		}
 	}
+}
+
+// VsphereCloudClient pass env details to login function, and used to login
+func VsphereCloudClient(oc *exutil.CLI) (*exutil.Vmware, *govmomi.Client) {
+	credential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/vsphere-creds", "-n", "kube-system", "-o", `jsonpath={.data}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	output := gjson.Parse(credential).Value().(map[string]interface{})
+	var accessKeyIDBase64 string
+	var secureKeyBase64 string
+	for key, value := range output {
+		if strings.Contains(key, "username") {
+			accessKeyIDBase64 = fmt.Sprint(value)
+		} else if strings.Contains(key, "password") {
+			secureKeyBase64 = fmt.Sprint(value)
+		}
+	}
+	accessKeyID, err1 := base64.StdEncoding.DecodeString(accessKeyIDBase64)
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	secureKey, err2 := base64.StdEncoding.DecodeString(secureKeyBase64)
+	o.Expect(err2).NotTo(o.HaveOccurred())
+	cloudConfig, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/cloud-provider-config", "-n", "openshift-config", "-o", `jsonpath={.data.config}`).OutputToFile("vsphere.ini")
+	o.Expect(err3).NotTo(o.HaveOccurred())
+	cmd := fmt.Sprintf(`grep -i server "%v" | awk -F '"' '{print $2}'`, cloudConfig)
+	serverURL, err4 := exec.Command("bash", "-c", cmd).Output()
+	e2e.Logf("\n serverURL: %v \n", serverURL)
+	o.Expect(err4).NotTo(o.HaveOccurred())
+	envUsername := string(accessKeyID)
+	envPassword := string(secureKey)
+	envURL := string(serverURL)
+	envURL = strings.TrimSuffix(envURL, "\n")
+	govmomiURL := "https://" + envUsername + ":" + envPassword + "@" + envURL + "/sdk"
+	vmware := exutil.Vmware{GovmomiURL: govmomiURL}
+	return vmware.Login()
 }
 
 // startVMOnAzure start one Azure VM

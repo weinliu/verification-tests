@@ -1988,3 +1988,20 @@ func getOVNGatewayMode(oc *exutil.CLI) string {
 	}
 	return "shared"
 }
+
+func getEgressCIDRsForNode(oc *exutil.CLI, nodeName string) string {
+	var sub1 string
+	platform := exutil.CheckPlatform(oc)
+	if strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") {
+		defaultSubnetV4, err := getDefaultSubnet(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, ipNet, err1 := net.ParseCIDR(defaultSubnetV4)
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		e2e.Logf("ipnet: %v", ipNet)
+		sub1 = ipNet.String()
+		e2e.Logf("\n\n\n sub1 as -->%v<--\n\n\n", sub1)
+	} else {
+		sub1 = getIfaddrFromNode(nodeName, oc)
+	}
+	return sub1
+}
