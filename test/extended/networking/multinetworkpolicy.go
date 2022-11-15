@@ -79,10 +79,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(output).To(o.ContainSubstring("ingress-allow-same-podselector-with-same-namespaceselector"))
 
 		g.By("9. Same curl testing, one curl pass and three curls will fail after applying policy")
-		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-1", pod3ns1IPv4, pod3ns1IPv6)
-		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-1", pod1ns2IPv4, pod1ns2IPv6)
-		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-1", pod2ns2IPv4, pod2ns2IPv6)
-		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod2ns1IPv4, pod2ns1IPv6)
+		curlPod2PodMultiNetworkFail(oc, ns1, "red-pod-1", pod1ns1IPv4, pod1ns1IPv6)
+		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-3", pod1ns1IPv4, pod1ns1IPv6)
+		curlPod2PodMultiNetworkFail(oc, ns1, "red-pod-2", pod1ns1IPv4, pod1ns1IPv6)
+		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-2", pod1ns1IPv4, pod1ns1IPv6)
 
 		g.By("10. Delete ingress-allow-same-podselector-with-same-namespaceselector policy in ns1")
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns1, "multi-networkpolicy", "ingress-allow-same-podselector-with-same-namespaceselector").Execute()
@@ -154,10 +154,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(output).To(o.ContainSubstring("ingress-allow-diff-podselector-with-same-namespaceselector"))
 
 		g.By("9. Same curl testing, one curl fail and three curls will pass after applying policy")
-		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-1", pod2ns1IPv4, pod2ns1IPv6)
-		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod3ns1IPv4, pod3ns1IPv6)
-		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-1", pod1ns2IPv4, pod1ns2IPv6)
-		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-1", pod2ns2IPv4, pod2ns2IPv6)
+		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-2", pod1ns1IPv4, pod1ns1IPv6)
+		curlPod2PodMultiNetworkPass(oc, ns1, "red-pod-1", pod1ns1IPv4, pod1ns1IPv6)
+		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-3", pod1ns1IPv4, pod1ns1IPv6)
+		curlPod2PodMultiNetworkFail(oc, ns1, "red-pod-2", pod1ns1IPv4, pod1ns1IPv6)
 
 		g.By("10. Delete ingress-allow-diff-podselector-with-same-namespaceselector policy in ns1")
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns1, "multi-networkpolicy", "ingress-allow-diff-podselector-with-same-namespaceselector").Execute()
@@ -459,17 +459,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(output).To(o.ContainSubstring("ingress-ipblock"))
 
 		g.By("8. curl should fail for ip range 192.168.0.4-192.168.0.6 after applying policy")
-		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-1", pod4ns1IPv4, pod4ns1IPv6)
-		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-1", pod5ns1IPv4, pod5ns1IPv6)
-		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-1", pod6ns1IPv4, pod6ns1IPv6)
-		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod2ns1IPv4, pod2ns1IPv6)
-		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod3ns1IPv4, pod3ns1IPv6)
-
 		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-6", pod1ns1IPv4, pod1ns1IPv6)
 		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-6", pod2ns1IPv4, pod2ns1IPv6)
 		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-6", pod3ns1IPv4, pod3ns1IPv6)
 		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-6", pod4ns1IPv4, pod4ns1IPv6)
 		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-6", pod5ns1IPv4, pod5ns1IPv6)
+
+		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-4", pod1ns1IPv4, pod1ns1IPv6)
+		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-5", pod1ns1IPv4, pod1ns1IPv6)
+		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-6", pod1ns1IPv4, pod1ns1IPv6)
+		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-2", pod1ns1IPv4, pod1ns1IPv6)
+		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-3", pod1ns1IPv4, pod1ns1IPv6)
 
 		g.By("9. Delete ingress-ipBlock policy in ns1")
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns1, "multi-networkpolicy", "ingress-ipblock").Execute()
@@ -651,11 +651,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod2ns1IPv4, pod2ns1IPv6)
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod3ns1IPv4, pod3ns1IPv6)
 
-		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-6", pod1ns1IPv4, pod1ns1IPv6)
-		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-6", pod2ns1IPv4, pod2ns1IPv6)
-		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-6", pod3ns1IPv4, pod3ns1IPv6)
-		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-6", pod4ns1IPv4, pod4ns1IPv6)
-		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-6", pod5ns1IPv4, pod5ns1IPv6)
+		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-2", pod6ns1IPv4, pod6ns1IPv6)
+		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-2", pod6ns1IPv4, pod6ns1IPv6)
+		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-3", pod6ns1IPv4, pod6ns1IPv6)
+		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-4", pod6ns1IPv4, pod6ns1IPv6)
+		curlPod2PodMultiNetworkFail(oc, ns1, "blue-pod-5", pod6ns1IPv4, pod6ns1IPv6)
 
 		g.By("9. Delete egress-ipBlock policy in ns1")
 		policyDeleteErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns1, "multi-networkpolicy", "egress-ipblock").Execute()
