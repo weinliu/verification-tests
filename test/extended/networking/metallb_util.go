@@ -65,17 +65,23 @@ func operatorInstall(oc *exutil.CLI, sub subscriptionResource, ns namespaceResou
 	//Applying the config of necessary yaml files from templates to create metallb operator
 	g.By("(1.1) Applying namespace template")
 	err0 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ns.template, "-p", "NAME="+ns.name)
-	e2e.Logf("Error creating namespace %v", err0)
+	if err0 != nil {
+		e2e.Logf("Error creating namespace %v", err0)
+	}
 
 	g.By("(1.2)  Applying operatorgroup yaml")
 	err0 = applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", og.template, "-p", "NAME="+og.name, "NAMESPACE="+og.namespace, "TARGETNAMESPACES="+og.targetNamespaces)
-	e2e.Logf("Error creating operator group %v", err0)
+	if err0 != nil {
+		e2e.Logf("Error creating operator group %v", err0)
+	}
 
 	g.By("(1.3) Creating subscription yaml from template")
 	// no need to check for an existing subscription
 	err0 = applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sub.template, "-p", "SUBSCRIPTIONNAME="+sub.name, "NAMESPACE="+sub.namespace, "CHANNEL="+sub.channel,
 		"CATALOGSOURCE="+sub.catalog, "CATALOGSOURCENAMESPACE="+sub.catalogNamespace)
-	e2e.Logf("Error creating subscription %v", err0)
+	if err0 != nil {
+		e2e.Logf("Error creating subscription %v", err0)
+	}
 
 	//confirming operator install
 	g.By("(1.4) Verify the operator finished subscribing")
