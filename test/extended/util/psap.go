@@ -26,7 +26,7 @@ import (
 //If excludewinnode is true, skip checking windows nodes daemonset status
 //For daemonset or deployment have random name, getting name before use this function
 
-//WaitOprResourceReady used for checking if deployment/daemonset/statefulset is ready
+// WaitOprResourceReady used for checking if deployment/daemonset/statefulset is ready
 func WaitOprResourceReady(oc *CLI, kind, name, namespace string, islongduration bool, excludewinnode bool) {
 	//If islongduration is true, it will sleep 720s, otherwise 180s
 	var timeDurationSec int
@@ -97,7 +97,7 @@ func WaitOprResourceReady(oc *CLI, kind, name, namespace string, islongduration 
 	AssertWaitPollNoErr(waitErr, fmt.Sprintf("the pod of %v is not running", name))
 }
 
-//IsNodeLabeledByNFD Check if NFD Installed base on the cluster labels
+// IsNodeLabeledByNFD Check if NFD Installed base on the cluster labels
 func IsNodeLabeledByNFD(oc *CLI) bool {
 	workNode, _ := GetFirstWorkerNode(oc)
 	Output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", workNode, "-o", "jsonpath='{.metadata.annotations}'").Output()
@@ -109,7 +109,7 @@ func IsNodeLabeledByNFD(oc *CLI) bool {
 	return false
 }
 
-//CountNodeNumByOS used for count how many worker node by windows or linux
+// CountNodeNumByOS used for count how many worker node by windows or linux
 func CountNodeNumByOS(oc *CLI) (linuxNum int, windowsNum int) {
 	//Count how many windows node and linux node
 	linuxNodeNames, err := GetAllNodesbyOSType(oc, "linux")
@@ -124,7 +124,7 @@ func CountNodeNumByOS(oc *CLI) (linuxNum int, windowsNum int) {
 	return linuxNum, windowsNum
 }
 
-//GetFirstLinuxMachineSets used for getting first linux worker nodes name
+// GetFirstLinuxMachineSets used for getting first linux worker nodes name
 func GetFirstLinuxMachineSets(oc *CLI) string {
 	machinesets, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-machine-api").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -139,7 +139,7 @@ func GetFirstLinuxMachineSets(oc *CLI) string {
 	return machinesetsArray[0]
 }
 
-//InstallNFD attempts to install the Node Feature Discovery operator and verify that it is running
+// InstallNFD attempts to install the Node Feature Discovery operator and verify that it is running
 func InstallNFD(oc *CLI, nfdNamespace string) {
 	var (
 		nfdNamespaceFile     = FixturePath("testdata", "psap", "nfd", "nfd-namespace.yaml")
@@ -187,7 +187,7 @@ func InstallNFD(oc *CLI, nfdNamespace string) {
 
 }
 
-//CreateNFDInstance used for create NFD Instance in different namespace
+// CreateNFDInstance used for create NFD Instance in different namespace
 func CreateNFDInstance(oc *CLI, namespace string) {
 
 	var (
@@ -202,7 +202,10 @@ func CreateNFDInstance(oc *CLI, namespace string) {
 	e2e.Logf("NFD Instance is: %v", nfdinstanceName)
 	if strings.Contains(nfdinstanceName, "NotFound") || strings.Contains(nfdinstanceName, "No resources") || err != nil {
 		// create NFD operator group from template
-		ApplyNsResourceFromTemplate(oc, namespace, "--ignore-unknown-parameters=true", "-f", nfdInstanceFile, "-p", "IMAGE=quay.io/openshift/origin-node-feature-discovery:"+clusterVersion, "NAMESPACE="+namespace)
+		nfdInstanceImage := GetNFDInstanceImage(oc, namespace)
+		e2e.Logf("NFD instance image name: %v", nfdInstanceImage)
+		o.Expect(nfdInstanceImage).NotTo(o.BeEmpty())
+		ApplyNsResourceFromTemplate(oc, namespace, "--ignore-unknown-parameters=true", "-f", nfdInstanceFile, "-p", "IMAGE="+nfdInstanceImage, "NAMESPACE="+namespace)
 	} else {
 		e2e.Logf("NFD instance found - continue to check pod status ...")
 	}
@@ -212,7 +215,37 @@ func CreateNFDInstance(oc *CLI, namespace string) {
 	WaitOprResourceReady(oc, "daemonset", "nfd-worker", namespace, false, true)
 }
 
-//GetOperatorPKGManifestSource used for getting operator Packagemanifest source name
+// GetNFDVersionbyPackageManifest return NFD version
+func GetNFDVersionbyPackageManifest(oc *CLI, namespace string) string {
+	nfdVersionOrigin, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "nfd", "-n", namespace, "-ojsonpath={.status.channels[*].currentCSVDesc.version}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(nfdVersionOrigin).NotTo(o.BeEmpty())
+	nfdVersionArr := strings.Split(nfdVersionOrigin, ".")
+	nfdVersion := nfdVersionArr[0] + "." + nfdVersionArr[1]
+	return nfdVersion
+}
+
+// GetNFDInstanceImage return correct image name in manifest channel
+func GetNFDInstanceImage(oc *CLI, namespace string) string {
+	var nfdInstanceImage string
+	nfdInstanceImageStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "nfd", "-n", namespace, "-ojsonpath={.status.channels[*].currentCSVDesc.relatedImages}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(nfdInstanceImageStr).NotTo(o.BeEmpty())
+	strTmp1 := strings.TrimLeft(nfdInstanceImageStr, "[")
+	strTmp2 := strings.TrimRight(strTmp1, "]")
+	strTmp3 := strings.ReplaceAll(strTmp2, `"`, "")
+	nfdInstanceImageArr := strings.Split(strTmp3, ",")
+
+	for i := 0; i < len(nfdInstanceImageArr); i++ {
+		if strings.Contains(nfdInstanceImageArr[i], "node-feature-discovery") {
+			nfdInstanceImage = nfdInstanceImageArr[i]
+		}
+	}
+	e2e.Logf("NFD instance image name: %v", nfdInstanceImage)
+	return nfdInstanceImage
+}
+
+// GetOperatorPKGManifestSource used for getting operator Packagemanifest source name
 func GetOperatorPKGManifestSource(oc *CLI, pkgManifestName, namespace string) (string, error) {
 	catalogSourceNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -224,14 +257,14 @@ func GetOperatorPKGManifestSource(oc *CLI, pkgManifestName, namespace string) (s
 	return soureName, err
 }
 
-//GetOperatorPKGManifestDefaultChannel to getting operator Packagemanifest default channel
+// GetOperatorPKGManifestDefaultChannel to getting operator Packagemanifest default channel
 func GetOperatorPKGManifestDefaultChannel(oc *CLI, pkgManifestName, namespace string) (string, error) {
 	channel, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", pkgManifestName, "-n", namespace, "-o", "jsonpath={.status.defaultChannel}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return channel, err
 }
 
-//ApplyOperatorResourceByYaml - It's not a template yaml file, the yaml shouldn't include namespace, we specify namespace by parameter.
+// ApplyOperatorResourceByYaml - It's not a template yaml file, the yaml shouldn't include namespace, we specify namespace by parameter.
 func ApplyOperatorResourceByYaml(oc *CLI, namespace string, yamlfile string) {
 	if len(namespace) == 0 {
 		//Create cluster-wide resource
@@ -244,7 +277,7 @@ func ApplyOperatorResourceByYaml(oc *CLI, namespace string, yamlfile string) {
 	}
 }
 
-//CleanupOperatorResourceByYaml - It's not a template yaml file, the yaml shouldn't include namespace, we specify namespace by parameter.
+// CleanupOperatorResourceByYaml - It's not a template yaml file, the yaml shouldn't include namespace, we specify namespace by parameter.
 func CleanupOperatorResourceByYaml(oc *CLI, namespace string, yamlfile string) {
 	if len(namespace) == 0 {
 		//Delete cluster-wide resource
@@ -257,7 +290,7 @@ func CleanupOperatorResourceByYaml(oc *CLI, namespace string, yamlfile string) {
 	}
 }
 
-//AssertOprPodLogsbyFilterWithDuration used for truncting pods logs by filter
+// AssertOprPodLogsbyFilterWithDuration used for truncting pods logs by filter
 func AssertOprPodLogsbyFilterWithDuration(oc *CLI, podName string, namespace string, filter string, timeDurationSec int, minimalMatch int) {
 	podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-oname").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -290,7 +323,7 @@ func AssertOprPodLogsbyFilterWithDuration(oc *CLI, podName string, namespace str
 	}
 }
 
-//AssertOprPodLogsbyFilter trunct pods logs by filter
+// AssertOprPodLogsbyFilter trunct pods logs by filter
 func AssertOprPodLogsbyFilter(oc *CLI, podName string, namespace string, filter string, minimalMatch int) bool {
 	podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-oname").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -322,7 +355,7 @@ func AssertOprPodLogsbyFilter(oc *CLI, podName string, namespace string, filter 
 	return isMatch
 }
 
-//WaitForNoPodsAvailableByKind used for checking no pods in a certain namespace
+// WaitForNoPodsAvailableByKind used for checking no pods in a certain namespace
 func WaitForNoPodsAvailableByKind(oc *CLI, kind string, name string, namespace string) {
 	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 		kindNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(kind, name, "-n", namespace, "-oname").Output()
@@ -337,7 +370,7 @@ func WaitForNoPodsAvailableByKind(oc *CLI, kind string, name string, namespace s
 	AssertWaitPollNoErr(err, "No pod was found ...")
 }
 
-//InstallPAO attempts to install the Performance Add-On operator and verify that it is running
+// InstallPAO attempts to install the Performance Add-On operator and verify that it is running
 func InstallPAO(oc *CLI, paoNamespace string) {
 	var (
 		paoNamespaceFile     = FixturePath("testdata", "psap", "pao", "pao-namespace.yaml")
@@ -384,7 +417,7 @@ func InstallPAO(oc *CLI, paoNamespace string) {
 	WaitOprResourceReady(oc, "deployment", "performance-operator", paoNamespace, false, false)
 }
 
-//IsPAOInstalled used for deploying Performance Add-on Operator
+// IsPAOInstalled used for deploying Performance Add-on Operator
 func IsPAOInstalled(oc *CLI) bool {
 	var isInstalled bool
 	deployments, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-A").Output()
@@ -398,7 +431,7 @@ func IsPAOInstalled(oc *CLI) bool {
 	return isInstalled
 }
 
-//IsPAOInOperatorHub used for checking if PAO exist in OperatorHub
+// IsPAOInOperatorHub used for checking if PAO exist in OperatorHub
 func IsPAOInOperatorHub(oc *CLI) bool {
 	var havePAO bool
 	packagemanifest, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-A").Output()
@@ -412,14 +445,14 @@ func IsPAOInOperatorHub(oc *CLI) bool {
 	return havePAO
 }
 
-//StringToBASE64 Base64 Encode
+// StringToBASE64 Base64 Encode
 func StringToBASE64(src string) string {
 	// plaintext, err := base64.StdEncoding.DecodeString(src)
 	stdEnc := base64.StdEncoding.EncodeToString([]byte(src))
 	return string(stdEnc)
 }
 
-//BASE64DecodeStr Base64 Decode
+// BASE64DecodeStr Base64 Decode
 func BASE64DecodeStr(src string) string {
 	plaintext, err := base64.StdEncoding.DecodeString(src)
 	if err != nil {
@@ -428,7 +461,7 @@ func BASE64DecodeStr(src string) string {
 	return string(plaintext)
 }
 
-//CreateMachinesetbyInstanceType used to create a machineset with specified machineset name and instance type
+// CreateMachinesetbyInstanceType used to create a machineset with specified machineset name and instance type
 func CreateMachinesetbyInstanceType(oc *CLI, machinesetName string, instanceType string) {
 	// Get existing machinesets in cluster
 	ocGetMachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachineset, "-n", "openshift-machine-api", "-oname").Output()
@@ -468,7 +501,7 @@ func CreateMachinesetbyInstanceType(oc *CLI, machinesetName string, instanceType
 	ApplyOperatorResourceByYaml(oc, "openshift-machine-api", newMachinesetFileName)
 }
 
-//IsMachineSetExist check if machineset exist in OCP
+// IsMachineSetExist check if machineset exist in OCP
 func IsMachineSetExist(oc *CLI) bool {
 
 	haveMachineSet := true
@@ -481,7 +514,7 @@ func IsMachineSetExist(oc *CLI) bool {
 	return haveMachineSet
 }
 
-//GetMachineSetInstanceType used to get first machineset instance type
+// GetMachineSetInstanceType used to get first machineset instance type
 func GetMachineSetInstanceType(oc *CLI) string {
 	var (
 		instanceType string
@@ -498,13 +531,15 @@ func GetMachineSetInstanceType(oc *CLI) string {
 		instanceType, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", firstMachinesetName, "-n", "openshift-machine-api", "-ojsonpath={.spec.template.spec.providerSpec.value.machineType}").Output()
 	} else if iaasPlatform == "ibmcloud" {
 		instanceType, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", firstMachinesetName, "-n", "openshift-machine-api", "-ojsonpath={.spec.template.spec.providerSpec.value.profile}").Output()
+	} else if iaasPlatform == "alibabacloud" {
+		instanceType, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", firstMachinesetName, "-n", "openshift-machine-api", "-ojsonpath={.spec.template.spec.providerSpec.value.instanceType}").Output()
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(instanceType).NotTo(o.BeEmpty())
 	return instanceType
 }
 
-//GetNodeNameByMachineset used for get
+// GetNodeNameByMachineset used for get
 func GetNodeNameByMachineset(oc *CLI, machinesetName string) string {
 
 	machinesetLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", machinesetName, "-n", "openshift-machine-api", "-ojsonpath={.spec.selector.matchLabels.machine\\.openshift\\.io/cluster-api-machineset}").Output()
@@ -519,7 +554,7 @@ func GetNodeNameByMachineset(oc *CLI, machinesetName string) string {
 	return nodeName
 }
 
-//AssertIfMCPChangesAppliedByName checks the MCP of a given oc client and determines if the machine counts are as expected
+// AssertIfMCPChangesAppliedByName checks the MCP of a given oc client and determines if the machine counts are as expected
 func AssertIfMCPChangesAppliedByName(oc *CLI, mcpName string, timeDurationMin int) {
 	err := wait.Poll(1*time.Minute, time.Duration(timeDurationMin)*time.Minute, func() (bool, error) {
 		var (
@@ -570,7 +605,7 @@ func AssertIfMCPChangesAppliedByName(oc *CLI, mcpName string, timeDurationMin in
 	AssertWaitPollNoErr(err, "MachineConfigPool checks were not successful within timeout limit")
 }
 
-//DeleteMCAndMCPByName used for checking if node return to worker machine config pool and the specified mcp is zero, then delete mc and mcp
+// DeleteMCAndMCPByName used for checking if node return to worker machine config pool and the specified mcp is zero, then delete mc and mcp
 func DeleteMCAndMCPByName(oc *CLI, mcName string, mcpName string, timeDurationMin int) {
 
 	//Check if labeled node return back to worker mcp, then delete mc and mcp after worker mcp is ready

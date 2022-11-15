@@ -27,8 +27,19 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 	g.It("Author:wabouham-Medium-43461-Add a new worker node on an NFD-enabled OCP cluster [Slow] [Flaky]", func() {
 
 		// currently test is only supported on AWS, GCP, and Azure
-		if iaasPlatform != "aws" && iaasPlatform != "gcp" && iaasPlatform != "azure" && iaasPlatform != "ibmcloud" {
+		if iaasPlatform != "aws" && iaasPlatform != "gcp" && iaasPlatform != "azure" && iaasPlatform != "ibmcloud" && iaasPlatform != "alibabacloud" {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
+		}
+
+		clusterVersion, _, err := exutil.GetClusterVersion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterVersion).NotTo(o.BeEmpty())
+
+		nfdVersion := exutil.GetNFDVersionbyPackageManifest(oc, "openshift-marketplace")
+		o.Expect(nfdVersion).NotTo(o.BeEmpty())
+
+		if nfdVersion != clusterVersion {
+			g.Skip("The nfd version " + nfdVersion + " mismatch cluster version " + clusterVersion + " skip creating instance")
 		}
 
 		// test requires NFD to be installed and an instance to be runnning
