@@ -35,7 +35,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		operatorsdkCLI.showInfo = true
 		g.By("check the olm status")
 		output, _ := operatorsdkCLI.Run("olm").Args("status", "--olm-namespace", "openshift-operator-lifecycle-manager").Output()
-		o.Expect(output).To(o.ContainSubstring("Successfully got OLM status for version"))
+		o.Expect(output).To(o.ContainSubstring("Fetching CRDs for version"))
 	})
 
 	// author: jfan@redhat.com
