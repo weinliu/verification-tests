@@ -89,7 +89,7 @@ if echo $INSTALL_TOOLS | grep -i 'operatorSDK' > /dev/null; then
         git status
         BUILD_CMD="make -f ci/prow.Makefile patch build"
     else
-        if [ "${JENKINS_AGENT}" == 'goc412' ]; then
+        if [ "${JENKINS_AGENT}" == 'goc413' ]; then
             git clone --depth=1 git@github.com:operator-framework/operator-sdk.git ${WORKSPACE}/osdk --branch master
         else
             BRANCH="release-${NIGHTLYFLAG:0:1}.${NIGHTLYFLAG:1}"
@@ -114,17 +114,11 @@ fi
 if echo $INSTALL_TOOLS | grep -i 'hypershift' > /dev/null; then
     unset http_proxy https_proxy
     echo "------------------get hypershift------------------------"
-    mkdir ${WORKSPACE}/hypershift
-    BUILD_CMD="sudo make hypershift"
-    sudo git clone --depth=1 git@github.com:openshift/hypershift.git ${WORKSPACE}/hypershift --branch main
-    cd ${WORKSPACE}/hypershift
-    echo "buid command is [${BUILD_CMD}]"
-    eval "${BUILD_CMD}"
-    sudo mv -f bin/hypershift $WORKDIR
-    sudo rm -fr ../hypershift
-    sudo chown -R cloud-user:cloud-user $WORKDIR
+    oc image extract quay.io/openshifttest/hypershift-client:latest --file=/hypershift
+    mv -f hypershift $WORKDIR
+    chmod 755 $WORKDIR/hypershift
+    chown -R cloud-user:cloud-user $WORKDIR
     hypershift -h
-    cd $WORKDIR
 else
     echo "skip get hypershift"
 fi
