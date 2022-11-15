@@ -24,7 +24,7 @@ objects:
         redundancyPolicy: ${REDUNDANCY_POLICY}
         resources:
           requests:
-            memory: "1Gi"
+            memory: "2Gi"
         storage: {}
     visualization:
       type: "kibana"
@@ -33,7 +33,7 @@ objects:
     collection:
       type: ${COLLECTOR}
       resources:
-        limits: 
+        limits:
           memory: ${COLLECTOR_LIMITS_MEMORY}
           cpu: ${COLLECTOR_LIMITS_CPU}
         requests:

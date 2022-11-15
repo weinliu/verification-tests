@@ -24,7 +24,7 @@ objects:
         redundancyPolicy: ${REDUNDANCY_POLICY}
         resources:
           requests:
-            memory: "1Gi"
+            memory: "2Gi"
         storage: {}
     visualization:
       type: "kibana"
