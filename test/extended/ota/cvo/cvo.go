@@ -360,7 +360,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	})
 
 	//author: jialiu@redhat.com
-	g.It("Author:jialiu-Medium-41391-cvo serves metrics over only https not http", func() {
+	g.It("NonHyperShiftHOST-Author:jialiu-Medium-41391-cvo serves metrics over only https not http", func() {
 		g.By("Check cvo delopyment config file...")
 		cvoDeploymentYaml, err := GetDeploymentsYaml(oc, "cluster-version-operator", projectName)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -941,7 +941,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	})
 
 	//author: jiajliu@redhat.com
-	g.It("Author:jiajliu-Low-46922-check runlevel in cvo ns", func() {
+	g.It("NonHyperShiftHOST-Author:jiajliu-Low-46922-check runlevel in cvo ns", func() {
 		g.By("Check runlevel in cvo namespace.")
 		runLevel, err := oc.AsAdmin().WithoutNamespace().Run("get").
 			Args("ns", "openshift-cluster-version",
