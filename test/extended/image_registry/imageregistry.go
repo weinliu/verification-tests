@@ -3364,4 +3364,17 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "The imagestreamchange trigger doesn't work, not update to use new image")
 	})
+
+	g.It("ROSA-OSD_CCS-ARO-Author:wewang-High-19633-Should create a status tag after editing an image stream tag to set 'reference: true' from an invalid tag", func() {
+		g.By("Import image with an invalid tag")
+		output, err := oc.WithoutNamespace().AsAdmin().Run("import-image").Args("jenkins:invalid", "--from", "registry.access.redhat.com/openshift3/jenkins-2-rhel7:invalid", "--confirm", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(string(output)).To(o.ContainSubstring("Import failed"))
+		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("imagestream/jenkins", "-p", `{"spec":{"tags":[{"from":{"kind": "DockerImage", "name": "registry.access.redhat.com/openshift3/jenkins-2-rhel7:invalid"},"name": "invalid","reference": true}]}}`, "--type=merge", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		isOut, err := oc.WithoutNamespace().AsAdmin().Run("describe").Args("imagestream/jenkins", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(isOut).To(o.ContainSubstring("reference to registry"))
+		o.Expect(isOut).NotTo(o.ContainSubstring("Import failed"))
+	})
 })

@@ -485,7 +485,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring(oc.Namespace() + "/oci is not found, will remove the whole repository"))
 	})
 
-	g.It("Author:wewang-High-54905-Critical-54904-Critical-54051-Critical-54050-Could import manifest lists via ImageStreamImport and sub-manifests did not be pruned when prune image", func() {
+	g.It("Author:wewang-High-54905-Critical-54904-Critical-54051-Critical-54050-Critical-54171-Could import manifest lists via ImageStreamImport and sub-manifests did not be pruned when prune image", func() {
 		g.By("Create ImageStreamImport with docker multiarch image")
 		var (
 			isImportFile = filepath.Join(imageRegistryBaseDir, "imagestream-import-oci.yaml")
@@ -497,10 +497,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 				template:  isImportFile,
 			}
 		)
-		isarr := [2]string{"ociapp", "dockerapp"}
-		imagearr := [2]string{"quay.io/openshifttest/ociimage@sha256:d58e3e003ddec723dd14f72164beaa609d24c5e5e366579e23bc8b34b9a58324", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f"}
-		shortimage := [2]string{"ociimage", "busybox"}
-		num := [2]int{7, 10}
+
+		isarr := [3]string{"ociapp", "dockerapp", "simpleapp"}
+		imagearr := [3]string{"quay.io/openshifttest/ociimage@sha256:d58e3e003ddec723dd14f72164beaa609d24c5e5e366579e23bc8b34b9a58324", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "quay.io/openshifttest/ociimage-singlearch@sha256:93b3159f0a3a3b8f6ce46888adffb19d55779fd4038cbfece92650040acc034b"}
+		shortimage := [3]string{"ociimage@", "busybox", "ociimage-singlearch"}
+		num := [3]int{7, 10, 1}
 		g.By("Get server host")
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
@@ -536,5 +537,19 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			})
 			exutil.AssertWaitPollNoErr(err, "generation is not 2")
 		}
+
+		g.By("Create imagestream with ManifestList importMode for simple manifest for ocp-54171")
+		isimportsrc.mode = "PreserveOriginal"
+		isimportsrc.name = isarr[2]
+		isimportsrc.image = imagearr[2]
+		isimportsrc.create(oc)
+		g.By("Check image object and no manifest list")
+		isOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("is/"+isarr[2], "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(isOut).To(o.ContainSubstring(isarr[2]))
+		imageOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("images", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		imageCount := strings.Count(imageOut, shortimage[2])
+		o.Expect(imageCount).To(o.Equal(num[2]))
 	})
 })
