@@ -458,13 +458,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	g.It("Author:mjoseph-Critical-54042-Configuring CoreDNS caching and TTL parameters [Disruptive]", func() {
 		var (
 			resourceName      = "dns.operator.openshift.io/default"
-			cacheDefaultValue = "[{\"op\":\"replace\", \"path\":\"/spec/cache\", \"value\":{\"negativeTTL\":\"0s\", \"positiveTTL\":\"0s\"}}]"
 			cacheValue        = "[{\"op\":\"replace\", \"path\":\"/spec/cache\", \"value\":{\"negativeTTL\":\"1800s\", \"positiveTTL\":\"604801s\"}}]"
 			cacheSmallValue   = "[{\"op\":\"replace\", \"path\":\"/spec/cache\", \"value\":{\"negativeTTL\":\"1s\", \"positiveTTL\":\"1s\"}}]"
 			cacheDecimalValue = "[{\"op\":\"replace\", \"path\":\"/spec/cache\", \"value\":{\"negativeTTL\":\"1.9s\", \"positiveTTL\":\"1.6m\"}}]"
 			cacheWrongValue   = "[{\"op\":\"replace\", \"path\":\"/spec/cache\", \"value\":{\"negativeTTL\":\"-9s\", \"positiveTTL\":\"1.6\"}}]"
 		)
-		defer patchGlobalResourceAsAdmin(oc, resourceName, cacheDefaultValue)
+		defer restoreDNSOperatorDefault(oc)
 
 		g.By("Patch dns operator with postive and negative cache values")
 		patchGlobalResourceAsAdmin(oc, resourceName, cacheValue)
