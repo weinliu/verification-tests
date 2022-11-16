@@ -21,6 +21,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		storageTeamBaseDir string
 		pvTemplate         string
 		pvcTemplate        string
+		podTemplate        string
 		deploymentTemplate string
 		svcTemplate        string
 		secTemplate        string
@@ -32,6 +33,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		svcIscsiServer = setupIscsiServer(oc, storageTeamBaseDir)
 		pvTemplate = filepath.Join(storageTeamBaseDir, "csi-pv-template.yaml")
 		pvcTemplate = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+		podTemplate = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
 		deploymentTemplate = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
 		svcTemplate = filepath.Join(storageTeamBaseDir, "service-template.yaml")
 		secTemplate = filepath.Join(storageTeamBaseDir, "secret-template.yaml")
@@ -292,6 +294,76 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		dep.create(oc)
 		defer dep.deleteAsAdmin(oc)
 		dep.waitReady(oc)
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-52683 [ISCSI] Check RWO iscsi volume should store data written by multiple pods only on same node and allow exec of files on the volume
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:rdeore-High-52683-[ISCSI] Check RWO iscsi volume should store data written by multiple pods only on same node and allow exec of files on the volume", func() {
+		//Set the resource objects definition for the scenario
+		var (
+			scName = "iscsi-sc-" + getRandomString()
+			pvc    = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("2Gi"),
+				setPersistentVolumeClaimAccessmode("ReadWriteOnce"), setPersistentVolumeClaimStorageClassName(scName))
+			dep  = newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+			pod  = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			pod2 = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+			pv   = newPersistentVolume(setPersistentVolumeTemplate(pvTemplate), setPersistentVolumeAccessMode("ReadWriteOnce"), setPersistentVolumeKind("iscsi"),
+				setPersistentVolumeStorageClassName(scName), setPersistentVolumeReclaimPolicy("Delete"), setPersistentVolumeCapacity("2Gi"))
+		)
+
+		schedulableLinuxWorkers := getSchedulableLinuxWorkers(getAllNodesInfo(oc))
+		if len(schedulableLinuxWorkers) < 2 {
+			g.Skip("Skip: This test needs at least 2 worker nodes, test cluster has less than 2 schedulable workers!")
+		}
+
+		//Clean-up: delete network portal from iscsi target server
+		defer svcIscsiServer.deleteIscsiNetworkPortal(oc, svcIscsiServer.svc.clusterIP, svcIscsiServer.deploy.getPodList(oc)[0])
+
+		g.By("#. Create a pv with the storageclass")
+		pv.iscsiServerIP = svcIscsiServer.svc.clusterIP
+		pv.create(oc)
+		defer pv.deleteAsAdmin(oc)
+
+		g.By("#. Create a pvc with the storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("#. Create deployment consume the created pvc and wait for the deployment ready")
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+		dep.waitReady(oc)
+
+		g.By("#. Check the pods can read/write data inside volume")
+		dep.checkPodMountedVolumeCouldRW(oc)
+
+		g.By("#. Check the deployment's pod mounted volume have the exec right")
+		dep.checkPodMountedVolumeHaveExecRight(oc)
+
+		g.By("#. Check pod is stuck at Pending caused by Multi-Attach error for volume")
+		nodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
+		pod.createWithNodeAffinity(oc, "kubernetes.io/hostname", "NotIn", []string{nodeName})
+		defer pod.deleteAsAdmin(oc)
+
+		o.Eventually(func() string {
+			return describePod(oc, pod.namespace, pod.name)
+		}, 120*time.Second, 5*time.Second).Should(o.And(
+			o.ContainSubstring("Multi-Attach error for volume"),
+			o.ContainSubstring("Volume is already used by pod"),
+		))
+
+		g.By("#. Check pod2 mount the iscsi volume successfully and is Running")
+		pod2.createWithNodeAffinity(oc, "kubernetes.io/hostname", "In", []string{nodeName})
+		defer pod2.deleteAsAdmin(oc)
+		pod2.waitReady(oc)
+
+		g.By("#. Check pod2 can read previously written data inside volume")
+		o.Expect(execCommandInSpecificPod(oc, dep.namespace, pod2.name, "cat /mnt/storage/testfile_*")).To(o.ContainSubstring("storage test"))
+
+		g.By("#. Check pod2 can read/write data inside volume")
+		pod2.checkMountedVolumeCouldRW(oc)
+
+		g.By("#. Check pod2's mounted volume have the exec right")
+		pod2.checkMountedVolumeHaveExecRight(oc)
 	})
 })
 
