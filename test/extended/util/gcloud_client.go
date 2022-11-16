@@ -1,12 +1,16 @@
 package util
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 
+	"cloud.google.com/go/storage"
 	o "github.com/onsi/gomega"
+	"google.golang.org/api/iterator"
 )
 
 // Gcloud struct
@@ -98,4 +102,147 @@ func (gcloud *Gcloud) GetGcpInstanceStateByNode(nodeIdentity string) (string, er
 // StopInstanceAsync Shutdown GCP node/instance with async
 func (gcloud *Gcloud) StopInstanceAsync(nodeName string, zoneName string) error {
 	return exec.Command("bash", "-c", fmt.Sprintf(`gcloud compute instances stop %s --async --zone=%s`, nodeName, zoneName)).Run()
+}
+
+// CreateGCSBucket creates a GCS bucket in a project
+func CreateGCSBucket(projectID, bucketName string) error {
+	ctx := context.Background()
+	// initialize the GCS client, the credentials are got from the env var GOOGLE_APPLICATION_CREDENTIALS
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		return fmt.Errorf("storage.NewClient: %v", err)
+	}
+	defer client.Close()
+	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
+	defer cancel()
+
+	// check if the bucket exists or not
+	// if exists, clear all the objects in the bucket
+	// if not, create the bucket
+	exist := false
+	buckets, err := ListGCSBuckets(*client, projectID)
+	if err != nil {
+		return err
+	}
+	for _, bu := range buckets {
+		if bu == bucketName {
+			exist = true
+			break
+		}
+	}
+	if exist {
+		return EmptyGCSBucket(*client, bucketName)
+	}
+
+	bucket := client.Bucket(bucketName)
+	if err := bucket.Create(ctx, projectID, &storage.BucketAttrs{}); err != nil {
+		return fmt.Errorf("Bucket(%q).Create: %v", bucketName, err)
+	}
+	fmt.Printf("Created bucket %v\n", bucketName)
+	return nil
+}
+
+// ListGCSBuckets gets all the bucket names under the projectID
+func ListGCSBuckets(client storage.Client, projectID string) ([]string, error) {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, time.Second*30)
+	defer cancel()
+
+	var buckets []string
+	it := client.Buckets(ctx, projectID)
+	for {
+		battrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		buckets = append(buckets, battrs.Name)
+	}
+	return buckets, nil
+}
+
+// ListObjestsInGCSBucket gets all the objects in a bucket
+func ListObjestsInGCSBucket(client storage.Client, bucket string) ([]string, error) {
+	files := []string{}
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
+	defer cancel()
+
+	it := client.Bucket(bucket).Objects(ctx, nil)
+	for {
+		attrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return files, fmt.Errorf("Bucket(%q).Objects: %v", bucket, err)
+		}
+		files = append(files, attrs.Name)
+	}
+	return files, nil
+}
+
+// DeleteFilesInGCSBucket removes the object in the bucket
+func DeleteFilesInGCSBucket(client storage.Client, object, bucket string) error {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
+	defer cancel()
+
+	o := client.Bucket(bucket).Object(object)
+
+	// Optional: set a generation-match precondition to avoid potential race
+	// conditions and data corruptions. The request to upload is aborted if the
+	// object's generation number does not match your precondition.
+	attrs, err := o.Attrs(ctx)
+	if err != nil {
+		return fmt.Errorf("object.Attrs: %v", err)
+	}
+	o = o.If(storage.Conditions{GenerationMatch: attrs.Generation})
+
+	if err := o.Delete(ctx); err != nil {
+		return fmt.Errorf("Object(%q).Delete: %v", object, err)
+	}
+	return nil
+}
+
+// EmptyGCSBucket removes all the objects in the bucket
+func EmptyGCSBucket(client storage.Client, bucket string) error {
+	objects, err := ListObjestsInGCSBucket(client, bucket)
+	if err != nil {
+		return err
+	}
+
+	for _, object := range objects {
+		err = DeleteFilesInGCSBucket(client, object, bucket)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DeleteGCSBucket deletes the GCS bucket
+func DeleteGCSBucket(bucketName string) error {
+	ctx := context.Background()
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		return fmt.Errorf("storage.NewClient: %v", err)
+	}
+	defer client.Close()
+	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
+	defer cancel()
+
+	// remove objects
+	err = EmptyGCSBucket(*client, bucketName)
+	if err != nil {
+		return err
+	}
+	bucket := client.Bucket(bucketName)
+	if err := bucket.Delete(ctx); err != nil {
+		return fmt.Errorf("Bucket(%q).Delete: %v", bucketName, err)
+	}
+	fmt.Printf("Bucket %v deleted\n", bucketName)
+	return nil
 }

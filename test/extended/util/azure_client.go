@@ -5,15 +5,19 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2019-06-01/network"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
+	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -275,4 +279,128 @@ func GetAzureCredentialFromCluster(oc *CLI) (string, error) {
 	os.Setenv("AZURE_TENANT_ID", string(azureTenantID))
 	e2e.Logf("Azure credentials successfully loaded.")
 	return string(azureResourceGroup), nil
+}
+
+// GetAzureStorageAccountFromCluster gets azure storage accountName and accountKey from image registry
+// TODO: create a storage account and use that accout to manage azure container
+func GetAzureStorageAccountFromCluster(oc *CLI) (string, string, error) {
+	var accountName string
+	imageRegistry, err := oc.AdminKubeClient().AppsV1().Deployments("openshift-image-registry").Get(context.Background(), "image-registry", metav1.GetOptions{})
+	if err != nil {
+		return "", "", err
+	}
+	for _, container := range imageRegistry.Spec.Template.Spec.Containers {
+		for _, env := range container.Env {
+			if env.Name == "REGISTRY_STORAGE_AZURE_ACCOUNTNAME" {
+				accountName = env.Value
+				break
+			}
+		}
+	}
+
+	dirname := "/tmp/" + oc.Namespace() + "-creds"
+	defer os.RemoveAll(dirname)
+	_ = os.MkdirAll(dirname, 0777)
+	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/image-registry-private-configuration", "-n", "openshift-image-registry", "--confirm", "--to="+dirname).Output()
+	if err != nil {
+		return accountName, "", err
+	}
+	accountKey, _ := os.ReadFile(dirname + "/REGISTRY_STORAGE_AZURE_ACCOUNTKEY")
+	return accountName, string(accountKey), nil
+}
+
+// NewAzureContainerClient initializes a new azure blob container client
+func NewAzureContainerClient(oc *CLI, accountName, accountKey, azContainerName string) (azblob.ContainerURL, error) {
+	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
+	p := azblob.NewPipeline(credential, azblob.PipelineOptions{})
+	u, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net", accountName))
+	serviceURL := azblob.NewServiceURL(*u, p)
+	return serviceURL.NewContainerURL(azContainerName), err
+}
+
+// CreateAzureStorageBlobContainer creates azure storage container
+func CreateAzureStorageBlobContainer(container azblob.ContainerURL) error {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
+	defer cancel()
+
+	// check if the container exists or not
+	// if exists, then remove the blobs in the container, if not, create the container
+	_, err := container.GetProperties(ctx, azblob.LeaseAccessConditions{})
+	message := fmt.Sprintf("%v", err)
+	if strings.Contains(message, "ContainerNotFound") {
+		_, err = container.Create(ctx, azblob.Metadata{}, azblob.PublicAccessNone)
+		return err
+	}
+	return EmptyAzureBlobContainer(container)
+}
+
+// DeleteAzureStorageBlobContainer deletes azure storage container
+func DeleteAzureStorageBlobContainer(container azblob.ContainerURL) error {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
+	defer cancel()
+
+	err := EmptyAzureBlobContainer(container)
+	if err != nil {
+		return err
+	}
+	_, err = container.Delete(ctx, azblob.ContainerAccessConditions{})
+	return err
+}
+
+// ListBlobsInAzureContainer lists files in azure storage container
+func ListBlobsInAzureContainer(container azblob.ContainerURL) ([]string, error) {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
+	defer cancel()
+
+	blobNames := []string{}
+	for marker := (azblob.Marker{}); marker.NotDone(); { // The parens around Marker{} are required to avoid compiler error.
+		// Get a result segment starting with the blob indicated by the current Marker.
+		listBlob, err := container.ListBlobsFlatSegment(ctx, marker, azblob.ListBlobsSegmentOptions{})
+		if err != nil {
+			return blobNames, err
+		}
+
+		// IMPORTANT: ListBlobs returns the start of the next segment; you MUST use this to get
+		// the next segment (after processing the current result segment).
+		marker = listBlob.NextMarker
+
+		// Process the blobs returned in this result segment (if the segment is empty, the loop body won't execute)
+		for _, blobInfo := range listBlob.Segment.BlobItems {
+			blobNames = append(blobNames, blobInfo.Name)
+		}
+	}
+	return blobNames, nil
+}
+
+// DeleteAzureBlob deletes file from azure storage container
+func DeleteAzureBlob(container azblob.ContainerURL, blobName string) error {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
+	defer cancel()
+
+	blobURL := container.NewBlockBlobURL(blobName)
+	_, err := blobURL.Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
+	return err
+}
+
+// EmptyAzureBlobContainer removes all the files in azure storage container
+func EmptyAzureBlobContainer(container azblob.ContainerURL) error {
+	blobNames, err := ListBlobsInAzureContainer(container)
+	if err != nil {
+		return fmt.Errorf("can't list blobs in the container: %v", err)
+	}
+	for _, blob := range blobNames {
+		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(ctx, time.Second*60)
+		defer cancel()
+		blobURL := container.NewBlockBlobURL(blob)
+		_, err := blobURL.Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
+		if err != nil {
+			return fmt.Errorf("error deleting blob %s: %v", blob, err)
+		}
+	}
+	return nil
 }

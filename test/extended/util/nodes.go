@@ -1,9 +1,12 @@
 package util
 
 import (
+	"context"
 	"strings"
 
 	o "github.com/onsi/gomega"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // GetFirstLinuxWorkerNode returns the first linux worker node in the cluster
@@ -222,4 +225,109 @@ func GetFirstWorkerNodeByNodePoolNameInHostedCluster(oc *CLI, nodePoolName strin
 	workerNodes, err := GetAllNodesByNodePoolNameInHostedCluster(oc, nodePoolName)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return workerNodes[0], err
+}
+
+// GetSchedulableLinuxWorkerNodes returns a group of nodes that match the requirements:
+// os: linux, role: worker, status: ready, schedulable
+func GetSchedulableLinuxWorkerNodes(oc *CLI) ([]v1.Node, error) {
+	var nodes, workers []v1.Node
+	linuxNodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
+	// get schedulable linux worker nodes
+	for _, node := range linuxNodes.Items {
+		if _, ok := node.Labels["node-role.kubernetes.io/worker"]; ok && !node.Spec.Unschedulable {
+			workers = append(workers, node)
+		}
+	}
+	// get ready nodes
+	for _, worker := range workers {
+		for _, con := range worker.Status.Conditions {
+			if con.Type == "Ready" && con.Status == "True" {
+				nodes = append(nodes, worker)
+				break
+			}
+		}
+	}
+	return nodes, err
+}
+
+// GetPodsNodesMap returns all the running pods in each node
+func GetPodsNodesMap(oc *CLI, nodes []v1.Node) map[string][]v1.Pod {
+	podsMap := make(map[string][]v1.Pod)
+	projects, err := oc.AdminKubeClient().CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// get pod list in each node
+	for _, project := range projects.Items {
+		pods, err := oc.AdminKubeClient().CoreV1().Pods(project.Name).List(context.Background(), metav1.ListOptions{})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, pod := range pods.Items {
+			if pod.Status.Phase != "Failed" && pod.Status.Phase != "Succeeded" {
+				podsMap[pod.Spec.NodeName] = append(podsMap[pod.Spec.NodeName], pod)
+			}
+		}
+	}
+
+	var nodeNames []string
+	for _, node := range nodes {
+		nodeNames = append(nodeNames, node.Name)
+	}
+	contain := func(a []string, b string) bool {
+		for _, c := range a {
+			if c == b {
+				return true
+			}
+		}
+		return false
+	}
+	// if the key is not in nodes list, remove the element from the map
+	for podmap := range podsMap {
+		if !contain(nodeNames, podmap) {
+			delete(podsMap, podmap)
+		}
+	}
+	return podsMap
+}
+
+// NodeResources contains the resources of CPU and Memory in a node
+type NodeResources struct {
+	CPU    int64
+	Memory int64
+}
+
+// GetRequestedResourcesNodesMap returns the total requested CPU and Memory in each node
+func GetRequestedResourcesNodesMap(oc *CLI, nodes []v1.Node) map[string]NodeResources {
+	rmap := make(map[string]NodeResources)
+	podsMap := GetPodsNodesMap(oc, nodes)
+	for nodeName := range podsMap {
+		var totalRequestedCPU, totalRequestedMemory int64
+		for _, pod := range podsMap[nodeName] {
+			for _, container := range pod.Spec.Containers {
+				totalRequestedCPU += container.Resources.Requests.Cpu().MilliValue()
+				totalRequestedMemory += container.Resources.Requests.Memory().MilliValue()
+			}
+		}
+		rmap[nodeName] = NodeResources{totalRequestedCPU, totalRequestedMemory}
+	}
+	return rmap
+}
+
+// GetAllocatableResourcesNodesMap returns the total allocatable CPU and Memory in each node
+func GetAllocatableResourcesNodesMap(nodes []v1.Node) map[string]NodeResources {
+	rmap := make(map[string]NodeResources)
+	for _, node := range nodes {
+		rmap[node.Name] = NodeResources{node.Status.Allocatable.Cpu().MilliValue(), node.Status.Allocatable.Memory().MilliValue()}
+	}
+	return rmap
+}
+
+// GetRemainingResourcesNodesMap returns the total remaning CPU and Memory in each node
+func GetRemainingResourcesNodesMap(oc *CLI, nodes []v1.Node) map[string]NodeResources {
+	rmap := make(map[string]NodeResources)
+	requested := GetRequestedResourcesNodesMap(oc, nodes)
+	allocatable := GetAllocatableResourcesNodesMap(nodes)
+
+	for _, node := range nodes {
+		rmap[node.Name] = NodeResources{allocatable[node.Name].CPU - requested[node.Name].CPU, allocatable[node.Name].Memory - requested[node.Name].Memory}
+	}
+	return rmap
 }

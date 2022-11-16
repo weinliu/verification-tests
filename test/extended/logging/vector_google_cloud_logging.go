@@ -41,8 +41,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		projectID, err := exutil.GetGcpProjectID(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		gcl := googleCloudLogging{
-			projectID: getGCPProjectID(oc),
+			projectID: projectID,
 			logName:   getInfrastructureName(oc) + "-53691",
 		}
 		defer gcl.removeLogs()
@@ -87,7 +89,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		projectID := getGCPProjectID(oc)
+		projectID, err := exutil.GetGcpProjectID(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		logName := getInfrastructureName(oc) + "-53731"
 		logTypes := []string{"infrastructure", "audit", "application"}
 		for _, logType := range logTypes {
@@ -141,8 +144,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj2, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		projectID, err := exutil.GetGcpProjectID(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		gcl := googleCloudLogging{
-			projectID: getGCPProjectID(oc),
+			projectID: projectID,
 			logName:   getInfrastructureName(oc) + "-53903",
 		}
 		defer gcl.removeLogs()
@@ -194,8 +199,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		projectID, err := exutil.GetGcpProjectID(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		gcl := googleCloudLogging{
-			projectID: getGCPProjectID(oc),
+			projectID: projectID,
 			logName:   getInfrastructureName(oc) + "-53904",
 		}
 		defer gcl.removeLogs()

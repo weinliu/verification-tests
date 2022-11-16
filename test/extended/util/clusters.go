@@ -79,3 +79,9 @@ func SkipARM64(oc *CLI) {
 		g.Skip("Skip for Multi-Arch")
 	}
 }
+
+// GetAWSClusterRegion returns AWS region of the cluster
+func GetAWSClusterRegion(oc *CLI) (string, error) {
+	region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
+	return region, err
+}
