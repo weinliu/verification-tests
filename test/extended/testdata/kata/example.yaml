@@ -9,21 +9,21 @@ objects:
       labels:
         app: httpd
       name: "${NAME}"
-    spec: 
-    runtimeClassName: kata
-    containers: 
-      - image: "image-registry.openshift-image-registry.svc:5000/openshift/httpd:latest"
-        name: httpd
-        ports: 
-          - containerPort: 8080
-        securityContext:
+    spec:
+      runtimeClassName: kata
+      containers:
+        - image: "image-registry.openshift-image-registry.svc:5000/openshift/httpd:latest"
+          name: httpd
+          ports:
+            - containerPort: 8080
+          securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
             capabilities:
               drop:
               - ALL
             seccompProfile:
-              type: RuntimeDefault 
+              type: RuntimeDefault
 
 parameters:
   - name: NAME
