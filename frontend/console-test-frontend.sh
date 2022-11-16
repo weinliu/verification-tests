@@ -8,6 +8,8 @@ mkdir -p $ARTIFACT_DIR
 SCREENSHOTS_DIR=gui_test_screenshots
 
 function copyArtifacts {
+  yarn merge-reports
+  python3 parse-xml.py
   if [ -d "$ARTIFACT_DIR" ] && [ -d "$SCREENSHOTS_DIR" ]; then
     echo "Copying artifacts from $(pwd)..."
     cp console-cypress.xml "$SCREENSHOTS_DIR"
@@ -75,5 +77,4 @@ export LOGIN_UP_PAIR=$users
 ls -ltr
 echo "triggering tests"
 set -x
-yarn run test-cypress-console-headless || yarn merge-reports
-python3 parse-xml.py
+yarn run test-cypress-console-headless

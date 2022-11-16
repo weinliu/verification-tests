@@ -5,6 +5,8 @@ mkdir -p $ARTIFACT_DIR
 SCREENSHOTS_DIR=gui_test_screenshots
 echo $SHARED_DIR
 function copyArtifacts {
+  yarn merge-reports
+  python3 parse-xml.py
   if [ -d "$ARTIFACT_DIR" ] && [ -d "$SCREENSHOTS_DIR" ]; then
     echo "Copying artifacts from $(pwd)..."
     cp console-cypress.xml "$SCREENSHOTS_DIR"
@@ -31,5 +33,4 @@ export KUBECONFIG_PATH="${KUBECONFIG}"
 ls -ltr
 echo "Triggering tests"
 set -x
-yarn run test-cypress-console-hypershift-guest || yarn merge-reports
-python3 parse-xml.py
+yarn run test-cypress-console-hypershift-guest
