@@ -89,8 +89,8 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 
 	})
 	// author: geliu@redhat.com
-	g.It("Author:geliu-Critical-54129-New etcd alerts to be added to the monitoring stack in ocp 4.12", func() {
-		g.By("Test for case OCP-54129-New etcd alerts to be added to the monitoring stack in ocp 4.12")
+	g.It("Author:geliu-Critical-54129-New etcd alerts to be added to the monitoring stack in ocp 4.10.", func() {
+		g.By("Test for case OCP-54129-New etcd alerts to be added to the monitoring stack in ocp 4.10.")
 		e2e.Logf("Check new alert msg have been updated")
 		output, err := exec.Command("bash", "-c", "oc -n openshift-monitoring get cm prometheus-k8s-rulefiles-0 -oyaml | grep \"alert: etcd\"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
