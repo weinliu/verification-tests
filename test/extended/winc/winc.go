@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -234,7 +233,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		namespace := "winc-32273"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")})
+		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
 		externalIP, err := getExternalIP(iaasPlatform, oc, "windows", namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Load balancer takes about 3 minutes to work, set timeout as 5 minutes
@@ -275,7 +274,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		createWindowsAutoscaller(oc, machinesetName, namespace)
 
 		g.By("Creating Windows workloads")
-		createWindowsWorkload(oc, namespace, "windows_web_server_scaler.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")})
+		createWindowsWorkload(oc, namespace, "windows_web_server_scaler.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
 
 		g.By("Scalling up the Windows workload to 2")
 		scaleDeployment(oc, "windows", 2, namespace)
@@ -328,7 +327,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			"<windows_container_image>": getConfigMapData(oc, "secondary_windows_container_image"),
 			"<kernelID>":                buildID,
 		}
-		createWindowsWorkload(oc, namespace, "windows_webserver_secondary_os.yaml", replacement)
+		createWindowsWorkload(oc, namespace, "windows_webserver_secondary_os.yaml", replacement, true)
 		e2e.Logf("-------- Windows workload scaled on node IP %v -------------", machineIP[0])
 		e2e.Logf("-------- Scaling up workloads to 5 -------------")
 		scaleDeployment(oc, "windows", 5, namespace)
@@ -398,7 +397,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		setBYOH(oc, iaasPlatform, "InternalIP", machinesetName)
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server_byoh.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")})
+		createWindowsWorkload(oc, namespace, "windows_web_server_byoh.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
 		scaleDeployment(oc, "windows", 5, namespace)
 		msg, err := oc.WithoutNamespace().Run("get").Args("pods", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -410,7 +409,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		namespace := "winc-39451"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")})
+		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
 		createLinuxWorkload(oc, namespace)
 		g.By("Check access through clusterIP from Linux and Windows pods")
 		windowsClusterIP, err := getServiceClusterIP(oc, "windows", namespace)
@@ -495,7 +494,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		namespace := "winc-31276"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")})
+		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
 		createLinuxWorkload(oc, namespace)
 		// we scale the deployment to 5 windows pods
 		scaleDeployment(oc, "windows", 5, namespace)
@@ -703,7 +702,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		namespace := "winc-37472"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")})
+		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
 		windowsHostName := getWindowsHostNames(oc)[0]
 		oc.WithoutNamespace().Run("annotate").Args("node", windowsHostName, "windowsmachineconfig.openshift.io/version-").Output()
 
@@ -808,10 +807,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			e2e.Failf("Failed to check Windows node have taint os=Windows:NoSchedule")
 		}
 		g.By("Check deployment without tolerations would not land on Windows nodes")
-		windowsWebServerNoTaint := filepath.Join(exutil.FixturePath("testdata", "winc"), "windows_web_server_no_taint.yaml")
-		oc.WithoutNamespace().Run("create").Args("-f", windowsWebServerNoTaint, "-n", namespace).Output()
+		createWindowsWorkload(oc, namespace, "windows_web_server_no_taint.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, false)
 		poolErr := wait.Poll(20*time.Second, 60*time.Second, func() (bool, error) {
-			msg, err = oc.WithoutNamespace().Run("get").Args("pod", "--selector=app=win-webserver-no-taint", "-o=jsonpath={.items[].status.conditions[].message}", "-n", namespace).Output()
+			msg, err = oc.WithoutNamespace().Run("get").Args("pod", "--selector=app=win-webserver", "-o=jsonpath={.items[].status.conditions[].message}", "-n", namespace).Output()
 			if strings.Contains(msg, "had untolerated taint") {
 				return true, nil
 			}
@@ -855,21 +853,28 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create Windows Pod with Projected Volume")
-		createWindowsWorkload(oc, namespace, "windows_webserver_projected_volume.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")})
+		// TODO replace to nano server image as soon as it supported
+		// change the powershell commands to pwsh.exe and in the windows_webserver_projected_volume change to pwsh.exe
+		image := "mcr.microsoft.com/windows/servercore:ltsc2019"
+		deployedImage := getConfigMapData(oc, "primary_windows_container_image")
+		if strings.Contains(deployedImage, "ltsc2022") {
+			image = "mcr.microsoft.com/windows/servercore:ltsc2022"
+		}
+		createWindowsWorkload(oc, namespace, "windows_webserver_projected_volume.yaml", map[string]string{"<windows_container_image>": image}, true)
 		winpod, err := getWorkloadsNames(oc, "windows", namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Check in Windows pod, the projected-volume directory contains your projected sources")
-		command := []string{"exec", winpod[0], "-n", namespace, "--", "powershell", " ls .\\projected-volume", ";", "ls C:\\var\\run\\secrets\\kubernetes.io\\serviceaccount"}
+		command := []string{"exec", winpod[0], "-n", namespace, "--", "powershell.exe", " ls .\\projected-volume", ";", "ls C:\\var\\run\\secrets\\kubernetes.io\\serviceaccount"}
 		msg, err := oc.WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Projected volume output is:\n %v", msg)
 
 		g.By("Check username and password exist on projected volume pod")
-		command = []string{"exec", winpod[0], "-n", namespace, "--", "powershell", "cat C:\\projected-volume\\username"}
+		command = []string{"exec", winpod[0], "-n", namespace, "--", "powershell.exe", "cat C:\\projected-volume\\username"}
 		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Username output is:\n %v", msg)
-		command = []string{"exec", winpod[0], "-n", namespace, "--", "powershell", "cat C:\\projected-volume\\password"}
+		command = []string{"exec", winpod[0], "-n", namespace, "--", "powershell.exe", "cat C:\\projected-volume\\password"}
 		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Password output is:\n %v", msg)

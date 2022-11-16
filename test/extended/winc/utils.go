@@ -216,13 +216,15 @@ func checkWorkloadCreated(oc *exutil.CLI, deploymentName string, namespace strin
 	return true
 }
 
-/* replacement contains a slice with string to replace (as written in the template, for example:
-   <windows_container_image>) and the value to be replaced by. Example:
-   var toReplace map[string]string = map[string]string{
-		"<windows_container_image>": "mcr.microsoft.com/windows/servercore:ltsc2019",
-		"<kernelID>": "k3Rn3L-1d"
+/*
+replacement contains a slice with string to replace (as written in the template, for example:
+
+	<windows_container_image>) and the value to be replaced by. Example:
+	var toReplace map[string]string = map[string]string{
+	             "<windows_container_image>": "mcr.microsoft.com/windows/servercore:ltsc2019",
+	             "<kernelID>": "k3Rn3L-1d"
 */
-func createWindowsWorkload(oc *exutil.CLI, namespace string, workloadFile string, replacement map[string]string) {
+func createWindowsWorkload(oc *exutil.CLI, namespace string, workloadFile string, replacement map[string]string, waitBool bool) {
 	windowsWebServer := getFileContent("winc", workloadFile)
 	for rep, value := range replacement {
 		windowsWebServer = strings.ReplaceAll(windowsWebServer, rep, value)
@@ -232,11 +234,13 @@ func createWindowsWorkload(oc *exutil.CLI, namespace string, workloadFile string
 	ioutil.WriteFile(tempFileName, []byte(windowsWebServer), 0644)
 	oc.WithoutNamespace().Run("create").Args("-f", tempFileName, "-n", namespace).Output()
 	// Wait up to 15 minutes for Windows workload ready in case of Windows image is not pre-pulled
-	poolErr := wait.Poll(30*time.Second, 15*time.Minute, func() (bool, error) {
-		return checkWorkloadCreated(oc, "win-webserver", namespace, 1), nil
-	})
-	if poolErr != nil {
-		e2e.Failf("Windows workload is not ready after waiting up to 15 minutes ...")
+	if waitBool {
+		poolErr := wait.Poll(30*time.Second, 15*time.Minute, func() (bool, error) {
+			return checkWorkloadCreated(oc, "win-webserver", namespace, 1), nil
+		})
+		if poolErr != nil {
+			e2e.Failf("Windows workload is not ready after waiting up to 15 minutes ...")
+		}
 	}
 }
 

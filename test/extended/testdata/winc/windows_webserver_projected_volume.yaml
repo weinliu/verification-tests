@@ -37,6 +37,7 @@ spec:
         Effect: "NoSchedule"
       containers:
       - name: windowswebserver
+        # TODO replace to nano server image as soon as it supported
         image: <windows_container_image>
         imagePullPolicy: IfNotPresent
         command:
