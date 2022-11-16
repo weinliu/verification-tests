@@ -2,6 +2,7 @@ package storage
 
 import (
 	"path/filepath"
+	"strconv"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -12,12 +13,17 @@ import (
 
 var _ = g.Describe("[sig-storage] STORAGE", func() {
 	defer g.GinkgoRecover()
-	var oc = exutil.NewCLI("storage-storageclass", exutil.KubeConfigPath())
+	var (
+		oc = exutil.NewCLI("storage-storageclass", exutil.KubeConfigPath())
+		mo *monitor
+	)
 
 	g.BeforeEach(func() {
 		cloudProvider = getCloudProvider(oc)
 		// Function to check optional enabled capabilities
 		checkOptionalCapability(oc, "Storage")
+
+		mo = newMonitor(oc.AsAdmin())
 	})
 
 	// author: wduan@redhat.com
@@ -117,5 +123,56 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			e2e.Logf("The result of \"oc get sc\": %v", allSCRes)
 			g.Fail("Something wrong when checking the default storageclass, please check.")
 		}
+	})
+
+	// author: ropatil@redhat.com
+	// OCP-51537 - [Metrics] Check metric and alert for default storage class count [Disruptive]
+	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-NonPreRelease-Longduration-Medium-51537-[Metrics] Check metric and alert for default storage class count [Disruptive]", func() {
+
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+		)
+
+		// Set up a specified project share for all the phases
+		g.By("# Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		g.By("******" + cloudProvider + " with provisioner kubernetes.io/no-provisioner test phase start ******")
+		// Set the resource definition for the scenario
+
+		g.By("# Display the initial Default sc value counts")
+		initDefaultSCCount, err := mo.getSpecifiedMetricValue("default_storage_class_count", `data.result.0.value.1`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		//Adding e2e.logf line to display default sc count value only
+		e2e.Logf("Initial Default sc value is %s\n", initDefaultSCCount)
+
+		// Adding 2 default sc, in case few profiles do not have even 1 default sc ex: BM/Nutanix
+		for i := 1; i <= 2; i++ {
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("kubernetes.io/no-provisioner"))
+
+			g.By("# Create test storageclass")
+			storageClass.create(oc)
+			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+			g.By("# Apply patch to created storage class as default one")
+			patchResourceAsAdmin(oc, "", "sc/"+storageClass.name, `{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}`, "merge")
+			defSCCheck, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", storageClass.name, "-o=jsonpath={.metadata.annotations.storageclass\\.kubernetes\\.io\\/is-default-class}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(defSCCheck).To(o.Equal("true"))
+			e2e.Logf("Changed the storage class %v to default one successfully", storageClass.name)
+		}
+
+		g.By("# Check the default sc count values changed")
+		initDefaultSCIntCount, err := strconv.Atoi(initDefaultSCCount)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// Suppose upcoming platform if there are 2 default sc, so adding +1 to existing default sc count with Serial keyword
+		// ex: OP INFO: The metric: default_storage_class_count's {data.result.0.value.1} value become to expected "3"
+		newDefaultSCCount := strconv.Itoa(initDefaultSCIntCount + 2)
+		mo.waitSpecifiedMetricValueAsExpected("default_storage_class_count", `data.result.0.value.1`, newDefaultSCCount)
+
+		g.By("# Check the alert raised for MultipleDefaultStorageClasses")
+		checkAlertRaised(oc, "MultipleDefaultStorageClasses")
 	})
 })

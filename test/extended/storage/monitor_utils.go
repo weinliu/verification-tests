@@ -20,7 +20,7 @@ const (
 	prometheusK8s       string = "prometheus-k8s"
 )
 
-//  Define a monitor object
+// Define a monitor object
 type monitor struct {
 	token    string
 	ocClient *exutil.CLI
@@ -85,7 +85,7 @@ func checkAlertRaised(oc *exutil.CLI, alertName string) {
 	alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"%s\")'", token, url, alertName)
 	//alertAnnoCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"%s\").annotations'", token, url, alertName)
 	//alertStateCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"%s\").state'", token, url, alertName)
-	err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
+	err = wait.Poll(30*time.Second, 720*time.Second, func() (bool, error) {
 		result, err := exec.Command("bash", "-c", alertCMD).Output()
 		if err != nil {
 			e2e.Logf("Error retrieving prometheus alert: %v, retry ...", err)
