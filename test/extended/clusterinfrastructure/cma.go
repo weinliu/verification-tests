@@ -19,7 +19,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	)
 
 	// author: huliu@redhat.com
-	g.It("Author:huliu-Medium-45420-Cluster Machine Approver should use leader election [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:huliu-Medium-45420-Cluster Machine Approver should use leader election [Disruptive]", func() {
 		attemptAcquireLeaderLeaseStr := "attempting to acquire leader lease openshift-cluster-machine-approver/cluster-machine-approver-leader..."
 		acquiredLeaseStr := "successfully acquired lease openshift-cluster-machine-approver/cluster-machine-approver-leader"
 

@@ -18,7 +18,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-High-42927-CCM should honour cluster wide proxy settings", func() {
+	g.It("NonHyperShiftHOST-Author:zhsun-High-42927-CCM should honour cluster wide proxy settings", func() {
 		g.By("Check if it's a proxy cluster")
 		httpProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy/cluster", "-o=jsonpath={.spec.httpProxy}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -41,14 +41,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-High-43307-cloud-controller-manager clusteroperator should be in Available state", func() {
+	g.It("NonHyperShiftHOST-Author:zhsun-High-43307-cloud-controller-manager clusteroperator should be in Available state", func() {
 		state, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/cloud-controller-manager", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(state).To(o.ContainSubstring("TrueFalseFalse"))
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-High-44212-The KAPI and KCM cloud-provider should be external", func() {
+	g.It("NonHyperShiftHOST-Author:zhsun-High-44212-The KAPI and KCM cloud-provider should be external", func() {
 		SkipIfCloudControllerManagerNotDeployed(oc)
 		if iaasPlatform == "azure" {
 			g.By("Check if cloud-node-manager daemonset is deployed")
@@ -76,7 +76,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Longduration-NonPreRelease-Author:zhsun-High-42657-Enable out-of-tree cloud providers with feature gate [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-High-42657-Enable out-of-tree cloud providers with feature gate [Disruptive]", func() {
 		g.By("Check if ccm on this platform is supported")
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "openstack", "gcp", "vsphere")
 		g.By("Check if ccm is deployed")
@@ -108,7 +108,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-Medium-42879-Cloud-config configmap should be copied and kept in sync within the CCCMO namespace [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:zhsun-Medium-42879-Cloud-config configmap should be copied and kept in sync within the CCCMO namespace [Disruptive]", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure", "vsphere")
 
 		g.By("Check if cloud-config cm is copied to openshift-cloud-controller-manager namespace")
@@ -134,7 +134,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			o.ContainSubstring("source and target cloud-config content are equal, no sync needed")))
 	})
 	// author: miyadav@redhat.com
-	g.It("Author:miyadav-High-45971-Implement the in-tree to out-of-tree code owner migration", func() {
+	g.It("NonHyperShiftHOST-Author:miyadav-High-45971-Implement the in-tree to out-of-tree code owner migration", func() {
 		SkipIfCloudControllerManagerNotDeployed(oc)
 		g.By("Check cloud-controller-manager-operator owns cloud-controllers")
 		owner, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-controller-manager", "-o=jsonpath={.status.conditions[*]}").Output()

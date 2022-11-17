@@ -18,7 +18,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	)
 
 	// author: miyadav@redhat.com
-	g.It("Author:miyadav-High-37384-Machine API components should honour cluster wide proxy settings", func() {
+	g.It("NonHyperShiftHOST-Author:miyadav-High-37384-Machine API components should honour cluster wide proxy settings", func() {
 		g.By("Check if it's a proxy cluster")
 		httpProxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy/cluster", "-o=jsonpath={.spec.httpProxy}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -45,7 +45,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("HyperShiftGUEST-Author:huliu-Low-34718-Node labels and Affinity definition in PV should match", func() {
+	g.It("NonHyperShiftHOST-Author:huliu-Low-34718-Node labels and Affinity definition in PV should match", func() {
 		miscBaseDir := exutil.FixturePath("testdata", "clusterinfrastructure", "misc")
 		pvcTemplate := filepath.Join(miscBaseDir, "pvc34718.yaml")
 		podTemplate := filepath.Join(miscBaseDir, "pod34718.yaml")
@@ -83,7 +83,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 	})
 	// author: miyadav@redhat.com
-	g.It("Author:miyadav-High-55408-Rate limiting on Azure", func() {
+	g.It("NonHyperShiftHOST-Author:miyadav-High-55408-Rate limiting on Azure", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "azure")
 		g.By("Check rate limiting is set to false")
 		rateLimiting, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmaps", "cloud-provider-config", "-n", "openshift-config", "-o=jsonpath={.data}").Output()

@@ -18,7 +18,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	)
 
 	// author: huliu@redhat.com
-	g.It("Author:huliu-Low-45343-[MHC] - nodeStartupTimeout in MachineHealthCheck should revert back to default [Flaky]", func() {
+	g.It("NonHyperShiftHOST-Author:huliu-Low-45343-[MHC] - nodeStartupTimeout in MachineHealthCheck should revert back to default [Flaky]", func() {
 		g.By("Get the default nodeStartupTimeout")
 		nodeStartupTimeoutBeforeUpdate, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMHC, "machine-api-termination-handler", "-o=jsonpath={.spec.nodeStartupTimeout}", "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

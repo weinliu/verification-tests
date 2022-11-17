@@ -13,7 +13,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		oc = exutil.NewCLI("mapi-operator", exutil.KubeConfigPath())
 	)
 	// author: miyadav@redhat.com
-	g.It("Author:miyadav-Medium-46078-Signal when mao no-op in the clusterOperator status conditions", func() {
+	g.It("NonHyperShiftHOST-Author:miyadav-Medium-46078-Signal when mao no-op in the clusterOperator status conditions", func() {
 		g.By("watch the message from machine-api(mapi) clusteroperator ")
 		if exutil.CheckPlatform(oc) == "none" {
 			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "machine-api", "-o=jsonpath={.status.conditions}").Output()

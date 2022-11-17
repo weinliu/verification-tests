@@ -19,7 +19,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		iaasPlatform = exutil.CheckPlatform(oc)
 	})
 	// author: miyadav@redhat.com
-	g.It("Author:miyadav-Critical-29147-Check that all the baremetalhosts are up and running", func() {
+	g.It("NonHyperShiftHOST-Author:miyadav-Critical-29147-Check that all the baremetalhosts are up and running", func() {
 		g.By("Check if baremetal cluster")
 		if !(iaasPlatform == "baremetal") {
 			e2e.Logf("Cluster is: %s", iaasPlatform)
@@ -34,7 +34,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 	})
 	// author: miyadav@redhat.com
-	g.It("Author:miyadav-Critical-32198-Verify all master bmh are 'externally provisioned'", func() {
+	g.It("NonHyperShiftHOST-Author:miyadav-Critical-32198-Verify all master bmh are 'externally provisioned'", func() {
 		g.By("Check if baremetal cluster")
 		if !(iaasPlatform == "baremetal") {
 			e2e.Logf("Cluster is: %s", iaasPlatform)

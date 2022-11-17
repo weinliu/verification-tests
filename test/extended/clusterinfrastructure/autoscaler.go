@@ -48,7 +48,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 	})
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-Medium-43174-ClusterAutoscaler CR could be deleted with foreground deletion", func() {
+	g.It("NonHyperShiftHOST-Author:zhsun-Medium-43174-ClusterAutoscaler CR could be deleted with foreground deletion", func() {
 		g.By("Create clusterautoscaler")
 		clusterAutoscaler.createClusterAutoscaler(oc)
 		defer clusterAutoscaler.deleteClusterAutoscaler(oc)
@@ -61,7 +61,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	//author: miyadav@redhat.com
-	g.It("Longduration-NonPreRelease-Author:miyadav-Low-45430-MachineSet scaling from 0 should be evaluated correctly for the new or changed instance types [Serial][Slow][Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:miyadav-Low-45430-MachineSet scaling from 0 should be evaluated correctly for the new or changed instance types [Serial][Slow][Disruptive]", func() {
 		machineAutoscaler = machineAutoscalerDescription{
 			name:           "machineautoscaler-45430",
 			namespace:      "openshift-machine-api",
@@ -101,7 +101,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	//author: zhsun@redhat.com
-	g.It("Author:zhsun-Medium-44816-Cluster version operator could remove unrecognized volume mounts [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:zhsun-Medium-44816-Cluster version operator could remove unrecognized volume mounts [Disruptive]", func() {
 		//As cluster-autoscaler-operator deployment will be synced by cvo, so we don't need defer to resotre autoscaler deployment
 		g.By("Update cluster-autoscaler-operator deployment's volumeMounts")
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("deploy/cluster-autoscaler-operator", "-n", machineAPINamespace, "-p", `[{"op": "add", "path": "/spec/template/spec/containers/0/volumeMounts/0","value":{"mountPath":"/etc/cluster-autoscaler-operator-invalid/service-ca","name":"cert","readOnly":true}}]`, "--type=json").Execute()
@@ -132,7 +132,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	//author: huliu@redhat.com
-	g.It("Longduration-NonPreRelease-Author:huliu-Medium-47656-[CAO] Cluster autoscaler could scale down based on scale down utilization threshold [Slow][Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-47656-[CAO] Cluster autoscaler could scale down based on scale down utilization threshold [Slow][Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		machinesetName := "machineset-47656"
 		utilThreshold := "0.08"
@@ -204,7 +204,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 	})
 	//author: miyadav
-	g.It("Author:miyadav-Critical-53080-[clusterautoscaler] Add verbosity option to autoscaler CRD [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:miyadav-Critical-53080-[clusterautoscaler] Add verbosity option to autoscaler CRD [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		clusterAutoscalerTemplate = filepath.Join(autoscalerBaseDir, "clusterautoscalerutil.yaml")
 		clusterAutoscaler = clusterAutoscalerDescription{
