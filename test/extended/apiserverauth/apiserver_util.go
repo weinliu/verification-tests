@@ -479,20 +479,31 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	cpuMax := workerCPUtopall[0]
 	availableCPU := int(float64(totalCPU) * (100 - float64(preserveCPUP) - float64(cpuMax)) / 100)
 	n = int(availableCPU / int(cpuMetric))
+	// Avoid the cay3se that the calculated value of zero availableMem above will result in a zero divisor at below code.
+	if m == 0 {
+		m = 1
+	}
 	workerNodeCount := len(workerCPU)
 	o.Expect(err).NotTo(o.HaveOccurred())
+
 	p := workerNodeCount
 	if workerNodeCount == 1 {
 		dn = 1
 		r = 1
-		c = 3
+		c = 5
+		s = 5
 	} else {
 		r = 3
 		c = 2
-		dn = workerNodeCount
+		if n > workerNodeCount {
+			dn = 3
+		} else {
+			dn = workerNodeCount
+		}
+		s = int(500 / n / dn)
 	}
 	e2e.Logf("Start CPU load ...")
-	cpuloadCmd := fmt.Sprintf(`clusterbuster -N %v -B cpuload -P server -b 5 -r %v -p %v -d %v -c %v -m 1000 -D .2 -M 1 -t 36000 -x -v > %v`, n, r, p, dn, c, dirname+"clusterbuster-cpu-log")
+	cpuloadCmd := fmt.Sprintf(`clusterbuster -N %v -B cpuload -P server -b 5 -r %v -p %v -d %v -c %v -s %v -W -m 1000 -D .2 -M 1 -t 36000 -x -v > %v`, n, r, p, dn, c, s, dirname+"clusterbuster-cpu-log")
 	e2e.Logf("%v", cpuloadCmd)
 	_, err = exec.Command("bash", "-c", cpuloadCmd).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -532,16 +543,17 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 		m = 1
 	}
 	if workerNodeCount == 1 {
-		dn = 6
-		c = 7
-		s = 2
+		dn = 1
+		r = 1
+		c = 5
+		s = 5
 	} else {
 		dn = workerNodeCount
-		c = 3
-		s = int(1000 / m / dn)
+		c = dn
+		s = int(500 / m / dn)
 	}
 	e2e.Logf("Start Memory load ...")
-	memloadCmd := fmt.Sprintf(`clusterbuster -N %v -B memload -P classic -r %v -p %v -d %v -c %v -s %v -W -t 36000 -x -v > %v`, m, m, p, dn, c, s, dirname+"clusterbuster-mem-log")
+	memloadCmd := fmt.Sprintf(`clusterbuster -N %v -B memload -P server -r %v -p %v -d %v -c %v -s %v -W -t 36000 -x -v > %v`, m, r, p, dn, c, s, dirname+"clusterbuster-mem-log")
 	e2e.Logf("%v", memloadCmd)
 	_, err = exec.Command("bash", "-c", memloadCmd).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
