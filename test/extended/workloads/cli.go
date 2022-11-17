@@ -647,6 +647,99 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		exutil.AssertWaitPollNoErr(err, "oc image mirror fails")
 
 	})
+
+	// author: knarra@redhat.com
+	g.It("Longduration-Author:knarra-VMonly-Critical-54787-Run sos report against  ocp cluster and verify that it works fine[Serial]", func() {
+		sosTmpDirName := "/tmp/case54787"
+		err := os.MkdirAll(sosTmpDirName, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(sosTmpDirName)
+		command := fmt.Sprintf("sos collect --no-local --batch --preset=ocp --tmp-dir=%s", sosTmpDirName)
+		collectionStatus, err := exec.Command("bash", "-c", command).Output()
+		e2e.Logf("Sos output is: %v", string(collectionStatus))
+		if err != nil {
+			e2e.Failf("Error occured during sos report collect: %v", err.Error())
+		}
+		validationMessages := []string{
+			"Successfully collected sos report",
+			"The following archive has been created",
+			"/tmp/case54787/sos-collector-",
+		}
+		for _, vmessage := range validationMessages {
+			o.Expect(collectionStatus).To(o.ContainSubstring(vmessage))
+		}
+
+	})
+
+	// author: knarra@redhat.com
+	g.It("Longduration-Author:knarra-VMonly-Critical-55971-Run sos collect against  ocp cluster to collect logs from master and workers and verify that it works fine[Serial]", func() {
+		sosTmpDirName := "/tmp/case55971"
+		err := os.MkdirAll(sosTmpDirName, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(sosTmpDirName)
+		command := fmt.Sprintf("sos collect --no-local -c ocp.role=worker:master --batch --preset=ocp --tmp-dir=%s", sosTmpDirName)
+		collectionStatus, err := exec.Command("bash", "-c", command).Output()
+		e2e.Logf("Sos output is:", string(collectionStatus))
+		if err != nil {
+			e2e.Failf("Error occured during sos report collect: %v", err.Error())
+		}
+		validationMessages := []string{
+			"Successfully collected sos report",
+			"The following archive has been created",
+			"/tmp/case55971/sos-collector-",
+		}
+		for _, vmessage := range validationMessages {
+			o.Expect(collectionStatus).To(o.ContainSubstring(vmessage))
+		}
+
+	})
+
+	// author: knarra@redhat.com
+	g.It("Author:knarra-VMonly-High-55972-Run sos collect against  ocp cluster to collect kernel logs from master nodes and verify that it works fine[Serial]", func() {
+		sosTmpDirName := "/tmp/case55972"
+		err := os.MkdirAll(sosTmpDirName, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(sosTmpDirName)
+		command := fmt.Sprintf("sos collect --no-local -o kernel --batch --tmp-dir=%s", sosTmpDirName)
+		collectionStatus, err := exec.Command("bash", "-c", command).Output()
+		e2e.Logf("Sos output is:", string(collectionStatus))
+		if err != nil {
+			e2e.Failf("Error occured during sos report collect: %v", err.Error())
+		}
+		validationMessages := []string{
+			"Successfully collected sos report",
+			"The following archive has been created",
+			"/tmp/case55972/sos-collector-",
+		}
+		for _, vmessage := range validationMessages {
+			o.Expect(collectionStatus).To(o.ContainSubstring(vmessage))
+		}
+
+	})
+
+	// author: knarra@redhat.com
+	g.It("Longduration-Author:knarra-VMonly-High-55973-Verify sos collect against worker nodes in ocp cluster and validate that it works fine[Serial]", func() {
+		sosTmpDirName := "/tmp/case55973"
+		err := os.MkdirAll(sosTmpDirName, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(sosTmpDirName)
+		command := fmt.Sprintf("sos collect --no-local -c ocp.role=worker --batch --preset=ocp --tmp-dir=%s", sosTmpDirName)
+		collectionStatus, err := exec.Command("bash", "-c", command).Output()
+		e2e.Logf("Sos output is:", string(collectionStatus))
+		if err != nil {
+			e2e.Failf("Error occured during sos report collect: %v", err.Error())
+		}
+		validationMessages := []string{
+			"Successfully collected sos report",
+			"The following archive has been created",
+			"/tmp/case55973/sos-collector-",
+		}
+		for _, vmessage := range validationMessages {
+			o.Expect(collectionStatus).To(o.ContainSubstring(vmessage))
+		}
+
+	})
+
 })
 
 // ClientVersion ...
