@@ -2929,7 +2929,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("4) Check pod status using get command")
-		describeOutput, err := oc.Run("get").Args("pod", podName, "-n", namespace, "-o=jsonpath={.status.containerStatuses[0].image}").Output()
+		describeOutput, err := oc.Run("get").Args("pod", podName, "-n", namespace, "-o=jsonpath={.status.containerStatuses[*].image}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(describeOutput).To(o.ContainSubstring("openshifttest/hello-openshift"))
 
