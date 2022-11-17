@@ -29,7 +29,7 @@ var _ = g.Describe("[sig-cco] Cluster_Operator CCO should", func() {
 	// author: lwan@redhat.com
 	// It is destructive case, will remove root credentials, so adding [Disruptive]. The case duration is greater than 5 minutes
 	// so adding [Slow]
-	g.It("Author:lwan-High-31768-Report the mode of cloud-credential operation as a metric [Slow][Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:lwan-High-31768-Report the mode of cloud-credential operation as a metric [Slow][Disruptive]", func() {
 		g.By("Check if the current platform is a supported platform")
 		rootSecretName, err := getRootSecretName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -104,7 +104,7 @@ spec:
 	})
 	//For bug https://bugzilla.redhat.com/show_bug.cgi?id=1940142
 	//For bug https://bugzilla.redhat.com/show_bug.cgi?id=1952891
-	g.It("Author:lwan-High-45415-[Bug 1940142] Reset CACert to correct path [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:lwan-High-45415-[Bug 1940142] Reset CACert to correct path [Disruptive]", func() {
 		g.By("Check if it's an osp cluster")
 		platformType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -197,7 +197,7 @@ data:
 		o.Expect(credsTXT).To(o.ContainSubstring("cacert: /etc/kubernetes/static-pod-resources/configmaps/cloud-config/ca-bundle.pem"))
 	})
 
-	g.It("ROSA-OSD_CCS-Author:jshu-High-36498-CCO credentials secret change to STS-style", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:jshu-High-36498-CCO credentials secret change to STS-style", func() {
 		//Check IAAS platform type
 		iaasPlatform := exutil.CheckPlatform(oc)
 		if iaasPlatform != "aws" {
@@ -215,7 +215,7 @@ data:
 		}
 	})
 
-	g.It("ROSA-OSD_CCS-ARO-Author:jshu-Medium-50869-High-53283 CCO Pod Security Admission change", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:jshu-Medium-50869-High-53283 CCO Pod Security Admission change", func() {
 		g.By("1.Check cloud-credential-operator pod")
 		ccoPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app=cloud-credential-operator", "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -255,7 +255,7 @@ data:
 
 	})
 
-	g.It("Author:jshu-Medium-48360 Reconciliation of aws pod identity mutating webhook did not happen [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:jshu-Medium-48360 Reconciliation of aws pod identity mutating webhook did not happen [Disruptive]", func() {
 		//Check IAAS platform type
 		iaasPlatform := exutil.CheckPlatform(oc)
 		if iaasPlatform != "aws" {
@@ -294,7 +294,7 @@ data:
 		exutil.AssertWaitPollNoErr(errWait, "The port is not reset to 443")
 	})
 
-	g.It("Author:jshu-Medium-45975-Test cco condition changes [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:jshu-Medium-45975-Test cco condition changes [Disruptive]", func() {
 		//Check CCO mode
 		mode, err := getCloudCredentialMode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -390,12 +390,12 @@ data:
 	})
 
 	//For bug https://bugzilla.redhat.com/show_bug.cgi?id=1977319
-	g.It("ROSA-OSD_CCS-ARO-Author:jshu-High-45219-A fresh cluster should not have stale CR", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:jshu-High-45219-A fresh cluster should not have stale CR", func() {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "controller-manager-service", "-n", "openshift-cloud-credential-operator").Output()
 		o.Expect(output).To(o.ContainSubstring("Error from server (NotFound)"))
 	})
 
-	g.It("ROSA-OSD_CCS-ARO-Author:jshu-Critical-34470-Cloud credential operator health check", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:jshu-Critical-34470-Cloud credential operator health check", func() {
 		g.By("Check CCO status conditions")
 		//Check CCO mode
 		mode, err := getCloudCredentialMode(oc)

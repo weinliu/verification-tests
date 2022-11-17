@@ -35,7 +35,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	})
 
 	//author: lwan@redhat.com
-	g.It("NonPreRelease-ConnectedOnly-Author:lwan-Critical-29670-install/uninstall hive operator from OperatorHub", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:lwan-Critical-29670-install/uninstall hive operator from OperatorHub", func() {
 		g.By("Check Subscription...")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "AllCatalogSourcesHealthy", ok, DefaultTimeout, []string{"sub", sub.name, "-n",
 			sub.namespace, "-o=jsonpath={.status.conditions[0].reason}"}).check(oc)
@@ -72,7 +72,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "44914"|./bin/extended-platform-tests run --timeout 15m -f -
-	g.It("NonPreRelease-ConnectedOnly-Author:lwan-Medium-44914-View Hive Metrics with OpenShift Cluster Monitoring [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:lwan-Medium-44914-View Hive Metrics with OpenShift Cluster Monitoring [Serial]", func() {
 		g.By("Verify hive metrics can get from prometheus...")
 		token, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -91,7 +91,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "41932"|./bin/extended-platform-tests run --timeout 15m -f -
-	g.It("NonPreRelease-ConnectedOnly-Author:lwan-Medium-41932-Add metric for hive-operator[Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:lwan-Medium-41932-Add metric for hive-operator[Serial]", func() {
 		g.By("Create PodMonitor for HiveConfig...")
 		podMonitorYaml := filepath.Join(testDataDir, "hive-operator-podmonitor.yaml")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", podMonitorYaml, "--ignore-not-found").Execute()

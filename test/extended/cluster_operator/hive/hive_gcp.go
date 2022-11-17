@@ -51,7 +51,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "41777"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:lwan-High-41777-High-28636-Hive API support for GCP[Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:lwan-High-41777-High-28636-Hive API support for GCP[Serial]", func() {
 		testCaseID := "41777"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -175,7 +175,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "33872"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:lwan-Medium-33872-[gcp]Hive supports ClusterPool [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:lwan-Medium-33872-[gcp]Hive supports ClusterPool [Serial]", func() {
 		testCaseID := "33872"
 		poolName := "pool-" + testCaseID
 		imageSetName := poolName + "-imageset"
@@ -256,7 +256,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	//author: liangli@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "44475"|./bin/extended-platform-tests run --timeout 90m -f -
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:liangli-Medium-44475-Medium-45158-[gcp]Hive Change BaseDomain field right after creating pool and all clusters finish install firstly then recreated [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:liangli-Medium-44475-Medium-45158-[gcp]Hive Change BaseDomain field right after creating pool and all clusters finish install firstly then recreated [Serial]", func() {
 		testCaseID := "44475"
 		poolName := "pool-" + testCaseID
 		imageSetName := poolName + "-imageset"
@@ -349,7 +349,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "41499"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:lwan-High-41499-High-34404-High-25333-Hive syncset test for paused and multi-modes[Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:lwan-High-41499-High-34404-High-25333-Hive syncset test for paused and multi-modes[Serial]", func() {
 		testCaseID := "41499"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -594,7 +594,7 @@ spec:
 	//author: mihuang@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "35069"|./bin/extended-platform-tests run --timeout 70m -f -
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-35069-Hive supports cluster hibernation for gcp[Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-35069-Hive supports cluster hibernation for gcp[Serial]", func() {
 		testCaseID := "35069"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -657,7 +657,7 @@ spec:
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "52411"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:lwan-Medium-52411-[GCP]Hive Machinepool test for autoscale [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:lwan-Medium-52411-[GCP]Hive Machinepool test for autoscale [Serial]", func() {
 		testCaseID := "52411"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -791,7 +791,7 @@ spec:
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "46729"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("NonPreRelease-ConnectedOnly-Author:lwan-Medium-46729-[HIVE]Support overriding installer image [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:lwan-Medium-46729-[HIVE]Support overriding installer image [Serial]", func() {
 		testCaseID := "46729"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		imageSetName := cdName + "-imageset"
@@ -877,7 +877,7 @@ spec:
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "45279"|./bin/extended-platform-tests run --timeout 15m -f -
-	g.It("NonPreRelease-ConnectedOnly-Author:lwan-Medium-45279-Test Metric for ClusterClaim[Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:lwan-Medium-45279-Test Metric for ClusterClaim[Serial]", func() {
 		testCaseID := "45279"
 		poolName := "pool-" + testCaseID
 		imageSetName := poolName + "-imageset"
@@ -982,7 +982,7 @@ spec:
 
 	//author: mihuang@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "54463"|./bin/extended-platform-tests run --timeout 35m -f -
-	g.It("NonPreRelease-ConnectedOnly-Author:mihuang-Medium-54463-Add cluster install success/fail metrics[Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-54463-Add cluster install success/fail metrics[Serial]", func() {
 		testCaseID := "54463"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		imageSetName := cdName + "-imageset"

@@ -49,7 +49,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		testOCPImage = getTestOCPImage()
 	})
 
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-High-25447-High-28657-Hive API support for Azure[Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-High-25447-High-28657-Hive API support for Azure[Serial]", func() {
 		testCaseID := "25447"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -169,7 +169,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running Running", ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Machine", "-n", "openshift-machine-api", "-o=jsonpath={.items[?(@.spec.metadata.labels.node-role\\.kubernetes\\.io==\"infra\")].status.phase}"}).check(oc)
 	})
 
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-33854-Hive supports Azure ClusterPool [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-33854-Hive supports Azure ClusterPool [Serial]", func() {
 		testCaseID := "33854"
 		poolName := "pool-" + testCaseID
 		imageSetName := poolName + "-imageset"
@@ -251,7 +251,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	//author: mihuang@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "35297"|./bin/extended-platform-tests run --timeout 90m -f -
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-35297-Hive supports cluster hibernation[Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-35297-Hive supports cluster hibernation[Serial]", func() {
 		testCaseID := "35297"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -314,7 +314,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 	//author: mihuang@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "44946"|./bin/extended-platform-tests run --timeout 90m -f -
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-44946-Keep it hot when HibernateAfter is setting [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-44946-Keep it hot when HibernateAfter is setting [Serial]", func() {
 		testCaseID := "44946"
 		poolName := "pool-" + testCaseID
 		imageSetName := poolName + "-imageset"
@@ -424,7 +424,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	//author: lwan@redhat.com
 	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "52415"|./bin/extended-platform-tests run --timeout 90m -f -
-	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:lwan-Medium-52415-[Azure]Hive Machinepool test for autoscale [Serial]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:lwan-Medium-52415-[Azure]Hive Machinepool test for autoscale [Serial]", func() {
 		testCaseID := "52415"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -556,7 +556,7 @@ spec:
 
 	//author: mihuang@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "54048"|./bin/extended-platform-tests run --timeout 10m -f -
-	g.It("NonPreRelease-ConnectedOnly-Author:mihuang-Medium-54048-Hive to supprt cli-domain-from-installer-image annotation [Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-54048-Hive to supprt cli-domain-from-installer-image annotation [Serial]", func() {
 		testCaseID := "54048"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		imageSetName := cdName + "-imageset"
