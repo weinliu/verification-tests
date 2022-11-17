@@ -1206,6 +1206,16 @@ func installHiveOperator(oc *exutil.CLI, ns *hiveNameSpace, og *operatorGroup, s
 	hc.createIfNotExist(oc)
 }
 
+// Get hiveadmission pod name
+func getHiveadmissionPod(oc *exutil.CLI, namespace string) string {
+	hiveadmissionOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "--selector=app=hiveadmission", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	podArray := strings.Split(strings.TrimSpace(hiveadmissionOutput), " ")
+	o.Expect(len(podArray)).To(o.BeNumerically(">", 0))
+	e2e.Logf("Hiveadmission pod list is %s,first pod name is %s", podArray, podArray[0])
+	return podArray[0]
+}
+
 // Get OCP Image for Hive testing
 func getTestOCPImage() string {
 	//get the latest 4-stable image for Hive testing

@@ -2,6 +2,7 @@ package hive
 
 import (
 	"path/filepath"
+	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -114,6 +115,20 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		expectedReason, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HiveConfig", "hive", "-o=jsonpath={.status.conditions[0].reason}").Output()
 		checkHiveConfigMetric(oc, "condition", expectedType, token, PrometheusURL, query4)
 		checkHiveConfigMetric(oc, "reason", expectedReason, token, PrometheusURL, query4)
+	})
+
+	//author: mihuang@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "55904"|./bin/extended-platform-tests run --timeout 5m -f -
+	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:mihuang-Low-55904-[aws]Hiveadmission log enhancement[Serial]", func() {
+		hiveadmissionPod := getHiveadmissionPod(oc, sub.namespace)
+		hiveadmissionPodLog, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(hiveadmissionPod, "-n", sub.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(hiveadmissionPodLog, "failed to list") {
+			e2e.Failf("the pod log includes failed to list")
+		}
+		if !strings.Contains(hiveadmissionPodLog, "Running API Priority and Fairness config worker") {
+			e2e.Failf("the pod log does not include Running API Priority and Fairness config worker")
+		}
 	})
 
 })
