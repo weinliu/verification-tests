@@ -23,8 +23,18 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		iaasPlatform = exutil.CheckPlatform(oc)
 	})
 
+	g.It("NonHyperShiftHOST-Author:zhsun-High-56086-[CPMS] Controlplanemachineset should be created by default", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+
+		g.By("CPMS should be created by default and state is Active")
+		cpmsState, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace, "-o=jsonpath={.spec.state}").Output()
+		o.Expect(cpmsState).To(o.ContainSubstring("Active"))
+		o.Expect(checkIfCPMSIsStable(oc)).To(o.BeTrue())
+	})
+
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-53320-Owner reference could be added/removed to control plan machines [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:zhsun-Medium-53320-[CPMS] Owner reference could be added/removed to control plan machines [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
 		skipForCPMSNotExist(oc)
@@ -60,7 +70,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-Medium-53081-Finalizer should be added to control plan machineset [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:zhsun-Medium-53081-[CPMS] Finalizer should be added to control plan machineset [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "vsphere")
 		skipForCPMSNotExist(oc)
@@ -81,7 +91,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("NonHyperShiftHOST-Author:zhsun-High-53610-Operator control-plane-machine-set should be in Available state and report version information", func() {
+	g.It("NonHyperShiftHOST-Author:zhsun-High-53610-[CPMS] Operator control-plane-machine-set should be in Available state and report version information", func() {
 		state, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/control-plane-machine-set", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
 		version, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/control-plane-machine-set", "-o=jsonpath={.status.versions[0].version}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -403,7 +413,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-Medium-54895-[CPMS] CPMS generator controller will create a new CPMS if a CPMS is removed from cluster [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:zhsun-Medium-54895-[CPMS] CPMS generator controller will create a new CPMS if a CPMS is removed from cluster [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
 		skipForCPMSNotExist(oc)
@@ -433,5 +443,30 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"state":"Active"}}`, "--type=merge", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(checkIfCPMSIsStable(oc)).To(o.BeTrue())
+	})
+
+	// author: zhsun@redhat.com
+	g.It("NonHyperShiftHOST-Author:zhsun-Medium-52587-[CPMS] Webhook validations for CPMS resource [Disruptive]", func() {
+		exutil.SkipConditionally(oc)
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
+		skipForCPMSNotExist(oc)
+
+		g.By("Update CPMS name")
+		cpmsName, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"metadata":{"name":"invalid"}}`, "--type=merge", "-n", machineAPINamespace).Output()
+		o.Expect(cpmsName).To(o.ContainSubstring("the name of the object (invalid) does not match the name on the URL (cluster)"))
+		g.By("Update CPMS replicas")
+		cpmsReplicas, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"replicas": 4}}`, "--type=merge", "-n", machineAPINamespace).Output()
+		o.Expect(cpmsReplicas).To(o.ContainSubstring("replicas is immutable"))
+		g.By("Update CPMS selector")
+		cpmsSelector, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"selector":{"matchLabels":{"machine.openshift.io/cluster-api-cluster": null}}}}`, "--type=merge", "-n", machineAPINamespace).Output()
+		o.Expect(cpmsSelector).To(o.ContainSubstring("selector is immutable"))
+		g.By("Update CPMS labels")
+		cpmsLabel, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"metadata":{"labels":{"machine.openshift.io/cluster-api-cluster": null, "machine.openshift.io/cluster-api-machine-role": "invalid", "machine.openshift.io/cluster-api-machine-type": "invalid"}}}}}}`, "--type=merge", "-n", machineAPINamespace).Output()
+		o.Expect(cpmsLabel).To(o.ContainSubstring("label 'machine.openshift.io/cluster-api-cluster' is required"))
+		o.Expect(cpmsLabel).To(o.ContainSubstring("label 'machine.openshift.io/cluster-api-machine-role' is required, and must have value 'master'"))
+		o.Expect(cpmsLabel).To(o.ContainSubstring("label 'machine.openshift.io/cluster-api-machine-type' is required, and must have value 'master'"))
+		g.By("Update CPMS state")
+		cpmsState, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"state":"Inactive"}}`, "--type=merge", "-n", machineAPINamespace).Output()
+		o.Expect(cpmsState).To(o.ContainSubstring("state cannot be changed once Active"))
 	})
 })

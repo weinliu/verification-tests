@@ -33,8 +33,7 @@ func waitForCPMSUpdateCompleted(oc *exutil.CLI, replicas int) {
 // skipForCPMSNotExist skip the test if controlplanemachineset doesn't exist
 func skipForCPMSNotExist(oc *exutil.CLI) {
 	controlplanemachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if len(controlplanemachineset) == 0 {
+	if err != nil || len(controlplanemachineset) == 0 {
 		g.Skip("Skip for controlplanemachineset doesn't exist!")
 	}
 }
@@ -74,6 +73,7 @@ func checkIfCPMSIsStable(oc *exutil.CLI) bool {
 	desiredReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.replicas}", "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if !(desiredReplicas == currentReplicas && desiredReplicas == readyReplicas) {
+		e2e.Logf("cpms is not stable, desiredReplicas :%s, currentReplicas:%s, readyReplicas:%s", desiredReplicas, currentReplicas, readyReplicas)
 		return false
 	}
 	return true
