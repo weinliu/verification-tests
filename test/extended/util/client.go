@@ -232,6 +232,12 @@ func (c *CLI) NotShowInfo() *CLI {
 	return c
 }
 
+// SetShowInfo instructs the command will not be logged
+func (c *CLI) SetShowInfo() *CLI {
+	c.showInfo = true
+	return c
+}
+
 // SetGuestKubeconf instructs the guest cluster kubeconf file is set
 func (c *CLI) SetGuestKubeconf(guestKubeconf string) *CLI {
 	c.guestConfigPath = guestKubeconf
@@ -574,6 +580,7 @@ func (c *CLI) Run(commands ...string) *CLI {
 		kubeFramework:   c.KubeFramework(),
 		adminConfigPath: c.adminConfigPath,
 		configPath:      c.configPath,
+		showInfo:        c.showInfo,
 		guestConfigPath: c.guestConfigPath,
 		username:        c.username,
 		globalArgs:      commands,
@@ -668,7 +675,10 @@ func (c *CLI) Outputs() (string, string, error) {
 	}
 	cmd := exec.Command(c.execPath, c.finalArgs...)
 	cmd.Stdin = c.stdin
-	e2e.Logf("Running '%s %s'", c.execPath, strings.Join(c.finalArgs, " "))
+	e2e.Logf("showInfo is %v", c.showInfo)
+	if c.showInfo {
+		e2e.Logf("Running '%s %s'", c.execPath, strings.Join(c.finalArgs, " "))
+	}
 	//out, err := cmd.CombinedOutput()
 	var stdErrBuff, stdOutBuff bytes.Buffer
 	cmd.Stdout = &stdOutBuff
