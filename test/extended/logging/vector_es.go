@@ -895,7 +895,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-47753-Vector Forward logs to external Elasticsearch with username password HTTP[Serial][Slow]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-Medium-55200-Medium-47753-Vector Forward logs to external Elasticsearch with username password HTTP ES 6.x[Serial][Slow]", func() {
 
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
@@ -941,13 +941,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-47755-Vector Forward logs to external Elasticsearch with username password HTTPS[Serial][Slow]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-Medium-55199-Medium-47755-Vector Forward logs to external Elasticsearch with username password HTTPS ES 7.x[Serial][Slow]", func() {
 
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
 			ees := externalES{
 				namespace:  esProj,
-				version:    "6",
+				version:    "7",
 				serverName: "elasticsearch-server",
 				httpSSL:    true,
 				userAuth:   true,
@@ -988,13 +988,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-47758-Vector Forward logs to external Elasticsearch with username password mTLS[Serial][Slow]", func() {
+		g.It("CPaasrunOnly-Author:ikanse-Medium-55201-Medium-47758-Vector Forward logs to external Elasticsearch with username password mTLS ES 8.x[Serial][Slow]", func() {
 
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
 			ees := externalES{
 				namespace:  esProj,
-				version:    "6",
+				version:    "8",
 				serverName: "elasticsearch-server",
 				httpSSL:    true,
 				clientAuth: true,
@@ -1172,6 +1172,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			flatLabelsInLoki := lokiLog[0].Kubernetes.FlatLabels
 			o.Expect(len(flatLabelsInLoki) == 0).Should(o.BeTrue())
 		})
+
 	})
 
 	g.Context("JSON log tests", func() {
