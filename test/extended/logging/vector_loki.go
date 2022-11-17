@@ -316,7 +316,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-High-49486-Vector Forward logs to LokiStack using CLF with gateway-CLF[Serial]", func() {
+		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Medium-48646-High-49486-Deploy lokistack under different namespace and Vector Forward logs to LokiStack using CLF with gateway[Serial]", func() {
 			if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
 				g.Skip("Current platform not supported/resources not available for this test!")
 			}
@@ -331,8 +331,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			sc, err := getStorageClassName(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			g.By("deploy loki stack")
-			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
-			ls := lokiStack{"loki-49486", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-49486-" + getInfrastructureName(oc), lokiStackTemplate}
+			oc.SetupProject()
+			lokiNS := oc.Namespace()
+			ls := lokiStack{
+				name:          "loki-49486",
+				namespace:     lokiNS,
+				tSize:         "1x.extra-small",
+				storageType:   getStorageType(oc),
+				storageSecret: "storage-49486",
+				storageClass:  sc,
+				bucketName:    "logging-loki-49486-" + getInfrastructureName(oc),
+				template:      exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml"),
+			}
 			defer ls.removeObjectStorage(oc)
 			err = ls.prepareResourcesForLokiStack(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())

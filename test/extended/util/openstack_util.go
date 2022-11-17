@@ -157,29 +157,8 @@ func GetAuthenticatedUserID(providerClient *gophercloud.ProviderClient) (string,
 
 // GetOpenStackUserIDAndDomainID returns the user ID and domain ID
 func GetOpenStackUserIDAndDomainID(cred *OpenstackCredentials) (string, string) {
-	//normal users don't have permisson to list users, to get user info, must provide user ID
-	//here gets user ID from auth result
-	getUserID := func(providerClient *gophercloud.ProviderClient) (string, error) {
-		//copied from https://github.com/gophercloud/gophercloud/blob/master/auth_result.go
-		res := providerClient.GetAuthResult()
-		if res == nil {
-			//ProviderClient did not use openstack.Authenticate(), e.g. because token
-			//was set manually with ProviderClient.SetToken()
-			return "", fmt.Errorf("no AuthResult available")
-		}
-		switch r := res.(type) {
-		case tokens3.CreateResult:
-			u, err := r.ExtractUser()
-			if err != nil {
-				return "", err
-			}
-			return u.ID, nil
-		default:
-			return "", fmt.Errorf("got unexpected AuthResult type %t", r)
-		}
-	}
 	client := NewOpenStackClient(cred, "identity")
-	userID, err := getUserID(client.ProviderClient)
+	userID, err := GetAuthenticatedUserID(client.ProviderClient)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	user, err := users.Get(client, userID).Extract()
 	o.Expect(err).NotTo(o.HaveOccurred())
