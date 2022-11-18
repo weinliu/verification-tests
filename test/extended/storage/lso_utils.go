@@ -115,32 +115,20 @@ func (lso *localStorageOperator) getCurrentCSV(oc *exutil.CLI) string {
 	return currentCSV
 }
 
-// Check the cluster CatalogSource, use qeCatalogSource first
-// If qeCatalogSource not exist check the redhatCatalogSource
-// If both qeCatalogSource and redhatCatalogSource not exist skip the test
-func (lso *localStorageOperator) checkClusterCatalogSource(oc *exutil.CLI) error {
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", sourceNameSpace, "catalogsource/"+qeCatalogSource).Output()
-	if err != nil {
-		if strings.Contains(output, "not found") {
-			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", sourceNameSpace, "catalogsource/"+redhatCatalogSource).Output()
-			if err != nil {
-				if strings.Contains(output, "not found") {
-					g.Skip("Skip for both qeCatalogSource and redhatCatalogSource don't exist !!!")
-					return nil
-				}
-				e2e.Logf("Get redhatCatalogSource failed of: \"%v\"", err)
-				return err
-			}
-			lso.source = redhatCatalogSource
-			lso.channel = "stable"
-			e2e.Logf("Since qeCatalogSource doesn't exist, use offical: \"%s:%s\" instead", lso.source, lso.channel)
-			return nil
-		}
-		e2e.Logf("Get qeCatalogSource failed of: \"%v\"", err)
-		return err
+// Check whether the local storage operator packagemanifests exist in cluster catalogs
+func (lso *localStorageOperator) checkPackagemanifestsExistInClusterCatalogs(oc *exutil.CLI) {
+	catalogs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "packagemanifests.packages.operators.coreos.com", "-o=jsonpath={.items[?(@.metadata.name==\"local-storage-operator\")].metadata.labels.catalog}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if catalogs == "" {
+		g.Skip("Skipped: Local storage Operator packagemanifests not exist in cluster catalogs")
+	} else if strings.Contains(catalogs, qeCatalogSource) {
+		lso.source = qeCatalogSource
+	} else if strings.Contains(catalogs, redhatCatalogSource) {
+		lso.source = redhatCatalogSource
+	} else {
+		lso.source = strings.Split(catalogs, " ")[0]
 	}
-	e2e.Logf("qeCatalogSource exist, use qe catalogsource: \"%s:%s\" start test", lso.source, lso.channel)
-	return nil
+	e2e.Logf(`Local storage Operator exist in "catalogs: %s", use "channel: %s", "source: %s" start test`, catalogs, lso.channel, lso.source)
 }
 
 // Check openshift local storage operator install succeed

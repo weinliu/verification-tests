@@ -40,7 +40,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			testChannel = "stable"
 		}
 		myLso = newLso(setLsoChannel(testChannel), setLsoTemplate(lsoTemplate))
-		o.Expect(myLso.checkClusterCatalogSource(oc)).NotTo(o.HaveOccurred())
+		myLso.checkPackagemanifestsExistInClusterCatalogs(oc)
 		myLso.install(oc)
 		myLso.waitInstallSucceed(oc)
 		allNodes = getAllNodesInfo(oc)
