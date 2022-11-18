@@ -2427,6 +2427,110 @@ nulla pariatur.`
 		o.Expect(filterClusterRoleBindingLogErr).Should(o.HaveOccurred(), "found ClusterRoleBindingUpdated log in mco pod")
 
 	})
+	g.It("Author:sregidor-NonPreRelease-Medium-54922-daemon: add check before updating kernelArgs [Disruptive]", func() {
+		var (
+			kernelArg1         = "test1"
+			kernelArg2         = "test2"
+			usbguardMCTemplate = "change-worker-extension-usbguard.yaml"
+
+			expectedLogArg1 = fmt.Sprintf("Running rpm-ostree [kargs --append=%s]", kernelArg1)
+			expectedLogArg2 = fmt.Sprintf("Running rpm-ostree [kargs --delete=%s --append=%s --append=%s]",
+				kernelArg1, kernelArg1, kernelArg2)
+			// Expr: "kargs .*--append|kargs .*--delete"
+			// We need to scape the "--" characters
+			expectedNotLogExtesionRegex = "kargs .*" + regexp.QuoteMeta("--") + "append|kargs .*" + regexp.QuoteMeta("--") + "delete"
+
+			mcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		)
+
+		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform, GCPPlatform)
+		workerNode := skipTestIfOsIsNotCoreOs(oc)
+
+		// Create MC to add kernel arg 'test1'
+		g.By(fmt.Sprintf("Create a MC to add a kernel arg: %s", kernelArg1))
+		mcArgs1 := MachineConfig{name: "tc-54922-kernel-args-1", pool: MachineConfigPoolWorker, skipWaitForMcp: true,
+			Template:   *NewMCOTemplate(oc, GenericMCTemplate),
+			parameters: []string{fmt.Sprintf(`KERNEL_ARGS=["%s"]`, kernelArg1)}}
+
+		defer mcArgs1.delete(oc)
+		mcArgs1.create(oc)
+		logger.Infof("OK!\n")
+
+		g.By("Check that the MCD logs are tracing the new kernel argument")
+		// We don't know if the selected node will be updated first or last, so we have to wait
+		// the same time we would wait for the mcp to be updated. Aprox.
+		timeToWait := time.Duration(mcp.estimateWaitTimeInMinutes()) * time.Minute
+		logger.Infof("waiting time: %s", timeToWait.String())
+		o.Expect(workerNode.CaptureMCDaemonLogsUntilRestartWithTimeout(timeToWait.String())).To(
+			o.ContainSubstring(expectedLogArg1),
+			"A log line reporting new kernel arguments should be present in the MCD logs when we add a kernel argument via MC")
+		logger.Infof("OK!\n")
+
+		g.By("Wait for worker pool to be updated")
+		mcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		g.By("Check that the new kernel argument was added")
+		o.Expect(workerNode.IsKernelArgEnabled(kernelArg1)).To(o.BeTrue(),
+			"Kernel argument %s was not enabled in the node %s", kernelArg1, workerNode.GetName())
+		logger.Infof("OK!\n")
+
+		// Create MC to add kernel arg 'test2'
+		g.By(fmt.Sprintf("Create a MC to add a kernel arg: %s", kernelArg2))
+		mcArgs2 := MachineConfig{name: "tc-54922-kernel-args-2", pool: MachineConfigPoolWorker, skipWaitForMcp: true,
+			Template:   *NewMCOTemplate(oc, GenericMCTemplate),
+			parameters: []string{fmt.Sprintf(`KERNEL_ARGS=["%s"]`, kernelArg2)}}
+
+		defer mcArgs2.deleteNoWait(oc)
+		mcArgs2.create(oc)
+		logger.Infof("OK!\n")
+
+		g.By("Check that the MCD logs are tracing both kernel arguments")
+		// We don't know if the selected node will be updated first or last, so we have to wait
+		// the same time we would wait for the mcp to be updated. Aprox.
+		logger.Infof("waiting time: %s", timeToWait.String())
+		o.Expect(workerNode.CaptureMCDaemonLogsUntilRestartWithTimeout(timeToWait.String())).To(
+			o.ContainSubstring(expectedLogArg2),
+			"A log line reporting the new kernel arguments configuration should be present in MCD logs")
+		logger.Infof("OK!\n")
+
+		g.By("Wait for worker pool to be updated")
+		mcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		g.By("Check that the both kernel arguments were added")
+		o.Expect(workerNode.IsKernelArgEnabled(kernelArg1)).To(o.BeTrue(),
+			"Kernel argument %s was not enabled in the node %s", kernelArg1, workerNode.GetName())
+		o.Expect(workerNode.IsKernelArgEnabled(kernelArg2)).To(o.BeTrue(),
+			"Kernel argument %s was not enabled in the node %s", kernelArg2, workerNode.GetName())
+		logger.Infof("OK!\n")
+
+		// Create MC to deploy an usbguard extension
+		g.By("Create MC to add usbguard extension")
+		mcUsb := MachineConfig{name: "tc-54922-extension", pool: MachineConfigPoolWorker, skipWaitForMcp: true,
+			Template: *NewMCOTemplate(oc, usbguardMCTemplate)}
+
+		defer mcUsb.deleteNoWait(oc)
+		mcUsb.create(oc)
+		logger.Infof("OK!\n")
+
+		g.By("Check that the MCD logs do not make any reference to add or delete kargs")
+		o.Expect(workerNode.CaptureMCDaemonLogsUntilRestartWithTimeout(timeToWait.String())).NotTo(
+			o.MatchRegexp(expectedNotLogExtesionRegex),
+			"MCD logs should not make any reference to kernel arguments addition/deletion when no new kernel arg is added/deleted")
+
+		logger.Infof("OK!\n")
+
+		g.By("Wait for worker pool to be updated")
+		mcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		g.By("Check that the usbguard extension was added")
+		o.Expect(workerNode.RpmIsInstalled("usbguard")).To(
+			o.BeTrue(),
+			"usbguard rpm should be installed in node %s", workerNode.GetName())
+		logger.Infof("OK!\n")
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching xpectedNDStatus, expectedNDMessage, expectedNDReason

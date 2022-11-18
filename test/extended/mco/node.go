@@ -290,7 +290,7 @@ func (n Node) PollMCDaemonLogs(filter string) func() string {
 }
 
 // CaptureMCDaemonLogsUntilRestartWithTimeout captures all the logs in the MachineConfig daemon pod for this node until the daemon pod is restarted
-func (n Node) CaptureMCDaemonLogsUntilRestartWithTimeout(timeout string) (string, error) {
+func (n *Node) CaptureMCDaemonLogsUntilRestartWithTimeout(timeout string) (string, error) {
 	machineConfigDaemon := n.GetMachineConfigDaemon()
 	duration, err := time.ParseDuration(timeout)
 	if err != nil {

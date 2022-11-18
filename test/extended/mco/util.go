@@ -472,7 +472,7 @@ func (mcp *MachineConfigPool) GetReportedOsImageOverrideValue() (string, error) 
 	return metricValue, nil
 }
 
-// RecoverFromDegraded updates the curent and desired machine configs so that the pool can recover from degraded state once the offending MC is deleted
+// RecoverFromDegraded updates the current and desired machine configs so that the pool can recover from degraded state once the offending MC is deleted
 func (mcp *MachineConfigPool) RecoverFromDegraded() error {
 	logger.Infof("Recovering %s pool from degraded status", mcp.GetName())
 	mcpNodes, _ := mcp.GetNodes()

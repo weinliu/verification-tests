@@ -910,7 +910,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.cent
 		o.Expect(telemetryConfig.Get(`{.data}`)).To(o.ContainSubstring(expectedExposedMetric),
 			"Metric %s, is not exposed to telemetry", osImageURLOverrideQuery)
 
-		g.By("Validating inital os_image_url_override values")
+		g.By("Validating initial os_image_url_override values")
 		mon, err := exutil.NewPrometheusMonitor(oc.AsAdmin())
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error creating new thanos monitor")
