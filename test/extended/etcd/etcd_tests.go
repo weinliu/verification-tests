@@ -17,7 +17,7 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: skundu@redhat.com
-	g.It("Author:skundu-Critical-43330-Ensure a safety net for the 3.4 to 3.5 etcd upgrade", func() {
+	g.It("NonHyperShiftHOST-Author:skundu-Critical-43330-Ensure a safety net for the 3.4 to 3.5 etcd upgrade", func() {
 		var (
 			err error
 			msg string
@@ -50,7 +50,7 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 
 	})
 	// author: geliu@redhat.com
-	g.It("Author:geliu-Medium-52418-Add new parameter to avoid Potential etcd inconsistent revision and data occurs", func() {
+	g.It("NonHyperShiftHOST-Author:geliu-Medium-52418-Add new parameter to avoid Potential etcd inconsistent revision and data occurs", func() {
 		g.By("Test for case OCP-52418-Add new parameter to avoid Potential etcd inconsistent revision and data occurs")
 		oc.SetupProject()
 
@@ -63,7 +63,7 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		o.Expect(output).To(o.ContainSubstring("experimental-initial-corrupt-check=true"))
 	})
 	// author: skundu@redhat.com
-	g.It("Author:skundu-NonPreRelease-Critical-52312-cluster-backup.sh script has a conflict to use /etc/kubernetes/static-pod-certs folder [Serial]", func() {
+	g.It("NonHyperShiftHOST-Author:skundu-NonPreRelease-Critical-52312-cluster-backup.sh script has a conflict to use /etc/kubernetes/static-pod-certs folder [Serial]", func() {
 		g.By("Test for case OCP-52312 cluster-backup.sh script has a conflict to use /etc/kubernetes/static-pod-certs folder.")
 		e2e.Logf("select all the master nodes")
 		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
@@ -89,7 +89,7 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 
 	})
 	// author: geliu@redhat.com
-	g.It("Author:geliu-Critical-54129-New etcd alerts to be added to the monitoring stack in ocp 4.10.", func() {
+	g.It("NonHyperShiftHOST-Author:geliu-Critical-54129-New etcd alerts to be added to the monitoring stack in ocp 4.10.", func() {
 		g.By("Test for case OCP-54129-New etcd alerts to be added to the monitoring stack in ocp 4.10.")
 		e2e.Logf("Check new alert msg have been updated")
 		output, err := exec.Command("bash", "-c", "oc -n openshift-monitoring get cm prometheus-k8s-rulefiles-0 -oyaml | grep \"alert: etcd\"").Output()
@@ -100,7 +100,7 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 	})
 
 	// author: skundu@redhat.com
-	g.It("PstChkUpgrade-ConnectedOnly-Author:skundu-NonPreRelease-Critical-22665-Check etcd image have been update to target release value after upgrade [Serial]", func() {
+	g.It("NonHyperShiftHOST-PstChkUpgrade-ConnectedOnly-Author:skundu-NonPreRelease-Critical-22665-Check etcd image have been update to target release value after upgrade [Serial]", func() {
 		g.By("Test for case OCP-22665 Check etcd image have been update to target release value after upgrade.")
 		e2e.Logf("Discover all the etcd pods")
 		etcdPodList := getPodListByLabel(oc, "etcd=true")
