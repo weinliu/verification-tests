@@ -351,7 +351,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("Author:wewang-Medium-27985-Image with invalid resource name can be pruned [Disruptive]", func() {
+	g.It("Author:VMonly-wewang-Medium-27985-Image with invalid resource name can be pruned [Disruptive]", func() {
 		//When registry configured pvc or emptryDir, the replicas is 1 and with recreate pod policy.
 		//This is not suitable for the defer recoverage. Only run this case on cloud storage.
 		platforms := map[string]bool{
