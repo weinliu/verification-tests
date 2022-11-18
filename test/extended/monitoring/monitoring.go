@@ -202,6 +202,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		}
 	})
 
+	//author: tagao@redhat.com
 	g.It("Author:tagao-Low-55670-Prometheus should not collecting error messages for completed pods", func() {
 		var output string
 		g.By("check pod conditioning in openshift-kube-scheduler, all pods should be ready")
@@ -218,6 +219,17 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				e2e.Failf("found unexpected logs: unable to fetch CPU metrics for pod")
 			}
 		}
+	})
+
+	//author: tagao@redhat.com
+	g.It("Author:tagao-Medium-55767-Missing metrics in kube-state-metrics", func() {
+		g.By("Get token of SA prometheus-k8s")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+		g.By("check kube-state-metrics metrics, the following metrics should be visible")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/label/__name__/values`, token, `"kube_pod_container_status_terminated_reason"`, uwmLoadTime)
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/label/__name__/values`, token, `"kube_pod_init_container_status_terminated_reason"`, uwmLoadTime)
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/label/__name__/values`, token, `"kube_pod_status_scheduled_time"`, uwmLoadTime)
 	})
 
 	g.Context("user workload monitoring", func() {
