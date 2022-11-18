@@ -5512,20 +5512,20 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		g.By("Get SA of csv")
 		sa := newSa(strings.Fields(getResource(oc, asUser, withNamespace, "csv", sub.installedCSV, "-o=jsonpath={.status.requirementStatus[?(@.kind==\"ServiceAccount\")].name}"))[0], sub.namespace)
-		sa.checkAuth(oc, "yes", "CloudStorage")
+		sa.checkAuth(oc, "yes", "leases")
 
 		g.By("Get Role of csv")
 		role := newRole(getResource(oc, asUser, withNamespace, "role", "-n", sub.namespace, fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-o=jsonpath={.items[0].metadata.name}"), sub.namespace)
 		origRules := role.getRules(oc)
-		modifiedRules := role.getRulesWithDelete(oc, "oadp.openshift.io")
+		modifiedRules := role.getRulesWithDelete(oc, "coordination.k8s.io")
 
 		g.By("Remove rules")
 		role.patch(oc, fmt.Sprintf("{\"rules\": %s}", modifiedRules))
-		sa.checkAuth(oc, "no", "CloudStorage")
+		sa.checkAuth(oc, "no", "leases")
 
 		g.By("Recovery rules")
 		role.patch(oc, fmt.Sprintf("{\"rules\": %s}", origRules))
-		sa.checkAuth(oc, "yes", "CloudStorage")
+		sa.checkAuth(oc, "yes", "leases")
 	})
 
 	// It will cover test case: OCP-29723, author: kuiwang@redhat.com
