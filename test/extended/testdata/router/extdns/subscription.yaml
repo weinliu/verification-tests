@@ -4,9 +4,8 @@ metadata:
   name: external-dns-operator
   namespace: external-dns-operator
 spec:
-  channel: alpha
+  channel: stable-v1.0
   installPlanApproval: Automatic
   name: external-dns-operator
   source: qe-app-registry
   sourceNamespace: openshift-marketplace
-  startingCSV: external-dns-operator.v0.1.2

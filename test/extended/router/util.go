@@ -808,20 +808,13 @@ func pollReadPodData(oc *exutil.CLI, ns, routername, executeCmd, searchString st
 
 // this function create external dns operator
 func createExternalDNSOperator(oc *exutil.CLI) {
-	buildPruningBaseDir := exutil.FixturePath("testdata", "router")
-	extraRoles := filepath.Join(buildPruningBaseDir, "extra-roles.yaml")
+	buildPruningBaseDir := exutil.FixturePath("testdata", "router", "extdns")
 	operatorGroup := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 	subscription := filepath.Join(buildPruningBaseDir, "subscription.yaml")
-	nsOperand := filepath.Join(buildPruningBaseDir, "ns-external-dns.yaml")
 	nsOperator := filepath.Join(buildPruningBaseDir, "ns-external-dns-operator.yaml")
 	operatorNamespace := "external-dns-operator"
 
-	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", nsOperand).Output()
-	e2e.Logf("err %v, msg %v", err, msg)
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", extraRoles).Output()
-	e2e.Logf("err %v, msg %v", err, msg)
-
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", nsOperator).Output()
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", nsOperator).Output()
 	e2e.Logf("err %v, msg %v", err, msg)
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", operatorGroup).Output()
 	e2e.Logf("err %v, msg %v", err, msg)

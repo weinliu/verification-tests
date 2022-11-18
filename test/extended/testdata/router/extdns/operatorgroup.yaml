@@ -6,4 +6,3 @@ metadata:
 spec:
   targetNamespaces:
   - external-dns-operator
-
