@@ -4785,6 +4785,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 
 			og = operatorGroupDescription{
@@ -4792,14 +4793,23 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				namespace: "",
 				template:  ogSingleTemplate,
 			}
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-operator",
+				namespace:   "",
+				displayName: "Test Catsrc Operators",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				template:    catsrcImageTemplate,
+			}
 			sub = subscriptionDescription{
-				subName:                "mta-operator",
+				subName:                "oadp-operator",
 				namespace:              "",
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "mta-operator",
-				catalogSourceName:      "community-operators",
-				catalogSourceNamespace: "openshift-marketplace",
+				operatorPackage:        "oadp-operator",
+				catalogSourceName:      catsrc.name,
+				catalogSourceNamespace: "",
 				startingCSV:            "",
 				currentCSV:             "",
 				installedCSV:           "",
@@ -4809,9 +4819,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		)
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
+		catsrc.namespace = oc.Namespace()
+		sub.catalogSourceNamespace = catsrc.namespace
+
+		g.By("create catalog source")
+		catsrc.createWithCheck(oc, itName, dr)
 
 		g.By("Create csv with failure because of no operator group")
-		sub.currentCSV = "windup-operator.0.0.5"
+		sub.currentCSV = "oadp-operator.v0.5.3"
 		sub.createWithoutCheck(oc, itName, dr)
 		newCheck("present", asUser, withNamespace, notPresent, "", ok, []string{"csv", sub.currentCSV}).check(oc)
 		sub.delete(itName, dr)
@@ -4829,6 +4844,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 
 			og = operatorGroupDescription{
@@ -4836,14 +4852,24 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				namespace: "",
 				template:  ogSingleTemplate,
 			}
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-operator",
+				namespace:   "",
+				displayName: "Test Catsrc Operators",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				template:    catsrcImageTemplate,
+			}
+
 			sub = subscriptionDescription{
-				subName:                "mta-operator",
+				subName:                "oadp-operator",
 				namespace:              "",
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "mta-operator",
-				catalogSourceName:      "community-operators",
-				catalogSourceNamespace: "openshift-marketplace",
+				operatorPackage:        "oadp-operator",
+				catalogSourceName:      catsrc.name,
+				catalogSourceNamespace: "",
 				startingCSV:            "",
 				currentCSV:             "",
 				installedCSV:           "",
@@ -4853,6 +4879,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		)
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
+		catsrc.namespace = oc.Namespace()
+		sub.catalogSourceNamespace = catsrc.namespace
+
+		g.By("create catalog source")
+		catsrc.createWithCheck(oc, itName, dr)
 
 		g.By("Create og")
 		og.create(oc, itName, dr)
@@ -4936,32 +4967,48 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			ogD                 = operatorGroupDescription{
 				name:      "og-singlenamespace",
 				namespace: "",
 				template:  ogSingleTemplate,
 			}
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-operator",
+				namespace:   "",
+				displayName: "Test Catsrc Operators",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				template:    catsrcImageTemplate,
+			}
 			subD = subscriptionDescription{
-				subName:                "mta-operator",
+				subName:                "oadp-operator",
 				namespace:              "",
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "mta-operator",
-				catalogSourceName:      "community-operators",
-				catalogSourceNamespace: "openshift-marketplace",
+				operatorPackage:        "oadp-operator",
+				catalogSourceName:      catsrc.name,
+				catalogSourceNamespace: "",
 				startingCSV:            "",
 				currentCSV:             "",
 				installedCSV:           "",
 				template:               subTemplate,
 				singleNamespace:        true,
 			}
+
 			og  = ogD
 			sub = subD
 		)
 		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
+		catsrc.namespace = oc.Namespace()
+		sub.catalogSourceNamespace = catsrc.namespace
+
+		g.By("create catalog source")
+		catsrc.createWithCheck(oc, itName, dr)
 
 		g.By("Create og")
 		og.create(oc, itName, dr)
@@ -4990,20 +5037,30 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			ogD                 = operatorGroupDescription{
 				name:      "og-singlenamespace",
 				namespace: "",
 				template:  ogSingleTemplate,
 			}
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-operator",
+				namespace:   "",
+				displayName: "Test Catsrc Operators",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				template:    catsrcImageTemplate,
+			}
 			subD = subscriptionDescription{
-				subName:                "mta-operator",
+				subName:                "oadp-operator",
 				namespace:              "",
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "mta-operator",
-				catalogSourceName:      "community-operators",
-				catalogSourceNamespace: "openshift-marketplace",
+				operatorPackage:        "oadp-operator",
+				catalogSourceName:      catsrc.name,
+				catalogSourceNamespace: "",
 				startingCSV:            "",
 				currentCSV:             "",
 				installedCSV:           "",
@@ -5016,6 +5073,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
+		catsrc.namespace = oc.Namespace()
+		sub.catalogSourceNamespace = catsrc.namespace
+
+		g.By("create catalog source")
+		catsrc.createWithCheck(oc, itName, dr)
 
 		g.By("Create og")
 		og.create(oc, itName, dr)
@@ -5175,21 +5237,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				namespace: "",
 				template:  ogSingleTemplate,
 			}
-			subD = subscriptionDescription{
-				subName:                "mta-operator",
-				namespace:              "",
-				channel:                "alpha",
-				ipApproval:             "Automatic",
-				operatorPackage:        "mta-operator",
-				catalogSourceName:      "community-operators",
-				catalogSourceNamespace: "openshift-marketplace",
-				startingCSV:            "",
-				currentCSV:             "",
-				installedCSV:           "",
-				template:               subTemplate,
-				singleNamespace:        true,
-			}
-
 			catsrc = catalogSourceDescription{
 				name:        "catsrc-test-operator",
 				namespace:   "",
@@ -5199,6 +5246,21 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				address:     "",
 				template:    catsrcImageTemplate,
 			}
+			subD = subscriptionDescription{
+				subName:                "oadp-operator",
+				namespace:              "",
+				channel:                "alpha",
+				ipApproval:             "Automatic",
+				operatorPackage:        "oadp-operator",
+				catalogSourceName:      "test",
+				catalogSourceNamespace: "",
+				startingCSV:            "",
+				currentCSV:             "",
+				installedCSV:           "",
+				template:               subTemplate,
+				singleNamespace:        true,
+			}
+
 			og  = ogD
 			sub = subD
 		)
@@ -5220,9 +5282,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		newCheck("expect", asUser, withoutNamespace, contain, "UnhealthyCatalogSourceFound", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions[*].reason}"}).check(oc)
 
 		g.By("create catalogsource")
-		imageAddress := getResource(oc, asAdmin, withoutNamespace, "catsrc", "community-operators", "-n", "openshift-marketplace", "-o=jsonpath={.spec.image}")
-		o.Expect(imageAddress).NotTo(o.BeEmpty())
-		catsrc.address = imageAddress
+		catsrc.address = "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne"
 		catsrc.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", catsrc.name, "-n", catsrc.namespace, "-o=jsonpath={.status..lastObservedState}"}).check(oc)
 
@@ -5309,20 +5369,31 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			ogD                 = operatorGroupDescription{
 				name:      "og-singlenamespace",
 				namespace: "",
 				template:  ogSingleTemplate,
 			}
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-operator",
+				namespace:   "",
+				displayName: "Test Catsrc Operators",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				template:    catsrcImageTemplate,
+			}
+
 			subD = subscriptionDescription{
-				subName:                "mta-operator",
+				subName:                "oadp-operator",
 				namespace:              "",
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "mta-operator",
-				catalogSourceName:      "community-operators",
-				catalogSourceNamespace: "openshift-marketplace",
+				operatorPackage:        "oadp-operator",
+				catalogSourceName:      catsrc.name,
+				catalogSourceNamespace: "",
 				startingCSV:            "",
 				currentCSV:             "",
 				installedCSV:           "",
@@ -5335,6 +5406,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
+		catsrc.namespace = oc.Namespace()
+		sub.catalogSourceNamespace = catsrc.namespace
+
+		g.By("create catalog source")
+		catsrc.createWithCheck(oc, itName, dr)
 
 		g.By("Create og")
 		og.create(oc, itName, dr)
@@ -5344,7 +5420,8 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-o=jsonpath={.status.phase}"}).check(oc)
 
 		g.By("Get SA of csv")
-		sa := newSa(getResource(oc, asUser, withNamespace, "csv", sub.installedCSV, "-o=jsonpath={.status.requirementStatus[?(@.kind==\"ServiceAccount\")].name}"), sub.namespace)
+		getResource(oc, asUser, withNamespace, "csv", sub.installedCSV, "-o=json")
+		sa := newSa(strings.Fields(getResource(oc, asUser, withNamespace, "csv", sub.installedCSV, "-o=jsonpath={.status.requirementStatus[?(@.kind==\"ServiceAccount\")].name}"))[0], sub.namespace)
 
 		g.By("Delete sa of csv")
 		sa.getDefinition(oc)
@@ -5363,20 +5440,30 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			ogD                 = operatorGroupDescription{
 				name:      "og-singlenamespace",
 				namespace: "",
 				template:  ogSingleTemplate,
 			}
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-operator",
+				namespace:   "",
+				displayName: "Test Catsrc Operators",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				template:    catsrcImageTemplate,
+			}
 			subD = subscriptionDescription{
-				subName:                "mta-operator",
+				subName:                "oadp-operator",
 				namespace:              "",
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "mta-operator",
-				catalogSourceName:      "community-operators",
-				catalogSourceNamespace: "openshift-marketplace",
+				operatorPackage:        "oadp-operator",
+				catalogSourceName:      catsrc.name,
+				catalogSourceNamespace: "",
 				startingCSV:            "",
 				currentCSV:             "",
 				installedCSV:           "",
@@ -5389,6 +5476,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
+		catsrc.namespace = oc.Namespace()
+		sub.catalogSourceNamespace = catsrc.namespace
+
+		g.By("create catalog source")
+		catsrc.createWithCheck(oc, itName, dr)
 
 		g.By("Create og")
 		og.create(oc, itName, dr)
@@ -5398,21 +5490,21 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded"+"InstallSucceeded", ok, []string{"csv", sub.installedCSV, "-o=jsonpath={.status.phase}{.status.reason}"}).check(oc)
 
 		g.By("Get SA of csv")
-		sa := newSa(getResource(oc, asUser, withNamespace, "csv", sub.installedCSV, "-o=jsonpath={.status.requirementStatus[?(@.kind==\"ServiceAccount\")].name}"), sub.namespace)
-		sa.checkAuth(oc, "yes", "Windup")
+		sa := newSa(strings.Fields(getResource(oc, asUser, withNamespace, "csv", sub.installedCSV, "-o=jsonpath={.status.requirementStatus[?(@.kind==\"ServiceAccount\")].name}"))[0], sub.namespace)
+		sa.checkAuth(oc, "yes", "CloudStorage")
 
 		g.By("Get Role of csv")
 		role := newRole(getResource(oc, asUser, withNamespace, "role", "-n", sub.namespace, fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-o=jsonpath={.items[0].metadata.name}"), sub.namespace)
 		origRules := role.getRules(oc)
-		modifiedRules := role.getRulesWithDelete(oc, "windup.jboss.org")
+		modifiedRules := role.getRulesWithDelete(oc, "oadp.openshift.io")
 
 		g.By("Remove rules")
 		role.patch(oc, fmt.Sprintf("{\"rules\": %s}", modifiedRules))
-		sa.checkAuth(oc, "no", "Windup")
+		sa.checkAuth(oc, "no", "CloudStorage")
 
 		g.By("Recovery rules")
 		role.patch(oc, fmt.Sprintf("{\"rules\": %s}", origRules))
-		sa.checkAuth(oc, "yes", "Windup")
+		sa.checkAuth(oc, "yes", "CloudStorage")
 	})
 
 	// It will cover test case: OCP-29723, author: kuiwang@redhat.com
@@ -6042,6 +6134,15 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				address:     "quay.io/olmqe/olm-dep:v1860185-v2",
 				template:    catsrcImageTemplate,
 			}
+			catsrc1 = catalogSourceDescription{
+				name:        "catsrc-operator",
+				namespace:   "",
+				displayName: "Test Catsrc Operators",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				template:    catsrcImageTemplate,
+			}
 			subStrimzi = subscriptionDescription{
 				subName:                "strimzi",
 				namespace:              "",
@@ -6071,14 +6172,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				singleNamespace:        true,
 			}
 			subMta = subscriptionDescription{
-				subName:                "mta-operator",
+				subName:                "oadp-operator",
 				namespace:              "",
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "mta-operator",
-				catalogSourceName:      catsrc.name,
+				operatorPackage:        "oadp-operator",
+				catalogSourceName:      catsrc1.name,
 				catalogSourceNamespace: "",
-				startingCSV:            "windup-operator.0.0.5",
+				startingCSV:            "",
 				currentCSV:             "",
 				installedCSV:           "",
 				template:               subTemplate,
@@ -6088,15 +6189,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
 		og.namespace = oc.Namespace()
 		catsrc.namespace = oc.Namespace()
+		catsrc1.namespace = oc.Namespace()
 		subStrimzi.namespace = oc.Namespace()
 		subStrimzi.catalogSourceNamespace = catsrc.namespace
 		subBuildv2.namespace = oc.Namespace()
 		subBuildv2.catalogSourceNamespace = catsrc.namespace
 		subMta.namespace = oc.Namespace()
-		subMta.catalogSourceNamespace = catsrc.namespace
+		subMta.catalogSourceNamespace = catsrc1.namespace
 
 		g.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
+		catsrc1.createWithCheck(oc, itName, dr)
 
 		g.By("Create og")
 		og.create(oc, itName, dr)
