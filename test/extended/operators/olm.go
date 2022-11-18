@@ -1819,14 +1819,19 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, firstNode, "app_54038")
 		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, firstNode, "app_54038", "dev")
 
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--show-labels", "--no-headers").Output()
+		e2e.Logf("Node labels " + msg)
+
 		g.By("4) Install the Prometheus CR")
-		_, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("-f", prometheusCR, "-n", oc.Namespace()).Output()
+		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("-f", prometheusCR, "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Available", ok, []string{"Prometheus", "example", "-n", oc.Namespace(), "-o=jsonpath={.status.conditions[0].type}"}).check(oc)
 
 		g.By("5) Ensure that pod is not scheduled in the node with the defined label")
 		deployedNode := getResource(oc, asAdmin, withoutNamespace, "pods", "prometheus-example-0", "-n", oc.Namespace(), "-o=jsonpath={.spec.nodeName}")
-		o.Expect(firstNode).NotTo(o.Equal(deployedNode))
+		if firstNode == deployedNode {
+			e2e.Failf("Prometheus is deployed in the same node of app_54038 label. Node: %s . Node Labels: %s", deployedNode, msg)
+		}
 
 	})
 
