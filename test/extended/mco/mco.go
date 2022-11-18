@@ -2439,8 +2439,8 @@ func validateMcpNodeDegraded(mc MachineConfig, mcp *MachineConfigPool, expectedN
 	logger.Infof("OK!\n")
 
 	g.By("Wait until MCP becomes degraded")
-	o.Eventually(mcp.pollDegradedStatus(), "5m", "30s").Should(o.Equal("True"),
-		"The '%s' MCP should become degraded when a we try to create the force file via MC, but it didn't.", mcp.GetName())
+	o.Eventually(mcp.pollDegradedStatus(), "10m", "30s").Should(o.Equal("True"),
+		"The '%s' MCP should become degraded when we try to create an invalid MC, but it didn't.", mcp.GetName())
 	o.Eventually(mcp.pollDegradedMachineCount(), "5m", "30s").Should(o.Equal("1"),
 		"The '%s' MCP should report '1' degraded machine count, but it doesn't.", mcp.GetName())
 

@@ -206,27 +206,24 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 			nonBootableImage = "quay.io/openshifttest/hello-openshift:1.2.0"
 			layeringMcName   = "not-bootable-image-tc54052"
 
-			expectedNDStatus  = "True"
 			expectedNDMessage = ".*failed to update OS to " + regexp.QuoteMeta(nonBootableImage+" : error running ostree refs --repo") + ".*"
 			expectedNDReason  = "1 nodes are reporting degraded status on sync"
 		)
 
-		checkInvalidOsImagesDegradedStatus(oc.AsAdmin(), nonBootableImage, layeringMcName, expectedNDStatus, expectedNDMessage, expectedNDReason)
+		checkInvalidOsImagesDegradedStatus(oc.AsAdmin(), nonBootableImage, layeringMcName, expectedNDMessage, expectedNDReason)
 	})
 
 	g.It("Author:sregidor-NonPreRelease-Medium-54054-Not pullable layered osImage provided[Disruptive]", func() {
 		var (
-			nonPullableImage = "quay.io/openshifttest/tc54054fakeimage:latest"
-			layeringMcName   = "not-pullable-image-tc54054"
-
-			expectedNDStatus  = "True"
-			expectedNDMessage = regexp.QuoteMeta("Error checking type of update image: error running skopeo inspect --no-tags --retry-times 5") +
-				".*" + regexp.QuoteMeta(nonPullableImage) + ".*repository not found"
+			nonPullableImage  = "quay.io/openshifttest/tc54054fakeimage:latest"
+			layeringMcName    = "not-pullable-image-tc54054"
+			expectedNDMessage = regexp.QuoteMeta("Error checking type of update image: failed to run command podman (6 tries):") +
+				".*" + regexp.QuoteMeta(nonPullableImage) + ".*"
 
 			expectedNDReason = "1 nodes are reporting degraded status on sync"
 		)
 
-		checkInvalidOsImagesDegradedStatus(oc.AsAdmin(), nonPullableImage, layeringMcName, expectedNDStatus, expectedNDMessage, expectedNDReason)
+		checkInvalidOsImagesDegradedStatus(oc.AsAdmin(), nonPullableImage, layeringMcName, expectedNDMessage, expectedNDReason)
 	})
 
 	g.It("Author:sregidor-VMonly-ConnectedOnly-Longduration-NonPreRelease-Critical-54159-Apply a new osImage on a cluster with already installed rpms [Disruptive]", func() {
@@ -1045,105 +1042,17 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.cent
 // oc: the CLI
 // image: the layered image that will be configured in the MC
 // layeringMcName: the name of the MC
-// expectedNDStatus: expected value for the status in the MCP NodeDegraded condition
 // expectedNDMessage: expected value for the message in the MCP NodeDegraded condition
 // expectedNDReason: expected value for the reason in the MCP NodeDegraded condition
-func checkInvalidOsImagesDegradedStatus(oc *exutil.CLI, image, layeringMcName, expectedNDStatus, expectedNDMessage, expectedNDReason string) {
+func checkInvalidOsImagesDegradedStatus(oc *exutil.CLI, image, layeringMcName, expectedNDMessage, expectedNDReason string) {
 	var (
 		mcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 	)
 	// Create MC and wait for MCP
-	g.By("Create a MC to deploy the new osImage that is non-bootable")
 	layeringMC := MachineConfig{name: layeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate), skipWaitForMcp: true,
 		pool: mcp.GetName(), parameters: []string{"OS_IMAGE=" + image}}
 
-	// Defer the error recovery logic
-	defer func() {
-		logger.Infof("Start image checker helper defer block")
-		if layeringMC.exists(oc.AsAdmin()) {
-			logger.Infof("Deleting MC")
-			layeringMC.deleteNoWait(oc)
-
-			logger.Infof("Recovering degraded nodes")
-			// At this point we dont know exactly the state of the cluster, so we make sure that
-			// all nodes (and not only the degraded ones) have the right desiredConfig annotation
-			allNodes, _ := NewNodeList(oc.AsAdmin()).GetAll()
-			for _, degradedNode := range allNodes {
-				logger.Infof("Recovering from errors in node: %s", degradedNode)
-				_ = degradedNode.RestoreDesiredConfig()
-			}
-
-			derr := mcp.WaitForNotDegradedStatus()
-			if derr != nil {
-				logger.Infof("Could not recover from the degraded status: %s", derr)
-			}
-
-			uerr := mcp.WaitForUpdatedStatus()
-			if uerr != nil {
-				logger.Infof("Could not recover from the degraded status: %s", uerr)
-			}
-		} else {
-			logger.Infof("The machine config was deleted during the test execution. Nothing to clean.")
-		}
-
-		logger.Infof("End image checker helper defer block")
-	}()
-
-	layeringMC.create(oc.AsAdmin())
-	logger.Infof("OK!\n")
-
-	// Verify that MCP is degraded
-	g.By("Check that the worker MCP becomes degraded")
-	logger.Infof("Wait for degraded status")
-	o.Eventually(mcp.pollDegradedStatus(), "5m", "30s").Should(o.Equal("True"),
-		"The 'worker' MCP should become degraded when a non-bootable osImage is configure, but it didn't.")
-
-	logger.Infof("Wait for degraded machinecount")
-	o.Eventually(mcp.pollDegradedMachineCount(), "5m", "30s").Should(o.Equal("1"),
-		"The 'worker' MCP should report '1' degraded machine count, but it doesn't.")
-
-	logger.Infof("OK!\n")
-
-	// Verify that degraded messages are ok
-	g.By("Check that the error is reported properly in the MCP")
-	nodeDegradedCondition := mcp.GetConditionByType("NodeDegraded")
-
-	nodeDegradedConditionJSON := JSON(nodeDegradedCondition)
-
-	nodeDegradedStatus := nodeDegradedConditionJSON.Get("status").ToString()
-	nodeDegradedMessage := nodeDegradedConditionJSON.Get("message").ToString()
-	nodeDegradedReason := nodeDegradedConditionJSON.Get("reason").ToString()
-
-	o.ExpectWithOffset(1, nodeDegradedStatus).Should(o.Equal(expectedNDStatus),
-		"'worker' MCP should report degraded status in the NodeDegraded condition: %s", nodeDegradedCondition)
-	o.ExpectWithOffset(1, nodeDegradedMessage).Should(o.MatchRegexp(expectedNDMessage),
-		"'worker' MCP is not reporting the expected message in the NodeDegraded condition: %s", nodeDegradedCondition)
-	o.ExpectWithOffset(1, nodeDegradedReason).Should(o.MatchRegexp(expectedNDReason),
-		"'worker' MCP is not reporting the expected reason in the NodeDegraded condition: %s", nodeDegradedCondition)
-	logger.Infof("OK!\n")
-
-	// Recover from error
-	g.By("Restore the original status and recover from the error")
-	logger.Infof("Deleting MC")
-	layeringMC.deleteNoWait(oc)
-
-	logger.Infof("Restoring annotations in degraded nodes")
-	degradedNodes, err := NewNodeList(oc.AsAdmin()).GetAllDegraded()
-	o.ExpectWithOffset(1, err).ShouldNot(o.HaveOccurred(),
-		"Where was an error trying to get the list of the Degraded nodes")
-	for _, degradedNode := range degradedNodes {
-		logger.Infof("Recovering from errors in node: %s", degradedNode)
-		err := degradedNode.RestoreDesiredConfig()
-		o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(),
-			"Error restoring the desiredConfig annotation in node %s", degradedNode.GetName())
-	}
-
-	o.Eventually(mcp.pollDegradedStatus(), "10m", "30s").Should(o.Equal("False"),
-		"The 'worker' MCP should not be degraded once the wrong MC is deleted and the node annotations are restored. But it is degraded.")
-
-	mcp.waitForComplete()
-
-	logger.Infof("OK!\n")
+	validateMcpNodeDegraded(layeringMC, mcp, expectedNDMessage, expectedNDReason)
 
 }
 
