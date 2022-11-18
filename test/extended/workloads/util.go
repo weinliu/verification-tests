@@ -536,6 +536,11 @@ func (registry *registry) createregistry(oc *exutil.CLI) serviceInfo {
 		e2e.Failf("private registry pod is not running even afer waiting for about 3 minutes")
 	}
 
+	e2e.Logf("Create the pod to use curl command check the route available")
+	err = oc.Run("run").Args("podforcurl", "--image=quay.io/openshifttest/base-fedora@sha256:8962182b4bfc7ee362726ad66871334587e7e5695bec3d7cfc3acbca7a4d309c", "-n", registry.namespace, "--command", "--", "/bin/sleep", "1200").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	checkPodStatus(oc, "run="+"podforcurl", registry.namespace, "Running")
+
 	e2e.Logf("Get the service info of the registry")
 	regSvcIP, err := oc.AsAdmin().Run("get").Args("svc", "registry", "-n", registry.namespace, "-o=jsonpath={.spec.clusterIP}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -545,6 +550,17 @@ func (registry *registry) createregistry(oc *exutil.CLI) serviceInfo {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	regRoute, err := oc.AsAdmin().Run("get").Args("route", "my-route", "-n", registry.namespace, "-o=jsonpath={.spec.host}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Check the route of registry available")
+	waitErr := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		err := oc.Run("exec").Args("po/podforcurl", "--", "curl", "-v", "https://"+regRoute, "-I", "-k").Execute()
+		if err != nil {
+			e2e.Logf("curl is not yet resolving, retrying...")
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the route is not reachable"))
+
 	regSvcURL := regSvcIP + ":" + regSvcPort
 	svc := serviceInfo{
 		serviceIP:   regSvcIP,
