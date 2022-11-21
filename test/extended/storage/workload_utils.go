@@ -95,7 +95,7 @@ func setPodMountPath(mountPath string) podOption {
 	}
 }
 
-//  Create a new customized pod object
+// Create a new customized pod object
 func newPod(opts ...podOption) pod {
 	defaultPod := pod{
 		name:       "mypod-" + getRandomString(),
@@ -130,6 +130,15 @@ func (pod *pod) createWithExtraParameters(oc *exutil.CLI, extraParameters map[st
 		pod.namespace = oc.Namespace()
 	}
 	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "PODNAME="+pod.name, "PODNAMESPACE="+pod.namespace, "PVCNAME="+pod.pvcname, "PODIMAGE="+pod.image, "VOLUMETYPE="+pod.volumeType, "PATHTYPE="+pod.pathType, "PODMOUNTPATH="+pod.mountPath)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Create new pod with multi extra parameters
+func (pod *pod) createWithMultiExtraParameters(oc *exutil.CLI, jsonPathsAndActions []map[string]string, multiExtraParameters []map[string]interface{}) {
+	if pod.namespace == "" {
+		pod.namespace = oc.Namespace()
+	}
+	err := applyResourceFromTemplateWithMultiExtraParameters(oc, jsonPathsAndActions, multiExtraParameters, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "PODNAME="+pod.name, "PODNAMESPACE="+pod.namespace, "PVCNAME="+pod.pvcname, "PODIMAGE="+pod.image, "VOLUMETYPE="+pod.volumeType, "PATHTYPE="+pod.pathType, "PODMOUNTPATH="+pod.mountPath)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -205,26 +214,32 @@ func (pod *pod) createWithNodeAffinity(oc *exutil.CLI, key string, operator stri
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Delete the pod
+// Delete the pod
 func (pod *pod) delete(oc *exutil.CLI) {
 	err := oc.WithoutNamespace().Run("delete").Args("pod", pod.name, "-n", pod.namespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Force delete the pod
+// Force delete the pod
 func (pod *pod) forceDelete(oc *exutil.CLI) {
 	err := oc.WithoutNamespace().Run("delete").Args("pod", pod.name, "-n", pod.namespace, "--force", "--grace-period=0").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Delete the pod use kubeadmin
+// Delete the pod use kubeadmin
 func (pod *pod) deleteAsAdmin(oc *exutil.CLI) {
 	oc.WithoutNamespace().AsAdmin().Run("delete").Args("pod", pod.name, "-n", pod.namespace, "--ignore-not-found").Execute()
 }
 
-//  Pod exec the bash CLI
+// Pod exec the bash CLI
 func (pod *pod) execCommand(oc *exutil.CLI, command string) (string, error) {
 	return execCommandInSpecificPod(oc, pod.namespace, pod.name, command)
+}
+
+// Pod exec the bash CLI in specific container
+func (pod *pod) execCommandInSpecifiedContainer(oc *exutil.CLI, containerName string, command string) (string, error) {
+	finalArgs := []string{"-n", pod.namespace, pod.name, "-c", containerName, "--", "/bin/sh", "-c", command}
+	return oc.WithoutNamespace().Run("exec").Args(finalArgs...).Output()
 }
 
 // Pod exec the bash CLI with admin
@@ -239,7 +254,7 @@ func (pod *pod) execCommandAsAdmin(oc *exutil.CLI, command string) (string, erro
 	return msg, nil
 }
 
-//  Check the pod mounted filesystem type volume could write data
+// Check the pod mounted filesystem type volume could write data
 func (pod *pod) checkMountedVolumeCouldWriteData(oc *exutil.CLI, checkFlag bool) {
 	_, err := execCommandInSpecificPod(oc, pod.namespace, pod.name, "echo \"storage test\" >"+pod.mountPath+"/testfile")
 	o.Expect(err == nil).Should(o.Equal(checkFlag))
@@ -249,13 +264,13 @@ func (pod *pod) checkMountedVolumeCouldWriteData(oc *exutil.CLI, checkFlag bool)
 	}
 }
 
-//  Check the pod mounted volume could read and write
+// Check the pod mounted volume could read and write
 func (pod *pod) checkMountedVolumeCouldRW(oc *exutil.CLI) {
 	pod.checkMountedVolumeCouldWriteData(oc, true)
 	pod.checkMountedVolumeDataExist(oc, true)
 }
 
-//  Check the pod mounted volume origin wrote data 'testfile' exist or not
+// Check the pod mounted volume origin wrote data 'testfile' exist or not
 func (pod *pod) checkMountedVolumeDataExist(oc *exutil.CLI, checkFlag bool) {
 	if checkFlag {
 		o.Expect(execCommandInSpecificPod(oc, pod.namespace, pod.name, "cat "+pod.mountPath+"/testfile")).To(o.ContainSubstring("storage test"))
@@ -266,14 +281,14 @@ func (pod *pod) checkMountedVolumeDataExist(oc *exutil.CLI, checkFlag bool) {
 	}
 }
 
-//  Check the pod mounted volume have exec right
+// Check the pod mounted volume have exec right
 func (pod *pod) checkMountedVolumeHaveExecRight(oc *exutil.CLI) {
 	_, err := execCommandInSpecificPod(oc, pod.namespace, pod.name, "cp hello "+pod.mountPath)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(execCommandInSpecificPod(oc, pod.namespace, pod.name, pod.mountPath+"/hello")).To(o.ContainSubstring("Hello OpenShift Storage"))
 }
 
-//  Check the pod mounted volume could write data into raw block volume
+// Check the pod mounted volume could write data into raw block volume
 func (pod *pod) writeDataIntoRawBlockVolume(oc *exutil.CLI) {
 	e2e.Logf("Writing the data into Raw Block volume")
 	_, err := pod.execCommand(oc, "/bin/dd  if=/dev/null of="+pod.mountPath+" bs=512 count=1")
@@ -282,7 +297,7 @@ func (pod *pod) writeDataIntoRawBlockVolume(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Check data in raw block volume could be read
+// Check data in raw block volume could be read
 func (pod *pod) checkDataInRawBlockVolume(oc *exutil.CLI) {
 	e2e.Logf("Check the data in Raw Block volume")
 	_, err := pod.execCommand(oc, "/bin/dd  if="+pod.mountPath+" of=/tmp/testfile bs=512 count=1")
@@ -330,28 +345,28 @@ func (pod *pod) getPodMountFsVolumeSize(oc *exutil.CLI) int64 {
 	return sizeInt64
 }
 
-//  Get the phase, status of specified pod
+// Get the phase, status of specified pod
 func getPodStatus(oc *exutil.CLI, namespace string, podName string) (string, error) {
 	podStatus, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.phase}").Output()
 	e2e.Logf("The pod  %s status in namespace %s is %q", podName, namespace, podStatus)
 	return podStatus, err
 }
 
-//  Check the pod status becomes ready, status is "Running", "Ready" or "Complete"
+// Check the pod status becomes ready, status is "Running", "Ready" or "Complete"
 func checkPodReady(oc *exutil.CLI, namespace string, podName string) (bool, error) {
 	podOutPut, err := getPodStatus(oc, namespace, podName)
 	status := []string{"Running", "Ready", "Complete"}
 	return contains(status, podOutPut), err
 }
 
-//  Get the detail info of specified pod
+// Get the detail info of specified pod
 func describePod(oc *exutil.CLI, namespace string, podName string) string {
 	podDescribe, err := oc.WithoutNamespace().Run("describe").Args("pod", "-n", namespace, podName).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return podDescribe
 }
 
-//  Waiting for the pod becomes ready, such as "Running", "Ready", "Complete"
+// Waiting for the pod becomes ready, such as "Running", "Ready", "Complete"
 func waitPodReady(oc *exutil.CLI, namespace string, podName string) {
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		status, err1 := checkPodReady(oc, namespace, podName)
@@ -373,9 +388,9 @@ func waitPodReady(oc *exutil.CLI, namespace string, podName string) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod %s not ready", podName))
 }
 
-//  Specified pod exec the bash CLI
-//  If failed execute will retry 3 times, because of the network instability or other action cause the pod recreate flake.
-//  Flake info : "error: unable to upgrade connection: container not found"  It maybe the container suddenly crashed.
+// Specified pod exec the bash CLI
+// If failed execute will retry 3 times, because of the network instability or other action cause the pod recreate flake.
+// Flake info : "error: unable to upgrade connection: container not found"  It maybe the container suddenly crashed.
 func execCommandInSpecificPod(oc *exutil.CLI, namespace string, podName string, command string) (output string, errInfo error) {
 	command1 := []string{"-n", namespace, podName, "--", "/bin/sh", "-c", command}
 	err := wait.Poll(5*time.Second, 15*time.Second, func() (bool, error) {
@@ -468,7 +483,7 @@ func checkPodStatusByLabel(oc *exutil.CLI, namespace string, selectorLabel strin
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod with label %s not ready", selectorLabel))
 }
 
-//  Specified pod exec the bash CLI
+// Specified pod exec the bash CLI
 func execCommandInSpecificPodWithLabel(oc *exutil.CLI, namespace string, labelName string, command string) (string, error) {
 	podsList, err := getPodsListByLabel(oc, namespace, labelName)
 	e2e.Logf("Pod List is %s.", podsList)
@@ -590,7 +605,7 @@ func setDeploymentMaxWaitReadyTime(maxWaitReadyTime time.Duration) deployOption 
 	}
 }
 
-//  Create a new customized Deployment object
+// Create a new customized Deployment object
 func newDeployment(opts ...deployOption) deployment {
 	defaultDeployment := deployment{
 		name:             "my-dep-" + getRandomString(),
@@ -891,7 +906,7 @@ func (dep *deployment) setVolumeAdd(oc *exutil.CLI, mPath string, volName string
 	dep.waitReady(oc)
 }
 
-//Function to delete the project
+// Function to delete the project
 func deleteProjectAsAdmin(oc *exutil.CLI, namespace string) {
 	_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", namespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -906,7 +921,7 @@ func deleteProjectAsAdmin(oc *exutil.CLI, namespace string) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The Project \"%s\" did not get deleted within the time period", namespace))
 }
 
-//Function to return the command combinations based on resourceName, namespace
+// Function to return the command combinations based on resourceName, namespace
 func getCommandCombinations(oc *exutil.CLI, resourceType string, resourceName string, namespace string) []string {
 	var command []string
 	if resourceName != "" && namespace != "" {
@@ -1054,7 +1069,7 @@ func setStsVolumeMode(volumemode string) statefulsetOption {
 	}
 }
 
-//  Create a new customized Statefulset object
+// Create a new customized Statefulset object
 func newSts(opts ...statefulsetOption) statefulset {
 	var defaultVolSize string
 	switch cloudProvider {
@@ -1099,13 +1114,13 @@ func (sts *statefulset) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Delete the Statefulset from the namespace
+// Delete the Statefulset from the namespace
 func (sts *statefulset) delete(oc *exutil.CLI) {
 	err := oc.WithoutNamespace().Run("delete").Args("sts", sts.name, "-n", sts.namespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Delete the Statefulset from the namespace
+// Delete the Statefulset from the namespace
 func (sts *statefulset) deleteAsAdmin(oc *exutil.CLI) {
 	oc.WithoutNamespace().AsAdmin().Run("delete").Args("sts", sts.name, "-n", sts.namespace, "--ignore-not-found").Execute()
 
@@ -1118,7 +1133,7 @@ func (sts *statefulset) getReplicasNum(oc *exutil.CLI) string {
 	return replicasNum
 }
 
-//  Describe Statefulset
+// Describe Statefulset
 func (sts *statefulset) describeSTS(oc *exutil.CLI) {
 	output, err := oc.WithoutNamespace().Run("describe").Args("sts", "-n", sts.namespace, sts.name).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -1185,7 +1200,7 @@ func (sts *statefulset) checkReady(oc *exutil.CLI) (bool, error) {
 	return strings.EqualFold(sts.replicasno, readyReplicas), nil
 }
 
-//  Check the pod mounted volume could read and write
+// Check the pod mounted volume could read and write
 func (sts *statefulset) checkMountedVolumeCouldRW(oc *exutil.CLI) {
 	podList, err := getPodsListByLabel(oc, sts.namespace, "app="+sts.applabel)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -1198,7 +1213,7 @@ func (sts *statefulset) checkMountedVolumeCouldRW(oc *exutil.CLI) {
 	}
 }
 
-//  Check the pod mounted volume have exec right
+// Check the pod mounted volume have exec right
 func (sts *statefulset) checkMountedVolumeHaveExecRight(oc *exutil.CLI) {
 	podList, err := getPodsListByLabel(oc, sts.namespace, "app="+sts.applabel)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -1209,7 +1224,7 @@ func (sts *statefulset) checkMountedVolumeHaveExecRight(oc *exutil.CLI) {
 	}
 }
 
-//  Check the pod mounted volume could write data into raw block volume
+// Check the pod mounted volume could write data into raw block volume
 func (sts *statefulset) writeDataIntoRawBlockVolume(oc *exutil.CLI) {
 	e2e.Logf("Write the data in Raw Block volume")
 	podList, err := getPodsListByLabel(oc, sts.namespace, "app="+sts.applabel)
@@ -1222,7 +1237,7 @@ func (sts *statefulset) writeDataIntoRawBlockVolume(oc *exutil.CLI) {
 	}
 }
 
-//  Check data into raw block volume could be read
+// Check data into raw block volume could be read
 func (sts *statefulset) checkDataIntoRawBlockVolume(oc *exutil.CLI) {
 	e2e.Logf("Check the data in Raw Block volume")
 	podList, err := getPodsListByLabel(oc, sts.namespace, "app="+sts.applabel)
@@ -1305,7 +1320,7 @@ func setDsVolumeTypePath(typepath string) daemonSetOption {
 	}
 }
 
-//  Create a new customized Daemonset object
+// Create a new customized Daemonset object
 func newDaemonSet(opts ...daemonSetOption) daemonset {
 	defaultDaemonSet := daemonset{
 		name:       "my-ds-" + getRandomString(),
@@ -1354,7 +1369,7 @@ func (ds *daemonset) deleteAsAdmin(oc *exutil.CLI) {
 	oc.WithoutNamespace().AsAdmin().Run("delete").Args("daemonset", ds.name, "-n", ds.namespace, "--ignore-not-found").Execute()
 }
 
-//  Describe Daemonset
+// Describe Daemonset
 func (ds *daemonset) describeDaemonSet(oc *exutil.CLI) {
 	output, err := oc.WithoutNamespace().Run("describe").Args("daemonset", "-n", ds.namespace, ds.name).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
