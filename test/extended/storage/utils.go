@@ -376,13 +376,25 @@ func strSliceContains(sl []string, element string) bool {
 	return isInMap(convertStrSliceToMap(sl), element)
 }
 
-// Function to check optional enabled capabilities
-func checkOptionalCapability(oc *exutil.CLI, component string) {
+// Check if component is listed in clusterversion.status.capabilities.knownCapabilities
+func isKnownCapability(oc *exutil.CLI, component string) bool {
+	knownCapabilities, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-o=jsonpath={.items[*].status.capabilities.knownCapabilities}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Cluster known capability parameters: %v\n", knownCapabilities)
+	return strings.Contains(knownCapabilities, component)
+}
+
+// Check if component is listed in clusterversion.status.capabilities.enabledCapabilities
+func isEnabledCapability(oc *exutil.CLI, component string) bool {
 	enabledCapabilities, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-o=jsonpath={.items[*].status.capabilities.enabledCapabilities}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("Cluster enabled capability parameters: %v\n", enabledCapabilities)
+	return strings.Contains(enabledCapabilities, component)
+}
 
-	if !strings.Contains(enabledCapabilities, component) {
+// Check if component is a disabled capability by knownCapabilities and enabledCapabilities list, skip if it is diabled.
+func checkOptionalCapability(oc *exutil.CLI, component string) {
+	if isKnownCapability(oc, component) && !isEnabledCapability(oc, component) {
 		g.Skip("Skip for " + component + " not enabled optional capability")
 	}
 }
