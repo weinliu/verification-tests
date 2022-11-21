@@ -47,7 +47,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		// author ikanse@redhat.com
 		g.It("CPaasrunOnly-Author:ikanse-Medium-36368-Elasticsearch nodes can scale down[Serial][Slow]", func() {
 			// create clusterlogging instance with elasticsearch node count set to 3
-			g.Skip("Known issue: https://issues.redhat.com/browse/LOG-2999")
 			g.By("deploy EFK pods")
 			sc, err := getStorageClassName(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
