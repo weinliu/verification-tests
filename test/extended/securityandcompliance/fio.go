@@ -96,7 +96,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	// It will cover test case: OCP-34388 & OCP-27760 , author: xiyuan@redhat.com
-	g.It("ARO-Author:xiyuan-Critical-34388-High-27760-check file-integrity-operator could report failure and persist the failure logs on to a ConfigMap [Serial]", func() {
+	g.It("ConnectedOnly-ARO-Author:xiyuan-Critical-34388-High-27760-check file-integrity-operator could report failure and persist the failure logs on to a ConfigMap [Serial]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
@@ -118,22 +118,27 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		o.Expect(err).NotTo(o.HaveOccurred())
 		fi1.checkFileintegrityStatus(oc, "running")
 
-		var pod = podModifyD
-		pod.namespace = oc.Namespace()
+		g.By("trigger fileintegrity failure on node")
+		var pod1, pod2 podModify = podModifyD, podModifyD
+		pod1.namespace = oc.Namespace()
 		nodeName := getOneRhcosWorkerNodeName(oc)
-		pod.name = "pod-modify"
-		pod.nodeName = nodeName
-		pod.args = "mkdir -p /hostroot/root/test"
+		pod1.name = "pod-modify"
+		pod1.nodeName = nodeName
+		var filePath = "/hostroot/root/test/test" + getRandomString()
+		pod1.args = "mkdir -p " + filePath
 		defer func() {
-			pod.name = "pod-recover"
-			pod.nodeName = nodeName
-			pod.args = "rm -rf /hostroot/root/test"
-			pod.doActionsOnNode(oc, "Succeeded", dr)
+			cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod1.name})
+			pod2.name = "pod-recover"
+			pod2.namespace = oc.Namespace()
+			pod2.nodeName = nodeName
+			pod2.args = "rm -rf " + filePath
+			pod2.doActionsOnNode(oc, "Succeeded", dr)
+			cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod2.name})
 		}()
-		pod.doActionsOnNode(oc, "Succeeded", dr)
+		pod1.doActionsOnNode(oc, "Succeeded", dr)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
 		cmName := fi1.getConfigmapFromFileintegritynodestatus(oc, nodeName)
-		fi1.getDataFromConfigmap(oc, cmName, "/hostroot/root/test")
+		fi1.getDataFromConfigmap(oc, cmName, filePath)
 	})
 
 	//author: xiyuan@redhat.com
@@ -351,29 +356,35 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.createFIOWithoutConfig(oc, itName, dr)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		var pod = podModifyD
-		pod.namespace = oc.Namespace()
+
+		g.By("trigger fileintegrity failure on node")
+		var pod1, pod2 podModify = podModifyD, podModifyD
+		pod1.namespace = oc.Namespace()
 		nodeName := getOneRhcosWorkerNodeName(oc)
-		pod.name = "pod-modify"
-		pod.nodeName = nodeName
-		pod.args = "mkdir -p /hostroot/root/test"
+		pod1.name = "pod-modify"
+		pod1.nodeName = nodeName
+		var filePath = "/hostroot/root/test/test" + getRandomString()
+		pod1.args = "mkdir -p " + filePath
 		defer func() {
-			pod.name = "pod-recover"
-			pod.nodeName = nodeName
-			pod.args = "rm -rf /hostroot/root/test"
-			pod.doActionsOnNode(oc, "Succeeded", dr)
+			cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod1.name})
+			pod2.name = "pod-recover"
+			pod2.namespace = oc.Namespace()
+			pod2.nodeName = nodeName
+			pod2.args = "rm -rf " + filePath
+			pod2.doActionsOnNode(oc, "Succeeded", dr)
+			cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod2.name})
 		}()
-		pod.doActionsOnNode(oc, "Succeeded", dr)
+		pod1.doActionsOnNode(oc, "Succeeded", dr)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
 		cmName := fi1.getConfigmapFromFileintegritynodestatus(oc, nodeName)
-		fi1.getDataFromConfigmap(oc, cmName, "/hostroot/root/test")
+		fi1.getDataFromConfigmap(oc, cmName, filePath)
 
 		g.By("delete and recreate the fileintegrity")
 		fi1.removeFileintegrity(oc, "deleted")
 		fi1.createFIOWithoutConfig(oc, itName, dr)
 		fi1.checkFileintegrityStatus(oc, "running")
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
-		fi1.getDataFromConfigmap(oc, cmName, "/hostroot/root/test")
+		fi1.getDataFromConfigmap(oc, cmName, filePath)
 
 		g.By("trigger reinit")
 		fi1.reinitFileintegrity(oc, "annotated")
@@ -613,7 +624,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("ARO-Author:xiyuan-High-42026-aide config change will trigger a re-initialization of the aide database [Serial]", func() {
+	g.It("ConnectedOnly-ARO-Author:xiyuan-High-42026-aide config change will trigger a re-initialization of the aide database [Serial]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
@@ -635,6 +646,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.checkFileintegrityStatus(oc, "running")
 		fi1.reinitFileintegrity(oc, "annotated")
 		fi1.checkFileintegrityStatus(oc, "running")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		nodeName := getOneRhcosWorkerNodeName(oc)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Succeeded")
 
@@ -642,24 +654,32 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.configname = "myconf"
 		fi1.configkey = "aide-conf"
 		fi1.createConfigmapFromFile(oc, itName, dr, fi1.configname, fi1.configkey, configFile, "created")
-		fi1.checkConfigmapCreated(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, fi1.configname, ok, []string{"configmap", "-n", fi1.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		fi1.createFIOWithConfig(oc, itName, dr)
 		fi1.checkFileintegrityStatus(oc, "running")
-		var pod = podModifyD
-		pod.namespace = oc.Namespace()
-		pod.name = "pod-modify"
-		pod.nodeName = nodeName
-		pod.args = "mkdir -p /hostroot/root/test29782"
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("trigger fileintegrity failure on node")
+		var pod1, pod2 podModify = podModifyD, podModifyD
+		pod1.namespace = oc.Namespace()
+		pod1.name = "pod-modify"
+		pod1.nodeName = nodeName
+		var filePath = "/hostroot/root/test/test" + getRandomString()
+		pod1.args = "mkdir -p " + filePath
 		defer func() {
-			pod.name = "pod-recover"
-			pod.nodeName = nodeName
-			pod.args = "rm -rf /hostroot/root/test29782"
-			pod.doActionsOnNode(oc, "Succeeded", dr)
+			cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod1.name})
+			pod2.name = "pod-recover"
+			pod2.namespace = oc.Namespace()
+			pod2.nodeName = nodeName
+			pod2.args = "rm -rf " + filePath
+			pod2.doActionsOnNode(oc, "Succeeded", dr)
+			cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod2.name})
 		}()
-		pod.doActionsOnNode(oc, "Succeeded", dr)
+		pod1.doActionsOnNode(oc, "Succeeded", dr)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
 		cmName := fi1.getConfigmapFromFileintegritynodestatus(oc, nodeName)
-		fi1.getDataFromConfigmap(oc, cmName, "/hostroot/root/test29782")
+		fi1.getDataFromConfigmap(oc, cmName, filePath)
+
 		g.By("trigger reinit by applying aide config")
 		fi1.configname = "myconf1"
 		fi1.configkey = "aide-conf1"
@@ -668,11 +688,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		fi1.createFIOWithConfig(oc, itName, dr)
 		fi1.checkFileintegrityStatus(oc, "running")
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
-		fi1.expectedStringNotExistInConfigmap(oc, cmName, "/hostroot/root/test29782")
+		fi1.expectedStringNotExistInConfigmap(oc, cmName, filePath)
 	})
 
 	//author: pdhamdhe@redhat.com
-	g.It("ARO-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-High-29782-check md5 algorithm could not work for a fips enabled cluster while working well for a fips disabled cluster [Serial][Slow]", func() {
+	g.It("ConnectedOnly-ARO-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-High-29782-check md5 algorithm could not work for a fips enabled cluster while working well for a fips disabled cluster [Serial][Slow]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
@@ -706,26 +726,32 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 			fi1.checkFileintegritynodestatus(oc, nodeName, "Succeeded")
 			var podName = fi1.getOneFioPodName(oc)
 			fi1.checkKeywordExistInLog(oc, podName, "running aide check")
-			var pod = podModifyD
-			pod.namespace = oc.Namespace()
-			pod.name = "pod-modify"
-			pod.nodeName = nodeName
-			pod.args = "echo \"testAAAAAAAAA\" >> /hostroot/etc/kubernetes/cloud.conf"
+
+			g.By("Check the md5 algorithm for fips disabled cluster")
+			var pod1, pod2 podModify = podModifyD, podModifyD
+			pod1.namespace = oc.Namespace()
+			pod1.name = "pod-modify"
+			pod1.nodeName = nodeName
+			var filePath = "/hostroot/etc/kubernetes/cloud.conf"
+			pod1.args = "echo \"testAAAAAAAAA\" >>" + filePath
 			defer func() {
-				pod.name = "pod-recover"
-				pod.nodeName = nodeName
-				pod.args = "sed -i '/testAAAAAAAAA/d' /hostroot/etc/kubernetes/cloud.conf"
-				pod.doActionsOnNode(oc, "Succeeded", dr)
+				cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod1.name})
+				pod2.name = "pod-recover"
+				pod2.namespace = oc.Namespace()
+				pod2.nodeName = nodeName
+				pod2.args = "sed -i '/testAAAAAAAAA/d' " + filePath
+				pod2.doActionsOnNode(oc, "Succeeded", dr)
+				cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod2.name})
 			}()
-			pod.doActionsOnNode(oc, "Succeeded", dr)
+			pod1.doActionsOnNode(oc, "Succeeded", dr)
 			fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
 			cmName := fi1.getConfigmapFromFileintegritynodestatus(oc, nodeName)
-			fi1.getDataFromConfigmap(oc, cmName, "/hostroot/etc/kubernetes/cloud.conf")
+			fi1.getDataFromConfigmap(oc, cmName, filePath)
 		}
 	})
 
 	//author: pdhamdhe@redhat.com
-	g.It("ARO-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-High-43136-Check FIO metrics and alerting [Serial][Slow]", func() {
+	g.It("ConnectedOnly-ARO-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-High-43136-Check FIO metrics and alerting [Serial][Slow]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
@@ -749,23 +775,30 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		g.By("Create fileintegrity object with default aide config..\n")
 		fi1.createFIOWithoutConfig(oc, itName, dr)
 		fi1.checkFileintegrityStatus(oc, "running")
+		// trigger reinit before checking fileintegritynodestatus, otherwise it could be Failed status
+		fi1.reinitFileintegrity(oc, "annotated")
+		fi1.checkFileintegrityStatus(oc, "running")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		nodeName := getOneRhcosWorkerNodeName(oc)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Succeeded")
 
-		g.By("Create file on one worker node...\n")
-		fi1.checkFileintegrityStatus(oc, "running")
-		var pod = podModifyD
-		pod.namespace = oc.Namespace()
-		pod.name = "pod-modify"
-		pod.nodeName = nodeName
-		pod.args = "mkdir -p /hostroot/root/test42026"
+		g.By("trigger fileintegrity failure on node")
+		var pod1, pod2 podModify = podModifyD, podModifyD
+		pod1.namespace = oc.Namespace()
+		pod1.name = "pod-modify"
+		pod1.nodeName = nodeName
+		var filePath = "/hostroot/root/test/test" + getRandomString()
+		pod1.args = "mkdir -p " + filePath
 		defer func() {
-			pod.name = "pod-recover"
-			pod.nodeName = nodeName
-			pod.args = "rm -rf /hostroot/root/test42026"
-			pod.doActionsOnNode(oc, "Succeeded", dr)
+			cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod1.name})
+			pod2.name = "pod-recover"
+			pod2.namespace = oc.Namespace()
+			pod2.nodeName = nodeName
+			pod2.args = "rm -rf " + filePath
+			pod2.doActionsOnNode(oc, "Succeeded", dr)
+			cleanupObjects(oc, objectTableRef{"pod", oc.Namespace(), pod2.name})
 		}()
-		pod.doActionsOnNode(oc, "Succeeded", dr)
+		pod1.doActionsOnNode(oc, "Succeeded", dr)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
 
 		metricsErr := []string{"file_integrity_operator_daemonset_update_total{operation=\"update\"} 1", "file_integrity_operator_node_failed{node=\"" + nodeName + "\"} 1",

@@ -2,6 +2,7 @@ package securityandcompliance
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -60,7 +61,6 @@ func createSecurityProfileOperator(oc *exutil.CLI, subD subscriptionDescription,
 	ogFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ogD.template, "-p", "NAME="+ogD.name, "NAMESPACE="+ogD.namespace, "-n", ogD.namespace).OutputToFile(getRandomString() + "og.json")
 	e2e.Logf("Created the operator-group yaml %s, %v", ogFile, err)
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", ogFile).Output()
-	e2e.Logf("err %v, msg %v", err, msg)
 
 	g.By("Create subscription for above catalogsource !!!")
 	subFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", subD.template, "-p", "SUBNAME="+subD.subName, "SUBNAMESPACE="+subD.namespace, "CHANNEL="+subD.channel, "APPROVAL="+subD.ipApproval,
@@ -89,7 +89,6 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 	g.By("Check the operator is AtLatestKnown !!!")
 	errCheck := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}").Output()
-		e2e.Logf("operator state %v, err %v", msg, err)
 		if strings.Compare(msg, "AtLatestKnown") == 0 {
 			return true, nil
 		}
@@ -99,7 +98,6 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 
 	g.By("Get csvName to check its finish !!!")
 	csvName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installedCSV}").Output()
-	e2e.Logf("csvName %v, err %v", csvName, err)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("Check the csv '" + csvName + "' has finished !!!")
@@ -111,14 +109,12 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 		}
 		return false, nil
 	})
-	e2e.Logf("csv %v status :  %v, err %v", csvName, msg, err)
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status in ns %v: %v %v", csvName, sub.namespace, msg, err))
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "--no-headers").Output()
 	return msg, err
 }
 
 func deleteNamespace(oc *exutil.CLI, namespace string) {
-	e2e.Logf("Start to delete namespace : %s", namespace)
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", namespace, "--ignore-not-found").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
@@ -127,8 +123,6 @@ func getWorkerCount(oc *exutil.CLI) int {
 	workerNodeDetails, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	nodeCount := int(strings.Count(workerNodeDetails, "Ready")) + int(strings.Count(workerNodeDetails, "NotReady"))
-	e2e.Logf("Worker node details are: %v", workerNodeDetails)
-	e2e.Logf("Worker node count is: %d", nodeCount)
 	return nodeCount
 }
 
@@ -136,15 +130,12 @@ func getNodeCount(oc *exutil.CLI) int {
 	RhcosNodeDetails, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=kubernetes.io/os=linux").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	rhcosCount := int(strings.Count(RhcosNodeDetails, "Ready")) + int(strings.Count(RhcosNodeDetails, "NotReady"))
-	e2e.Logf("rhcos node details are: %v", RhcosNodeDetails)
-	e2e.Logf("rhcos node count is: %d", rhcosCount)
 	return rhcosCount
 }
 
 func checkReadyPodCountOfDeployment(oc *exutil.CLI, name string, namespace string, readyCount int) {
 	err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 		rCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", name, "-n", namespace, "-o=jsonpath={.status.availableReplicas}").Output()
-		e2e.Logf("the availableReplicas of deployment %s : %v", name, rCount)
 		if strings.Compare(strconv.Itoa(readyCount), rCount) == 0 {
 			return true, nil
 		}
@@ -156,7 +147,6 @@ func checkReadyPodCountOfDeployment(oc *exutil.CLI, name string, namespace strin
 func checkReadyPodCountOfDaemonset(oc *exutil.CLI, name string, namespace string, readyCount int) {
 	err := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 		rCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", name, "-n", namespace, "-o=jsonpath={.status.numberReady}").Output()
-		e2e.Logf("the numberReady of daemonset %s : %v", name, rCount)
 		if strings.Compare(strconv.Itoa(readyCount), rCount) == 0 {
 			return true, nil
 		}
@@ -174,7 +164,6 @@ func (fi1 *fileintegrity) checkFileintegrityStatus(oc *exutil.CLI, expected stri
 	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", fi1.namespace, "-l app=aide-"+fi1.name,
 			"-o=jsonpath={.items[*].status.containerStatuses[*].state}").Output()
-		e2e.Logf("the result of checkFileintegrityStatus:%v", output)
 		if strings.Contains(output, expected) && (!(strings.Contains(strings.ToLower(output), "error"))) && (!(strings.Contains(strings.ToLower(output), "crashLoopbackOff"))) {
 			return true, nil
 		}
@@ -188,7 +177,6 @@ func (fi1 *fileintegrity) getConfigmapFromFileintegritynodestatus(oc *exutil.CLI
 	err := wait.Poll(5*time.Second, 150*time.Second, func() (bool, error) {
 		cmName, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fi1.name+"-"+nodeName,
 			"-o=jsonpath={.results[-1].resultConfigMapName}").Output()
-		e2e.Logf("the result of cmName:%v", cmName)
 		if strings.Contains(cmName, "failed") {
 			return true, nil
 		}
@@ -202,10 +190,9 @@ func (fi1 *fileintegrity) getConfigmapFromFileintegritynodestatus(oc *exutil.CLI
 }
 
 func (fi1 *fileintegrity) getDataFromConfigmap(oc *exutil.CLI, cmName string, expected string) {
-	e2e.Logf("the result of cmName:%v", cmName)
-	err := wait.Poll(5*time.Second, 150*time.Second, func() (bool, error) {
+	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		aideResult, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap/"+cmName, "-n", fi1.namespace, "-o=jsonpath={.data}").Output()
-		if strings.Contains(aideResult, expected) {
+		if matched, _ := regexp.MatchString(expected, aideResult); matched {
 			return true, nil
 		}
 		return false, nil
@@ -217,7 +204,6 @@ func getOneWorkerNodeName(oc *exutil.CLI) string {
 	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l node-role.kubernetes.io/worker=",
 		"-o=jsonpath={.items[0].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("the result of nodename:%v", nodeName)
 	return nodeName
 }
 
@@ -225,7 +211,6 @@ func getOneMasterNodeName(oc *exutil.CLI) string {
 	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l node-role.kubernetes.io/master=",
 		"-o=jsonpath={.items[0].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("the result of nodename:%v", nodeName)
 	return nodeName
 }
 
@@ -233,7 +218,6 @@ func (fi1 *fileintegrity) getOneFioPodName(oc *exutil.CLI) string {
 	fioPodName, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l file-integrity.openshift.io/pod=",
 		"-n", fi1.namespace, "-o=jsonpath={.items[0].metadata.name}").Output()
 	o.Expect(err1).NotTo(o.HaveOccurred())
-	e2e.Logf("the result of fioPodName:%v", fioPodName)
 	if strings.Compare(fioPodName, "") != 0 {
 		return fioPodName
 	}
@@ -244,7 +228,6 @@ func (fi1 *fileintegrity) checkKeywordNotExistInLog(oc *exutil.CLI, podName stri
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		logs, err1 := oc.AsAdmin().WithoutNamespace().Run("logs").Args(podName, "-n", fi1.namespace).Output()
 		o.Expect(err1).NotTo(o.HaveOccurred())
-		e2e.Logf("the result of logs:%v", logs)
 		if strings.Compare(logs, "") != 0 && !strings.Contains(logs, expected) {
 			return true, nil
 		}
@@ -257,9 +240,7 @@ func (fi1 *fileintegrity) checkKeywordExistInLog(oc *exutil.CLI, podName string,
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		logs, err1 := oc.AsAdmin().WithoutNamespace().Run("logs").Args("pod/"+podName, "-n", fi1.namespace).Output()
 		o.Expect(err1).NotTo(o.HaveOccurred())
-		e2e.Logf("the result of logs:%v", logs)
 		if strings.Contains(logs, expected) {
-			e2e.Logf("The pod '%s' logs include '%s'", podName, expected)
 			return true, nil
 		}
 		return false, nil
@@ -272,7 +253,6 @@ func (fi1 *fileintegrity) checkArgsInPod(oc *exutil.CLI, expected string) {
 		fioPodArgs, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l file-integrity.openshift.io/pod=",
 			"-n", fi1.namespace, "-o=jsonpath={.items[0].spec.containers[].args}").Output()
 		o.Expect(err1).NotTo(o.HaveOccurred())
-		e2e.Logf("the result of fioPodArgs: %v", fioPodArgs)
 		if strings.Contains(fioPodArgs, expected) {
 			return true, nil
 		}
@@ -282,36 +262,29 @@ func (fi1 *fileintegrity) checkArgsInPod(oc *exutil.CLI, expected string) {
 }
 
 func (pod *podModify) doActionsOnNode(oc *exutil.CLI, expected string, dr describerResrouce) {
-	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace,
-			"NODENAME="+pod.nodeName, "PARAC="+pod.args)
-		o.Expect(err1).NotTo(o.HaveOccurred())
-		podModifyresult, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", pod.namespace, pod.name, "-o=jsonpath={.status.phase}").Output()
-		e2e.Logf("the result of pod %s: %v", pod.name, podModifyresult)
-		if strings.Contains(podModifyresult, expected) {
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("phase of pod is not expected %s", expected))
+	err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-n", pod.namespace, "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace,
+		"NODENAME="+pod.nodeName, "PARAC="+pod.args)
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	newCheck("expect", asAdmin, withoutNamespace, contain, expected, ok, []string{"pod", "-n", pod.namespace, pod.name,
+		"-o=jsonpath={.status.phase}"}).check(oc)
 }
 
 func (fi1 *fileintegrity) createFIOWithoutConfig(oc *exutil.CLI, itName string, dr describerResrouce) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", fi1.template, "-p", "NAME="+fi1.name, "NAMESPACE="+fi1.namespace,
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-n", fi1.namespace, "-f", fi1.template, "-p", "NAME="+fi1.name, "NAMESPACE="+fi1.namespace,
 		"GRACEPERIOD="+strconv.Itoa(fi1.graceperiod), "DEBUG="+strconv.FormatBool(fi1.debug), "NODESELECTORKEY="+fi1.nodeselectorkey, "NODESELECTORVALUE="+fi1.nodeselectorvalue)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	dr.getIr(itName).add(newResource(oc, "fileintegrity", fi1.name, requireNS, fi1.namespace))
 }
 
 func (fi1 *fileintegrity) createFIOWithoutKeyword(oc *exutil.CLI, itName string, dr describerResrouce, keyword string) {
-	err := applyResourceFromTemplateWithoutKeyword(oc, keyword, "--ignore-unknown-parameters=true", "-f", fi1.template, "-p", "NAME="+fi1.name, "NAMESPACE="+fi1.namespace,
+	err := applyResourceFromTemplateWithoutKeyword(oc, keyword, "--ignore-unknown-parameters=true", "-n", fi1.namespace, "-f", fi1.template, "-p", "NAME="+fi1.name, "NAMESPACE="+fi1.namespace,
 		"CONFNAME="+fi1.configname, "CONFKEY="+fi1.configkey, "DEBUG="+strconv.FormatBool(fi1.debug), "NODESELECTORKEY="+fi1.nodeselectorkey, "NODESELECTORVALUE="+fi1.nodeselectorvalue)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	dr.getIr(itName).add(newResource(oc, "fileintegrity", fi1.name, requireNS, fi1.namespace))
 }
 
 func (fi1 *fileintegrity) createFIOWithConfig(oc *exutil.CLI, itName string, dr describerResrouce) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", fi1.template, "-p", "NAME="+fi1.name, "NAMESPACE="+fi1.namespace,
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-n", fi1.namespace, "-f", fi1.template, "-p", "NAME="+fi1.name, "NAMESPACE="+fi1.namespace,
 		"GRACEPERIOD="+strconv.Itoa(fi1.graceperiod), "DEBUG="+strconv.FormatBool(fi1.debug), "CONFNAME="+fi1.configname, "CONFKEY="+fi1.configkey,
 		"NODESELECTORKEY="+fi1.nodeselectorkey, "NODESELECTORVALUE="+fi1.nodeselectorvalue)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -322,7 +295,6 @@ func (sub *subscriptionDescription) checkPodFioStatus(oc *exutil.CLI, expected s
 	err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", sub.namespace, "-l", "name=file-integrity-operator",
 			"-o=jsonpath={.items[*].status.containerStatuses[*].state}").Output()
-		e2e.Logf("the result of checkPodFioStatus:%v", output)
 		if strings.Contains(strings.ToLower(output), expected) {
 			return true, nil
 		}
@@ -334,7 +306,6 @@ func (sub *subscriptionDescription) checkPodFioStatus(oc *exutil.CLI, expected s
 func (fi1 *fileintegrity) createConfigmapFromFile(oc *exutil.CLI, itName string, dr describerResrouce, cmName string, aideKey string, aideFile string, expected string) (bool, error) {
 	output, _ := oc.AsAdmin().WithoutNamespace().Run("create").Args("configmap", cmName, "-n", fi1.namespace, "--from-file="+aideKey+"="+aideFile).Output()
 	dr.getIr(itName).add(newResource(oc, "configmap", cmName, requireNS, fi1.namespace))
-	e2e.Logf("the result of checkPodFioStatus:%v", output)
 	if strings.Contains(strings.ToLower(output), expected) {
 		return true, nil
 	}
@@ -344,7 +315,6 @@ func (fi1 *fileintegrity) createConfigmapFromFile(oc *exutil.CLI, itName string,
 func (fi1 *fileintegrity) checkConfigmapCreated(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", fi1.configname, "-n", fi1.namespace).Output()
-		e2e.Logf("the result of checkConfigmapCreated:%v", output)
 		if strings.Contains(output, fi1.configname) {
 			return true, nil
 		}
@@ -356,15 +326,10 @@ func (fi1 *fileintegrity) checkConfigmapCreated(oc *exutil.CLI) {
 func (fi1 *fileintegrity) checkFileintegritynodestatus(oc *exutil.CLI, nodeName string, expected string) {
 	err := wait.Poll(5*time.Second, 150*time.Second, func() (bool, error) {
 		fileintegrityName := fi1.name + "-" + nodeName
-		fileintegritynodestatusOut, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", fileintegrityName, "-n", fi1.namespace).Output()
-		e2e.Logf("the result of fileintegritynodestatusOut:%v", fileintegritynodestatusOut)
-		if !strings.Contains(fileintegritynodestatusOut, fileintegrityName) || err1 != nil {
-			return false, nil
-		}
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fileintegrityName,
 			"-o=jsonpath={.lastResult.condition}").Output()
-		e2e.Logf("the result of checkFileintegritynodestatus:%v", output)
-		if strings.Contains(output, expected) {
+		matched, _ := regexp.MatchString(expected, output)
+		if matched {
 			return true, nil
 		}
 		return false, nil
@@ -375,12 +340,9 @@ func (fi1 *fileintegrity) checkFileintegritynodestatus(oc *exutil.CLI, nodeName 
 func (fi1 *fileintegrity) checkOnlyOneDaemonset(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 45*time.Second, func() (bool, error) {
 		daemonsetPodNumber, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", "-n", fi1.namespace, "-o=jsonpath={.items[].status.numberReady}").Output()
-		e2e.Logf("the result of daemonsetPodNumber:%v", daemonsetPodNumber)
 		podNameString, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l file-integrity.openshift.io/pod=", "-n", fi1.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
-		e2e.Logf("the result of podNameString:%v", podNameString)
 		intDaemonsetPodNumber, _ := strconv.Atoi(daemonsetPodNumber)
 		intPodNumber := len(strings.Fields(podNameString))
-		e2e.Logf("the result of intPodNumber:%v", intPodNumber)
 		if intPodNumber == intDaemonsetPodNumber {
 			return true, nil
 		}
@@ -392,7 +354,6 @@ func (fi1 *fileintegrity) checkOnlyOneDaemonset(oc *exutil.CLI) {
 func (fi1 *fileintegrity) removeFileintegrity(oc *exutil.CLI, expected string) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("delete").Args("fileintegrity", fi1.name, "-n", fi1.namespace).Output()
-		e2e.Logf("the result of removeFileintegrity:%v", output)
 		if strings.Contains(output, expected) {
 			return true, nil
 		}
@@ -405,7 +366,6 @@ func (fi1 *fileintegrity) removeFileintegrity(oc *exutil.CLI, expected string) {
 func (fi1 *fileintegrity) reinitFileintegrity(oc *exutil.CLI, expected string) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("fileintegrity", fi1.name, "-n", fi1.namespace, "file-integrity.openshift.io/re-init=").Output()
-		e2e.Logf("the result of reinitFileintegrity:%v", output)
 		if strings.Contains(output, expected) {
 			return true, nil
 		}
@@ -419,13 +379,10 @@ func (fi1 *fileintegrity) getDetailedDataFromFileintegritynodestatus(oc *exutil.
 	err := wait.Poll(5*time.Second, 150*time.Second, func() (bool, error) {
 		filesAdded, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fi1.name+"-"+nodeName,
 			"-o=jsonpath={.results[-1].filesAdded}").Output()
-		e2e.Logf("the result of filesAdded in Fileintegritynodestatus:%v", filesAdded)
 		filesChanged, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fi1.name+"-"+nodeName,
 			"-o=jsonpath={.results[-1].filesChanged}").Output()
-		e2e.Logf("the result of filesChanged in Fileintegritynodestatus:%v", filesChanged)
 		filesRemoved, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fi1.name+"-"+nodeName,
 			"-o=jsonpath={.results[-1].filesRemoved}").Output()
-		e2e.Logf("the result of filesRemoved in Fileintegritynodestatus:%v", filesRemoved)
 		if filesAdded == "" && filesChanged == "" && filesRemoved == "" {
 			return false, nil
 		}
@@ -452,20 +409,16 @@ func (fi1 *fileintegrity) getDetailedDataFromFileintegritynodestatus(oc *exutil.
 
 func (fi1 *fileintegrity) getDetailedDataFromConfigmap(oc *exutil.CLI, cmName string) (int, int, int) {
 	var intFilesAdded, intFilesChanged, intFilesRemoved int
-	e2e.Logf("the result of cmName:%v", cmName)
 	err := wait.Poll(5*time.Second, 150*time.Second, func() (bool, error) {
 		annotations, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-n", fi1.namespace,
 			"-o=jsonpath={.metadata.annotations}").Output()
 		e2e.Logf("the result of annotations in configmap:%v", annotations)
 		filesAdded, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-n", fi1.namespace,
 			"-o=jsonpath={.metadata.annotations.file-integrity\\.openshift\\.io/files-added}").Output()
-		e2e.Logf("the result of filesAdded in configmap:%v", filesAdded)
 		filesChanged, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-n", fi1.namespace,
 			"-o=jsonpath={.metadata.annotations.file-integrity\\.openshift\\.io/files-changed}").Output()
-		e2e.Logf("the result of filesChanged in configmap:%v", filesChanged)
 		filesRemoved, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-n", fi1.namespace,
 			"-o=jsonpath={.metadata.annotations.file-integrity\\.openshift\\.io/files-removed}").Output()
-		e2e.Logf("the result of filesRemoved in configmap:%v", filesRemoved)
 		if (filesAdded == "" && filesChanged == "" && filesRemoved == "") || (filesAdded == "0" && filesChanged == "0" && filesRemoved == "0") {
 			return false, nil
 		}
@@ -500,8 +453,6 @@ func (fi1 *fileintegrity) checkPodNumerLessThanNodeNumber(oc *exutil.CLI, label 
 	err := wait.Poll(5*time.Second, 100*time.Second, func() (bool, error) {
 		intNodeNumber := getNodeNumberPerLabel(oc, label)
 		daemonsetPodNumber, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", "-n", fi1.namespace, "-o=jsonpath={.items[].status.numberReady}").Output()
-		e2e.Logf("the result of intNodeNumber:%v", intNodeNumber)
-		e2e.Logf("the result of daemonsetPodNumber:%v", daemonsetPodNumber)
 		intDaemonsetPodNumber, _ := strconv.Atoi(daemonsetPodNumber)
 		if intNodeNumber != intDaemonsetPodNumber+1 {
 			return false, nil
@@ -516,8 +467,6 @@ func (fi1 *fileintegrity) checkPodNumerEqualNodeNumber(oc *exutil.CLI, label str
 		intNodeNumber := getNodeNumberPerLabel(oc, label)
 		daemonsetPodNumber, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("daemonset", "-n", fi1.namespace, "-o=jsonpath={.items[].status.numberReady}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("the result of intNodeNumber:%v", intNodeNumber)
-		e2e.Logf("the result of daemonsetPodNumber:%v", daemonsetPodNumber)
 		intDaemonsetPodNumber, _ := strconv.Atoi(daemonsetPodNumber)
 		if intNodeNumber != intDaemonsetPodNumber {
 			return false, nil
@@ -532,14 +481,12 @@ func (fi1 *fileintegrity) recreateFileintegrity(oc *exutil.CLI) error {
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
 		output, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegrity", fi1.name, "-n", fi1.namespace, "-ojson").OutputToFile(getRandomString() + "isc-config.json")
 		if err1 != nil {
-			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
 		}
 		configFile = output
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fileintegrity %s is not got", fi1.name))
-	e2e.Logf("the file of resource is %s", configFile)
 	fi1.removeFileintegrity(oc, "deleted")
 	return oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
 }
@@ -550,7 +497,6 @@ func setLabelToSpecificNode(oc *exutil.CLI, nodeName string, label string) {
 }
 
 func (fi1 *fileintegrity) expectedStringNotExistInConfigmap(oc *exutil.CLI, cmName string, expected string) {
-	e2e.Logf("the result of cmName:%v", cmName)
 	err := wait.Poll(5*time.Second, 150*time.Second, func() (bool, error) {
 		aideResult, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap/"+cmName, "-n", fi1.namespace, "-o=jsonpath={.data}").Output()
 		if !strings.Contains(aideResult, expected) {
@@ -568,7 +514,6 @@ func (fi1 *fileintegrity) checkDBBackupResult(oc *exutil.CLI, nodeName string) {
 			return false, nil
 		}
 		if strings.Contains(dbBackupResult, "aide.db.gz.backup") && strings.Contains(dbBackupResult, "aide.log.backup") {
-			e2e.Logf("the DB backup result for node %s is: %s", nodeName, dbBackupResult)
 			return true, nil
 		}
 		return false, nil

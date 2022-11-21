@@ -950,9 +950,10 @@ func getSAToken(oc *exutil.CLI, account string, namespace string) string {
 
 func checkMetric(oc *exutil.CLI, metricString []string, namespace string, operator string) {
 	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
-	err := wait.Poll(3*time.Second, 45*time.Second, func() (bool, error) {
+	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
 		metrics, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-ks", "-H", fmt.Sprintf("Authorization: Bearer %v", token), "https://metrics."+namespace+".svc:8585/metrics-"+operator).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The metrics %v is: ", metrics)
 		for _, metricStr := range metricString {
 			matched, err := regexp.MatchString(metricStr, metrics)
 			if err != nil || !matched {
