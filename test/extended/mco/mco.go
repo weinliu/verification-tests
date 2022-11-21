@@ -2531,6 +2531,25 @@ nulla pariatur.`
 			"usbguard rpm should be installed in node %s", workerNode.GetName())
 		logger.Infof("OK!\n")
 	})
+	g.It("Author:sregidor-NonPreRelease-Medium-56123-Invalid extensions should degrade the machine config pool [Disruptive]", func() {
+		var (
+			validExtension   = "usbguard"
+			invalidExtension = "zsh"
+			mcName           = "mco-tc-56123-invalid-extension"
+			mcp              = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+
+			expectedNDMessage = regexp.QuoteMeta(fmt.Sprintf("invalid extensions found: [%s]", invalidExtension)) // quotemeta to scape regex characters
+			expectedNDReason  = "1 nodes are reporting degraded status on sync"
+		)
+
+		g.By("Create a MC with invalid extensions")
+		mc := MachineConfig{name: mcName, pool: MachineConfigPoolWorker, skipWaitForMcp: true,
+			Template:   *NewMCOTemplate(oc, GenericMCTemplate),
+			parameters: []string{fmt.Sprintf(`EXTENSIONS=["%s", "%s"]`, validExtension, invalidExtension)}}
+
+		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason)
+
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching xpectedNDStatus, expectedNDMessage, expectedNDReason

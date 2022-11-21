@@ -12,6 +12,7 @@ objects:
     spec:
       kernelArguments: ${{KERNEL_ARGS}}
       osImageURL: ${OS_IMAGE}
+      extensions: ${{EXTENSIONS}}
       config:
         ignition:
           version: ${IGNITION_VERSION}
@@ -29,6 +30,8 @@ parameters:
   - name: UNITS
     value: "[]"
   - name: KERNEL_ARGS
+    value: "[]"
+  - name: EXTENSIONS
     value: "[]"
   - name: OS_IMAGE
     value: ""
