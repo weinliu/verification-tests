@@ -490,9 +490,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch 
 		WaitForECKPodsToBeReady(oc, cloNS)
 
 		g.By("update log store configurations to make ES pods do rolling-upgrade")
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("cl/instance", "-n", cloNS, "-p", "{\"spec\": {\"logStore\": {\"elasticsearch\": {\"resources\": {\"requests\": {\"memory\": \"2Gi\"}}}}}}", "--type=merge").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("cl/instance", "-n", cloNS, "-p", "{\"spec\": {\"logStore\": {\"elasticsearch\": {\"resources\": {\"requests\": {\"memory\": \"3Gi\"}}}}}}", "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		checkResource(oc, true, true, "2Gi", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.spec.nodeSpec.resources.requests.memory}"})
+		checkResource(oc, true, true, "3Gi", []string{"elasticsearches.logging.openshift.io", "elasticsearch", "-n", cloNS, "-ojsonpath={.spec.nodeSpec.resources.requests.memory}"})
 
 		g.By("wait for ES pods complete rolling upgrade, the ES cluster health should be green")
 		// make sure the upgrade starts

@@ -510,7 +510,7 @@ func deleteNamespace(oc *exutil.CLI, ns string) {
 // WaitForIMCronJobToAppear checks if the cronjob exists or not
 func WaitForIMCronJobToAppear(oc *exutil.CLI, ns string, name string) {
 	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
-		_, err = oc.AdminKubeClient().BatchV1beta1().CronJobs(ns).Get(context.Background(), name, metav1.GetOptions{})
+		_, err = oc.AdminKubeClient().BatchV1().CronJobs(ns).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				e2e.Logf("Waiting for availability of cronjob\n")
