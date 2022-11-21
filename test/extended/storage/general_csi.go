@@ -2701,6 +2701,95 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 	})
 
+	// author: ropatil@redhat.com
+	// OCP-51207 - [CSI Driver][Dynamic PV][FileSystem] AllowedTopologies should fail to schedule a pod on new zone
+	// known issue for Azure platform: northcentralUS region, zones are null
+	g.It("ROSA-OSD_CCS-ARO-Author:ropatil-Medium-51207-[CSI Driver][Dynamic PV][FileSystem] AllowedTopologies should fail to schedule a pod on new zone", func() {
+		// Get 2 Schedulable worker of different zones
+		myWorkers := getTwoSchedulableWorkersWithDifferentAzs(oc)
+		if len(myWorkers) < 2 {
+			g.Skip("Have less than 2 zones - skipping test ... ")
+		}
+
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "vpc.block.csi.ibm.io"}
+		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			deploymentTemplate   = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+		)
+
+		// Set up a specified project share for all the phases
+		g.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+
+		for _, provisioner := range supportProvisioners {
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			topologyKey := map[string]string{
+				"aws":          "topology.ebs.csi.aws.com/zone",
+				"azure":        "topology.disk.csi.azure.com/zone",
+				"alibabacloud": "topology.diskplugin.csi.alibabacloud.com/zone",
+				"ibmcloud":     "failure-domain.beta.kubernetes.io/zone",
+				"gcp":          "topology.gke.io/zone",
+			}
+
+			labelExpressions := []map[string]interface{}{
+				{"key": topologyKey[cloudProvider], "values": []string{myWorkers[0].avaiableZone}},
+			}
+			matchLabelExpressions := []map[string]interface{}{
+				{"matchLabelExpressions": labelExpressions},
+			}
+			extraParameters := map[string]interface{}{
+				"allowedTopologies": matchLabelExpressions,
+			}
+
+			// Set the resource definition
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
+			g.By("# Create csi storageclass with allowedTopologies")
+			storageClass.provisioner = provisioner
+			storageClass.createWithExtraParameters(oc, extraParameters)
+			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+			g.By("# Create a pvc with the csi storageclass")
+			pvc.create(oc)
+			defer pvc.delete(oc)
+
+			g.By("# Create deployment with new zone")
+			dep.createWithNodeSelector(oc, `topology\.kubernetes\.io\/zone`, myWorkers[1].avaiableZone)
+			defer dep.deleteAsAdmin(oc)
+
+			g.By("# Check for dep remain in Pending state")
+			podsList, err := getPodsListByLabel(oc, oc.Namespace(), "app="+dep.applabel)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Consistently(func() string {
+				podStatus, _ := getPodStatus(oc, dep.namespace, podsList[0])
+				return podStatus
+			}, 60*time.Second, 5*time.Second).Should(o.Equal("Pending"))
+			output := describePod(oc, dep.namespace, podsList[0])
+			o.Expect(output).Should(o.ContainSubstring("didn't find available persistent volumes to bind"))
+
+			g.By("# Check for pvc remain in Pending state with WaitForPodScheduled event")
+			pvcState, err := pvc.getStatus(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(pvcState).Should(o.Equal("Pending"))
+			output, _ = describePersistentVolumeClaim(oc, pvc.namespace, pvc.name)
+			o.Expect(output).Should(o.ContainSubstring("WaitForPodScheduled"))
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
 	//author: chaoyang@redhat.com
 	//OCP-27733 - [CSI Driver] [Snapshot] [Retain deletionPolicy] [Pre-provison] could re-used snapshotcontent after the snapshot/snapshotcontent deletion
 	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-27733-[CSI Driver] [Snapshot] [Retain deletionPolicy] [Pre-provison] could re-used snapshotcontent after the snapshot/snapshotcontent deletion", func() {
