@@ -336,6 +336,37 @@ func checkCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]str
 	o.Expect(reflect.DeepEqual(currentCoStatus, statusToCompare)).To(o.Equal(true), "Wrong %s CO status reported, actual status : %s", coName, currentCoStatus)
 }
 
+func getNodePortRange(oc *exutil.CLI) (int, int) {
+	// Follow the steps in https://docs.openshift.com/container-platform/4.11/networking/configuring-node-port-service-range.html
+	output, err := oc.AsAdmin().Run("get").Args("configmaps", "-n", "openshift-kube-apiserver", "config", `-o=jsonpath="{.data['config\.yaml']}"`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	rgx := regexp.MustCompile(`"service-node-port-range":\["([0-9]*)-([0-9]*)"\]`)
+	rs := rgx.FindSubmatch([]byte(output))
+	o.Expect(rs).To(o.HaveLen(3))
+
+	leftBound, err := strconv.Atoi(string(rs[1]))
+	o.Expect(err).NotTo(o.HaveOccurred())
+	rightBound, err := strconv.Atoi(string(rs[2]))
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return leftBound, rightBound
+}
+
+func isTargetPortAvailable(oc *exutil.CLI, port int) bool {
+	masterNodes, err := exutil.GetClusterNodesBy(oc, "master")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	for _, masterNode := range masterNodes {
+		cmd := fmt.Sprintf("netstat -tulpn | grep LISTEN | { grep :%d || true; }", port)
+		checkPortResult, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkPortResult = strings.Trim(strings.Trim(checkPortResult, "\n"), " ")
+		if checkPortResult != "" {
+			return false
+		}
+	}
+	return true
+}
+
 // GetAlertsByName get all the alerts
 func GetAlertsByName(oc *exutil.CLI, alertName string) (string, error) {
 	mon, monErr := exutil.NewPrometheusMonitor(oc.AsAdmin())

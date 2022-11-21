@@ -3268,4 +3268,103 @@ EOF`, dcpolicyrepo)
 		})
 		exutil.AssertWaitPollNoErr(waiterrRollout, " 6. Test case failed :: deploymentconfig.apps.openshift.io/mydc not rolled out with new policy.")
 	})
+
+	// author: zxiao@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-Medium-11364-[platformmanagement_public_624] Create nodeport service", func() {
+		g.By("1) Create new project required for this test execution")
+		oc.SetupProject()
+		namespace := oc.Namespace()
+
+		filename := "hello-pod.json"
+		g.By(fmt.Sprintf("2) Create pod with resource file %s", filename))
+		template := getTestDataFilePath(filename)
+		err := oc.Run("create").Args("-f", template, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		podName := "hello-openshift"
+		g.By(fmt.Sprintf("3) Wait for pod with name %s to be ready", podName))
+		exutil.AssertPodToBeReady(oc, podName, namespace)
+
+		g.By(fmt.Sprintf("4) Check host ip for pod %s", podName))
+		hostIP, err := oc.Run("get").Args("pods", podName, "-o=jsonpath={.status.hostIP}", "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(hostIP).NotTo(o.Equal(""))
+		g.By(fmt.Sprintf("Get host ip %s", hostIP))
+
+		g.By("5) get random target port")
+		port1 := rand.Intn(3000) + 6000
+		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			if isTargetPortAvailable(oc, port1) {
+				return true, nil
+			}
+			port1 = rand.Intn(3000) + 6000 // reassign port if not available
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "cannot assign random target port")
+
+		serviceName := podName
+		g.By(fmt.Sprintf("6) Create nodeport service at random target port %d", port1))
+		err = oc.Run("create").Args("service", "nodeport", serviceName, fmt.Sprintf("--tcp=%d:8080", port1)).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.Run("delete").Args("service", serviceName).Execute()
+
+		g.By(fmt.Sprintf("7) Check node port for service %s", serviceName))
+		nodePort, err := oc.Run("get").Args("services", serviceName, fmt.Sprintf("-o=jsonpath={.spec.ports[?(@.port==%d)].nodePort}", port1)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodePort).NotTo(o.Equal(""))
+		e2e.Logf(fmt.Sprintf("Get node port %s", nodePort))
+
+		filename = "pod-for-ping.json"
+		g.By(fmt.Sprintf("8) Create pod with resource file %s for checking network access", filename))
+		template = getTestDataFilePath(filename)
+		err = oc.Run("create").Args("-f", template, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		podName = "pod-for-ping"
+		g.By(fmt.Sprintf("9) Wait for pod with name %s to be ready", podName))
+		exutil.AssertPodToBeReady(oc, podName, namespace)
+
+		url := fmt.Sprintf("%s:%s", hostIP, nodePort)
+		g.By(fmt.Sprintf("10) Check network access to %s", url))
+		curlOutput, err := oc.Run("exec").Args(podName, "-i", "--", "curl", url).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(curlOutput).To(o.ContainSubstring("Hello OpenShift!"))
+
+		g.By(fmt.Sprintf("11) Delete service %s", serviceName))
+		err = oc.Run("delete").Args("service", serviceName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("12) get random target port and node port range")
+		port2 := rand.Intn(3000) + 6000
+		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			if isTargetPortAvailable(oc, port2) {
+				return true, nil
+			}
+			port2 = rand.Intn(3000) + 6000 // reassign port if not available
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "cannot assign random target port")
+
+		var generatedNodePort int
+		npLeftBound, npRightBound := getNodePortRange(oc)
+
+		g.By(fmt.Sprintf("13) Create another nodeport service with random target port %d and node port [%d-%d]", port2, npLeftBound, npRightBound))
+		// multiple try to avoid node port collision: https://issues.redhat.com/browse/OCPQE-10011
+		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			generatedNodePort = rand.Intn(npRightBound-npLeftBound) + npLeftBound
+			err = oc.Run("create").Args("service", "nodeport", serviceName, fmt.Sprintf("--node-port=%d", generatedNodePort), fmt.Sprintf("--tcp=%d:8080", port2)).Execute()
+			if err != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "cannot create nodeport service")
+		defer oc.Run("delete").Args("service", serviceName).Execute()
+
+		url = fmt.Sprintf("%s:%d", hostIP, generatedNodePort)
+		g.By(fmt.Sprintf("14) Check network access again to %s", url))
+		curlOutput, err = oc.Run("exec").Args(podName, "-i", "--", "curl", url).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(curlOutput).To(o.ContainSubstring("Hello OpenShift!"))
+	})
 })
