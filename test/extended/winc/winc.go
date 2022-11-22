@@ -85,7 +85,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}{
 			{
 				folder:   "/payload",
-				expected: "azure-cloud-node-manager.exe cni containerd generated hybrid-overlay-node.exe kube-node powershell windows-instance-config-daemon.exe windows_exporter.exe wmcb.exe",
+				expected: "azure-cloud-node-manager.exe cni containerd generated hybrid-overlay-node.exe kube-node powershell windows-instance-config-daemon.exe windows_exporter.exe",
 			},
 			{
 				folder:   "/payload/containerd",
@@ -101,7 +101,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			},
 			{
 				folder:   "/payload/powershell",
-				expected: "hns.psm1 wget-ignore-cert.ps1",
+				expected: "gcp-get-hostname.ps1 hns.psm1",
 			},
 			{
 				folder:   "/payload/generated",
@@ -1066,6 +1066,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		winInternalIP := getWindowsInternalIPs(oc)
 		for _, winhost := range winInternalIP {
 			for _, svc := range services {
+				g.By(fmt.Sprintf("Check %v service is running in worker %v", svc.Name, winhost))
 				msg, _ := runPSCommand(bastionHost, winhost, fmt.Sprintf("Get-Service %v", svc.Name), privateKey, iaasPlatform)
 				o.Expect(msg).Should(o.ContainSubstring("Running"), "Failed to check %v service is running in %v: %s", svc.Name, winhost, msg)
 			}
