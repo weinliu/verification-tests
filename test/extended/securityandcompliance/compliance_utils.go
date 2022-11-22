@@ -140,9 +140,9 @@ type storageClassDescription struct {
 type resourceConfigMapDescription struct {
 	name      string
 	namespace string
-	rule      string
-	variable  string
-	profile   string
+	rule      int
+	variable  int
+	profile   int
 	template  string
 }
 
@@ -233,7 +233,7 @@ func (sclass *storageClassDescription) create(oc *exutil.CLI) {
 
 func (confmap *resourceConfigMapDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", confmap.template, "-p", "NAME="+confmap.name,
-		"NAMESPACE="+confmap.namespace, "RULE="+confmap.rule, "VARIABLE="+confmap.variable, "PROFILE="+confmap.profile)
+		"NAMESPACE="+confmap.namespace, "RULE="+strconv.Itoa(confmap.rule), "VARIABLE="+strconv.Itoa(confmap.variable), "PROFILE="+strconv.Itoa(confmap.profile))
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -909,26 +909,24 @@ func genFluentdSecret(oc *exutil.CLI, namespace string, serverName string) {
 	e2e.Logf("The secrete is generated for %s in %s namespace \n", serverName, namespace)
 }
 
-func getOperatorResources(oc *exutil.CLI, resourcename string, namespace string) string {
-	rPath, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(resourcename, "--no-headers", "-n", namespace).OutputToFile(getRandomString() + ".json")
-	resCnt, err := exec.Command("bash", "-c", "cat "+rPath+" | wc -l; rm -rf "+rPath).Output()
-	orgCnt := string(resCnt)
+func getOperatorResources(oc *exutil.CLI, resourcename string, namespace string) int {
+	rList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resourcename, "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("The %s resource count is: %s \n", resourcename, orgCnt)
+	orgCnt := len(strings.Fields(rList))
 	return orgCnt
 }
 
-func readFileLinesToCompare(oc *exutil.CLI, confMap string, actCnt string, namespace string, resName string) {
+func readFileLinesToCompare(oc *exutil.CLI, confMap string, actCnt int, namespace string, resName string) {
 	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
 		rsPath, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", confMap, "-n", namespace, "-ojsonpath={.data."+resName+"}").OutputToFile(getRandomString() + ".json")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		result, _ := exec.Command("bash", "-c", "cat "+rsPath+"; rm -rf "+rsPath).Output()
-		orgCnt := string(result)
-		if strings.Contains(actCnt, orgCnt) {
-			e2e.Logf("The original %s count before upgrade was %s and that matches with the actual %s count %s after upgrade \n", resName, actCnt, resName, orgCnt)
+		orgCnt, _ := strconv.Atoi(string(result))
+		if actCnt >= orgCnt {
+			e2e.Logf("The original %s count before upgrade was %s and that matches with the actual %s count %s after upgrade \n", orgCnt, strconv.Itoa(orgCnt), resName, strconv.Itoa(actCnt))
 			return true, nil
 		}
-		e2e.Logf("The original %s count before upgrade was %s and that matches with the actual %s count %s after upgrade \n", resName, actCnt, resName, orgCnt)
+		e2e.Logf("The original %s count before upgrade was %s and that does not matches with the actual %s count %s after upgrade \n", resName, strconv.Itoa(orgCnt), resName, strconv.Itoa(actCnt))
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The orignal count before upgrade does not match with the actual count after upgrade \n"))
