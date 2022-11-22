@@ -879,4 +879,41 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// This case intentionally does not the post-upgrade check. Successful upgrade itself is the post-upgrade expected result.
 	})
+
+	// author: yinzhou@redhat.com
+	g.It("Author:yinzhou-Medium-55675-Group member should not lose rights after other members join the group", func() {
+		g.By("Creat new namespace")
+		oc.SetupProject()
+		user1Name := oc.Username()
+		g.By("Creat new group")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("group", "g55675").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "new", "g55675").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Add first user to the group")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "add-users", "g55675", user1Name).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Adding clusterrole to the group")
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-admin", "g55675").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-admin", "g55675").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Waiting for 120 secs, at beginning may hit the error or success intermittently within 2 mins")
+		time.Sleep(120 * time.Second)
+
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "add-users", "g55675", "user2").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(10*time.Second, 3*time.Minute, func() (bool, error) {
+			for j := 1; j < 31; j++ {
+				if oc.Run("get").Args("nodes").Execute() != nil {
+					break
+				}
+				if j == 30 {
+					// Continuous success for 30 times. This can help us believe user 1's right is stable
+					return true, nil
+				}
+				time.Sleep(1 * time.Second)
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "After add member to group, hit err, member right is broken")
+	})
 })
