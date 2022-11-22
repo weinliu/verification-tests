@@ -984,11 +984,14 @@ spec:
 	// author: rgangwar@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Author:rgangwar-Critical-40861-[Apiserver] [bug 1912564] cluster works fine wihtout panic under stress with API Priority and Fairness feature [Slow]", func() {
 		var (
-			dirname    = "/tmp/-OCP-40861/"
-			exceptions = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
+			exceptions   = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
+			caseID       = "ocp-40861"
+			dirName      = "/tmp/-" + caseID + "/"
+			nodesLogFile = caseID + "/nodes.log"
+			podLogFile   = caseID + "/pod.log"
+			coLogFile    = caseID + "/co.log"
+			kasLogFile   = caseID + "/kas.log"
 		)
-		defer os.RemoveAll(dirname)
-		defer CleanNamespace(oc, 50, "test-ocp40861")
 
 		defer func() {
 			cmdcpu := fmt.Sprintf(`clusterbuster --cleanup -B cpuload`)
@@ -1002,7 +1005,10 @@ spec:
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 
-		err := os.MkdirAll(dirname, 0755)
+		err := os.MkdirAll(dirName, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirName)
+
 		g.By("Check the configuration of priority level")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "workload-low", "-o", `jsonpath={.spec.limited.assuredConcurrencyShares}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1012,8 +1018,8 @@ spec:
 		o.Expect(output).Should(o.Equal(`20`))
 
 		g.By("Stress the cluster")
-		cpuAvgValWorker, memAvgValWorker := checkClusterLoad(oc, "worker", "OCP-40667/nodes.log")
-		cpuAvgValMaster, memAvgValMaster := checkClusterLoad(oc, "master", "OCP-40667/nodes.log")
+		cpuAvgValWorker, memAvgValWorker := checkClusterLoad(oc, "worker", nodesLogFile)
+		cpuAvgValMaster, memAvgValMaster := checkClusterLoad(oc, "master", nodesLogFile)
 		if cpuAvgValMaster < 75 || memAvgValMaster < 70 || cpuAvgValWorker < 75 || memAvgValWorker < 70 {
 			LoadCPUMemWorkload(oc)
 		}
@@ -1021,9 +1027,9 @@ spec:
 		g.By("Check the abnormal pods")
 		var podLogs []byte
 		errPod := wait.Poll(15*time.Second, 600*time.Second, func() (bool, error) {
-			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile("OCP-40861/pod.log")
+			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile(podLogFile)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			cmd := fmt.Sprintf(`cat %v | grep -iE 'cpuload|memload' | grep -ivE 'Running|Completed|namespace|pending' || true`, dirname+"pod.log")
+			cmd := fmt.Sprintf(`cat %v | grep -iE 'cpuload|memload' | grep -ivE 'Running|Completed|namespace|pending' || true`, podLogFile)
 			podLogs, err = exec.Command("bash", "-c", cmd).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if len(podLogs) > 0 {
@@ -1039,9 +1045,9 @@ spec:
 		exutil.AssertWaitPollNoErr(errPod, "Abnormality found in clusterbuster pods.")
 
 		g.By("Check the abnormal nodes")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--no-headers").OutputToFile("OCP-40861/node.log")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--no-headers").OutputToFile(nodesLogFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		cmd := fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, dirname+"node.log")
+		cmd := fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, nodesLogFile)
 		nodeLogs, err := exec.Command("bash", "-c", cmd).Output()
 		e2e.Logf("%s", nodeLogs)
 		if len(nodeLogs) > 0 {
@@ -1055,9 +1061,9 @@ spec:
 		}
 
 		g.By("Check the abnormal operators")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--no-headers").OutputToFile("OCP-40861/co.log")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--no-headers").OutputToFile(coLogFile)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		cmd = fmt.Sprintf(`cat %v | grep -v '.True.*False.*False' || true`, dirname+"co.log")
+		cmd = fmt.Sprintf(`cat %v | grep -v '.True.*False.*False' || true`, coLogFile)
 		coLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(coLogs) > 0 {
@@ -1074,13 +1080,13 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		masterName := strings.Fields(masterNode)
 		for i := 0; i < len(masterName); i++ {
-			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+masterName[i]).OutputToFile("OCP-40861/kas.log." + masterName[i])
+			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+masterName[i]).OutputToFile(kasLogFile + "." + masterName[i])
 			o.Expect(errlog).NotTo(o.HaveOccurred())
 		}
-		cmd = fmt.Sprintf(`cat %v | grep -iE 'apf_controller.go|apf_filter.go' | grep 'no route' || true`, dirname+"kas.log.*")
+		cmd = fmt.Sprintf(`cat %v | grep -iE 'apf_controller.go|apf_filter.go' | grep 'no route' || true`, kasLogFile+".*")
 		noRouteLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		cmd = fmt.Sprintf(`cat %v | grep -i 'panic' | grep -Ev "%s" || true`, dirname+"kas.log.*", exceptions)
+		cmd = fmt.Sprintf(`cat %v | grep -i 'panic' | grep -Ev "%s" || true`, kasLogFile+".*", exceptions)
 		panicLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(noRouteLogs) > 0 || len(panicLogs) > 0 {
@@ -1095,7 +1101,7 @@ spec:
 		var cpuAvgVal int
 		var memAvgVal int
 		errLoad := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
-			cpuAvgVal, memAvgVal := checkClusterLoad(oc, "worker", "OCP-40667/nodes_new.log")
+			cpuAvgVal, memAvgVal := checkClusterLoad(oc, "worker", caseID+"/nodes_new.log")
 			if cpuAvgVal > 75 || memAvgVal > 85 {
 				return false, nil
 			}
@@ -1111,7 +1117,7 @@ spec:
 		exutil.AssertWaitPollNoErr(errLoad, fmt.Sprintf("Nodes CPU avg %d %% and Memory avg %d %% consumption is high, please investigate the consumption...", cpuAvgVal, memAvgVal))
 
 		g.By("Summary of resources used")
-		resourceDetails := checkResources(oc, "OCP-40861/resources.log")
+		resourceDetails := checkResources(oc, caseID+"/resources.log")
 		for key, value := range resourceDetails {
 			e2e.Logf("Number of %s is %v\n", key, value)
 		}

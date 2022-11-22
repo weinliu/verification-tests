@@ -390,61 +390,6 @@ func isSNOCluster(oc *exutil.CLI) bool {
 	return false
 }
 
-// LoadSecrets used to create secrets
-func LoadSecrets(oc *exutil.CLI, noOfSecrets int, ns string, noOfNamespace int) {
-	var cmdErr error
-	for j := 1; j <= noOfNamespace; j++ {
-		namespaceCMD := fmt.Sprintf("oc create ns " + ns + strconv.Itoa(j) + ">/dev/null")
-		errNs := wait.Poll(1*time.Second, 30*time.Second, func() (bool, error) {
-			_, cmdErr = exec.Command("bash", "-c", namespaceCMD).Output()
-			if cmdErr != nil {
-				return false, nil
-			}
-			return true, nil
-		})
-		if cmdErr != nil {
-			defer CleanNamespace(oc, noOfNamespace, ns)
-		}
-		exutil.AssertWaitPollNoErr(errNs, fmt.Sprintf("Namespace not created :: "+ns+strconv.Itoa(j)))
-		for i := 1; i <= noOfSecrets; i++ {
-			secretCMD := fmt.Sprintf("oc create secret generic secret-" + ns + "-" + strconv.Itoa(i) + " -n " + ns + strconv.Itoa(j) + ` --from-literal abcdefg='12345^&*()'>/dev/null`)
-			errSecret := wait.Poll(1*time.Second, 30*time.Second, func() (bool, error) {
-				_, cmdErr = exec.Command("bash", "-c", secretCMD).Output()
-				if cmdErr != nil {
-					return false, nil
-				}
-				return true, nil
-			})
-			if cmdErr != nil {
-				defer CleanNamespace(oc, noOfNamespace, ns)
-			}
-			exutil.AssertWaitPollNoErr(errSecret, fmt.Sprintf("Secret not created :: secret-"+ns+"-"+strconv.Itoa(i)))
-		}
-	}
-	namespaceOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", "-A").Output()
-	secretOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "-A").Output()
-	namespaceCount := strings.Count(namespaceOutput, ns)
-	secretCount := strings.Count(secretOutput, "secret-"+ns)
-	if namespaceCount == noOfNamespace && secretCount == noOfSecrets*noOfNamespace {
-		e2e.Logf("No. of namespaces created :: %v \n No. of secrets created :: %v", noOfNamespace, noOfSecrets*noOfNamespace)
-	} else {
-		defer CleanNamespace(oc, noOfNamespace, ns)
-		e2e.Failf("No. of namespaces not created :: %v \n No. of secrets not created :: %v  \n Actual no. of namespaces/secrets are created %v :: %v", noOfNamespace, noOfSecrets*noOfNamespace, namespaceCount, secretCount)
-	}
-}
-
-// CleanNamespace is used to delete namespaces.
-func CleanNamespace(oc *exutil.CLI, noOfNamespace int, ns string) {
-	deleteFail := false
-	for i := 1; i <= noOfNamespace; i++ {
-		_, err := exec.Command("bash", "-c", "oc delete namespace "+ns+strconv.Itoa(i)+" --ignore-not-found >/dev/null").Output()
-		if err != nil {
-			deleteFail = true
-		}
-	}
-	o.Expect(deleteFail).To(o.BeFalse())
-}
-
 // LoadCPUMemWorkload load cpu and memory workload
 func LoadCPUMemWorkload(oc *exutil.CLI) {
 	workerCPUtopall := []int{}
@@ -469,7 +414,7 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	defer os.RemoveAll(dirname)
 	os.MkdirAll(dirname, 0755)
 
-	workerNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker", "--no-headers").OutputToFile("load-cpu-mem_" + randomStr + "40667-log")
+	workerNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker", "--no-headers").OutputToFile("load-cpu-mem_" + randomStr + "-log")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	cmd := fmt.Sprintf(`cat %v |head -1 | awk '{print $1}'`, workerNode)
 	worker1, err := exec.Command("bash", "-c", cmd).Output()
@@ -493,7 +438,7 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	workerCPU := strings.Fields(string(workerCPU1))
 
 	for i := 0; i < len(workerCPU); i++ {
-		workerCPUtop, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node", workerCPU[i], "--no-headers=true").OutputToFile("load-cpu-mem_" + randomStr + "40667-log")
+		workerCPUtop, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node", workerCPU[i], "--no-headers=true").OutputToFile("load-cpu-mem_" + randomStr + "-log")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		workerCPUtopcmd := fmt.Sprintf(`cat %v | awk '{print $3}'`, workerCPUtop)
 		workerCPUUsage, err := exec.Command("bash", "-c", workerCPUtopcmd).Output()
@@ -552,7 +497,7 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	totalMem := int(float64(mem) / (float64(memP) / 100))
 
 	for i := 0; i < len(workerCPU); i++ {
-		workerMEMtop, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node", workerCPU[i], "--no-headers=true").OutputToFile("load-cpu-mem_" + randomStr + "40667-log")
+		workerMEMtop, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node", workerCPU[i], "--no-headers=true").OutputToFile("load-cpu-mem_" + randomStr + "-log")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		workerMEMtopcmd := fmt.Sprintf(`cat %v | awk '{print $5}'`, workerMEMtop)
 		workerMEMUsage, err := exec.Command("bash", "-c", workerMEMtopcmd).Output()
