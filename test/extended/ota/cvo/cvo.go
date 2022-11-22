@@ -1343,6 +1343,58 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	})
 
+	//author: evakhoni@redhat.com
+	g.It("Longduration-NonPreRelease-Author:evakhoni-Medium-22641-Rollback against a dummy start update with oc adm upgrade clear [Serial]", func() {
+		// preserve original message
+		originalMessage, err := getCVObyJP(oc, ".status.conditions[?(.type=='ReleaseAccepted')].message")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("request upgrade to fake payload")
+		fakeReleasePayload := "registry.ci.openshift.org/ocp/release@sha256:5a561dc23a9d323c8bd7a8631bed078a9e5eec690ce073f78b645c83fb4cdf74"
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").
+			Args("upgrade", "--allow-explicit-upgrade", "--force", "--to-image", fakeReleasePayload).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "--clear").Execute()
+
+		g.By("check ReleaseAccepted=False")
+		// usually happens quicker, but 5 minutes is safe deadline
+		err = waitForCondition(30, 300, "False",
+			"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"ReleaseAccepted\").status'")
+		exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 5m")
+
+		g.By("check ReleaseAccepted False have correct message")
+		message, err := getCVObyJP(oc, ".status.conditions[?(.type=='ReleaseAccepted')].message")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(message).To(o.ContainSubstring("Unable to download and prepare the update: deadline exceeded"))
+		o.Expect(message).To(o.ContainSubstring("Job was active longer than specified deadline"))
+		o.Expect(message).To(o.ContainSubstring(fakeReleasePayload))
+
+		g.By("check version pod in ImagePullBackOff")
+		// swinging betseen Init:0/4 Init:ErrImagePull and Init:ImagePullBackOff so need a few retries
+		err = waitForCondition(5, 30, "ImagePullBackOff",
+			"oc get -n openshift-cluster-version pods -ojsonpath='{.items[*].status.initContainerStatuses[0].state.waiting.reason}'")
+		exutil.AssertWaitPollNoErr(err, "ImagePullBackOff not detected in 30s")
+
+		g.By("Clear above unstarted upgrade")
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "--clear").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check ReleaseAccepted=True")
+		err = waitForCondition(30, 300, "True",
+			"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"ReleaseAccepted\").status'")
+		exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 5m")
+
+		g.By("check ReleaseAccepted False have correct message")
+		message, err = getCVObyJP(oc, ".status.conditions[?(.type=='ReleaseAccepted')].message")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(message).To(o.ContainSubstring(originalMessage))
+
+		g.By("no version pod in ImagePullBackOff")
+		err = waitForCondition(5, 30, "",
+			"oc get -n openshift-cluster-version pods -ojsonpath='{.items[*].status.initContainerStatuses[0].state.waiting.reason}'")
+		exutil.AssertWaitPollNoErr(err, "ImagePullBackOff not cleared in 30s")
+	})
+
 	//author: jiajliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:jiajliu-High-46017-CVO should keep reconcile manifests when update failed on precondition check [Disruptive]", func() {
 		//Take openshift-marketplace/deployment as an example, it can be any resource which included in manifest files
