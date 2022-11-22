@@ -457,4 +457,84 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(alertExpr).To(o.ContainSubstring("histogram_quantile(.95, sum(rate(kubeproxy_sync_proxy_rules_duration_seconds_bucket[5m])) by (le, namespace, pod))"))
 
 	})
+
+	g.It("NonPreRelease-Longduration-Author:qiowang-Medium-53969-Verify OVN controller SB DB connection status metric works [Disruptive] [Slow]", func() {
+		networkType := exutil.CheckNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+
+		var (
+			namespace  = "openshift-ovn-kubernetes"
+			metricName = "ovn_controller_southbound_database_connected"
+		)
+		ipStackType := checkIPStackType(oc)
+		var iptablesCmdList []string
+		if ipStackType == "dualstack" {
+			iptablesCmdList = []string{"iptables", "ip6tables"}
+		} else if ipStackType == "ipv6single" {
+			iptablesCmdList = []string{"ip6tables"}
+		} else {
+			iptablesCmdList = []string{"iptables"}
+		}
+		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		podName, getPodNameErr := exutil.GetPodName(oc, namespace, "app=ovnkube-node", nodeName)
+		o.Expect(getPodNameErr).NotTo(o.HaveOccurred())
+		o.Expect(podName).NotTo(o.BeEmpty())
+		// check if the cluster is hypershift hosted cluster
+		// if yes, will drop tcp packets with dport 443 to disconnected to SB DB
+		var dport string
+		podDesc, descPoderr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", namespace, "pod", podName).Output()
+		o.Expect(descPoderr).NotTo(o.HaveOccurred())
+		if strings.Contains(podDesc, "ovnkube-sbdb-clusters-hypershift-ci") {
+			dport = "443"
+		} else {
+			dport = "9642"
+		}
+
+		g.By("1. Restart pod " + podName + " in " + namespace + " to make the pod logs clear")
+		delPodErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", podName, "-n", namespace, "--ignore-not-found=true").Execute()
+		o.Expect(delPodErr).NotTo(o.HaveOccurred())
+		podName, getPodNameErr = exutil.GetPodName(oc, namespace, "app=ovnkube-node", nodeName)
+		o.Expect(getPodNameErr).NotTo(o.HaveOccurred())
+		o.Expect(podName).NotTo(o.BeEmpty())
+		waitPodReady(oc, namespace, podName)
+
+		g.By("2. Get the metrics of " + metricName + " when ovn controller connected to SB DB")
+		prometheusURL := "localhost:29105/metrics"
+		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "kube-rbac-proxy-ovn-metrics", podName, "--", "curl", prometheusURL).OutputToFile("metrics.txt")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		metricOutput, _ := exec.Command("bash", "-c", "cat "+output+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
+		metricValue := strings.TrimSpace(string(metricOutput))
+		e2e.Logf("The output of the %s is : %v", metricName, metricValue)
+		o.Expect(metricValue).To(o.Equal("1"))
+
+		g.By("3. Configure iptables to block connection from the worker node ovn controller to SB DB")
+		for _, iptablesCmd := range iptablesCmdList {
+			_, cfgErr := exutil.DebugNodeWithChroot(oc, nodeName, iptablesCmd, "-A", "OUTPUT", "-p", "tcp", "--dport", dport, "-j", "DROP")
+			defer exutil.DebugNodeWithChroot(oc, nodeName, iptablesCmd, "-D", "OUTPUT", "-p", "tcp", "--dport", dport, "-j", "DROP")
+			o.Expect(cfgErr).NotTo(o.HaveOccurred())
+		}
+
+		g.By("4. Waiting for ovn controller disconnected to SB DB")
+		logs, getLogErr := exutil.WaitAndGetSpecificPodLogs(oc, namespace, "ovn-controller", podName, "\"connection dropped\"")
+		e2e.Logf("The log is : %s", logs)
+		o.Expect(getLogErr).NotTo(o.HaveOccurred())
+
+		g.By("5. Get the metrics of " + metricName + " when ovn controller disconnected to SB DB")
+		metricsOutput1 := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			output1, err1 := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, "-c", "kube-rbac-proxy-ovn-metrics", podName, "--", "curl", prometheusURL).OutputToFile("metrics.txt")
+			o.Expect(err1).NotTo(o.HaveOccurred())
+			metricOutput1, _ := exec.Command("bash", "-c", "cat "+output1+" | grep "+metricName+" | awk 'NR==3{print $2}'").Output()
+			metricValue1 := strings.TrimSpace(string(metricOutput1))
+			e2e.Logf("The output of the %s is : %v", metricName, metricValue1)
+			if metricValue1 == "0" {
+				return true, nil
+			}
+			e2e.Logf("Can't get correct metrics value of %s and try again", metricName)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(metricsOutput1, fmt.Sprintf("Fail to get metric and the error is:%s", metricsOutput1))
+	})
 })
