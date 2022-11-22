@@ -226,6 +226,32 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		}
 		createMcAndVerifyMCValue(oc, "Usb Extension", "change-worker-extension-usbguard", workerNode, textToVerify, "rpm", "-q", "usbguard")
 	})
+	g.It("Author:sregidor-Longduration-NonPreRelease-Critical-56131-Install all extensions [Disruptive]", func() {
+		var (
+			workerNode                   = skipTestIfOsIsNotCoreOs(oc)
+			stepText                     = "available extensions"
+			mcName                       = "change-worker-all-extensions"
+			allExtensions                = []string{"usbguard", "kerberos", "kernel-devel", "sandboxed-containers"}
+			expectedRpmInstalledPackages = []string{"usbguard", "krb5-workstation", "libkadm5", "kernel-devel", "kernel-headers",
+				"kata-containers"}
+			textToVerify = TextToVerify{
+				textToVerifyForMC:   "(?s)" + strings.Join(allExtensions, ".*"),
+				textToVerifyForNode: "(?s)" + strings.Join(expectedRpmInstalledPackages, ".*"),
+				needChroot:          true,
+			}
+
+			cmd = append([]string{"rpm", "-q"}, expectedRpmInstalledPackages...)
+		)
+		createMcAndVerifyMCValue(oc, stepText, mcName, workerNode, textToVerify, cmd...)
+
+		g.By("Verify that extension packages where uninstalled after MC deletion")
+		for _, pkg := range expectedRpmInstalledPackages {
+			o.Expect(workerNode.RpmIsInstalled(pkg)).To(
+				o.BeFalse(),
+				"Package %s should be uninstalled when we remove the extensions MC", pkg)
+		}
+
+	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-43310-add kernel arguments, kernel type and extension to the RHCOS and RHEL [Disruptive]", func() {
 		nodeList := NewNodeList(oc)
@@ -2615,7 +2641,7 @@ func createMcAndVerifyMCValue(oc *exutil.CLI, stepText, mcName string, workerNod
 	g.By(fmt.Sprintf("Check %s in the created machine config", stepText))
 	mcOut, err := getMachineConfigDetails(oc, mc.name)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(mcOut).Should(o.ContainSubstring(textToVerify.textToVerifyForMC))
+	o.Expect(mcOut).Should(o.MatchRegexp(textToVerify.textToVerifyForMC))
 	logger.Infof("%s is verified in the created machine config!", stepText)
 
 	g.By(fmt.Sprintf("Check %s in the machine config daemon", stepText))
@@ -2628,7 +2654,7 @@ func createMcAndVerifyMCValue(oc *exutil.CLI, stepText, mcName string, workerNod
 		podOut, err = exutil.RemoteShPod(oc, MachineConfigNamespace, workerNode.GetMachineConfigDaemon(), cmd...)
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(podOut).Should(o.ContainSubstring(textToVerify.textToVerifyForNode))
+	o.Expect(podOut).Should(o.MatchRegexp(textToVerify.textToVerifyForNode))
 	logger.Infof("%s is verified in the machine config daemon!", stepText)
 }
 
