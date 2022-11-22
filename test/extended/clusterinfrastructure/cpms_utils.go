@@ -85,9 +85,17 @@ func checkIfCPMSIsStable(oc *exutil.CLI) bool {
 }
 
 // getCPMSAvailabilityZones get zones from cpms
-func getCPMSAvailabilityZones(oc *exutil.CLI) []string {
-	getAvailabilityZonesJSON := "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.aws[*].placement.availabilityZone}"
-	availabilityZonesStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getAvailabilityZonesJSON, "-n", machineAPINamespace).Output()
+func getCPMSAvailabilityZones(oc *exutil.CLI, iaasPlatform string) []string {
+	var getCPMSAvailabilityZonesJSON string
+	switch iaasPlatform {
+	case "aws":
+		getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.aws[*].placement.availabilityZone}"
+	case "azure":
+		getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.azure[*].zone}"
+	default:
+		e2e.Logf("The " + iaasPlatform + " Platform is not supported for now.")
+	}
+	availabilityZonesStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getCPMSAvailabilityZonesJSON, "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	availabilityZones := strings.Split(availabilityZonesStr, " ")
 	e2e.Logf("availabilityZones:%s", availabilityZones)
@@ -180,4 +188,18 @@ func waitForClusterStable(oc *exutil.CLI) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "Wait cluster to stabilize failed.")
+}
+
+// getCPMSState get CPMS state is Active or Inactive
+func getCPMSState(oc *exutil.CLI) string {
+	cpmsState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace, "-o=jsonpath={.spec.state}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return cpmsState
+}
+
+// getArchitectureType get the architecture is arm64 or amd64
+func getArchitectureType(oc *exutil.CLI) string {
+	architecture, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", exutil.GetNodeNameFromMachine(oc, exutil.ListMasterMachineNames(oc)[0]), "-o=jsonpath={.status.nodeInfo.architecture}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return architecture
 }
