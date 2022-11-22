@@ -29,7 +29,7 @@ func setNfsServerSvc(svc service) nfsServerOption {
 	}
 }
 
-//  Create a new customized nfsServer object
+// Create a new customized nfsServer object
 func newNfsServer(opts ...nfsServerOption) nfsServer {
 	serverName := "nfs-" + getRandomString()
 	defaultNfsServer := nfsServer{
@@ -81,7 +81,7 @@ func setIscsiServerSvc(svc service) iscsiServerOption {
 	}
 }
 
-//  Create a new customized iscsiServer object
+// Create a new customized iscsiServer object
 func newIscsiServer(opts ...iscsiServerOption) iscsiServer {
 	serverName := "iscsi-target-" + getRandomString()
 	serviceName := "iscsi-service-" + getRandomString()

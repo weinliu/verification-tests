@@ -44,7 +44,7 @@ func setSecretNamespace(namespace string) secretOption {
 	}
 }
 
-//  Create a new customized secret object
+// Create a new customized secret object
 func newSecret(opts ...secretOption) secret {
 	defaultSecret := secret{
 		name:      "secret-" + getRandomString(),
@@ -57,7 +57,7 @@ func newSecret(opts ...secretOption) secret {
 	return defaultSecret
 }
 
-//  Create a new customized secret with extra parameters
+// Create a new customized secret with extra parameters
 func (sec *secret) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
 	if sec.namespace == "" {
 		sec.namespace = oc.Namespace()

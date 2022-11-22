@@ -37,7 +37,7 @@ func setConfigMapTemplate(template string) configMapOption {
 	}
 }
 
-//  Create a new customized configMap object
+// Create a new customized configMap object
 func newConfigMap(opts ...configMapOption) configMap {
 	defaultConfigMap := configMap{
 		name:     "storage-cm-" + getRandomString(),
@@ -58,7 +58,7 @@ func (cm *configMap) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Create a new configMap with extra parameters
+// Create a new configMap with extra parameters
 func (cm *configMap) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
 	if cm.namespace == "" {
 		cm.namespace = oc.Namespace()
@@ -67,13 +67,13 @@ func (cm *configMap) createWithExtraParameters(oc *exutil.CLI, extraParameters m
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Delete the configMap
+// Delete the configMap
 func (cm *configMap) delete(oc *exutil.CLI) {
 	err := oc.WithoutNamespace().Run("delete").Args("-n", cm.namespace, "cm", cm.name).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Delete the configMap use kubeadmin
+// Delete the configMap use kubeadmin
 func (cm *configMap) deleteAsAdmin(oc *exutil.CLI) {
 	oc.WithoutNamespace().AsAdmin().Run("delete").Args("-n", cm.namespace, "cm", cm.name, "--ignore-not-found").Execute()
 }

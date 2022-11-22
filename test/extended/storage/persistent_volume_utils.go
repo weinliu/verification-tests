@@ -142,7 +142,7 @@ func setPersistentVolumeEncryptionInTransit(encryptionValue string) persistentVo
 	}
 }
 
-//  Create a new customized PersistentVolume object
+// Create a new customized PersistentVolume object
 func newPersistentVolume(opts ...persistentVolumeOption) persistentVolume {
 	var defaultVolSize string
 	switch cloudProvider {
@@ -270,14 +270,14 @@ func (pv *persistentVolume) create(oc *exutil.CLI) {
 	pv.createWithExtraParameters(oc, pvExtraParameters)
 }
 
-//  Create a new PersistentVolume with extra parameters
+// Create a new PersistentVolume with extra parameters
 func (pv *persistentVolume) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
 	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", pv.template, "-p", "NAME="+pv.name, "ACCESSMODE="+pv.accessmode,
 		"CAPACITY="+pv.capacity, "RECLAIMPOLICY="+pv.reclaimPolicy, "SCNAME="+pv.scname, "VOLUMEMODE="+pv.volumeMode)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Delete the PersistentVolume use kubeadmin
+// Delete the PersistentVolume use kubeadmin
 func (pv *persistentVolume) deleteAsAdmin(oc *exutil.CLI) {
 	oc.WithoutNamespace().AsAdmin().Run("delete").Args("pv", pv.name, "--ignore-not-found").Execute()
 }

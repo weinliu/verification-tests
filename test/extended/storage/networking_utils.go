@@ -78,7 +78,7 @@ func setServiceSelectorLable(selectorLable string) serviceOption {
 	}
 }
 
-//  Create a new customized service object
+// Create a new customized service object
 func newService(opts ...serviceOption) service {
 	defaultService := service{
 		name:          "storage-svc-" + getRandomString(),

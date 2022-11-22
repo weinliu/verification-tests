@@ -157,21 +157,21 @@ func deleteBackendVolumeByVolumeID(oc *exutil.CLI, volumeID string) (string, err
 	}
 }
 
-//  Check the volume status becomes avaiable, status is "avaiable"
+// Check the volume status becomes avaiable, status is "avaiable"
 func checkVolumeAvaiableOnBackend(volumeID string) (bool, error) {
 	volumeStatus, err := getAwsVolumeStatusByVolumeID(volumeID)
 	avaiableStatus := []string{"available"}
 	return contains(avaiableStatus, volumeStatus), err
 }
 
-//  Check the volume is deleted
+// Check the volume is deleted
 func checkVolumeDeletedOnBackend(volumeID string) (bool, error) {
 	volumeStatus, err := getAwsVolumeStatusByVolumeID(volumeID)
 	deletedStatus := []string{""}
 	return contains(deletedStatus, volumeStatus), err
 }
 
-//  Waiting the volume become avaiable
+// Waiting the volume become avaiable
 func waitVolumeAvaiableOnBackend(oc *exutil.CLI, volumeID string) {
 	switch cloudProvider {
 	case "aws":
@@ -204,7 +204,7 @@ func waitVolumeAvaiableOnBackend(oc *exutil.CLI, volumeID string) {
 	}
 }
 
-//  Waiting the volume become deleted
+// Waiting the volume become deleted
 func waitVolumeDeletedOnBackend(oc *exutil.CLI, volumeID string) {
 	switch cloudProvider {
 	case "aws":
@@ -321,7 +321,7 @@ func setVolClusterIDTagKey(clusterIDTagKey string) volOption {
 	}
 }
 
-//  Create a new customized pod object
+// Create a new customized pod object
 func newEbsVolume(opts ...volOption) ebsVolume {
 	defaultVol := ebsVolume{
 		AvailabilityZone: "",

@@ -60,7 +60,7 @@ func setVolumeSnapshotSourcepvcname(sourcepvcname string) volumeSnapshotOption {
 	}
 }
 
-//  Create a new customized VolumeSnapshot object
+// Create a new customized VolumeSnapshot object
 func newVolumeSnapshot(opts ...volumeSnapshotOption) volumeSnapshot {
 	defaultVolumeSnapshot := volumeSnapshot{
 		name:          "my-snapshot-" + getRandomString(),
@@ -86,12 +86,12 @@ func (vs *volumeSnapshot) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Delete the VolumeSnapshot
+// Delete the VolumeSnapshot
 func (vs *volumeSnapshot) delete(oc *exutil.CLI) {
 	oc.WithoutNamespace().Run("delete").Args("volumesnapshot", vs.name, "-n", vs.namespace).Execute()
 }
 
-//  Check whether the VolumeSnapshot becomes ready_to_use status
+// Check whether the VolumeSnapshot becomes ready_to_use status
 func (vs *volumeSnapshot) checkVsStatusReadyToUse(oc *exutil.CLI) (bool, error) {
 	vsStatus, err := oc.WithoutNamespace().Run("get").Args("volumesnapshot", "-n", vs.namespace, vs.name, "-o=jsonpath={.status.readyToUse}").Output()
 	e2e.Logf("The volumesnapshot %s ready_to_use status in namespace %s is %s", vs.name, vs.namespace, vsStatus)
@@ -227,13 +227,13 @@ func (vsc *volumeSnapshotClass) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Create a new customized VolumeSnapshotClass with extra parameters
+// Create a new customized VolumeSnapshotClass with extra parameters
 func (vsc *volumeSnapshotClass) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
 	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", vsc.template, "-p", "VSCNAME="+vsc.name, "DRIVER="+vsc.driver, "DELETIONPOLICY="+vsc.deletionPolicy)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Delete the VolumeSnapshotClass
+// Delete the VolumeSnapshotClass
 func (vsc *volumeSnapshotClass) deleteAsAdmin(oc *exutil.CLI) {
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("volumesnapshotclass", vsc.name, "--ignore-not-found").Execute()
 }
@@ -308,7 +308,7 @@ func setVolumeSnapshotContentTemplate(volumeSnapshotContentTemplate string) volu
 	}
 }
 
-//  Create a new customized VolumeSnapshotContent object
+// Create a new customized VolumeSnapshotContent object
 func newVolumeSnapshotContent(opts ...volumeSnapshotContentOption) volumeSnapshotContent {
 	defaultVolumeSnapshotContent := volumeSnapshotContent{
 		vscontentname:  "my-volumesnapshotcontent-" + getRandomString(),

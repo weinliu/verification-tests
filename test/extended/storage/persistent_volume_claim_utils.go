@@ -83,7 +83,7 @@ func setPersistentVolumeClaimDataSourceName(name string) persistentVolumeClaimOp
 	}
 }
 
-//  Create a new customized PersistentVolumeClaim object
+// Create a new customized PersistentVolumeClaim object
 func newPersistentVolumeClaim(opts ...persistentVolumeClaimOption) persistentVolumeClaim {
 	defaultPersistentVolumeClaim := persistentVolumeClaim{
 		name:       "my-pvc-" + getRandomString(),
@@ -112,7 +112,7 @@ func (pvc *persistentVolumeClaim) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Create a new PersistentVolumeClaim with clone dataSource parameters
+// Create a new PersistentVolumeClaim with clone dataSource parameters
 func (pvc *persistentVolumeClaim) createWithCloneDataSource(oc *exutil.CLI) {
 	if pvc.namespace == "" {
 		pvc.namespace = oc.Namespace()
@@ -130,7 +130,7 @@ func (pvc *persistentVolumeClaim) createWithCloneDataSource(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Create a new PersistentVolumeClaim with snapshot dataSource parameters
+// Create a new PersistentVolumeClaim with snapshot dataSource parameters
 func (pvc *persistentVolumeClaim) createWithSnapshotDataSource(oc *exutil.CLI) {
 	if pvc.namespace == "" {
 		pvc.namespace = oc.Namespace()
@@ -149,7 +149,7 @@ func (pvc *persistentVolumeClaim) createWithSnapshotDataSource(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Create a new PersistentVolumeClaim with specified persist volume
+// Create a new PersistentVolumeClaim with specified persist volume
 func (pvc *persistentVolumeClaim) createWithSpecifiedPV(oc *exutil.CLI, pvName string) {
 	if pvc.namespace == "" {
 		pvc.namespace = oc.Namespace()
@@ -163,7 +163,7 @@ func (pvc *persistentVolumeClaim) createWithSpecifiedPV(oc *exutil.CLI, pvName s
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Create a new PersistentVolumeClaim without specifying storaheclass name
+// Create a new PersistentVolumeClaim without specifying storaheclass name
 func (pvc *persistentVolumeClaim) createWithoutStorageclassname(oc *exutil.CLI) {
 	if pvc.namespace == "" {
 		pvc.namespace = oc.Namespace()
@@ -174,18 +174,18 @@ func (pvc *persistentVolumeClaim) createWithoutStorageclassname(oc *exutil.CLI) 
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Delete the PersistentVolumeClaim
+// Delete the PersistentVolumeClaim
 func (pvc *persistentVolumeClaim) delete(oc *exutil.CLI) {
 	err := oc.WithoutNamespace().Run("delete").Args("pvc", pvc.name, "-n", pvc.namespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//  Delete the PersistentVolumeClaim use kubeadmin
+// Delete the PersistentVolumeClaim use kubeadmin
 func (pvc *persistentVolumeClaim) deleteAsAdmin(oc *exutil.CLI) {
 	oc.WithoutNamespace().AsAdmin().Run("delete").Args("pvc", pvc.name, "-n", pvc.namespace, "--ignore-not-found").Execute()
 }
 
-//  Get the PersistentVolumeClaim status
+// Get the PersistentVolumeClaim status
 func (pvc *persistentVolumeClaim) getStatus(oc *exutil.CLI) (string, error) {
 	pvcStatus, err := oc.WithoutNamespace().Run("get").Args("pvc", "-n", pvc.namespace, pvc.name, "-o=jsonpath={.status.phase}").Output()
 	e2e.Logf("The PVC  %s status in namespace %s is %q", pvc.name, pvc.namespace, pvcStatus)
@@ -209,14 +209,14 @@ func (pvc *persistentVolumeClaim) getVolumeID(oc *exutil.CLI) string {
 	return volumeID
 }
 
-//  Get the description of PersistentVolumeClaim
+// Get the description of PersistentVolumeClaim
 func (pvc *persistentVolumeClaim) getDescription(oc *exutil.CLI) (string, error) {
 	output, err := oc.WithoutNamespace().Run("describe").Args("pvc", "-n", pvc.namespace, pvc.name).Output()
 	e2e.Logf("****** The PVC  %s in namespace %s detail info: ******\n %s", pvc.name, pvc.namespace, output)
 	return output, err
 }
 
-//  Get the PersistentVolumeClaim bound pv's nodeAffinity nodeSelectorTerms matchExpressions "topology.gke.io/zone" values
+// Get the PersistentVolumeClaim bound pv's nodeAffinity nodeSelectorTerms matchExpressions "topology.gke.io/zone" values
 func (pvc *persistentVolumeClaim) getVolumeNodeAffinityAvaiableZones(oc *exutil.CLI) []string {
 	volName := pvc.getVolumeName(oc)
 	return getPvNodeAffinityAvaiableZones(oc, volName)
@@ -229,7 +229,7 @@ func (pvc *persistentVolumeClaim) expand(oc *exutil.CLI, expandCapacity string) 
 	pvc.capacity = expandCapacity
 }
 
-//  Get specified PersistentVolumeClaim status
+// Get specified PersistentVolumeClaim status
 func getPersistentVolumeClaimStatus(oc *exutil.CLI, namespace string, pvcName string) (string, error) {
 	pvcStatus, err := oc.WithoutNamespace().Run("get").Args("pvc", "-n", namespace, pvcName, "-o=jsonpath={.status.phase}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -237,7 +237,7 @@ func getPersistentVolumeClaimStatus(oc *exutil.CLI, namespace string, pvcName st
 	return pvcStatus, err
 }
 
-//  Describe specified PersistentVolumeClaim
+// Describe specified PersistentVolumeClaim
 func describePersistentVolumeClaim(oc *exutil.CLI, namespace string, pvcName string) (string, error) {
 	output, err := oc.WithoutNamespace().Run("describe").Args("pvc", "-n", namespace, pvcName).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -245,7 +245,7 @@ func describePersistentVolumeClaim(oc *exutil.CLI, namespace string, pvcName str
 	return output, err
 }
 
-//  Get specified PersistentVolumeClaim status type during Resize
+// Get specified PersistentVolumeClaim status type during Resize
 func getPersistentVolumeClaimStatusType(oc *exutil.CLI, namespace string, pvcName string) (string, error) {
 	pvcStatus, err := oc.WithoutNamespace().Run("get").Args("pvc", pvcName, "-n", namespace, "-o=jsonpath={.status.conditions[0].type}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
