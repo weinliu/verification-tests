@@ -90,8 +90,8 @@ func getCPMSAvailabilityZones(oc *exutil.CLI, iaasPlatform string) []string {
 	switch iaasPlatform {
 	case "aws":
 		getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.aws[*].placement.availabilityZone}"
-	case "azure":
-		getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.azure[*].zone}"
+	case "azure", "gcp":
+		getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains." + iaasPlatform + "[*].zone}"
 	default:
 		e2e.Logf("The " + iaasPlatform + " Platform is not supported for now.")
 	}

@@ -36,7 +36,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-53320-[CPMS] Owner reference could be added/removed to control plan machines [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
 		if getCPMSState(oc) == "Inactive" {
 			defer deleteControlPlaneMachineSet(oc)
@@ -75,7 +75,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-53081-[CPMS] Finalizer should be added to control plan machineset [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "vsphere")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere")
 		skipForCPMSNotExist(oc)
 		if getCPMSState(oc) == "Inactive" {
 			defer deleteControlPlaneMachineSet(oc)
@@ -108,7 +108,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-53323-[CPMS] Implement update logic for RollingUpdate CPMS strategy [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
 		skipForCPMSNotStable(oc)
 		if getCPMSState(oc) == "Inactive" {
@@ -133,6 +133,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			backupInstanceType = "Standard_D8s_v3"
 			getInstanceTypeJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.vmSize}"
 			patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"vmSize":"`
+			patchstrSuffix = `"}}}}}}}`
+		case "gcp":
+			changeInstanceType = "e2-standard-4"
+			backupInstanceType = "n2-standard-4"
+			getInstanceTypeJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.machineType}"
+			patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"machineType":"`
 			patchstrSuffix = `"}}}}}}}`
 		default:
 			e2e.Logf("The " + iaasPlatform + " Platform is not supported for now.")
@@ -172,7 +178,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-55631-[CPMS] Implement update logic for RollingUpdate CPMS strategy - Delete a master machine [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
 		skipForCPMSNotStable(oc)
 		if getCPMSState(oc) == "Inactive" {
@@ -186,7 +192,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		switch iaasPlatform {
 		case "aws":
 			getMachineAvailabilityZoneJSON = "-o=jsonpath={.spec.providerSpec.value.placement.availabilityZone}"
-		case "azure":
+		case "azure", "gcp":
 			getMachineAvailabilityZoneJSON = "-o=jsonpath={.spec.providerSpec.value.zone}"
 		default:
 			e2e.Logf("The " + iaasPlatform + " Platform is not supported for now.")
@@ -206,7 +212,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-54005-[CPMS] Control plane machine set OnDelete update strategies - update instance type [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
 		skipForCPMSNotStable(oc)
 		if getCPMSState(oc) == "Inactive" {
@@ -231,6 +237,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			backupInstanceType = "Standard_D8s_v3"
 			getInstanceTypeJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.vmSize}"
 			patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"vmSize":"`
+			patchstrSuffix = `"}}}}}}}`
+		case "gcp":
+			changeInstanceType = "e2-standard-4"
+			backupInstanceType = "n2-standard-4"
+			getInstanceTypeJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.machineType}"
+			patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"machineType":"`
 			patchstrSuffix = `"}}}}}}}`
 		default:
 			e2e.Logf("The " + iaasPlatform + " Platform is not supported for now.")
@@ -273,7 +285,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-55724-[CPMS] Control plane machine set OnDelete update strategies - Delete/Add a failureDomain [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
 		skipForCPMSNotStable(oc)
 		if getCPMSState(oc) == "Inactive" {
@@ -292,9 +304,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		case "aws":
 			getMachineAvailabilityZoneJSON = "-o=jsonpath={.spec.providerSpec.value.placement.availabilityZone}"
 			getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.aws[*].placement.availabilityZone}"
-		case "azure":
+		case "azure", "gcp":
 			getMachineAvailabilityZoneJSON = "-o=jsonpath={.spec.providerSpec.value.zone}"
-			getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.azure[*].zone}"
+			getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains." + iaasPlatform + "[*].zone}"
 		default:
 			e2e.Logf("The " + iaasPlatform + " Platform is not supported for now.")
 		}
@@ -348,7 +360,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-55725-[CPMS] Control plane machine set OnDelete update strategies - Delete a master machine [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
 		skipForCPMSNotStable(oc)
 		if getCPMSState(oc) == "Inactive" {
@@ -367,7 +379,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		switch iaasPlatform {
 		case "aws":
 			getMachineAvailabilityZoneJSON = "-o=jsonpath={.spec.providerSpec.value.placement.availabilityZone}"
-		case "azure":
+		case "azure", "gcp":
 			getMachineAvailabilityZoneJSON = "-o=jsonpath={.spec.providerSpec.value.zone}"
 		default:
 			e2e.Logf("The " + iaasPlatform + " Platform is not supported for now.")
@@ -387,7 +399,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-53328-[CPMS] It doesn't rearrange the availability zones if the order of the zones isn't matching in the CPMS and the Control Plane [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
 		skipForCPMSNotStable(oc)
 		if getCPMSState(oc) == "Inactive" {
@@ -425,7 +437,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-54895-[CPMS] CPMS generator controller will create a new CPMS if a CPMS is removed from cluster [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
 		skipForCPMSNotStable(oc)
 		if getCPMSState(oc) == "Inactive" {
@@ -451,7 +463,18 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.AssertWaitPollNoErr(err, "controlplanemachineset is not in Inactive state")
 
 		g.By("Check controlplanemachineset do not reconcile master machines if state is Inactive")
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"instanceType":"invalid"}}}}}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		var instanceTypeName string
+		switch iaasPlatform {
+		case "aws":
+			instanceTypeName = "instanceType"
+		case "azure":
+			instanceTypeName = "vmSize"
+		case "gcp":
+			instanceTypeName = "machineType"
+		default:
+			e2e.Logf("The " + iaasPlatform + " Platform is not supported for now.")
+		}
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"`+instanceTypeName+`":"invalid"}}}}}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"state":"Active"}}`, "--type=merge", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -461,7 +484,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-52587-[CPMS] Webhook validations for CPMS resource [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
 		if getCPMSState(oc) == "Inactive" {
 			defer deleteControlPlaneMachineSet(oc)
@@ -489,7 +512,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-55485-[CPMS] Implement update logic for RollingUpdate CPMS strategy with non-standard indexes - Delete/Add a failureDomain [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
 		skipForCPMSNotStable(oc)
 		if getCPMSState(oc) == "Inactive" {
@@ -510,9 +533,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		case "aws":
 			getMachineAvailabilityZoneJSON = "-o=jsonpath={.spec.providerSpec.value.placement.availabilityZone}"
 			getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.aws[*].placement.availabilityZone}"
-		case "azure":
+		case "azure", "gcp":
 			getMachineAvailabilityZoneJSON = "-o=jsonpath={.spec.providerSpec.value.zone}"
-			getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains.azure[*].zone}"
+			getCPMSAvailabilityZonesJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains." + iaasPlatform + "[*].zone}"
 		default:
 			e2e.Logf("The " + iaasPlatform + " Platform is not supported for now.")
 		}

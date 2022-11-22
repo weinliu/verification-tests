@@ -211,7 +211,11 @@ func WaitForMachineRunningBySuffix(oc *CLI, machineNameSuffix string, labels str
 	e2e.Logf("Waiting for the machine Running ...")
 	var newMachineName string
 	err := wait.Poll(60*time.Second, 720*time.Second, func() (bool, error) {
-		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+		msg, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
+		if err2 != nil {
+			e2e.Logf("The server was unable to return a response and waiting up to 1 minutes ...")
+			return false, nil
+		}
 		for _, machineName := range strings.Split(msg, " ") {
 			phase, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, "-o=jsonpath={.status.phase}", "-n", machineAPINamespace).Output()
 			if phase == "Running" && strings.HasSuffix(machineName, machineNameSuffix) {
