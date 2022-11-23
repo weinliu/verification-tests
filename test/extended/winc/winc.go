@@ -1,6 +1,7 @@
 package winc
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -772,26 +773,31 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		if iaasPlatform == "vsphere" {
 			g.Skip("vSphere does not support Load balancer, skipping")
 		}
-		namespace := "winc-test"
-		// we determine range of 20
-		attempts := 20
+		namespace := "winc-38186"
+		defer deleteProject(oc, namespace)
+		createProject(oc, namespace)
+		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
 		// fetching here the external IP
 		externalIP, err := getExternalIP(iaasPlatform, oc, "windows", namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("External IP is: " + externalIP)
-		g.By("Test LB works well several times and should not get Connection timed out error")
-		if checkLBConnectivity(attempts, externalIP) {
-			e2e.Logf("Successfully tested loadbalancer on the same node")
-		} else {
-			e2e.Failf("Failed testing loadbalancer on same node scheduling")
-		}
+		// Wait for the Windows server to come up
+		time.Sleep(15 * time.Second)
+		g.By("Test LB " + externalIP + " connectivity")
+		// Execute checkConnectivity(externalIP, 5) in the background
+		ctx, cancel := context.WithCancel(context.Background())
+		// defer cancel to avoid leaving a zombie goroutine
+		defer cancel()
+		runInBackground(ctx, cancel, checkConnectivity, externalIP, 5)
 
 		g.By("2 Windows node + N Windows pods, N >= 2 and Windows pods should be landed on different nodes, we scale to 5 Windows workloads")
-		// scaleDeployment(oc, "windows", 6, namespace)
-		if checkLBConnectivity(attempts, externalIP) {
-			e2e.Logf("Successfully tested loadbalancer on differnt node scheduling")
+		scaleDeployment(oc, "windows", 6, namespace)
+
+		// Context was cancelled due to an error
+		if ctx.Err() != nil {
+			e2e.Failf("Connectivity check failed")
 		} else {
-			e2e.Failf("Failed testing loadbalancer on differnt node scheduling")
+			cancel()
+			e2e.Logf("Ending checkConnectivity")
 		}
 	})
 
@@ -1130,4 +1136,60 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		waitForServicesCM(oc, windowsServicesCM)
 
 	})
+	g.It("Longduration-Author:rrasouli-NonPreRelease-High-35707-Re-create Windows nodes not matching wmco version annotation [Slow][Serial][Disruptive]", func() {
+
+		// go routine parameters
+		var ctx context.Context
+		var cancel context.CancelFunc
+		namespace := "winc-test"
+		if iaasPlatform != "vsphere" {
+			externalIP, err := getExternalIP(iaasPlatform, oc, "windows", namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ctx, cancel = context.WithCancel(context.Background())
+			// defer cancel to avoid leaving a zombie goroutine
+			defer cancel()
+			runInBackground(ctx, cancel, checkConnectivity, externalIP, 60)
+		}
+
+		g.By("Scalling machines to 3")
+		defer scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc), 18, 2, false)
+		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc), 18, 3, false)
+		// Wait for the added node to be in Ready state, otherwise workloads won't get
+		// scheduled into it.
+		waitWindowsNodesReady(oc, getWindowsHostNames(oc), 10*time.Second, 300*time.Second)
+		g.By("Scalling workloads to 9")
+		defer scaleDeployment(oc, "windows", 5, namespace)
+		scaleDeployment(oc, "windows", 9, namespace)
+		// TODO fetch nodes age
+		// getWindowsNodesUptime(oc, privateKey, iaasPlatform)
+		g.By("Tampering 3 Window machines and service continue ")
+		defer scaleDeployment(oc, "wmco", 1, "openshift-windows-machine-config-operator")
+		err := scaleDeployment(oc, "wmco", 0, "openshift-windows-machine-config-operator")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, node := range getWindowsHostNames(oc) {
+			oc.WithoutNamespace().Run("annotate").Args("node", node, "--overwrite", "windowsmachineconfig.openshift.io/version=invalidVersion").Output()
+			waitVersionAnnotationReady(oc, node, 30*time.Second, 600*time.Second)
+		}
+		// scaling WMCO back to 1 we can expect to have 3 new nodes instead of wrong version annotated nodes
+		err = scaleDeployment(oc, "wmco", 1, "openshift-windows-machine-config-operator")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		msg, err := oc.WithoutNamespace().Run("get").Args("pods", "-owide", "-n", "winc-test").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf(msg)
+		for ok := true; ok; ok = (getNumNodesWithAnnotation(oc, "invalidVersion") > 0) {
+			waitForMachinesetReady(oc, getWindowsMachineSetName(oc), 28, 3)
+		}
+
+		if iaasPlatform != "vsphere" {
+			// Context was cancelled due to an error
+			if ctx.Err() != nil {
+				e2e.Failf("Connectivity check failed")
+			} else {
+				cancel() // Stop go routine
+				e2e.Logf("Ending checkConnectivity")
+			}
+		}
+
+	})
+
 })

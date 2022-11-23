@@ -1,6 +1,7 @@
 package winc
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	v "github.com/openshift/openshift-tests-private/test/extended/mco"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -104,6 +106,20 @@ func checkVersionAnnotationReady(oc *exutil.CLI, windowsNodeName string) (bool, 
 		return false, err
 	}
 	return true, err
+}
+
+// getNumNodesWithAnnotation returns the number of Windows nodes with
+// a version annotation matching the string passed in annotationValue
+func getNumNodesWithAnnotation(oc *exutil.CLI, annotationValue string) int {
+	accum := 0
+	for _, node := range getWindowsHostNames(oc) {
+		msg, err := oc.WithoutNamespace().Run("get").Args("nodes", node, "-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/version}'").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Trim(msg, "'") == annotationValue {
+			accum++
+		}
+	}
+	return accum
 }
 
 func getWindowsMachineSetName(oc *exutil.CLI) string {
@@ -207,13 +223,11 @@ func createLinuxWorkload(oc *exutil.CLI, namespace string) {
 func checkWorkloadCreated(oc *exutil.CLI, deploymentName string, namespace string, replicas int) bool {
 	msg, err := oc.WithoutNamespace().Run("get").Args("deployment", deploymentName, "-o=jsonpath={.status.readyReplicas}", "-n", namespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	workloads := strconv.Itoa(replicas)
-	if msg != workloads {
-		e2e.Logf("Deployment " + deploymentName + " did not scale to " + workloads)
-		return false
+	numberOfWorkloads, _ := strconv.Atoi(msg)
+	if (msg == "" && replicas == 0) || numberOfWorkloads == replicas {
+		return true
 	}
-	e2e.Logf("Deployment " + deploymentName + " created successfuly.")
-	return true
+	return false
 }
 
 /*
@@ -247,11 +261,22 @@ func createWindowsWorkload(oc *exutil.CLI, namespace string, workloadFile string
 // Get an external IP of loadbalancer service
 func getExternalIP(iaasPlatform string, oc *exutil.CLI, os string, namespace string) (extIP string, err error) {
 	serviceName := getWorkloadName(os)
-	if iaasPlatform == "azure" {
-		extIP, err = oc.WithoutNamespace().Run("get").Args("service", serviceName, "-o=jsonpath={.status.loadBalancer.ingress[0].ip}", "-n", namespace).Output()
-	} else {
-		extIP, err = oc.WithoutNamespace().Run("get").Args("service", serviceName, "-o=jsonpath={.status.loadBalancer.ingress[0].hostname}", "-n", namespace).Output()
-	}
+	pollErr := wait.Poll(2*time.Second, 60*time.Second, func() (bool, error) {
+		if iaasPlatform == "azure" {
+			extIP, err = oc.WithoutNamespace().Run("get").Args("service", serviceName, "-o=jsonpath={.status.loadBalancer.ingress[0].ip}", "-n", namespace).Output()
+			e2e.Logf("Azure ExternalIP is %v", extIP)
+		} else {
+			extIP, err = oc.WithoutNamespace().Run("get").Args("service", serviceName, "-o=jsonpath={.status.loadBalancer.ingress[0].hostname}", "-n", namespace).Output()
+			e2e.Logf("AWS ExternalIP is %v", extIP)
+		}
+		if err != nil || extIP == "" {
+			e2e.Logf("Did not get Loadbalancer IP, trying next round")
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(pollErr, "Failed to get Loadbalancer IP after 1 minute ...")
+
 	return extIP, err
 }
 
@@ -432,18 +457,44 @@ func getNodeNameFromIP(oc *exutil.CLI, nodeIP string, iaasPlatform string) strin
 	return nodeName
 }
 
-func checkLBConnectivity(attempts int, externalIP string) bool {
-	retcode := true
-	for v := 1; v < attempts; v++ {
-		e2e.Logf("Check the Load balancer cluster IP responding: " + externalIP)
-		msg, _ := exec.Command("bash", "-c", "curl "+externalIP).Output()
-		if !strings.Contains(string(msg), "Windows Container Web Server") {
-			e2e.Logf("Windows Load balancer isn't working properly on the %v attempt", v)
-			retcode = false
-			break
+func runInBackground(ctx context.Context, cancel context.CancelFunc, check func(string, int) error, val string, delay int) {
+
+	// starting a goroutine that invokes the desired function in the background
+	go func() {
+		defer g.GinkgoRecover()
+		select {
+		case <-ctx.Done():
+			return
+		default:
 		}
+		// Invoke the function to perform the check
+		err := check(val, delay)
+
+		// If an error is returned, then cancel the context
+		// this will be checked if the context has been ended prematuraly
+		if err != nil {
+			cancel()
+			e2e.Logf("Error during invokation of %v(%v,%v): %v", check, val, delay, err.Error())
+			return
+		}
+	}()
+}
+
+func checkConnectivity(IP string, delay int) error {
+
+	for {
+		// we need here a wait timeout before LB is ready
+		time.Sleep(time.Duration(delay) * time.Second)
+		curl := exec.Command("bash", "-c", "curl --connect-timeout "+strconv.Itoa(delay)+" "+IP)
+		out, err := curl.Output()
+		if err != nil {
+			return fmt.Errorf("error in curl command %v the IP of %v is not accesible %v", err, IP, string(out))
+		}
+		if !strings.Contains(string(out), "Windows Container Web Server") {
+			return fmt.Errorf("FATAL: Windows Load balancer isn't working properly")
+		}
+		e2e.Logf("Checked LB connectivity of " + IP)
 	}
-	return retcode
 }
 
 func fetchAddress(oc *exutil.CLI, addressType string, machinesetName string) []string {
