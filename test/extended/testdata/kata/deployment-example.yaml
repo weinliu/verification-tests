@@ -21,7 +21,14 @@ objects:
           replicas: 1
           runtimeClassName: kata
           containers:
-            - image: "image-registry.openshift-image-registry.svc:5000/openshift/httpd:latest"
+            - args:
+                - -m
+                - http.server
+                - "8080"
+              command:
+                - python3
+              image: fedora:30
+              imagePullPolicy: IfNotPresent
               name: "${NAME}"
               ports:
                 - containerPort: 8080
@@ -30,7 +37,7 @@ objects:
                 allowPrivilegeEscalation: false
                 capabilities:
                   drop:
-                  - ALL              
+                    - ALL
                 seccompProfile:
                   type: RuntimeDefault
 
