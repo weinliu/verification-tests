@@ -1248,7 +1248,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 	})
 
 	// Bug: 1967228
-	g.It("Author:shudili-High-55825 503 Error page should not contain license for a vulnerable release of Bootstrap", func() {
+	g.It("Author:shudili-High-55825-the 503 Error page should not contain license for a vulnerable release of Bootstrap", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
