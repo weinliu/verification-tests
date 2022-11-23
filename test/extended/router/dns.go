@@ -495,4 +495,25 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(output).To(o.ContainSubstring("spec.cache.positiveTTL: Invalid value: \"1.6\""))
 		o.Expect(output).To(o.ContainSubstring("spec.cache.negativeTTL: Invalid value: \"-9s\""))
 	})
+
+	// Bug: 2006803
+	g.It("Author:shudili-Medium-56047-Set CoreDNS cache entries for forwarded zones [Disruptive]", func() {
+		resourceName := "dns.operator.openshift.io/default"
+		jsonPatch := "[{\"op\":\"add\", \"path\":\"/spec/servers\", \"value\":[{\"forwardPlugin\":{\"policy\":\"Random\",\"upstreams\":[\"8.8.8.8\"]},\"name\":\"test\",\"zones\":[\"mytest.ocp\"]}]}]"
+		defer restoreDNSOperatorDefault(oc)
+
+		g.By("patch the dns.operator/default and add a custom forward zone config")
+		patchGlobalResourceAsAdmin(oc, resourceName, jsonPatch)
+		delAllDNSPodsNoWait(oc)
+		ensureDNSRollingUpdateDone(oc)
+
+		g.By("check the cache entries of the custom forward zone in CoreDNS")
+		podList := getAllDNSPodsNames(oc)
+		dnsPodName := getRandomDNSPodName(podList)
+		zoneInCoreFile := readDNSCorefile(oc, dnsPodName, "mytest.ocp:5353", "-A15")
+		o.Expect(zoneInCoreFile).Should(o.And(
+			o.ContainSubstring("cache 900"),
+			o.ContainSubstring("denial 9984 30")))
+	})
+
 })
