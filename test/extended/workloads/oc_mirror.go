@@ -6,11 +6,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -309,8 +311,15 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).Should(o.HaveOccurred())
 		g.By("Try to extract with icsp file, will extract from localregisty")
 		imageContentSourcePolicy := findImageContentSourcePolicy()
-		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", "--command=oc", "--to=oc-mirror-workspace/", "--icsp-file="+imageContentSourcePolicy, serInfo.serviceName+"/openshift/release-images"+"@"+imageDigest, "--insecure").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr := wait.Poll(120*time.Second, 600*time.Second, func() (bool, error) {
+			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", "--command=oc", "--to=oc-mirror-workspace/", "--icsp-file="+imageContentSourcePolicy, serInfo.serviceName+"/openshift/release-images"+"@"+imageDigest, "--insecure").Execute()
+			if err != nil {
+				e2e.Logf("mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the mirror still failed"))
 	})
 
 })
