@@ -331,3 +331,19 @@ func GetRemainingResourcesNodesMap(oc *CLI, nodes []v1.Node) map[string]NodeReso
 	}
 	return rmap
 }
+
+// getNodesByRoleAndOsID returns list of nodes by role and OS ID
+func getNodesByRoleAndOsID(oc *CLI, role string, osID string) ([]string, error) {
+	var nodesList []string
+	nodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/"+role+",node.openshift.io/os_id="+osID, "-o", "jsonpath='{.items[*].metadata.name}'").Output()
+	nodes = strings.Trim(nodes, "'")
+	if len(nodes) != 0 {
+		nodesList = strings.Split(nodes, " ")
+	}
+	return nodesList, err
+}
+
+// GetAllWorkerNodesByOSID returns list of worker nodes by OS ID
+func GetAllWorkerNodesByOSID(oc *CLI, osID string) ([]string, error) {
+	return getNodesByRoleAndOsID(oc, "worker", osID)
+}

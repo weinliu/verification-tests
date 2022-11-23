@@ -9,7 +9,6 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
-	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 var _ = g.Describe("[sig-networking] SDN", func() {
@@ -18,7 +17,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	var oc = exutil.NewCLI("networking-sctp", exutil.KubeConfigPath())
 
 	// author: weliang@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-Author:weliang-Medium-28757-Establish pod to pod SCTP connections. [Disruptive]", func() {
+	g.It("Longduration-Author:weliang-Medium-28757-Establish pod to pod SCTP connections. [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking/sctp")
 			sctpClientPod       = filepath.Join(buildPruningBaseDir, "sctpclient.yaml")
@@ -29,21 +28,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		)
 
 		g.By("install load-sctp-module in all workers")
-		masterNodes, nodeErr := exutil.GetClusterNodesBy(oc, "master")
-		o.Expect(nodeErr).NotTo(o.HaveOccurred())
-		if len(masterNodes) == 1 {
-			g.Skip("Skip sctp testing on SNO cluster.")
-		}
-		installSctpModule(oc, sctpModule)
-
-		g.By("check load-sctp-module in all workers")
-		workerNodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
-		if err != nil {
-			g.Skip("Can not find any woker nodes in the cluster")
-		}
-		for i := range workerNodeList.Items {
-			checkSctpModule(oc, workerNodeList.Items[i].Name, oc.Namespace())
-		}
+		prepareSCTPModule(oc, sctpModule)
 
 		g.By("create new namespace")
 		oc.SetupProject()
@@ -112,7 +97,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: weliang@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:weliang-Medium-28758-Expose SCTP ClusterIP Services. [Disruptive]", func() {
+	g.It("Longduration-NonPreRelease-Author:weliang-Medium-28758-Expose SCTP ClusterIP Services. [Disruptive]", func() {
 		var (
 			buildPruningBaseDir  = exutil.FixturePath("testdata", "networking/sctp")
 			sctpClientPod        = filepath.Join(buildPruningBaseDir, "sctpclient.yaml")
@@ -126,21 +111,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		)
 
 		g.By("install load-sctp-module in all workers")
-		masterNodes, nodeErr := exutil.GetClusterNodesBy(oc, "master")
-		o.Expect(nodeErr).NotTo(o.HaveOccurred())
-		if len(masterNodes) == 1 {
-			g.Skip("Skip sctp testing on SNO cluster.")
-		}
-		installSctpModule(oc, sctpModule)
-
-		g.By("check load-sctp-module in all workers")
-		workerNodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
-		if err != nil {
-			g.Skip("Can not find any woker nodes in the cluster")
-		}
-		for i := range workerNodeList.Items {
-			checkSctpModule(oc, workerNodeList.Items[i].Name, oc.Namespace())
-		}
+		prepareSCTPModule(oc, sctpModule)
 
 		g.By("create new namespace")
 		oc.SetupProject()
