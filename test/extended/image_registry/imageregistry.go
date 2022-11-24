@@ -503,7 +503,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		checkPodsRunningWithLabel(oc, oc.Namespace(), "app=example-statefulset", 3)
 
 		g.By("Reapply the sample yaml")
-		applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", statefulsetsrc.template, "-p", "NAME="+statefulsetsrc.name, "NAMESPACE="+statefulsetsrc.namespace)
+		applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", statefulsetsrc.template, "-p", "NAME="+statefulsetsrc.name, "IMAGE="+statefulsetsrc.image, "NAMESPACE="+statefulsetsrc.namespace)
 		g.By("Check the pods are running")
 		checkPodsRunningWithLabel(oc, oc.Namespace(), "app=example-statefulset", 3)
 
