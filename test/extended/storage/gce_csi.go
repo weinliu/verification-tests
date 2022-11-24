@@ -40,8 +40,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: chaoyang@redhat.com
-	// [GKE-PD-CSI] [Dynamic Regional PV] regional pv should store data and sync in different avaiable zones
-	g.It("NonHyperShiftHOST-OSD_CCS-Author:chaoyang-Critical-37490-[GKE-PD-CSI] regional pv should store data and sync in different avaiable zones", func() {
+	// [GKE-PD-CSI] [Dynamic Regional PV] regional pv should store data and sync in different available zones
+	g.It("NonHyperShiftHOST-OSD_CCS-Author:chaoyang-Critical-37490-[GKE-PD-CSI] regional pv should store data and sync in different available zones", func() {
 		var (
 			storageClass = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("pd.csi.storage.gke.io"))
 			// Regional diskDisk size minim size is 200 GB
@@ -73,30 +73,30 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer pvc.deleteAsAdmin(oc)
 
 		g.By("# Create deployment A with the created pvc and wait for it becomes ready")
-		depA.createWithNodeSelector(oc, "topology\\.kubernetes\\.io/zone", myWorkers[0].avaiableZone)
+		depA.createWithNodeSelector(oc, "topology\\.kubernetes\\.io/zone", myWorkers[0].availableZone)
 		defer depA.deleteAsAdmin(oc)
 		depA.waitReady(oc)
 
-		g.By("# Check deployment's pod mount vlolume could read and write")
+		g.By("# Check deployment's pod mount volume could read and write")
 		depA.checkPodMountedVolumeCouldRW(oc)
 
 		if len(myWorkers) == 2 {
-			// Regional volumes have 2 avaiable zones volumes
-			g.By("Get the regional volume avaiable zones")
-			volAvaiableZones := pvc.getVolumeNodeAffinityAvaiableZones(oc)
-			o.Expect(volAvaiableZones).Should(o.HaveLen(2))
+			// Regional volumes have 2 available zones volumes
+			g.By("Get the regional volume available zones")
+			volAvailableZones := pvc.getVolumeNodeAffinityAvailableZones(oc)
+			o.Expect(volAvailableZones).Should(o.HaveLen(2))
 
 			g.By("# Delete the deployment A")
 			deleteSpecifiedResource(oc, "deployment", depA.name, depA.namespace)
 
 			g.By("# Create deployment B with the same pvc and wait for it becomes ready")
 			// deployment B nodeSelector zone is different from deploymentA
-			o.Expect(volAvaiableZones[0]).ShouldNot(o.Equal(volAvaiableZones[1]))
-			depB.createWithNodeSelector(oc, "topology\\.kubernetes\\.io/zone", deleteElement(volAvaiableZones, myWorkers[0].avaiableZone)[0])
+			o.Expect(volAvailableZones[0]).ShouldNot(o.Equal(volAvailableZones[1]))
+			depB.createWithNodeSelector(oc, "topology\\.kubernetes\\.io/zone", deleteElement(volAvailableZones, myWorkers[0].availableZone)[0])
 			defer depB.deleteAsAdmin(oc)
 			depB.waitReady(oc)
 
-			g.By("# Check deployment B also could read the origin data which is written data by deployment A in different avaiable zones")
+			g.By("# Check deployment B also could read the origin data which is written data by deployment A in different available zones")
 			depB.checkPodMountedVolumeDataExist(oc, true)
 		}
 	})

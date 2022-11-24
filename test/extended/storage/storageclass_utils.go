@@ -250,10 +250,10 @@ func getGidRangeStartValueFromStorageClass(oc *exutil.CLI, scName string) (int, 
 	return gidStartIntValue, nil
 }
 
-// Define CSI Driver Privisioners const
+// Define CSI Driver Provisioners const
 const (
-	ebsCsiDriverPrivisioner string = "ebs.csi.aws.com"
-	efsCsiDriverPrivisioner string = "efs.csi.aws.com"
+	ebsCsiDriverProvisioner string = "ebs.csi.aws.com"
+	efsCsiDriverProvisioner string = "efs.csi.aws.com"
 )
 
 // Generate storageClass parameters by volume type
@@ -263,7 +263,7 @@ func gererateCsiScExtraParametersByVolType(oc *exutil.CLI, csiProvisioner string
 		extraParameters        = make(map[string]interface{})
 	)
 	switch csiProvisioner {
-	case ebsCsiDriverPrivisioner:
+	case ebsCsiDriverProvisioner:
 		// aws-ebs-csi
 		// https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-volume-types.html
 		// io1, io2, gp2, gp3, sc1, st1,standard
@@ -276,7 +276,7 @@ func gererateCsiScExtraParametersByVolType(oc *exutil.CLI, csiProvisioner string
 		}
 	// aws-efs-csi
 	// https://github.com/kubernetes-sigs/aws-efs-csi-driver
-	case efsCsiDriverPrivisioner:
+	case efsCsiDriverProvisioner:
 		fsID := getFsIDFromStorageClass(oc, getPresetStorageClassNameByProvisioner(oc, cloudProvider, "efs.csi.aws.com"))
 		storageClassParameters = map[string]string{
 			"provisioningMode": volumeType,

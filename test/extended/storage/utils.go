@@ -78,12 +78,12 @@ func getRandomString() string {
 }
 
 // https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/device_naming.html
-// Define vaild devMap for aws instance ebs volume device "/dev/sd[f-p]"
+// Define valid devMap for aws instance ebs volume device "/dev/sd[f-p]"
 var devMaps = map[string]bool{"f": false, "g": false, "h": false, "i": false, "j": false,
 	"k": false, "l": false, "m": false, "n": false, "o": false, "p": false}
 
 // Get a valid device for EFS volume attach
-func getVaildDeviceForEbsVol() string {
+func getValidDeviceForEbsVol() string {
 	var validStr string
 	for k, v := range devMaps {
 		if !v {
@@ -258,7 +258,7 @@ func jsonPathsBatchProcessToFile(jsonInput string, jsonPathsAndActions []map[str
 				debugLogf("Delete jsonPath: \"%s\"", jsonPath)
 				o.Expect(err).NotTo(o.HaveOccurred())
 			default:
-				e2e.Logf("Unknow JSON process action: \"%s\"", action)
+				e2e.Logf("Unknown JSON process action: \"%s\"", action)
 			}
 		}
 	}
@@ -339,7 +339,7 @@ func applyResourceFromTemplateWithMultiExtraParameters(oc *exutil.CLI, jsonPaths
 	return oc.WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
 }
 
-// None dupulicate element slice intersect
+// None duplicate element slice intersect
 func sliceIntersect(slice1, slice2 []string) []string {
 	m := make(map[string]int)
 	sliceResult := make([]string, 0)
@@ -392,7 +392,7 @@ func isEnabledCapability(oc *exutil.CLI, component string) bool {
 	return strings.Contains(enabledCapabilities, component)
 }
 
-// Check if component is a disabled capability by knownCapabilities and enabledCapabilities list, skip if it is diabled.
+// Check if component is a disabled capability by knownCapabilities and enabledCapabilities list, skip if it is disabled.
 func checkOptionalCapability(oc *exutil.CLI, component string) {
 	if isKnownCapability(oc, component) && !isEnabledCapability(oc, component) {
 		g.Skip("Skip for " + component + " not enabled optional capability")
@@ -591,15 +591,15 @@ func waitCSOspecifiedStatusValueAsExpected(oc *exutil.CLI, specifiedStatus strin
 
 // Check Cluster Storage Operator healthy
 func checkCSOhealthy(oc *exutil.CLI) (bool, error) {
-	// CSO healthyStatus:[degradedStatus:False, progressingStatus:False, avaiableStatus:True, upgradeableStatus:True]
+	// CSO healthyStatus:[degradedStatus:False, progressingStatus:False, availableStatus:True, upgradeableStatus:True]
 	var healthyStatus = []string{"False", "False", "True", "True"}
 	csoStatusJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/storage", "-o", "json").Output()
 	degradedStatus := gjson.Get(csoStatusJSON, `status.conditions.#(type=Degraded).status`).String()
 	progressingStatus := gjson.Get(csoStatusJSON, `status.conditions.#(type=Progressing).status`).String()
-	avaiableStatus := gjson.Get(csoStatusJSON, `status.conditions.#(type=Available).status`).String()
+	availableStatus := gjson.Get(csoStatusJSON, `status.conditions.#(type=Available).status`).String()
 	upgradeableStatus := gjson.Get(csoStatusJSON, `status.conditions.#(type=Upgradeable).status`).String()
-	e2e.Logf("CSO degradedStatus:%s, progressingStatus:%v, avaiableStatus:%v, upgradeableStatus:%v", degradedStatus, progressingStatus, avaiableStatus, upgradeableStatus)
-	return reflect.DeepEqual([]string{degradedStatus, progressingStatus, avaiableStatus, upgradeableStatus}, healthyStatus), err
+	e2e.Logf("CSO degradedStatus:%s, progressingStatus:%v, availableStatus:%v, upgradeableStatus:%v", degradedStatus, progressingStatus, availableStatus, upgradeableStatus)
+	return reflect.DeepEqual([]string{degradedStatus, progressingStatus, availableStatus, upgradeableStatus}, healthyStatus), err
 }
 
 // Wait for Cluster Storage Operator become healthy
@@ -787,4 +787,23 @@ func isAwsOutpostCluster(oc *exutil.CLI) bool {
 		return false
 	}
 	return strings.Contains(getWorkersInfo(oc), `topology.ebs.csi.aws.com/outpost-id`)
+}
+
+// Definition of int64Slice type
+// Used for expand sort.Sort() method
+type int64Slice []int64
+
+// Len is the number of elements in the collection.
+func (p int64Slice) Len() int {
+	return len(p)
+}
+
+// Less describe a transitive ordering.
+func (p int64Slice) Less(i, j int) bool {
+	return p[i] < p[j]
+}
+
+// Swap swaps the elements with indexes i and j.
+func (p int64Slice) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
 }

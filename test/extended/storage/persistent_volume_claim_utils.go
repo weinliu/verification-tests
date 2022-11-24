@@ -217,9 +217,9 @@ func (pvc *persistentVolumeClaim) getDescription(oc *exutil.CLI) (string, error)
 }
 
 // Get the PersistentVolumeClaim bound pv's nodeAffinity nodeSelectorTerms matchExpressions "topology.gke.io/zone" values
-func (pvc *persistentVolumeClaim) getVolumeNodeAffinityAvaiableZones(oc *exutil.CLI) []string {
+func (pvc *persistentVolumeClaim) getVolumeNodeAffinityAvailableZones(oc *exutil.CLI) []string {
 	volName := pvc.getVolumeName(oc)
-	return getPvNodeAffinityAvaiableZones(oc, volName)
+	return getPvNodeAffinityAvailableZones(oc, volName)
 }
 
 // Expand the PersistentVolumeClaim capacity, e.g. expandCapacity string "10Gi"
@@ -402,7 +402,7 @@ func getValidRandomCapacityByCsiVolType(csiProvisioner string, volumeType string
 	// https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-volume-types.html
 	// io1, io2, gp2, gp3, sc1, st1,standard
 	// Default is gp3 if not set the volumeType in storageClass parameters
-	case ebsCsiDriverPrivisioner:
+	case ebsCsiDriverProvisioner:
 		// General Purpose SSD: 1 GiB - 16 TiB
 		ebsGeneralPurposeSSD := []string{"gp2", "gp3"}
 		// Provisioned IOPS SSD 4 GiB - 16 TiB
@@ -425,9 +425,9 @@ func getValidRandomCapacityByCsiVolType(csiProvisioner string, volumeType string
 		validRandomCapacityInt64 = getRandomNum(1, 10)
 	// aws-efs-csi
 	// https://github.com/kubernetes-sigs/aws-efs-csi-driver
-	// Accually for efs-csi volumes the capacity is meaningless
+	// Actually for efs-csi volumes the capacity is meaningless
 	// efs provides volumes almost unlimited capacity only billed by usage
-	case efsCsiDriverPrivisioner:
+	case efsCsiDriverProvisioner:
 		validRandomCapacityInt64 = getRandomNum(1, 10)
 	default:
 		validRandomCapacityInt64 = getRandomNum(1, 10)

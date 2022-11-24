@@ -863,12 +863,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		var nonZonedProvisioners = []string{"file.csi.azure.com", "efs.csi.aws.com"}
 		if len(schedulableWorkersWithSameAz) == 0 {
-			e2e.Logf("The test cluster has less than two schedulable workers in each avaiable zone, check whether there is non-zoned provisioner")
+			e2e.Logf("The test cluster has less than two schedulable workers in each available zone, check whether there is non-zoned provisioner")
 			if len(sliceIntersect(nonZonedProvisioners, supportProvisioners)) != 0 {
 				supportProvisioners = sliceIntersect(nonZonedProvisioners, supportProvisioners)
 				e2e.Logf("***Supportprosisioners contains nonZonedProvisioners: \"%v\", test continue***", supportProvisioners)
 			} else {
-				g.Skip("Skip: The test cluster has less than two schedulable workers in each avaiable zone and no nonZonedProvisioners!!")
+				g.Skip("Skip: The test cluster has less than two schedulable workers in each available zone and no nonZonedProvisioners!!")
 			}
 		}
 
@@ -1070,7 +1070,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			g.By("# Check the volume still exists in backend by volumeID")
 			getCredentialFromCluster(oc)
-			waitVolumeAvaiableOnBackend(oc, volumeID)
+			waitVolumeAvailableOnBackend(oc, volumeID)
 
 			g.By("# Use the retained volume create new pv,pvc,pod and wait for the pod running")
 			newPvName := "newpv-" + getRandomString()
@@ -1574,8 +1574,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: wduan@redhat.com
-	// OCP-47879 - [CSI Driver] [Snapshot] [Filesystem default] provisioning should provision storage with snapshot data source and restore it succesffully
-	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-47879-[CSI Driver] [Snapshot] [Filesystem default] provisioning should provision storage with snapshot data source and restore it succesffully", func() {
+	// OCP-47879 - [CSI Driver] [Snapshot] [Filesystem default] provisioning should provision storage with snapshot data source and restore it successfully
+	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-47879-[CSI Driver] [Snapshot] [Filesystem default] provisioning should provision storage with snapshot data source and restore it successfully", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
@@ -1656,8 +1656,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: wduan@redhat.com
-	// OCP-47930 - [CSI Driver] [Snapshot] [Filesystem ext4] provisioning should provision storage with snapshot data source and restore it succesffully
-	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-47930-[CSI Driver] [Snapshot] [Filesystem ext4] provisioning should provision storage with snapshot data source and restore it succesffully", func() {
+	// OCP-47930 - [CSI Driver] [Snapshot] [Filesystem ext4] provisioning should provision storage with snapshot data source and restore it successfully
+	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-47930-[CSI Driver] [Snapshot] [Filesystem ext4] provisioning should provision storage with snapshot data source and restore it successfully", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
@@ -1755,8 +1755,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: wduan@redhat.com
-	// OCP-47931 - [CSI Driver] [Snapshot] [Filesystem xfs] provisioning should provision storage with snapshot data source and restore it succesffully
-	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-47931-[CSI Driver] [Snapshot] [Filesystem xfs] provisioning should provision storage with snapshot data source and restore it succesffully", func() {
+	// OCP-47931 - [CSI Driver] [Snapshot] [Filesystem xfs] provisioning should provision storage with snapshot data source and restore it successfully
+	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-47931-[CSI Driver] [Snapshot] [Filesystem xfs] provisioning should provision storage with snapshot data source and restore it successfully", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
@@ -1853,8 +1853,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 	})
 	// author: chaoyang@redhat.com
-	// OCP-48723 - [CSI Driver] [Snapshot] [Block] provisioning should provision storage with snapshot data source and restore it succesffully
-	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Critical-48723-[CSI Driver] [Snapshot] [block] provisioning should provision storage with snapshot data source and restore it succesffully", func() {
+	// OCP-48723 - [CSI Driver] [Snapshot] [Block] provisioning should provision storage with snapshot data source and restore it successfully
+	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Critical-48723-[CSI Driver] [Snapshot] [block] provisioning should provision storage with snapshot data source and restore it successfully", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
@@ -2742,7 +2742,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 
 			labelExpressions := []map[string]interface{}{
-				{"key": topologyKey[cloudProvider], "values": []string{myWorkers[0].avaiableZone}},
+				{"key": topologyKey[cloudProvider], "values": []string{myWorkers[0].availableZone}},
 			}
 			matchLabelExpressions := []map[string]interface{}{
 				{"matchLabelExpressions": labelExpressions},
@@ -2766,7 +2766,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer pvc.delete(oc)
 
 			g.By("# Create deployment with new zone")
-			dep.createWithNodeSelector(oc, `topology\.kubernetes\.io\/zone`, myWorkers[1].avaiableZone)
+			dep.createWithNodeSelector(oc, `topology\.kubernetes\.io\/zone`, myWorkers[1].availableZone)
 			defer dep.deleteAsAdmin(oc)
 
 			g.By("# Check for dep remain in Pending state")
@@ -2791,8 +2791,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	//author: chaoyang@redhat.com
-	//OCP-27733 - [CSI Driver] [Snapshot] [Retain deletionPolicy] [Pre-provison] could re-used snapshotcontent after the snapshot/snapshotcontent deletion
-	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-27733-[CSI Driver] [Snapshot] [Retain deletionPolicy] [Pre-provison] could re-used snapshotcontent after the snapshot/snapshotcontent deletion", func() {
+	//OCP-27733 - [CSI Driver] [Snapshot] [Retain deletionPolicy] [Pre-provision] could re-used snapshotcontent after the snapshot/snapshotcontent deletion
+	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Medium-27733-[CSI Driver] [Snapshot] [Retain deletionPolicy] [Pre-provision] could re-used snapshotcontent after the snapshot/snapshotcontent deletion", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
@@ -3309,7 +3309,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				checkVolumeNotMountOnNode(oc, pvName, originNodeName)
 
 				g.By("# Check the volume still exists in backend by volumeID")
-				waitVolumeAvaiableOnBackend(oc, volumeID)
+				waitVolumeAvailableOnBackend(oc, volumeID)
 
 				g.By("# Use the retained volume create new pv,pvc,pod and wait for the pod running")
 				newPvName := "newpv-" + getRandomString()
@@ -3947,7 +3947,7 @@ func resizeOfflineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep
 
 	g.By("#. Wait for the deployment scale down completed and check nodes has no mounted volume")
 	dep.waitReady(oc)
-	// Offline resize need the volume is detached from the node and when resize completely then comsume the volume
+	// Offline resize need the volume is detached from the node and when resize completely then consume the volume
 	checkVolumeDetachedFromNode(oc, volName, nodeName)
 
 	g.By("#. Apply the patch to Resize the pvc volume")
@@ -3972,7 +3972,7 @@ func resizeOfflineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep
 	g.By("#. Get the pod status by label Running")
 	dep.waitReady(oc)
 
-	g.By("#. Waiting for the pvc size update sucessfully")
+	g.By("#. Waiting for the pvc size update successfully")
 	pvc.waitResizeSuccess(oc, pvc.capacity)
 
 	g.By("#. Check origin data intact and write new data in pod")

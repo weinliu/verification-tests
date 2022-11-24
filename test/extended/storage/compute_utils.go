@@ -43,7 +43,7 @@ func execCommandInSpecificNode(oc *exutil.CLI, nodeHostName string, command stri
 		return output, err
 	}
 	debugLogf("Executed \""+command+"\" on node \"%s\" *Output is* : \"%v\".", nodeHostName, output)
-	e2e.Logf("Executed \""+command+"\" on node \"%s\" *Successed* ", nodeHostName)
+	e2e.Logf("Executed \""+command+"\" on node \"%s\" *Successfully* ", nodeHostName)
 	return output, nil
 }
 
@@ -123,6 +123,7 @@ func getNodeListForPodByLabel(oc *exutil.CLI, namespace string, labelName string
 	return nodeList, err
 }
 
+// GetNodeNameByPod gets the pod located node's name
 func getNodeNameByPod(oc *exutil.CLI, namespace string, podName string) string {
 	nodeName, err := oc.WithoutNamespace().Run("get").Args("pod", podName, "-n", namespace, "-o=jsonpath={.spec.nodeName}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -130,7 +131,7 @@ func getNodeNameByPod(oc *exutil.CLI, namespace string, podName string) string {
 	return nodeName
 }
 
-// Get the cluster wokernodes info
+// Get the cluster worker nodes info
 func getWorkersInfo(oc *exutil.CLI) string {
 	workersInfo, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker", "-o", "json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -143,7 +144,7 @@ func getWorkersList(oc *exutil.CLI) []string {
 	return strings.Split(output, " ")
 }
 
-// Get the cluster schedulable woker nodes names with the same avaiable zone
+// Get the cluster schedulable worker nodes names with the same available zone
 func getSchedulableWorkersWithSameAz(oc *exutil.CLI) (schedulableWorkersWithSameAz []string, azName string) {
 	var (
 		workersInfo              = getWorkersInfo(oc)
@@ -167,7 +168,7 @@ func getSchedulableWorkersWithSameAz(oc *exutil.CLI) (schedulableWorkersWithSame
 			schedulableWorkersWithAz[azName] = worker
 		}
 	}
-	e2e.Logf("*** The test cluster has less than two schedulable linux workers in each avaiable zone! ***")
+	e2e.Logf("*** The test cluster has less than two schedulable linux workers in each available zone! ***")
 	return nil, azName
 }
 
@@ -190,8 +191,8 @@ func uncordonSpecificNode(oc *exutil.CLI, nodeName string) error {
 	return oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", "nodes/"+nodeName).Execute()
 }
 
-// Waiting specified node avaiable: scheduleable and ready
-func waitNodeAvaiable(oc *exutil.CLI, nodeName string) {
+// Waiting specified node available: scheduleable and ready
+func waitNodeAvailable(oc *exutil.CLI, nodeName string) {
 	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 		nodeInfo, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes/"+nodeName, "-o", "json").Output()
 		if err != nil {
@@ -215,7 +216,7 @@ func getClusterRegion(oc *exutil.CLI) string {
 	return region
 }
 
-// Check zoned or unzonded nodes in cluster, currently works for azure only
+// Check zoned or un-zoned nodes in cluster, currently works for azure only
 func checkNodeZoned(oc *exutil.CLI) bool {
 	// https://kubernetes-sigs.github.io/cloud-provider-azure/topics/availability-zones/#node-labels
 	if cloudProvider == "azure" {
@@ -234,16 +235,18 @@ func checkNodeZoned(oc *exutil.CLI) bool {
 }
 
 type node struct {
-	name         string
-	instanceID   string
-	avaiableZone string
-	osType       string
-	osImage      string
-	osID         string
-	role         []string
-	scheduleable bool
-	readyStatus  string // "True", "Unknown"(Node is poweroff or disconnect), "False"
-	architecture string
+	name                        string
+	instanceID                  string
+	availableZone               string
+	osType                      string
+	osImage                     string
+	osID                        string
+	role                        []string
+	scheduleable                bool
+	readyStatus                 string // "True", "Unknown"(Node is poweroff or disconnect), "False"
+	architecture                string
+	allocatableEphemeralStorage string
+	ephemeralStorageCapacity    string
 }
 
 // Get cluster all node information
@@ -268,12 +271,12 @@ func getAllNodesInfo(oc *exutil.CLI) []node {
 		if gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").metadata.labels.node-role\\.kubernetes\\.io\\/infra").Exists() {
 			nodeRole = append(nodeRole, "infra")
 		}
-		nodeAvaiableZone := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+")."+zonePath).String()
-		// Enchancemant: It seems sometimes aws worker node miss kubernetes az label, maybe caused by other parallel cases
-		if nodeAvaiableZone == "" && cloudProvider == "aws" {
+		nodeAvailableZone := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+")."+zonePath).String()
+		// Enhancement: It seems sometimes aws worker node miss kubernetes az label, maybe caused by other parallel cases
+		if nodeAvailableZone == "" && cloudProvider == "aws" {
 			e2e.Logf("The node \"%s\" kubernetes az label not exist, retry get from csi az label", nodeName)
 			zonePath = `metadata.labels.topology\.ebs\.csi\.aws\.com\/zone`
-			nodeAvaiableZone = gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+")."+zonePath).String()
+			nodeAvailableZone = gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+")."+zonePath).String()
 		}
 		readyStatus := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").status.conditions.#(type=Ready).status").String()
 		scheduleFlag := !gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").spec.unschedulable").Exists()
@@ -281,19 +284,23 @@ func getAllNodesInfo(oc *exutil.CLI) []node {
 		nodeOsID := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").metadata.labels.node\\.openshift\\.io\\/os_id").String()
 		nodeOsImage := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").status.nodeInfo.osImage").String()
 		nodeArch := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").status.nodeInfo.architecture").String()
+		nodeEphemeralStorageCapacity := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").status.capacity.ephemeral-storage").String()
+		nodeAllocatableEphemeralStorage := gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+").status.allocatable.ephemeral-storage").String()
 		tempSlice := strings.Split(gjson.Get(nodesInfoJSON, "items.#(metadata.name="+nodeName+")."+"spec.providerID").String(), "/")
 		nodeInstanceID := tempSlice[len(tempSlice)-1]
 		nodes = append(nodes, node{
-			name:         nodeName,
-			instanceID:   nodeInstanceID,
-			avaiableZone: nodeAvaiableZone,
-			osType:       nodeOsType,
-			osID:         nodeOsID,
-			osImage:      nodeOsImage,
-			role:         nodeRole,
-			scheduleable: scheduleFlag,
-			architecture: nodeArch,
-			readyStatus:  readyStatus,
+			name:                        nodeName,
+			instanceID:                  nodeInstanceID,
+			availableZone:               nodeAvailableZone,
+			osType:                      nodeOsType,
+			osID:                        nodeOsID,
+			osImage:                     nodeOsImage,
+			role:                        nodeRole,
+			scheduleable:                scheduleFlag,
+			architecture:                nodeArch,
+			readyStatus:                 readyStatus,
+			allocatableEphemeralStorage: nodeAllocatableEphemeralStorage,
+			ephemeralStorageCapacity:    nodeEphemeralStorageCapacity,
 		})
 	}
 	e2e.Logf("*** The \"%s\" Cluster nodes info is ***:\n \"%+v\"", cloudProvider, nodes)
@@ -332,7 +339,7 @@ func getSchedulableRhelWorkers(allNodes []node) []node {
 	return schedulableRhelWorkers
 }
 
-// Get one cluster schedulable linux woker, rhel linux worker first
+// Get one cluster schedulable linux worker, rhel linux worker first
 func getOneSchedulableWorker(allNodes []node) (expectedWorker node) {
 	schedulableRhelWorkers := getSchedulableRhelWorkers(allNodes)
 	if len(schedulableRhelWorkers) != 0 {
@@ -354,7 +361,7 @@ func getOneSchedulableWorker(allNodes []node) (expectedWorker node) {
 	return expectedWorker
 }
 
-// Get one cluster schedulable master woker
+// Get one cluster schedulable master worker
 func getOneSchedulableMaster(allNodes []node) (expectedMater node) {
 	if len(allNodes) == 1 { // In case of SNO cluster
 		expectedMater = allNodes[0]
@@ -371,7 +378,7 @@ func getOneSchedulableMaster(allNodes []node) (expectedMater node) {
 	return expectedMater
 }
 
-// Get 2 schedulable woker nodes with different avaiable zones
+// Get 2 schedulable worker nodes with different available zones
 func getTwoSchedulableWorkersWithDifferentAzs(oc *exutil.CLI) []node {
 	var (
 		expectedWorkers            = make([]node, 0, 2)
@@ -383,8 +390,8 @@ func getTwoSchedulableWorkersWithDifferentAzs(oc *exutil.CLI) []node {
 		return expectedWorkers
 	}
 	for i := 1; i <= len(allSchedulableLinuxWorkers); i++ {
-		if allSchedulableLinuxWorkers[0].avaiableZone != allSchedulableLinuxWorkers[i].avaiableZone {
-			e2e.Logf("2 Schedulable workers with different avaiable zones are: [%v|%v]", allSchedulableLinuxWorkers[0], allSchedulableLinuxWorkers[i])
+		if allSchedulableLinuxWorkers[0].availableZone != allSchedulableLinuxWorkers[i].availableZone {
+			e2e.Logf("2 Schedulable workers with different available zones are: [%v|%v]", allSchedulableLinuxWorkers[0], allSchedulableLinuxWorkers[i])
 			return append(expectedWorkers, allSchedulableLinuxWorkers[0], allSchedulableLinuxWorkers[i])
 		}
 	}

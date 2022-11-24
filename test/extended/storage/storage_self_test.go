@@ -19,11 +19,11 @@ func TestGererateCsiScExtraParametersAndValidRandomCapacityByVolType(t *testing.
 
 	csiVolumeTypes := []string{"io1", "io2", "gp2", "gp3", "sc1", "st1", "standard"}
 	for _, volumeType := range csiVolumeTypes {
-		scParameters := gererateCsiScExtraParametersByVolType(oc, ebsCsiDriverPrivisioner, volumeType)
-		validCapacity := getValidRandomCapacityByCsiVolType(ebsCsiDriverPrivisioner, volumeType)
+		scParameters := gererateCsiScExtraParametersByVolType(oc, ebsCsiDriverProvisioner, volumeType)
+		validCapacity := getValidRandomCapacityByCsiVolType(ebsCsiDriverProvisioner, volumeType)
 		as.Contains(interfaceToString(scParameters), volumeType)
 		debugLogf("*csiProvisioner:\"%s\"*volType:\"%s\"*Parameters:\"%+v\"*Capacty:\"%s\"",
-			ebsCsiDriverPrivisioner, volumeType, scParameters, validCapacity)
+			ebsCsiDriverProvisioner, volumeType, scParameters, validCapacity)
 	}
 }
 

@@ -389,7 +389,7 @@ func waitForPersistentVolumeStatusAsExpected(oc *exutil.CLI, pvName string, expe
 			status, err = getPersistentVolumeStatus(oc, pvName)
 			if err != nil {
 				// Adapt for LSO test
-				// When pvc deleted the related pv status become [Released -> Deleted -> Avaiable]
+				// When pvc deleted the related pv status become [Released -> Deleted -> Available]
 				// The default storageclass reclaimpolicy is delete but after deleted the LSO will generate a same name pv
 				if strings.Contains(interfaceToString(err), "not found") {
 					e2e.Logf("Get persist volume '%s' status failed of *not fonud*, try another round", pvName)
@@ -456,14 +456,14 @@ func checkPvNodeAffinityContains(oc *exutil.CLI, pvName string, content string) 
 }
 
 // Get persistent volume nodeAffinity nodeSelectorTerms matchExpressions "topology.gke.io/zone" values
-func getPvNodeAffinityAvaiableZones(oc *exutil.CLI, pvName string) []string {
+func getPvNodeAffinityAvailableZones(oc *exutil.CLI, pvName string) []string {
 	pvInfo, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o", "json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	avaiableZonesStr := gjson.Get(pvInfo, `spec.nodeAffinity.required.nodeSelectorTerms.#.matchExpressions.#(key=topology.gke.io/zone)#.values|@ugly|@flatten`).String()
+	availableZonesStr := gjson.Get(pvInfo, `spec.nodeAffinity.required.nodeSelectorTerms.#.matchExpressions.#(key=topology.gke.io/zone)#.values|@ugly|@flatten`).String()
 	delSybols := []string{"[", "]", "\""}
 	for _, delSybol := range delSybols {
-		avaiableZonesStr = strings.ReplaceAll(avaiableZonesStr, delSybol, "")
+		availableZonesStr = strings.ReplaceAll(availableZonesStr, delSybol, "")
 	}
-	e2e.Logf("PV \"%s\" nodeAffinity \"topology.gke.io/zone\" values: %s", pvName, avaiableZonesStr)
-	return strings.Split(avaiableZonesStr, ",")
+	e2e.Logf("PV \"%s\" nodeAffinity \"topology.gke.io/zone\" values: %s", pvName, availableZonesStr)
+	return strings.Split(availableZonesStr, ",")
 }

@@ -320,13 +320,13 @@ func (lv *localVolume) deleteAsAdmin(oc *exutil.CLI) {
 // Waiting for the localVolume CR become "Available"
 func (lv *localVolume) waitAvailable(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
-		avaiableFlag, errinfo := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", lv.namespace, "localvolume/"+lv.name, "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}").Output()
+		availableFlag, errinfo := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", lv.namespace, "localvolume/"+lv.name, "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}").Output()
 		if errinfo != nil {
 			e2e.Logf("Failed to get LV status: %v, wait for next round to get.", errinfo)
 			return false, nil
 		}
-		if avaiableFlag == "True" {
-			e2e.Logf("The localVolume \"%s\" have already become avaiable to use", lv.name)
+		if availableFlag == "True" {
+			e2e.Logf("The localVolume \"%s\" have already become available to use", lv.name)
 			return true, nil
 		}
 		return false, nil
@@ -338,7 +338,7 @@ func (lv *localVolume) waitAvailable(oc *exutil.CLI) {
 		e2e.Logf("***$ oc logs -l app=diskmaker-manager -c diskmaker-manager --tail=100\n***%s", output)
 		e2e.Logf("**************************************************************************")
 	}
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for the localVolume \"%s\" become avaiable to use timeout", lv.name))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Waiting for the localVolume \"%s\" become available to use timeout", lv.name))
 }
 
 // Define LocalVolumeSet CR
@@ -601,26 +601,26 @@ func (lvd *localVolumeDiscovery) deleteAsAdmin(oc *exutil.CLI) {
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("localVolumeDiscovery/"+lvd.name, "-n", lvd.namespace, "--ignore-not-found").Execute()
 }
 
-func (lvd *localVolumeDiscovery) waitDiscoveryAvaiable(oc *exutil.CLI) {
+func (lvd *localVolumeDiscovery) waitDiscoveryAvailable(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
-		lvdAvaiableStatus, getLvdStatusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", lvd.namespace, "localVolumeDiscovery/"+lvd.name, "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}").Output()
+		lvdAvailableStatus, getLvdStatusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", lvd.namespace, "localVolumeDiscovery/"+lvd.name, "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}").Output()
 		if getLvdStatusErr != nil {
 			e2e.Logf("Failed to get localvolumediscovery: %v", getLvdStatusErr)
 			return false, getLvdStatusErr
 		}
-		if lvdAvaiableStatus == "True" {
-			e2e.Logf("Localvolumediscovery is Avaiable now")
+		if lvdAvailableStatus == "True" {
+			e2e.Logf("Localvolumediscovery is Available now")
 			return true, nil
 		}
-		e2e.Logf("Localvolumediscovery status is still \"%s\" try the next round", lvdAvaiableStatus)
+		e2e.Logf("Localvolumediscovery status is still \"%s\" try the next round", lvdAvailableStatus)
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, "Wait Localvolumediscovery become Avaiable timeout")
+	exutil.AssertWaitPollNoErr(err, "Wait Localvolumediscovery become Available timeout")
 }
 
 // Create localVolumeDiscovery CR with specific nodes
 func (lvd *localVolumeDiscovery) waitDiscoveryResultsGenerated(oc *exutil.CLI) {
-	lvd.waitDiscoveryAvaiable(oc)
+	lvd.waitDiscoveryAvailable(oc)
 	lvd.syncDiscoveryResults(oc)
 }
 

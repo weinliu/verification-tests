@@ -109,7 +109,7 @@ func getAwsVolumeInfoByVolumeID(volumeID string) (string, error) {
 	return interfaceToString(volumeInfo), err
 }
 
-// Get the volume status "in use" or "avaiable" by persistent volume id
+// Get the volume status "in use" or "available" by persistent volume id
 func getAwsVolumeStatusByVolumeID(volumeID string) (string, error) {
 	volumeInfo, err := getAwsVolumeInfoByVolumeID(volumeID)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -157,11 +157,11 @@ func deleteBackendVolumeByVolumeID(oc *exutil.CLI, volumeID string) (string, err
 	}
 }
 
-// Check the volume status becomes avaiable, status is "avaiable"
-func checkVolumeAvaiableOnBackend(volumeID string) (bool, error) {
+// Check the volume status becomes available, status is "available"
+func checkVolumeAvailableOnBackend(volumeID string) (bool, error) {
 	volumeStatus, err := getAwsVolumeStatusByVolumeID(volumeID)
-	avaiableStatus := []string{"available"}
-	return contains(avaiableStatus, volumeStatus), err
+	availableStatus := []string{"available"}
+	return contains(availableStatus, volumeStatus), err
 }
 
 // Check the volume is deleted
@@ -171,17 +171,17 @@ func checkVolumeDeletedOnBackend(volumeID string) (bool, error) {
 	return contains(deletedStatus, volumeStatus), err
 }
 
-// Waiting the volume become avaiable
-func waitVolumeAvaiableOnBackend(oc *exutil.CLI, volumeID string) {
+// Waiting the volume become available
+func waitVolumeAvailableOnBackend(oc *exutil.CLI, volumeID string) {
 	switch cloudProvider {
 	case "aws":
 		if strings.Contains(volumeID, "::") {
 			e2e.Logf("Get EFS volume: \"%s\" status is under development", volumeID)
 		} else {
 			err := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
-				volumeStatus, errinfo := checkVolumeAvaiableOnBackend(volumeID)
+				volumeStatus, errinfo := checkVolumeAvailableOnBackend(volumeID)
 				if errinfo != nil {
-					e2e.Logf("the err:%v, wait for volume %v to become avaiable.", errinfo, volumeID)
+					e2e.Logf("the err:%v, wait for volume %v to become available.", errinfo, volumeID)
 					return volumeStatus, errinfo
 				}
 				if !volumeStatus {
@@ -189,7 +189,7 @@ func waitVolumeAvaiableOnBackend(oc *exutil.CLI, volumeID string) {
 				}
 				return volumeStatus, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The volume:%v, is not avaiable.", volumeID))
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The volume:%v, is not available.", volumeID))
 		}
 	case "vsphere":
 		e2e.Logf("Get %s backend volume status is under development", cloudProvider)
@@ -328,7 +328,7 @@ func newEbsVolume(opts ...volOption) ebsVolume {
 		Encrypted:        false,
 		Size:             getRandomNum(5, 15),
 		VolumeType:       "gp3",
-		Device:           getVaildDeviceForEbsVol(),
+		Device:           getValidDeviceForEbsVol(),
 	}
 	for _, o := range opts {
 		o(&defaultVol)
@@ -370,7 +370,7 @@ func (vol *ebsVolume) create(ac *ec2.EC2) string {
 	return volumeID
 }
 
-// Create ebs volume on aws backend and waiting for state value to "avaiable"
+// Create ebs volume on aws backend and waiting for state value to "available"
 func (vol *ebsVolume) createAndReadyToUse(ac *ec2.EC2) {
 	vol.create(ac)
 	vol.waitStateAsExpected(ac, "available")
@@ -404,12 +404,12 @@ func (vol *ebsVolume) attachToInstance(ac *ec2.EC2, instance node) *ec2.VolumeAt
 	}
 	req, resp := ac.AttachVolumeRequest(volumeInput)
 	err := req.Send()
-	// Enchancemant: When the node already attached several volumes retry new device
+	// Enhancement: When the node already attached several volumes retry new device
 	// to avoid device name conflict cause the attach action failed
 	if strings.Contains(fmt.Sprint(err), "is already in use") {
 		for i := 1; i <= 8; i++ {
 			devMaps[strings.Split(vol.Device, "")[len(vol.Device)-1]] = true
-			vol.Device = getVaildDeviceForEbsVol()
+			vol.Device = getValidDeviceForEbsVol()
 			volumeInput.Device = aws.String(vol.Device)
 			req, resp = ac.AttachVolumeRequest(volumeInput)
 			e2e.Logf("Attached to \"%s\" failed of \"%+v\" try next*%d* Device \"%s\"",
