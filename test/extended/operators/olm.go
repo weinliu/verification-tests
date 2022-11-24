@@ -4843,7 +4843,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover part of test case: OCP-25855, author: kuiwang@redhat.com
-	g.It("ConnectedOnly-Author:kuiwang-High-25855-Add the channel field to subscription_sync_count [Serial]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-High-25855-Add the channel field to subscription_sync_count [Serial]", func() {
 		exutil.SkipARM64(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
@@ -5998,7 +5998,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-32863, author: kuiwang@redhat.com
-	g.It("ConnectedOnly-Author:kuiwang-Medium-32863-Support resources required for SAP Gardener Control Plane Operator [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-Medium-32863-Support resources required for SAP Gardener Control Plane Operator [Disruptive]", func() {
 		exutil.SkipARM64(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
@@ -10279,7 +10279,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 	})
 
 	// It will cover test case: OCP-25783, author: kuiwang@redhat.com
-	g.It("ConnectedOnly-Author:kuiwang-High-25783-Subscriptions are not getting processed taking very long to get processed [Serial]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-High-25783-Subscriptions are not getting processed taking very long to get processed [Serial]", func() {
 		exutil.SkipARM64(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
