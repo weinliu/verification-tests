@@ -2963,10 +2963,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			defer volumesnapshot.delete(oc)
 
 			g.By("Check volumesnapshot status, Delete volumesnapshot and check it gets deleted successfully")
-			vsStatus, err := oc.WithoutNamespace().Run("get").Args("volumesnapshot", "-n", volumesnapshot.namespace, volumesnapshot.name, "-o=jsonpath={.status.readyToUse}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(vsStatus).To(o.ContainSubstring("false"))
-			e2e.Logf("The volumesnapshot %s ready_to_use status in namespace %s is in expected status %s", volumesnapshot.name, volumesnapshot.namespace, vsStatus)
+			o.Eventually(func() string {
+				vsStatus, _ := oc.WithoutNamespace().Run("get").Args("volumesnapshot", "-n", volumesnapshot.namespace, volumesnapshot.name, "-o=jsonpath={.status.readyToUse}").Output()
+				return vsStatus
+			}, 120*time.Second, 5*time.Second).Should(o.ContainSubstring("false"))
+			e2e.Logf("The volumesnapshot %s ready_to_use status in namespace %s is in expected False status", volumesnapshot.name, volumesnapshot.namespace)
 			deleteSpecifiedResource(oc, "volumesnapshot", volumesnapshot.name, volumesnapshot.namespace)
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
