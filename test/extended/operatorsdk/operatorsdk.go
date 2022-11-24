@@ -4112,7 +4112,20 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		output, err = makeCLI.Run("deploy").Args("IMG=" + imageTag).Output()
 		o.Expect(output).To(o.ContainSubstring("deployment.apps/contentcollections-controller-manager"))
 
-		waitErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		waitErr := wait.Poll(10*time.Second, 240*time.Second, func() (bool, error) {
+			podMsg, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pods", "-n", nsOperator).Output()
+			if !strings.Contains(podMsg, "Started container manager") {
+				e2e.Failf("Started container manager failed")
+				logDebugInfo(oc, nsOperator, "events", "pod")
+				return false, nil
+			}
+			return true, nil
+		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
+
+		waitErr = wait.Poll(10*time.Second, 240*time.Second, func() (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/contentcollections-controller-manager", "-c", "manager", "-n", nsOperator).Output()
 			if !strings.Contains(msg, "Starting workers") {
 				e2e.Failf("Starting workers failed")
