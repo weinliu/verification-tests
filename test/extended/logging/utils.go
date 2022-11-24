@@ -754,7 +754,7 @@ func getCurrentCSVFromPackage(oc *exutil.CLI, channel string, packagemanifest st
 	return currentCSV
 }
 
-func chkMustGather(oc *exutil.CLI, ns string) {
+func chkMustGather(oc *exutil.CLI, ns string, clin string) {
 	cloImg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "deployment.apps/cluster-logging-operator", "-o", "jsonpath={.spec.template.spec.containers[?(@.name == \"cluster-logging-operator\")].image}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("The cloImg is: " + cloImg)
@@ -773,20 +773,57 @@ func chkMustGather(oc *exutil.CLI, ns string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	replacer := strings.NewReplacer(".", "-", "/", "-", ":", "-", "@", "-")
 	cloImgDir := replacer.Replace(cloImgID)
-	checkPath := []string{
-		"timestamp",
-		"event-filter.html",
-		cloImgDir + "/gather-debug.log",
-		cloImgDir + "/cluster-scoped-resources",
-		cloImgDir + "/namespaces",
-		cloImgDir + "/cluster-logging/clo",
-		cloImgDir + "/cluster-logging/collector",
-		cloImgDir + "/cluster-logging/eo",
-		cloImgDir + "/cluster-logging/eo/elasticsearch-operator.logs",
-		cloImgDir + "/cluster-logging/es",
-		cloImgDir + "/cluster-logging/install",
-		cloImgDir + "/cluster-logging/kibana/",
-		cloImgDir + "/cluster-logging/clo/openshift-logging-events.yaml",
+	var checkPath []string
+	if clin == "collector" {
+		checkPath = []string{
+			"timestamp",
+			"event-filter.html",
+			cloImgDir + "/timestamp",
+			cloImgDir + "/gather-debug.log",
+			cloImgDir + "/event-filter.html",
+			cloImgDir + "/cluster-scoped-resources",
+			cloImgDir + "/namespaces",
+			cloImgDir + "/cluster-logging/clo",
+			cloImgDir + "/cluster-logging/clo/fluent.conf",
+			cloImgDir + "/cluster-logging/clo/run.sh",
+			cloImgDir + "/cluster-logging/clo/daemonsets.txt",
+			cloImgDir + "/cluster-logging/collector",
+			cloImgDir + "/cluster-logging/install",
+			cloImgDir + "/cluster-logging/install/install_plan-clo",
+			cloImgDir + "/cluster-logging/install/install_plan-eo",
+			cloImgDir + "/cluster-logging/install/subscription-clo",
+			cloImgDir + "/cluster-logging/install/subscription-eo",
+		}
+	} else {
+		checkPath = []string{
+			"timestamp",
+			"event-filter.html",
+			cloImgDir + "/timestamp",
+			cloImgDir + "/gather-debug.log",
+			cloImgDir + "/event-filter.html",
+			cloImgDir + "/cluster-scoped-resources",
+			cloImgDir + "/namespaces",
+			cloImgDir + "/cluster-logging/clo",
+			cloImgDir + "/cluster-logging/clo/fluent.conf",
+			cloImgDir + "/cluster-logging/clo/deployments.txt",
+			cloImgDir + "/cluster-logging/clo/run.sh",
+			cloImgDir + "/cluster-logging/clo/daemonsets.txt",
+			cloImgDir + "/cluster-logging/clo/elasticsearch.crt",
+			cloImgDir + "/cluster-logging/clo/elasticsearch.key",
+			cloImgDir + "/cluster-logging/clo/logging-es.crt",
+			cloImgDir + "/cluster-logging/clo/logging-es.key",
+			cloImgDir + "/cluster-logging/eo",
+			cloImgDir + "/cluster-logging/eo/eo-deployment.describe",
+			cloImgDir + "/cluster-logging/es",
+			cloImgDir + "/cluster-logging/es/cluster-elasticsearch",
+			cloImgDir + "/cluster-logging/es/cr",
+			cloImgDir + "/cluster-logging/collector",
+			cloImgDir + "/cluster-logging/install",
+			cloImgDir + "/cluster-logging/install/install_plan-clo",
+			cloImgDir + "/cluster-logging/install/install_plan-eo",
+			cloImgDir + "/cluster-logging/install/subscription-clo",
+			cloImgDir + "/cluster-logging/install/subscription-eo",
+		}
 	}
 
 	for _, v := range checkPath {

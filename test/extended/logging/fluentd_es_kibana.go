@@ -199,16 +199,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			elp.checkLogsFromRs(oc, "[DEBUG]", "elasticsearch")
 		})
 
-		// author: ikanse@redhat.com
 		g.It("CPaasrunOnly-Author:ikanse-Medium-40168-oc adm must-gather can collect logging data [Slow][Disruptive]", func() {
-			g.By("Deploy Logging with Fluentd only instance")
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
-			cl := resource{"clusterlogging", "instance", cloNS}
-			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
-
-			g.By("Check must-gather can collect cluster logging data")
-			chkMustGather(oc, cloNS)
 
 			g.By("Create external Elasticsearch instance")
 			oc.SetupProject()
@@ -225,18 +216,34 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create CLF")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-exteranl-es-and-default.yaml")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-external-es.yaml")
 			err := clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200")
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("Deploy EFK pods")
+			g.By("Deploy ClusterLogging with collector only instance")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
+
+			g.By("Check must-gather can collect cluster logging data")
+			chkMustGather(oc, cloNS, "collector")
+
+			g.By("Create CLF")
+			clf = resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			clfTemplate = exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-exteranl-es-and-default.yaml")
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploy ClusterLogging with Elasticsearch as default log store")
 			instance = exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
 			cl = resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace)
 
 			g.By("Check must-gather can collect cluster logging data")
-			chkMustGather(oc, cloNS)
+			chkMustGather(oc, cloNS, "elasticsearch")
 		})
 
 		// author ikanse@redhat.com
