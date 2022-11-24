@@ -61,7 +61,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("ConnectedOnly-Author:wewang-High-39027-Check AWS secret and access key with an OpenShift installed in a regular way", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:wewang-High-39027-Check AWS secret and access key with an OpenShift installed in a regular way", func() {
 		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		if !strings.Contains(output, "AWS") {
 			g.Skip("Skip for non-supported platform")
@@ -274,7 +274,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("DisconnectedOnly-Author:xiuwang-High-43715-Image registry pullthough should support pull image from the mirror registry with auth via imagecontentsourcepolicy", func() {
+	g.It("NonHyperShiftHOST-DisconnectedOnly-Author:xiuwang-High-43715-Image registry pullthough should support pull image from the mirror registry with auth via imagecontentsourcepolicy", func() {
 		g.By("Create a imagestream using payload image with pullthrough policy")
 		oc.SetupProject()
 		err := waitForAnImageStreamTag(oc, "openshift", "tools", "latest")
@@ -336,7 +336,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("NonPreRelease-Longduration-Author:xiuwang-Medium-43664-Check ServiceMonitor of registry which will not hotloop CVO", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:xiuwang-Medium-43664-Check ServiceMonitor of registry which will not hotloop CVO", func() {
 		g.By("Check the servicemonitor of openshift-image-registry")
 		out := getResource(oc, asAdmin, withoutNamespace, "servicemonitor", "-n", "openshift-image-registry", "-o=jsonpath={.items[1].spec.selector.matchLabels.name}")
 		o.Expect(out).To(o.ContainSubstring("image-registry-operator"))
@@ -392,7 +392,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:wewang-High-41414-There are 2 replicas for image registry on HighAvailable workers S3/Azure/GCS/Swift storage", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:wewang-High-41414-There are 2 replicas for image registry on HighAvailable workers S3/Azure/GCS/Swift storage", func() {
 		g.By("Check image registry pod")
 		//We set registry use pv on openstack&disconnect cluster, the case will fail on this scenario.
 		//Skip all the fs volume test, only run on object storage backend.
@@ -476,7 +476,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:wewang-High-45952-ConnectedOnly-Imported imagestreams should success in deploymentconfig", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:wewang-High-45952-ConnectedOnly-Imported imagestreams should success in deploymentconfig", func() {
 		var (
 			statefulsetFile = filepath.Join(imageRegistryBaseDir, "statefulset.yaml")
 			statefulsetsrc  = staSource{
@@ -559,7 +559,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("NonPreRelease-Author:xiuwang-High-45540-Registry should fall back to secondary ImageContentSourcePolicy Mirror [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Author:xiuwang-High-45540-Registry should fall back to secondary ImageContentSourcePolicy Mirror [Disruptive]", func() {
 		var (
 			icspFile = filepath.Join(imageRegistryBaseDir, "icsp-multi-mirrors.yaml")
 			icspsrc  = icspSource{
@@ -655,7 +655,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("NonPreRelease-Longduration-Author:jitli-ConnectedOnly-VMonly-Medium-33051-Images can be imported from an insecure registry without 'insecure: true' if it is in insecureRegistries in image.config/cluster [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:jitli-ConnectedOnly-VMonly-Medium-33051-Images can be imported from an insecure registry without 'insecure: true' if it is in insecureRegistries in image.config/cluster [Disruptive]", func() {
 
 		masterNode, _ := exutil.GetFirstMasterNode(oc)
 		defer func() {
@@ -1153,7 +1153,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		e2e.Logf("Only baremetal platform supported for the test")
 	})
 
-	g.It("VMonly-Author:xiuwang-Medium-48045-Update global pull secret for additional private registries[Disruptive]", func() {
+	g.It("NonHyperShiftHOST-VMonly-Author:xiuwang-Medium-48045-Update global pull secret for additional private registries[Disruptive]", func() {
 		g.By("Setup a private registry")
 		oc.SetupProject()
 		var regUser, regPass = "testuser", getRandomString()
@@ -1203,7 +1203,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:wewang-Medium-43731-Image registry pods should have anti-affinity rules", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:wewang-Medium-43731-Image registry pods should have anti-affinity rules", func() {
 		//When replicas=2 the image registry pods follow requiredDuringSchedulingIgnoredDuringExecution
 		//anti-affinity rule on 4.11 and above version, other replicas will follow topologySpreadContraints
 		g.By("Check replicas")
@@ -1344,7 +1344,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: xiuwang@redhat.com
-	g.It("DisconnectedOnly-Author:xiuwang-High-48739-Pull through works with icsp which source and mirror without full path", func() {
+	g.It("NonHyperShiftHOST-DisconnectedOnly-Author:xiuwang-High-48739-Pull through works with icsp which source and mirror without full path", func() {
 		g.By("Check if image-policy-aosqe created")
 		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("imagecontentsourcepolicy").Output()
 		if !strings.Contains(output, "image-policy-aosqe") {
@@ -1649,7 +1649,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-NonPreRelease-Medium-22032-High-50219-Setting nodeSelector and tolerations on nodes with taints registry works well [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:jitli-NonPreRelease-Medium-22032-High-50219-Setting nodeSelector and tolerations on nodes with taints registry works well [Disruptive]", func() {
 
 		g.By("Check the image-registry default topology")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.template.spec.topologySpreadConstraints}").Output()
@@ -1803,7 +1803,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("NonPreRelease-Longduration-Author:jitli-Medium-49747-Configure image registry to skip volume SELinuxLabel [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:jitli-Medium-49747-Configure image registry to skip volume SELinuxLabel [Disruptive]", func() {
 
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "image_registry")
@@ -2031,7 +2031,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: yyou@redhat.com
-	g.It("Author:yyou-Medium-50925-Add prometheusrules for image_registry_image_stream_tags_total and registry operations metrics", func() {
+	g.It("NonHyperShiftHOST-Author:yyou-Medium-50925-Add prometheusrules for image_registry_image_stream_tags_total and registry operations metrics", func() {
 		var (
 			operationData   prometheusImageregistryOperations
 			storageTypeData prometheusImageregistryStorageType
@@ -2315,7 +2315,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("DisconnectedOnly-Author:xiuwang-Critical-29693-Import image from a secure registry using node credentials", func() {
+	g.It("NonHyperShiftHOST-DisconnectedOnly-Author:xiuwang-Critical-29693-Import image from a secure registry using node credentials", func() {
 		g.By("Check if image-policy-aosqe created")
 		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("imagecontentsourcepolicy").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2465,7 +2465,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: yyou@redhat.com
-	g.It("Author:yyou-High-27562-Recreate Rollouts for Image Registry is enabled", func() {
+	g.It("NonHyperShiftHOST-Author:yyou-High-27562-Recreate Rollouts for Image Registry is enabled", func() {
 
 		g.By("Check Image registry's deployment defaults value")
 		output, operationErr := oc.WithoutNamespace().AsAdmin().Run("get").Args("configs.imageregistry.operator.openshift.io/cluster", "-o=jsonpath={.spec.rolloutStrategy}").Output()
@@ -2548,7 +2548,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-18998-Mirror multiple images to another registry", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-18998-Mirror multiple images to another registry", func() {
 
 		g.By("Check the cluster using architecture")
 		// https://issues.redhat.com/browse/IR-192
@@ -2759,7 +2759,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("DisconnectedOnly-Author:wewang-High-21988-Registry can use AdditionalTrustedCA to trust an external secured registry", func() {
+	g.It("NonHyperShiftHOST-DisconnectedOnly-Author:wewang-High-21988-Registry can use AdditionalTrustedCA to trust an external secured registry", func() {
 		g.By("Check registry-config")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap/registry-config", "-n", "openshift-config").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2989,7 +2989,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: wewang@redhat.com
-	g.It("DisconnectedOnly-Author:wewang-Medium-31767-Warning appears when registry use invalid AdditionalTrustedCA [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-DisconnectedOnly-Author:wewang-Medium-31767-Warning appears when registry use invalid AdditionalTrustedCA [Disruptive]", func() {
 		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("image.config/cluster", "-o=jsonpath={.spec.additionalTrustedCA.name}").Output()
 		o.Expect(output).To(o.Equal("registry-config"))
 
@@ -3114,7 +3114,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: wewang@redhat.com
-	g.It("ConnectedOnly-Author:wewang-High-26732-Increase the limit on the number of image signatures [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:wewang-High-26732-Increase the limit on the number of image signatures [Disruptive]", func() {
 		g.By("Scale down cvo to zero")
 		defer func() {
 			err := oc.AsAdmin().Run("scale").Args("deployment/cluster-version-operator", "--replicas=1", "-n", "openshift-cluster-version").Execute()
@@ -3308,7 +3308,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		exutil.AssertWaitPollNoErr(err, "The imagestreamchange trigger doesn't work, not update to use new image")
 	})
 
-	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Critical-55008-ImageStreamChange triggers using annotations should work on daemonset", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:xiuwang-Critical-55008-ImageStreamChange triggers using annotations should work on daemonset", func() {
 		var (
 			dsFile = filepath.Join(imageRegistryBaseDir, "daemonset-trigger-annoation.yaml")
 			dssrc  = dsSource{
@@ -3338,9 +3338,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Create daemonset")
 		dssrc.create(oc)
 		g.By("Check the pods are running")
-		checkPodsRunningWithLabel(oc, oc.Namespace(), "app=example-daemonset", 3)
-		podImage, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app=example-daemonset", "-o=jsonpath={.items[0].status.containerStatuses[0].imageID}", "-n", dssrc.namespace).Output()
-		o.Expect(strings.Contains(podImage, imagev1id)).To(o.BeTrue())
+		err = wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+			podImage, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app=example-daemonset", "-o=jsonpath={.items[0].status.containerStatuses[0].imageID}", "-n", dssrc.namespace).Output()
+			if strings.Contains(podImage, imagev1id) {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "The image is not the expect one")
 
 		g.By("Import second image to the imagestream")
 		err = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("test:v2", "--from=quay.io/openshifttest/hello-openshift@sha256:f79669a4290b8917fc6f93eb1d2508a9517f36d8887e38745250db2ef4b0bc40", "-n", dssrc.namespace).Execute()
