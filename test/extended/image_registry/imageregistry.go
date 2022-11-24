@@ -476,7 +476,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:wewang-High-45952-ConnectedOnly-Imported imagestreams should success in deploymentconfig", func() {
+	g.It("ROSA-OSD_CCS-ARO-Author:wewang-High-45952-ConnectedOnly-Imported imagestreams should success in deploymentconfig", func() {
 		var (
 			statefulsetFile = filepath.Join(imageRegistryBaseDir, "statefulset.yaml")
 			statefulsetsrc  = staSource{
@@ -604,7 +604,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:wewang-Medium-23583-Registry should not try to pullthrough himself by any name ", func() {
+	g.It("OSD_CCS-ARO-Author:wewang-Medium-23583-Registry should not try to pullthrough himself by any name ", func() {
 		g.By("Create route to expose the registry")
 		defer restoreRouteExposeRegistry(oc)
 		createRouteExposeRegistry(oc)
@@ -1203,7 +1203,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:wewang-Medium-43731-Image registry pods should have anti-affinity rules", func() {
+	g.It("NonHyperShiftHOST-OSD_CCS-ARO-Author:wewang-Medium-43731-Image registry pods should have anti-affinity rules", func() {
 		//When replicas=2 the image registry pods follow requiredDuringSchedulingIgnoredDuringExecution
 		//anti-affinity rule on 4.11 and above version, other replicas will follow topologySpreadContraints
 		g.By("Check replicas")
