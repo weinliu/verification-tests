@@ -2437,8 +2437,8 @@ nulla pariatur.`
 				g.By("check vsphere related log in machine-config-operator pod")
 				filteredVsphereLog, filterVsphereLogErr := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigOperator, mcoPod, "PlatformStatus.VSphere")
 				// if no platformStatus.Vsphere log found, the func will return error, that's expected
-				o.Expect(filterVsphereLogErr).Should(o.HaveOccurred(), "found vsphere related log in mco pod")
 				logger.Debugf("filtered vsphere log:\n %s", filteredVsphereLog)
+				o.Expect(filterVsphereLogErr).Should(o.HaveOccurred(), "found vsphere related log in mco pod")
 			}
 		}
 
@@ -2453,6 +2453,7 @@ nulla pariatur.`
 		o.Expect(filterClusterRoleBindingLogErr).Should(o.HaveOccurred(), "found ClusterRoleBindingUpdated log in mco pod")
 
 	})
+
 	g.It("Author:sregidor-NonPreRelease-Medium-54922-daemon: add check before updating kernelArgs [Disruptive]", func() {
 		var (
 			kernelArg1         = "test1"
@@ -2557,6 +2558,7 @@ nulla pariatur.`
 			"usbguard rpm should be installed in node %s", workerNode.GetName())
 		logger.Infof("OK!\n")
 	})
+
 	g.It("Author:sregidor-NonPreRelease-Medium-56123-Invalid extensions should degrade the machine config pool [Disruptive]", func() {
 		var (
 			validExtension   = "usbguard"
@@ -2575,6 +2577,39 @@ nulla pariatur.`
 
 		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason)
 
+	})
+
+	g.It("NonHyperShiftHOST-Author:rioliu-Medium-54974-silence audit log events for container infra", func() {
+
+		auditRuleFile := "/etc/audit/rules.d/mco-audit-quiet-containers.rules"
+		auditLogFile := "/var/log/audit/audit.log"
+
+		g.By("log into any cluster node to check audit rule file exists or not")
+		worker := NewNodeList(oc.AsAdmin()).GetAllLinuxWorkerNodesOrFail()[0]
+		o.Expect(worker.DebugNodeWithChroot("stat", auditRuleFile)).ShouldNot(
+			o.ContainSubstring("No such file or directory"),
+			"The audit rules file %s should exist in the nodes", auditRuleFile)
+
+		grepOut, grepErr := worker.DebugNodeWithOptions([]string{"--quiet"}, "chroot", "/host", "bash", "-c", fmt.Sprintf("grep -E 'NETFILTER_CFG|ANOM_PROMISCUOUS' %s", auditRuleFile))
+		o.Expect(grepErr).NotTo(o.HaveOccurred(), "check excluded msgtype in audit rule file failed")
+		o.Expect(grepOut).NotTo(o.BeEmpty(), "expected excluded audit log msgtype not found")
+		o.Expect(grepOut).Should(o.And(
+			o.ContainSubstring("NETFILTER_CFG"),
+			o.ContainSubstring("ANOM_PROMISCUOUS"),
+		), "audit log rules does not have excluded msstype NETFILTER_CFG and ANOM_PROMISCUOUS")
+
+		g.By("check audit log to make sure no msg types NETFILTER_CFG and ANOM_PROMISCUOUS")
+		allLinuxNodes, getLinuxNodeErr := NewNodeList(oc.AsAdmin()).GetAllLinux()
+		o.Expect(getLinuxNodeErr).NotTo(o.HaveOccurred(), "get all linux nodes failed")
+		for _, node := range allLinuxNodes {
+			logger.Infof("checking audit log on node %s", node.GetName())
+			filteredLog, filterLogErr := node.DebugNodeWithChroot("bash", "-c", fmt.Sprintf("grep -E 'NETFILTER_CFG|ANOM_PROMISCUOUS' %s", auditLogFile))
+			o.Expect(filterLogErr).To(o.HaveOccurred(), "excluded audit log found")
+			o.Expect(filteredLog).ShouldNot(o.Or(
+				o.ContainSubstring("NETFILTER_CFG"),
+				o.ContainSubstring("ANOM_PROMISCUOUS"),
+			), "audit log contains excluded msgtype NETFILTER_CFG or ANOM_PROMISCUOUS")
+		}
 	})
 })
 
