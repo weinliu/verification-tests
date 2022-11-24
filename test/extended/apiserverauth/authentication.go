@@ -29,7 +29,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	// author: xxia@redhat.com
 	// It is destructive case, will make co/authentical Available=False for a while, so adding [Disruptive]
 	// If the case duration is greater than 10 minutes and is executed in serial (labelled Serial or Disruptive), add Longduration
-	g.It("Longduration-Author:xxia-Medium-29917-Deleted authentication resources can come back immediately [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Longduration-Author:xxia-Medium-29917-Deleted authentication resources can come back immediately [Disruptive]", func() {
 		g.By("Delete namespace openshift-authentication")
 		err := oc.WithoutNamespace().Run("delete").Args("ns", "openshift-authentication").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -138,7 +138,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	// author: pmali@redhat.com
 	// It is destructive case, will make co/authentical Available=False for a while, so adding [Disruptive]
 
-	g.It("Author:pmali-High-33390-Network Stability check every level of a managed route [Disruptive] [Flaky]", func() {
+	g.It("NonHyperShiftHOST-Author:pmali-High-33390-Network Stability check every level of a managed route [Disruptive] [Flaky]", func() {
 		g.By("Check pods under openshift-authentication namespace is available")
 		err := wait.Poll(1*time.Second, 60*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-authentication").Output()
@@ -425,7 +425,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 
 	// author: rugong@redhat.com
 	// It is destructive case, will change oauth cluster and the case execution duration is greater than 5 min, so adding [Disruptive] and [NonPreRelease]
-	g.It("NonPreRelease-Author:rugong-Medium-22434-RequestHeader IDP consumes header values from requests of auth proxy [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Author:rugong-Medium-22434-RequestHeader IDP consumes header values from requests of auth proxy [Disruptive]", func() {
 		configMapPath, err := os.MkdirTemp("/tmp/", "tmp_22434")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(configMapPath)
@@ -683,7 +683,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: gkarager@redhat.com
-	g.It("Author:gkarager-Medium-49757-Missing content in default RBAC role, rolebinding, clusterrole and clusterrolebinding can be restored automatically when apiserver restarts [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:gkarager-Medium-49757-Missing content in default RBAC role, rolebinding, clusterrole and clusterrolebinding can be restored automatically when apiserver restarts [Disruptive]", func() {
 		tmpCaseFilePath, err := os.MkdirTemp("/tmp/", "tmp_49757")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer os.RemoveAll(tmpCaseFilePath)
