@@ -47,11 +47,11 @@ spec:
             runAsNonRoot: false
             windowsOptions:
               runAsUserName: "ContainerAdministrator"
-        resources:
-          requests:
-            cpu: 1
-          limits:
-            cpu: 1
+          resources:
+            requests:
+              cpu: 1
+            limits:
+              cpu: 1
       nodeSelector:
         beta.kubernetes.io/os: windows
         type: "winc"

@@ -149,14 +149,14 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		// May fail other cases in parallel, so run it in serial
 		_, err = oc.WithoutNamespace().Run("delete").Args("secret", "windows-user-data", "-n", "openshift-machine-api").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		pollErr := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-			msg, _ := oc.WithoutNamespace().Run("get").Args("secret", "-n", "openshift-machine-api").Output()
+		pollErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			msg, err := oc.WithoutNamespace().Run("get").Args("secret", "-n", "openshift-machine-api").Output()
 			if !strings.Contains(msg, "windows-user-data") {
 				e2e.Logf("Secret windows-user-data does not exist yet and wait up to 1 minute ...")
 				return false, nil
 			}
 			e2e.Logf("Secret windows-user-data exist now")
-			msg, err := oc.WithoutNamespace().Run("get").Args("secret", "windows-user-data", "-o=jsonpath={.data.userData}", "-n", "openshift-machine-api").Output()
+			msg, err = oc.WithoutNamespace().Run("get").Args("secret", "windows-user-data", "-o=jsonpath={.data.userData}", "-n", "openshift-machine-api").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			decodedUserData, _ := base64.StdEncoding.DecodeString(msg)
 			if !strings.Contains(string(decodedUserData), publicKeyContent) {
@@ -262,8 +262,15 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		if iaasPlatform == "aws" {
 			infrastructureID, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			zone := "us-east-2a"
+			zone, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			machinesetName = infrastructureID + "-" + machinesetName + "-worker-" + zone
+		} else if iaasPlatform == "gcp" {
+			infrastructureID, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			zone, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			machinesetName = infrastructureID + "-" + machinesetName + "-worker-" + strings.Split(zone, "-")[2]
 		}
 		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", "openshift-machine-api").Output()
 
@@ -277,12 +284,21 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Creating Windows workloads")
 		createWindowsWorkload(oc, namespace, "windows_web_server_scaler.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
 
-		g.By("Scalling up the Windows workload to 2")
-		scaleDeployment(oc, "windows", 2, namespace)
+		if iaasPlatform == "gcp" {
+			g.By("Scalling up the Windows workload to 4")
+			scaleDeployment(oc, "windows", 4, namespace)
 
-		// now we need to test check whether the machines auto scalled to 2
-		g.By("Waiting for Windows nodes to auto scale to 2")
-		waitForMachinesetReady(oc, machinesetName, 15, 2)
+			// now we need to test check whether the machines auto scalled to 4
+			g.By("Waiting for Windows nodes to auto scale to 4")
+			waitForMachinesetReady(oc, machinesetName, 15, 4)
+		} else {
+			g.By("Scalling up the Windows workload to 2")
+			scaleDeployment(oc, "windows", 2, namespace)
+
+			// now we need to test check whether the machines auto scalled to 2
+			g.By("Waiting for Windows nodes to auto scale to 2")
+			waitForMachinesetReady(oc, machinesetName, 15, 2)
+		}
 
 		g.By("Scalling down the Windows workload to 1")
 		scaleDeployment(oc, "windows", 1, namespace)
@@ -352,6 +368,12 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			zone, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			machinesetName = infrastructureID + "-" + machinesetName + "-worker-" + zone
+		} else if iaasPlatform == "gcp" {
+			infrastructureID, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			zone, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			machinesetName = infrastructureID + "-" + machinesetName + "-worker-" + strings.Split(zone, "-")[2]
 		}
 		address := setBYOH(oc, iaasPlatform, "InternalDNS", machinesetName)
 		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", "openshift-machine-api").Output()
@@ -392,6 +414,12 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			zone, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			machinesetName = infrastructureID + "-" + machinesetName + "-worker-" + zone
+		} else if iaasPlatform == "gcp" {
+			infrastructureID, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			zone, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			machinesetName = infrastructureID + "-" + machinesetName + "-worker-" + strings.Split(zone, "-")[2]
 		}
 		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", "openshift-machine-api").Output()
 		defer oc.WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", "openshift-windows-machine-config-operator").Output()
@@ -828,7 +856,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Check none of core/optional operators/operands would land on Windows nodes")
 		for _, winHostName := range getWindowsHostNames(oc) {
 			e2e.Logf("Check pods running on Windows node: " + winHostName)
-			msg, err = oc.WithoutNamespace().Run("get").Args("pods", "--all-namespaces", "-o=jsonpath={.items[*].metadata.namespace}", "--field-selector", "spec.nodeName="+winHostName, "--no-headers").Output()
+			msg, err = oc.WithoutNamespace().Run("get").Args("pods", "--all-namespaces", "-o=jsonpath={.items[*].metadata.namespace}", "-l=app=win-webserver", "--field-selector", "spec.nodeName="+winHostName, "--no-headers").Output()
 			for _, namespace := range strings.Split(msg, " ") {
 				e2e.Logf("Found pods running in namespace: " + namespace)
 				if namespace != "" && !strings.Contains(namespace, "winc") {

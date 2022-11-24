@@ -262,7 +262,7 @@ func createWindowsWorkload(oc *exutil.CLI, namespace string, workloadFile string
 func getExternalIP(iaasPlatform string, oc *exutil.CLI, os string, namespace string) (extIP string, err error) {
 	serviceName := getWorkloadName(os)
 	pollErr := wait.Poll(2*time.Second, 60*time.Second, func() (bool, error) {
-		if iaasPlatform == "azure" {
+		if iaasPlatform == "azure" || iaasPlatform == "gcp" {
 			extIP, err = oc.WithoutNamespace().Run("get").Args("service", serviceName, "-o=jsonpath={.status.loadBalancer.ingress[0].ip}", "-n", namespace).Output()
 			e2e.Logf("Azure ExternalIP is %v", extIP)
 		} else {
@@ -412,6 +412,19 @@ func getMachinesetFileName(oc *exutil.CLI, iaasPlatform, winVersion string, mach
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<infrastructureID>", infrastructureID)
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<template>", imageID)
 		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<name>", machineSetName)
+	} else if iaasPlatform == "gcp" {
+
+		zone, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		region, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.gcp.region}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<infrastructureID>", infrastructureID)
+		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<zone>", zone)
+		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<zone_suffix>", strings.Split(zone, "-")[2])
+		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<region>", region)
+		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<gcp_windows_image>", strings.Trim(imageID, `'`))
+		windowsMachineSet = strings.ReplaceAll(windowsMachineSet, "<name>", machineSetName)
+
 	} else {
 		e2e.Failf("IAAS platform: %s is not automated yet", iaasPlatform)
 	}
@@ -625,13 +638,12 @@ func waitUntilWMCOStatusChanged(oc *exutil.CLI, message string) {
 }
 
 func getWMCOVersionFromLogs(oc *exutil.CLI) string {
-	wmcoVersion, err := oc.WithoutNamespace().Run("logs").Args("deployment.apps/windows-machine-config-operator", "-n", "openshift-windows-machine-config-operator").Output()
+	wmcoLog, err := oc.WithoutNamespace().Run("logs").Args("deployment.apps/windows-machine-config-operator", "-n", "openshift-windows-machine-config-operator").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	re := regexp.MustCompile(`version.*`)
-	wmcoVersionRe := re.Find([]byte(wmcoVersion))
-	wmcoVersionArray := strings.Split(string(wmcoVersionRe), " ")
-	wmcoVersion = strings.Trim(wmcoVersionArray[1], "ֿ}")
-	wmcoVersion = strings.Trim(wmcoVersion, "ֿ\"")
+	// match everything after "version":"(7.0.0-802f3e0)"
+	// only in the lines that include the word "operator"
+	re, _ := regexp.Compile(`operator.*version":"(.*)"}`)
+	wmcoVersion := re.FindStringSubmatch(wmcoLog)[1]
 	return wmcoVersion
 }
 
@@ -671,12 +683,8 @@ func setBYOH(oc *exutil.CLI, iaasPlatform string, addressType string, machineset
 	} else if v.CompareVersions(clusterVersions, "<=", "4.9") && iaasPlatform == "vsphere" {
 		winVersion = "2004"
 	}
-	machinesetFileName := "aws_byoh_machineset.yaml"
-	if iaasPlatform == "azure" {
-		machinesetFileName = "azure_byoh_machineset.yaml"
-	} else if iaasPlatform == "vsphere" {
-		machinesetFileName = "vsphere_byoh_machineset.yaml"
-	}
+	machinesetFileName := iaasPlatform + "_byoh_machineset.yaml"
+
 	// here we need to use a hardcoded machineset 'byoh' since AWS machineset name is too long.
 	MSFileName, err := getMachinesetFileName(oc, iaasPlatform, winVersion, "byoh", machinesetFileName, "primary")
 	defer os.Remove(MSFileName)
