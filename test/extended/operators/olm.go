@@ -10117,7 +10117,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 	})
 
 	// It will cover test case: OCP-43642, author: xzha@redhat.com
-	g.It("ConnectedOnly-Author:xzha-Medium-43642-Alerts should be raised if the catalogsources are missing [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:xzha-Medium-43642-Alerts should be raised if the catalogsources are missing [Disruptive]", func() {
 		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		if !strings.Contains(output, "AWS") {
 			g.Skip("Skip for non-supported platform")
