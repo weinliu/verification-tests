@@ -383,18 +383,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
 			}
 
-			// sa/logcollector can't view audit logs
-			// create a new sa, and check audit logs
-			sa := resource{"serviceaccount", "loki-viewer-" + getRandomString(), ls.namespace}
-			defer sa.clear(oc)
-			_ = oc.AsAdmin().WithoutNamespace().Run("create").Args("sa", sa.name, "-n", sa.namespace).Execute()
-			defer removeLokiStackPermissionFromSA(oc, sa.name)
-			grantLokiPermissionsToSA(oc, sa.name, sa.name, sa.namespace)
-			token := getSAToken(oc, sa.name, sa.namespace)
-
-			lcAudit := newLokiClient(route).withToken(token).retry(5)
 			err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-				res, err := lcAudit.searchByKey("audit", "log_type", "audit")
+				res, err := lc.searchByKey("audit", "log_type", "audit")
 				if err != nil {
 					e2e.Logf("\ngot err when getting audit logs: %v\n", err)
 					return false, err
@@ -475,18 +465,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
 			e2e.Logf("App log count check complete with Success!")
 
-			//create a new sa to view audit logs
-			sa := resource{"serviceaccount", "loki-viewer-" + getRandomString(), ls.namespace}
-			defer sa.clear(oc)
-			_ = oc.AsAdmin().WithoutNamespace().Run("create").Args("sa", sa.name, "-n", sa.namespace).Execute()
-			defer removeLokiStackPermissionFromSA(oc, sa.name)
-			grantLokiPermissionsToSA(oc, sa.name, sa.name, sa.namespace)
-			token := getSAToken(oc, sa.name, sa.namespace)
-
 			g.By("Checking Audit logs")
 			//Audit logs should not be found for this case
-			lcAudit := newLokiClient(route).withToken(token).retry(5)
-			res, err := lcAudit.searchByKey("audit", "log_type", "audit")
+			res, err := lc.searchByKey("audit", "log_type", "audit")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(res.Data.Result)).Should(o.BeZero())
 			e2e.Logf("Audit logs not found!")
@@ -537,12 +518,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("waiting for the collector pods to be ready...")
 			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
 
-			//check default logs (app and infra) in loki stack
-			g.By("checking App and infra logs in loki")
+			g.By("checking app, infra and audit logs in loki")
 			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
-			for _, logType := range []string{"application", "infrastructure"} {
+			for _, logType := range []string{"application", "infrastructure", "audit"} {
 				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
 					res, err := lc.searchByKey(logType, "log_type", logType)
 					if err != nil {
@@ -563,21 +543,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
 			e2e.Logf("App log count check complete with Success!")
 
-			//create a new sa to view audit logs
-			sa := resource{"serviceaccount", "loki-viewer-" + getRandomString(), ls.namespace}
-			defer sa.clear(oc)
-			_ = oc.AsAdmin().WithoutNamespace().Run("create").Args("sa", sa.name, "-n", sa.namespace).Execute()
-			defer removeLokiStackPermissionFromSA(oc, sa.name)
-			grantLokiPermissionsToSA(oc, sa.name, sa.name, sa.namespace)
-			token := getSAToken(oc, sa.name, sa.namespace)
-
-			g.By("Checking Audit logs")
-			//Audit logs should be found for this case
-			lcAudit := newLokiClient(route).withToken(token).retry(5)
-			res, err := lcAudit.searchByKey("audit", "log_type", "audit")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(res.Data.Result) > 0).Should(o.BeTrue())
-			e2e.Logf("Audit logs are found!")
 		})
 
 	})

@@ -465,6 +465,59 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			exutil.AssertWaitPollNoErr(err, "Not all nodes' journal logs have been sent to ES")
 		})
 
+		// author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-High-47061-Vector: Container logs collection and metadata check.[Serial]", func() {
+			app := oc.Namespace()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_non_json_log_template.json")
+			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			clusterID, err := getClusterID(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create clusterlogforwarder instance to forward all logs to default Elasticsearch")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "forward_to_default.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("deploy EFK pods")
+			sc, err := getStorageClassName(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			cl.applyFromTemplate(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "STORAGE_CLASS="+sc, "COLLECTOR=fluentd")
+			g.By("waiting for the EFK pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By("check logs in ES")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForProjectLogsAppear(cloNS, podList.Items[0].Name, app, "app-00")
+			waitForIndexAppear(cloNS, podList.Items[0].Name, "infra-00")
+			waitForIndexAppear(cloNS, podList.Items[0].Name, "audit-00")
+
+			appLogs := searchDocByQuery(cloNS, podList.Items[0].Name, "app-00", "{\"query\": {\"regexp\": {\"kubernetes.namespace_name\": \""+app+"\"}}}")
+			log := appLogs.Hits.DataHits[0].Source
+			o.Expect(log.Message == "ㄅㄉˇˋㄓˊ˙ㄚㄞㄢㄦㄆ 中国 883.317µs ā á ǎ à ō ó ▅ ▆ ▇ █ 々").Should(o.BeTrue())
+			o.Expect(log.OpenShift.ClusterID == clusterID).Should(o.BeTrue())
+			o.Expect(log.OpenShift.Sequence > 0).Should(o.BeTrue())
+			infraLogs := searchDocByQuery(cloNS, podList.Items[0].Name, "infra-00", "")
+			o.Expect(infraLogs.Hits.DataHits[0].Source.OpenShift.ClusterID == clusterID).Should(o.BeTrue())
+			auditLogs := searchDocByQuery(cloNS, podList.Items[0].Name, "audit-00", "")
+			o.Expect(auditLogs.Hits.DataHits[0].Source.OpenShift.ClusterID == clusterID).Should(o.BeTrue())
+
+			for _, logType := range []string{"app", "infra", "audit"} {
+				for _, field := range []string{"@timestamp", "openshift.cluster_id", "openshift.sequence"} {
+					count, err := getDocCountByQuery(cloNS, podList.Items[0].Name, logType, "{\"query\": {\"bool\": {\"must_not\": {\"exists\": {\"field\": "+field+"}}}}}")
+					o.Expect(err).NotTo(o.HaveOccurred())
+					o.Expect(count == 0).Should(o.BeTrue())
+				}
+			}
+
+		})
+
 	})
 
 	g.Context("Vector Elasticsearch tests", func() {

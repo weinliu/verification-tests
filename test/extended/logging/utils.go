@@ -121,6 +121,10 @@ func getProxyFromEnv() string {
 	return proxy
 }
 
+func getClusterID(oc *exutil.CLI) (string, error) {
+	return oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion/version", "-ojsonpath={.spec.clusterID}").Output()
+}
+
 // waitForPackagemanifestAppear waits for the packagemanifest to appear in the cluster
 // chSource: bool value, true means the packagemanifests' source name must match the so.CatalogSource.SourceName, e.g.: oc get packagemanifests xxxx -l catalog=$source-name
 func (so *SubscriptionObjects) waitForPackagemanifestAppear(oc *exutil.CLI, chSource bool) {

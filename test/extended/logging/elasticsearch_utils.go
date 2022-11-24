@@ -78,7 +78,10 @@ func waitForProjectLogsAppear(ns string, pod string, projectName string, indexNa
 }
 
 func searchDocByQuery(ns string, pod string, indexName string, queryString string) SearchResult {
-	cmd := "es_util --query=" + indexName + "*/_search?format=JSON -d '" + queryString + "'"
+	cmd := "es_util --query=" + indexName + "*/_search?format=JSON"
+	if len(queryString) > 0 {
+		cmd += " -d '" + queryString + "'"
+	}
 	stdout, err := e2e.RunHostCmdWithRetries(ns, pod, cmd, 5*time.Second, 30*time.Second)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	res := SearchResult{}
