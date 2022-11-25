@@ -487,6 +487,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
 			cl.applyFromTemplate(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "STORAGE_CLASS="+sc, "COLLECTOR=fluentd")
 			g.By("waiting for the EFK pods to be ready...")
 			WaitForECKPodsToBeReady(oc, cloNS)
