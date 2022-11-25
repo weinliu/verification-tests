@@ -11,15 +11,14 @@ spec:
         name: alertmanager-main
         port: web
   affinity:
-    podAntiAffinity:
+    nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:
-        - labelSelector:
-            matchExpressions:
+        nodeSelectorTerms:
+        - matchExpressions:
               - values:
                   - dev
                 key: app_54038
-                operator: In
-          topologyKey: kubernetes.io/hostname
+                operator: NotIn
   probeSelector: {}
   podMonitorSelector: {}
   scrapeInterval: 30s
