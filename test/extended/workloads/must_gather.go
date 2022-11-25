@@ -19,7 +19,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	)
 
 	// author: yinzhou@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-45694-Support to collect olm data in must-gather [Slow]", func() {
+	g.It("NonHyperShiftHOST-OSD_CCS-ARO-Author:yinzhou-Medium-45694-Support to collect olm data in must-gather [Slow]", func() {
 		g.By("create new namespace")
 		oc.SetupProject()
 
