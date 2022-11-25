@@ -27,15 +27,17 @@ describe("namespace dropdown favorite test", () => {
 
     cy.visit('/search/all-namespaces');
     namespaceDropdown.clickTheDropdown();
-    namespaceDropdown.clickDefaultProjectToggle();
-    namespaceDropdown.filterNamespace('openshift');
+    namespaceDropdown.showSystemProjects();
 
     namespaces.forEach(namespace => {
+      namespaceDropdown.filterNamespace(namespace);
       namespaceDropdown.favoriteNamespace(namespace);
       cy.get(`li:contains(${namespace})`).should('have.length', 2);
     });
-
-    namespaceDropdown.clickDefaultProjectToggle();
+    // close the namespace dropdown and open again
+    namespaceDropdown.clickTheDropdown();
+    namespaceDropdown.clickTheDropdown();
+    namespaceDropdown.hideSystemProjects();
     namespaces.forEach(namespace => {
       cy.get(`li:contains(${namespace})`).should('have.length', 1);
     });

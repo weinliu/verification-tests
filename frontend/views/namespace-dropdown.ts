@@ -14,8 +14,29 @@ export const namespaceDropdown = {
     getProjectsDisplayed: () => {
         return cy.get('li[data-test="dropdown-menu-item-link"]');
     },
-    clickDefaultProjectToggle: () => {
-        cy.get('span.pf-c-switch__toggle').click()
+    showSystemProjects: () => {
+        cy.get('input[data-test="showSystemSwitch"]').then(($toggleinput) =>{
+            const on = $toggleinput.attr('data-checked-state');
+            if(on == 'false'){
+                cy.log('show system project switch off, will switch on');
+                cy.wrap($toggleinput).click({force: true});
+            }
+            else {
+                cy.log('show system project switch already on');
+            }
+        })
+    },
+    hideSystemProjects:() => {
+        cy.get('input[data-test="showSystemSwitch"]').then(($toggleinput) =>{
+            const on = $toggleinput.attr('data-checked-state');
+            if(on == 'true'){
+                cy.log('show system project switch on, will switch off');
+                cy.wrap($toggleinput).click({force: true});
+            }
+            else {
+                cy.log('show system project switch already off');
+            }
+        })
     },
 
     filterNamespace: (name: string) => {
@@ -28,9 +49,10 @@ export const namespaceDropdown = {
     },
 
     selectNamespace: (name: string) => {
-        namespaceDropdown.clickTheDropdown()
-        namespaceDropdown.filterNamespace(name)
-        cy.contains('button', name).click()
+        namespaceDropdown.clickTheDropdown();
+        namespaceDropdown.showSystemProjects();
+        namespaceDropdown.filterNamespace(name);
+        cy.contains('button', name).click();
     }
 
 }

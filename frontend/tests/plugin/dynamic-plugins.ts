@@ -1,5 +1,6 @@
 import { nav } from '../../upstream/views/nav';
 import { Overview, statusCard } from '../../views/overview';
+import { namespaceDropdown } from '../../views/namespace-dropdown';
 import { guidedTour } from '../../upstream/views/guided-tour';
 import { listPage } from '../../upstream/views/list-page';
 
@@ -126,6 +127,7 @@ describe('Dynamic plugins features', () => {
   });
 
   it('(OCP-54322,yapei) Expose ErrorBoundary capabilities', {tags: ['e2e','admin']}, () => {
+    cy.switchPerspective('Administrator');
     cy.visit('/sample-error-boundary-page');
     cy.contains('Launch buggy component').click({force: true});
     cy.contains('Show details').click({force: true});
@@ -134,6 +136,7 @@ describe('Dynamic plugins features', () => {
   });
 
   it('(OCP-52366, xiangyli) Add Dyamic Plugins to Cluster Overview Status card and notification drawer', {tags: ['e2e','admin']}, () => {
+    cy.switchPerspective('Administrator');
     Overview.goToDashboard();
     statusCard.togglePluginPopover();
     let total = 0;
@@ -147,6 +150,7 @@ describe('Dynamic plugins features', () => {
   });
 
   it('(OCP-54322,yapei) Improve overview detail item extension', {tags: ['e2e','admin']}, () =>{
+    cy.switchPerspective('Administrator');
     Overview.goToDashboard();
     cy.get('[data-test="detail-item-title"]').should('include.text','Custom Overview Detail Title');
     cy.get('[data-test="detail-item-value"]').should('include.text','Custom Overview Detail Info');
@@ -168,6 +172,32 @@ describe('Dynamic plugins features', () => {
     cy.visit('?disable-plugins')
     cy.get('.pf-c-nav__link',{timeout: 60000}).should('not.have.text','Demo Plugin');
     cy.get('.pf-c-nav__link',{timeout: 60000}).should('not.have.text','Customization');
+  });
+
+  it('(OCP-53123,yapei) Exposed components in dynamic-plugin-sdk', {tags: ['e2e','admin']}, () => {
+    // ResourceIcon is exposed
+    cy.switchPerspective('Administrator');
+    cy.visit('/demo-list-page');
+    cy.get('table').should('exist');
+    cy.contains('Sample ResourceIcon').should('exist');
+    cy.get('[title="Pod"]').should('exist');
+
+    // Modal is exposed
+    cy.visit('/test-modal');
+    cy.contains('Launch Modal').click({force: true});
+    cy.get('[role="dialog"]').should('be.visible');
+    cy.get('button[aria-label="Close"]').as('closebutton').click();
+    cy.contains('Launch Modal Asynchronously').click({force: true});
+    cy.get('[role="dialog"]').should('be.visible');
+    cy.get('@closebutton').click();
+
+    // NamespaceBar is exposed
+    cy.switchPerspective('Demo');
+    nav.sidenav.shouldHaveNavSection(['Example Namespaced Page']);
+    nav.sidenav.clickNavLink(['Example Namespaced Page']);
+    namespaceDropdown.selectNamespace('openshift-dns');
+    cy.get('h1').contains('Currently selected namespace').should('exist');
+    cy.get('h2').contains('openshift-dns').should('exist');
   });
 
   it('(OCP-53234,yapei) Show alert when console operator is Unmanaged', {tags: ['e2e','admin']}, () => {
