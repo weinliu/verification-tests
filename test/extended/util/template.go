@@ -69,7 +69,7 @@ func resourceFromTemplate(oc *CLI, create bool, namespace string, parameters ...
 	AssertWaitPollNoErr(resourceErr, fmt.Sprintf("fail to create/apply resource %v", resourceErr))
 }
 
-//GetRandomString to create random string
+// GetRandomString to create random string
 func GetRandomString() string {
 	chars := "abcdefghijklmnopqrstuvwxyz0123456789"
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -80,7 +80,7 @@ func GetRandomString() string {
 	return string(buffer)
 }
 
-//ApplyResourceFromTemplateWithNonAdminUser to as normal user to create resrouce from template
+// ApplyResourceFromTemplateWithNonAdminUser to as normal user to create resource from template
 func ApplyResourceFromTemplateWithNonAdminUser(oc *CLI, parameters ...string) error {
 	var configFile string
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
@@ -96,4 +96,23 @@ func ApplyResourceFromTemplateWithNonAdminUser(oc *CLI, parameters ...string) er
 
 	e2e.Logf("the file of resource is %s", configFile)
 	return oc.WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
+}
+
+// ProcessTemplate process template given file path and parameters
+func ProcessTemplate(oc *CLI, parameters ...string) string {
+	var configFile string
+
+	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+		output, err := oc.Run("process").Args(parameters...).OutputToFile(GetRandomString() + "config.json")
+		if err != nil {
+			e2e.Logf("the err:%v, and try next round", err)
+			return false, nil
+		}
+		configFile = output
+		return true, nil
+	})
+
+	AssertWaitPollNoErr(err, fmt.Sprintf("fail to process %v", parameters))
+	e2e.Logf("the file of resource is %s", configFile)
+	return configFile
 }

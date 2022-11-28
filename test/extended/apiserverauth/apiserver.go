@@ -2185,7 +2185,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PstChkUpgrade-Author:zxiao-High-44597-Upgrade SNO clusters given kube-apiserver implements startup-monitor mechanism", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-PstChkUpgrade-Author:zxiao-High-44597-Upgrade SNO clusters given kube-apiserver implements startup-monitor mechanism", func() {
 		g.By("1) Check if cluster is SNO.")
 		if !isSNOCluster(oc) {
 			g.Skip("This is not a SNO cluster, skip.")
@@ -3052,7 +3052,6 @@ spec:
 
 	// author: dpunia@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:dpunia-High-44738-The installer pod fall-backoff should not happen if latestAvailableRevision > targetRevision [Disruptive]", func() {
-
 		if !isSNOCluster(oc) {
 			g.Skip("This is not a SNO cluster, skip.")
 		}
@@ -3372,5 +3371,144 @@ EOF`, dcpolicyrepo)
 		curlOutput, err = oc.Run("exec").Args(podName, "-i", "--", "curl", url).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(curlOutput).To(o.ContainSubstring("Hello OpenShift!"))
+	})
+
+	// author: zxiao@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-Medium-12360-[origin_platformexp_403] The number of created API objects can not exceed quota limitation", func() {
+		g.By("1) Create new project required for this test execution")
+		oc.SetupProject()
+		namespace := oc.Namespace()
+		limit := 3
+
+		g.By("2) Get quota limits according to used resouce count under namespace")
+		type quotaLimits struct {
+			podLimit           int
+			resourcequotaLimit int
+			secretLimit        int
+			serviceLimit       int
+			configmapLimit     int
+		}
+
+		var limits quotaLimits
+		var err error
+
+		limits.podLimit, err = countResource(oc, "pods", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		limits.podLimit += limit
+
+		limits.resourcequotaLimit, err = countResource(oc, "resourcequotas", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		limits.resourcequotaLimit += limit + 1 // need to count the quota we added
+
+		limits.secretLimit, err = countResource(oc, "secrets", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		limits.secretLimit += limit
+
+		limits.serviceLimit, err = countResource(oc, "services", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		limits.serviceLimit += limit
+
+		limits.configmapLimit, err = countResource(oc, "configmaps", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		limits.configmapLimit += limit
+
+		e2e.Logf("Get limits of pods %d, resourcequotas %d, secrets %d, services %d, configmaps %d", limits.podLimit, limits.resourcequotaLimit, limits.secretLimit, limits.serviceLimit, limits.configmapLimit)
+
+		filename := "ocp12360-quota.yaml"
+		quotaName := "ocp12360-quota"
+		g.By(fmt.Sprintf("3) Create quota with resource file %s", filename))
+		template := getTestDataFilePath(filename)
+		params := []string{"-f", template, "-p", fmt.Sprintf("POD_LIMIT=%d", limits.podLimit), fmt.Sprintf("RQ_LIMIT=%d", limits.resourcequotaLimit), fmt.Sprintf("SECRET_LIMIT=%d", limits.secretLimit), fmt.Sprintf("SERVICE_LIMIT=%d", limits.serviceLimit), fmt.Sprintf("CM_LIMIT=%d", limits.configmapLimit), fmt.Sprintf("NAME=%s", quotaName)}
+		configFile := exutil.ProcessTemplate(oc, params...)
+		err = oc.AsAdmin().Run("create").Args("-f", configFile, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("4) Wait for quota to show up in command describe")
+		quotaDescribeErr := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+			describeOutput, err := oc.Run("describe").Args("quota", quotaName, "-n", namespace).Output()
+			if isMatched, matchErr := regexp.Match("secrets.*[0-9]", []byte(describeOutput)); isMatched && matchErr == nil && err == nil {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(quotaDescribeErr, "quota did not show up")
+
+		g.By(fmt.Sprintf("5) Create multiple secrets with resource file %s, expect failure for secert creations that exceed quota limit", filename))
+		for i := 1; i <= limit+1; i++ {
+			secretName := fmt.Sprintf("ocp12360-secret-%d", i)
+			output, err := oc.Run("create").Args("secret", "generic", secretName, "--from-literal=testkey=testvalue", "-n", namespace).Output()
+			if i <= limit {
+				g.By(fmt.Sprintf("5.%d) creating secret %s, within quota limit, expect success", i, secretName))
+				o.Expect(err).NotTo(o.HaveOccurred())
+			} else {
+				g.By(fmt.Sprintf("5.%d) creating secret %s, exceeds quota limit, expect failure", i, secretName))
+				o.Expect(err).To(o.HaveOccurred())
+				o.Expect(output).To(o.MatchRegexp("secrets.*forbidden: exceeded quota"))
+			}
+		}
+
+		filename = "ocp12360-pod.yaml"
+		g.By(fmt.Sprintf("6) Create multiple pods with resource file %s, expect failure for pod creations that exceed quota limit", filename))
+		template = getTestDataFilePath(filename)
+		for i := 1; i <= limit+1; i++ {
+			podName := fmt.Sprintf("ocp12360-pod-%d", i)
+			configFile := exutil.ProcessTemplate(oc, "-f", template, "-p", "NAME="+podName)
+			output, err := oc.Run("create").Args("-f", configFile, "-n", namespace).Output()
+			if i <= limit {
+				g.By(fmt.Sprintf("6.%d) creating pod %s, within quota limit, expect success", i, podName))
+				o.Expect(err).NotTo(o.HaveOccurred())
+			} else {
+				g.By(fmt.Sprintf("6.%d) creating pod %s, exceeds quota limit, expect failure", i, podName))
+				o.Expect(err).To(o.HaveOccurred())
+				o.Expect(output).To(o.MatchRegexp("pods.*forbidden: exceeded quota"))
+			}
+		}
+
+		g.By(fmt.Sprintf("7) Create multiple services with resource file %s, expect failure for resource creations that exceed quota limit", filename))
+		for i := 1; i <= limit+1; i++ {
+			serviceName := fmt.Sprintf("ocp12360-service-%d", i)
+			externalName := fmt.Sprintf("ocp12360-external-name-%d", i)
+			output, err := oc.Run("create").Args("service", "externalname", serviceName, "-n", namespace, "--external-name", externalName).Output()
+			if i <= limit {
+				g.By(fmt.Sprintf("7.%d) creating service %s, within quota limit, expect success", i, serviceName))
+				o.Expect(err).NotTo(o.HaveOccurred())
+			} else {
+				g.By(fmt.Sprintf("7.%d) creating service %s, exceeds quota limit, expect failure", i, serviceName))
+				o.Expect(err).To(o.HaveOccurred())
+				o.Expect(output).To(o.MatchRegexp("services.*forbidden: exceeded quota"))
+			}
+		}
+
+		filename = "ocp12360-quota.yaml"
+		g.By(fmt.Sprintf("8) Create multiple quota with resource file %s, expect failure for quota creations that exceed quota limit", filename))
+		template = getTestDataFilePath(filename)
+		for i := 1; i <= limit+1; i++ {
+			quotaName := fmt.Sprintf("ocp12360-quota-%d", i)
+			params := []string{"-f", template, "-p", fmt.Sprintf("POD_LIMIT=%d", limits.podLimit), fmt.Sprintf("RQ_LIMIT=%d", limits.resourcequotaLimit), fmt.Sprintf("SECRET_LIMIT=%d", limits.secretLimit), fmt.Sprintf("SERVICE_LIMIT=%d", limits.serviceLimit), fmt.Sprintf("CM_LIMIT=%d", limits.configmapLimit), fmt.Sprintf("NAME=%s", quotaName)}
+			configFile := exutil.ProcessTemplate(oc, params...)
+			output, err := oc.AsAdmin().Run("create").Args("-f", configFile, "-n", namespace).Output()
+			if i <= limit {
+				g.By(fmt.Sprintf("8.%d) creating quota %s, within quota limit, expect success", i, quotaName))
+				o.Expect(err).NotTo(o.HaveOccurred())
+			} else {
+				g.By(fmt.Sprintf("8.%d) creating quota %s, exceeds quota limit, expect failure", i, quotaName))
+				o.Expect(err).To(o.HaveOccurred())
+				o.Expect(output).To(o.MatchRegexp("resourcequotas.*forbidden: exceeded quota"))
+			}
+		}
+
+		g.By(fmt.Sprintf("9) Create multiple configmaps with resource file %s, expect failure for configmap creations that exceed quota limit", filename))
+		for i := 1; i <= limit+1; i++ {
+			configmapName := fmt.Sprintf("ocp12360-configmap-%d", i)
+			output, err := oc.Run("create").Args("configmap", configmapName, "-n", namespace).Output()
+			if i <= limit {
+				g.By(fmt.Sprintf("9.%d) creating configmap %s, within quota limit, expect success", i, configmapName))
+				o.Expect(err).NotTo(o.HaveOccurred())
+			} else {
+				g.By(fmt.Sprintf("9.%d) creating configmap %s, exceeds quota limit, expect failure", i, configmapName))
+				o.Expect(err).To(o.HaveOccurred())
+				o.Expect(output).To(o.MatchRegexp("configmaps.*forbidden: exceeded quota"))
+			}
+		}
 	})
 })

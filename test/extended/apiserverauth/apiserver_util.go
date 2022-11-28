@@ -367,6 +367,16 @@ func isTargetPortAvailable(oc *exutil.CLI, port int) bool {
 	return true
 }
 
+func countResource(oc *exutil.CLI, resource string, namespace string) (int, error) {
+	output, err := oc.Run("get").Args(resource, "-n", namespace, "-o", "jsonpath='{.items[*].metadata.name}'").Output()
+	output = strings.Trim(strings.Trim(output, " "), "'")
+	if output == "" {
+		return 0, err
+	}
+	resources := strings.Split(output, " ")
+	return len(resources), err
+}
+
 // GetAlertsByName get all the alerts
 func GetAlertsByName(oc *exutil.CLI, alertName string) (string, error) {
 	mon, monErr := exutil.NewPrometheusMonitor(oc.AsAdmin())
