@@ -76,6 +76,5 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).To(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("infrastructureprovider", "--all", "-n", clusterAPINamespace).Execute()
 		o.Expect(err).To(o.HaveOccurred())
-
 	})
 })

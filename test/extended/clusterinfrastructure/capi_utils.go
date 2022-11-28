@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -26,6 +27,13 @@ type awsClusterDescription struct {
 	template  string
 }
 
+type gcpClusterDescription struct {
+	name      string
+	namespace string
+	region    string
+	template  string
+}
+
 type awsMachineTemplateDescription struct {
 	name       string
 	namespace  string
@@ -35,6 +43,16 @@ type awsMachineTemplateDescription struct {
 	subnetName string
 	sgName     string
 	template   string
+}
+
+type gcpMachineTemplateDescription struct {
+	name        string
+	namespace   string
+	region      string
+	image       string
+	machineType string
+	clusterID   string
+	template    string
 }
 
 type capiMachineSetDescription struct {
@@ -47,15 +65,19 @@ type capiMachineSetDescription struct {
 	template            string
 }
 
+// skipForCAPINotExist skip the test if capi doesn't exist
+func skipForCAPINotExist(oc *exutil.CLI) {
+	capi, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", clusterAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if err != nil || len(capi) == 0 {
+		g.Skip("Skip for cluster api is not deployed!")
+	}
+}
+
 func (cluster *clusterDescription) createCluster(oc *exutil.CLI) {
 	e2e.Logf("Creating cluster ...")
 	err := applyResourceFromTemplate(oc, "-f", cluster.template, "-p", "NAME="+cluster.name, "NAMESPACE="+clusterAPINamespace, "KIND="+cluster.kind)
 	o.Expect(err).NotTo(o.HaveOccurred())
-}
-
-func (cluster *clusterDescription) deleteCluster(oc *exutil.CLI) error {
-	e2e.Logf("Deleting cluster ...")
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("cluster", cluster.name, "-n", clusterAPINamespace).Execute()
 }
 
 func (awsCluster *awsClusterDescription) createAWSCluster(oc *exutil.CLI) {
@@ -69,6 +91,17 @@ func (awsCluster *awsClusterDescription) deleteAWSCluster(oc *exutil.CLI) error 
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("awscluster", awsCluster.name, "-n", clusterAPINamespace).Execute()
 }
 
+func (gcpCluster *gcpClusterDescription) createGCPCluster(oc *exutil.CLI) {
+	e2e.Logf("Creating awsCluster ...")
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", gcpCluster.template, "-p", "NAME="+gcpCluster.name, "NAMESPACE="+clusterAPINamespace, "REGION="+gcpCluster.region)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (gcpCluster *gcpClusterDescription) deleteGCPCluster(oc *exutil.CLI) error {
+	e2e.Logf("Deleting a awsCluster ...")
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("gcpCluster", gcpCluster.name, "-n", clusterAPINamespace).Execute()
+}
+
 func (awsMachineTemplate *awsMachineTemplateDescription) createAWSMachineTemplate(oc *exutil.CLI) {
 	e2e.Logf("Creating awsMachineTemplate ...")
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", awsMachineTemplate.template, "-p", "NAME="+awsMachineTemplate.name, "NAMESPACE="+clusterAPINamespace, "PROFILE="+awsMachineTemplate.profile, "ZONE="+awsMachineTemplate.zone, "AMI="+awsMachineTemplate.ami, "SUBNETNAME="+awsMachineTemplate.subnetName, "SGNAME="+awsMachineTemplate.sgName)
@@ -78,6 +111,17 @@ func (awsMachineTemplate *awsMachineTemplateDescription) createAWSMachineTemplat
 func (awsMachineTemplate *awsMachineTemplateDescription) deleteAWSMachineTemplate(oc *exutil.CLI) error {
 	e2e.Logf("Deleting awsMachineTemplate ...")
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("awsmachinetemplate", awsMachineTemplate.name, "-n", clusterAPINamespace).Execute()
+}
+
+func (gcpMachineTemplate *gcpMachineTemplateDescription) createGCPMachineTemplate(oc *exutil.CLI) {
+	e2e.Logf("Creating awsMachineTemplate ...")
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", gcpMachineTemplate.template, "-p", "NAME="+gcpMachineTemplate.name, "NAMESPACE="+clusterAPINamespace, "IMAGE="+gcpMachineTemplate.image, "REGION="+gcpMachineTemplate.region, "CLUSTERID="+gcpMachineTemplate.clusterID, "MACHINETYPE="+gcpMachineTemplate.machineType)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (gcpMachineTemplate *gcpMachineTemplateDescription) deleteGCPMachineTemplate(oc *exutil.CLI) error {
+	e2e.Logf("Deleting awsMachineTemplate ...")
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("awsmachinetemplate", gcpMachineTemplate.name, "-n", clusterAPINamespace).Execute()
 }
 
 func (capiMachineSet *capiMachineSetDescription) createCapiMachineSet(oc *exutil.CLI) {

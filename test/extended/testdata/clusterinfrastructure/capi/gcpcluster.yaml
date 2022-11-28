@@ -1,0 +1,19 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: gcpcluster
+objects:
+  - apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: GCPCluster
+    metadata:
+      name: ${NAME}
+      namespace: ${NAMESPACE}
+    spec:
+      region: ${REGION}
+      project: openshift-qe
+      network:
+        name: ${NAME}-network
+parameters:
+- name: NAME
+- name: NAMESPACE
+- name: REGION

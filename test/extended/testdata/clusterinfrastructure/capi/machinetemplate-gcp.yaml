@@ -1,0 +1,38 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: machinetemplate-gcp
+objects:
+  - apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: GCPMachineTemplate
+    metadata:
+      name: ${NAME}
+      namespace: ${NAMESPACE}
+    spec:
+      template:
+        spec:
+          failureDomain: ${REGION}
+          disks:
+          - autoDelete: true
+            boot: true
+            image: ${IMAGE}
+            labels: null
+            sizeGb: 128
+            type: pd-ssd
+          machineType: ${MACHINETYPE}
+          networkInterfaces:
+          - network: ${CLUSTERID}-network
+            subnetwork: ${CLUSTERID}-worker-subnet
+          serviceAccounts:
+            email: ${CLUSTERID}-w@openshift-qe.iam.gserviceaccount.com
+            scopes:
+            - https://www.googleapis.com/auth/cloud-platform
+          tags:
+          - ${CLUSTERID}-worker
+parameters:
+- name: NAME
+- name: NAMESPACE
+- name: REGION
+- name: IMAGE
+- name: MACHINETYPE
+- name: CLUSTERID
