@@ -256,7 +256,7 @@ func createSecretForMinIOBucket(oc *exutil.CLI, bucketName, secretName, ns, minI
 	_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/"+minioSecret, "-n", minIONS, "--confirm", "--to="+dirname).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	endpoint := "http://minio." + minIONS + ".svc"
+	endpoint := "http://minio." + minIONS + ".svc:9000"
 	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "--from-file=access_key_id="+dirname+"/access_key_id", "--from-file=access_key_secret="+dirname+"/secret_access_key", "--from-literal=bucketnames="+bucketName, "--from-literal=endpoint="+endpoint, "-n", ns).Execute()
 }
 
@@ -983,9 +983,9 @@ type externalLoki struct {
 
 func (l externalLoki) deployLoki(oc *exutil.CLI) {
 	//Create configmap for Loki
-	CMTemplate := exutil.FixturePath("testdata", "logging", "external-log-stores", "loki", "loki-configmap.yaml")
+	cmTemplate := exutil.FixturePath("testdata", "logging", "external-log-stores", "loki", "loki-configmap.yaml")
 	lokiCM := resource{"configmap", l.name, l.namespace}
-	err := lokiCM.applyFromTemplate(oc, "-n", l.namespace, "-f", CMTemplate, "-p", "LOKINAMESPACE="+l.namespace, "-p", "LOKICMNAME="+l.name)
+	err := lokiCM.applyFromTemplate(oc, "-n", l.namespace, "-f", cmTemplate, "-p", "LOKINAMESPACE="+l.namespace, "-p", "LOKICMNAME="+l.name)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	//Create Deployment for Loki

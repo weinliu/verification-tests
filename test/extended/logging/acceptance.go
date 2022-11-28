@@ -1,12 +1,14 @@
 package logging
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -37,24 +39,32 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	})
 
 	// author qitang@redhat.com
-	g.It("HyperShiftGUEST-Author:qitang-Critical-53817-Logging acceptance testing: vector to loki[Slow][Serial]", func() {
+	g.It("Author:qitang-Critical-53817-Logging acceptance testing: vector to loki[Slow][Serial]", func() {
 		if !compareClusterResources(oc, "6", "10Gi") {
 			g.Skip("Current cluster doesn't have sufficient cpu/memory for this test!")
 		}
 		s := getStorageType(oc)
-		if len(s) == 0 {
+		sc, err := getStorageClassName(oc)
+		if err != nil || len(sc) == 0 {
+			g.Skip("can't get storageclass from cluster, skip this case")
+		}
+
+		g.By("checking if the cluster is a hypershift guest cluster")
+		masterNodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/master="})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// For hypershift guest cluster, the master node count is 0
+		// In hypershift guest cluters, can't get cloud credentials from cluster, so use minIO as the object storage
+		if len(masterNodes.Items) == 0 || len(s) == 0 {
 			defer removeMinIO(oc)
-			// deploy minIO
 			deployMinIO(oc)
 			s = "minio"
 		}
+
 		appProj := oc.Namespace()
 		jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
-		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		sc, err := getStorageClassName(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("deploy loki stack")
 		lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
 		ls := lokiStack{"loki-53817", "openshift-logging", "1x.extra-small", s, "storage-secret", sc, "logging-loki-53817-" + getInfrastructureName(oc), lokiStackTemplate}
@@ -99,17 +109,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 			e2e.Logf("\nthe %s log labels are: %v\n", logType, labels)
 		}
 
-		//sa/logcollector can't view audit logs
-		//create a new sa, and check audit logs
-		sa := resource{"serviceaccount", "loki-viewer-" + getRandomString(), ls.namespace}
-		defer sa.clear(oc)
-		_ = oc.AsAdmin().WithoutNamespace().Run("create").Args("sa", sa.name, "-n", sa.namespace).Execute()
-		defer removeLokiStackPermissionFromSA(oc, sa.name)
-		grantLokiPermissionsToSA(oc, sa.name, sa.name, sa.namespace)
-		token := getSAToken(oc, sa.name, sa.namespace)
-
-		lcAudit := newLokiClient(route).withToken(token).retry(5)
-		res, err := lcAudit.searchLogsInLoki("audit", "{log_type=\"audit\"}")
+		res, err := lc.searchLogsInLoki("audit", "{log_type=\"audit\"}")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(res.Data.Result) == 0).Should(o.BeTrue())
 
@@ -125,7 +125,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
-			res, err := lcAudit.searchLogsInLoki("audit", "{log_type=\"audit\"}")
+			res, err := lc.searchLogsInLoki("audit", "{log_type=\"audit\"}")
 			if err != nil {
 				e2e.Logf("\ngot err when checking audit logs: %v\n", err)
 				return false, err
