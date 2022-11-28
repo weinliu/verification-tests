@@ -184,6 +184,17 @@ type aclSettings struct {
 	AllowSetting string `json:"allow"`
 }
 
+type egressrouterMultipleDst struct {
+	name           string
+	namespace      string
+	reservedip     string
+	gateway        string
+	destinationip1 string
+	destinationip2 string
+	destinationip3 string
+	template       string
+}
+
 func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace)
@@ -419,6 +430,18 @@ func (service *windowGenericServiceResource) createWinServiceFromParams(oc *exut
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create svc %v", service.servicename))
+}
+
+func (egressrouter *egressrouterMultipleDst) createEgressRouterMultipeDst(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", egressrouter.template, "-p", "NAME="+egressrouter.name, "NAMESPACE="+egressrouter.namespace, "RESERVEDIP="+egressrouter.reservedip, "GATEWAY="+egressrouter.gateway, "DSTIP1="+egressrouter.destinationip1, "DSTIP2="+egressrouter.destinationip2, "DSTIP3="+egressrouter.destinationip3)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create egressrouter %v", egressrouter.name))
 }
 
 func (egressFirewall *egressFirewall2) deleteEgressFW2Object(oc *exutil.CLI) {
@@ -2078,4 +2101,49 @@ func prepareSCTPModule(oc *exutil.CLI, sctpModule string) {
 		}
 	}
 
+}
+
+// getIPv4Gateway get ipv4 gateway address
+func getIPv4Gateway(oc *exutil.CLI, nodeName string) string {
+	cmd := "ip -4 route | grep default | awk '{print $3}'"
+	output, err := exutil.DebugNode(oc, nodeName, "bash", "-c", cmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	re := regexp.MustCompile(`(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}`)
+	ips := re.FindAllString(output, -1)
+	if len(ips) == 0 {
+		return ""
+	}
+	e2e.Logf("The default gateway of node %s is %s", nodeName, ips[0])
+	return ips[0]
+}
+
+// getInterfacePrefix return the prefix of the primary interface IP
+func getInterfacePrefix(oc *exutil.CLI, nodeName string) string {
+	defInf, err := getDefaultInterface(oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	cmd := fmt.Sprintf("ip -4 -brief a show %s | awk '{print $3}' ", defInf)
+	output, err := exutil.DebugNode(oc, nodeName, "bash", "-c", cmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("IP address for default interface %s is %s", defInf, output)
+	sli := strings.Split(output, "/")
+	if len(sli) > 0 {
+		return strings.Split(sli[1], "\n")[0]
+	}
+	return "24"
+}
+
+func excludeSriovNodes(oc *exutil.CLI) []string {
+	// In rdu1 and rdu2 clusters, there are two sriov nodes with mlx nic, by default, egressrouter case cannot run on it
+	// So here exclude sriov nodes in rdu1 and rdu2 clusters, just use the other common worker nodes
+	var workers []string
+	nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	for _, node := range nodeList.Items {
+		_, ok := node.Labels["node-role.kubernetes.io/sriov"]
+		if !ok {
+			e2e.Logf("node %s is not sriov node,add it to worker list.", node.Name)
+			workers = append(workers, node.Name)
+		}
+	}
+	return workers
 }
