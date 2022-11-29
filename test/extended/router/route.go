@@ -240,4 +240,59 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		waitForOutput(oc, "default", "co/ingress", jpath, "The \"default\" ingress controller reports Degraded=True")
 		waitForOutput(oc, "default", "co/ingress", jpath, "Canary route is not admitted by the default ingress controller")
 	})
+
+	// bugzilla: 1934904
+	g.It("Author:mjoseph-NonPreRelease-High-56240-Canary daemonset can schedule pods to both worker and infra nodes [Disruptive]", func() {
+		var (
+			machinSetName = "machineset-56240"
+		)
+
+		g.By("Check the intial machines and canary pod details")
+		getResourceName(oc, "openshift-machine-api", "machine")
+		getResourceName(oc, "openshift-ingress-canary", "pods")
+
+		g.By("Create a new machineset")
+		exutil.SkipConditionally(oc)
+		ms := exutil.MachineSetDescription{Name: machinSetName, Replicas: 1}
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		g.By("Update machineset to schedule infra nodes")
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io", "machineset-56240", "-n", "openshift-machine-api", "-p", "{\"spec\":{\"template\":{\"spec\":{\"taints\":null}}}}", "--type=merge").Output()
+		o.Expect(out).To(o.ContainSubstring("machineset.machine.openshift.io/machineset-56240 patched"))
+		out, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("machinesets.machine.openshift.io", "machineset-56240", "-n", "openshift-machine-api", "-p", "{\"spec\":{\"template\":{\"spec\":{\"metadata\":{\"labels\":{\"ingress\": \"true\", \"node-role.kubernetes.io/infra\": \"\"}}}}}}", "--type=merge").Output()
+		o.Expect(out).To(o.ContainSubstring("machineset.machine.openshift.io/machineset-56240 patched"))
+		updatedMachineName := exutil.WaitForMachinesRunningByLabel(oc, 1, "machine.openshift.io/cluster-api-machineset=machineset-56240")
+
+		g.By("Reschedule the running machineset with infra details")
+		exutil.DeleteMachine(oc, updatedMachineName[0])
+		updatedMachineName1 := exutil.WaitForMachinesRunningByLabel(oc, 1, "machine.openshift.io/cluster-api-machineset=machineset-56240")
+
+		g.By("Check the canary deamonset is scheduled on infra node which is newly created")
+		// confirm the new machineset is already created
+		updatedMachineSetName := exutil.ListWorkerMachineSetNames(oc)
+		checkGivenStringPresentOrNot(true, updatedMachineSetName, machinSetName)
+		// confirm infra node presence among the nodes
+		infraNode := searchStringUsingLabel(oc, "node", "node-role.kubernetes.io/infra", ".items[*].metadata.name")
+		// confirm a canary pod got scheduled on to the infra node
+		searchInDescribeResource(oc, "node", infraNode, "canary")
+
+		g.By("Confirming the canary namespace is over-rided with the default node selector")
+		annotations, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "openshift-ingress-canary", "-ojsonpath={.metadata.annotations}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(annotations).To(o.ContainSubstring(`openshift.io/node-selector":""`))
+
+		g.By("Confirming the canary daemonset has the default tolerations included for infra role")
+		tolerations := fetchJSONPathValue(oc, "openshift-ingress-canary", "daemonset/ingress-canary", ".spec.template.spec.tolerations")
+		o.Expect(tolerations).To(o.ContainSubstring(`effect":"NoSchedule`))
+		o.Expect(tolerations).To(o.ContainSubstring(`key":"node-role.kubernetes.io/infra`))
+
+		g.By("Tainting the infra nodes and confirm canary pods continues to remain up and functional on those nodes")
+		nodeNameOfMachine := exutil.GetNodeNameFromMachine(oc, updatedMachineName1[0])
+		output, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", "nodes", nodeNameOfMachine, "node-role.kubernetes.io/infra:NoSchedule").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("node/" + nodeNameOfMachine + " tainted"))
+		// confirm the canary pod is still present in the infra node
+		searchInDescribeResource(oc, "node", infraNode, "canary")
+	})
 })

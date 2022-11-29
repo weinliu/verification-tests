@@ -1122,3 +1122,39 @@ func waitForConfigMapOutput(oc *exutil.CLI, ns, resourceName, searchString strin
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but cannot find the search string."))
 	return output
 }
+
+// this function search the polled output using label
+func searchStringUsingLabel(oc *exutil.CLI, resource, label, searchString string) string {
+	var output string
+	var err error
+	waitErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "-l", label, "-ojsonpath={"+searchString+"}").Output()
+		if err != nil || output == "" {
+			e2e.Logf("failed to get output: %v, retrying...", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but cannot find the search string."))
+	return output
+}
+
+// this function will search in the polled and described resource details
+func searchInDescribeResource(oc *exutil.CLI, resource, resourceName, match string) string {
+	var output string
+	var err error
+	waitErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		output, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args(resource, resourceName).Output()
+		if err != nil || output == "" {
+			e2e.Logf("failed to get describe output: %v, retrying...", err)
+			return false, nil
+		}
+		if !strings.Contains(output, match) {
+			e2e.Logf("cannot find the matched string in the output, retrying...")
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but cannot find the search string."))
+	return output
+}
