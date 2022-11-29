@@ -5,7 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -122,12 +122,19 @@ func getNumNodesWithAnnotation(oc *exutil.CLI, annotationValue string) int {
 	return accum
 }
 
-func getWindowsMachineSetName(oc *exutil.CLI) string {
-	// fetch the Windows MachineSet from all machinesets list
-	myJSON := "-o=jsonpath={.items[?(@.spec.template.metadata.labels.machine\\.openshift\\.io\\/os-id==\"Windows\")].metadata.name}"
-	windowsMachineSetName, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachineset, "-n", "openshift-machine-api", myJSON).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return windowsMachineSetName
+func getWindowsMachineSetName(oc *exutil.CLI, name string, iaasPlatform string, zone string) string {
+	machinesetName := name
+	if iaasPlatform == "aws" || iaasPlatform == "gcp" {
+		infrastructureID, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if iaasPlatform == "aws" {
+			machinesetName = infrastructureID + "-" + machinesetName + "-worker-" + zone
+		} else if iaasPlatform == "gcp" {
+			machinesetName = infrastructureID + "-" + machinesetName + "-worker-" + strings.Split(zone, "-")[2]
+		}
+
+	}
+	return machinesetName
 }
 
 func getWindowsHostNames(oc *exutil.CLI) []string {
@@ -245,7 +252,7 @@ func createWindowsWorkload(oc *exutil.CLI, namespace string, workloadFile string
 	}
 	tempFileName := namespace + "-windows-workload"
 	defer os.Remove(namespace + "-windows-workload")
-	ioutil.WriteFile(tempFileName, []byte(windowsWebServer), 0644)
+	os.WriteFile(tempFileName, []byte(windowsWebServer), 0644)
 	oc.WithoutNamespace().Run("create").Args("-f", tempFileName, "-n", namespace).Output()
 	// Wait up to 15 minutes for Windows workload ready in case of Windows image is not pre-pulled
 	if waitBool {
@@ -294,7 +301,7 @@ func getFileContent(baseDir string, name string) (fileContent string) {
 	if err != nil {
 		e2e.Failf("Failed to open file: %s", filePath)
 	}
-	fileRead, _ := ioutil.ReadAll(fileOpen)
+	fileRead, _ := io.ReadAll(fileOpen)
 	if err != nil {
 		e2e.Failf("Failed to read file: %s", filePath)
 	}
@@ -429,7 +436,7 @@ func getMachinesetFileName(oc *exutil.CLI, iaasPlatform, winVersion string, mach
 		e2e.Failf("IAAS platform: %s is not automated yet", iaasPlatform)
 	}
 	machinesetFileName = "availWindowsMachineSet" + machineSetName
-	ioutil.WriteFile(machinesetFileName, []byte(windowsMachineSet), 0644)
+	os.WriteFile(machinesetFileName, []byte(windowsMachineSet), 0644)
 	return machinesetFileName, err
 }
 
@@ -554,7 +561,7 @@ func setConfigmap(oc *exutil.CLI, configMapFile string, replacement map[string]s
 	ts := time.Now().UTC().Format(time.RFC3339)
 	cmFileName := "configMapFile" + strings.Replace(ts, ":", "", -1) // get rid of offensive colons
 	defer os.Remove(cmFileName)
-	ioutil.WriteFile(cmFileName, []byte(configmap), 0644)
+	os.WriteFile(cmFileName, []byte(configmap), 0644)
 	_, err := oc.WithoutNamespace().Run("create").Args("-f", cmFileName).Output()
 	return err
 }
@@ -618,10 +625,7 @@ func checkRunningServicesOnWindowsNode(svcs map[int]string, winServices map[stri
 
 func checkFoldersDoNotExist(bastionHost string, winInternalIP string, folder string, privateKey string, iaasPlatform string) bool {
 	msg, _ := runPSCommand(bastionHost, winInternalIP, fmt.Sprintf("Get-Item %v", folder), privateKey, iaasPlatform)
-	if !strings.Contains(msg, "ItemNotFoundException") {
-		return true
-	}
-	return false
+	return !strings.Contains(msg, "ItemNotFoundException")
 }
 
 func waitUntilWMCOStatusChanged(oc *exutil.CLI, message string) {
@@ -713,7 +717,7 @@ func createWindowsAutoscaller(oc *exutil.CLI, machineSetName, namespace string) 
 	defer os.Remove("machine-autoscaler.yaml")
 	machineAutoscaller := getFileContent("winc", "machine-autoscaler.yaml")
 	machineAutoscaller = strings.ReplaceAll(machineAutoscaller, "<windows_machineset_name>", machineSetName)
-	ioutil.WriteFile("machine-autoscaler.yaml", []byte(machineAutoscaller), 0644)
+	os.WriteFile("machine-autoscaler.yaml", []byte(machineAutoscaller), 0644)
 	_, err = oc.WithoutNamespace().Run("create").Args("-f", "machine-autoscaler.yaml", "-n", "openshift-machine-api").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
