@@ -8479,7 +8479,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 			ogSAtemplate        = filepath.Join(buildPruningBaseDir, "operatorgroup-serviceaccount.yaml")
-			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-legacy.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 			saName              = "scopedv40958"
 			og1                 = operatorGroupDescription{
@@ -8529,6 +8529,8 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		catsrc.namespace = oc.Namespace()
 		sub.namespace = oc.Namespace()
 		sub.catalogSourceNamespace = catsrc.namespace
+		defer exutil.RecoverNamespaceRestricted(oc, oc.Namespace())
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 
 		g.By("create catalog source")
 		catsrc.createWithCheck(oc, itName, dr)
@@ -8537,10 +8539,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.createWithoutCheck(oc, itName, dr)
 
 		g.By("The install plan is Failed, without og")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallPlanPending", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).check(oc)
 		installPlan := sub.getIP(oc)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Installing", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "no operator group found", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallPlanPending", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).check(oc)
 
 		g.By("delete operator")
 		sub.delete(itName, dr)
