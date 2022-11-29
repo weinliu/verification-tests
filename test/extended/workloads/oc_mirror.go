@@ -22,7 +22,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	var (
 		oc = exutil.NewCLI("ocmirror", exutil.KubeConfigPath())
 	)
-	g.It("NonHyperShiftHOST-Author:yinzhou-Medium-46517-List operator content with different options", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-Medium-46517-List operator content with different options", func() {
 		dirname := "/tmp/case46517"
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -124,7 +124,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 	})
-	g.It("Author:yinzhou-Medium-46818-Low-46523-check the User Agent for oc-mirror", func() {
+	g.It("ConnectedOnly-Author:yinzhou-Medium-46818-Low-46523-check the User Agent for oc-mirror", func() {
 		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
 		operatorS := filepath.Join(ocmirrorBaseDir, "catlog-loggings.yaml")
 
@@ -213,7 +213,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			e2e.Failf("Can't see the stateless mode log")
 		}
 	})
-	g.It("NonHyperShiftHOST-Author:yinzhou-Low-51093-oc-mirror init", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-Low-51093-oc-mirror init", func() {
 		g.By("Set podman registry config")
 		dirname := "/tmp/case51093"
 		err := os.MkdirAll(dirname, 0755)
