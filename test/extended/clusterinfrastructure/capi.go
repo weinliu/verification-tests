@@ -1,11 +1,14 @@
 package clusterinfrastructure
 
 import (
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
@@ -62,19 +65,35 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-medium-51088-[CAPI] Prevent users from deleting providers [Disruptive]", func() {
-		g.By("Check if cluster api on this platform is supported")
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere")
-		g.By("Check if cluster api is deployed")
-		capi, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", clusterAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(capi) == 0 {
-			g.Skip("Skip for cluster api is not deployed!")
-		}
+		skipForCAPINotExist(oc)
 
 		g.By("Delete coreprovider and infrastructureprovider")
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("coreprovider", "cluster-api", "-n", clusterAPINamespace).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("coreprovider", "cluster-api", "-n", clusterAPINamespace).Execute()
 		o.Expect(err).To(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("infrastructureprovider", "--all", "-n", clusterAPINamespace).Execute()
 		o.Expect(err).To(o.HaveOccurred())
+	})
+
+	// author: zhsun@redhat.com
+	g.It("Author:zhsun-Medium-51141-[CAPI] worker-user-data secret should be synced up [Disruptive]", func() {
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere")
+		skipForCAPINotExist(oc)
+
+		g.By("Delete worker-user-data in openshift-cluster-api namespace")
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "worker-user-data", "-n", clusterAPINamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check user-data secret is synced up from openshift-machine-api to openshift-cluster-api")
+		err = wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+			userData, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "-n", clusterAPINamespace).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(userData, "worker-user-data") {
+				return true, nil
+			}
+			e2e.Logf("Continue to next round")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "user-data secret isn't synced up from openshift-machine-api to openshift-cluster-api")
 	})
 })
