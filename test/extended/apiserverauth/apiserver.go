@@ -751,7 +751,7 @@ spec:
 		g.By("Checking cluster worker load before running clusterbuster")
 		cpuAvgValWorker, memAvgValWorker := checkClusterLoad(oc, "worker", "OCP-40667/nodes.log")
 		cpuAvgValMaster, memAvgValMaster := checkClusterLoad(oc, "master", "OCP-40667/nodes.log")
-		if cpuAvgValMaster < 75 || memAvgValMaster < 70 || cpuAvgValWorker < 75 || memAvgValWorker < 70 {
+		if cpuAvgValMaster < 70 || memAvgValMaster < 70 || cpuAvgValWorker < 60 || memAvgValWorker < 60 {
 			LoadCPUMemWorkload(oc)
 		}
 
@@ -833,7 +833,7 @@ spec:
 		var memAvgVal int
 		errLoad := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
 			cpuAvgVal, memAvgVal := checkClusterLoad(oc, "worker", "OCP-40667/nodes_new.log")
-			if cpuAvgVal > 75 || memAvgVal > 85 {
+			if cpuAvgVal > 70 || memAvgVal > 75 {
 				return false, nil
 			}
 			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
@@ -841,7 +841,7 @@ spec:
 			e2e.Logf("Node CPU %d %% and Memory %d %% consumption is normal....", cpuAvgVal, memAvgVal)
 			return true, nil
 		})
-		if cpuAvgVal > 75 || memAvgVal > 85 {
+		if cpuAvgVal > 70 || memAvgVal > 75 {
 			errlog := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node").Execute()
 			o.Expect(errlog).NotTo(o.HaveOccurred())
 		}
@@ -853,7 +853,7 @@ spec:
 			e2e.Logf("Number of %s is %v\n", key, value)
 		}
 
-		if cpuAvgVal > 75 || memAvgVal > 85 || len(noRouteLogs) > 0 || len(panicLogs) > 0 || len(coLogs) > 0 || len(nodeLogs) > 0 {
+		if cpuAvgVal > 70 || memAvgVal > 75 || len(noRouteLogs) > 0 || len(panicLogs) > 0 || len(coLogs) > 0 || len(nodeLogs) > 0 {
 			e2e.Failf("Prechk Test case: Failed.....Check above errors in case run logs.")
 		} else {
 			e2e.Logf("Prechk Test case: Passed.....There is no error abnormaliy found..")

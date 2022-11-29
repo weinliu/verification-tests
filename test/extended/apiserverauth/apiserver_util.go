@@ -408,14 +408,16 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	workerMEMtopall := []int{}
 	var workerMEMtopstr string
 	var workerMEMtopint int
-	preserveCPUP := 30
+	reserveCPUP := 40
 	cpuMetric := 800
 	memMetric := 700
-	preserveMemP := 40
-	n := 0
-	m := 0
+	reserveMemP := 40
+	snoPodCapacity := 250
+	reservePodCapacity := 60
+	n := 1
+	m := 1
 	dn := 1
-	r := 0
+	r := 1
 	c := 0
 	s := 0
 
@@ -427,9 +429,10 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	workerNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker", "--no-headers").OutputToFile("load-cpu-mem_" + randomStr + "-log")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	cmd := fmt.Sprintf(`cat %v |head -1 | awk '{print $1}'`, workerNode)
-	worker1, err := exec.Command("bash", "-c", cmd).Output()
+	cmdOut, err := exec.Command("bash", "-c", cmd).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	workerTop, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node", strings.Replace(string(worker1), "\n", "", 1), "--no-headers=true").Output()
+	worker1 := strings.Replace(string(cmdOut), "\n", "", 1)
+	workerTop, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node", worker1, "--no-headers=true").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	cpuUsageCmd := fmt.Sprintf(`echo "%v" | awk '{print $2}'`, workerTop)
 	cpuUsage, err := exec.Command("bash", "-c", cpuUsageCmd).Output()
@@ -446,6 +449,8 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	workerCPU1, err := exec.Command("bash", "-c", cmd).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	workerCPU := strings.Fields(string(workerCPU1))
+	workerNodeCount := len(workerCPU)
+	o.Expect(err).NotTo(o.HaveOccurred())
 
 	for i := 0; i < len(workerCPU); i++ {
 		workerCPUtop, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("top", "node", workerCPU[i], "--no-headers=true").OutputToFile("load-cpu-mem_" + randomStr + "-log")
@@ -463,36 +468,46 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 		}
 	}
 	cpuMax := workerCPUtopall[0]
-	availableCPU := int(float64(totalCPU) * (100 - float64(preserveCPUP) - float64(cpuMax)) / 100)
+	availableCPU := int(float64(totalCPU) * (100 - float64(reserveCPUP) - float64(cpuMax)) / 100)
 	n = int(availableCPU / int(cpuMetric))
-	// Avoid the cay3se that the calculated value of zero availableMem above will result in a zero divisor at below code.
-	if m == 0 {
-		m = 1
-	}
-	workerNodeCount := len(workerCPU)
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	p := workerNodeCount
-	if workerNodeCount == 1 {
-		dn = 1
-		r = 1
-		c = 5
-		s = 5
+	if n <= 0 {
+		e2e.Logf("No more CPU resource is available, no load will be added!")
 	} else {
-		r = 3
-		c = 2
-		if n > workerNodeCount {
-			dn = 3
+		p := workerNodeCount
+		if workerNodeCount == 1 {
+			dn = 1
+			r = 1
+			c = 3
+			s = 20
 		} else {
-			dn = workerNodeCount
+			r = 3
+			c = 3
+			if n > workerNodeCount {
+				dn = 3
+			} else {
+				dn = workerNodeCount
+			}
+			s = int(500 / n / dn)
 		}
-		s = int(500 / n / dn)
+		cmd1 := fmt.Sprintf(`oc describe node/%s | grep 'Non-terminated Pods' | grep -oP "[0-9]+"`, worker1)
+		cmdOut1, err := exec.Command("bash", "-c", cmd1).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		usedPods, err := strconv.Atoi(regexp.MustCompile(`[^0-9 ]+`).ReplaceAllString(string(cmdOut1), ""))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		availablePods := snoPodCapacity - usedPods - reservePodCapacity
+		if workerNodeCount > 1 {
+			availablePods = availablePods * workerNodeCount
+		}
+		nsMax := int(availablePods / dn / r)
+		if n > nsMax {
+			n = nsMax
+		}
+		e2e.Logf("Start CPU load ...")
+		cpuloadCmd := fmt.Sprintf(`clusterbuster -N %v -B cpuload -P server -b 5 -r %v -p %v -d %v -c %v -s %v -W -m 1000 -D .2 -M 1 -t 36000 -x -v > %v`, n, r, p, dn, c, s, dirname+"clusterbuster-cpu-log")
+		e2e.Logf("%v", cpuloadCmd)
+		_, err = exec.Command("bash", "-c", cpuloadCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 	}
-	e2e.Logf("Start CPU load ...")
-	cpuloadCmd := fmt.Sprintf(`clusterbuster -N %v -B cpuload -P server -b 5 -r %v -p %v -d %v -c %v -s %v -W -m 1000 -D .2 -M 1 -t 36000 -x -v > %v`, n, r, p, dn, c, s, dirname+"clusterbuster-cpu-log")
-	e2e.Logf("%v", cpuloadCmd)
-	_, err = exec.Command("bash", "-c", cpuloadCmd).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
 
 	memUsageCmd := fmt.Sprintf(`echo "%v" | awk '{print $4}'`, workerTop)
 	memUsage, err := exec.Command("bash", "-c", memUsageCmd).Output()
@@ -513,7 +528,7 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 		workerMEMUsage, err := exec.Command("bash", "-c", workerMEMtopcmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		workerMEMtopstr = regexp.MustCompile(`[^0-9 ]+`).ReplaceAllString(string(workerMEMUsage), "")
-		workerMEMtopint, err = strconv.Atoi(workerMEMtopstr)
+		workerMEMtopint, _ = strconv.Atoi(workerMEMtopstr)
 		workerMEMtopall = append(workerMEMtopall, workerMEMtopint)
 	}
 	for j := 1; j < len(workerCPU); j++ {
@@ -522,39 +537,60 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 		}
 	}
 	memMax := workerMEMtopall[0]
-	availableMem := int(float64(totalMem) * (100 - float64(preserveMemP) - float64(memMax)) / 100)
+	availableMem := int(float64(totalMem) * (100 - float64(reserveMemP) - float64(memMax)) / 100)
 	m = int(availableMem / int(memMetric))
-	// Avoid the case that the calculated value of zero availableMem above will result in a zero divisor at below code.
-	if m == 0 {
-		m = 1
-	}
-	if workerNodeCount == 1 {
-		dn = 1
-		r = 1
-		c = 5
-		s = 5
+	if m <= 0 {
+		e2e.Logf("No more memory resource is available, no load will be added!")
 	} else {
-		dn = workerNodeCount
-		c = dn
-		s = int(500 / m / dn)
+		r = m
+		p := workerNodeCount
+		if workerNodeCount == 1 {
+			dn = 6
+			c = 6
+			s = 5
+		} else {
+			if m > workerNodeCount {
+				dn = m
+			} else {
+				dn = workerNodeCount
+			}
+			c = 3
+			s = int(500 / m / dn)
+		}
+		cmd1 := fmt.Sprintf(`oc describe node/%v | grep 'Non-terminated Pods' | grep -oP "[0-9]+"`, worker1)
+		cmdOut1, err := exec.Command("bash", "-c", cmd1).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		usedPods, err := strconv.Atoi(regexp.MustCompile(`[^0-9 ]+`).ReplaceAllString(string(cmdOut1), ""))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		availablePods := snoPodCapacity - usedPods - reservePodCapacity
+		if workerNodeCount > 1 {
+			availablePods = availablePods * workerNodeCount
+		}
+		nsMax := int(availablePods / dn / r)
+		if m > nsMax {
+			m = nsMax
+		}
+		e2e.Logf("Start Memory load ...")
+		memloadCmd := fmt.Sprintf(`clusterbuster -N %v -B memload -P server -r %v -p %v -d %v -c %v -s %v -W -x -v > %v`, m, r, p, dn, c, s, dirname+"clusterbuster-mem-log")
+		e2e.Logf("%v", memloadCmd)
+		_, err = exec.Command("bash", "-c", memloadCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 	}
-	e2e.Logf("Start Memory load ...")
-	memloadCmd := fmt.Sprintf(`clusterbuster -N %v -B memload -P server -r %v -p %v -d %v -c %v -s %v -W -t 36000 -x -v > %v`, m, r, p, dn, c, s, dirname+"clusterbuster-mem-log")
-	e2e.Logf("%v", memloadCmd)
-	_, err = exec.Command("bash", "-c", memloadCmd).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-
 	// Wait for 5 mins(this time is based on many tests), when the load starts, it will reach a peak within a few minutes, then falls back.
-	time.Sleep(300 * time.Second)
+	if n > 0 || m > 0 {
+		time.Sleep(300 * time.Second)
 
-	keywords := "body: net/http: request canceled (Client.Timeout|panic"
-	bustercmd := fmt.Sprintf(`cat %v | grep -iE '%s' || true`, dirname+"clusterbuster*", keywords)
-	busterLogs, err := exec.Command("bash", "-c", bustercmd).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if len(busterLogs) > 0 {
-		e2e.Logf("%s", busterLogs)
-		e2e.Logf("Found some panic or timeout errors, if errors are  potential bug then file a bug.")
+		keywords := "body: net/http: request canceled (Client.Timeout|panic"
+		bustercmd := fmt.Sprintf(`cat %v | grep -iE '%s' || true`, dirname+"clusterbuster*", keywords)
+		busterLogs, err := exec.Command("bash", "-c", bustercmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(busterLogs) > 0 {
+			e2e.Logf("%s", busterLogs)
+			e2e.Logf("Found some panic or timeout errors, if errors are  potential bug then file a bug.")
+		} else {
+			e2e.Logf("No errors found in clusterbuster logs")
+		}
 	} else {
-		e2e.Logf("No errors found in clusterbuster logs")
+		e2e.Logf("No more CPU and memory resource, no any load is added.")
 	}
 }
