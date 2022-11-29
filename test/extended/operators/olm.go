@@ -916,6 +916,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("NonHyperShiftHOST-Author:jiazha-Medium-43978-Catalog pods don't report termination logs to catalog-operator", func() {
+		exutil.SkipBaselineCapsNone(oc)
 		catalogs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "-n", "openshift-marketplace").Output()
 		if err != nil {
 			e2e.Failf("Fail to get the CatalogSource in openshift-marketplace project")
@@ -1564,6 +1565,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("ConnectedOnly-Author:jiazha-High-37260-should allow to create the default CatalogSource [Disruptive] [Flaky]", func() {
+		exutil.SkipBaselineCapsNone(oc)
 		g.By("1) Disable the default OperatorHub")
 		patchResource(oc, asAdmin, withoutNamespace, "operatorhub", "cluster", "-p", "{\"spec\": {\"disableAllDefaultSources\": true}}", "--type=merge")
 		defer patchResource(oc, asAdmin, withoutNamespace, "operatorhub", "cluster", "-p", "{\"spec\": {\"disableAllDefaultSources\": false}}", "--type=merge")
@@ -1730,6 +1732,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("Author:jiazha-Medium-35631-Remove OperatorSource API", func() {
+		exutil.SkipBaselineCapsNone(oc)
 		g.By("1) Check the operatorsource resource")
 		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorsource").Output()
 		e2e.Logf("Get the expected error: %s", msg)
@@ -1771,6 +1774,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-54038-Comply with Operator Anti-Affinity definition", func() {
 		exutil.SkipARM64(oc)
+		exutil.SkipBaselineCapsNone(oc)
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			subFile             = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -1838,6 +1842,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-54036-Comply with Operator NodeAffinity definition", func() {
 		exutil.SkipARM64(oc)
+		exutil.SkipBaselineCapsNone(oc)
 		var (
 			buildPruningBaseDir  = exutil.FixturePath("testdata", "olm")
 			subFile              = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -1947,6 +1952,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-High-24387-Any CRD upgrade is allowed if there is only one owner in a cluster [Disruptive] [Flaky]", func() {
 		exutil.SkipARM64(oc)
+		exutil.SkipBaselineCapsNone(oc)
 		var (
 			catName             = "cs-24387"
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -2677,6 +2683,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-Medium-24916-Operators in AllNamespaces should be granted namespace list [Flaky]", func() {
 		exutil.SkipARM64(oc)
+		exutil.SkipBaselineCapsNone(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		dr := make(describerResrouce)
@@ -2895,6 +2902,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: bandrade@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:bandrade-Medium-49130-Default CatalogSources deployed by marketplace do not have toleration for tainted nodes", func() {
 
+		exutil.SkipBaselineCapsNone(oc)
 		podNameCertifiedOP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-marketplace", "-l", "olm.catalogSource=certified-operators", "-o", "name").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -3034,6 +3042,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:bandrade-High-40317-Check CatalogSources index images [Flaky]", func() {
+		exutil.SkipBaselineCapsNone(oc)
 		clusterVersion, _, err := exutil.GetClusterVersion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -3053,6 +3062,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-High-32613-Operators won't install if the CSV dependency is already installed", func() {
 		exutil.SkipARM64(oc)
+		exutil.SkipBaselineCapsNone(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 
@@ -3391,6 +3401,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// only community operator ready for the disconnected env now
 	g.It("ConnectedOnly-Author:scolange-Medium-32862-Pods found with invalid container images not present in release payload [Flaky]", func() {
 
+		exutil.SkipBaselineCapsNone(oc)
 		g.By("Verify the version of marketplace_operator")
 		pods, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-marketplace", "--no-headers").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -4018,6 +4029,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: scolange@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:scolange-Medium-23395-Deleted catalog registry pods and verify if them are recreated automatically [Disruptive]", func() {
 
+		exutil.SkipBaselineCapsNone(oc)
 		g.By("get pod of marketplace")
 		podName := getResource(oc, asAdmin, withoutNamespace, "pod", "--selector=olm.catalogSource=redhat-operators", "-n", "openshift-marketplace", "-o=jsonpath={...metadata.name}")
 		o.Expect(podName).NotTo(o.BeEmpty())
@@ -4312,6 +4324,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-NonPreRelease-PreChkUpgrade-Author:xzha-High-22618-prepare to check the catalogsource status of catalogsource", func() {
+		exutil.SkipBaselineCapsNone(oc)
 		g.By("1) Create a CatalogSource in the openshift-marketplace project")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
@@ -4412,6 +4425,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-NonPreRelease-PstChkUpgrade-Author:xzha-High-22618-Post check the catalogsource status of catalogsource", func() {
+		exutil.SkipBaselineCapsNone(oc)
 		ns := "olm-upgrade-22618"
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "olm-upgrade-22618").Output()
 
@@ -4729,6 +4743,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 
 	// It will cover test case: OCP-21825, author: kuiwang@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-Medium-21825-Certs for packageserver can be rotated successfully", func() {
+		exutil.SkipBaselineCapsNone(oc)
 		var (
 			packageserverName = "packageserver"
 		)
@@ -7126,6 +7141,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// It will cover test case: OCP-25644, author: tbuskey@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:bandrade-Medium-25644-OLM collect CSV health per version", func() {
 		exutil.SkipARM64(oc)
+		exutil.SkipBaselineCapsNone(oc)
 		var err error
 		var (
 			itName              = g.CurrentSpecReport().FullText()
@@ -8001,6 +8017,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// author: xzha@redhat.com, test case OCP-40529
 	g.It("ConnectedOnly-Author:xzha-Medium-40529-OPERATOR_CONDITION_NAME should have correct value", func() {
 		exutil.SkipARM64(oc)
+		exutil.SkipBaselineCapsNone(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -8133,6 +8150,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// author: xzha@redhat.com, test case OCP-40532
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:xzha-Medium-40532-OLM should not print debug logs", func() {
+		exutil.SkipBaselineCapsNone(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
@@ -8572,6 +8590,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-41174-Periodically retry InstallPlan execution until a timeout expires", func() {
 		exutil.SkipARM64(oc)
+		exutil.SkipBaselineCapsNone(oc)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		roletemplate := filepath.Join(buildPruningBaseDir, "role.yaml")
 		rolebindingtemplate := filepath.Join(buildPruningBaseDir, "role-binding.yaml")
@@ -10118,6 +10137,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 
 	// It will cover test case: OCP-43642, author: xzha@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:xzha-Medium-43642-Alerts should be raised if the catalogsources are missing [Disruptive]", func() {
+		exutil.SkipBaselineCapsNone(oc)
 		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		if !strings.Contains(output, "AWS") {
 			g.Skip("Skip for non-supported platform")
@@ -10208,6 +10228,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 
 	// It will cover test case: OCP-25679, OCP-21418(acutally it covers OCP-25679), author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-High-25679-Medium-21418-Cluster resource created and deleted correctly [Serial]", func() {
+		exutil.SkipBaselineCapsNone(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -10281,6 +10302,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 	// It will cover test case: OCP-25783, author: kuiwang@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-High-25783-Subscriptions are not getting processed taking very long to get processed [Serial]", func() {
 		exutil.SkipARM64(oc)
+		exutil.SkipBaselineCapsNone(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -10426,6 +10448,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 
 	// It will cover test case: OCP-24906, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-24906-Operators requesting cluster-scoped permission can trigger kube GC bug [Serial]", func() {
+		exutil.SkipBaselineCapsNone(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -10660,6 +10683,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 	// It will cover test case: OCP-40531, author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-High-40531-High-41051-High-23172-the value of lastUpdateTime of csv and Components of Operator should be correct [Serial]", func() {
 		exutil.SkipARM64(oc)
+		exutil.SkipBaselineCapsNone(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -10989,6 +11013,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 	// OCP-45359 author: jitli@redhat.com
 	g.It("NonHyperShiftHOST-Author:jitli-ConnectedOnly-Medium-45359-Default catalogs need to use the correct tags [Flaky]", func() {
+		exutil.SkipBaselineCapsNone(oc)
 		g.By("step: get version")
 		currentVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.desired.version}").Output()
 		if err != nil {
@@ -12123,6 +12148,7 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 
 	// author: jiazha@redhat.com
 	g.It("HyperShiftMGMT-Author:bandrade-High-45408-Eliminate use of imagestreams in catalog management", func() {
+		exutil.SkipBaselineCapsNone(oc)
 		g.By("1) check the cronjob in the control-plane project")
 		controlProject := fmt.Sprintf("clusters-%s", guestClusterName)
 		cronjobs, err := oc.AsAdmin().Run("get").Args("cronjob", "-n", controlProject).Output()

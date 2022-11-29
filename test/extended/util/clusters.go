@@ -80,6 +80,17 @@ func SkipARM64(oc *CLI) {
 	}
 }
 
+// SkipBaselineCapsNone skip the test if cluster has no default catsrc
+func SkipBaselineCapsNone(oc *CLI) {
+	baselineCapabilitySet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.spec.capabilities.baselineCapabilitySet}").Output()
+	if err != nil {
+		e2e.Failf("get baselineCapabilitySet failed err %v .", err)
+	}
+	if strings.Contains(baselineCapabilitySet, "None") {
+		g.Skip("Skip for cluster with baselineCapabilitySet = None")
+	}
+}
+
 // GetAWSClusterRegion returns AWS region of the cluster
 func GetAWSClusterRegion(oc *CLI) (string, error) {
 	region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
