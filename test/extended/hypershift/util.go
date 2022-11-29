@@ -40,7 +40,7 @@ const (
 	//NodepoolNameSpace is the namespace where the nodepool CR is always created
 	NodepoolNameSpace = "clusters"
 
-	ClusterInstallTimeout = 1800 * time.Second
+	ClusterInstallTimeout = 3600 * time.Second
 	LongTimeout           = 900 * time.Second
 	DefaultTimeout        = 300 * time.Second
 	ShortTimeout          = 50 * time.Second
@@ -225,18 +225,23 @@ func getAzureKey(oc *exutil.CLI) (string, string, string, string, error) {
 	return clientID, clientSecret, subscriptionID, tenantID, nil
 }
 
-/* parse a structure's tag 'param' and output cli command parameters
+/*
+	parse a structure's tag 'param' and output cli command parameters
+
 e.g.
 Input:
-  type example struct {
-	Name string `param:"name"`
-    PullSecret string `param:"pull_secret"`
-  } {
-  	Name:"hypershift",
-    PullSecret:"pullsecret.txt",
-  }
+
+	  type example struct {
+		Name string `param:"name"`
+	    PullSecret string `param:"pull_secret"`
+	  } {
+	  	Name:"hypershift",
+	    PullSecret:"pullsecret.txt",
+	  }
+
 Output:
-  --name="hypershift" --pull_secret="pullsecret.txt"
+
+	--name="hypershift" --pull_secret="pullsecret.txt"
 */
 func parse(obj interface{}) ([]string, error) {
 	v := reflect.ValueOf(obj)

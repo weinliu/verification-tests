@@ -16,7 +16,7 @@ objects:
             runAsUser: 0
           containers:
             - name: prestart
-              image: quay.io/openshifttest/hypershift-pre-start:1.2.0
+              image: quay.io/openshifttest/hypershift-pre-start:1.2.3
               imagePullPolicy: Always
               command: ["hypershift-pre","${CASEID}","${ACTION}"]
               envFrom:

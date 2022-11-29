@@ -440,7 +440,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Eventually(func() string {
 			return doOcpReq(oc, OcpGet, false, "hostedcluster", "-n", hostedCluster.namespace, hostedCluster.name)
 		}, ClusterInstallTimeout, ClusterInstallTimeout/20).Should(o.ContainSubstring("Completed"), "hostedcluster can't be Completed")
-		o.Eventually(hostedCluster.pollGetNodePoolReplicas(), DefaultTimeout, DefaultTimeout/10).Should(o.ContainSubstring("1"), fmt.Sprintf("hostedcluster %s nodepool not ready", hostedCluster.name))
+		o.Eventually(hostedCluster.pollGetNodePoolReplicas(), ClusterInstallTimeout, ClusterInstallTimeout/20).Should(o.ContainSubstring("1"), fmt.Sprintf("hostedcluster %s nodepool not ready", hostedCluster.name))
 		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
 
 		g.By("create aws Bastion")
