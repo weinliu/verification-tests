@@ -329,4 +329,23 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		}
 	})
 
+	// author: knarra@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Medium-56176-oc debug cronjob should fail with a meaningful error", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		cronjobF := filepath.Join(buildPruningBaseDir, "cronjob56176.yaml")
+		g.By("create new namespace")
+		oc.SetupProject()
+
+		g.By("create cronjob")
+		err := oc.Run("create").Args("-f", cronjobF).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("check if cronjob has been created")
+		cronCreationOutput, err := oc.Run("get").Args("cronjob").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(cronCreationOutput).To(o.ContainSubstring("cronjob56176"))
+		debugErr, err := oc.Run("debug").Args("cronjob/cronjob56176").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(debugErr).NotTo(o.ContainSubstring("v1.CronJob is not supported by debug"))
+	})
+
 })
