@@ -25,13 +25,13 @@ func AddLabelsToSpecificResource(oc *CLI, resourceKindAndName string, resourceNa
 	return oc.AsAdmin().WithoutNamespace().Run("label").Args(cargs...).Output()
 }
 
-// GetResourceSpecificLabelValue gets the specfic label value from the resource and label name
+// GetResourceSpecificLabelValue gets the specified label value from the resource and label name
 func GetResourceSpecificLabelValue(oc *CLI, resourceKindAndName string, resourceNamespace string, labelName string) (string, error) {
 	var cargs []string
 	if resourceNamespace != "" {
 		cargs = append(cargs, "-n", resourceNamespace)
 	}
-	cargs = append(cargs, resourceKindAndName, "-o=jsonpath=.metadata.labels."+labelName+"}")
+	cargs = append(cargs, resourceKindAndName, "-o=jsonpath={.metadata.labels."+labelName+"}")
 	return oc.AsAdmin().WithoutNamespace().Run("get").Args(cargs...).Output()
 }
 
