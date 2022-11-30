@@ -6037,13 +6037,13 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 32863 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/single-bundle-index:pdb2",
+				address:     "quay.io/olmqe/single-bundle-index:pdb3",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
 				subName:                "busybox",
 				namespace:              "",
-				channel:                "alpha",
+				channel:                "candidate-v2",
 				ipApproval:             "Automatic",
 				operatorPackage:        "busybox",
 				catalogSourceName:      catsrc.name,
@@ -6082,7 +6082,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 			g.By("check additional resources")
-			newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"vpa", "busybox-vpa", "-n", sub.namespace}).check(oc)
+			newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"VerticalPodAutoscaler", "busybox-vpa", "-n", sub.namespace}).check(oc)
 			newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"PriorityClass", "super-priority", "-n", sub.namespace}).check(oc)
 			newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"PodDisruptionBudget", "busybox-pdb", "-n", sub.namespace}).check(oc)
 		}
