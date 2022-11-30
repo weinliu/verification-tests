@@ -72,8 +72,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("Check the router env to verify the PROXY variable is applied")
 		routername := getRouterPod(oc, "ocp40675")
-		dssearch := readRouterPodEnv(oc, routername, "ROUTER_USE_PROXY_PROTOCOL")
-		o.Expect(dssearch).To(o.ContainSubstring(`ROUTER_USE_PROXY_PROTOCOL=true`))
+		pollReadPodData(oc, "openshift-ingress", routername, "/usr/bin/env", `ROUTER_USE_PROXY_PROTOCOL=true`)
 	})
 
 	//author: jechen@redhat.com
