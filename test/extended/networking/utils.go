@@ -1007,13 +1007,13 @@ func getEgressIPByKind(oc *exutil.CLI, kind string, kindName string, expectedNum
 	if expectedNum == 0 && isIPListEmpty {
 		return ip, nil
 	}
-	if !isIPListEmpty {
+	if !isIPListEmpty && iplist != "[]" {
 		ip = strings.Split(iplist[2:len(iplist)-2], "\",\"")
 	}
 	if isIPListEmpty || len(ip) < expectedNum || err != nil {
 		err = wait.Poll(30*time.Second, 5*time.Minute, func() (bool, error) {
 			iplist, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(kind, kindName, "-o=jsonpath={.egressIPs}").Output()
-			if len(iplist) > 0 {
+			if len(iplist) > 0 && iplist != "[]" {
 				ip = strings.Split(iplist[2:len(iplist)-2], "\",\"")
 			}
 			if len(ip) < expectedNum || err != nil {
@@ -1145,7 +1145,7 @@ func checkNodeStatus(oc *exutil.CLI, nodeName string, expectedStatus string) {
 			e2e.Logf("\nGet node status with error : %v", err)
 			return false, nil
 		}
-		e2e.Logf("Node %s kubelet status is %s", nodeName, statusOutput)
+		e2e.Logf("Expect Node %s in state %v, kubelet status is %s", nodeName, expectedStatus, statusOutput)
 		if statusOutput != expectedStatus1 {
 			return false, nil
 		}

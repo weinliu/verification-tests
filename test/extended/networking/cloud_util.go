@@ -581,6 +581,40 @@ func installIPEchoServiceOnAzure(oc *exutil.CLI, sess *exutil.AzureSession, rg s
 	return ipEchoURL, nil
 }
 
+// Run timeout ssh connection test from Azure int-svc instance
+func accessEgressNodeFromIntSvcInstanceOnAzure(sess *exutil.AzureSession, oc *exutil.CLI, rg string, IPaddr string) (string, error) {
+	user := os.Getenv("SSH_CLOUD_PRIV_AZURE_USER")
+	if user == "" {
+		user = "core"
+	}
+
+	sshkey := os.Getenv("SSH_CLOUD_PRIV_KEY")
+	if sshkey == "" {
+		sshkey = "../internal/config/keys/openshift-qe.pem"
+	}
+
+	publicIP, publicIPErr := getAzureIntSvcVMPublicIP(oc, sess, rg)
+	if publicIPErr != nil || publicIP == "" {
+		return "", publicIPErr
+	}
+
+	cmd := fmt.Sprintf(`timeout 5 bash -c "</dev/tcp/%v/22"`, IPaddr)
+	sshClient := exutil.SshClient{User: user, Host: publicIP, Port: 22, PrivateKey: sshkey}
+	err := sshClient.Run(cmd)
+	if err != nil {
+		e2e.Logf("Failed to run %v: %v", cmd, err)
+
+		// Extract the return code from the err1 variable
+		if returnedErr, ok := err.(*ssh.ExitError); ok {
+			return fmt.Sprintf("%d", returnedErr.ExitStatus()), err
+		}
+		// IO problems, the return code was not sent back
+		return "", err
+	}
+
+	return "0", nil
+}
+
 // runOcWithRetry runs the oc command with up to 5 retries if a timeout error occurred while running the command.
 func runOcWithRetry(oc *exutil.CLI, cmd string, args ...string) (string, error) {
 	var err error
@@ -1020,7 +1054,7 @@ func estimateTimeoutForEgressIP(oc *exutil.CLI) time.Duration {
 	timeout := 100 * time.Second
 	platform := exutil.CheckPlatform(oc)
 	if strings.Contains(platform, "azure") || strings.Contains(platform, "openstack") {
-		timeout = 180 * time.Second
+		timeout = 210 * time.Second
 	}
 	return timeout
 }

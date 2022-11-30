@@ -160,7 +160,7 @@ func StartAzureVM(sess *AzureSession, vmName string, resourceGroupName string) (
 	vmClient := compute.NewVirtualMachinesClient(sess.SubscriptionID)
 	vmClient.Authorizer = sess.Authorizer
 	future, vmErr := vmClient.Start(ctx, resourceGroupName, vmName)
-	if err != nil {
+	if vmErr != nil {
 		e2e.Logf("cannot start vm: %v", vmErr)
 		return osr, vmErr
 	}
