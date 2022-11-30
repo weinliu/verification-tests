@@ -153,7 +153,8 @@ var _ = g.Describe("[sig-node] Container_Engine_Tools crio,scc", func() {
 	})
 
 	// author: pmali@redhat.com
-	g.It("Author:pmali-Critical-48876-Check ping I src IP does work on a container", func() {
+	// author: minmli@redhat.com
+	g.It("ConnectedOnly-Author:pmali-Critical-48876-Check ping I src IP does work on a container", func() {
 
 		oc.SetupProject()
 		ocp48876Pod.name = "hello-pod-ocp48876"
