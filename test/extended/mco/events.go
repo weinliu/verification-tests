@@ -29,7 +29,11 @@ func NewEvent(oc *exutil.CLI, namespace, name string) *Event {
 
 // String implements the Stringer interface
 func (e Event) String() string {
-	description := e.GetOrFail(`{.metadata.creationTimestamp} Type: {.type} Reason: {.reason}, namespace: {.metadata.namespace}`)
+	description, err := e.Get(`{.metadata.creationTimestamp} Type: {.type} Reason: {.reason} Namespace: {.metadata.namespace} Involves: {.involvedObject.kind}/{.involvedObject.name}`)
+	if err != nil {
+		logger.Errorf("Event %s/%s does not exist anymore", e.GetNamespace(), e.GetName())
+		return ""
+	}
 
 	return description
 }
@@ -50,10 +54,6 @@ func (el *EventList) GetAll() ([]Event, error) {
 	allEvents := make([]Event, 0, len(allEventResources))
 
 	for _, eventRes := range allEventResources {
-		// add non-exist check, sometimes event cannot be found from server
-		if !eventRes.Exists() {
-			continue
-		}
 		allEvents = append(allEvents, *NewEvent(el.oc, eventRes.namespace, eventRes.name))
 	}
 	// We want the first element to be the more recent
@@ -73,7 +73,12 @@ func (el EventList) GetAllSince(since time.Time) ([]Event, error) {
 
 	returnEvents := []Event{}
 	for _, event := range allEvents {
-		creationTime := event.GetOrFail(`{.metadata.creationTimestamp}`)
+		creationTime, err := event.Get(`{.metadata.creationTimestamp}`)
+		if err != nil {
+			logger.Errorf("Error parsing event %s/%s. Error: %s", event.GetNamespace(), event.GetName(), err)
+			continue
+		}
+
 		parsedCreation, perr := time.Parse(time.RFC3339, creationTime)
 		if perr != nil {
 			logger.Errorf("Error parsing event '%s' -n '%s' creation time: %s", event.GetName(), event.GetNamespace(), perr)
@@ -186,7 +191,7 @@ func (matcher *haveEventsSequenceMatcher) FailureMessage(actual interface{}) (me
 	// The type was already validated in Match, we can safely ignore the error
 	events, _ := actual.([]Event)
 
-	output := "Expected events\n"
+	output := "Expecte events\n"
 
 	if len(events) == 0 {
 		output = "No events in the list\n"
@@ -204,7 +209,7 @@ func (matcher *haveEventsSequenceMatcher) NegatedFailureMessage(actual interface
 	// The type was already validated in Match, we can safely ignore the error
 	events, _ := actual.([]Event)
 
-	output := "Expected events\n"
+	output := "Expecte events\n"
 	for _, event := range events {
 		output += output + fmt.Sprintf("-  %s\n", event)
 	}

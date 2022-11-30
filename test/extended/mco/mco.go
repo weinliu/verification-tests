@@ -2129,6 +2129,17 @@ nulla pariatur.`
 		o.Eventually(firstUpdatedMaster.IsUpdated, "10m", "20s").Should(o.BeTrue(),
 			"Node %s is not in 'Done' status after the configuration is applied")
 
+		g.By("Print all events for the verified worker node")
+		el := NewEventList(oc.AsAdmin(), "default")
+		el.ByFieldSelector(`involvedObject.name=` + firstUpdatedWorker.GetName())
+		events, _ := el.GetAll()
+		printString := ""
+		for _, event := range events {
+			printString = printString + fmt.Sprintf("-  %s\n", event)
+		}
+		logger.Infof("All events for node %s:\n%s", firstUpdatedWorker.GetName(), printString)
+		logger.Infof("OK!\n")
+
 		g.By("Verify that a drain and reboot events were triggered for worker node")
 		wEvents, weErr := firstUpdatedWorker.GetAllEventsSince(startTime)
 		o.Expect(weErr).ShouldNot(o.HaveOccurred(), "Error getting events for node %s", firstUpdatedWorker.GetName())
