@@ -755,7 +755,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	})
 
 	// author: gkarager@redhat.com
-	g.It("Author:gkarager-Medium-52324-Pod security admission autolabelling opting out keeps old labels/does not sync [Disruptive]", func() {
+	g.It("Author:gkarager-Medium-52324-Pod security admission autolabelling opting out keeps old labels/does not sync", func() {
 		g.By("1. Create a namespace as normal user")
 		oc.SetupProject()
 		testNameSpace := oc.Namespace()
@@ -763,8 +763,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		g.By("2. Check the project labels")
 		output, err := oc.Run("get").Args("project", testNameSpace, "-o=jsonpath={.metadata.labels}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		// for 4.11, default project lables are "warn", "audit"
-		// for 4.12, default project label is 'enforce'
+		// for 4.12 and below, default project lables are "warn", "audit"
 		o.Expect(output).To(o.ContainSubstring("\"pod-security.kubernetes.io/enforce\":\"restricted\""))
 
 		g.By("3. Create a standalone pod with oc run")
@@ -811,6 +810,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("\"pod-security.kubernetes.io/enforce\":\"baseline\""))
 	})
+
 	// author: yinzhou@redhat.com
 	g.It("Author:yinzhou-Medium-10662-Cannot run process via user root in the container when using MustRunAsNonRoot as the RunAsUserStrategy[Disruptive]", func() {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("scc", "restricted-v2", "-o", "yaml").Output()
