@@ -500,7 +500,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		isarr := [3]string{"ociapp", "dockerapp", "simpleapp"}
 		imagearr := [3]string{"quay.io/openshifttest/ociimage@sha256:d58e3e003ddec723dd14f72164beaa609d24c5e5e366579e23bc8b34b9a58324", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "quay.io/openshifttest/ociimage-singlearch@sha256:93b3159f0a3a3b8f6ce46888adffb19d55779fd4038cbfece92650040acc034b"}
-		shortimage := [3]string{"ociimage@", "busybox", "ociimage-singlearch"}
+		shortimage := [3]string{"ociimage@", "busybox@", "ociimage-singlearch"}
 		num := [3]int{7, 10, 1}
 		g.By("Get server host")
 		routeName := getRandomString()
