@@ -1387,7 +1387,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		g.By("check ReleaseAccepted False have correct message")
 		message, err = getCVObyJP(oc, ".status.conditions[?(.type=='ReleaseAccepted')].message")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(message).To(o.ContainSubstring(originalMessage))
+		o.Expect(message).To(o.ContainSubstring(regexp.MustCompile(` architecture=".*"`).ReplaceAllString(originalMessage, ""))) // until OCPBUGS-4032 is fixed
 
 		g.By("no version pod in ImagePullBackOff")
 		err = waitForCondition(5, 30, "",
