@@ -224,6 +224,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterautoscaler", "default", "-n", machineAPINamespace, "-p", `{"spec": {"logVerbosity": 8}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		// the pod exists ( old one ) when patched pod restarts and then new one turns up in a while, hence had to use hard-coded to get new pod name
+		time.Sleep(10 * time.Second)
 		g.By("Get clusterautoscaler pod name")
 		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "cluster-autoscaler", "-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-machine-api").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
