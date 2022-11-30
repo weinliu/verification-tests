@@ -4010,13 +4010,13 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("doesn't get secret test-secret %s", nsOperator))
-		msg, err = oc.AsAdmin().Run("describe").Args("secret", "test-secret", "-n", nsOperator).Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("secret", "test-secret", "-n", nsOperator).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("test:  6 bytes"))
 
 		// OCP-28157
 		waitErr = wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
-			msg, _ := oc.AsAdmin().Run("describe").Args("configmap", "test-blacklist-watches", "-n", nsOperator).Output()
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("configmap", "test-blacklist-watches", "-n", nsOperator).Output()
 			if strings.Contains(msg, "afdasdfsajsafj") {
 				e2e.Logf("Skipping the blacklist")
 				return true, nil
