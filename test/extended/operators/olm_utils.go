@@ -832,6 +832,19 @@ func (rolebinding *rolebindingDescription) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+type secretDescription struct {
+	name      string
+	namespace string
+	template  string
+}
+
+// the method is to create secret with template
+func (secret *secretDescription) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", secret.template,
+		"-p", "NAME="+secret.name, "NAMESPACE="+secret.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 type checkDescription struct {
 	method          string
 	executor        bool

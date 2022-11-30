@@ -8711,6 +8711,88 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// author: xzha@redhat.com
+	g.It("Author:xzha-High-56371-service account token secret reference", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		roletemplate := filepath.Join(buildPruningBaseDir, "role.yaml")
+		rolebindingtemplate := filepath.Join(buildPruningBaseDir, "role-binding.yaml")
+		ogSAtemplate := filepath.Join(buildPruningBaseDir, "operatorgroup-serviceaccount.yaml")
+		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+		secretTemplate := filepath.Join(buildPruningBaseDir, "secret_opaque.yaml")
+		oc.SetupProject()
+		namespace := oc.Namespace()
+		itName := g.CurrentSpecReport().FullText()
+		var (
+			sa = "scoped-56371"
+			og = operatorGroupDescription{
+				name:               "test-og-56371",
+				namespace:          namespace,
+				serviceAccountName: sa,
+				template:           ogSAtemplate,
+			}
+			sub = subscriptionDescription{
+				subName:                "sub-56371",
+				namespace:              namespace,
+				catalogSourceName:      "qe-app-registry",
+				catalogSourceNamespace: "openshift-marketplace",
+				channel:                "beta",
+				ipApproval:             "Automatic",
+				operatorPackage:        "learn",
+				singleNamespace:        false,
+				template:               subTemplate,
+			}
+			role = roleDescription{
+				name:      "role-56371",
+				namespace: namespace,
+				template:  roletemplate,
+			}
+			rolebinding = rolebindingDescription{
+				name:      "scoped-bindings-56371",
+				namespace: namespace,
+				rolename:  "role-56371",
+				saname:    sa,
+				template:  rolebindingtemplate,
+			}
+			secret = secretDescription{
+				name:      "zsecret-56371",
+				namespace: namespace,
+				template:  secretTemplate,
+			}
+		)
+
+		g.By("1) Create the service account")
+		_, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", sub.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("2) Create the OperatorGroup")
+		og.createwithCheck(oc, itName, dr)
+		err = newCheck("expect", asAdmin, withoutNamespace, compare, sa, ok, []string{"og", og.name, "-n", og.namespace, "-o=jsonpath={.status.serviceAccountRef.name}"}).checkWithoutAssert(oc)
+		if err != nil {
+			output := getResource(oc, asAdmin, withoutNamespace, "og", og.name, "-n", og.namespace, "-o=jsonpath={.status}")
+			e2e.Logf(output)
+		}
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("status.serviceAccountRef.name of og %s is not %s", og.name, sa))
+
+		g.By("3) Create the Secret")
+		secret.create(oc)
+
+		g.By("4) Grant the proper permissions to the service account")
+		role.create(oc)
+		rolebinding.create(oc)
+
+		g.By("5) create sub")
+		sub.create(oc, itName, dr)
+
+		g.By("6) Checking the secret")
+		secrets, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(secrets).To(o.ContainSubstring(secret.name))
+
+		g.By("7) Checking the state of CSV")
+		newCheck("expect", asUser, withNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+
+	})
+
+	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-41035-Fail InstallPlan on bundle unpack timeout [Slow]", func() {
 		exutil.SkipARM64(oc)
 		var (
