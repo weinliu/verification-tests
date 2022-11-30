@@ -507,6 +507,15 @@ func readDNSCorefile(oc *exutil.CLI, DNSPodName, searchString, grepOption string
 	return output
 }
 
+// this function get all cluster's operators
+func getClusterOperators(oc *exutil.CLI) []string {
+	opList := []string{}
+	outputOps, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperators", "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	opList = strings.Split(outputOps, " ")
+	return opList
+}
+
 // wait for "Progressing" is True
 func ensureClusterOperatorProgress(oc *exutil.CLI, coName string) {
 	e2e.Logf("waiting for CO %v to start rolling update......", coName)
@@ -557,6 +566,29 @@ func ensureClusterOperatorNormal(oc *exutil.CLI, coName string, healthyThreshold
 		return primary, nil
 	})
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but CO %v is still abnoraml.", coName))
+}
+
+// this function ensure all cluster's operators become normal
+func ensureAllClusterOperatorsNormal(oc *exutil.CLI, waitTime time.Duration) {
+	opList := getClusterOperators(oc)
+	for _, operator := range opList {
+		ensureClusterOperatorNormal(oc, operator, 1, waitTime)
+	}
+}
+
+// this function pick up those cluster operators in bad status
+func checkAllClusterOperatorsStatus(oc *exutil.CLI) []string {
+	badOpList := []string{}
+	opList := getClusterOperators(oc)
+	jsonPath := "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"
+	for _, operator := range opList {
+		searchLine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator", operator, jsonPath).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(searchLine, "TrueFalseFalse") {
+			badOpList = append(badOpList, operator)
+		}
+	}
+	return badOpList
 }
 
 // to ensure DNS rolling upgrade is done after updating the global resource "dns.operator/default"

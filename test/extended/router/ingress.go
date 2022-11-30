@@ -3,6 +3,7 @@ package router
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -311,5 +312,46 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("check the reachability of the 'bar-unsecure' host in 'beta shard' controller")
 		custContIP2 := getPodv4Address(oc, custContPod2, "openshift-ingress")
 		waitForCurl(oc, podName[0], baseDomain, "bar.beta-beta-ocp51437.", "Hello-OpenShift", custContIP2)
+	})
+
+	// bug: 1914127
+	g.It("Author:shudili-NonPreRelease-High-56228-Deletion of default router service under the openshift ingress namespace hangs flag [Disruptive]", func() {
+		var (
+			svcResource = "service/router-default"
+			namespace   = "openshift-ingress"
+		)
+
+		g.By("check if the cluster has the router-default service")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "router-default") {
+			g.Skip("This cluster has NOT the router-defaut service, skip the test.")
+		}
+
+		g.By("check if all COs are in good status")
+		badOpList := checkAllClusterOperatorsStatus(oc)
+		if len(badOpList) > 0 {
+			g.Skip("Some cluster operators are NOT in good status, skip the test.")
+		}
+
+		g.By("check the created time of svc router-default")
+		jsonPath := ".metadata.creationTimestamp"
+		svcCreatedTime1 := fetchJSONPathValue(oc, namespace, svcResource, jsonPath)
+		o.Expect(svcCreatedTime1).NotTo(o.BeEmpty())
+
+		g.By("try to delete the svc router-default, should no errors")
+		defer ensureAllClusterOperatorsNormal(oc, 720)
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(svcResource, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("wait for new svc router-default is created")
+		jsonPath = ".metadata.name"
+		waitForOutput(oc, namespace, svcResource, jsonPath, "router-default")
+
+		g.By("check the created time of the new svc router-default")
+		jsonPath = ".metadata.creationTimestamp"
+		svcCreatedTime2 := fetchJSONPathValue(oc, namespace, svcResource, jsonPath)
+		o.Expect(svcCreatedTime2).NotTo(o.BeEmpty())
+		o.Expect(svcCreatedTime1).NotTo(o.Equal(svcCreatedTime2))
 	})
 })
