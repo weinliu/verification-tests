@@ -527,18 +527,22 @@ func ensureClusterOperatorProgress(oc *exutil.CLI, coName string) {
 }
 
 // wait for the cluster operator back to normal status ("True False False")
-// wait until get 5 successive normal status to ensure it is stable
-func ensureClusterOperatorNormal(oc *exutil.CLI, coName string) {
+// wait until get the specified number of successive normal status, which is defined by healthyThreshold and totalWaitTime
+// healthyThreshold: max rounds for checking an CO,  int type,and no less than 1
+// totalWaitTime: total checking time, time.Durationshould type, and no less than 1
+func ensureClusterOperatorNormal(oc *exutil.CLI, coName string, healthyThreshold int, totalWaitTime time.Duration) {
+	count := 0
+	printCount := 0
 	jsonPath := "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"
 
 	e2e.Logf("waiting for CO %v back to normal status......", coName)
-	var count = 0
-	waitErr := wait.Poll(6*time.Second, 300*time.Second, func() (bool, error) {
+	waitErr := wait.Poll(6*time.Second, totalWaitTime*time.Second, func() (bool, error) {
 		status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/"+coName, jsonPath).Output()
 		primary := false
+		printCount++
 		if strings.Compare(status, "TrueFalseFalse") == 0 {
 			count++
-			if count == 5 {
+			if count == healthyThreshold {
 				e2e.Logf("got %v successive good status (%v), the CO is stable!", count, status)
 				primary = true
 			} else {
@@ -546,7 +550,9 @@ func ensureClusterOperatorNormal(oc *exutil.CLI, coName string) {
 			}
 		} else {
 			count = 0
-			e2e.Logf("CO status is still abnormal (%v), wait and try again...", status)
+			if printCount%10 == 1 {
+				e2e.Logf("CO status is still abnormal (%v), wait and try again...", status)
+			}
 		}
 		return primary, nil
 	})
@@ -558,7 +564,7 @@ func ensureClusterOperatorNormal(oc *exutil.CLI, coName string) {
 // 2nd, co/dns is back to normal and stable
 func ensureDNSRollingUpdateDone(oc *exutil.CLI) {
 	ensureClusterOperatorProgress(oc, "dns")
-	ensureClusterOperatorNormal(oc, "dns")
+	ensureClusterOperatorNormal(oc, "dns", 5, 300)
 }
 
 // patch the dns.operator/default with the original value
@@ -576,7 +582,7 @@ func restoreDNSOperatorDefault(oc *exutil.CLI) {
 		delAllDNSPodsNoWait(oc)
 		ensureClusterOperatorProgress(oc, "dns")
 	}
-	ensureClusterOperatorNormal(oc, "dns")
+	ensureClusterOperatorNormal(oc, "dns", 5, 300)
 }
 
 // this function is to get all dns pods' names, the return is the string slice of all dns pods' names, together with an error

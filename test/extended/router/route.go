@@ -220,7 +220,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(result).To(o.ContainSubstring("passed"))
 
 		g.By("Patch the ingress controller and deleting the canary route")
-		defer ensureClusterOperatorNormal(oc, "ingress")
+		defer ensureClusterOperatorNormal(oc, "ingress", 5, 300)
 		defer patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":null}}")
 		patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":{\"matchLabels\":{\"type\":\"default\"}}}}")
 		// Deleting canary route
