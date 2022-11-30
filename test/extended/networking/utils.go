@@ -1120,6 +1120,7 @@ func getAssignedEIPInEIPObject(oc *exutil.CLI, egressIPObject string) []map[stri
 
 	var egressIPJsonMap []map[string]string
 	json.Unmarshal([]byte(egressIPs), &egressIPJsonMap)
+	e2e.Logf("egressIPJsonMap:%v", egressIPJsonMap)
 	return egressIPJsonMap
 }
 
@@ -2027,6 +2028,68 @@ func getEgressCIDRsForNode(oc *exutil.CLI, nodeName string) string {
 		sub1 = getIfaddrFromNode(nodeName, oc)
 	}
 	return sub1
+}
+
+// get routerID by node name
+func getRouterID(oc *exutil.CLI, nodeName string) (string, error) {
+	ovnLeaderPod := getOVNLeaderPod(oc, "north")
+	o.Expect(ovnLeaderPod).ShouldNot(o.Equal(""))
+	var cmdOutput, routerName, routerID string
+	var cmdErr error
+	routerName = "GR_" + nodeName
+	cmd := "ovn-nbctl show | grep " + routerName + " | grep 'router '|awk '{print $2}'"
+	checkOVNDbErr := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+		cmdOutput, cmdErr = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnLeaderPod, cmd)
+		if cmdErr != nil {
+			e2e.Logf("%v,Waiting for expected result to be synced, try again ...,", cmdErr)
+			return false, nil
+		}
+
+		// Command output always has first line as: Defaulted container "northd" out of: northd, nbdb, kube-rbac-proxy, sbdb, ovnkube-master, ovn-dbchecker
+		// Take result from the second line
+		cmdOutputLines := strings.Split(cmdOutput, "\n")
+		if len(cmdOutputLines) >= 2 {
+			routerID = cmdOutputLines[1]
+			return true, nil
+		}
+		e2e.Logf("%v,Waiting for expected result to be synced, try again ...,")
+		return false, nil
+	})
+	if checkOVNDbErr != nil {
+		e2e.Logf("The command check result in ovndb is not expected ! See below output \n %s ", cmdOutput)
+	}
+	return routerID, checkOVNDbErr
+}
+
+func getSNATofEgressIP(oc *exutil.CLI, routerID, egressIP string) (string, error) {
+	ovnLeaderPod := getOVNLeaderPod(oc, "north")
+	o.Expect(ovnLeaderPod).ShouldNot(o.Equal(""))
+	var cmdOutput, snatIP string
+	var cmdErr error
+
+	cmd := "ovn-nbctl lr-nat-list " + routerID + " | grep " + egressIP + " |awk '{print $3}'"
+	checkOVNDbErr := wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+		cmdOutput, cmdErr = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnLeaderPod, cmd)
+		if cmdErr != nil {
+			e2e.Logf("%v,Waiting for expected result to be synced, try again ...,", cmdErr)
+			return false, nil
+		}
+
+		// Command output always has first line as: Defaulted container "northd" out of: northd, nbdb, kube-rbac-proxy, sbdb, ovnkube-master, ovn-dbchecker
+		// Take result from the second line
+		cmdOutputLines := strings.Split(cmdOutput, "\n")
+		if len(cmdOutputLines) >= 2 {
+			snatIP = cmdOutputLines[1]
+			return true, nil
+		}
+		e2e.Logf("%v,Waiting for expected result to be synced, try again ...")
+		return false, nil
+
+	})
+	if checkOVNDbErr != nil {
+		e2e.Logf("The command check result in ovndb is not expected ! See below output \n %s ", cmdOutput)
+	}
+	return snatIP, checkOVNDbErr
 }
 
 // enableSCTPModuleOnNode Manual way to enable sctp in a cluster
