@@ -566,21 +566,19 @@ func waitForIMJobsToComplete(oc *exutil.CLI, ns string, timeout time.Duration) {
 }
 
 func getStorageClassName(oc *exutil.CLI) (string, error) {
-	var scName string
-	defaultSC := ""
-	SCs, err := oc.AdminKubeClient().StorageV1().StorageClasses().List(context.Background(), metav1.ListOptions{})
-	for _, sc := range SCs.Items {
+	scs, err := oc.AdminKubeClient().StorageV1().StorageClasses().List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return "", err
+	}
+	if len(scs.Items) == 0 {
+		return "", fmt.Errorf("there is no storageclass in the cluster")
+	}
+	for _, sc := range scs.Items {
 		if sc.ObjectMeta.Annotations["storageclass.kubernetes.io/is-default-class"] == "true" {
-			defaultSC = sc.Name
-			break
+			return sc.Name, nil
 		}
 	}
-	if defaultSC != "" {
-		scName = defaultSC
-	} else {
-		scName = SCs.Items[0].Name
-	}
-	return scName, err
+	return scs.Items[0].Name, nil
 }
 
 // Assert the status of a resource
