@@ -11,8 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -24,7 +22,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-//JSONp defins a json struct
+// JSONp defins a json struct
 type JSONp struct {
 	Oper string      `json:"op"`
 	Path string      `json:"path"`
@@ -137,7 +135,7 @@ func waitForAlert(oc *exutil.CLI, alertString string, interval time.Duration, ti
 	return true, annoMap, nil
 }
 
-//Check if operator's condition is expected until timeout or return ture or an error happened.
+// Check if operator's condition is expected until timeout or return ture or an error happened.
 func waitForCondition(interval time.Duration, timeout time.Duration, expectedCondition string, parameters string) error {
 	err := wait.Poll(interval*time.Second, timeout*time.Second, func() (bool, error) {
 		output, err := exec.Command("bash", "-c", parameters).Output()
@@ -159,7 +157,7 @@ func waitForCondition(interval time.Duration, timeout time.Duration, expectedCon
 	return nil
 }
 
-//Get detail alert info by selector
+// Get detail alert info by selector
 func getAlert(oc *exutil.CLI, alertSelector string) map[string]interface{} {
 	var alertInfo map[string]interface{}
 	url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
@@ -195,7 +193,7 @@ func getAlert(oc *exutil.CLI, alertSelector string) map[string]interface{} {
 	return alertInfo
 }
 
-//Get detail alert info by alertname
+// Get detail alert info by alertname
 func getAlertByName(oc *exutil.CLI, alertName string) map[string]interface{} {
 	return getAlert(oc, fmt.Sprintf(".labels.alertname == \"%s\"", alertName))
 }
@@ -415,8 +413,8 @@ func buildGraph(client *storage.Client, oc *exutil.CLI, projectID string, graphN
 	return fmt.Sprintf("https://storage.googleapis.com/%s/%s", bucket, object), bucket, object, targetVersion, targetPayload, nil
 }
 
-//restoreCVSpec restores upstream and channel of clusterversion
-//if no need to restore, pass "nochange" to the argument(s)
+// restoreCVSpec restores upstream and channel of clusterversion
+// if no need to restore, pass "nochange" to the argument(s)
 func restoreCVSpec(upstream string, channel string, oc *exutil.CLI) {
 	if channel != "nochange" {
 		oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "channel", "--allow-explicit-channel", channel).Execute()
@@ -445,16 +443,16 @@ func extractManifest(oc *exutil.CLI) (string, error) {
 	tempDataDir := filepath.Join("/tmp/", fmt.Sprintf("ota-%s", getRandomString()))
 	err := os.Mkdir(tempDataDir, 0755)
 	if err != nil {
-		return tempDataDir, fmt.Errorf("Fail to create directory: %v", err)
+		return tempDataDir, fmt.Errorf("failed to create directory: %v", err)
 	}
 	manifestDir := filepath.Join(tempDataDir, "manifest")
 	err = oc.AsAdmin().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--confirm", "--to="+tempDataDir).Execute()
 	if err != nil {
-		return tempDataDir, fmt.Errorf("Fail to extract dockerconfig: %v", err)
+		return tempDataDir, fmt.Errorf("failed to extract dockerconfig: %v", err)
 	}
 	err = oc.AsAdmin().Run("adm").Args("release", "extract", "--to", manifestDir, "-a", tempDataDir+"/.dockerconfigjson").Execute()
 	if err != nil {
-		return tempDataDir, fmt.Errorf("Fail to extract manifests: %v", err)
+		return tempDataDir, fmt.Errorf("failed to extract manifests: %v", err)
 	}
 	return tempDataDir, nil
 }
@@ -597,34 +595,34 @@ func changeCap(oc *exutil.CLI, base bool, cap interface{}) (string, error) {
 	return ocJSONPatch(oc, "", "clusterversion/version", []JSONp{{"add", spec, cap}})
 }
 
-func getCapsManifest(oc *exutil.CLI) ([]string, error) {
-	tempDataDir, err := extractManifest(oc)
-	defer os.RemoveAll(tempDataDir)
-	if err != nil {
-		return []string{}, err
-	}
-	manifestDir := filepath.Join(tempDataDir, "manifest")
-	cmd := fmt.Sprintf("grep 'capability.openshift.io/name' -hr %s | cut -d ':' -f2  | tr -d '\"' | sort | uniq", manifestDir)
-	out, err := exec.Command("bash", "-c", cmd).Output()
-	if err != nil {
-		return []string{}, err
-	}
-	capStr := strings.ReplaceAll(string(out), " ", "")
-	knownCaps := regexp.MustCompile("[\n+]").Split(capStr, -1)
-	inResult := make(map[string]bool)
-	var result []string
-	for _, str := range knownCaps {
-		if str == "" {
-			continue
-		}
-		if _, ok := inResult[str]; !ok {
-			inResult[str] = true
-			result = append(result, str)
-		}
-	}
-	sort.Strings(result)
-	return result, nil
-}
+// func getCapsManifest(oc *exutil.CLI) ([]string, error) {
+// 	tempDataDir, err := extractManifest(oc)
+// 	defer os.RemoveAll(tempDataDir)
+// 	if err != nil {
+// 		return []string{}, err
+// 	}
+// 	manifestDir := filepath.Join(tempDataDir, "manifest")
+// 	cmd := fmt.Sprintf("grep 'capability.openshift.io/name' -hr %s | cut -d ':' -f2  | tr -d '\"' | sort | uniq", manifestDir)
+// 	out, err := exec.Command("bash", "-c", cmd).Output()
+// 	if err != nil {
+// 		return []string{}, err
+// 	}
+// 	capStr := strings.ReplaceAll(string(out), " ", "")
+// 	knownCaps := regexp.MustCompile("[\n+]").Split(capStr, -1)
+// 	inResult := make(map[string]bool)
+// 	var result []string
+// 	for _, str := range knownCaps {
+// 		if str == "" {
+// 			continue
+// 		}
+// 		if _, ok := inResult[str]; !ok {
+// 			inResult[str] = true
+// 			result = append(result, str)
+// 		}
+// 	}
+// 	sort.Strings(result)
+// 	return result, nil
+// }
 
 func setCVOverrides(oc *exutil.CLI, resourceKind string, resourceName string, resourceNamespace string) error {
 	type ovrd struct {
@@ -695,15 +693,15 @@ func getReleaseInfo(oc *exutil.CLI) (map[string]interface{}, error) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	err = oc.AsAdmin().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--confirm", "--to="+tempDataDir).Execute()
 	if err != nil {
-		return nil, fmt.Errorf("Fail to extract dockerconfig: %v", err)
+		return nil, fmt.Errorf("failed to extract dockerconfig: %v", err)
 	}
 	output, err := oc.AsAdmin().Run("adm").Args("release", "info", "-a", tempDataDir+"/.dockerconfigjson", "-ojson").Output()
 	if err != nil {
-		return nil, fmt.Errorf("Fail to get release info: %v", err)
+		return nil, fmt.Errorf("failed to get release info: %v", err)
 	}
 	err = json.Unmarshal([]byte(output), &releaseInfo)
 	if err != nil {
-		return nil, fmt.Errorf("Unmarshal release info error: %v", err)
+		return nil, fmt.Errorf("unmarshal release info error: %v", err)
 	}
 	return releaseInfo, nil
 }
