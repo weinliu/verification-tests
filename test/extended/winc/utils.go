@@ -9,7 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -494,7 +496,7 @@ func runInBackground(ctx context.Context, cancel context.CancelFunc, check func(
 		// this will be checked if the context has been ended prematuraly
 		if err != nil {
 			cancel()
-			e2e.Logf("Error during invokation of %v(%v,%v): %v", check, val, delay, err.Error())
+			e2e.Logf("Error during invokation of %v(%v,%v): %v", runtime.FuncForPC(reflect.ValueOf(check).Pointer()).Name(), val, delay, err.Error())
 			return
 		}
 	}()

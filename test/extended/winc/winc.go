@@ -768,7 +768,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		externalIP, err := getExternalIP(iaasPlatform, oc, "windows", namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Wait for the Windows server to come up
-		time.Sleep(15 * time.Second)
+		time.Sleep(100 * time.Second)
 		g.By("Test LB " + externalIP + " connectivity")
 		// Execute checkConnectivity(externalIP, 5) in the background
 		ctx, cancel := context.WithCancel(context.Background())
