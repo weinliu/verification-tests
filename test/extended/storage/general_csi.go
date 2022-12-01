@@ -3864,6 +3864,62 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		}
 	})
+
+	// author: rdeore@redhat.com
+	// [CSI Driver] Volume is detached from node when delete the project
+	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-High-24550-[CSI Driver] Volume is detached from node when delete the project", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate          = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			supportProvisioners  = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		for _, provisioner := range supportProvisioners {
+
+			g.By("#. Create new project for the scenario")
+			oc.SetupProject() //create new project
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			// Set the resource definition for the scenario
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassReclaimPolicy("Delete"))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+			g.By("#. Create csi storageclass")
+			storageClass.provisioner = provisioner
+			storageClass.create(oc)
+			defer storageClass.deleteAsAdmin(oc)
+
+			g.By("# Create a pvc with the csi storageclass")
+			pvc.scname = storageClass.name
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+
+			g.By("# Create pod with the created pvc and wait for the pod ready")
+			pod.create(oc)
+			defer pod.deleteAsAdmin(oc)
+			pod.waitReady(oc)
+
+			g.By("# Get the volumename")
+			volumeName := pvc.getVolumeName(oc)
+
+			g.By("# Delete the project and check the pv is also deleted")
+			deleteSpecifiedResource(oc.AsAdmin(), "project", pvc.namespace, "")
+			checkResourcesNotExist(oc.AsAdmin(), "pv", volumeName, "")
+
+			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
 })
 
 // Performing test steps for Online Volume Resizing
