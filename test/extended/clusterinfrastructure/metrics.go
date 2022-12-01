@@ -39,7 +39,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		metrics, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(machineApproverPodName, "-c", "machine-approver-controller", "-n", machineApproverNamespace, "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", token), "https://localhost:9192/metrics").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(metrics).NotTo(o.BeEmpty())
-		o.Expect(metrics).To(o.ContainSubstring("mapi_current_pending_csr " + strconv.Itoa(pending)))
+		checkMetricsShown(oc, "mapi_current_pending_csr", strconv.Itoa(pending))
 	})
 
 	// author: zhsun@redhat.com
