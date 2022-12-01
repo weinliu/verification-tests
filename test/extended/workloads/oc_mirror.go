@@ -321,5 +321,27 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the mirror still failed"))
 	})
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-NonPreRelease-Medium-46518-List ocp release content with different options", func() {
+		g.By("Set podman registry config")
+		dirname := "/tmp/case46518"
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("List releases for ocp 4.11")
+		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("list", "releases", "--version=4.11").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("List release channels for ocp 4.11")
+		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("list", "releases", "--version=4.11", "--channels").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("List available releases from channel candidate for ocp 4.11")
+		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("list", "releases", "--version=4.11", "--channel=candidate-4.11").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("List available releases from channel candidate for ocp 4.11 and specify arch arm64")
+		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("list", "releases", "--version=4.11", "--channel=candidate-4.11", "--filter-by-archs=arm64").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 
 })
