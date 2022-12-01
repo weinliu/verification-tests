@@ -429,3 +429,18 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		exutil.AssertWaitPollNoErr(err, "pod not run in user namespace")
 	})
 })
+
+var _ = g.Describe("[sig-node] NODE keda", func() {
+
+	defer g.GinkgoRecover()
+	var (
+		oc = exutil.NewCLI("keda-operator", exutil.KubeConfigPath())
+	)
+	g.BeforeEach(func() {
+		createKedaOperator(oc)
+	})
+	// author: weinliu@redhat.com
+	g.It("ConnectedOnly-Author:weinliu-High-52383-Keda Install", func() {
+		g.By("keda operator is installed successfully")
+	})
+})

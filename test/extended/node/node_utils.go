@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -132,7 +133,7 @@ func (podSleep *podSleepDescription) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-//Delete Namespace with all resources
+// Delete Namespace with all resources
 func (podSleep *podSleepDescription) deleteProject(oc *exutil.CLI) error {
 	e2e.Logf("Deleting Project ...")
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", podSleep.namespace).Execute()
@@ -637,5 +638,63 @@ func (podUserNS *podUserNSDescription) podRunInUserNS(oc *exutil.CLI) error {
 		}
 		e2e.Logf("the user id in pod is not root")
 		return false, nil
+	})
+}
+
+// this function create CMA(Keda) operator
+func createKedaOperator(oc *exutil.CLI) {
+	buildPruningBaseDir := exutil.FixturePath("testdata", "node")
+	operatorGroup := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+	subscription := filepath.Join(buildPruningBaseDir, "subscription.yaml")
+	nsOperator := filepath.Join(buildPruningBaseDir, "ns-keda-operator.yaml")
+	operatorNamespace := "openshift-keda"
+
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", nsOperator).Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", operatorGroup).Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", subscription).Output()
+	e2e.Logf("err %v, msg %v", err, msg)
+
+	// checking subscription status
+	errCheck := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		subState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "openshift-custom-metrics-autoscaler-operator", "-n", operatorNamespace, "-o=jsonpath={.status.state}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Compare(subState, "AtLatestKnown") == 0 {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("subscription openshift-custom-metrics-autoscaler-operator is not correct status"))
+
+	// checking csv status
+	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "openshift-custom-metrics-autoscaler-operator", "-n", operatorNamespace, "-o=jsonpath={.status.installedCSV}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(csvName).NotTo(o.BeEmpty())
+	errCheck = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		csvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", operatorNamespace, "-o=jsonpath={.status.phase}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Compare(csvState, "Succeeded") == 0 {
+			e2e.Logf("CSV check complete!!!")
+			return true, nil
+		}
+		return false, nil
+
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status", csvName))
+}
+func waitForPodWithLabelReady(oc *exutil.CLI, ns, label string) error {
+	return wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}").Output()
+		e2e.Logf("the Ready status of pod is %v", status)
+		if err != nil || status == "" {
+			e2e.Logf("failed to get pod status: %v, retrying...", err)
+			return false, nil
+		}
+		if strings.Contains(status, "False") {
+			e2e.Logf("the pod Ready status not met; wanted True but got %v, retrying...", status)
+			return false, nil
+		}
+		return true, nil
 	})
 }
