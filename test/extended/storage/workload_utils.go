@@ -877,7 +877,7 @@ func (dep *deployment) writeDataBlockType(oc *exutil.CLI) {
 	e2e.Logf("Writing the data as Block level")
 	_, err := execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "/bin/dd  if=/dev/null of="+dep.mpath+" bs=512 count=1")
 	o.Expect(err).NotTo(o.HaveOccurred())
-	_, err = execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "echo 'test data' > "+dep.mpath)
+	_, err = execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], `echo "block-data" > `+dep.mpath)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -885,7 +885,7 @@ func (dep *deployment) writeDataBlockType(oc *exutil.CLI) {
 func (dep *deployment) checkDataBlockType(oc *exutil.CLI) {
 	_, err := execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "/bin/dd if="+dep.mpath+" of=/tmp/testfile bs=512 count=1")
 	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat /tmp/testfile | grep 'test data' ")).To(o.ContainSubstring("matches"))
+	o.Expect(execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat /tmp/testfile")).To(o.ContainSubstring("block-data"))
 }
 
 // Get deployment all replicas logs by filter

@@ -389,7 +389,7 @@ func getTwoSchedulableWorkersWithDifferentAzs(oc *exutil.CLI) []node {
 		e2e.Logf("Schedulable workers less than 2")
 		return expectedWorkers
 	}
-	for i := 1; i <= len(allSchedulableLinuxWorkers); i++ {
+	for i := 1; i < len(allSchedulableLinuxWorkers); i++ {
 		if allSchedulableLinuxWorkers[0].availableZone != allSchedulableLinuxWorkers[i].availableZone {
 			e2e.Logf("2 Schedulable workers with different available zones are: [%v|%v]", allSchedulableLinuxWorkers[0], allSchedulableLinuxWorkers[i])
 			return append(expectedWorkers, allSchedulableLinuxWorkers[0], allSchedulableLinuxWorkers[i])
