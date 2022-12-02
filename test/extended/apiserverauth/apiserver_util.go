@@ -408,10 +408,10 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	workerMEMtopall := []int{}
 	var workerMEMtopstr string
 	var workerMEMtopint int
-	reserveCPUP := 40
 	cpuMetric := 800
 	memMetric := 700
-	reserveMemP := 40
+	reserveCPUP := 50
+	reserveMemP := 50
 	snoPodCapacity := 250
 	reservePodCapacity := 60
 	n := 1
@@ -469,6 +469,7 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	}
 	cpuMax := workerCPUtopall[0]
 	availableCPU := int(float64(totalCPU) * (100 - float64(reserveCPUP) - float64(cpuMax)) / 100)
+	e2e.Logf("----> Cluster has total CPU, Reserved CPU percentage, Max CPU of node :%v,%v,%v", totalCPU, reserveCPUP, cpuMax)
 	n = int(availableCPU / int(cpuMetric))
 	if n <= 0 {
 		e2e.Logf("No more CPU resource is available, no load will be added!")
@@ -476,19 +477,19 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 		p := workerNodeCount
 		if workerNodeCount == 1 {
 			dn = 1
-			r = 1
+			r = 2
 			c = 3
-			s = 20
 		} else {
-			r = 3
+			dn = 2
 			c = 3
 			if n > workerNodeCount {
-				dn = 3
+				r = 3
 			} else {
-				dn = workerNodeCount
+				r = workerNodeCount
 			}
-			s = int(500 / n / dn)
 		}
+		s = int(500 / n / dn)
+		// Get the available pods of worker nodes, based on this, the upper limit for a namespace is calculated
 		cmd1 := fmt.Sprintf(`oc describe node/%s | grep 'Non-terminated Pods' | grep -oP "[0-9]+"`, worker1)
 		cmdOut1, err := exec.Command("bash", "-c", cmd1).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -499,14 +500,24 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 			availablePods = availablePods * workerNodeCount
 		}
 		nsMax := int(availablePods / dn / r)
-		if n > nsMax {
-			n = nsMax
+		if nsMax > 0 {
+			if n > nsMax {
+				n = nsMax
+			}
+		} else {
+			n = 1
+			r = 1
+			dn = 1
+			c = 3
+			s = 10
 		}
 		e2e.Logf("Start CPU load ...")
 		cpuloadCmd := fmt.Sprintf(`clusterbuster -N %v -B cpuload -P server -b 5 -r %v -p %v -d %v -c %v -s %v -W -m 1000 -D .2 -M 1 -t 36000 -x -v > %v`, n, r, p, dn, c, s, dirname+"clusterbuster-cpu-log")
 		e2e.Logf("%v", cpuloadCmd)
 		_, err = exec.Command("bash", "-c", cpuloadCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		// Wait for 3 mins(this time is based on many tests), when the load starts, it will reach a peak within a few minutes, then falls back.
+		time.Sleep(180 * time.Second)
 	}
 
 	memUsageCmd := fmt.Sprintf(`echo "%v" | awk '{print $4}'`, workerTop)
@@ -539,24 +550,26 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	memMax := workerMEMtopall[0]
 	availableMem := int(float64(totalMem) * (100 - float64(reserveMemP) - float64(memMax)) / 100)
 	m = int(availableMem / int(memMetric))
+	e2e.Logf("----> Cluster has total Mem, Reserved Mem percentage, Max memory of node :%v,%v,%v", totalMem, reserveMemP, memMax)
 	if m <= 0 {
 		e2e.Logf("No more memory resource is available, no load will be added!")
 	} else {
-		r = m
 		p := workerNodeCount
 		if workerNodeCount == 1 {
-			dn = 6
+			dn = 1
+			r = 2
 			c = 6
-			s = 5
 		} else {
+			r = workerNodeCount
 			if m > workerNodeCount {
 				dn = m
 			} else {
 				dn = workerNodeCount
 			}
 			c = 3
-			s = int(500 / m / dn)
 		}
+		s = int(500 / m / dn)
+		// Get the available pods of worker nodes, based on this, the upper limit for a namespace is calculated
 		cmd1 := fmt.Sprintf(`oc describe node/%v | grep 'Non-terminated Pods' | grep -oP "[0-9]+"`, worker1)
 		cmdOut1, err := exec.Command("bash", "-c", cmd1).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -567,19 +580,27 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 			availablePods = availablePods * workerNodeCount
 		}
 		nsMax := int(availablePods / dn / r)
-		if m > nsMax {
-			m = nsMax
+		if nsMax > 0 {
+			if m > nsMax {
+				m = nsMax
+			}
+		} else {
+			m = 1
+			r = 1
+			dn = 1
+			c = 3
+			s = 10
 		}
 		e2e.Logf("Start Memory load ...")
 		memloadCmd := fmt.Sprintf(`clusterbuster -N %v -B memload -P server -r %v -p %v -d %v -c %v -s %v -W -x -v > %v`, m, r, p, dn, c, s, dirname+"clusterbuster-mem-log")
 		e2e.Logf("%v", memloadCmd)
 		_, err = exec.Command("bash", "-c", memloadCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		// Wait for 3 mins(this time is based on many tests), when the load starts, it will reach a peak within a few minutes, then falls back.
+		time.Sleep(180 * time.Second)
 	}
-	// Wait for 5 mins(this time is based on many tests), when the load starts, it will reach a peak within a few minutes, then falls back.
+	// If load are landed, will do some checking with logs
 	if n > 0 || m > 0 {
-		time.Sleep(300 * time.Second)
-
 		keywords := "body: net/http: request canceled (Client.Timeout|panic"
 		bustercmd := fmt.Sprintf(`cat %v | grep -iE '%s' || true`, dirname+"clusterbuster*", keywords)
 		busterLogs, err := exec.Command("bash", "-c", bustercmd).Output()

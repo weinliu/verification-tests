@@ -751,7 +751,7 @@ spec:
 		g.By("Checking cluster worker load before running clusterbuster")
 		cpuAvgValWorker, memAvgValWorker := checkClusterLoad(oc, "worker", "OCP-40667/nodes.log")
 		cpuAvgValMaster, memAvgValMaster := checkClusterLoad(oc, "master", "OCP-40667/nodes.log")
-		if cpuAvgValMaster < 70 || memAvgValMaster < 70 || cpuAvgValWorker < 60 || memAvgValWorker < 60 {
+		if cpuAvgValMaster < 70 && memAvgValMaster < 70 && cpuAvgValWorker < 60 && memAvgValWorker < 60 {
 			LoadCPUMemWorkload(oc)
 		}
 
@@ -1020,7 +1020,7 @@ spec:
 		g.By("Stress the cluster")
 		cpuAvgValWorker, memAvgValWorker := checkClusterLoad(oc, "worker", nodesLogFile)
 		cpuAvgValMaster, memAvgValMaster := checkClusterLoad(oc, "master", nodesLogFile)
-		if cpuAvgValMaster < 75 || memAvgValMaster < 70 || cpuAvgValWorker < 75 || memAvgValWorker < 70 {
+		if cpuAvgValMaster < 70 && memAvgValMaster < 70 && cpuAvgValWorker < 60 && memAvgValWorker < 60 {
 			LoadCPUMemWorkload(oc)
 		}
 
