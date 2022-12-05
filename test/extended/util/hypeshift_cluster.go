@@ -39,6 +39,7 @@ func ValidHypershiftAndGetGuestKubeConf(oc *CLI) (string, string) {
 	o.Expect(hypersfhitPodStatus).To(o.ContainSubstring("Running"))
 
 	//get first hosted cluster to run test
+	e2e.Logf("the hosted cluster names: %s, and will select the first", clusterNames)
 	guestClusterName := strings.Split(clusterNames, " ")[0]
 
 	var guestClusterKubeconfigFile string
@@ -47,8 +48,9 @@ func ValidHypershiftAndGetGuestKubeConf(oc *CLI) (string, string) {
 		e2e.Logf(fmt.Sprintf("use a known guest cluster kubeconfig: %v", guestClusterKubeconfigFile))
 	} else {
 		guestClusterKubeconfigFile = "/tmp/guestcluster-kubeconfig-" + guestClusterName + "-" + getRandomString()
-		_, err = exec.Command("bash", "-c", fmt.Sprintf("hypershift create kubeconfig --name %s > %s",
-			guestClusterName, guestClusterKubeconfigFile)).Output()
+		output, err := exec.Command("bash", "-c", fmt.Sprintf("hypershift create kubeconfig --name %s --namespace %s > %s",
+			guestClusterName, hostedclusterNS, guestClusterKubeconfigFile)).Output()
+		e2e.Logf("the cmd output: %s", string(output))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(fmt.Sprintf("create a new guest cluster kubeconfig: %v", guestClusterKubeconfigFile))
 	}
@@ -83,6 +85,7 @@ func ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc *CLI) (string, string) {
 	o.Expect(hypersfhitPodStatus).To(o.ContainSubstring("Running"))
 
 	//get first hosted cluster to run test
+	e2e.Logf("the hosted cluster names: %s, and will select the first", clusterNames)
 	guestClusterName := strings.Split(clusterNames, " ")[0]
 
 	var guestClusterKubeconfigFile string
@@ -91,8 +94,9 @@ func ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc *CLI) (string, string) {
 		e2e.Logf(fmt.Sprintf("use a known guest cluster kubeconfig: %v", guestClusterKubeconfigFile))
 	} else {
 		guestClusterKubeconfigFile = "/tmp/guestcluster-kubeconfig-" + guestClusterName + "-" + getRandomString()
-		_, err = exec.Command("bash", "-c", fmt.Sprintf("hypershift create kubeconfig --name %s > %s",
-			guestClusterName, guestClusterKubeconfigFile)).Output()
+		output, err := exec.Command("bash", "-c", fmt.Sprintf("hypershift create kubeconfig --name %s --namespace %s > %s",
+			guestClusterName, hostedclusterNS, guestClusterKubeconfigFile)).Output()
+		e2e.Logf("the cmd output: %s", string(output))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(fmt.Sprintf("create a new guest cluster kubeconfig: %v", guestClusterKubeconfigFile))
 	}
@@ -118,7 +122,20 @@ func GetHyperShiftOperatorNameSpace(oc *CLI) string {
 // if not exist, it will return empty string. If more than one exists, it will return the first one.
 func GetHyperShiftHostedClusterNameSpace(oc *CLI) string {
 	namespace, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
-		"hostedcluster", "-A", "--ignore-not-found", "-ojsonpath={.items[0].metadata.namespace}").Output()
+		"hostedcluster", "-A", "--ignore-not-found", "-ojsonpath={.items[*].metadata.namespace}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	return namespace
+	if len(namespace) <= 0 {
+		return namespace
+	}
+	namespaces := strings.Fields(namespace)
+	if len(namespaces) == 1 {
+		return namespaces[0]
+	}
+	ns := ""
+	for _, ns = range namespaces {
+		if ns != "clusters" {
+			break
+		}
+	}
+	return ns
 }
