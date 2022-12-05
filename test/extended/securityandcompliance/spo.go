@@ -46,7 +46,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		subD = subscriptionDescription{
 			subName:                "security-profiles-operator-sub",
 			namespace:              "security-profiles-operator",
-			channel:                "release-0.5",
+			channel:                "release-alpha-rhel8",
 			ipApproval:             "Automatic",
 			operatorPackage:        "security-profiles-operator",
 			catalogSourceName:      "qe-app-registry",
