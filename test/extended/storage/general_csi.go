@@ -2936,7 +2936,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			volumesnapshotTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
 		)
 
-		g.By("Create new project for the scenario")
+		g.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
@@ -2947,7 +2947,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageClass.create(oc)
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not
 
-			g.By("Create a pvc with the csi storageclass and wait for the pvc remain in Pending status")
+			g.By("# Create a pvc with the csi storageclass and wait for the pvc remain in Pending status")
 			pvc.scname = storageClass.name
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
@@ -2956,13 +2956,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				return pvcState
 			}, 30*time.Second, 5*time.Second).Should(o.Equal("Pending"))
 
-			g.By("Create volumesnapshot with pre-defined volumesnapshotclass")
+			g.By("# Create volumesnapshot with pre-defined volumesnapshotclass")
 			presetVscName := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
 			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvc.name), setVolumeSnapshotVscname(presetVscName))
 			volumesnapshot.create(oc)
 			defer volumesnapshot.delete(oc)
 
-			g.By("Check volumesnapshot status, Delete volumesnapshot and check it gets deleted successfully")
+			g.By("# Check volumesnapshot status, Delete volumesnapshot and check it gets deleted successfully")
 			o.Eventually(func() string {
 				vsStatus, _ := oc.WithoutNamespace().Run("get").Args("volumesnapshot", "-n", volumesnapshot.namespace, volumesnapshot.name, "-o=jsonpath={.status.readyToUse}").Output()
 				return vsStatus
@@ -3000,9 +3000,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
 			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			volumesnapshotTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
+			deploymentTemplate     = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
 		)
 
-		g.By("Create new project for the scenario")
+		g.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
@@ -3010,23 +3011,36 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			// Set the resource definition
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
 			storageClass.create(oc)
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 
-			g.By("Create a pvc with the csi storageclass")
+			g.By("# Create a pvc with the csi storageclass")
 			pvc.scname = storageClass.name
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
-			pvc.waitStatusAsExpected(oc, "Bound")
 
-			g.By("Create volumesnapshot with pre-defined volumesnapshotclass and wait for ready_to_use status")
+			if provisioner == "vpc.block.csi.ibm.io" {
+				// Added deployment because of IBM limitation
+				// It does not support offline snapshots or resize. Volume must be attached to a running pod.
+				g.By("# Create deployment with the created pvc and wait ready")
+				dep.create(oc)
+				defer dep.delete(oc)
+				dep.waitReady(oc)
+			} else {
+				g.By("# Wait for the pvc become to bound")
+				pvc.waitStatusAsExpected(oc, "Bound")
+			}
+
+			g.By("# Create volumesnapshot with pre-defined volumesnapshotclass and wait for ready_to_use status")
 			presetVscName := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
 			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvc.name), setVolumeSnapshotVscname(presetVscName))
 			volumesnapshot.create(oc)
 			defer volumesnapshot.delete(oc)
 			volumesnapshot.waitReadyToUse(oc)
 
-			g.By("Change deletion policy of volumesnapshot content to Retain from Delete")
+			g.By("# Change deletion policy of volumesnapshot content to Retain from Delete")
 			vsContentName := getVSContentByVSname(oc, volumesnapshot.namespace, volumesnapshot.name)
 			patchResourceAsAdmin(oc, volumesnapshot.namespace, "volumesnapshotcontent/"+vsContentName, `{"spec":{"deletionPolicy": "Retain"}}`, "merge")
 			deletionPolicy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("volumesnapshotcontent", vsContentName, "-o=jsonpath={.spec.deletionPolicy}").Output()
@@ -3034,19 +3048,19 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			o.Expect(deletionPolicy).To(o.ContainSubstring("Retain"))
 			e2e.Logf("The volumesnapshot content %s deletion policy changed successfully to Retain from Delete", vsContentName)
 
-			g.By("Delete volumesnapshot and check volumesnapshot content remains")
+			g.By("# Delete volumesnapshot and check volumesnapshot content remains")
 			deleteSpecifiedResource(oc, "volumesnapshot", volumesnapshot.name, volumesnapshot.namespace)
 			_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("volumesnapshotcontent", vsContentName).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("Change deletion policy of volumesnapshot content to Delete from Retain")
+			g.By("# Change deletion policy of volumesnapshot content to Delete from Retain")
 			patchResourceAsAdmin(oc, volumesnapshot.namespace, "volumesnapshotcontent/"+vsContentName, `{"spec":{"deletionPolicy": "Delete"}}`, "merge")
 			deletionPolicy, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("volumesnapshotcontent", vsContentName, "-o=jsonpath={.spec.deletionPolicy}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(deletionPolicy).To(o.ContainSubstring("Delete"))
 			e2e.Logf("The volumesnapshot content %s deletion policy changed successfully to Delete from Retain", vsContentName)
 
-			g.By("Delete volumesnapshotcontent and check volumesnapshot content doesn't remain")
+			g.By("# Delete volumesnapshotcontent and check volumesnapshot content doesn't remain")
 			deleteSpecifiedResource(oc.AsAdmin(), "volumesnapshotcontent", vsContentName, "")
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
@@ -3078,10 +3092,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
 			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			volumesnapshotTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
+			deploymentTemplate     = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
 			volSize                int64
 		)
 
-		g.By("Create new project for the scenario")
+		g.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
 		for _, provisioner := range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
@@ -3089,18 +3104,31 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			// Set the resource definition
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
 			storageClass.create(oc)
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 
-			g.By("Create a pvc with the csi storageclass")
+			g.By("# Create a pvc with the csi storageclass")
 			pvc.scname = storageClass.name
 			volSize = getRandomNum(25, 35)
 			pvc.capacity = strconv.FormatInt(volSize, 10) + "Gi"
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
-			pvc.waitStatusAsExpected(oc, "Bound")
 
-			g.By("Create volumesnapshot with pre-defined volumesnapshotclass and wait for ready_to_use status")
+			if provisioner == "vpc.block.csi.ibm.io" {
+				// Added deployment because of IBM limitation
+				// It does not support offline snapshots or resize. Volume must be attached to a running pod.
+				g.By("# Create deployment with the created pvc and wait ready")
+				dep.create(oc)
+				defer dep.delete(oc)
+				dep.waitReady(oc)
+			} else {
+				g.By("# Wait for the pvc become to bound")
+				pvc.waitStatusAsExpected(oc, "Bound")
+			}
+
+			g.By("# Create volumesnapshot with pre-defined volumesnapshotclass and wait for ready_to_use status")
 			presetVscName := getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, provisioner)
 			volumesnapshot := newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvc.name), setVolumeSnapshotVscname(presetVscName))
 			volumesnapshot.create(oc)
@@ -3109,21 +3137,33 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			// Set the resource definition for the restore
 			pvcRestore := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name))
+			depRestore := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvcRestore.name))
 
-			g.By("Create a restored pvc with the preset csi storageclass")
+			g.By("# Create a restored pvc with the preset csi storageclass")
 			pvcRestore.capacity = strconv.FormatInt(volSize-getRandomNum(1, 5), 10) + "Gi"
 			pvcRestore.scname = storageClass.name
 			pvcRestore.createWithSnapshotDataSource(oc)
 			defer pvcRestore.deleteAsAdmin(oc)
 
-			g.By("# Check the pvc restored failed with capacity less than snapshot")
-			o.Consistently(func() string {
-				pvcRestoreState, _ := pvcRestore.getStatus(oc)
-				return pvcRestoreState
-			}, 60*time.Second, 5*time.Second).Should(o.Equal("Pending"))
-			output, err := describePersistentVolumeClaim(oc, pvcRestore.namespace, pvcRestore.name)
+			g.By("# Create deployment with the restored pvc and wait for the deployment ready")
+			depRestore.create(oc)
+			defer depRestore.deleteAsAdmin(oc)
+
+			g.By("# Check for deployment should stuck at Pending state")
+			podsList, err := getPodsListByLabel(oc, oc.Namespace(), "app="+depRestore.applabel)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(output).Should(o.ContainSubstring("is less than the size"))
+			o.Consistently(func() string {
+				podStatus, _ := getPodStatus(oc, depRestore.namespace, podsList[0])
+				return podStatus
+			}, 60*time.Second, 5*time.Second).Should(o.Equal("Pending"))
+
+			g.By("# Check the pvc restored failed with capacity less than snapshot")
+			o.Expect(pvcRestore.getStatus(oc)).Should(o.Equal("Pending"))
+			// TODO: ibm provisioner has known issue: https://issues.redhat.com/browse/OCPBUGS-4318
+			// We should remove the if condition when the issue fixed
+			if provisioner != "vpc.block.csi.ibm.io" {
+				o.Expect(describePersistentVolumeClaim(oc, pvcRestore.namespace, pvcRestore.name)).Should(o.ContainSubstring("is less than the size"))
+			}
 
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
