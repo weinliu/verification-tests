@@ -25,6 +25,7 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		memHogTemp           = filepath.Join(buildPruningBaseDir, "mem-hog-ocp11600.yaml")
 		podTwoContainersTemp = filepath.Join(buildPruningBaseDir, "pod-with-two-containers.yaml")
 		podUserNSTemp        = filepath.Join(buildPruningBaseDir, "pod-user-namespace.yaml")
+		ctrcfgOverlayTemp    = filepath.Join(buildPruningBaseDir, "containerRuntimeConfig-overlay.yaml")
 
 		podUserNS47663 = podUserNSDescription{
 			name:      "",
@@ -81,6 +82,12 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 			name:      "",
 			namespace: "",
 			template:  podTwoContainersTemp,
+		}
+
+		ctrcfgOverlay = ctrcfgOverlayDescription{
+			name:     "",
+			overlay:  "",
+			template: ctrcfgOverlayTemp,
 		}
 	)
 	// author: pmali@redhat.com
@@ -427,6 +434,46 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		g.By("Check pod run in user namespace")
 		err = podUserNS47663.podRunInUserNS(oc)
 		exutil.AssertWaitPollNoErr(err, "pod not run in user namespace")
+	})
+
+	// author: minmli@redhat.com
+	g.It("NonPreRelease-Longduration-Author:minmli-High-46313-set overlaySize in containerRuntimeConfig should take effect in container [Disruptive][Slow]", func() {
+		oc.SetupProject()
+		g.By("Test for case OCP-46313")
+		ctrcfgOverlay.name = "ctrcfg-46313"
+		ctrcfgOverlay.overlay = "9G"
+
+		g.By("Create a containerRuntimeConfig to set overlaySize")
+		ctrcfgOverlay.create(oc)
+		defer func() {
+			g.By("Deleting configRuntimeConfig")
+			cleanupObjectsClusterScope(oc, objectTableRefcscope{"ContainerRuntimeConfig", "ctrcfg-46313"})
+			g.By("Check mcp finish rolling out")
+			err := getmcpStatus(oc, "worker")
+			exutil.AssertWaitPollNoErr(err, "mcp is not updated")
+		}()
+
+		g.By("Check mcp finish rolling out")
+		err := getmcpStatus(oc, "worker")
+		exutil.AssertWaitPollNoErr(err, "mcp is not updated")
+
+		g.By("Check overlaySize take effect in config file")
+		err = checkOverlaySize(oc, ctrcfgOverlay.overlay)
+		exutil.AssertWaitPollNoErr(err, "overlaySize not take effect")
+
+		g.By("Create a pod")
+		podTermination.name = "pod-46313"
+		podTermination.namespace = oc.Namespace()
+		podTermination.create(oc)
+		defer podTermination.delete(oc)
+
+		g.By("Check pod status")
+		err = podStatus(oc)
+		exutil.AssertWaitPollNoErr(err, "pod is not running")
+
+		g.By("Check in pod the root partition size for Overlay is correct.")
+		err = checkPodOverlaySize(oc, ctrcfgOverlay.overlay)
+		exutil.AssertWaitPollNoErr(err, "pod overlay size is not correct !!!")
 	})
 })
 

@@ -108,6 +108,17 @@ type podTwoContainersDescription struct {
 	template  string
 }
 
+type ctrcfgOverlayDescription struct {
+	name     string
+	overlay  string
+	template string
+}
+
+func (ctrcfg *ctrcfgOverlayDescription) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ctrcfg.template, "-p", "NAME="+ctrcfg.name, "OVERLAY="+ctrcfg.overlay)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 func (podUserNS *podUserNSDescription) createPodUserNS(oc *exutil.CLI) {
 	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podUserNS.template, "-p", "NAME="+podUserNS.name, "NAMESPACE="+podUserNS.namespace)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -352,14 +363,6 @@ func (ctrcfg *ctrcfgDescription) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func cleanupObjectsClusterScope(oc *exutil.CLI, objs ...objectTableRefcscope) {
-	for _, v := range objs {
-		e2e.Logf("\n Start to remove: %v", v)
-		_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(v.kind, v.name).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-	}
-}
-
 func (ctrcfg *ctrcfgDescription) checkCtrcfgParameters(oc *exutil.CLI) error {
 	return wait.Poll(10*time.Minute, 11*time.Minute, func() (bool, error) {
 		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
@@ -535,8 +538,8 @@ func masterNodeLog(oc *exutil.CLI, masterNode string) error {
 }
 
 func getmcpStatus(oc *exutil.CLI, nodeName string) error {
-	return wait.Poll(10*time.Second, 15*time.Minute, func() (bool, error) {
-		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeName, "-ojsonpath={.status.conditions[4].status}").Output()
+	return wait.Poll(60*time.Second, 15*time.Minute, func() (bool, error) {
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeName, "-ojsonpath={.status.conditions[?(@.type=='Updating')].status}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("\nCurrent mcp UPDATING Status is %s\n", status)
 		if strings.Contains(status, "False") {
@@ -558,6 +561,59 @@ func getWorkerNodeDescribe(oc *exutil.CLI, workerNodeName string) error {
 		} else {
 			e2e.Logf("\n WORKER NODE DO NOT HAVE MEMORY PRESSURE\n ")
 			return false, nil
+		}
+		return true, nil
+	})
+}
+
+func checkOverlaySize(oc *exutil.CLI, overlaySize string) error {
+	return wait.Poll(3*time.Second, 1*time.Minute, func() (bool, error) {
+		workerNode := getSingleWorkerNode(oc)
+		overlayString, err := exutil.DebugNodeWithChroot(oc, workerNode, "/bin/bash", "-c", "head -n 7 /etc/containers/storage.conf | grep size")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("overlaySize string : %v", overlayString)
+		if strings.Contains(string(overlayString), overlaySize) {
+			e2e.Logf("overlay size check successfully")
+		} else {
+			e2e.Logf("overlay size check failed")
+			return false, nil
+		}
+		return true, nil
+	})
+}
+
+func checkPodOverlaySize(oc *exutil.CLI, overlaySize string) error {
+	return wait.Poll(1*time.Second, 3*time.Second, func() (bool, error) {
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].metadata.name}", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		overlayString, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", oc.Namespace(), podName, "/bin/bash", "-c", "df -h | grep overlay").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("overlayString is : %v", overlayString)
+		overlaySizeStr := strings.Fields(string(overlayString))
+		e2e.Logf("overlaySize : %s", overlaySizeStr[1])
+		overlaySizeInt := strings.Split(string(overlaySizeStr[1]), ".")[0] + "G"
+		e2e.Logf("overlaySizeInt : %s", overlaySizeInt)
+		if overlaySizeInt == overlaySize {
+			e2e.Logf("pod overlay size is correct")
+		} else {
+			e2e.Logf("pod overlay size is not correct !!!")
+			return false, nil
+		}
+		return true, nil
+	})
+}
+
+func cleanupObjectsClusterScope(oc *exutil.CLI, objs ...objectTableRefcscope) error {
+	return wait.Poll(1*time.Second, 1*time.Second, func() (bool, error) {
+		for _, v := range objs {
+			e2e.Logf("\n Start to remove: %v", v)
+			status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(v.kind, v.name).Output()
+			if strings.Contains(status, "Error") {
+				e2e.Logf("Error getting resources... Seems resources objects are already deleted. \n")
+				return true, nil
+			}
+			_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(v.kind, v.name).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		return true, nil
 	})
