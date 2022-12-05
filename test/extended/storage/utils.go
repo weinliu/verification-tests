@@ -26,6 +26,14 @@ import (
 // Define the global cloudProvider
 var cloudProvider string
 
+// Define test waiting time const
+const (
+	defaultMaxWaitingTime = 180 * time.Second
+	defaultIterationTimes = 20
+	longerMaxWaitingTime  = 15 * time.Minute
+	longestMaxWaitingTime = 1 * time.Hour
+)
+
 // Kubeadmin user use oc client apply yaml template
 func applyResourceFromTemplateAsAdmin(oc *exutil.CLI, parameters ...string) error {
 	var configFile string

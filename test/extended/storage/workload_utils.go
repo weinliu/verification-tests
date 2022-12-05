@@ -16,14 +16,15 @@ import (
 
 // Pod workload related functions
 type pod struct {
-	name       string
-	namespace  string
-	pvcname    string
-	template   string
-	image      string
-	volumeType string
-	pathType   string
-	mountPath  string
+	name             string
+	namespace        string
+	pvcname          string
+	template         string
+	image            string
+	volumeType       string
+	pathType         string
+	mountPath        string
+	maxWaitReadyTime time.Duration
 }
 
 // Define the global Storage Operators && Driver deploments object
@@ -98,14 +99,15 @@ func setPodMountPath(mountPath string) podOption {
 // Create a new customized pod object
 func newPod(opts ...podOption) pod {
 	defaultPod := pod{
-		name:       "mypod-" + getRandomString(),
-		template:   "pod-template.yaml",
-		namespace:  "",
-		pvcname:    "mypvc",
-		image:      "quay.io/openshifttest/hello-openshift@sha256:56c354e7885051b6bb4263f9faa58b2c292d44790599b7dde0e49e7c466cf339",
-		volumeType: "volumeMounts",
-		pathType:   "mountPath",
-		mountPath:  "/mnt/storage",
+		name:             "mypod-" + getRandomString(),
+		template:         "pod-template.yaml",
+		namespace:        "",
+		pvcname:          "mypvc",
+		image:            "quay.io/openshifttest/hello-openshift@sha256:56c354e7885051b6bb4263f9faa58b2c292d44790599b7dde0e49e7c466cf339",
+		volumeType:       "volumeMounts",
+		pathType:         "mountPath",
+		mountPath:        "/mnt/storage",
+		maxWaitReadyTime: defaultMaxWaitingTime,
 	}
 
 	for _, o := range opts {
@@ -116,60 +118,60 @@ func newPod(opts ...podOption) pod {
 }
 
 // Create new pod with customized parameters
-func (pod *pod) create(oc *exutil.CLI) {
-	if pod.namespace == "" {
-		pod.namespace = oc.Namespace()
+func (po *pod) create(oc *exutil.CLI) {
+	if po.namespace == "" {
+		po.namespace = oc.Namespace()
 	}
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "PODNAME="+pod.name, "PODNAMESPACE="+pod.namespace, "PVCNAME="+pod.pvcname, "PODIMAGE="+pod.image, "VOLUMETYPE="+pod.volumeType, "PATHTYPE="+pod.pathType, "PODMOUNTPATH="+pod.mountPath)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // Create new pod with extra parameters
-func (pod *pod) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
-	if pod.namespace == "" {
-		pod.namespace = oc.Namespace()
+func (po *pod) createWithExtraParameters(oc *exutil.CLI, extraParameters map[string]interface{}) {
+	if po.namespace == "" {
+		po.namespace = oc.Namespace()
 	}
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "PODNAME="+pod.name, "PODNAMESPACE="+pod.namespace, "PVCNAME="+pod.pvcname, "PODIMAGE="+pod.image, "VOLUMETYPE="+pod.volumeType, "PATHTYPE="+pod.pathType, "PODMOUNTPATH="+pod.mountPath)
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // Create new pod with multi extra parameters
-func (pod *pod) createWithMultiExtraParameters(oc *exutil.CLI, jsonPathsAndActions []map[string]string, multiExtraParameters []map[string]interface{}) {
-	if pod.namespace == "" {
-		pod.namespace = oc.Namespace()
+func (po *pod) createWithMultiExtraParameters(oc *exutil.CLI, jsonPathsAndActions []map[string]string, multiExtraParameters []map[string]interface{}) {
+	if po.namespace == "" {
+		po.namespace = oc.Namespace()
 	}
-	err := applyResourceFromTemplateWithMultiExtraParameters(oc, jsonPathsAndActions, multiExtraParameters, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "PODNAME="+pod.name, "PODNAMESPACE="+pod.namespace, "PVCNAME="+pod.pvcname, "PODIMAGE="+pod.image, "VOLUMETYPE="+pod.volumeType, "PATHTYPE="+pod.pathType, "PODMOUNTPATH="+pod.mountPath)
+	err := applyResourceFromTemplateWithMultiExtraParameters(oc, jsonPathsAndActions, multiExtraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // Create new pod with extra parameters for readonly
-func (pod *pod) createWithReadOnlyVolume(oc *exutil.CLI) {
-	if pod.namespace == "" {
-		pod.namespace = oc.Namespace()
+func (po *pod) createWithReadOnlyVolume(oc *exutil.CLI) {
+	if po.namespace == "" {
+		po.namespace = oc.Namespace()
 	}
 	extraParameters := map[string]interface{}{
 		"jsonPath": `items.0.spec.containers.0.volumeMounts.0.`,
 		"readOnly": true,
 	}
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "PODNAME="+pod.name, "PODNAMESPACE="+pod.namespace, "PVCNAME="+pod.pvcname, "PODIMAGE="+pod.image, "VOLUMETYPE="+pod.volumeType, "PATHTYPE="+pod.pathType, "PODMOUNTPATH="+pod.mountPath)
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // Create new pod with subpath
-func (pod *pod) createWithSubpathVolume(oc *exutil.CLI, subPath string) {
-	if pod.namespace == "" {
-		pod.namespace = oc.Namespace()
+func (po *pod) createWithSubpathVolume(oc *exutil.CLI, subPath string) {
+	if po.namespace == "" {
+		po.namespace = oc.Namespace()
 	}
 	extraParameters := map[string]interface{}{
 		"jsonPath": `items.0.spec.containers.0.volumeMounts.0.`,
 		"subPath":  subPath,
 	}
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "PODNAME="+pod.name, "PODNAMESPACE="+pod.namespace, "PVCNAME="+pod.pvcname, "PODIMAGE="+pod.image, "VOLUMETYPE="+pod.volumeType, "PATHTYPE="+pod.pathType, "PODMOUNTPATH="+pod.mountPath)
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // Create new pod for security check
-func (pod *pod) createWithSecurity(oc *exutil.CLI) {
+func (po *pod) createWithSecurity(oc *exutil.CLI) {
 	seLevel := map[string]string{
 		"level": "s0:c13,c2",
 	}
@@ -179,166 +181,174 @@ func (pod *pod) createWithSecurity(oc *exutil.CLI) {
 		"fsGroup":        24680,
 		"runAsUser":      1000160000,
 	}
-	if pod.namespace == "" {
-		pod.namespace = oc.Namespace()
+	if po.namespace == "" {
+		po.namespace = oc.Namespace()
 	}
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "PODNAME="+pod.name, "PODNAMESPACE="+pod.namespace, "PVCNAME="+pod.pvcname, "PODIMAGE="+pod.image, "VOLUMETYPE="+pod.volumeType, "PATHTYPE="+pod.pathType, "PODMOUNTPATH="+pod.mountPath)
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // Create new pod with extra parameters for nodeSelector
-func (pod *pod) createWithNodeSelector(oc *exutil.CLI, labelName string, labelValue string) {
+func (po *pod) createWithNodeSelector(oc *exutil.CLI, labelName string, labelValue string) {
 	extraParameters := map[string]interface{}{
 		"jsonPath": `items.0.spec.nodeSelector.`,
 		labelName:  labelValue,
 	}
-	if pod.namespace == "" {
-		pod.namespace = oc.Namespace()
+	if po.namespace == "" {
+		po.namespace = oc.Namespace()
 	}
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "PODNAME="+pod.name, "PODNAMESPACE="+pod.namespace, "PVCNAME="+pod.pvcname, "PODIMAGE="+pod.image, "VOLUMETYPE="+pod.volumeType, "PATHTYPE="+pod.pathType, "PODMOUNTPATH="+pod.mountPath)
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // Create new pod with extra parameters for nodeAffinity, key, operator and values should be provided in matchExpressions
-func (pod *pod) createWithNodeAffinity(oc *exutil.CLI, key string, operator string, values []string) {
+func (po *pod) createWithNodeAffinity(oc *exutil.CLI, key string, operator string, values []string) {
 	extraParameters := map[string]interface{}{
 		"jsonPath": `items.0.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms.0.matchExpressions.0.`,
 		"key":      key,
 		"operator": operator,
 		"values":   values,
 	}
-	if pod.namespace == "" {
-		pod.namespace = oc.Namespace()
+	if po.namespace == "" {
+		po.namespace = oc.Namespace()
 	}
-	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "PODNAME="+pod.name, "PODNAMESPACE="+pod.namespace, "PVCNAME="+pod.pvcname, "PODIMAGE="+pod.image, "VOLUMETYPE="+pod.volumeType, "PATHTYPE="+pod.pathType, "PODMOUNTPATH="+pod.mountPath)
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // Delete the pod
-func (pod *pod) delete(oc *exutil.CLI) {
-	err := oc.WithoutNamespace().Run("delete").Args("pod", pod.name, "-n", pod.namespace).Execute()
+func (po *pod) delete(oc *exutil.CLI) {
+	err := oc.WithoutNamespace().Run("delete").Args("pod", po.name, "-n", po.namespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // Force delete the pod
-func (pod *pod) forceDelete(oc *exutil.CLI) {
-	err := oc.WithoutNamespace().Run("delete").Args("pod", pod.name, "-n", pod.namespace, "--force", "--grace-period=0").Execute()
+func (po *pod) forceDelete(oc *exutil.CLI) {
+	err := oc.WithoutNamespace().Run("delete").Args("pod", po.name, "-n", po.namespace, "--force", "--grace-period=0").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // Delete the pod use kubeadmin
-func (pod *pod) deleteAsAdmin(oc *exutil.CLI) {
-	oc.WithoutNamespace().AsAdmin().Run("delete").Args("pod", pod.name, "-n", pod.namespace, "--ignore-not-found").Execute()
+func (po *pod) deleteAsAdmin(oc *exutil.CLI) {
+	oc.WithoutNamespace().AsAdmin().Run("delete").Args("pod", po.name, "-n", po.namespace, "--ignore-not-found").Execute()
 }
 
 // Pod exec the bash CLI
-func (pod *pod) execCommand(oc *exutil.CLI, command string) (string, error) {
-	return execCommandInSpecificPod(oc, pod.namespace, pod.name, command)
+func (po *pod) execCommand(oc *exutil.CLI, command string) (string, error) {
+	return execCommandInSpecificPod(oc, po.namespace, po.name, command)
 }
 
 // Pod exec the bash CLI in specific container
-func (pod *pod) execCommandInSpecifiedContainer(oc *exutil.CLI, containerName string, command string) (string, error) {
-	finalArgs := []string{"-n", pod.namespace, pod.name, "-c", containerName, "--", "/bin/sh", "-c", command}
+func (po *pod) execCommandInSpecifiedContainer(oc *exutil.CLI, containerName string, command string) (string, error) {
+	finalArgs := []string{"-n", po.namespace, po.name, "-c", containerName, "--", "/bin/sh", "-c", command}
 	return oc.WithoutNamespace().Run("exec").Args(finalArgs...).Output()
 }
 
 // Pod exec the bash CLI with admin
-func (pod *pod) execCommandAsAdmin(oc *exutil.CLI, command string) (string, error) {
-	command1 := []string{"-n", pod.namespace, pod.name, "--", "/bin/sh", "-c", command}
+func (po *pod) execCommandAsAdmin(oc *exutil.CLI, command string) (string, error) {
+	command1 := []string{"-n", po.namespace, po.name, "--", "/bin/sh", "-c", command}
 	msg, err := oc.WithoutNamespace().AsAdmin().Run("exec").Args(command1...).Output()
 	if err != nil {
-		e2e.Logf(pod.name+"# "+command+" *failed with* :\"%v\".", err)
+		e2e.Logf(po.name+"# "+command+" *failed with* :\"%v\".", err)
 		return msg, err
 	}
-	debugLogf(pod.name+"# "+command+" *Output is* :\"%s\".", msg)
+	debugLogf(po.name+"# "+command+" *Output is* :\"%s\".", msg)
 	return msg, nil
 }
 
 // Check the pod mounted filesystem type volume could write data
-func (pod *pod) checkMountedVolumeCouldWriteData(oc *exutil.CLI, checkFlag bool) {
-	_, err := execCommandInSpecificPod(oc, pod.namespace, pod.name, "echo \"storage test\" >"+pod.mountPath+"/testfile")
+func (po *pod) checkMountedVolumeCouldWriteData(oc *exutil.CLI, checkFlag bool) {
+	_, err := execCommandInSpecificPod(oc, po.namespace, po.name, "echo \"storage test\" >"+po.mountPath+"/testfile")
 	o.Expect(err == nil).Should(o.Equal(checkFlag))
 	if err == nil && checkFlag {
-		_, err = execCommandInSpecificPod(oc, pod.namespace, pod.name, "sync -f "+pod.mountPath+"/testfile")
+		_, err = execCommandInSpecificPod(oc, po.namespace, po.name, "sync -f "+po.mountPath+"/testfile")
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 }
 
 // Check the pod mounted volume could read and write
-func (pod *pod) checkMountedVolumeCouldRW(oc *exutil.CLI) {
-	pod.checkMountedVolumeCouldWriteData(oc, true)
-	pod.checkMountedVolumeDataExist(oc, true)
+func (po *pod) checkMountedVolumeCouldRW(oc *exutil.CLI) {
+	po.checkMountedVolumeCouldWriteData(oc, true)
+	po.checkMountedVolumeDataExist(oc, true)
 }
 
 // Check the pod mounted volume origin wrote data 'testfile' exist or not
-func (pod *pod) checkMountedVolumeDataExist(oc *exutil.CLI, checkFlag bool) {
+func (po *pod) checkMountedVolumeDataExist(oc *exutil.CLI, checkFlag bool) {
 	if checkFlag {
-		o.Expect(execCommandInSpecificPod(oc, pod.namespace, pod.name, "cat "+pod.mountPath+"/testfile")).To(o.ContainSubstring("storage test"))
+		o.Expect(execCommandInSpecificPod(oc, po.namespace, po.name, "cat "+po.mountPath+"/testfile")).To(o.ContainSubstring("storage test"))
 	} else {
-		output, err := execCommandInSpecificPod(oc, pod.namespace, pod.name, "cat "+pod.mountPath+"/testfile")
+		output, err := execCommandInSpecificPod(oc, po.namespace, po.name, "cat "+po.mountPath+"/testfile")
 		o.Expect(err).Should(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("No such file or directory"))
 	}
 }
 
 // Check the pod mounted volume have exec right
-func (pod *pod) checkMountedVolumeHaveExecRight(oc *exutil.CLI) {
-	_, err := execCommandInSpecificPod(oc, pod.namespace, pod.name, "cp hello "+pod.mountPath)
+func (po *pod) checkMountedVolumeHaveExecRight(oc *exutil.CLI) {
+	_, err := execCommandInSpecificPod(oc, po.namespace, po.name, "cp hello "+po.mountPath)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(execCommandInSpecificPod(oc, pod.namespace, pod.name, pod.mountPath+"/hello")).To(o.ContainSubstring("Hello OpenShift Storage"))
+	o.Expect(execCommandInSpecificPod(oc, po.namespace, po.name, po.mountPath+"/hello")).To(o.ContainSubstring("Hello OpenShift Storage"))
 }
 
 // Check the pod mounted volume could write data into raw block volume
-func (pod *pod) writeDataIntoRawBlockVolume(oc *exutil.CLI) {
+func (po *pod) writeDataIntoRawBlockVolume(oc *exutil.CLI) {
 	e2e.Logf("Writing the data into Raw Block volume")
-	_, err := pod.execCommand(oc, "/bin/dd  if=/dev/null of="+pod.mountPath+" bs=512 count=1")
+	_, err := po.execCommand(oc, "/bin/dd  if=/dev/null of="+po.mountPath+" bs=512 count=1")
 	o.Expect(err).NotTo(o.HaveOccurred())
-	_, err = pod.execCommand(oc, "echo 'storage test' > "+pod.mountPath)
+	_, err = po.execCommand(oc, "echo 'storage test' > "+po.mountPath)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // Check data in raw block volume could be read
-func (pod *pod) checkDataInRawBlockVolume(oc *exutil.CLI) {
+func (po *pod) checkDataInRawBlockVolume(oc *exutil.CLI) {
 	e2e.Logf("Check the data in Raw Block volume")
-	_, err := pod.execCommand(oc, "/bin/dd  if="+pod.mountPath+" of=/tmp/testfile bs=512 count=1")
+	_, err := po.execCommand(oc, "/bin/dd  if="+po.mountPath+" of=/tmp/testfile bs=512 count=1")
 	o.Expect(err).NotTo(o.HaveOccurred())
-	output, err := pod.execCommand(oc, "cat /tmp/testfile")
+	output, err := po.execCommand(oc, "cat /tmp/testfile")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(output).To(o.ContainSubstring("storage test"))
 }
 
-func (pod *pod) checkFsgroup(oc *exutil.CLI, command string, expect string) {
-	output, err := pod.execCommandAsAdmin(oc, command)
+func (po *pod) checkFsgroup(oc *exutil.CLI, command string, expect string) {
+	output, err := po.execCommandAsAdmin(oc, command)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(output).To(o.ContainSubstring(expect))
 }
 
+// longerTime changes po.maxWaitReadyTime to LongerMaxWaitingTime
+// Used for some Longduration test
+func (po *pod) longerTime() *pod {
+	newPod := *po
+	newPod.maxWaitReadyTime = longerMaxWaitingTime
+	return &newPod
+}
+
 // Waiting for the Pod ready
-func (pod *pod) waitReady(oc *exutil.CLI) {
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-		status, err1 := checkPodReady(oc, pod.namespace, pod.name)
+func (po *pod) waitReady(oc *exutil.CLI) {
+	err := wait.Poll(po.maxWaitReadyTime/defaultIterationTimes, po.maxWaitReadyTime, func() (bool, error) {
+		status, err1 := checkPodReady(oc, po.namespace, po.name)
 		if err1 != nil {
-			e2e.Logf("the err:%v, wait for pod %v to become ready.", err1, pod.name)
+			e2e.Logf("the err:%v, wait for pod %v to become ready.", err1, po.name)
 			return status, err1
 		}
 		if !status {
 			return status, nil
 		}
-		e2e.Logf("Pod: \"%s\" is running on the node: \"%s\"", pod.name, getNodeNameByPod(oc, pod.namespace, pod.name))
+		e2e.Logf("Pod: \"%s\" is running on the node: \"%s\"", po.name, getNodeNameByPod(oc, po.namespace, po.name))
 		return status, nil
 	})
 
 	if err != nil {
-		podDescribe := describePod(oc, pod.namespace, pod.name)
-		e2e.Logf("oc describe pod %s:\n%s", pod.name, podDescribe)
-		describePersistentVolumeClaim(oc, pod.namespace, pod.pvcname)
+		podDescribe := describePod(oc, po.namespace, po.name)
+		e2e.Logf("oc describe pod %s:\n%s", po.name, podDescribe)
+		describePersistentVolumeClaim(oc, po.namespace, po.pvcname)
 	}
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod %s not ready", pod.name))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod %s not ready", po.name))
 }
 
 // Get the pod mount filesystem type volume size by df command
-func (pod *pod) getPodMountFsVolumeSize(oc *exutil.CLI) int64 {
-	sizeString, err := pod.execCommand(oc, "df -BG|grep "+pod.mountPath+"|awk '{print $2}'")
+func (po *pod) getPodMountFsVolumeSize(oc *exutil.CLI) int64 {
+	sizeString, err := po.execCommand(oc, "df -BG|grep "+po.mountPath+"|awk '{print $2}'")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	sizeInt64, err := strconv.ParseInt(strings.TrimSuffix(sizeString, "G"), 10, 64)
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -368,7 +378,7 @@ func describePod(oc *exutil.CLI, namespace string, podName string) string {
 
 // Waiting for the pod becomes ready, such as "Running", "Ready", "Complete"
 func waitPodReady(oc *exutil.CLI, namespace string, podName string) {
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	err := wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
 		status, err1 := checkPodReady(oc, namespace, podName)
 		if err1 != nil {
 			e2e.Logf("the err:%v, wait for pod %v to become ready.", err1, podName)
@@ -412,7 +422,7 @@ func execCommandInSpecificPod(oc *exutil.CLI, namespace string, podName string, 
 
 // Wait for pods selected with selector name to be removed
 func waitUntilPodsAreGoneByLabel(oc *exutil.CLI, namespace string, labelName string) {
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	err := wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
 		output, err := oc.WithoutNamespace().Run("get").Args("pods", "-l", labelName, "-n", namespace).Output()
 		if err != nil {
 			return false, err
@@ -457,7 +467,7 @@ func checkPodStatusByLabel(oc *exutil.CLI, namespace string, selectorLabel strin
 	var pvcList []string
 	podsList, _ := getPodsListByLabel(oc, namespace, selectorLabel)
 	e2e.Logf("PodLabelName \"%s\", expected status is \"%s\", podsList=%s", selectorLabel, expectedstatus, podsList)
-	err := wait.Poll(3*time.Second, 120*time.Second, func() (bool, error) {
+	err := wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
 		podflag := 0
 		for _, podName := range podsList {
 			podstatus, err := oc.WithoutNamespace().Run("get").Args("pod", podName, "-n", namespace, "-o=jsonpath={.status.phase}").Output()
@@ -617,7 +627,7 @@ func newDeployment(opts ...deployOption) deployment {
 		pvcname:          "",
 		volumetype:       "volumeMounts",
 		typepath:         "mountPath",
-		maxWaitReadyTime: 180 * time.Second,
+		maxWaitReadyTime: defaultMaxWaitingTime,
 	}
 
 	for _, o := range opts {
@@ -805,9 +815,17 @@ func (dep *deployment) describe(oc *exutil.CLI) string {
 	return deploymentDescribe
 }
 
+// longerTime changes dep.maxWaitReadyTime to LongerMaxWaitingTime
+// Used for some Longduration test
+func (dep *deployment) longerTime() *deployment {
+	newDep := *dep
+	newDep.maxWaitReadyTime = longerMaxWaitingTime
+	return &newDep
+}
+
 // Waiting the deployment become ready
 func (dep *deployment) waitReady(oc *exutil.CLI) {
-	err := wait.Poll(5*time.Second, dep.maxWaitReadyTime, func() (bool, error) {
+	err := wait.Poll(dep.maxWaitReadyTime/defaultIterationTimes, dep.maxWaitReadyTime, func() (bool, error) {
 		deploymentReady, err := dep.checkReady(oc)
 		if err != nil {
 			return deploymentReady, err
@@ -910,7 +928,7 @@ func (dep *deployment) setVolumeAdd(oc *exutil.CLI, mPath string, volName string
 func deleteProjectAsAdmin(oc *exutil.CLI, namespace string) {
 	_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", namespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	err = wait.Poll(15*time.Second, 120*time.Second, func() (bool, error) {
+	err = wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("project", namespace).Output()
 		if strings.Contains(output, "not found") {
 			e2e.Logf("Project %s got deleted successfully", namespace)
@@ -942,7 +960,7 @@ func getCommandCombinations(oc *exutil.CLI, resourceType string, resourceName st
 // Function to check the resources exists or no
 func checkResourcesNotExist(oc *exutil.CLI, resourceType string, resourceName string, namespace string) {
 	command := getCommandCombinations(oc, resourceType, resourceName, namespace)
-	err := wait.Poll(15*time.Second, 120*time.Second, func() (bool, error) {
+	err := wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
 		output, _ := oc.WithoutNamespace().Run("get").Args(command...).Output()
 		if strings.Contains(output, "not found") && namespace != "" {
 			e2e.Logf("No %s resource exists in the namespace %s", resourceType, namespace)
@@ -968,18 +986,19 @@ func deleteSpecifiedResource(oc *exutil.CLI, resourceType string, resourceName s
 
 // Statefulset workload related functions
 type statefulset struct {
-	name       string
-	namespace  string
-	replicasno string
-	applabel   string
-	mpath      string
-	pvcname    string
-	template   string
-	volumetype string
-	typepath   string
-	capacity   string
-	scname     string
-	volumemode string
+	name             string
+	namespace        string
+	replicasno       string
+	applabel         string
+	mpath            string
+	pvcname          string
+	template         string
+	volumetype       string
+	typepath         string
+	capacity         string
+	scname           string
+	volumemode       string
+	maxWaitReadyTime time.Duration
 }
 
 // function option mode to change the default value of Statefulset parameters,eg. name, replicasno, mpath
@@ -1084,18 +1103,19 @@ func newSts(opts ...statefulsetOption) statefulset {
 		defaultVolSize = strconv.FormatInt(getRandomNum(1, 10), 10) + "Gi"
 	}
 	defaultStatefulset := statefulset{
-		name:       "my-sts-" + getRandomString(),
-		template:   "sts-template.yaml",
-		namespace:  "",
-		replicasno: "2",
-		applabel:   "myapp-" + getRandomString(),
-		mpath:      "/mnt/local",
-		pvcname:    "stsvol-" + getRandomString(),
-		volumetype: "volumeMounts",
-		typepath:   "mountPath",
-		capacity:   defaultVolSize,
-		scname:     "gp2-csi",
-		volumemode: "Filesystem",
+		name:             "my-sts-" + getRandomString(),
+		template:         "sts-template.yaml",
+		namespace:        "",
+		replicasno:       "2",
+		applabel:         "myapp-" + getRandomString(),
+		mpath:            "/mnt/local",
+		pvcname:          "stsvol-" + getRandomString(),
+		volumetype:       "volumeMounts",
+		typepath:         "mountPath",
+		capacity:         defaultVolSize,
+		scname:           "gp2-csi",
+		volumemode:       "Filesystem",
+		maxWaitReadyTime: defaultMaxWaitingTime,
 	}
 
 	for _, o := range opts {
@@ -1145,9 +1165,17 @@ func (sts *statefulset) matchPvcNumWithReplicasNo(oc *exutil.CLI) bool {
 	return checkPvcNumWithLabel(oc, "app="+sts.applabel, sts.replicasno)
 }
 
+// longerTime changes sts.maxWaitReadyTime to LongerMaxWaitingTime
+// Used for some Longduration test
+func (sts *statefulset) longerTime() *statefulset {
+	newSts := *sts
+	newSts.maxWaitReadyTime = longerMaxWaitingTime
+	return &newSts
+}
+
 // Waiting the Statefulset become ready
 func (sts *statefulset) waitReady(oc *exutil.CLI) {
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	err := wait.Poll(sts.maxWaitReadyTime/defaultIterationTimes, sts.maxWaitReadyTime, func() (bool, error) {
 		stsReady, err := sts.checkReady(oc)
 		if err != nil {
 			return false, err
@@ -1251,14 +1279,15 @@ func (sts *statefulset) checkDataIntoRawBlockVolume(oc *exutil.CLI) {
 
 // Daemonset workload related functions
 type daemonset struct {
-	name       string
-	namespace  string
-	applabel   string
-	mpath      string
-	pvcname    string
-	template   string
-	volumetype string
-	typepath   string
+	name             string
+	namespace        string
+	applabel         string
+	mpath            string
+	pvcname          string
+	template         string
+	volumetype       string
+	typepath         string
+	maxWaitReadyTime time.Duration
 }
 
 // function option mode to change the default value of daemonset parameters,eg. name, mpath
@@ -1323,14 +1352,15 @@ func setDsVolumeTypePath(typepath string) daemonSetOption {
 // Create a new customized Daemonset object
 func newDaemonSet(opts ...daemonSetOption) daemonset {
 	defaultDaemonSet := daemonset{
-		name:       "my-ds-" + getRandomString(),
-		template:   "ds-template.yaml",
-		namespace:  "",
-		applabel:   "myapp-" + getRandomString(),
-		mpath:      "/mnt/ds",
-		pvcname:    "",
-		volumetype: "volumeMounts",
-		typepath:   "mountPath",
+		name:             "my-ds-" + getRandomString(),
+		template:         "ds-template.yaml",
+		namespace:        "",
+		applabel:         "myapp-" + getRandomString(),
+		mpath:            "/mnt/ds",
+		pvcname:          "",
+		volumetype:       "volumeMounts",
+		typepath:         "mountPath",
+		maxWaitReadyTime: defaultMaxWaitingTime,
 	}
 
 	for _, o := range opts {
@@ -1418,9 +1448,17 @@ func (ds *daemonset) checkPodMountedVolumeCouldRead(oc *exutil.CLI) {
 	}
 }
 
+// longerTime changes ds.maxWaitReadyTime to LongerMaxWaitingTime
+// Used for some Longduration test
+func (ds *daemonset) longerTime() *daemonset {
+	newDs := *ds
+	newDs.maxWaitReadyTime = longerMaxWaitingTime
+	return &newDs
+}
+
 // Waiting the Daemonset to become ready
 func (ds *daemonset) waitReady(oc *exutil.CLI) {
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+	err := wait.Poll(ds.maxWaitReadyTime/defaultIterationTimes, ds.maxWaitReadyTime, func() (bool, error) {
 		dsReady, err := ds.checkReady(oc)
 		if err != nil {
 			return dsReady, err

@@ -176,8 +176,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("#. Wait for the deployment scale up completed")
 		// Enhance for OVN network type test clusters
-		dep.maxWaitReadyTime = 15 * time.Minute
-		dep.waitReady(oc)
+		dep.longerTime().waitReady(oc)
 
 		g.By("#. Check testdata still in the volume and volume has exec right")
 		output, err := execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat "+dep.mpath+"/testfile*")
