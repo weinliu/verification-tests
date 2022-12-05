@@ -186,10 +186,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		routeNames := getResourceName(oc, oc.Namespace(), "route")
 
 		g.By("check whether route details are present in custom controller domain")
-		output := fetchJSONPathValue(oc, oc.Namespace(), "route/"+routeNames[0], ".metadata.annotations")
-		o.Expect(output).Should(o.ContainSubstring(`"route.openshift.io/destination-ca-certificate-secret":"service-secret"`))
-		output = fetchJSONPathValue(oc, oc.Namespace(), "route/"+routeNames[0], ".spec.host")
-		o.Expect(output).Should(o.ContainSubstring(`service-secure-%s.ocp50842.%s`, oc.Namespace(), baseDomain))
+		waitForOutput(oc, oc.Namespace(), "route/"+routeNames[0], ".metadata.annotations", `"route.openshift.io/destination-ca-certificate-secret":"service-secret"`)
+		cmd := fmt.Sprintf(`service-secure-%s.ocp50842.%s`, oc.Namespace(), baseDomain)
+		waitForOutput(oc, oc.Namespace(), "route/"+routeNames[0], ".spec.host", cmd)
 
 		g.By("check the reachability of the host in custom controller")
 		controlerIP := getPodv4Address(oc, custContPod, "openshift-ingress")
