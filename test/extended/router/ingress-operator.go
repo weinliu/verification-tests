@@ -435,8 +435,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(findAnnotation).To(o.ContainSubstring("10.0.0.0/8"))
 
 		g.By("Check the annotation value in the allowedSourceRanges in the controller status")
-		sourceRange := fetchJSONPathValue(oc, "openshift-ingress-operator", "ingresscontroller/ocp55341", ".status.endpointPublishingStrategy.loadBalancer.allowedSourceRanges")
-		o.Expect(sourceRange).To(o.ContainSubstring(`10.0.0.0/8`))
+		waitForOutput(oc, "openshift-ingress-operator", "ingresscontroller/ocp55341", ".status.endpointPublishingStrategy.loadBalancer.allowedSourceRanges", `10.0.0.0/8`)
 
 		g.By("Patch the loadBalancerSourceRanges in the LB service")
 		patchResourceAsAdmin(oc, "openshift-ingress", "svc/router-ocp55341", "{\"spec\":{\"loadBalancerSourceRanges\":[\"30.0.0.0/16\"]}}")
@@ -448,8 +447,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		waitForOutput(oc, "openshift-ingress", "svc/router-ocp55341", ".spec.loadBalancerSourceRanges", `30.0.0.0/16`)
 
 		g.By("Check the controller status and confirm the sourcerange value's precedence over the annotation")
-		sourceRange = fetchJSONPathValue(oc, "openshift-ingress-operator", "ingresscontroller/ocp55341", ".status.endpointPublishingStrategy.loadBalancer.allowedSourceRanges")
-		o.Expect(sourceRange).To(o.ContainSubstring(`30.0.0.0/16`))
+		waitForOutput(oc, "openshift-ingress-operator", "ingresscontroller/ocp55341", ".status.endpointPublishingStrategy.loadBalancer.allowedSourceRanges", `30.0.0.0/16`)
 	})
 
 	// author: mjoseph@redhat.com
