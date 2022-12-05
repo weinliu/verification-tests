@@ -978,7 +978,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			manifestDir, name, namespace)
 		e2e.Logf(cmd)
 		out, err := exec.Command("bash", "-c", cmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		// We expect no replicas could be found, so the cmd should return with non-zero
+		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(out).To(o.BeEmpty())
 
 		g.By("Check only one insights-operator pod in a fresh installed cluster")
