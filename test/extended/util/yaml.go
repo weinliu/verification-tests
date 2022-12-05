@@ -43,7 +43,6 @@ func ModifyYamlFileContent(file string, replacements []YamlReplace) {
 	var doc yaml.Node
 	if err = yaml.Unmarshal(input, &doc); err != nil {
 		e2e.Failf("unmarshal yaml for file %s failed: %v", file, err)
-
 	}
 
 	for _, replacement := range replacements {

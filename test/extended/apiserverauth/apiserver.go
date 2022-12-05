@@ -3512,4 +3512,79 @@ EOF`, dcpolicyrepo)
 			}
 		}
 	})
+
+	// author: zxiao@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:zxiao-High-24219-[MSTR-737] Custom resource watchers should terminate instead of hang when its CRD is deleted or modified [Disruptive]", func() {
+		g.By("1) Create a new project required for this test execution")
+		oc.SetupProject()
+		namespace := oc.Namespace()
+
+		crdTemplate := getTestDataFilePath("ocp24219-crd.yaml")
+		g.By(fmt.Sprintf("2) Create custom resource definition from file %s", crdTemplate))
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", crdTemplate).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", crdTemplate).Execute()
+
+		crTemplate := getTestDataFilePath("ocp24219-cr.yaml")
+		g.By(fmt.Sprintf("3) Create custom resource definition from file %s", crTemplate))
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", crTemplate, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", crTemplate, "-n", namespace).Execute()
+
+		resourcePath := fmt.Sprintf("/apis/example.com/v1/namespaces/%s/testcrs", namespace)
+		g.By(fmt.Sprintf("4) Check custom resource under path %s", resourcePath))
+		cmd1, backgroundBuf, _, err := oc.AsAdmin().Run("get").Args(fmt.Sprintf("--raw=%s?watch=True", resourcePath), "-n", namespace).Background()
+		defer cmd1.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By(fmt.Sprintf("5) Change YAML content of file at path %s", crTemplate))
+		crTemplateCopy := CopyToFile(crTemplate, "ocp24219-cr-copy.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.ModifyYamlFileContent(crTemplateCopy, []exutil.YamlReplace{
+			{
+				Path:  "spec.a",
+				Value: "This change to the CR results in a MODIFIED event",
+			},
+		})
+
+		g.By(fmt.Sprintf("6) Apply custom resource from file %s", crTemplateCopy))
+		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crTemplateCopy, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("7) Check background buffer for modify pattern")
+		o.Eventually(func() bool {
+			return strings.Contains(backgroundBuf.String(), "MODIFIED event")
+		}, 5*60*time.Second, 1*time.Second).Should(o.BeTrue(), "modification is not detected")
+
+		g.By(fmt.Sprintf("8) Change YAML content of file at path %s", crdTemplate))
+		crdTemplateCopy := CopyToFile(crdTemplate, "ocp24219-crd-copy.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.ModifyYamlFileContent(crdTemplateCopy, []exutil.YamlReplace{
+			{
+				Path:  "spec.versions.0.schema.openAPIV3Schema.properties.spec.properties",
+				Value: "b:\n  type: string",
+			},
+		})
+
+		g.By(fmt.Sprintf("9) Apply custom resource definition from file %s", crdTemplateCopy))
+		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", crdTemplateCopy).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("10) Create background process for checking custom resource")
+		cmd2, backgroundBuf2, _, err := oc.AsAdmin().Run("get").Args(fmt.Sprintf("--raw=%s?watch=True", resourcePath), "-n", namespace).Background()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer cmd2.Process.Kill()
+
+		crdName := "crd/testcrs.example.com"
+		g.By(fmt.Sprintf("11) Delete custom resource named %s", crdName))
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(crdName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("12) checking custom resource")
+		crDeleteMatchRegex, err := regexp.Compile(`type":"DELETED".*"object":.*"kind":"OCP24219TestCR`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Eventually(func() bool {
+			return crDeleteMatchRegex.MatchString(backgroundBuf2.String())
+		}, 60*time.Second, 1*time.Second).Should(o.BeTrue(), "crd is not deleted")
+	})
 })

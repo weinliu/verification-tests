@@ -3,6 +3,7 @@ package apiserverauth
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -614,4 +615,38 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	} else {
 		e2e.Logf("No more CPU and memory resource, no any load is added.")
 	}
+}
+
+// CopyToFile copy a given file into a temp folder with given file name
+func CopyToFile(fromPath string, toFilename string) string {
+	// check if source file is regular file
+	srcFileStat, err := os.Stat(fromPath)
+	if err != nil {
+		e2e.Failf("get source file %s stat failed: %v", fromPath, err)
+	}
+	if !srcFileStat.Mode().IsRegular() {
+		e2e.Failf("source file %s is not a regular file", fromPath)
+	}
+
+	// open source file
+	source, err := os.Open(fromPath)
+	if err != nil {
+		e2e.Failf("open source file %s failed: %v", fromPath, err)
+	}
+	defer source.Close()
+
+	// open dest file
+	saveTo := filepath.Join(e2e.TestContext.OutputDir, toFilename)
+	dest, err := os.Create(saveTo)
+	if err != nil {
+		e2e.Failf("open destination file %s failed: %v", saveTo, err)
+	}
+	defer dest.Close()
+
+	// copy from source to dest
+	_, err = io.Copy(dest, source)
+	if err != nil {
+		e2e.Failf("copy file from %s to %s failed: %v", fromPath, saveTo, err)
+	}
+	return saveTo
 }
