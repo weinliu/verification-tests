@@ -3,6 +3,7 @@ package storage
 import (
 	"path/filepath"
 	"strconv"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -174,5 +175,67 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("# Check the alert raised for MultipleDefaultStorageClasses")
 		checkAlertRaised(oc, "MultipleDefaultStorageClasses")
+	})
+
+	// author: rdeore@redhat.com
+	// No volume is created when SC provider is not right
+	g.It("ROSA-OSD_CCS-ARO-Author:rdeore-Medium-24923- No volume is created when SC provider is not right", func() {
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+		)
+
+		g.By("#. Create new project for the scenario")
+		oc.SetupProject()
+
+		// Set the resource definition for the scenario
+		storageClass1 := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassVolumeBindingMode("Immediate"))
+		storageClass2 := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassVolumeBindingMode("Immediate"))
+		pvc1 := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+		pvc2 := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+
+		g.By("#. Create invalid csi storageclass")
+		storageClass1.provisioner = "invalid.csi.provisioner.com" //Setting invalid provisioner
+		storageClass1.create(oc)
+		defer storageClass1.deleteAsAdmin(oc)
+
+		g.By("# Create a pvc1 with the csi storageclass")
+		pvc1.scname = storageClass1.name
+		pvc1.create(oc)
+		defer pvc1.deleteAsAdmin(oc)
+
+		g.By("# Check pvc1 should stuck at Pending status and no volume is provisioned")
+		o.Consistently(func() string {
+			pvc1Event, _ := describePersistentVolumeClaim(oc, pvc1.namespace, pvc1.name)
+			return pvc1Event
+		}, 60*time.Second, 10*time.Second).Should(o.And(
+			o.ContainSubstring("Pending"),
+			o.ContainSubstring("ExternalProvisioning"),
+			o.ContainSubstring("waiting for a volume to be created, either by external provisioner \"invalid.csi.provisioner.com\" or manually created by system administrator"),
+		))
+		o.Expect(describePersistentVolumeClaim(oc, pvc1.namespace, pvc1.name)).ShouldNot(o.ContainSubstring("Successfully provisioned volume"))
+
+		g.By("# Create invalid inline storageclass")
+		storageClass2.provisioner = "kubernetes.io/invalid.provisioner.com" //Setting invalid provisioner
+		storageClass2.create(oc)
+		defer storageClass2.deleteAsAdmin(oc)
+
+		g.By("# Create a pvc2 with the inline storageclass")
+		pvc2.scname = storageClass2.name
+		pvc2.create(oc)
+		defer pvc2.deleteAsAdmin(oc)
+
+		g.By("# Check pvc2 should stuck at Pending status and no volume is provisioned")
+		o.Consistently(func() string {
+			pvc2Event, _ := describePersistentVolumeClaim(oc, pvc2.namespace, pvc2.name)
+			return pvc2Event
+		}, 60*time.Second, 10*time.Second).Should(o.And(
+			o.ContainSubstring("Pending"),
+			o.ContainSubstring("no volume plugin matched name: kubernetes.io/invalid.provisioner.com"),
+		))
+		o.Expect(describePersistentVolumeClaim(oc, pvc2.namespace, pvc2.name)).ShouldNot(o.ContainSubstring("Successfully provisioned volume"))
+
 	})
 })
