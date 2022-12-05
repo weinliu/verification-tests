@@ -907,7 +907,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-Medium-41398-Users providing custom AWS tags are set with bucket creation [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:jitli-ConnectedOnly-Medium-41398-Users providing custom AWS tags are set with bucket creation [Disruptive]", func() {
 
 		g.By("Check platforms")
 		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure.config.openshift.io", "-o=jsonpath={..status.platformStatus.type}").Output()

@@ -2,7 +2,6 @@ package imageregistry
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -23,7 +22,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		var containerCLI = container.NewPodmanCLI()
 		oc.SetupProject()
 		g.By("Import an OCI image to internal registry")
-		err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("myimage", "--from", "docker.io/wzheng/busyboxoci", "--confirm", "--reference-policy=local", "-n", oc.Namespace()).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("myimage", "--from", "quay.io/openshifttest/ociimage:multiarch", "--confirm", "--reference-policy=local", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -61,9 +60,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 	g.It("ROSA-OSD_CCS-ARO-Author:wewang-ConnectedOnly-VMonly-High-37498-Push image with OCI format directly to the internal registry", func() {
 		var podmanCLI = container.NewPodmanCLI()
 		containerCLI := podmanCLI
-		//quay.io does not support oci image, so using docker image temporarily, https://issues.redhat.com/browse/PROJQUAY-2300
-		// ociImage := "quay.io/openshifttest/ociimage"
-		ociImage := "docker.io/wzheng/ociimage"
+		ociImage := "quay.io/openshifttest/ociimage:multiarch"
 
 		g.By("Expose route of internal registry")
 		routeName := getRandomString()
@@ -78,8 +75,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("podman tag an image")
-		dockerConfig := filepath.Join("/home", "cloud-user", ".docker", "auto", "48710.json")
-		output, err := containerCLI.Run("pull").Args(ociImage, "--authfile="+dockerConfig, "--tls-verify=false").Output()
+		output, err := containerCLI.Run("pull").Args(ociImage, "--tls-verify=false").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if err != nil {
 			e2e.Logf(output)
@@ -114,7 +110,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 	g.It("ROSA-OSD_CCS-ARO-Author:wewang-ConnectedOnly-VMonly-Critical-35998-OCI images layers configs can be pruned completely", func() {
 		var podmanCLI = container.NewPodmanCLI()
 		containerCLI := podmanCLI
-		ociImage := "docker.io/wzheng/ociimage"
+		ociImage := "quay.io/openshifttest/ociimage:multiarch"
 
 		g.By("Tag the image to internal registry")
 		oc.SetupProject()
