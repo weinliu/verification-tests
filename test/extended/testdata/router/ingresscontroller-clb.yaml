@@ -15,7 +15,7 @@ objects:
           aws:
             type: Classic
           type: AWS
-        scope: Internal
+        scope: External
       type: LoadBalancerService
 parameters:
 - name: NAME
