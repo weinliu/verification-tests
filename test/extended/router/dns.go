@@ -2,10 +2,12 @@ package router
 
 import (
 	"path/filepath"
+	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
@@ -516,4 +518,40 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			o.ContainSubstring("denial 9984 30")))
 	})
 
+	// Bug: 2061244
+	// no master nodes on HyperShift guest cluster so this case is not available
+	g.It("NonHyperShiftHOST-Author:mjoseph-High-56325-DNS pod should not work on nodes with taint configured [Disruptive]", func() {
+
+		g.By("Check whether the dns pods eviction annotation is set or not")
+		podList := getAllDNSPodsNames(oc)
+		dnsPodName := getRandomDNSPodName(podList)
+		findAnnotation := getAnnotation(oc, "openshift-dns", "po", dnsPodName)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`cluster-autoscaler.kubernetes.io/enable-ds-eviction":"true`))
+
+		// get the worker and master node name
+		masterNodes := searchStringUsingLabel(oc, "node", "node-role.kubernetes.io/master", ".items[*].metadata.name")
+		workerNodes := searchStringUsingLabel(oc, "node", "node-role.kubernetes.io/worker", ".items[*].metadata.name")
+		masterNodeName := getRandomDNSPodName(strings.Split(masterNodes, " "))
+		workerNodeName := getRandomDNSPodName(strings.Split(workerNodes, " "))
+
+		g.By("Apply NoSchedule taint to worker node and confirm the dns pod is not scheduled")
+		defer deleteTaint(oc, "node", workerNodeName, "dedicated-")
+		addTaint(oc, "node", workerNodeName, "dedicated=Kafka:NoSchedule")
+		// Confirming one node is not schedulable with dns pod
+		podOut, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", "openshift-dns", "ds", "dns-default").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(podOut, "Number of Nodes Misscheduled: 1") {
+			e2e.Logf("Number of Nodes Misscheduled: 1 is not expected")
+		}
+
+		g.By("Apply NoSchedule taint to master node and confirm the dns pod is not scheduled on it")
+		defer deleteTaint(oc, "node", masterNodeName, "dns-taint-")
+		addTaint(oc, "node", masterNodeName, "dns-taint=test:NoSchedule")
+		// Confirming two nodes are not schedulable with dns pod
+		podOut2, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", "openshift-dns", "ds", "dns-default").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(podOut2, "Number of Nodes Misscheduled: 2") {
+			e2e.Logf("Number of Nodes Misscheduled: 2 is not expected")
+		}
+	})
 })

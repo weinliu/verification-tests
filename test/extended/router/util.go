@@ -1196,3 +1196,17 @@ func searchInDescribeResource(oc *exutil.CLI, resource, resourceName, match stri
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but cannot find the search string."))
 	return output
 }
+
+// this function is to add taint to resource
+func addTaint(oc *exutil.CLI, resource, resourceName, taint string) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", resource, resourceName, taint).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(output).To(o.ContainSubstring(resource + "/" + resourceName + " tainted"))
+}
+
+// this function is to remove the configured taint
+func deleteTaint(oc *exutil.CLI, resource, resourceName, taint string) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", resource, resourceName, taint).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(output).To(o.ContainSubstring(resource + "/" + resourceName + " untainted"))
+}
