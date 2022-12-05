@@ -357,6 +357,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			g.Skip("Skip test for openshift-samples which managed templates and imagestream are not installed")
 		}
 
+		g.By("Check if it's a https_proxy cluster")
+		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("proxy/cluster", "-o=jsonpath={.spec}").Output()
+		if strings.Contains(output, "httpProxy") && strings.Contains(output, "user-ca-bundle") {
+			g.Skip("Skip for non https_proxy platform")
+		}
+
 		g.By("Get server host")
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
