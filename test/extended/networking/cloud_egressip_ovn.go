@@ -1157,7 +1157,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("ConnectedOnly-Author:huirwang-High-53069-[Bug2097243] EgressIP should work for recreated same name pod. [Serial]", func() {
+	g.It("ConnectedOnly-Author:huirwang-High-Longduration-NonPreRelease-53069-EgressIP should work for recreated same name pod. [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
@@ -1214,12 +1214,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, true, egressIPMaps[0]["egressIP"])
 
 			g.By("6. Delete the test pod and recreate it. \n")
-			pod1.deletePingPod(oc)
-			pod1.createPingPod(oc)
-			waitPodReady(oc, pod1.namespace, pod1.name)
+			// Add more times to delete pod and recreate pod. This is to cover bug https://bugzilla.redhat.com/show_bug.cgi?id=2117310
+			g.By("6. Delete the test pod and recreate it. \n")
+			for i := 0; i < 15; i++ {
+				e2e.Logf("Delete and recreate pod for the %v time", i)
+				pod1.deletePingPod(oc)
+				pod1.createPingPod(oc)
+				waitPodReady(oc, pod1.namespace, pod1.name)
 
-			g.By("7. Check the source ip.\n")
-			verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, true, egressIPMaps[0]["egressIP"])
+				g.By("7. Check the source ip.\n")
+				verifyEgressIPWithIPEcho(oc, pod1.namespace, pod1.name, ipEchoURL, true, egressIPMaps[0]["egressIP"])
+			}
 		case "tcpdump":
 			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
 			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
@@ -1235,14 +1240,17 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			egressErr := verifyEgressIPinTCPDump(oc, pod1.name, pod1.namespace, egressIPMaps[0]["egressIP"], dstHost, ns1, tcpdumpDS.name, true)
 			o.Expect(egressErr).NotTo(o.HaveOccurred())
 
-			g.By("6. Delete the test pod and recreate it. \n")
-			pod1.deletePingPod(oc)
-			pod1.createPingPod(oc)
-			waitPodReady(oc, pod1.namespace, pod1.name)
+			g.By("6. Delete the test pod and recreate it for. \n")
+			for i := 0; i < 15; i++ {
+				e2e.Logf("Delete and recreate pod for the %v time", i)
+				pod1.deletePingPod(oc)
+				pod1.createPingPod(oc)
+				waitPodReady(oc, pod1.namespace, pod1.name)
 
-			g.By("7. Verify from tcpdump that source IP is EgressIP")
-			egressErr = verifyEgressIPinTCPDump(oc, pod1.name, pod1.namespace, egressIPMaps[0]["egressIP"], dstHost, ns1, tcpdumpDS.name, true)
-			o.Expect(egressErr).NotTo(o.HaveOccurred())
+				g.By("7. Verify from tcpdump that source IP is EgressIP")
+				egressErr = verifyEgressIPinTCPDump(oc, pod1.name, pod1.namespace, egressIPMaps[0]["egressIP"], dstHost, ns1, tcpdumpDS.name, true)
+				o.Expect(egressErr).NotTo(o.HaveOccurred())
+			}
 
 		default:
 			g.Skip("Skip for not support scenarios!")
