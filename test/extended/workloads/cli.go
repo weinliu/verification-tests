@@ -13,6 +13,7 @@ import (
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
@@ -738,6 +739,41 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			o.Expect(collectionStatus).To(o.ContainSubstring(vmessage))
 		}
 
+	})
+
+	// author: knarra@redhat.com
+	g.It("Author:knarra-Medium-28018-Workloads Custom label for pvc in statefulsets", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		deployStatefulSet := filepath.Join(buildPruningBaseDir, "stable-storage.yaml")
+
+		g.By("Check if default sc exists, if not, skip the test")
+		allSC, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "-o", "json").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defaultSC := gjson.Get(allSC, "items.#(metadata.annotations.storageclass\\.kubernetes\\.io\\/is-default-class=true)#.metadata.name")
+		e2e.Logf("The default storageclass list: %s", defaultSC)
+
+		g.By("Skip the test if length of defaultsc is less than one")
+		defaultSCCount := len(defaultSC.Array())
+		if defaultSCCount != 1 {
+			g.Skip("Skip for unexpected default storageclass!")
+		}
+
+		g.By("Create new namespace")
+		oc.SetupProject()
+
+		g.By("Create stable storage stateful set")
+		creationErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", deployStatefulSet, "-n", oc.Namespace()).Execute()
+		o.Expect(creationErr).NotTo(o.HaveOccurred())
+
+		g.By("Check if pod is ready")
+		exutil.AssertPodToBeReady(oc, "hello-statefulset-0", oc.Namespace())
+
+		g.By("Check if the pvc is ready")
+		pvcOutput, pvcCreationErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("pvc", "www-hello-statefulset-0", "-n", oc.Namespace(), "--template={{.metadata.labels}}").Output()
+		o.Expect(pvcCreationErr).NotTo(o.HaveOccurred())
+		o.Expect(pvcOutput).NotTo(o.BeEmpty())
+		o.Expect(pvcOutput).To(o.ContainSubstring("app:hello-pod"))
 	})
 
 })
