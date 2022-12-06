@@ -925,21 +925,17 @@ func getBaseDomain(oc *exutil.CLI) string {
 	return baseDomain[strings.Index(baseDomain, ".")+1:]
 }
 
-// check whether hypershift operator is installed
+// check whether hypershift operator is installed and hostedcluster is created
 func isHypershiftEnabled(oc *exutil.CLI) bool {
-	// in hypershift ci, operator and hosted cluster are all enabled.
-	operatorEnabled := NewResource(oc.AsAdmin(), "ns", HypershiftNs).Exists()
-	clusterEnabled := NewResource(oc.AsAdmin(), "ns", HypershiftNsClusters).Exists()
-	enabled := operatorEnabled && clusterEnabled
-	logger.Infof("hypershift is enabled %t", enabled)
-	return enabled
+	guestClusterName, guestClusterKubeconfigFile := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
+	return (guestClusterName != "" && guestClusterKubeconfigFile != "")
 }
 
+// get first hostedcluster name
 func getFirstHostedCluster(oc *exutil.CLI) string {
-	clusters, err := NewNamespacedResourceList(oc.AsAdmin(), HypershiftHostedCluster, HypershiftNsClusters).GetAll()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(clusters).NotTo(o.BeEmpty())
-	return clusters[0].GetName()
+	hostedClusterName, _ := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
+	logger.Infof("first hostedcluster name is %s", hostedClusterName)
+	return hostedClusterName
 }
 
 // get image url of latest nightly build

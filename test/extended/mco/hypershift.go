@@ -109,6 +109,12 @@ func (opt *AwsInstallOptions) WithRegion(region string) *AwsInstallOptions {
 	return opt
 }
 
+// WithNamespace builder func to append option s3 region
+func (opt *AwsInstallOptions) WithNamespace(ns string) *AwsInstallOptions {
+	opt.appendOption("--namespace", ns)
+	return opt
+}
+
 // NewAwsCreateClusterOptions constructor of create cluster on aws options
 func NewAwsCreateClusterOptions() *AwsCreateClusterOptions {
 	opts := &AwsCreateClusterOptions{
@@ -193,6 +199,12 @@ func (opt *AwsDestroyClusterOptions) WithDestroyCloudResource() *AwsDestroyClust
 	return opt
 }
 
+// WithNamespace builder func to append option namespace
+func (opt *AwsDestroyClusterOptions) WithNamespace(ns string) *AwsDestroyClusterOptions {
+	opt.appendOption("--namespace", ns)
+	return opt
+}
+
 // NewAwsCreateNodePoolOptions constructor of create node pool options
 func NewAwsCreateNodePoolOptions() *AwsCreateNodePoolOptions {
 	opts := &AwsCreateNodePoolOptions{
@@ -229,6 +241,12 @@ func (opt *AwsCreateNodePoolOptions) WithRender() *AwsCreateNodePoolOptions {
 	return opt
 }
 
+// WithNamespace builder func to append option namespace
+func (opt *AwsCreateNodePoolOptions) WithNamespace(ns string) *AwsCreateNodePoolOptions {
+	opt.appendOption("--namespace", ns)
+	return opt
+}
+
 // Install install hypershift operator with cli operations
 func (hc *HypershiftCli) Install(options CliOptions) (string, error) {
 	return execHypershift(
@@ -257,9 +275,9 @@ func (hc *HypershiftCli) DestroyCluster(options CliOptions) (string, error) {
 }
 
 // CreateKubeConfig create kubeconfig for hosted cluster
-func (hc *HypershiftCli) CreateKubeConfig(clusterName, filePath string) (string, error) {
+func (hc *HypershiftCli) CreateKubeConfig(clusterName, namespace, filePath string) (string, error) {
 	return execBash([]string{
-		fmt.Sprintf("hypershift create kubeconfig --name %s > %s", clusterName, filePath)})
+		fmt.Sprintf("hypershift create kubeconfig --name %s --namespace %s > %s", clusterName, namespace, filePath)})
 }
 
 // CreateNodePool create node pool with cli options
@@ -312,9 +330,9 @@ type HypershiftNodePool struct {
 }
 
 // NewHypershiftNodePool constructor of node pool struct
-func NewHypershiftNodePool(oc *exutil.CLI, name string) *HypershiftNodePool {
+func NewHypershiftNodePool(oc *exutil.CLI, clusterNs, name string) *HypershiftNodePool {
 	return &HypershiftNodePool{
-		Resource: *NewNamespacedResource(oc, HypershiftCrNodePool, HypershiftNsClusters, name),
+		Resource: *NewNamespacedResource(oc, HypershiftCrNodePool, clusterNs, name),
 	}
 }
 

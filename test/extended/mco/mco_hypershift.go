@@ -45,6 +45,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			HypershiftCli{},
 			GetCloudCredential(oc),
 			tmpdir,
+			exutil.GetHyperShiftHostedClusterNameSpace(oc),
 		}
 
 		// in hypershift enabled env, like prow or cluster installed with hypershift template
@@ -164,10 +165,10 @@ func GetCloudCredential(oc *exutil.CLI) CloudCredential {
 // HypershiftTest tester for hypershift, contains required tool e.g client, cli, cred, shared context etc.
 type HypershiftTest struct {
 	*SharedContext
-	oc   *exutil.CLI
-	cli  HypershiftCli
-	cred CloudCredential
-	dir  string
+	oc             *exutil.CLI
+	cli            HypershiftCli
+	cred           CloudCredential
+	dir, clusterNS string
 }
 
 // InstallOnAws install hypershift on aws
@@ -259,14 +260,14 @@ func (ht *HypershiftTest) CreateClusterOnAws() {
 		WithBaseDomain(baseDomain).
 		WithPullSecret(secretFile).
 		WithRegion(awscred.region).
-		WithReleaseImage("quay.io/openshift-release-dev/ocp-release:4.12.0-rc.0-x86_64").
+		WithReleaseImage("quay.io/openshift-release-dev/ocp-release:4.12.0-rc.2-x86_64").
 		WithName(name)
 
 	_, createClusterErr := ht.cli.CreateCluster(createClusterOpts)
 	o.Expect(createClusterErr).NotTo(o.HaveOccurred(), "create hosted cluster on aws failed")
 
 	// wait for hosted control plane is available
-	exutil.AssertAllPodsToBeReadyWithPollerParams(ht.oc, fmt.Sprintf("clusters-%s", name), 30*time.Second, 10*time.Minute)
+	exutil.AssertAllPodsToBeReadyWithPollerParams(ht.oc, fmt.Sprintf("%s-%s", ht.clusterNS, name), 30*time.Second, 10*time.Minute)
 
 	logger.Infof("hosted cluster %s is created successfully on AWS", name)
 }
@@ -302,6 +303,7 @@ func (ht *HypershiftTest) CreateNodePoolOnAws(replica string) {
 		WithName(name).
 		WithClusterName(clusterName).
 		WithNodeCount(replica).
+		WithNamespace(ht.clusterNS).
 		WithRender()
 
 	renderedNp, renderNpErr := ht.cli.CreateNodePool(renderNodePoolOpts)
@@ -323,7 +325,7 @@ func (ht *HypershiftTest) CreateNodePoolOnAws(replica string) {
 		NotTo(o.HaveOccurred(), "create rendered node pool failed")
 
 	logger.Infof("poll node pool status, expected is desired nodes == current nodes")
-	np := NewHypershiftNodePool(ht.oc.AsAdmin(), name)
+	np := NewHypershiftNodePool(ht.oc.AsAdmin(), ht.clusterNS, name)
 	logger.Debugf(np.PrettyString())
 
 	// poll node pool state, expected is desired nodes == current nodes
@@ -342,7 +344,7 @@ func (ht *HypershiftTest) DestroyNodePoolOnAws() {
 
 	npName := ht.StrValue(TestCtxKeyNodePool)
 	clusterName := ht.StrValue(TestCtxKeyCluster)
-	awsMachines, getAwsMachineErr := NewNamespacedResourceList(ht.oc.AsAdmin(), HypershiftAwsMachine, fmt.Sprintf("clusters-%s", clusterName)).GetAll()
+	awsMachines, getAwsMachineErr := NewNamespacedResourceList(ht.oc.AsAdmin(), HypershiftAwsMachine, fmt.Sprintf("%s-%s", ht.clusterNS, clusterName)).GetAll()
 	o.Expect(getAwsMachineErr).NotTo(o.HaveOccurred(), "get awsmachines failed for hosted cluster %s", clusterName)
 	o.Expect(awsMachines).ShouldNot(o.BeEmpty())
 	for _, machine := range awsMachines {
@@ -362,7 +364,7 @@ func (ht *HypershiftTest) DestroyNodePoolOnAws() {
 
 	logger.Infof("all the awsmachines of nodepool %s are deleted", npName)
 
-	NewNamespacedResource(ht.oc.AsAdmin(), HypershiftCrNodePool, HypershiftNsClusters, npName).DeleteOrFail()
+	NewNamespacedResource(ht.oc.AsAdmin(), HypershiftCrNodePool, ht.clusterNS, npName).DeleteOrFail()
 
 	logger.Infof("nodepool %s is deleted successfully", npName)
 
@@ -380,7 +382,7 @@ func (ht *HypershiftTest) CreateMcConfigMap() {
 	filePath := fmt.Sprintf("/home/core/test-%s", exutil.GetRandomString())
 	exutil.ApplyNsResourceFromTemplate(
 		ht.oc.AsAdmin(),
-		HypershiftNsClusters,
+		ht.clusterNS,
 		"--ignore-unknown-parameters=true",
 		"-f", template,
 		"-p",
@@ -391,7 +393,7 @@ func (ht *HypershiftTest) CreateMcConfigMap() {
 	)
 
 	// get config map to check it exists or not
-	cm := NewNamespacedResource(ht.oc.AsAdmin(), "cm", HypershiftNsClusters, cmName)
+	cm := NewNamespacedResource(ht.oc.AsAdmin(), "cm", ht.clusterNS, cmName)
 	o.Expect(cm.Exists()).Should(o.BeTrue(), "mc config map does not exist")
 	logger.Debugf(cm.PrettyString())
 	logger.Infof("config map %s is created successfully", cmName)
@@ -407,7 +409,7 @@ func (ht *HypershiftTest) DeleteMcConfigMap() {
 	g.By("delete config map")
 
 	cmName := ht.StrValue(TestCtxKeyConfigMap)
-	NewNamespacedResource(ht.oc.AsAdmin(), "cm", HypershiftNsClusters, cmName).DeleteOrFail()
+	NewNamespacedResource(ht.oc.AsAdmin(), "cm", ht.clusterNS, cmName).DeleteOrFail()
 
 	logger.Infof("config map %s is deleted successfully", cmName)
 }
@@ -420,7 +422,7 @@ func (ht *HypershiftTest) PatchNodePoolToTriggerUpdate() {
 
 	npName := ht.StrValue(HypershiftCrNodePool)
 	cmName := ht.StrValue(TestCtxKeyConfigMap)
-	np := NewHypershiftNodePool(ht.oc.AsAdmin(), npName)
+	np := NewHypershiftNodePool(ht.oc.AsAdmin(), ht.clusterNS, npName)
 	o.Expect(np.Patch("merge", fmt.Sprintf(`{"spec":{"config":[{"name": "%s"}]}}`, cmName))).NotTo(o.HaveOccurred(), "patch node pool with cm setting failed")
 	o.Expect(np.GetOrFail(`{.spec.config}`)).Should(o.ContainSubstring(cmName), "node pool does not have cm config")
 	logger.Debugf(np.PrettyString())
@@ -438,7 +440,7 @@ func (ht *HypershiftTest) PatchNodePoolToUpdateReleaseImage() {
 
 	g.By("patch node pool to update release image")
 	npName := ht.StrValue(HypershiftCrNodePool)
-	np := NewHypershiftNodePool(ht.oc.AsAdmin(), npName)
+	np := NewHypershiftNodePool(ht.oc.AsAdmin(), ht.clusterNS, npName)
 	versionSlice := strings.Split(np.GetVersion(), ".")
 	imageURL, version := getLatestImageURL(ht.oc, fmt.Sprintf("%s.%s", versionSlice[0], versionSlice[1])) // get latest nightly build based on release version
 	o.Expect(np.Patch("merge", fmt.Sprintf(`{"spec":{"release":{"image": "%s"}}}`, imageURL))).NotTo(o.HaveOccurred(), "patch node pool with release image failed")
@@ -461,7 +463,7 @@ func (ht *HypershiftTest) PatchNodePoolToUpdateMaxUnavailable(maxUnavailable str
 	npName := ht.StrValue(HypershiftCrNodePool)
 	cmName := ht.StrValue(TestCtxKeyConfigMap)
 	// update maxUnavailable
-	np := NewHypershiftNodePool(ht.oc.AsAdmin(), npName)
+	np := NewHypershiftNodePool(ht.oc.AsAdmin(), ht.clusterNS, npName)
 	o.Expect(np.Patch("merge", fmt.Sprintf(`{"spec":{"management":{"inPlace":{"maxUnavailable":%s}}}}`, maxUnavailable))).NotTo(o.HaveOccurred(), "patch node pool with maxUnavailable setting failed")
 	o.Expect(np.GetOrFail(`{.spec.management.inPlace}`)).Should(o.ContainSubstring("maxUnavailable"), "node pool does not have maxUnavailable config")
 	// update config
@@ -479,7 +481,7 @@ func (ht *HypershiftTest) PatchNodePoolToUpdateMaxUnavailable(maxUnavailable str
 func (ht *HypershiftTest) CheckNodesAreUpdatingInParallel(nodeNum int) {
 
 	npName := ht.StrValue(HypershiftCrNodePool)
-	np := NewHypershiftNodePool(ht.oc.AsAdmin(), npName)
+	np := NewHypershiftNodePool(ht.oc.AsAdmin(), ht.clusterNS, npName)
 	defer np.WaitUntilConfigUpdateIsCompleted()
 
 	g.By(fmt.Sprintf("checking whether nodes are updating in parallel, expected node num is %v", nodeNum))
@@ -507,7 +509,7 @@ func (ht *HypershiftTest) CreateKubeConfigForCluster() {
 
 	clusterName := ht.StrValue(TestCtxKeyCluster)
 	file := filepath.Join(ht.dir, fmt.Sprintf("%s-kubeconfig", clusterName))
-	_, err := ht.cli.CreateKubeConfig(clusterName, file)
+	_, err := ht.cli.CreateKubeConfig(clusterName, ht.clusterNS, file)
 	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("create kubeconfig for cluster %s failed", clusterName))
 
 	logger.Infof("kubeconfig of cluster %s is saved to %s", clusterName, file)
@@ -525,7 +527,7 @@ func (ht *HypershiftTest) CheckMcAnnotationsOnNode() {
 	workerNode := NewNodeList(ht.oc.AsAdmin().AsGuestKubeconf()).GetAllLinuxWorkerNodesOrFail()[0]
 
 	// get machine config name
-	secrets := NewNamespacedResourceList(ht.oc.AsAdmin(), "secrets", fmt.Sprintf("clusters-%s", clusterName))
+	secrets := NewNamespacedResourceList(ht.oc.AsAdmin(), "secrets", fmt.Sprintf("%s-%s", ht.clusterNS, clusterName))
 	secrets.SortByTimestamp()
 	secrets.ByFieldSelector("type=Opaque")
 	secrets.SetItemsFilter("-1:")
@@ -593,7 +595,7 @@ func skipTestIfHostedClusterVersionIsNotMatched(oc *exutil.CLI, version string) 
 	// in CI env, there is a preinstalled hostedcluster, get release image info from the 1st one
 	imageURL := NewNamespacedResource(oc.AsAdmin(),
 		HypershiftHostedCluster,
-		HypershiftNsClusters,
+		exutil.GetHyperShiftHostedClusterNameSpace(oc),
 		getFirstHostedCluster(oc)).GetOrFail("{.spec.release.image}")
 	logger.Infof("hosted cluster is running with image %s", imageURL)
 	if !strings.Contains(imageURL, version) {
