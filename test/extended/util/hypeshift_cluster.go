@@ -11,11 +11,12 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-// ValidHypershiftAndGetGuestKubeConf check if it is hypershift env and get kubeconf of the guest cluster
-// the first return is guest cluster name
-// the second return is the file of kubeconfig of the guest cluster
+// ValidHypershiftAndGetGuestKubeConf check if it is hypershift env and get kubeconf of the hosted cluster
+// the first return is hosted cluster name
+// the second return is the file of kubeconfig of the hosted cluster
+// the third return is the hostedcluster namespace in mgmt cluster which contains the generated resources
 // if it is not hypershift env, it will skip test.
-func ValidHypershiftAndGetGuestKubeConf(oc *CLI) (string, string) {
+func ValidHypershiftAndGetGuestKubeConf(oc *CLI) (string, string, string) {
 	operatorNS := GetHyperShiftOperatorNameSpace(oc)
 	if len(operatorNS) <= 0 {
 		g.Skip("there is no hypershift operator on host cluster, skip test run")
@@ -40,43 +41,46 @@ func ValidHypershiftAndGetGuestKubeConf(oc *CLI) (string, string) {
 
 	//get first hosted cluster to run test
 	e2e.Logf("the hosted cluster names: %s, and will select the first", clusterNames)
-	guestClusterName := strings.Split(clusterNames, " ")[0]
+	clusterName := strings.Split(clusterNames, " ")[0]
 
-	var guestClusterKubeconfigFile string
+	var hostedClusterKubeconfigFile string
 	if os.Getenv("GUEST_KUBECONFIG") != "" {
-		guestClusterKubeconfigFile = os.Getenv("GUEST_KUBECONFIG")
-		e2e.Logf(fmt.Sprintf("use a known guest cluster kubeconfig: %v", guestClusterKubeconfigFile))
+		e2e.Logf("the kubeconfig you set GUEST_KUBECONFIG must be that of the hosted cluster %s in namespace %s", clusterName, hostedclusterNS)
+		hostedClusterKubeconfigFile = os.Getenv("GUEST_KUBECONFIG")
+		e2e.Logf(fmt.Sprintf("use a known hosted cluster kubeconfig: %v", hostedClusterKubeconfigFile))
 	} else {
-		guestClusterKubeconfigFile = "/tmp/guestcluster-kubeconfig-" + guestClusterName + "-" + getRandomString()
+		hostedClusterKubeconfigFile = "/tmp/guestcluster-kubeconfig-" + clusterName + "-" + getRandomString()
 		output, err := exec.Command("bash", "-c", fmt.Sprintf("hypershift create kubeconfig --name %s --namespace %s > %s",
-			guestClusterName, hostedclusterNS, guestClusterKubeconfigFile)).Output()
+			clusterName, hostedclusterNS, hostedClusterKubeconfigFile)).Output()
 		e2e.Logf("the cmd output: %s", string(output))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf(fmt.Sprintf("create a new guest cluster kubeconfig: %v", guestClusterKubeconfigFile))
+		e2e.Logf(fmt.Sprintf("create a new hosted cluster kubeconfig: %v", hostedClusterKubeconfigFile))
 	}
-	return guestClusterName, guestClusterKubeconfigFile
+	e2e.Logf("if you want hostedcluster controlplane namespace, you could get it by combining %s and %s with -", hostedclusterNS, clusterName)
+	return clusterName, hostedClusterKubeconfigFile, hostedclusterNS
 }
 
-// ValidHypershiftAndGetGuestKubeConfWithNoSkip check if it is hypershift env and get kubeconf of the guest cluster
-// the first return is guest cluster name
-// the second return is the file of kubeconfig of the guest cluster
+// ValidHypershiftAndGetGuestKubeConfWithNoSkip check if it is hypershift env and get kubeconf of the hosted cluster
+// the first return is hosted cluster name
+// the second return is the file of kubeconfig of the hosted cluster
+// the third return is the hostedcluster namespace in mgmt cluster which contains the generated resources
 // if it is not hypershift env, it will not skip the testcase and return null string.
-func ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc *CLI) (string, string) {
+func ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc *CLI) (string, string, string) {
 	operatorNS := GetHyperShiftOperatorNameSpace(oc)
 	if len(operatorNS) <= 0 {
-		return "", ""
+		return "", "", ""
 	}
 
 	hostedclusterNS := GetHyperShiftHostedClusterNameSpace(oc)
 	if len(hostedclusterNS) <= 0 {
-		return "", ""
+		return "", "", ""
 	}
 
 	clusterNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
 		"-n", hostedclusterNS, "hostedclusters", "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if len(clusterNames) <= 0 {
-		return "", ""
+		return "", "", ""
 	}
 
 	hypersfhitPodStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
@@ -86,21 +90,23 @@ func ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc *CLI) (string, string) {
 
 	//get first hosted cluster to run test
 	e2e.Logf("the hosted cluster names: %s, and will select the first", clusterNames)
-	guestClusterName := strings.Split(clusterNames, " ")[0]
+	clusterName := strings.Split(clusterNames, " ")[0]
 
-	var guestClusterKubeconfigFile string
+	var hostedClusterKubeconfigFile string
 	if os.Getenv("GUEST_KUBECONFIG") != "" {
-		guestClusterKubeconfigFile = os.Getenv("GUEST_KUBECONFIG")
-		e2e.Logf(fmt.Sprintf("use a known guest cluster kubeconfig: %v", guestClusterKubeconfigFile))
+		e2e.Logf("the kubeconfig you set GUEST_KUBECONFIG must be that of the guestcluster %s in namespace %s", clusterName, hostedclusterNS)
+		hostedClusterKubeconfigFile = os.Getenv("GUEST_KUBECONFIG")
+		e2e.Logf(fmt.Sprintf("use a known hosted cluster kubeconfig: %v", hostedClusterKubeconfigFile))
 	} else {
-		guestClusterKubeconfigFile = "/tmp/guestcluster-kubeconfig-" + guestClusterName + "-" + getRandomString()
+		hostedClusterKubeconfigFile = "/tmp/guestcluster-kubeconfig-" + clusterName + "-" + getRandomString()
 		output, err := exec.Command("bash", "-c", fmt.Sprintf("hypershift create kubeconfig --name %s --namespace %s > %s",
-			guestClusterName, hostedclusterNS, guestClusterKubeconfigFile)).Output()
+			clusterName, hostedclusterNS, hostedClusterKubeconfigFile)).Output()
 		e2e.Logf("the cmd output: %s", string(output))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf(fmt.Sprintf("create a new guest cluster kubeconfig: %v", guestClusterKubeconfigFile))
+		e2e.Logf(fmt.Sprintf("create a new hosted cluster kubeconfig: %v", hostedClusterKubeconfigFile))
 	}
-	return guestClusterName, guestClusterKubeconfigFile
+	e2e.Logf("if you want hostedcluster controlplane namespace, you could get it by combining %s and %s with -", hostedclusterNS, clusterName)
+	return clusterName, hostedClusterKubeconfigFile, hostedclusterNS
 }
 
 // GetHyperShiftOperatorNameSpace get hypershift operator namespace

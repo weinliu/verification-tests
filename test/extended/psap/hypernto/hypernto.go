@@ -21,18 +21,20 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		guestClusterName              string
 		guestClusterNS                string
 		guestClusterKube              string
+		hostedClusterNS               string
 	)
 
 	g.BeforeEach(func() {
-		guestClusterName, guestClusterKube = exutil.ValidHypershiftAndGetGuestKubeConf(oc)
-		e2e.Logf("%s, %s", guestClusterName, guestClusterKube)
+		guestClusterName, guestClusterKube, hostedClusterNS = exutil.ValidHypershiftAndGetGuestKubeConf(oc)
+		e2e.Logf("%s, %s, %s", guestClusterName, guestClusterKube, hostedClusterNS)
 		oc.SetGuestKubeconf(guestClusterKube)
 		tunedWithSameProfileName = exutil.FixturePath("testdata", "psap", "hypernto", "tuned-with-sameprofilename.yaml")
 		tunedWithDiffProfileName = exutil.FixturePath("testdata", "psap", "hypernto", "tuned-with-diffprofilename.yaml")
 		tunedWithInvalidProfileName = exutil.FixturePath("testdata", "psap", "hypernto", "nto-basic-tuning-sysctl-invalid.yaml")
 		tunedWithNodeLevelProfileName = exutil.FixturePath("testdata", "psap", "hypernto", "nto-basic-tuning-sysctl-nodelevel.yaml")
 		// ensure NTO operator is installed
-		guestClusterNS = "clusters-" + guestClusterName
+		guestClusterNS = hostedClusterNS + guestClusterName
+		e2e.Logf("HostedClusterControlPlaneNS: %v", guestClusterNS)
 		isNTO = isHyperNTOPodInstalled(oc, guestClusterNS)
 	})
 

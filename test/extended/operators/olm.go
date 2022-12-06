@@ -12220,13 +12220,13 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc                                 = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
-		guestClusterName, guestClusterKube string
+		oc                                                  = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
+		guestClusterName, guestClusterKube, hostedClusterNS string
 	)
 
 	g.BeforeEach(func() {
-		guestClusterName, guestClusterKube = exutil.ValidHypershiftAndGetGuestKubeConf(oc)
-		e2e.Logf("%s, %s", guestClusterName, guestClusterKube)
+		guestClusterName, guestClusterKube, hostedClusterNS = exutil.ValidHypershiftAndGetGuestKubeConf(oc)
+		e2e.Logf("%s, %s, %s", guestClusterName, guestClusterKube, hostedClusterNS)
 		oc.SetGuestKubeconf(guestClusterKube)
 	})
 

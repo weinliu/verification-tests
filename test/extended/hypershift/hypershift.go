@@ -65,13 +65,13 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		e2e.Logf("hosted cluster namespace %s", hostedclusterNS)
 		o.Expect(hostedclusterNS).NotTo(o.BeEmpty())
 
-		guestClusterName, guestClusterKube := exutil.ValidHypershiftAndGetGuestKubeConf(oc)
+		guestClusterName, guestClusterKube, _ := exutil.ValidHypershiftAndGetGuestKubeConf(oc)
 		e2e.Logf("hostedclustercluster name %s", guestClusterName)
 		cv, err := oc.AsAdmin().SetGuestKubeconf(guestClusterKube).AsGuestKubeconf().Run("get").Args("clusterversion").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("hosted cluster clusterversion name %s", cv)
 
-		guestClusterName, guestClusterKube = exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
+		guestClusterName, guestClusterKube, _ = exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
 		o.Expect(guestClusterName).NotTo(o.BeEmpty())
 		o.Expect(guestClusterKube).NotTo(o.BeEmpty())
 		cv, err = oc.AsAdmin().SetGuestKubeconf(guestClusterKube).AsGuestKubeconf().Run("get").Args("clusterversion").Output()

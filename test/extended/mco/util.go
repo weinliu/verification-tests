@@ -927,13 +927,13 @@ func getBaseDomain(oc *exutil.CLI) string {
 
 // check whether hypershift operator is installed and hostedcluster is created
 func isHypershiftEnabled(oc *exutil.CLI) bool {
-	guestClusterName, guestClusterKubeconfigFile := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
+	guestClusterName, guestClusterKubeconfigFile, _ := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
 	return (guestClusterName != "" && guestClusterKubeconfigFile != "")
 }
 
 // get first hostedcluster name
 func getFirstHostedCluster(oc *exutil.CLI) string {
-	hostedClusterName, _ := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
+	hostedClusterName, _, _ := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
 	logger.Infof("first hostedcluster name is %s", hostedClusterName)
 	return hostedClusterName
 }
