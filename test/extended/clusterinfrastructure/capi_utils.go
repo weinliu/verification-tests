@@ -65,6 +65,17 @@ type capiMachineSetDescription struct {
 	template            string
 }
 
+type capiMachineSetgcpDescription struct {
+	name                string
+	namespace           string
+	clusterName         string
+	kind                string
+	replicas            int
+	machineTemplateName string
+	template            string
+	failureDomain       string
+}
+
 // skipForCAPINotExist skip the test if capi doesn't exist
 func skipForCAPINotExist(oc *exutil.CLI) {
 	capi, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", clusterAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
@@ -92,13 +103,13 @@ func (awsCluster *awsClusterDescription) deleteAWSCluster(oc *exutil.CLI) error 
 }
 
 func (gcpCluster *gcpClusterDescription) createGCPCluster(oc *exutil.CLI) {
-	e2e.Logf("Creating awsCluster ...")
+	e2e.Logf("Creating gcpCluster ...")
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", gcpCluster.template, "-p", "NAME="+gcpCluster.name, "NAMESPACE="+clusterAPINamespace, "REGION="+gcpCluster.region)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func (gcpCluster *gcpClusterDescription) deleteGCPCluster(oc *exutil.CLI) error {
-	e2e.Logf("Deleting a awsCluster ...")
+	e2e.Logf("Deleting a gcpCluster ...")
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("gcpCluster", gcpCluster.name, "-n", clusterAPINamespace).Execute()
 }
 
@@ -114,14 +125,14 @@ func (awsMachineTemplate *awsMachineTemplateDescription) deleteAWSMachineTemplat
 }
 
 func (gcpMachineTemplate *gcpMachineTemplateDescription) createGCPMachineTemplate(oc *exutil.CLI) {
-	e2e.Logf("Creating awsMachineTemplate ...")
+	e2e.Logf("Creating gcpMachineTemplate ...")
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", gcpMachineTemplate.template, "-p", "NAME="+gcpMachineTemplate.name, "NAMESPACE="+clusterAPINamespace, "IMAGE="+gcpMachineTemplate.image, "REGION="+gcpMachineTemplate.region, "CLUSTERID="+gcpMachineTemplate.clusterID, "MACHINETYPE="+gcpMachineTemplate.machineType)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func (gcpMachineTemplate *gcpMachineTemplateDescription) deleteGCPMachineTemplate(oc *exutil.CLI) error {
-	e2e.Logf("Deleting awsMachineTemplate ...")
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("awsmachinetemplate", gcpMachineTemplate.name, "-n", clusterAPINamespace).Execute()
+	e2e.Logf("Deleting gcpMachineTemplate ...")
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("gcpmachinetemplate", gcpMachineTemplate.name, "-n", clusterAPINamespace).Execute()
 }
 
 func (capiMachineSet *capiMachineSetDescription) createCapiMachineSet(oc *exutil.CLI) {
@@ -137,6 +148,21 @@ func (capiMachineSet *capiMachineSetDescription) createCapiMachineSet(oc *exutil
 func (capiMachineSet *capiMachineSetDescription) deleteCapiMachineSet(oc *exutil.CLI) error {
 	e2e.Logf("Deleting awsMachineSet ...")
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(capiMachineset, capiMachineSet.name, "-n", clusterAPINamespace).Execute()
+}
+
+func (capiMachineSetgcp *capiMachineSetgcpDescription) createCapiMachineSetgcp(oc *exutil.CLI) {
+	e2e.Logf("Creating gcpMachineSet ...")
+	if err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", capiMachineSetgcp.template, "-p", "NAME="+capiMachineSetgcp.name, "NAMESPACE="+clusterAPINamespace, "CLUSTERNAME="+capiMachineSetgcp.clusterName, "MACHINETEMPLATENAME="+capiMachineSetgcp.machineTemplateName, "KIND="+capiMachineSetgcp.kind, "FAILUREDOMAIN="+capiMachineSetgcp.failureDomain, "REPLICAS="+strconv.Itoa(capiMachineSetgcp.replicas)); err != nil {
+		capiMachineSetgcp.deleteCapiMachineSetgcp(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		waitForCapiMachinesRunning(oc, capiMachineSetgcp.replicas, capiMachineSetgcp.name)
+	}
+}
+
+func (capiMachineSetgcp *capiMachineSetgcpDescription) deleteCapiMachineSetgcp(oc *exutil.CLI) error {
+	e2e.Logf("Deleting gcpMachineSet ...")
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(capiMachineset, capiMachineSetgcp.name, "-n", clusterAPINamespace).Execute()
 }
 
 // waitForCapiMachinesRunning check if all the machines are Running in a MachineSet

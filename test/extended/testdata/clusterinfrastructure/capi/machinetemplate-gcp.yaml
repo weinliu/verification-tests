@@ -11,28 +11,21 @@ objects:
     spec:
       template:
         spec:
-          failureDomain: ${REGION}
-          disks:
-          - autoDelete: true
-            boot: true
-            image: ${IMAGE}
-            labels: null
-            sizeGb: 128
-            type: pd-ssd
-          machineType: ${MACHINETYPE}
-          networkInterfaces:
-          - network: ${CLUSTERID}-network
-            subnetwork: ${CLUSTERID}-worker-subnet
+          image: ${IMAGE}
+          instanceType: ${MACHINETYPE}
+          rootDeviceSize: 128
+          rootDeviceType: pd-ssd
           serviceAccounts:
             email: ${CLUSTERID}-w@openshift-qe.iam.gserviceaccount.com
             scopes:
             - https://www.googleapis.com/auth/cloud-platform
-          tags:
+          subnet: ${CLUSTERID}-worker-subnet
+          additionalNetworkTags:
           - ${CLUSTERID}-worker
+
 parameters:
 - name: NAME
 - name: NAMESPACE
-- name: REGION
 - name: IMAGE
 - name: MACHINETYPE
 - name: CLUSTERID

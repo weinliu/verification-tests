@@ -31,6 +31,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		gcpClusterTemplate         string
 		gcpMachineTemplateTemplate string
 		capiMachinesetTemplate     string
+		capiMachinesetgcpTemplate  string
 		err                        error
 		cluster                    clusterDescription
 		awscluster                 awsClusterDescription
@@ -38,6 +39,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		gcpcluster                 gcpClusterDescription
 		gcpMachineTemplate         gcpMachineTemplateDescription
 		capiMachineSet             capiMachineSetDescription
+		capiMachineSetgcp          capiMachineSetgcpDescription
 	)
 
 	g.BeforeEach(func() {
@@ -61,6 +63,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			region, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.gcp.region}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			randomMachinesetName := exutil.GetRandomMachineSetName(oc)
+			zone, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.zone}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			image, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.disks[0].image}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			machineType, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.machineType}").Output()
@@ -78,6 +82,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		gcpClusterTemplate = filepath.Join(capiBaseDir, "gcpcluster.yaml")
 		gcpMachineTemplateTemplate = filepath.Join(capiBaseDir, "machinetemplate-gcp.yaml")
 		capiMachinesetTemplate = filepath.Join(capiBaseDir, "machineset.yaml")
+		capiMachinesetgcpTemplate = filepath.Join(capiBaseDir, "machinesetgcp.yaml")
 		cluster = clusterDescription{
 			name:     clusterID,
 			template: clusterTemplate,
@@ -114,6 +119,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			clusterName: clusterID,
 			template:    capiMachinesetTemplate,
 		}
+		capiMachineSetgcp = capiMachineSetgcpDescription{
+			name:          "capi-machineset-gcp",
+			clusterName:   clusterID,
+			template:      capiMachinesetgcpTemplate,
+			failureDomain: zone,
+			replicas:      1,
+		}
 
 		switch iaasPlatform {
 		case "aws":
@@ -122,8 +134,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			capiMachineSet.machineTemplateName = awsMachineTemplate.name
 		case "gcp":
 			cluster.kind = "GCPCluster"
-			capiMachineSet.kind = "GCPMachineTemplate"
-			capiMachineSet.machineTemplateName = gcpMachineTemplate.name
+			capiMachineSetgcp.kind = "GCPMachineTemplate"
+			capiMachineSetgcp.machineTemplateName = gcpMachineTemplate.name
+			capiMachineSetgcp.failureDomain = zone
+
 		default:
 			g.Skip("IAAS platform is " + iaasPlatform + " which is NOT supported cluster api ...")
 		}
@@ -156,15 +170,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		cluster.createCluster(oc)
 		defer gcpcluster.deleteGCPCluster(oc)
 		gcpcluster.createGCPCluster(oc)
-		/*Uncomment below if https://bugzilla.redhat.com/show_bug.cgi?id=2107999 is ON_QA/VERIFIED*/
-		/*
-			defer gcpMachineTemplate.deleteGCPMachineTemplate(oc)
-			gcpMachineTemplate.createGCPMachineTemplate(oc)
 
-			capiMachineSet.name = "capi-machineset-53100"
-			defer capiMachineSet.deleteCapiMachineSet(oc)
-			capiMachineSet.createCapiMachineSet(oc)
-		*/
+		defer gcpMachineTemplate.deleteGCPMachineTemplate(oc)
+		gcpMachineTemplate.createGCPMachineTemplate(oc)
+
+		capiMachineSetgcp.name = "capi-machineset-53100"
+		defer capiMachineSetgcp.deleteCapiMachineSetgcp(oc)
+		capiMachineSetgcp.createCapiMachineSetgcp(oc)
+
 	})
 
 	// author: zhsun@redhat.com
