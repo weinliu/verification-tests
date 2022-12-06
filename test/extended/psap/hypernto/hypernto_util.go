@@ -29,9 +29,9 @@ func isHyperNTOPodInstalled(oc *exutil.CLI, hostedClusterName string) bool {
 }
 
 // getNodePoolNamebyHostedClusterName used to get nodepool name in clusters
-func getNodePoolNamebyHostedClusterName(oc *exutil.CLI, hostedClusterName string) string {
+func getNodePoolNamebyHostedClusterName(oc *exutil.CLI, hostedClusterName, hostedClusterNS string) string {
 
-	nodePoolNameList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodepool", "-n", "clusters", "-ojsonpath='{.items[*].metadata.name}'").Output()
+	nodePoolNameList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodepool", "-n", hostedClusterNS, "-ojsonpath='{.items[*].metadata.name}'").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(nodePoolNameList).NotTo(o.BeEmpty())
 
@@ -66,7 +66,13 @@ func getTuningConfigMapNameWithRetry(oc *exutil.CLI, namespace string, filter st
 		if isMatch {
 			tuningConfigMap := configMapsReg.FindAllString(configMaps, -1)
 			e2e.Logf("The list of tuned configmap is: \n%v", tuningConfigMap)
-			configmapName = tuningConfigMap[0]
+			//Node Pool using MC will have two configmap
+			if len(tuningConfigMap) == 2 {
+				configmapName = tuningConfigMap[0] + " " + tuningConfigMap[1]
+			} else {
+				configmapName = tuningConfigMap[0]
+			}
+
 			return true, nil
 		}
 		return false, nil
@@ -133,6 +139,8 @@ func assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc *exutil.CLI, n
 // assertNTOPodLogsLastLinesInHostedCluster
 func assertNTOPodLogsLastLinesInHostedCluster(oc *exutil.CLI, namespace string, ntoPod string, lineN string, timeDurationSec int, filter string) {
 
+	var logLineStr []string
+
 	err := wait.Poll(15*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
 
 		//Remove err assert for SNO, the OCP will can not access temporily when master node restart or certificate key removed
@@ -142,13 +150,15 @@ func assertNTOPodLogsLastLinesInHostedCluster(oc *exutil.CLI, namespace string, 
 		o.Expect(err).NotTo(o.HaveOccurred())
 		isMatch := regNTOPodLogs.MatchString(ntoPodLogs)
 		if isMatch {
-			loglines := regNTOPodLogs.FindAllString(ntoPodLogs, -1)
-			e2e.Logf("The logs of nto pod %v is: \n%v", ntoPod, loglines[0])
+			logLineStr = regNTOPodLogs.FindAllString(ntoPodLogs, -1)
+			e2e.Logf("The logs of nto pod %v is: \n%v", ntoPod, logLineStr[0])
 			return true, nil
 		}
 		e2e.Logf("The keywords of nto pod isn't found, try next ...")
 		return false, nil
 	})
+
+	e2e.Logf("The logs of nto pod %v is: \n%v", ntoPod, logLineStr[0])
 	exutil.AssertWaitPollNoErr(err, "The tuned pod's log doesn't contain the keywords, please check")
 }
 
@@ -241,5 +251,23 @@ func assertMisMatchTunedSystemSettingsByParmNameOnNodePoolLevelInHostedCluster(o
 		stdOut := getTunedSystemSetValueByParamNameInHostedCluster(oc, ntoNamespace, nodeNames[i], oscommand, sysctlparm)
 		o.Expect(stdOut).NotTo(o.BeEmpty())
 		o.Expect(stdOut).NotTo(o.ContainSubstring(expectedMisMatchValue))
+	}
+}
+
+// assertIfMatchKenelBootOnNodePoolLevelInHostedCluster used to compare if match the keywords
+func assertIfMatchKenelBootOnNodePoolLevelInHostedCluster(oc *exutil.CLI, ntoNamespace, nodePoolName, expectedMisMatchValue string, isMatch bool) {
+	nodeNames, err := exutil.GetAllNodesByNodePoolNameInHostedCluster(oc, nodePoolName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	nodesNum := len(nodeNames)
+	for i := 0; i < nodesNum; i++ {
+		debugNodeStdout, err := oc.AsAdmin().AsGuestKubeconf().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+nodeNames[i], "--", "cat", "/proc/cmdline").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(debugNodeStdout).NotTo(o.BeEmpty())
+		if isMatch {
+			o.Expect(debugNodeStdout).To(o.ContainSubstring(expectedMisMatchValue))
+		} else {
+			o.Expect(debugNodeStdout).NotTo(o.ContainSubstring(expectedMisMatchValue))
+		}
+
 	}
 }

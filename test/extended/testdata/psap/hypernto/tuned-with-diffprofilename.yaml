@@ -7,7 +7,6 @@ objects:
     kind: ConfigMap
     metadata:
       name: ${TUNEDPROFILENAME}-cm
-      #namespace: clusters
     data:
       tuning: |
         apiVersion: tuned.openshift.io/v1

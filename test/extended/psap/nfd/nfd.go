@@ -31,6 +31,11 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
 		}
 
+		stdOut, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "nfd", "-n", "openshift-marketplace").Output()
+		if strings.Contains(stdOut, "NotFound") {
+			g.Skip("No NFD package manifest found, skipping test ...")
+		}
+
 		clusterVersion, _, err := exutil.GetClusterVersion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterVersion).NotTo(o.BeEmpty())

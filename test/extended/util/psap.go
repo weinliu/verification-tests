@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -231,11 +232,14 @@ func GetNFDInstanceImage(oc *CLI, namespace string) string {
 	nfdInstanceImageStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "nfd", "-n", namespace, "-ojsonpath={.status.channels[*].currentCSVDesc.relatedImages}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(nfdInstanceImageStr).NotTo(o.BeEmpty())
-	strTmp1 := strings.TrimLeft(nfdInstanceImageStr, "[")
-	strTmp2 := strings.TrimRight(strTmp1, "]")
+
+	strTmp1 := strings.ReplaceAll(nfdInstanceImageStr, "[", ",")
+	strTmp2 := strings.ReplaceAll(strTmp1, "]", ",")
 	strTmp3 := strings.ReplaceAll(strTmp2, `"`, "")
+
 	nfdInstanceImageArr := strings.Split(strTmp3, ",")
 
+	//using the last one image if mulitiple image was found
 	for i := 0; i < len(nfdInstanceImageArr); i++ {
 		if strings.Contains(nfdInstanceImageArr[i], "node-feature-discovery") {
 			nfdInstanceImage = nfdInstanceImageArr[i]
@@ -496,7 +500,7 @@ func CreateMachinesetbyInstanceType(oc *CLI, machinesetName string, instanceType
 
 	newMachinesetFileName := filepath.Join(e2e.TestContext.OutputDir, oc.Namespace()+"-"+machinesetName+"-new.yaml")
 	defer os.RemoveAll(newMachinesetFileName)
-	err = ioutil.WriteFile(newMachinesetFileName, machinesetNewB, 0644)
+	err = ioutil.WriteFile(newMachinesetFileName, machinesetNewB, 0o644)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	ApplyOperatorResourceByYaml(oc, "openshift-machine-api", newMachinesetFileName)
 }
@@ -628,4 +632,70 @@ func DeleteMCAndMCPByName(oc *CLI, mcName string, mcpName string, timeDurationMi
 	} else {
 		e2e.Logf("The mcp [%v] has been deleted ...", mcpName)
 	}
+}
+
+// CreateCustomNodePoolInHypershift retrun custom nodepool yaml
+func CreateCustomNodePoolInHypershift(oc *CLI, cloudProvider, guestClusterName, nodePoolName, nodeCount, instanceType, clustersNS string) {
+
+	cmdString := fmt.Sprintf("hypershift create nodepool %s --cluster-name %s --name %s --node-count %s --instance-type %s --namespace %s --render", cloudProvider, guestClusterName, nodePoolName, nodeCount, instanceType, clustersNS)
+	fmt.Println(cmdString)
+	rawOutput, err := exec.Command("bash", "-c", cmdString).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	//NTO required InPlace upgradeType
+	nodePoolYaml := strings.ReplaceAll(string(rawOutput), "upgradeType: Replace", "upgradeType: InPlace")
+
+	nodePoolNewB := []byte(nodePoolYaml)
+
+	newNodePoolFileName := filepath.Join(e2e.TestContext.OutputDir, "openshift-psap-qe-"+nodePoolName+"-new.yaml")
+	defer os.RemoveAll(newNodePoolFileName)
+	err = ioutil.WriteFile(newNodePoolFileName, nodePoolNewB, 0o644)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	nodePoolNameList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodepool", "-n", clustersNS, "-oname").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	isMatch := strings.Contains(nodePoolNameList, nodePoolName)
+	if !isMatch {
+		ApplyOperatorResourceByYaml(oc, clustersNS, newNodePoolFileName)
+	}
+}
+
+// AssertIfNodePoolIsReadyByName checks if the Nodepool is ready
+func AssertIfNodePoolIsReadyByName(oc *CLI, nodePoolName string, timeDurationSec int, clustersNS string) {
+	err := wait.Poll(20*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
+		var (
+			isNodePoolReady string
+			err             error
+		)
+		isNodePoolReady, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodepool", nodePoolName, "-n", clustersNS, `-ojsonpath='{.status.conditions[?(@.type=="Ready")].status}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(isNodePoolReady).NotTo(o.BeEmpty())
+		//For master node, only make sure one of master is ready.
+		if strings.Contains(isNodePoolReady, "True") {
+			return true, nil
+		}
+		e2e.Logf("Node Pool [%v] checks failed, the following values were found (read type should be true '%v')", nodePoolName, isNodePoolReady)
+		return false, nil
+	})
+	AssertWaitPollNoErr(err, "Nodepool checks were not successful within timeout limit")
+}
+
+// AssertIfNodePoolUpdatingConfigByName checks if the Nodepool is ready
+func AssertIfNodePoolUpdatingConfigByName(oc *CLI, nodePoolName string, timeDurationSec int, clustersNS string) {
+	err := wait.Poll(20*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
+		var (
+			isNodePoolUpdatingConfig string
+			err                      error
+		)
+		isNodePoolUpdatingConfig, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodepool", nodePoolName, "-n", clustersNS, `-ojsonpath='{.status.conditions[?(@.type=="UpdatingConfig")].status}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(isNodePoolUpdatingConfig).NotTo(o.BeEmpty())
+		//For master node, only make sure one of master is ready.
+		if !strings.Contains(isNodePoolUpdatingConfig, "True") {
+			return true, nil
+		}
+		e2e.Logf("Node Pool [%v] checks failed, the following values were found (read type should be empty '%v')", nodePoolName, isNodePoolUpdatingConfig)
+		return false, nil
+	})
+	AssertWaitPollNoErr(err, "Nodepool checks were not successful within timeout limit")
 }

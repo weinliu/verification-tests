@@ -388,7 +388,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(mcKernelArgCheck).To(o.ContainSubstring("default_hugepagesz=2M"))
 	})
 
-	g.It("Author:liqcui-Medium-23959-Test NTO for remove pod in daemon mode [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:liqcui-Medium-23959-Test NTO for remove pod in daemon mode [Disruptive]", func() {
 
 		// test requires NTO to be installed
 		if !isNTO {
@@ -751,7 +751,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.AssertOprPodLogsbyFilterWithDuration(oc, tunedPodName, ntoNamespace, "DEBUG", 60, 2)
 	})
 
-	g.It("Author:liqcui-Medium-37415-Allow setting isolated_cores without touching the default_irq_affinity [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:liqcui-Medium-37415-Allow setting isolated_cores without touching the default_irq_affinity [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -1095,7 +1095,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-rt", "worker-rt", 5)
 	})
 
-	g.It("Author:liqcui-Medium-29804-Tuned profile is updated after incorrect tuned CR is fixed [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:liqcui-Medium-29804-Tuned profile is updated after incorrect tuned CR is fixed [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -1728,7 +1728,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(stalldStatus).To(o.ContainSubstring("active (running)"))
 	})
 
-	g.It("Author:liqcui-Medium-49441-NTO Applying a profile with multiple inheritance where parents include a common ancestor. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:liqcui-Medium-49441-NTO Applying a profile with multiple inheritance where parents include a common ancestor. [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -1795,13 +1795,13 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "2", 300, `active and recommended profile \(openshift-node-postgresql\) match`)
 	})
 
-	g.It("Author:liqcui-Medium-49705-Tuned net plugin handle net devices with n/a value for a channel. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:liqcui-Medium-49705-Tuned net plugin handle net devices with n/a value for a channel. [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		if iaasPlatform == "vsphere" {
+		if iaasPlatform == "vsphere" || iaasPlatform == "openStack" {
 			g.Skip("IAAS platform: " + iaasPlatform + " doesn't support cloud provider profile - skipping test ...")
 		}
 
@@ -1870,7 +1870,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(isMatch).To(o.BeFalse())
 	})
 
-	g.It("Author:liqcui-Medium-49617-NTO support cloud-provider specific profiles for NTO/TuneD. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:liqcui-Medium-49617-NTO support cloud-provider specific profiles for NTO/TuneD. [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -2032,7 +2032,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("defaultTunedCreateTimeBefore is : %v defaultTunedCreateTimeAfter is: %v", defaultTunedCreateTimeBefore, defaultTunedCreateTimeAfter)
 
 	})
-	g.It("Author:liqcui-Medium-41552-NTO Operator Report per-node Tuned profile application status[Disruptive].", func() {
+	g.It("NonHyperShiftHOST-Author:liqcui-Medium-41552-NTO Operator Report per-node Tuned profile application status[Disruptive].", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -2053,7 +2053,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 	})
 
-	g.It("Author:liqcui-Medium-50052-NTO RHCOS-shipped stalld systemd units should use SCHED_FIFO to run stalld[Disruptive].", func() {
+	g.It("NonHyperShiftHOST-Author:liqcui-Medium-50052-NTO RHCOS-shipped stalld systemd units should use SCHED_FIFO to run stalld[Disruptive].", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
@@ -2313,7 +2313,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-pao", "worker-pao", 8)
 	})
 
-	g.It("Author:liqcui-Medium-53053-NTO will automatically delete profile with unknown/stuck state. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:liqcui-Medium-53053-NTO will automatically delete profile with unknown/stuck state. [Disruptive]", func() {
 		// test requires NTO to be installed
 		if !isNTO {
 			g.Skip("NTO is not installed - skipping test ...")
