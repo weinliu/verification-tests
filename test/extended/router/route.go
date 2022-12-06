@@ -157,9 +157,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		waitForRangeOfResourceToDisappear(oc, "openshift-ingress", routerpods)
 		newrouterpods := getResourceName(oc, "openshift-ingress", "pods")
 
-		g.By("check whether canary's, oauth-openshift's and console's route status are cleared")
+		g.By("check whether canary route status is cleared")
 		getNamespaceRouteDetails(oc, "openshift-ingress-canary", "canary", ".status", "default", true)
-		getNamespaceRouteDetails(oc, "openshift-authentication", "oauth-openshift", ".status", "default", true)
 
 		g.By("patch the controller back to default check the canary route status")
 		patchResourceAsAdmin(oc, "openshift-ingress-operator", "ingresscontrollers/default", "{\"spec\":{\"routeSelector\":{\"matchLabels\":{\"type\":null}}}}")
