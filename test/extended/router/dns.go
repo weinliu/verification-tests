@@ -422,8 +422,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("test done, will restore dns operator to default by the defer restoreDNSOperatorDefault code")
 	})
 
-	// Bug: 1949361
-	g.It("Author:mjoseph-High-55821-CoreDNS default bufsize should be 512", func() {
+	// Bug: 1949361, 1884053, 1756344
+	g.It("Author:mjoseph-High-55821-Check CoreDNS default bufsize, readinessProbe path and policy", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
@@ -455,6 +455,17 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		digOutput, err = oc.Run("exec").Args(cltPodName, "--", "dig", "nxdomain.google.com").Output()
 		o.Expect(err1).NotTo(o.HaveOccurred())
 		o.Expect(digOutput).To(o.ContainSubstring("udp: 512"))
+
+		// bug:- 1884053
+		g.By("Check Readiness probe configured to use the '/ready' path")
+		dnsPodName2 := getRandomDNSPodName(podList)
+		output2, err2 := oc.AsAdmin().Run("get").Args("pod/"+dnsPodName2, "-n", "openshift-dns", "-o=jsonpath={.spec.containers[0].readinessProbe.httpGet}").Output()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		o.Expect(output2).To(o.ContainSubstring(`"path":"/ready"`))
+
+		// bug:- 1756344
+		g.By("Check the policy is sequential in Corefile of coredns under all dns-default-xxx pods")
+		keepSearchInAllDNSPods(oc, podList, "policy sequential")
 	})
 
 	g.It("Author:mjoseph-Critical-54042-Configuring CoreDNS caching and TTL parameters [Disruptive]", func() {
