@@ -106,7 +106,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	})
 
 	// author: huliu@redhat.com
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-53323-[CPMS] Implement update logic for RollingUpdate CPMS strategy [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-53323-[CPMS] Implement update logic for RollingUpdate CPMS strategy update instance type [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
@@ -526,8 +526,19 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			g.Skip("Skip for the failureDomains is no more than 1")
 		}
 
+		g.By("Replace the master machine which will be updated later with non-standard index")
+		_, _, machineName := getZoneAndMachineFromCPMSZones(oc, availabilityZones)
+		defer activeControlPlaneMachineSet(oc)
+		deleteControlPlaneMachineSet(oc)
+		suffix, newMasterMachineName := randomMasterMachineName(machineName)
+		e2e.Logf("newMasterMachineName:%s", newMasterMachineName)
+		replaceOneMasterMachine(oc, machineName, newMasterMachineName)
+		waitForClusterStable(oc)
+		activeControlPlaneMachineSet(oc)
+
 		g.By("Pick the failureDomain which has only one master machine")
-		key, value, machineName := getZoneAndMachineFromCPMSZones(oc, availabilityZones)
+		availabilityZones = getCPMSAvailabilityZones(oc, iaasPlatform)
+		key, value, _ := getZoneAndMachineFromCPMSZones(oc, availabilityZones)
 		var getMachineAvailabilityZoneJSON, getCPMSAvailabilityZonesJSON string
 		switch iaasPlatform {
 		case "aws":
@@ -541,14 +552,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 		deleteFailureDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.failureDomains."+iaasPlatform+"["+strconv.Itoa(key)+"]}", "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-
-		defer activeControlPlaneMachineSet(oc)
-		deleteControlPlaneMachineSet(oc)
-		suffix, newMasterMachineName := randomMasterMachineName(machineName)
-		e2e.Logf("newMasterMachineName:%s", newMasterMachineName)
-		replaceOneMasterMachine(oc, machineName, newMasterMachineName)
-		waitForClusterStable(oc)
-		activeControlPlaneMachineSet(oc)
 
 		g.By("Delete the failureDomain to trigger RollingUpdate")
 		labelsBefore := "machine.openshift.io/zone=" + value + ",machine.openshift.io/cluster-api-machine-type=master"

@@ -65,7 +65,7 @@ func printNodeInfo(oc *exutil.CLI) {
 // getMachineSuffix get the machine suffix
 func getMachineSuffix(oc *exutil.CLI, machineName string) string {
 	start := strings.LastIndex(machineName, "-")
-	suffix := machineName[start+1:]
+	suffix := machineName[start:]
 	return suffix
 }
 
@@ -113,7 +113,7 @@ func getZoneAndMachineFromCPMSZones(oc *exutil.CLI, availabilityZones []string) 
 		machineName = machineNames[0]
 		number := len(machineNames)
 		if number == 1 {
-			e2e.Logf("failureDomain:%s, master machine name:%s", value, machineName)
+			e2e.Logf("key:%s, failureDomain:%s, master machine name:%s", key, value, machineName)
 			break
 		}
 	}
@@ -159,7 +159,7 @@ func randomMasterMachineName(oldMachineName string) (string, string) {
 	start := strings.LastIndex(oldMachineName, "-")
 	newIndex := strconv.Itoa(rand.Intn(100) + 3)
 	newMachineName := oldMachineName[0:start+1] + newIndex
-	return newIndex, newMachineName
+	return "-" + newIndex, newMachineName
 }
 
 // getMasterMachineNameBySuffix get the master machine name by suffix

@@ -249,7 +249,7 @@ func WaitForMachineRunningByName(oc *CLI, machineName string) {
 // WaitForMachineDisappearBySuffix check if the machine is disappear by machine suffix
 func WaitForMachineDisappearBySuffix(oc *CLI, machineNameSuffix string, labels string) {
 	e2e.Logf("Waiting for the machine disappear ...")
-	err := wait.Poll(60*time.Second, 960*time.Second, func() (bool, error) {
+	err := wait.Poll(60*time.Second, 1200*time.Second, func() (bool, error) {
 		msg, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
 		if err2 != nil {
 			e2e.Logf("The server was unable to return a response and waiting up to 1 minutes ...")
