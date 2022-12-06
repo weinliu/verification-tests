@@ -348,4 +348,42 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		o.Expect(debugErr).NotTo(o.ContainSubstring("v1.CronJob is not supported by debug"))
 	})
 
+	// author: knarra@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:knarra-Medium-56179-KCM Alert PodDisruptionBudget At and Limit do not alert with maxUnavailable or MinAvailable by percentage [Disruptive]", func() {
+		g.By("Get the first master nodename")
+		masterNodeName, err := exutil.GetFirstMasterNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Corodon one of the master node")
+		defer func() {
+			uncordonErr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", masterNodeName).Execute()
+			o.Expect(uncordonErr).NotTo(o.HaveOccurred())
+			checkPodStatus(oc, "app=guard", "openshift-etcd", "Running")
+		}()
+
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("cordon", masterNodeName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Get the quorum guard pod name on the master node which was cordoned")
+		etcdPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-etcd", "-l", "app=guard", fmt.Sprintf(`-o=jsonpath={.items[?(@.spec.nodeName=='%s')].metadata.name}`, masterNodeName)).Output()
+
+		g.By("Delete one of the etcd quorum pod")
+		podDeletionErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", etcdPodName, "-n", "openshift-etcd").Execute()
+		o.Expect(podDeletionErr).NotTo(o.HaveOccurred())
+
+		token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
+		err = wait.Poll(5*time.Second, 100*time.Second, func() (bool, error) {
+			output, _, err := oc.AsAdmin().NotShowInfo().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", token), "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=ALERTS").Outputs()
+			if err != nil {
+				e2e.Logf("Can't get alerts, error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("etcd-guard-pdb", output); matched {
+				e2e.Logf("Check the PodDisruptionBudgetAtLimit alert succeed\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get alert PodDisruptionBudgetAtLimit via prometheus"))
+	})
 })
