@@ -12,7 +12,7 @@ var _ = g.Describe("[sig-node] NODE kubeletconfig feature", func() {
 	var oc = exutil.NewCLI("node-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: minmli@redhat.com
-	g.It("Author:minmli-Medium-39142-kubeletconfig should not prompt duplicate error message", func() {
+	g.It("NonHyperShiftHOST-Author:minmli-Medium-39142-kubeletconfig should not prompt duplicate error message", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "node")
 		kubeletConfigT := filepath.Join(buildPruningBaseDir, "kubeletconfig-maxpod.yaml")
 		g.By("Test for case OCP-39142")
