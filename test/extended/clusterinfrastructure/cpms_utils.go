@@ -19,7 +19,7 @@ import (
 // waitForCPMSUpdateCompleted wait the Update to complete
 func waitForCPMSUpdateCompleted(oc *exutil.CLI, replicas int) {
 	e2e.Logf("Waiting for the Update completed ...")
-	timeToWait := time.Duration(replicas*25) * time.Minute
+	timeToWait := time.Duration(replicas*35) * time.Minute
 	err := wait.Poll(1*time.Minute, timeToWait, func() (bool, error) {
 		readyReplicas, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
 		currentReplicas, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.replicas}", "-n", machineAPINamespace).Output()
