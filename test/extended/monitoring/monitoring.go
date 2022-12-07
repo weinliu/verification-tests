@@ -174,8 +174,8 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 
 		g.By("query with thanos-querier svc")
-		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=cluster_version'`, token, `"cluster_version"`, uwmLoadTime)
-		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=cluster_version'`, token, `"cluster-version-operator"`, uwmLoadTime)
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=cluster_version'`, token, `"cluster_version"`, 3*uwmLoadTime)
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=cluster_version'`, token, `"cluster-version-operator"`, 2*uwmLoadTime)
 
 		g.By("check from thanos-querier logs")
 		thanosQuerierPodName, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/instance=thanos-querier", "-ojsonpath={.items[].metadata.name}").Output()
@@ -336,6 +336,49 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				g.By("check user metrics again, the user metrics can't be found from thanos-querier")
 				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version{namespace=\""+ns+"\"}'", token, "\"result\":[]", 2*uwmLoadTime)
 			})
+
+			// author: tagao@redhat.com
+			g.It("Author:tagao-Medium-49189-Enforce label scrape limits for UWM [Serial]", func() {
+				var (
+					invalidUWM = filepath.Join(monitoringBaseDir, "invalid-uwm.yaml")
+				)
+				g.By("delete uwm-config/cm-config at the end of a serial case")
+				defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+				defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+				g.By("Get token of SA prometheus-k8s")
+				token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+				g.By("query metrics from thanos-querier")
+				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version'", token, "prometheus-example-app", uwmLoadTime)
+
+				g.By("trigger label_limit exceed")
+				createResourceFromYaml(oc, "openshift-user-workload-monitoring", invalidUWM)
+
+				g.By("check in thanos-querier /targets api, it should complains the label_limit exceeded")
+				checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/targets`, token, `label_limit exceeded`, 2*uwmLoadTime)
+
+				g.By("trigger label_name_length_limit exceed")
+				err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("cm", "user-workload-monitoring-config", "-p", `{"data": {"config.yaml": "prometheus:\n enforcedLabelLimit: 8\n enforcedLabelNameLengthLimit: 1\n enforcedLabelValueLengthLimit: 1\n"}}`, "--type=merge", "-n", "openshift-user-workload-monitoring").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				g.By("check in thanos-querier /targets api, it should complains the label_name_length_limit exceeded")
+				checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/targets`, token, `label_name_length_limit exceeded`, 2*uwmLoadTime)
+
+				g.By("trigger label_value_length_limit exceed")
+				err2 := oc.AsAdmin().WithoutNamespace().Run("patch").Args("cm", "user-workload-monitoring-config", "-p", `{"data": {"config.yaml": "prometheus:\n enforcedLabelLimit: 8\n enforcedLabelNameLengthLimit: 8\n enforcedLabelValueLengthLimit: 1\n"}}`, "--type=merge", "-n", "openshift-user-workload-monitoring").Execute()
+				o.Expect(err2).NotTo(o.HaveOccurred())
+
+				g.By("check in thanos-querier /targets api, it should complains the label_value_length_limit exceeded")
+				checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/targets`, token, `label_value_length_limit exceeded`, 2*uwmLoadTime)
+
+				g.By("relax restrictions")
+				err3 := oc.AsAdmin().WithoutNamespace().Run("patch").Args("cm", "user-workload-monitoring-config", "-p", `{"data": {"config.yaml": "prometheus:\n enforcedLabelLimit: 10\n enforcedLabelNameLengthLimit: 10\n enforcedLabelValueLengthLimit: 50\n"}}`, "--type=merge", "-n", "openshift-user-workload-monitoring").Execute()
+				o.Expect(err3).NotTo(o.HaveOccurred())
+
+				g.By("able to see the metrics")
+				checkMetric(oc, "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=version'", token, "prometheus-example-app", 2*uwmLoadTime)
+			})
 		})
 
 		// author: hongyli@redhat.com
@@ -382,6 +425,10 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			output            string
 			deployThanosRuler = filepath.Join(monitoringBaseDir, "deployThanosRuler.yaml")
 		)
+		g.By("delete uwm-config/cm-config at the end of a serial case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
 		g.By("deploy ThanosRuler under namespace as a common user (non-admin)")
 		oc.SetupProject()
 		ns = oc.Namespace()
