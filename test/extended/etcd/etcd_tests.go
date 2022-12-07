@@ -70,16 +70,16 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 
 		defer func() {
 			e2e.Logf("Remove the certs directory")
-			_, errCert := oc.AsAdmin().Run("debug").Args("node/"+masterNodeList[0], "--", "chroot", "/host", "rm", "-rf", "/etc/kubernetes/static-pod-certs").Output()
+			_, errCert := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodeList[0], []string{"-q"}, "rm", "-rf", "/etc/kubernetes/static-pod-certs")
 			o.Expect(errCert).NotTo(o.HaveOccurred())
 		}()
 		e2e.Logf("Create the certs directory")
-		_, err := oc.AsAdmin().Run("debug").Args("node/"+masterNodeList[0], "--", "chroot", "/host", "mkdir", "/etc/kubernetes/static-pod-certs").Output()
+		_, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodeList[0], []string{"-q"}, "mkdir", "/etc/kubernetes/static-pod-certs")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		defer func() {
 			e2e.Logf("Remove the backup directory")
-			_, err := oc.AsAdmin().Run("debug").Args("node/"+masterNodeList[0], "--", "chroot", "/host", "rm", "-rf", "/home/core/assets/backup").Output()
+			_, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodeList[0], []string{"-q"}, "rm", "-rf", "/home/core/assets/backup")
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 		firstMNode := []string{masterNodeList[0]}
