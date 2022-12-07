@@ -190,9 +190,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		getRoutes(oc, project2)
 
 		g.By("check whether required host is present in 'foobar-unsecure' route details")
-		output := fetchJSONPathValue(oc, project2, "route/foobar-unsecure", ".status.ingress")
-		o.Expect(output).Should(o.ContainSubstring(`"host":"foobar.apps.%s"`, baseDomain))
-		o.Expect(output).Should(o.ContainSubstring(`"host":"foobar.ocp51429.%s"`, baseDomain))
+		waitForOutput(oc, project2, "route/foobar-unsecure", ".status.ingress", fmt.Sprintf(`"host":"foobar.apps.%s"`, baseDomain))
+		waitForOutput(oc, project2, "route/foobar-unsecure", ".status.ingress", fmt.Sprintf(`"host":"foobar.ocp51429.%s"`, baseDomain))
 
 		g.By("check the router pod and ensure the routes are loaded in haproxy.config in default controller")
 		searchOutput1 := pollReadPodData(oc, "openshift-ingress", defaultContPod, "cat haproxy.config", "foobar-unsecure")
@@ -276,9 +275,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		getRoutes(oc, project3)
 
 		g.By("check whether required host is present in alpha ingress controller domain")
-		output := fetchJSONPathValue(oc, project3, "route/bar-unsecure", ".status.ingress")
-		o.Expect(output).Should(o.ContainSubstring(`"host":"bar.apps.%s"`, baseDomain))
-		o.Expect(output).Should(o.ContainSubstring(`"host":"bar.alpha-alpha-ocp51437.%s"`, baseDomain))
+		waitForOutput(oc, project3, "route/bar-unsecure", ".status.ingress", fmt.Sprintf(`"host":"bar.apps.%s"`, baseDomain))
+		waitForOutput(oc, project3, "route/bar-unsecure", ".status.ingress", fmt.Sprintf(`"host":"bar.alpha-alpha-ocp51437.%s"`, baseDomain))
 
 		g.By("check the router pod and ensure the routes are loaded in haproxy.config of alpha controller")
 		searchOutput1 := pollReadPodData(oc, "openshift-ingress", custContPod1, "cat haproxy.config", "bar-unsecure")
@@ -297,13 +295,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		waitForCurl(oc, podName[0], baseDomain, "bar.alpha-alpha-ocp51437.", "Hello-OpenShift", custContIP)
 
 		g.By("Overwrite route with beta shard")
-		output, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("routes/bar-unsecure", "--overwrite", "shard=beta", "-n", project3).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("routes/bar-unsecure", "--overwrite", "shard=beta", "-n", project3).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("check whether required host is present in beta ingress controller domain")
-		output = fetchJSONPathValue(oc, project3, "route/bar-unsecure", ".status.ingress")
-		o.Expect(output).Should(o.ContainSubstring(`"host":"bar.apps.%s"`, baseDomain))
-		o.Expect(output).Should(o.ContainSubstring(`"host":"bar.beta-beta-ocp51437.%s"`, baseDomain))
+		waitForOutput(oc, project3, "route/bar-unsecure", ".status.ingress", fmt.Sprintf(`"host":"bar.apps.%s"`, baseDomain))
+		waitForOutput(oc, project3, "route/bar-unsecure", ".status.ingress", fmt.Sprintf(`"host":"bar.beta-beta-ocp51437.%s"`, baseDomain))
 
 		g.By("check the router pod and ensure the routes are loaded in haproxy.config of beta controller")
 		searchOutput2 := pollReadPodData(oc, "openshift-ingress", custContPod2, "cat haproxy.config", "bar-unsecure")
