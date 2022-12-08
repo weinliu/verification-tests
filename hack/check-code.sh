@@ -68,6 +68,39 @@ else
     echo "gofmt SUCCESS"
 fi
 
+echo -e "\n###############  ginkgo version check  ####################"
+bad_ginkgover_files=""
+bad_ginkgorep_files=""
+echo -e "$modified_files"
+for f in $modified_files;
+do
+    if [ -e $f ]; then
+        version_check_result=$(echo $f | xargs grep 'github.com/onsi/ginkgo' | grep -v 'github.com/onsi/ginkgo/v2' || true)
+        if [[ -n "${version_check_result}" ]]; then
+            bad_ginkgover_files="$bad_ginkgover_files $f";
+        fi
+        version_check_result=$(echo $f | xargs grep 'CurrentGinkgoTestDescription' || true)
+        if [[ -n "${version_check_result}" ]]; then
+            bad_ginkgorep_files="$bad_ginkgorep_files $f";
+        fi
+    fi 
+done
+
+if [[ -n "${bad_ginkgover_files}" ]]||[[ -n "${bad_ginkgorep_files}" ]]; then
+    echo -e "from 4.12, please use github.com/onsi/ginkgo/v2 and CurrentSpecReport, not github.com/onsi/ginkgo and CurrentGinkgoTestDescription"
+    echo -e "before 4.12, please use github.com/onsi/ginkgo and CurrentGinkgoTestDescription, not github.com/onsi/ginkgo/v2 and CurrentSpecReport"
+    echo "ERROR:"
+	echo "ginkgo version check detected following problems:"
+    test -n "${bad_ginkgover_files}" && echo "please use github.com/onsi/ginkgo/v2 in ${bad_ginkgover_files}" || true
+    test -n "${bad_ginkgorep_files}" && echo "please use CurrentSpecReport in ${bad_ginkgorep_files}" || true
+else
+    echo "ginkgo version check SUCCESS"
+fi
+
+if [[ -n "${bad_ginkgover_files}" ]]||[[ -n "${bad_ginkgorep_files}" ]]; then
+	exit 1
+fi
+
 if [[ -n "${bad_golint_files}" ]]||[[ -n "${bad_gofmt_files}" ]]; then
 	exit 1
 fi
