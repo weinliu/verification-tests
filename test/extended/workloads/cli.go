@@ -775,6 +775,31 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(pvcOutput).NotTo(o.BeEmpty())
 		o.Expect(pvcOutput).To(o.ContainSubstring("app:hello-pod"))
 	})
+	// author: yinzhou@redhat.com
+	g.It("Author:yinzhou-High-38178-oc should be able to debug init container", func() {
+		podBaseDir := exutil.FixturePath("testdata", "workloads")
+		initPodFile := filepath.Join(podBaseDir, "initContainer.yaml")
+
+		g.By("Create pod with init container")
+		err := oc.Run("create").Args("-f", initPodFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Make sure pod with init container running well")
+		checkPodStatus(oc, "name=hello-pod", oc.Namespace(), "Running")
+		g.By("Run debug command with init container")
+		err = wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			output, err := oc.Run("debug").Args("pod/hello-pod", "-c", "wait").Output()
+			if err != nil {
+				e2e.Logf("debug failed with error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("sleep", output); matched {
+				e2e.Logf("Check the debug pod with init container command succeeded\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get debug with init container"))
+	})
 
 })
 
