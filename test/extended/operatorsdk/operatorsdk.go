@@ -2933,7 +2933,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
 		// update the Dockerfile
 		dockerFilePath := filepath.Join(tmpPath, "Dockerfile")
-		replaceContent(dockerFilePath, "golang:1.18", "quay.io/olmqe/golang:1.18")
+		replaceContent(dockerFilePath, "golang:1.19", "quay.io/olmqe/golang:1.19")
 		// update the Makefile
 		makefileFilePath := filepath.Join(tmpPath, "Makefile")
 		replaceContent(makefileFilePath, "controller:latest", imageTag)
@@ -2962,6 +2962,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		exec.Command("bash", "-c", "cd "+tmpPath+" && go get github.com/operator-framework/operator-lib/proxy").Output()
 		exec.Command("bash", "-c", "cd "+tmpPath+" && go get k8s.io/apimachinery/pkg/util/diff@v0.24.0").Output()
+		exec.Command("bash", "-c", "cd "+tmpPath+" && go get github.com/evanphx/json-patch").Output()
 		podmanCLI := container.NewPodmanCLI()
 		podmanCLI.ExecCommandPath = tmpPath
 		output, err = podmanCLI.Run("build").Args(tmpPath, "--arch", "amd64", "--tag", imageTag, "--authfile", fmt.Sprintf("%s/.dockerconfigjson", tokenDir)).Output()
