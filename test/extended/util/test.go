@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/ginkgo/v2/types"
@@ -98,9 +99,16 @@ func InitTest(dryRun bool) error {
 
 func AnnotateTestSuite() {
 	// qe take different method to select case, so no need to annotate it.
-	out, err := kubectlCmd("get", "clusterversion").CombinedOutput()
-	if err != nil && strings.Contains(string(out), "Service Unavailable") {
-		e2e.Logf("Fail to get the cluster:%v, error: %v", string(out), err)
+	waitErr := wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+		out, err := kubectlCmd("get", "clusterversion").CombinedOutput()
+		if err != nil && strings.Contains(string(out), "Service Unavailable") {
+			e2e.Logf("Fail to get the cluster:%v, error: %v, try again", string(out), err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if waitErr != nil {
+		e2e.Logf("Fail to get the cluster")
 		os.Exit(1)
 	}
 
