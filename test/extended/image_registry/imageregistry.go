@@ -3382,4 +3382,36 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(isOut).To(o.ContainSubstring("reference to registry"))
 		o.Expect(isOut).NotTo(o.ContainSubstring("Import failed"))
 	})
+
+	g.It("Author:xiuwang-Low-54172-importMode negative test", func() {
+		g.By("Create ImageStreamImport with negative option")
+		var (
+			isImportFile = filepath.Join(imageRegistryBaseDir, "imagestream-import-oci.yaml")
+			isimportsrc  = isImportSource{
+				namespace: "",
+				name:      "54172-negative",
+				image:     "quay.io/openshifttest/ociimage@sha256:d58e3e003ddec723dd14f72164beaa609d24c5e5e366579e23bc8b34b9a58324",
+				mode:      "",
+				template:  isImportFile,
+			}
+		)
+		// PreserveOriginal is one correct value, set to an invalid value
+		isimportsrc.mode = "preserveoriginal"
+		isimportsrc.namespace = oc.Namespace()
+		parameters := []string{"-f", isImportFile, "-p", "NAME=" + isimportsrc.name, "NAMESPACE=" + isimportsrc.namespace, "IMAGE=" + isimportsrc.image, "MODE=" + isimportsrc.mode}
+		configFile := parseToJSON(oc, parameters)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", configFile).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("invalid"))
+		o.Expect(output).To(o.ContainSubstring(`valid modes are '', 'Legacy', 'PreserveOriginal'`))
+
+		o.Expect(err).To(o.HaveOccurred())
+		// Set importMode to empty, the default importMode is Legacy
+		isimportsrc.mode = ""
+		isimportsrc.name = "empty"
+		isimportsrc.create(oc)
+		importOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("is/empty", "-o=jsonpath={.spec.tags[0].importPolicy.importMode}", "-n", isimportsrc.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(importOut).To(o.ContainSubstring("Legacy"))
+	})
 })
