@@ -668,6 +668,7 @@ spec:
 
 	// author: rgangwar@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:rgangwar-Medium-43889-Examine non critical kube-apiserver errors", func() {
+		g.Skip("This test always fails due to non-real critical errors and is not suitable for automated testing and will be tested manually instead, skip.")
 		var (
 			keywords     = "(error|fail|tcp dial timeout|connect: connection refused|Unable to connect to the server: dial tcp|remote error: tls: bad certificate)"
 			exceptions   = "panic|fatal|SHOULD NOT HAPPEN"
@@ -3136,7 +3137,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:rgangwar-Critical-55494-[Apiserver] When using webhooks fails to rollout latest deploymentconfig [Disruptive]", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Critical-55494-[Apiserver] When using webhooks fails to rollout latest deploymentconfig [Disruptive]", func() {
 		var (
 			caKeypem          = tmpdir + "/caKey.pem"
 			caCertpem         = tmpdir + "/caCert.pem"
