@@ -1,9 +1,12 @@
 package hypershift
 
 import (
-	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 	"strings"
+
+	o "github.com/onsi/gomega"
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 type hostedCluster struct {
@@ -146,4 +149,18 @@ func pollGetHostedClusters(oc *exutil.CLI, namespace string) func() string {
 		value, _ := getHostedClusters(oc, namespace)
 		return value
 	}
+}
+
+// checkHCConditions check conditions and exit test if not available.
+func (h *hostedCluster) checkHCConditions() bool {
+	res, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("hostedcluster", h.name, "-n", h.namespace,
+		`-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}`).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+
+	return checkSubstringWithNoExit(res,
+		[]string{"ValidHostedControlPlaneConfiguration True", "ClusterVersionSucceeding True",
+			"Degraded False", "EtcdAvailable True", "KubeAPIServerAvailable True", "InfrastructureReady True",
+			"Available True", "ValidConfiguration True", "SupportedHostedCluster True",
+			"ValidHostedControlPlaneConfiguration True", "IgnitionEndpointAvailable True", "ReconciliationActive True",
+			"ValidReleaseImage True", "ValidOIDCConfiguration True", "ReconciliationSucceeded True"})
 }

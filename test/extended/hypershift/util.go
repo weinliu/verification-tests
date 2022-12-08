@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"github.com/tidwall/gjson"
 	"io"
 	"io/ioutil"
 	"os"
@@ -16,13 +15,15 @@ import (
 	"time"
 
 	o "github.com/onsi/gomega"
-	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
 // OcpClientVerb is the oc verb operation of OCP
-type OcpClientVerb string
+type OcpClientVerb = string
 
 /*
 oc <OcpClientVerb> resources
@@ -64,6 +65,22 @@ func checkSubstring(src string, expect []string) {
 	for i := 0; i < len(expect); i++ {
 		o.Expect(src).To(o.ContainSubstring(expect[i]))
 	}
+}
+
+func checkSubstringWithNoExit(src string, expect []string) bool {
+	if expect == nil || len(expect) <= 0 {
+		e2e.Logf("Warning expected sub string empty ? %+v", expect)
+		return true
+	}
+
+	for i := 0; i < len(expect); i++ {
+		if !strings.Contains(src, expect[i]) {
+			e2e.Logf("expected sub string %s not in src %s", expect[i], src)
+			return false
+		}
+	}
+
+	return true
 }
 
 type workload struct {

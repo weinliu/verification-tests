@@ -12,10 +12,10 @@ import (
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
-
-	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
 var _ = g.Describe("[sig-hypershift] Hypershift", func() {
@@ -25,9 +25,14 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		oc                                      = exutil.NewCLI("hypershift", exutil.KubeConfigPath())
 		guestClusterName, guestClusterNamespace string
 		iaasPlatform                            string
+		hostedcluster                           *hostedCluster
 	)
 
 	g.BeforeEach(func() {
+		hostedClusterName, hostedclusterKubeconfig, hostedClusterNs := exutil.ValidHypershiftAndGetGuestKubeConf(oc)
+		oc.SetGuestKubeconf(hostedclusterKubeconfig)
+		hostedcluster = newHostedCluster(oc, hostedClusterNs, hostedClusterName)
+
 		operator := doOcpReq(oc, OcpGet, false, "pods", "-n", "hypershift", "-ojsonpath={.items[*].metadata.name}")
 		if len(operator) <= 0 {
 			g.Skip("hypershift operator not found, skip test run")
@@ -51,10 +56,8 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: heli@redhat.com
 	g.It("HyperShiftMGMT-Author:heli-Critical-42855-Check Status Conditions for HostedControlPlane", func() {
-		res := doOcpReq(oc, OcpGet, true, "-n", guestClusterNamespace, "hostedcontrolplane", guestClusterName, "-ojsonpath={range .status.conditions[*]}{@.type}{\" \"}{@.status}{\" \"}{end}")
-		checkSubstring(res,
-			[]string{"ValidHostedControlPlaneConfiguration True",
-				"EtcdAvailable True", "KubeAPIServerAvailable True", "InfrastructureReady True"})
+		rc := hostedcluster.checkHCConditions()
+		o.Expect(rc).Should(o.BeTrue())
 
 		// add more test here to check hypershift util
 		operatorNS := exutil.GetHyperShiftOperatorNameSpace(oc)
