@@ -111,6 +111,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
 		skipForCPMSNotStable(oc)
+		skipForClusterNotStable(oc)
 		if getCPMSState(oc) == "Inactive" {
 			defer deleteControlPlaneMachineSet(oc)
 			activeControlPlaneMachineSet(oc)
@@ -159,6 +160,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Change instanceType to trigger RollingUpdate")
 		defer printNodeInfo(oc)
+		defer waitForClusterStable(oc)
 		defer waitForCPMSUpdateCompleted(oc, 1)
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrRecover, "--type=merge", "-n", machineAPINamespace).Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrChange, "--type=merge", "-n", machineAPINamespace).Execute()
@@ -181,6 +183,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
 		skipForCPMSNotStable(oc)
+		skipForClusterNotStable(oc)
 		if getCPMSState(oc) == "Inactive" {
 			defer deleteControlPlaneMachineSet(oc)
 			activeControlPlaneMachineSet(oc)
@@ -203,6 +206,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Delete the master machine to trigger RollingUpdate")
 		defer printNodeInfo(oc)
+		defer waitForClusterStable(oc)
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(mapiMachine, machineName, "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.WaitForMachineRunningBySuffix(oc, suffix, labels)
@@ -215,6 +219,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
 		skipForCPMSNotStable(oc)
+		skipForClusterNotStable(oc)
 		if getCPMSState(oc) == "Inactive" {
 			defer deleteControlPlaneMachineSet(oc)
 			activeControlPlaneMachineSet(oc)
@@ -262,6 +267,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Update strategy to OnDelete, change instanceType to trigger OnDelete update")
 		defer printNodeInfo(oc)
+		defer waitForClusterStable(oc)
 		defer waitForCPMSUpdateCompleted(oc, 1)
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"strategy":{"type":"RollingUpdate"}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrRecover, "--type=merge", "-n", machineAPINamespace).Execute()
@@ -288,6 +294,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
 		skipForCPMSNotStable(oc)
+		skipForClusterNotStable(oc)
 		if getCPMSState(oc) == "Inactive" {
 			defer deleteControlPlaneMachineSet(oc)
 			activeControlPlaneMachineSet(oc)
@@ -314,6 +321,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		defer printNodeInfo(oc)
+		defer waitForClusterStable(oc)
 		defer func() {
 			availabilityZonesStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getCPMSAvailabilityZonesJSON, "-n", machineAPINamespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -363,12 +371,14 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
 		skipForCPMSNotStable(oc)
+		skipForClusterNotStable(oc)
 		if getCPMSState(oc) == "Inactive" {
 			defer deleteControlPlaneMachineSet(oc)
 			activeControlPlaneMachineSet(oc)
 		}
 		g.By("Update strategy to OnDelete")
 		defer printNodeInfo(oc)
+		defer waitForClusterStable(oc)
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"strategy":{"type":"RollingUpdate"}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"strategy":{"type":"OnDelete"}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -515,6 +525,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
 		skipForCPMSNotStable(oc)
+		skipForClusterNotStable(oc)
 		if getCPMSState(oc) == "Inactive" {
 			defer deleteControlPlaneMachineSet(oc)
 			activeControlPlaneMachineSet(oc)
@@ -557,6 +568,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		labelsBefore := "machine.openshift.io/zone=" + value + ",machine.openshift.io/cluster-api-machine-type=master"
 		labelsAfter := "machine.openshift.io/zone!=" + value + ",machine.openshift.io/cluster-api-machine-type=master"
 		defer printNodeInfo(oc)
+		defer waitForClusterStable(oc)
 		defer func() {
 			availabilityZonesStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getCPMSAvailabilityZonesJSON, "-n", machineAPINamespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())

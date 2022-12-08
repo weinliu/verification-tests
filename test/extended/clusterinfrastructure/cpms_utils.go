@@ -203,3 +203,16 @@ func getArchitectureType(oc *exutil.CLI) string {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return architecture
 }
+
+// skipForClusterNotStable skip the test if the cluster is not stable
+func skipForClusterNotStable(oc *exutil.CLI) {
+	statusAvailable, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator", "-o=jsonpath={.items[*].status.conditions[?(@.type==\"Available\")].status}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	statusProgressing, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator", "-o=jsonpath={.items[*].status.conditions[?(@.type==\"Progressing\")].status}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	statusDegraded, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator", "-o=jsonpath={.items[*].status.conditions[?(@.type==\"Degraded\")].status}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(statusAvailable, "False") || strings.Contains(statusProgressing, "True") || strings.Contains(statusDegraded, "True") {
+		g.Skip("Skip for cluster is not stable!")
+	}
+}
