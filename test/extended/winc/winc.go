@@ -268,6 +268,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		g.By("Creating Windows machineset with 1")
 		setMachineset(oc, iaasPlatform, machinesetName)
+		waitForMachinesetReady(oc, machinesetName, 25, 1)
 
 		g.By("Creating cluster and machine autoscaller")
 		defer destroyWindowsAutoscaller(oc)
@@ -655,23 +656,33 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 	})
 
-	// author: sgao@redhat.com
-	g.It("Smokerun-Author:sgao-NonPreRelease-High-33794-Watch cloud private key secret [Slow][Disruptive]", func() {
-		g.By("Check watch cloud-private-key secret")
+	// author: rrasouli@redhat.com
+	g.It("Smokerun-Author:rrasouli-NonPreRelease-High-33794-Watch cloud private key secret [Slow][Disruptive]", func() {
+		g.By("Scale WMCO to 0")
+		defer scaleDeployment(oc, "wmco", 1, wmcoNamespace)
+		scaleDeployment(oc, "wmco", 0, wmcoNamespace)
+
+		g.By("Deleting the private key and user data")
 		defer oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", wmcoNamespace).Output()
 		_, err := oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = oc.WithoutNamespace().Run("delete").Args("secret", "windows-user-data", "-n", mcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		windowsMachineSetName := getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone)
-		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2, false)
-		scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 3, true)
+		g.By("Scale WMCO to 1")
+		scaleDeployment(oc, "wmco", 1, wmcoNamespace)
 
-		g.By("Check Windows machine should be in Provisioning phase and not reconciled")
+		g.By("Creating Windows machineset with 1")
+		machinesetName := getWindowsMachineSetName(oc, "winc", iaasPlatform, zone)
+		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, machinesetName, "-n", mcoNamespace).Output()
+		setMachineset(oc, iaasPlatform, machinesetName)
+
+		g.By("Check Windows machine should be in Provisioning phase and not reconciled without cloud-private-key and windows-user-data")
 		pollErr := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
-			msg, _ := oc.WithoutNamespace().Run("get").Args("events", "-n", mcoNamespace).Output()
-			if strings.Contains(msg, "Secret \"windows-user-data\" not found") {
+			events, _ := oc.WithoutNamespace().Run("get").Args("events", "-n", mcoNamespace).Output()
+			status, err := oc.WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-ojsonpath={.items[?(@.metadata.labels.machine\\.openshift\\.io\\/cluster-api-machineset==\""+machinesetName+"\")].status.phase}", "-n", "openshift-machine-api").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(events, "Secret \"windows-user-data\" not found") && strings.EqualFold(status, "Provisioning") {
 				return true, nil
 			}
 			return false, nil
@@ -680,9 +691,34 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			e2e.Failf("Failed to check Windows machine should be in Provisioning phase and not reconciled after waiting up to 5 minutes ...")
 		}
 
+		g.By("Create the private key so machine can be reconciled with a valid secret")
+		_, err = oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", wmcoNamespace).Output()
+		waitForMachinesetReady(oc, machinesetName, 25, 1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Scale down the machinset that the number of the existing Windows machines will be 0")
+		scaleWindowsMachineSet(oc, machinesetName, 5, 0, false)
+
+		g.By("Delete the existing private key secret")
+		_, err = oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create a new secret with a wrong key name.")
+		defer oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
+		_, err = oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=wrong-key.pem="+privateKey, "-n", wmcoNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Scale up the machinset that the number of the existing Windows machines will be 1")
+		// since we don't need to wait until the machineset is in ready state there is no need for a long timeout until the machine is ready
+		scaleWindowsMachineSet(oc, machinesetName, 2, 1, true)
+		waitUntilWMCOStatusChanged(oc, "cloud-private-key missing")
+
+		g.By("Replace private key during Windows machine configuration")
+		_, err = oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitWindowsNodesReady(oc, getWindowsHostNames(oc), 10*time.Second, 1200*time.Second)
+		waitForMachinesetReady(oc, machinesetName, 25, 1)
 	})
 
 	// author: sgao@redhat.com

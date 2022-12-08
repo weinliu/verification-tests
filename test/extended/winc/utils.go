@@ -709,7 +709,6 @@ func setMachineset(oc *exutil.CLI, iaasPlatform string, machinesetName string) {
 	defer os.Remove(MSFileName)
 	err = createMachineset(oc, MSFileName)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	waitForMachinesetReady(oc, machinesetName, 25, 1)
 }
 
 func createWindowsAutoscaller(oc *exutil.CLI, machineSetName, namespace string) {
