@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
+	o "github.com/onsi/gomega"
+	"github.com/tidwall/gjson"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -95,4 +97,17 @@ func SkipBaselineCapsNone(oc *CLI) {
 func GetAWSClusterRegion(oc *CLI) (string, error) {
 	region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 	return region, err
+}
+
+// SkipNoDefaultSC skip the test if cluster has no default storageclass or has more than 1 default storageclass
+func SkipNoDefaultSC(oc *CLI) {
+	allSCRes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "-o", "json").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	defaultSCRes := gjson.Get(allSCRes, "items.#(metadata.annotations.storageclass\\.kubernetes\\.io\\/is-default-class=true)#.metadata.name")
+	e2e.Logf("The default storageclass list: %s", defaultSCRes)
+	defaultSCNub := len(defaultSCRes.Array())
+	if defaultSCNub != 1 {
+		e2e.Logf("oc get sc:\n%s", allSCRes)
+		g.Skip("Skip for unexpected default storageclass!")
+	}
 }
