@@ -24,17 +24,15 @@ Cypress.Commands.add("switchPerspective", (perspective: string) => {
 });
 
 Cypress.Commands.add("cliLogin", () => {
-  cy.exec(`oc login -u ${Cypress.env('LOGIN_USERNAME')} -p ${Cypress.env('LOGIN_PASSWORD')} ${Cypress.env('HOST_API')} --insecure-skip-tls-verify=true`).then(result => {
-    cy.log(result.stderr)
-    cy.log(result.stdout)
-    expect(result.stderr).to.be.empty
+  cy.exec(`oc login -u ${Cypress.env('LOGIN_USERNAME')} -p ${Cypress.env('LOGIN_PASSWORD')} ${Cypress.env('HOST_API')} --insecure-skip-tls-verify=true`, { failOnNonZeroExit: false }).then(result => {
+    cy.log(result.stderr);
+    cy.log(result.stdout);
   });
 });
 
 Cypress.Commands.add("cliLogout", () => {
-  cy.exec(`oc logout`).then(result => {
-    cy.log(result.stderr)
-    cy.log(result.stdout)
-    expect(result.stderr).to.be.empty
+  cy.exec(`oc logout`, { failOnNonZeroExit: false }).then(result => {
+    cy.log(result.stderr);
+    cy.log(result.stdout);
   });
 });

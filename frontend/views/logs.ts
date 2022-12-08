@@ -22,5 +22,16 @@ export const logsPage = {
   clearSearch: () => {
     cy.get('[aria-label="Reset"]').click();
     cy.get('input[placeholder="Search"]').should("have.attr", "value", "");
+  },
+  checkLogWraped: (boolvalue) => {
+    cy.get('#wrapLogLines').should('have.attr', 'data-checked-state', `${boolvalue}`);
+  },
+  setLogWrap: (boolvalue) => {
+    cy.get('#wrapLogLines').then(($elem) => {
+      const $checkedstate = $elem.attr('data-checked-state');
+      if($checkedstate != '${boolvalue}'){
+        cy.contains('Wrap lines').click();
+      }
+    })
   }
 }
