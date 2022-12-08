@@ -16,6 +16,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	var (
 		oc = exutil.NewCLI("machine-proxy-cluster", exutil.KubeConfigPath())
 	)
+	g.BeforeEach(func() {
+		exutil.SkipForSNOCluster(oc)
+	})
 
 	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Author:miyadav-High-37384-Machine API components should honour cluster wide proxy settings", func() {

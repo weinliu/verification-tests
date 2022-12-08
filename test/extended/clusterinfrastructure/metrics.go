@@ -17,6 +17,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	var (
 		oc = exutil.NewCLI("metrics", exutil.KubeConfigPath())
 	)
+	g.BeforeEach(func() {
+		exutil.SkipForSNOCluster(oc)
+	})
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-45499-mapi_current_pending_csr should reflect real pending CSR count [Flaky]", func() {

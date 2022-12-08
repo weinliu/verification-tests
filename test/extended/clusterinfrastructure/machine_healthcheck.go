@@ -16,6 +16,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	var (
 		oc = exutil.NewCLI("machine-healthcheck", exutil.KubeConfigPath())
 	)
+	g.BeforeEach(func() {
+		exutil.SkipForSNOCluster(oc)
+	})
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Author:huliu-Low-45343-[MHC] - nodeStartupTimeout in MachineHealthCheck should revert back to default [Flaky]", func() {

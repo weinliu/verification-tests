@@ -17,6 +17,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	var (
 		oc = exutil.NewCLI("cluster-machine-approver", exutil.KubeConfigPath())
 	)
+	g.BeforeEach(func() {
+		exutil.SkipForSNOCluster(oc)
+	})
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Author:huliu-Medium-45420-Cluster Machine Approver should use leader election [Disruptive]", func() {

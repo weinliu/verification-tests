@@ -362,3 +362,13 @@ func GetAwsCredentialFromCluster(oc *CLI) {
 	os.Setenv("AWS_SECRET_ACCESS_KEY", string(secureKey))
 	os.Setenv("AWS_REGION", clusterRegion)
 }
+
+// SkipForSNOCluster skip for SNO cluster
+func SkipForSNOCluster(oc *CLI) {
+	//Only 1 master, 1 worker node and with the same hostname.
+	masterNodes, _ := GetClusterNodesBy(oc, "master")
+	workerNodes, _ := GetClusterNodesBy(oc, "worker")
+	if len(masterNodes) == 1 && len(workerNodes) == 1 && masterNodes[0] == workerNodes[0] {
+		g.Skip("Skip for SNO cluster.")
+	}
+}

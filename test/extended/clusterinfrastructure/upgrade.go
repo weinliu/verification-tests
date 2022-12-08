@@ -11,6 +11,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	var (
 		oc = exutil.NewCLI("cluster-infrastructure-upgrade", exutil.KubeConfigPath())
 	)
+	g.BeforeEach(func() {
+		exutil.SkipForSNOCluster(oc)
+	})
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-PstChkUpgrade-Author:zhsun-High-43725-[Upgrade]Enable out-of-tree cloud providers with feature gate [Disruptive]", func() {

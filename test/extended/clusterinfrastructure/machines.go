@@ -17,6 +17,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	var (
 		oc = exutil.NewCLI("machine-api-operator", exutil.KubeConfigPath())
 	)
+	g.BeforeEach(func() {
+		exutil.SkipForSNOCluster(oc)
+	})
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-Medium-45772-MachineSet selector is immutable", func() {

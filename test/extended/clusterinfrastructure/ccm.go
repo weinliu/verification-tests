@@ -14,6 +14,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	)
 
 	g.BeforeEach(func() {
+		exutil.SkipForSNOCluster(oc)
 		iaasPlatform = exutil.CheckPlatform(oc)
 	})
 
