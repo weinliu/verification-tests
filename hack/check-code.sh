@@ -45,9 +45,9 @@ fi
 set -e
 echo -e "\n###############  golint  ####################"
 bad_golint_files=""
-if [ -n "${modified_files_check}" ]; then
-    bad_golint_files=$(echo $modified_files_check | xargs -n1 golint)
-fi
+# if [ -n "${modified_files_check}" ]; then
+#     bad_golint_files=$(echo $modified_files_check | xargs -n1 golint)
+# fi
 
 if [[ -n "${bad_golint_files}" ]]; then
     echo "ERROR:"
