@@ -149,7 +149,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 			e2e.Logf(output)
 		}
 		defer containerCLI.RemoveImage("quay.io/rh-obulatov/boater")
-		o.Expect(output).To(o.ContainSubstring("schemaVersion\":2,\"config"))
+		o.Expect(output).To(o.ContainSubstring("schemaVersion\":2"))
+		o.Expect(output).To(o.ContainSubstring("application/vnd.oci.image.manifest.v1+json"))
 		o.Expect(output).To(o.ContainSubstring("layers"))
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", oc.Namespace(), "all", "--all").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
