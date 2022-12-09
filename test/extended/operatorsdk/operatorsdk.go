@@ -1208,16 +1208,29 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(output).To(o.ContainSubstring("State: fail"))
 		o.Expect(output).To(o.ContainSubstring("spec missing from [memcached43660-sample]"))
 		pathOutput := filepath.Join(tmpPath, "test-output", "basic", "basic-check-spec-test")
-		_, err = os.Stat(pathOutput)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = wait.Poll(2*time.Second, 6*time.Second, func() (bool, error) {
+			if _, err := os.Stat(pathOutput); os.IsNotExist(err) {
+				e2e.Logf("get basic-check-spec-test Failed")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "get basic-check-spec-test Failed")
 
 		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=olm-bundle-validation-test", "-n", oc.Namespace()).Output()
 		e2e.Logf(" scorecard bundle %v", err)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("State: pass"))
 		pathOutput = filepath.Join(tmpPath, "test-output", "olm", "olm-bundle-validation-test")
-		_, err = os.Stat(pathOutput)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = wait.Poll(2*time.Second, 6*time.Second, func() (bool, error) {
+			if _, err := os.Stat(pathOutput); os.IsNotExist(err) {
+				e2e.Logf("get olm-bundle-validation-test Failed")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "get olm-bundle-validation-test Failed")
+
 	})
 
 	// author: chuo@redhat.com
