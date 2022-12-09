@@ -2601,8 +2601,7 @@ nulla pariatur.`
 			o.ContainSubstring("No such file or directory"),
 			"The audit rules file %s should exist in the nodes", auditRuleFile)
 
-		grepOut, grepErr := worker.DebugNodeWithOptions([]string{"--quiet"}, "chroot", "/host", "bash", "-c", fmt.Sprintf("grep -E 'NETFILTER_CFG|ANOM_PROMISCUOUS' %s", auditRuleFile))
-		o.Expect(grepErr).NotTo(o.HaveOccurred(), "check excluded msgtype in audit rule file failed")
+		grepOut, _ := worker.DebugNodeWithOptions([]string{"--quiet"}, "chroot", "/host", "bash", "-c", fmt.Sprintf("grep -E 'NETFILTER_CFG|ANOM_PROMISCUOUS' %s", auditRuleFile))
 		o.Expect(grepOut).NotTo(o.BeEmpty(), "expected excluded audit log msgtype not found")
 		o.Expect(grepOut).Should(o.And(
 			o.ContainSubstring("NETFILTER_CFG"),
@@ -2614,8 +2613,7 @@ nulla pariatur.`
 		o.Expect(getLinuxNodeErr).NotTo(o.HaveOccurred(), "get all linux nodes failed")
 		for _, node := range allLinuxNodes {
 			logger.Infof("checking audit log on node %s", node.GetName())
-			filteredLog, filterLogErr := node.DebugNodeWithChroot("bash", "-c", fmt.Sprintf("grep -E 'NETFILTER_CFG|ANOM_PROMISCUOUS' %s", auditLogFile))
-			o.Expect(filterLogErr).To(o.HaveOccurred(), "excluded audit log found")
+			filteredLog, _ := node.DebugNodeWithChroot("bash", "-c", fmt.Sprintf("grep -E 'NETFILTER_CFG|ANOM_PROMISCUOUS' %s", auditLogFile))
 			o.Expect(filteredLog).ShouldNot(o.Or(
 				o.ContainSubstring("NETFILTER_CFG"),
 				o.ContainSubstring("ANOM_PROMISCUOUS"),
