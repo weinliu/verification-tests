@@ -577,7 +577,7 @@ func (vol *ebsVolume) expand(ac *ec2.EC2, expandCapacity int64) error {
 	return err
 }
 
-// Expand the EBS volume capacity and wait for the expandation succeed
+// Expand the EBS volume capacity and wait for the expanding succeed
 func (vol *ebsVolume) expandSucceed(ac *ec2.EC2, expandCapacity int64) {
 	err := vol.expand(ac, expandCapacity)
 	o.Expect(err).NotTo(o.HaveOccurred())

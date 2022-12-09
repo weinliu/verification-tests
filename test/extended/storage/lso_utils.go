@@ -164,10 +164,10 @@ func (lso *localStorageOperator) uninstall(oc *exutil.CLI) error {
 		errs          []error
 		resourceTypes = []string{"localvolume", "localvolumeset", "localvolumediscovery", "deployment", "ds", "pod", "pvc"}
 	)
-	for _, resouceType := range resourceTypes {
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", lso.namespace, resouceType, "--all", "--ignore-not-found").Execute()
+	for _, resourceType := range resourceTypes {
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", lso.namespace, resourceType, "--all", "--ignore-not-found").Execute()
 		if err != nil {
-			e2e.Logf("Clean \"%s\" resources failed of %v", resouceType, err)
+			e2e.Logf("Clean \"%s\" resources failed of %v", resourceType, err)
 			errs = append(errs, err)
 		}
 	}

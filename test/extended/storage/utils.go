@@ -815,3 +815,15 @@ func (p int64Slice) Less(i, j int) bool {
 func (p int64Slice) Swap(i, j int) {
 	p[i], p[j] = p[j], p[i]
 }
+
+// isSpecifiedResourceExist checks whether the specified resource exist, returns bool
+func isSpecifiedResourceExist(oc *exutil.CLI, resourceKindAndName string, resourceNamespace string) bool {
+	var cargs []string
+	if resourceNamespace != "" {
+		cargs = append(cargs, "-n", resourceNamespace)
+	}
+	cargs = append(cargs, resourceKindAndName, "--ignore-not-found")
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(cargs...).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return !strings.EqualFold(output, "")
+}

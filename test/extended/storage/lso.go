@@ -732,6 +732,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// Customer Scenario:
 	// https://bugzilla.redhat.com/show_bug.cgi?id=2061447
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-High-51520-[LSO] LocalVolume CR provisioned volume should have no ownerReferences with Node [Disruptive]", func() {
+
+		// Check whether the test cluster satisfy the test scenario
+		// STS, C2S etc. profiles the credentials don't have permission to reboot the node
+		if !isSpecifiedResourceExist(oc, "secret/aws-creds", "kube-system") {
+			g.Skip("Skipped: the cluster not satisfy the test scenario")
+		}
+
 		// Set the resource definition for the scenario
 		var (
 			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
