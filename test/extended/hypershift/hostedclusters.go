@@ -1,6 +1,7 @@
 package hypershift
 
 import (
+	"encoding/base64"
 	"strings"
 
 	o "github.com/onsi/gomega"
@@ -163,4 +164,17 @@ func (h *hostedCluster) checkHCConditions() bool {
 			"Available True", "ValidConfiguration True", "SupportedHostedCluster True",
 			"ValidHostedControlPlaneConfiguration True", "IgnitionEndpointAvailable True", "ReconciliationActive True",
 			"ValidReleaseImage True", "ValidOIDCConfiguration True", "ReconciliationSucceeded True"})
+}
+
+func (h *hostedCluster) getHostedclusterConsoleInfo() (string, string) {
+	url, cerr := h.oc.AsGuestKubeconf().WithoutNamespace().Run(OcpWhoami).Args("--show-console").Output()
+	o.Expect(cerr).ShouldNot(o.HaveOccurred())
+
+	pwdbase64, pswerr := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace+"-"+h.name, "secret",
+		"kubeadmin-password", "-ojsonpath={.data.password}").Output()
+	o.Expect(pswerr).ShouldNot(o.HaveOccurred())
+
+	pwd, err := base64.StdEncoding.DecodeString(pwdbase64)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return url, string(pwd)
 }

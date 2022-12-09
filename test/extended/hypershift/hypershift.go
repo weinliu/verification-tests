@@ -85,27 +85,10 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: heli@redhat.com
 	g.It("HyperShiftMGMT-Author:heli-Critical-43555-Allow direct ingress on guest clusters on AWS", func() {
-		guestClusterKubeconfigFile := "/tmp/guestcluster-kubeconfig-43555"
-
 		var bashClient = NewCmdClient()
-		defer os.Remove(guestClusterKubeconfigFile)
-		_, err := bashClient.Run(fmt.Sprintf("hypershift create kubeconfig --name %s > %s", guestClusterName, guestClusterKubeconfigFile)).Output()
-		o.Expect(err).ShouldNot(o.HaveOccurred())
-
-		res := doOcpReq(oc, OcpGet, true, "clusteroperator", "kube-apiserver", fmt.Sprintf("--kubeconfig=%s", guestClusterKubeconfigFile), "-ojsonpath={range .status.conditions[*]}{@.type}{\" \"}{@.status}{\" \"}{end}")
-		checkSubstring(res, []string{"Degraded False"})
-
-		ingressDomain := doOcpReq(oc, OcpGet, true, "-n", "openshift-ingress-operator", "ingresscontrollers", "-ojsonpath={.items[0].spec.domain}", fmt.Sprintf("--kubeconfig=%s", guestClusterKubeconfigFile))
-		e2e.Logf("The guest cluster ingress domain is : %s\n", ingressDomain)
-
-		console := doOcpReq(oc, OcpWhoami, true, fmt.Sprintf("--kubeconfig=%s", guestClusterKubeconfigFile), "--show-console")
-
-		pwdbase64 := doOcpReq(oc, OcpGet, true, "-n", guestClusterNamespace, "secret", "kubeadmin-password", "-ojsonpath={.data.password}")
-		pwd, err := base64.StdEncoding.DecodeString(pwdbase64)
-		o.Expect(err).ShouldNot(o.HaveOccurred())
-
-		parms := fmt.Sprintf("curl -u admin:%s %s  -k  -LIs -o /dev/null -w %s ", string(pwd), console, "%{http_code}")
-		res, err = bashClient.Run(parms).Output()
+		console, psw := hostedcluster.getHostedclusterConsoleInfo()
+		parms := fmt.Sprintf("curl -u admin:%s %s  -k  -LIs -o /dev/null -w %s ", psw, console, "%{http_code}")
+		res, err := bashClient.Run(parms).Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		checkSubstring(res, []string{"200"})
 	})
