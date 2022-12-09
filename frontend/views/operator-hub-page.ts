@@ -2,13 +2,11 @@ import { listPage } from "../upstream/views/list-page";
 export const operatorHubPage = {
   goTo: () => {
     cy.visit('/operatorhub/all-namespaces');
+    // the operator hub page is loaded when the count is displayed
+    cy.get('.co-catalog-page__num-items').should('exist')
   },
   getAllTileLabels: () => {
     return cy.get('.pf-c-badge')
-  },
-  // the operator hub page is loaded when the count is displayed
-  isLoaded: () => {
-    cy.get('.co-catalog-page__num-items').should('exist')
   },
   checkCustomCatalog: (name: string) => {
     cy.get('form[data-test-group-name="catalogSourceDisplayName"]')
@@ -23,6 +21,11 @@ export const operatorHubPage = {
     cy.get('form[data-test-group-name="catalogSourceDisplayName"]')
       .find(`[data-test="catalogSourceDisplayName-${name}"]`)
       .find('[type="checkbox"]').uncheck()
+  },
+  filter: (name: string) => {
+    cy.get('input[type="text"]')
+      .clear()
+      .type(name)
   },
   // pass operator name that matches the Title on UI
   install: (name: string) => {

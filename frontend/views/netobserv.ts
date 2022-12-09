@@ -61,7 +61,6 @@ export const Operator = {
     },
     install: (catalogSourceDisplayName: string) => {
         operatorHubPage.goTo()
-        operatorHubPage.isLoaded()
         const catalogSourceSelectorCheckbox = `input[title="${catalogSourceDisplayName}"]`
         cy.get(catalogSourceSelectorCheckbox).check()
         operatorHubPage.install("NetObserv Operator")
