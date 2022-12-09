@@ -95,6 +95,7 @@ func dePodLogs(pods []corev1.Pod, oc *exutil.CLI, matchlogs string) bool {
 }
 
 func getBearerTokenURLViaPod(ns string, execPodName string, url string, bearer string) (string, error) {
+	g.By("Get token via pod")
 	cmd := fmt.Sprintf("curl --retry 15 --max-time 4 --retry-delay 1 -s -k -H 'Authorization: Bearer %s' %s", bearer, url)
 	output, err := e2e.RunHostCmd(ns, execPodName, cmd)
 	if err != nil {
@@ -104,6 +105,7 @@ func getBearerTokenURLViaPod(ns string, execPodName string, url string, bearer s
 }
 
 func runQuery(queryURL, ns, execPodName, bearerToken string) (*prometheusResponse, error) {
+	g.By("Run query")
 	contents, err := getBearerTokenURLViaPod(ns, execPodName, queryURL, bearerToken)
 	if err != nil {
 		return nil, fmt.Errorf("unable to execute query %v", err)
@@ -121,6 +123,7 @@ func runQuery(queryURL, ns, execPodName, bearerToken string) (*prometheusRespons
 }
 
 func metricReportStatus(queryURL, ns, execPodName, bearerToken string, value model.SampleValue) bool {
+	g.By("Return metric status")
 	result, err := runQuery(queryURL, ns, execPodName, bearerToken)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return result.Data.Result[0].Value == value
@@ -425,7 +428,7 @@ func (stafulsrc *staSource) create(oc *exutil.CLI) {
 }
 
 func checkPodsRunningWithLabel(oc *exutil.CLI, namespace string, label string, number int) {
-	err := wait.Poll(25*time.Second, 5*time.Minute, func() (bool, error) {
+	err := wait.Poll(25*time.Second, 6*time.Minute, func() (bool, error) {
 		podList, _ := oc.AdminKubeClient().CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		if len(podList.Items) != number {
 			e2e.Logf("the pod number is not %d, Continue to next round", number)
