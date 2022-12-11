@@ -45,14 +45,29 @@ fi
 set -e
 echo -e "\n###############  golint  ####################"
 bad_golint_files=""
-# if [ -n "${modified_files_check}" ]; then
-#     bad_golint_files=$(echo $modified_files_check | xargs -n1 golint)
-# fi
+unset GOFLAGS
+export GOCACHE=/tmp
+mkdir -p /tmp/gomod
+export GOMODCACHE=/tmp/gomod
+mkdir -p /tmp/gopath
+export GOPATH=/tmp/gopath
+export GOLANGCI_LINT_CACHE=/tmp/.cache
+for f in $modified_files;
+do
+    if [ -e $f ]; then
+        lint_check_result=$(golangci-lint run --timeout=10m0s --fast $f || true)
+        if [[ -n "${lint_check_result}" ]]; then
+            bad_golint_files="$bad_golint_files\n$lint_check_result";
+        fi
+    fi
+done
 
 if [[ -n "${bad_golint_files}" ]]; then
     echo "ERROR:"
-	echo "golint detected following problems:"
-	echo "${bad_golint_files}"
+    echo "golint detected following problems:"
+    echo -e "${bad_golint_files}"
+    echo "you could install golangci-lint with \"go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.50.1\""
+    echo "and then 'golangci-lint run --timeout=10m0s --fast [file_path]' to check it in your local env"
 else
     echo "golint SUCCESS"
 fi
@@ -71,7 +86,6 @@ fi
 echo -e "\n###############  ginkgo version check  ####################"
 bad_ginkgover_files=""
 bad_ginkgorep_files=""
-echo -e "$modified_files"
 for f in $modified_files;
 do
     if [ -e $f ]; then
