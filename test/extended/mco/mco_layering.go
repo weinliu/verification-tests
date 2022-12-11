@@ -68,11 +68,11 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		// Create MC and wait for MCP
 		g.By("Create a MC to deploy the new osImage")
 		layeringMcName := "layering-mc"
-		layeringMC := MachineConfig{name: layeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate),
-			pool: MachineConfigPoolWorker, parameters: []string{"OS_IMAGE=" + digestedImage}}
+		layeringMC := NewMachineConfig(oc.AsAdmin(), layeringMcName, MachineConfigPoolWorker)
+		layeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
 
-		defer layeringMC.delete(oc)
-		layeringMC.create(oc.AsAdmin())
+		defer layeringMC.delete()
+		layeringMC.create()
 
 		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		mcp.waitForComplete()
@@ -159,7 +159,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 
 		// Delete the MC and wait for MCP
 		g.By("Delete the MC so that the original osImage is restored")
-		layeringMC.delete(oc)
+		layeringMC.delete()
 		mcp.waitForComplete()
 		logger.Infof("MC was successfully deleted\n")
 
@@ -313,11 +313,11 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		// Create MC and wait for MCP
 		g.By("Create a MC to deploy the new osImage")
 		layeringMcName := "layering-mc-54159"
-		layeringMC := MachineConfig{name: layeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate),
-			pool: MachineConfigPoolWorker, parameters: []string{"OS_IMAGE=" + digestedImage}}
+		layeringMC := NewMachineConfig(oc.AsAdmin(), layeringMcName, MachineConfigPoolWorker)
+		layeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
 
-		defer layeringMC.delete(oc)
-		layeringMC.create(oc.AsAdmin())
+		defer layeringMC.delete()
+		layeringMC.create()
 
 		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		mcp.waitForComplete()
@@ -367,7 +367,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 
 		// Delete the MC and wait for MCP
 		g.By("Delete the MC so that original osImage is restored")
-		layeringMC.delete(oc)
+		layeringMC.delete()
 		mcp.waitForComplete()
 		logger.Infof("MC was successfully deleted\n")
 
@@ -469,20 +469,22 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.cent
 		// Create MC to apply the config to worker nodes
 		g.By("Create a MC to deploy the new osImage in 'worker' pool")
 		wLayeringMcName := "tc-54909-layering-extensions-worker"
-		wLayeringMC := MachineConfig{name: wLayeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate), skipWaitForMcp: true,
-			pool: MachineConfigPoolWorker, parameters: []string{"OS_IMAGE=" + digestedImage}}
+		wLayeringMC := NewMachineConfig(oc.AsAdmin(), wLayeringMcName, MachineConfigPoolWorker)
+		wLayeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
+		wLayeringMC.skipWaitForMcp = true
 
-		defer wLayeringMC.deleteNoWait(oc)
-		wLayeringMC.create(oc.AsAdmin())
+		defer wLayeringMC.deleteNoWait()
+		wLayeringMC.create()
 
 		// Create MC to apply the config to master nodes
 		g.By("Create a MC to deploy the new osImage in 'master' pool")
 		mLayeringMcName := "tc-54909-layering-extensions-master"
-		mLayeringMC := MachineConfig{name: mLayeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate), skipWaitForMcp: true,
-			pool: MachineConfigPoolMaster, parameters: []string{"OS_IMAGE=" + digestedImage}}
+		mLayeringMC := NewMachineConfig(oc.AsAdmin(), mLayeringMcName, MachineConfigPoolMaster)
+		mLayeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
+		mLayeringMC.skipWaitForMcp = true
 
-		defer mLayeringMC.deleteNoWait(oc)
-		mLayeringMC.create(oc.AsAdmin())
+		defer mLayeringMC.deleteNoWait()
+		mLayeringMC.create()
 
 		// Wait for pools
 		wMcp.waitForComplete()
@@ -546,20 +548,20 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.cent
 		// Create MC to apply usbguard extension to worker nodes
 		g.By("Create a MC to deploy the new osImage in 'worker' pool")
 		wUsbguardMcName := "tc-54909-extension-usbguard-worker"
-		wUsbguardMC := MachineConfig{name: wUsbguardMcName, Template: *NewMCOTemplate(oc, "change-worker-extension-usbguard.yaml"),
-			skipWaitForMcp: true, pool: MachineConfigPoolWorker}
+		wUsbguardMC := NewMachineConfig(oc.AsAdmin(), wUsbguardMcName, MachineConfigPoolWorker).SetMCOTemplate("change-worker-extension-usbguard.yaml")
+		wUsbguardMC.skipWaitForMcp = true
 
-		defer wUsbguardMC.deleteNoWait(oc)
-		wUsbguardMC.create(oc.AsAdmin())
+		defer wUsbguardMC.deleteNoWait()
+		wUsbguardMC.create()
 
 		// Create MC to apply usbguard extension to master nodes
 		g.By("Create a MC to deploy the new osImage in 'master' pool")
 		mUsbguardMcName := "tc-54909-extension-usbguard-master"
-		mUsbguardMC := MachineConfig{name: mUsbguardMcName, Template: *NewMCOTemplate(oc, "change-worker-extension-usbguard.yaml"),
-			skipWaitForMcp: true, pool: MachineConfigPoolMaster}
+		mUsbguardMC := NewMachineConfig(oc.AsAdmin(), mUsbguardMcName, MachineConfigPoolMaster).SetMCOTemplate("change-worker-extension-usbguard.yaml")
+		mUsbguardMC.skipWaitForMcp = true
 
-		defer mUsbguardMC.deleteNoWait(oc)
-		mUsbguardMC.create(oc.AsAdmin())
+		defer mUsbguardMC.deleteNoWait()
+		mUsbguardMC.create()
 
 		// Wait for pools
 		wMcp.waitForComplete()
@@ -633,8 +635,8 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.cent
 		logger.Infof("OK!\n")
 
 		g.By("Remove custom layering MCs")
-		wLayeringMC.deleteNoWait(oc)
-		mLayeringMC.deleteNoWait(oc)
+		wLayeringMC.deleteNoWait()
+		mLayeringMC.deleteNoWait()
 		logger.Infof("OK!\n")
 
 		// Wait for pools
@@ -722,21 +724,21 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.cent
 		// Create a MC to use realtime kernel in the worker pool
 		g.By("Create machine config to enable RT kernel in worker pool")
 		wRtMcName := "50-realtime-kernel-worker"
-		wRtMc := MachineConfig{name: wRtMcName, Template: *NewMCOTemplate(oc, rtMcTemplate),
-			skipWaitForMcp: true, pool: MachineConfigPoolWorker}
+		wRtMc := NewMachineConfig(oc.AsAdmin(), wRtMcName, MachineConfigPoolWorker).SetMCOTemplate(rtMcTemplate)
+		wRtMc.skipWaitForMcp = true
 
-		defer wRtMc.deleteNoWait(oc)
-		wRtMc.create(oc)
+		defer wRtMc.deleteNoWait()
+		wRtMc.create()
 		logger.Infof("OK!\n")
 
 		// Create a MC to use realtime kernel in the master pool
 		g.By("Create machine config to enable RT kernel in master pool")
 		mRtMcName := "50-realtime-kernel-master"
-		mRtMc := MachineConfig{name: mRtMcName, Template: *NewMCOTemplate(oc, rtMcTemplate),
-			skipWaitForMcp: true, pool: MachineConfigPoolMaster}
+		mRtMc := NewMachineConfig(oc.AsAdmin(), mRtMcName, MachineConfigPoolMaster).SetMCOTemplate(rtMcTemplate)
+		mRtMc.skipWaitForMcp = true
 
-		defer mRtMc.deleteNoWait(oc)
-		mRtMc.create(oc)
+		defer mRtMc.deleteNoWait()
+		mRtMc.create()
 		logger.Infof("OK!\n")
 
 		// Wait for the pools to be updated
@@ -768,21 +770,23 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.cent
 		// Create MC to apply the config to worker nodes
 		g.By("Create a MC to deploy the new osImage in 'worker' pool")
 		wLayeringMcName := "tc-54915-layering-kerneltype-worker"
-		wLayeringMC := MachineConfig{name: wLayeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate), skipWaitForMcp: true,
-			pool: MachineConfigPoolWorker, parameters: []string{"OS_IMAGE=" + digestedImage}}
+		wLayeringMC := NewMachineConfig(oc.AsAdmin(), wLayeringMcName, MachineConfigPoolWorker)
+		wLayeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
+		wLayeringMC.skipWaitForMcp = true
 
-		defer wLayeringMC.deleteNoWait(oc)
-		wLayeringMC.create(oc.AsAdmin())
+		defer wLayeringMC.deleteNoWait()
+		wLayeringMC.create()
 		logger.Infof("OK!\n")
 
 		// Create MC to apply the config to master nodes
 		g.By("Create a MC to deploy the new osImage in 'master' pool")
 		mLayeringMcName := "tc-54915-layering-kerneltype-master"
-		mLayeringMC := MachineConfig{name: mLayeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate), skipWaitForMcp: true,
-			pool: MachineConfigPoolMaster, parameters: []string{"OS_IMAGE=" + digestedImage}}
+		mLayeringMC := NewMachineConfig(oc.AsAdmin(), mLayeringMcName, MachineConfigPoolMaster)
+		mLayeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
+		mLayeringMC.skipWaitForMcp = true
 
-		defer mLayeringMC.deleteNoWait(oc)
-		mLayeringMC.create(oc.AsAdmin())
+		defer mLayeringMC.deleteNoWait()
+		mLayeringMC.create()
 		logger.Infof("OK!\n")
 
 		// Wait for the pools to be updated
@@ -837,8 +841,8 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.cent
 
 		// Delete realtime configs
 		g.By("Delete the realtime kernel MCs")
-		wRtMc.deleteNoWait(oc)
-		mRtMc.deleteNoWait(oc)
+		wRtMc.deleteNoWait()
+		mRtMc.deleteNoWait()
 		logger.Infof("OK!\n")
 
 		// Wait for the pools to be updated
@@ -944,23 +948,25 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.cent
 		// Create MC to apply the config to worker nodes
 		g.By("Create a MC to deploy the new osImage in 'worker' pool")
 		wLayeringMcName := "tc-55002-layering-telemetry-worker"
-		wLayeringMC := MachineConfig{name: wLayeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate), skipWaitForMcp: true,
-			pool: MachineConfigPoolWorker, parameters: []string{"OS_IMAGE=" + digestedImage}}
+		wLayeringMC := NewMachineConfig(oc.AsAdmin(), wLayeringMcName, MachineConfigPoolWorker)
+		wLayeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
+		wLayeringMC.skipWaitForMcp = true
 
 		defer mMcp.waitForComplete()
 		defer wMcp.waitForComplete()
-		defer wLayeringMC.deleteNoWait(oc)
-		wLayeringMC.create(oc.AsAdmin())
+		defer wLayeringMC.deleteNoWait()
+		wLayeringMC.create()
 		logger.Infof("OK!\n")
 
 		// Create MC to apply the config to master nodes
 		g.By("Create a MC to deploy the new osImage in 'master' pool")
 		mLayeringMcName := "tc-55002-layering-telemetry-master"
-		mLayeringMC := MachineConfig{name: mLayeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate), skipWaitForMcp: true,
-			pool: MachineConfigPoolMaster, parameters: []string{"OS_IMAGE=" + digestedImage}}
+		mLayeringMC := NewMachineConfig(oc.AsAdmin(), mLayeringMcName, MachineConfigPoolMaster)
+		mLayeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
+		mLayeringMC.skipWaitForMcp = true
 
-		defer mLayeringMC.deleteNoWait(oc)
-		mLayeringMC.create(oc.AsAdmin())
+		defer mLayeringMC.deleteNoWait()
+		mLayeringMC.create()
 		logger.Infof("OK!\n")
 
 		// Wait for the pools to be updated
@@ -989,7 +995,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.cent
 		logger.Infof("OK!\n")
 
 		g.By("Delete the MC that overrides worker pool's osImage and wait for the pool to be updated")
-		wLayeringMC.deleteNoWait(oc)
+		wLayeringMC.deleteNoWait()
 		wMcp.waitForComplete()
 		logger.Infof("OK!\n")
 
@@ -1013,7 +1019,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.cent
 		logger.Infof("OK!\n")
 
 		g.By("Delete the MC that overrides master pool's osImage and wait for the pool to be updated")
-		mLayeringMC.deleteNoWait(oc)
+		mLayeringMC.deleteNoWait()
 		mMcp.waitForComplete()
 		logger.Infof("OK!\n")
 
@@ -1049,8 +1055,9 @@ func checkInvalidOsImagesDegradedStatus(oc *exutil.CLI, image, layeringMcName, e
 		mcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 	)
 	// Create MC and wait for MCP
-	layeringMC := MachineConfig{name: layeringMcName, Template: *NewMCOTemplate(oc, GenericMCTemplate), skipWaitForMcp: true,
-		pool: mcp.GetName(), parameters: []string{"OS_IMAGE=" + image}}
+	layeringMC := NewMachineConfig(oc.AsAdmin(), layeringMcName, mcp.GetName())
+	layeringMC.parameters = []string{"OS_IMAGE=" + image}
+	layeringMC.skipWaitForMcp = true
 
 	validateMcpNodeDegraded(layeringMC, mcp, expectedNDMessage, expectedNDReason)
 
