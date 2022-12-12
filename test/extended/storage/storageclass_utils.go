@@ -259,8 +259,8 @@ const (
 // Generate storageClass parameters by volume type
 func gererateCsiScExtraParametersByVolType(oc *exutil.CLI, csiProvisioner string, volumeType string) map[string]interface{} {
 	var (
-		storageClassParameters = make(map[string]string)
-		extraParameters        = make(map[string]interface{})
+		storageClassParameters map[string]string
+		extraParameters        map[string]interface{}
 	)
 	switch csiProvisioner {
 	case ebsCsiDriverProvisioner:

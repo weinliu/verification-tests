@@ -690,7 +690,7 @@ func (dep *deployment) createWithInlineVolume(oc *exutil.CLI, inVol InlineVolume
 		dep.namespace = oc.Namespace()
 	}
 	var (
-		extraParameters = make(map[string]interface{}, 10)
+		extraParameters map[string]interface{}
 		jsonPath        = `items.0.spec.template.spec.volumes.0.`
 	)
 	switch inVol.Kind {

@@ -2221,10 +2221,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			depTemplate            = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
 			storageClassParameters = map[string]string{}
-			extraParameters        = map[string]interface{}{
-				"parameters": storageClassParameters,
-			}
-			volumeFsType string
+			extraParameters        map[string]interface{}
+			volumeFsType           string
 		)
 
 		// Define the test scenario support volumeBindingModes

@@ -709,9 +709,9 @@ func mergeMaps(mObj ...map[string]interface{}) map[string]interface{} {
 // ELSE return "bool:false" (Contains versionA = versionB)
 func versionIsAbove(versionA, versionB string) bool {
 	var (
-		subVersionStringA, subVersionStringB = make([]string, 0, 5), make([]string, 0, 5)
-		subVersionIntA, subVersionIntB       = make([]int, 0, 5), make([]int, 0, 5)
-		errList                              = make([]error, 0, 5)
+		subVersionStringA, subVersionStringB []string
+		subVersionIntA, subVersionIntB       []int
+		errList                              []error
 	)
 	subVersionStringA = strings.Split(versionA, ".")
 	subVersionIntA, errList = stringSliceToIntSlice(subVersionStringA)
