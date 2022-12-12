@@ -167,10 +167,24 @@ func createKataPod(oc *exutil.CLI, podNs, commonPod, commonPodName string) strin
 	return newPodName
 }
 
-// author: abhbaner@redhat.com
-func deleteKataPod(oc *exutil.CLI, podNs, newPodName string) bool {
-	e2e.Logf("delete pod %s in namespace %s", newPodName, podNs)
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", newPodName, "-n", podNs).Execute()
+// author: abhbaner@redhat.com, vvoronko@redhat.com
+func deleteKataPod(oc *exutil.CLI, podNs, delPodName string) bool {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", delPodName, "-n", podNs).Output()
+	if err != nil {
+		e2e.Logf("issue deleting pod %v in namespace %v, error: %v", delPodName, podNs, err)
+		return false
+	}
+	e2e.Logf("%s in namespace %s", output, podNs)
+
+	errCheck := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+		podsList, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", podNs).Output()
+		if !strings.Contains(podsList, delPodName) {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Pod %v was not finally deleted in ns %v", delPodName, podNs))
+	e2e.Logf("Pod %s in namespace %s deletion verified", delPodName, podNs)
 	return true
 }
 
