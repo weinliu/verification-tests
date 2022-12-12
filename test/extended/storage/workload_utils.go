@@ -25,6 +25,7 @@ type pod struct {
 	pathType         string
 	mountPath        string
 	maxWaitReadyTime time.Duration
+	invalid          bool
 }
 
 // Define the global Storage Operators && Driver deploments object
@@ -108,6 +109,7 @@ func newPod(opts ...podOption) pod {
 		pathType:         "mountPath",
 		mountPath:        "/mnt/storage",
 		maxWaitReadyTime: defaultMaxWaitingTime,
+		invalid:          false,
 	}
 
 	for _, o := range opts {
@@ -115,6 +117,14 @@ func newPod(opts ...podOption) pod {
 	}
 
 	return defaultPod
+}
+
+// isInvalid changes pod.invalid to true
+// Using for negative test that the pod is invalid and should create failed
+func (po *pod) isInvalid() *pod {
+	newPod := *po
+	newPod.invalid = true
+	return &newPod
 }
 
 // Create new pod with customized parameters
@@ -136,12 +146,17 @@ func (po *pod) createWithExtraParameters(oc *exutil.CLI, extraParameters map[str
 }
 
 // Create new pod with multi extra parameters
-func (po *pod) createWithMultiExtraParameters(oc *exutil.CLI, jsonPathsAndActions []map[string]string, multiExtraParameters []map[string]interface{}) {
+func (po *pod) createWithMultiExtraParameters(oc *exutil.CLI, jsonPathsAndActions []map[string]string, multiExtraParameters []map[string]interface{}) (string, error) {
 	if po.namespace == "" {
 		po.namespace = oc.Namespace()
 	}
-	err := applyResourceFromTemplateWithMultiExtraParameters(oc, jsonPathsAndActions, multiExtraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	output, err := applyResourceFromTemplateWithMultiExtraParameters(oc, jsonPathsAndActions, multiExtraParameters, "--ignore-unknown-parameters=true", "-f", po.template, "-p", "PODNAME="+po.name, "PODNAMESPACE="+po.namespace, "PVCNAME="+po.pvcname, "PODIMAGE="+po.image, "VOLUMETYPE="+po.volumeType, "PATHTYPE="+po.pathType, "PODMOUNTPATH="+po.mountPath)
+	if po.invalid {
+		o.Expect(err).Should(o.HaveOccurred())
+		return output, err
+	}
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return output, nil
 }
 
 // Create new pod with extra parameters for readonly
@@ -353,6 +368,11 @@ func (po *pod) getPodMountFsVolumeSize(oc *exutil.CLI) int64 {
 	sizeInt64, err := strconv.ParseInt(strings.TrimSuffix(sizeString, "G"), 10, 64)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return sizeInt64
+}
+
+// GetValueByJSONPath gets the specified JSONPath value of pod
+func (po *pod) getValueByJSONPath(oc *exutil.CLI, jsonPath string) (string, error) {
+	return oc.WithoutNamespace().AsAdmin().Run("get").Args("-n", po.namespace, "pod/"+po.name, "-o", "jsonpath="+jsonPath).Output()
 }
 
 // Get the phase, status of specified pod
@@ -660,7 +680,7 @@ func (dep *deployment) createWithMultiExtraParameters(oc *exutil.CLI, jsonPathsA
 	if dep.namespace == "" {
 		dep.namespace = oc.Namespace()
 	}
-	err := applyResourceFromTemplateWithMultiExtraParameters(oc, jsonPathsAndActions, multiExtraParameters, "--ignore-unknown-parameters=true", "-f", dep.template, "-p", "DNAME="+dep.name, "DNAMESPACE="+dep.namespace, "PVCNAME="+dep.pvcname, "REPLICASNUM="+dep.replicasno, "DLABEL="+dep.applabel, "MPATH="+dep.mpath, "VOLUMETYPE="+dep.volumetype, "TYPEPATH="+dep.typepath)
+	_, err := applyResourceFromTemplateWithMultiExtraParameters(oc, jsonPathsAndActions, multiExtraParameters, "--ignore-unknown-parameters=true", "-f", dep.template, "-p", "DNAME="+dep.name, "DNAMESPACE="+dep.namespace, "PVCNAME="+dep.pvcname, "REPLICASNUM="+dep.replicasno, "DLABEL="+dep.applabel, "MPATH="+dep.mpath, "VOLUMETYPE="+dep.volumetype, "TYPEPATH="+dep.typepath)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

@@ -328,7 +328,7 @@ func applyResourceFromTemplateWithExtraParametersAsAdmin(oc *exutil.CLI, extraPa
 }
 
 // Use oc client apply yaml template with multi extra parameters
-func applyResourceFromTemplateWithMultiExtraParameters(oc *exutil.CLI, jsonPathsAndActions []map[string]string, multiExtraParameters []map[string]interface{}, parameters ...string) error {
+func applyResourceFromTemplateWithMultiExtraParameters(oc *exutil.CLI, jsonPathsAndActions []map[string]string, multiExtraParameters []map[string]interface{}, parameters ...string) (string, error) {
 	var configFile string
 	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
 		output, err := oc.AsAdmin().Run("process").Args(parameters...).Output()
@@ -344,7 +344,7 @@ func applyResourceFromTemplateWithMultiExtraParameters(oc *exutil.CLI, jsonPaths
 	e2e.Logf("the file of resource is %s", configFile)
 	jsonOutput, _ := ioutil.ReadFile(configFile)
 	debugLogf("The file content is: \n%s", jsonOutput)
-	return oc.WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
+	return oc.WithoutNamespace().Run("apply").Args("-f", configFile).Output()
 }
 
 // None duplicate element slice intersect
