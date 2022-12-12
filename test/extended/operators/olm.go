@@ -308,20 +308,24 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		g.By("1, Create a CatalogSource that in a random project")
 		oc.SetupProject()
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-without-interval.yaml")
+		ocpVersionByte, err := exec.Command("bash", "-c", "oc version -o json | jq -r '.openshiftVersion' | cut -d '.' -f1,2").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocpVersion := strings.Replace(string(ocpVersionByte), "\n", "", -1)
+		indexImage := fmt.Sprintf("quay.io/openshift-qe-optional-operators/aosqe-index:v%s", ocpVersion)
 		cs := catalogSourceDescription{
 			name:        "cs-53758",
 			namespace:   oc.Namespace(),
 			displayName: "QE Operators",
 			publisher:   "QE",
 			sourceType:  "grpc",
-			address:     "quay.io/openshift-qe-optional-operators/ocp4-index:latest",
+			address:     indexImage,
 			template:    csImageTemplate,
 		}
 		defer cs.delete(itName, dr)
 		cs.createWithCheck(oc, itName, dr)
 
 		g.By("2, delete this CatalogSource's SA")
-		_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("serviceaccount", cs.name, "-n", cs.namespace).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("serviceaccount", cs.name, "-n", cs.namespace).Output()
 		if err != nil {
 			e2e.Failf("fail to delete the catalogsource SA:%s", cs.name)
 		}
@@ -350,20 +354,24 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer og.delete(itName, dr)
 		og.createwithCheck(oc, itName, dr)
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-image-template.yaml")
+		ocpVersionByte, err := exec.Command("bash", "-c", "oc version -o json | jq -r '.openshiftVersion' | cut -d '.' -f1,2").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocpVersion := strings.Replace(string(ocpVersionByte), "\n", "", -1)
+		indexImage := fmt.Sprintf("quay.io/openshift-qe-optional-operators/aosqe-index:v%s", ocpVersion)
 		cs := catalogSourceDescription{
 			name:        "cs-53740",
 			namespace:   oc.Namespace(),
 			displayName: "QE Operators",
 			publisher:   "QE",
 			sourceType:  "grpc",
-			address:     "quay.io/openshift-qe-optional-operators/ocp4-index:latest",
+			address:     indexImage,
 			interval:    "15mError code",
 			template:    csImageTemplate,
 		}
 		defer cs.delete(itName, dr)
 		cs.create(oc, itName, dr)
 		var msg string
-		err := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", cs.name, "-n", cs.namespace, "-o=jsonpath={.status.message}").Output()
 			if !strings.Contains(msg, "error parsing") {
 				return false, nil
@@ -418,13 +426,17 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			defer og.delete(itName, dr)
 			og.createwithCheck(oc, itName, dr)
 			csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-image-template.yaml")
+			ocpVersionByte, err := exec.Command("bash", "-c", "oc version -o json | jq -r '.openshiftVersion' | cut -d '.' -f1,2").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ocpVersion := strings.Replace(string(ocpVersionByte), "\n", "", -1)
+			indexImage := fmt.Sprintf("quay.io/openshift-qe-optional-operators/aosqe-index:v%s", ocpVersion)
 			cs := catalogSourceDescription{
 				name:        "cs-49687",
 				namespace:   oc.Namespace(),
 				displayName: "QE Operators",
 				publisher:   "QE",
 				sourceType:  "grpc",
-				address:     "quay.io/openshift-qe-optional-operators/ocp4-index:latest",
+				address:     indexImage,
 				template:    csImageTemplate,
 			}
 			defer cs.delete(itName, dr)
@@ -1582,6 +1594,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		g.By("2) Create a CatalogSource with a default CatalogSource name")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+		ocpVersionByte, err := exec.Command("bash", "-c", "oc version -o json | jq -r '.openshiftVersion' | cut -d '.' -f1,2").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocpVersion := strings.Replace(string(ocpVersionByte), "\n", "", -1)
+		indexImage := fmt.Sprintf("quay.io/openshift-qe-optional-operators/aosqe-index:v%s", ocpVersion)
 		oc.SetupProject()
 		cs := catalogSourceDescription{
 			name:        "redhat-operators",
@@ -1589,7 +1605,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			displayName: "OLM QE",
 			publisher:   "OLM QE",
 			sourceType:  "grpc",
-			address:     "quay.io/openshift-qe-optional-operators/ocp4-index:latest",
+			address:     indexImage,
 			template:    csImageTemplate,
 		}
 		dr := make(describerResrouce)
@@ -12301,13 +12317,18 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 		og.createwithCheck(oc.AsGuestKubeconf(), itName, dr)
 
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-image-template.yaml")
+		ocpVersionByte, err := exec.Command("bash", "-c", "oc version -o json | jq -r '.openshiftVersion' | cut -d '.' -f1,2").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocpVersion := strings.Replace(string(ocpVersionByte), "\n", "", -1)
+		indexImage := fmt.Sprintf("quay.io/openshift-qe-optional-operators/aosqe-index:v%s", ocpVersion)
+
 		cs := catalogSourceDescription{
 			name:        "cs-45348",
 			namespace:   ns,
 			displayName: "QE Operators",
 			publisher:   "QE",
 			sourceType:  "grpc",
-			address:     "quay.io/openshift-qe-optional-operators/ocp4-index:latest",
+			address:     indexImage,
 			template:    csImageTemplate,
 		}
 		defer cs.delete(itName, dr)
