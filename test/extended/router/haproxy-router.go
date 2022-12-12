@@ -75,7 +75,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		pollReadPodData(oc, "openshift-ingress", routername, "/usr/bin/env", `ROUTER_USE_PROXY_PROTOCOL=true`)
 	})
 
-	//author: jechen@redhat.com
+	// author: jechen@redhat.com
 	g.It("Author:jechen-Medium-42878-Errorfile stanzas and dummy default html files have been added to the router", func() {
 		g.By("Get pod (router) in openshift-ingress namespace")
 		podname := getRouterPod(oc, "default")
@@ -91,7 +91,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(searchOutput).To(o.ContainSubstring(`ROUTER_ERRORFILE_503`))
 	})
 
-	//author: jechen@redhat.com
+	// author: jechen@redhat.com
 	g.It("Author:jechen-High-43115-Configmap mounted on router volume after ingresscontroller has spec field HttpErrorCodePage populated with configmap name", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -1116,8 +1116,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		defer ingctrlhp2.delete(oc)
 		ingctrlhp2.create(oc)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrlhp2.name))
 		err = waitForCustomIngressControllerAvailable(oc, ingctrlhp2.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrlhp2.name))
 
 		g.By("Patch the two custom ingress-controllers with nodePlacement")
 		patchSelectNode := "{\"spec\":{\"nodePlacement\":{\"nodeSelector\":{\"matchLabels\":{\"kubernetes.io/hostname\": \"" + nodeHostName + "\"}}}}}"
@@ -1149,6 +1149,67 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			o.ContainSubstring("ROUTER_SERVICE_HTTP_PORT:                  10080"),
 			o.ContainSubstring("STATS_PORT:                                10936")))
 
+	})
+
+	// author: shudili@redhat.com
+	g.It("Author:shudili-Low-50406-The http/https/stat port field in the ingresscontroller does not accept negative values during configuration", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-hostnetwork-only.yaml")
+			ingctrlhp           = ingctrlHostPortDescription{
+				name:      "ocp50406",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				httpport:  10080,
+				httpsport: 10443,
+				statsport: 10936,
+				template:  customTemp,
+			}
+
+			ingctrlResource = "ingresscontrollers/" + ingctrlhp.name
+		)
+
+		g.By("Pre-flight check for the platform type and number of worker nodes in the environment")
+		platformtype := exutil.CheckPlatform(oc)
+		platforms := map[string]bool{
+			// ‘None’ also for Baremetal
+			"none":      true,
+			"baremetal": true,
+			"vsphere":   true,
+			"openstack": true,
+			"nutanix":   true,
+		}
+		if !platforms[platformtype] {
+			g.Skip("Skip for non-supported platform")
+		}
+		workerNodeCount, _ := exactNodeDetails(oc)
+		if workerNodeCount < 1 {
+			g.Skip("Skipping as we atleast need  one worker node")
+		}
+
+		g.By("Create a custom ingresscontrollers")
+		baseDomain := getBaseDomain(oc)
+		ingctrlhp.domain = ingctrlhp.name + "." + baseDomain
+		defer ingctrlhp.delete(oc)
+		ingctrlhp.create(oc)
+		err1 := waitForCustomIngressControllerAvailable(oc, ingctrlhp.name)
+		exutil.AssertWaitPollNoErr(err1, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrlhp.name))
+
+		g.By("Patch the the custom ingress-controllers with invalid hostNetwork configutations")
+		jsonPath := "{\"spec\":{\"endpointPublishingStrategy\":{\"hostNetwork\":{\"httpPort\": -10090}}}}"
+		output, err2 := oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", jsonPath, "--type=merge", "-n", ingctrlhp.namespace).Output()
+		o.Expect(err2).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Invalid value: -10090"))
+
+		jsonPath = "{\"spec\":{\"endpointPublishingStrategy\":{\"hostNetwork\":{\"httpPort\": -11443}}}}"
+		output, err2 = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", jsonPath, "--type=merge", "-n", ingctrlhp.namespace).Output()
+		o.Expect(err2).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Invalid value: -11443"))
+
+		jsonPath = "{\"spec\":{\"endpointPublishingStrategy\":{\"hostNetwork\":{\"httpPort\": -12936}}}}"
+		output, err2 = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", jsonPath, "--type=merge", "-n", ingctrlhp.namespace).Output()
+		o.Expect(err2).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Invalid value: -12936"))
 	})
 
 	// author: shudili@redhat.com
