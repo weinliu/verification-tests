@@ -160,12 +160,20 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = locatePodmanCred(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(60*time.Second, 300*time.Second, func() (bool, error) {
 
-		out, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--config", operatorS, "file:///tmp/46770test", "--continue-on-error", "-v", "3").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(out, "Using local backend at location") {
-			e2e.Failf("Do not expect the backend setting")
-		}
+			out, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--config", operatorS, "file:///tmp/46770test", "--continue-on-error", "-v", "3").Output()
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if !strings.Contains(out, "Using local backend at location") {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("max time reached but the oc-mirror still failed"))
+
 		_, err = os.Stat("/tmp/46770test/publish/.metadata.json")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("describe", "/tmp/46770test/mirror_seq1_000000.tar").Output()
