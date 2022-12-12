@@ -37,6 +37,10 @@
             "name": "pd.csi.storage.gke.io",
             "preset_scname": "standard-csi",
             "preset_vscname": "csi-gce-pd-vsc"
+          },
+          {
+            "name": "filestore.csi.storage.gke.io",
+            "preset_scname": "filestore-csi"
           }
         ]
       },

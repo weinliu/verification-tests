@@ -293,3 +293,9 @@ func gererateCsiScExtraParametersByVolType(oc *exutil.CLI, csiProvisioner string
 	}
 	return extraParameters
 }
+func getNetworkFromStorageClass(oc *exutil.CLI, scName string) string {
+	networkID, err := oc.WithoutNamespace().Run("get").Args("sc", scName, "-o", "jsonpath={.parameters.network}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The network Id is %s", networkID)
+	return networkID
+}

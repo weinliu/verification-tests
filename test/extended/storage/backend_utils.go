@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/efs"
 	"github.com/tidwall/gjson"
 
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -81,7 +83,12 @@ func getCredentialFromCluster(oc *exutil.CLI) {
 	case "vsphere":
 		e2e.Logf("Get %s backend credential is under development", cloudProvider)
 	case "gcp":
-		e2e.Logf("Get %s backend credential is under development", cloudProvider)
+		dirname := "/tmp/" + oc.Namespace() + "-creds"
+		err := os.MkdirAll(dirname, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/gcp-filestore-cloud-credentials", "-n", "openshift-cluster-csi-drivers", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", dirname+"/service_account.json")
 	case "azure":
 		e2e.Logf("Get %s backend credential is under development", cloudProvider)
 	case "openstack":
@@ -606,4 +613,23 @@ func rebootInstanceAndWaitSucceed(ac *ec2.EC2, instanceID string) {
 	err = ac.WaitUntilInstanceRunning(instancesInput)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("Reboot Instance:\"%+s\" Succeed", instanceID)
+}
+
+func getgcloudClient(oc *exutil.CLI) *exutil.Gcloud {
+	if exutil.CheckPlatform(oc) != "gcp" {
+		g.Skip("it is not gcp platform!")
+	}
+	projectID, err := exutil.GetGcpProjectID(oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	gcloud := exutil.Gcloud{ProjectID: projectID}
+	return gcloud.Login()
+}
+
+func getFilestoreInstanceFromGCP(oc *exutil.CLI, pvID string, region string) map[string]interface{} {
+	filestoreInfo, err := getgcloudClient(oc).GetFilestoreInstanceInfo(pvID, region)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	debugLogf("Check filestore info %s", string(filestoreInfo))
+	var filestoreJSONMap map[string]interface{}
+	json.Unmarshal([]byte(filestoreInfo), &filestoreJSONMap)
+	return filestoreJSONMap
 }
