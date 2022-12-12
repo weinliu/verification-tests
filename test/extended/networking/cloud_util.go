@@ -1058,3 +1058,73 @@ func estimateTimeoutForEgressIP(oc *exutil.CLI) time.Duration {
 	}
 	return timeout
 }
+
+// GetBmhNodeMachineConfig gets Machine Config for BM host node
+func GetBmhNodeMachineConfig(oc *exutil.CLI, nodeName string) (string, error) {
+	provideIDOutput, bmhErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o", `jsonpath='{.spec.providerID}'`).Output()
+	o.Expect(bmhErr).NotTo(o.HaveOccurred())
+	bmh := strings.Split(provideIDOutput, "/")[4]
+	e2e.Logf("\n The baremetal host for the node is:%v\n", bmh)
+	return bmh, bmhErr
+}
+
+// stopVMOnIpiBM stop one IPI BM VM
+func stopVMOnIPIBM(oc *exutil.CLI, nodeName string) error {
+	stopErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+		vmInstance, err := GetBmhNodeMachineConfig(oc, nodeName)
+		if err != nil {
+			return false, nil
+		}
+		e2e.Logf("\n\n\n vmInstance for the node is: %v \n\n\n", vmInstance)
+
+		patch := `[{"op": "replace", "path": "/spec/online", "value": false}]`
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("bmh", "-n", "openshift-machine-api", vmInstance, "--type=json", "-p", patch).Execute()
+		if patchErr != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	e2e.Logf("Not able to stop %s, got error: %v.", nodeName, stopErr)
+	return stopErr
+}
+
+// startVMOnIpiBM starts one IPI BM VM
+func startVMOnIPIBM(oc *exutil.CLI, nodeName string) error {
+	startErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+		vmInstance, err := GetBmhNodeMachineConfig(oc, nodeName)
+		if err != nil {
+			return false, nil
+		}
+		e2e.Logf("\n\n\n vmInstance for the node is: %v \n\n\n", vmInstance)
+
+		patch := `[{"op": "replace", "path": "/spec/online", "value": true}]`
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("bmh", "-n", "openshift-machine-api", vmInstance, "--type=json", "-p", patch).Execute()
+		if patchErr != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	e2e.Logf("Not able to start %s, got error: %v.", nodeName, startErr)
+	return startErr
+}
+
+func specialPlatformCheck(oc *exutil.CLI) bool {
+	platform := exutil.CheckPlatform(oc)
+	specialPlatform := false
+	e2e.Logf("Check credential in kube-system to see if this cluster is a special STS cluster.")
+	switch platform {
+	case "aws":
+		credErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", "-n", "kube-system", "aws-creds").Execute()
+		if credErr != nil {
+			specialPlatform = true
+		}
+	case "gcp":
+		credErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", "-n", "kube-system", "gcp-credentials").Execute()
+		if credErr != nil {
+			specialPlatform = true
+		}
+	default:
+		e2e.Logf("Skip this check for other platforms that do not have special STS scenario.")
+	}
+	return specialPlatform
+}

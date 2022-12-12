@@ -10,6 +10,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/vmware/govmomi"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
@@ -977,18 +978,25 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	// author: huirwang@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-Longduration-NonPreRelease-Medium-47033-If an egress node is NotReady traffic is still load balanced between available egress nodes. [Disruptive]", func() {
-		platform := exutil.CheckPlatform(oc)
-		e2e.Logf("\n\nThe platform is %v,\n", platform)
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "azure")
-		if !acceptedPlatform || ipEchoURL == "" {
-			g.Skip("Test cases should be run on AWS/GCP/Azure with int-svc host, skip for other platforms!!")
-		}
+
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
+		timer := estimateTimeoutForEgressIP(oc) * 2
+
+		platform := exutil.CheckPlatform(oc)
+		e2e.Logf("\n\nThe platform is %v,\n", platform)
+
+		// Due to OCPBUGS-4563, temporarily remove Azure as acceptedPlatform to skip the test on Azure
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal")
+
+		// This test case is not supposed to run on some special AWS/GCP cluster with STS, use specialPlatformCheck function to identify such a cluster
+		isSpecialSTSCluster := specialPlatformCheck(oc)
+		if !acceptedPlatform || (isSpecialSTSCluster && strings.Contains(platform, "aws")) || (isSpecialSTSCluster && strings.Contains(platform, "gcp")) {
+			g.Skip("This test case should be run on AWS, GCP, OSP, vSphere and IPI BM, skip for other platforms or special AWS/GCP STS cluster!!")
+		}
 
 		g.By("1. create new namespace\n")
-		oc.SetupProject()
 		ns1 := oc.Namespace()
 
 		g.By("2. Label EgressIP node\n")
@@ -1012,13 +1020,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
 
 		g.By("5. Create an egressip object\n")
-		sub1 := getIfaddrFromNode(nodeList.Items[0].Name, oc)
+		sub1 := getEgressCIDRsForNode(oc, nodeList.Items[0].Name)
 		freeIP1 := findUnUsedIPsOnNode(oc, nodeList.Items[0].Name, sub1, 1)
 		o.Expect(len(freeIP1) == 1).Should(o.BeTrue())
-		sub2 := getIfaddrFromNode(nodeList.Items[1].Name, oc)
+		sub2 := getEgressCIDRsForNode(oc, nodeList.Items[1].Name)
 		freeIP2 := findUnUsedIPsOnNode(oc, nodeList.Items[1].Name, sub2, 1)
 		o.Expect(len(freeIP2) == 1).Should(o.BeTrue())
-		sub3 := getIfaddrFromNode(nodeList.Items[2].Name, oc)
+		sub3 := getEgressCIDRsForNode(oc, nodeList.Items[2].Name)
 		freeIP3 := findUnUsedIPsOnNode(oc, nodeList.Items[2].Name, sub3, 1)
 		o.Expect(len(freeIP3) == 1).Should(o.BeTrue())
 
@@ -1046,35 +1054,90 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
 		g.By("8. Check source IP is randomly one of egress ips.\n")
-		e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
 		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 3)
-		sourceIP, err := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..15}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf(sourceIP)
-		o.Expect(sourceIP).Should(o.ContainSubstring(freeIP1[0]))
-		o.Expect(sourceIP).Should(o.ContainSubstring(freeIP2[0]))
-		o.Expect(sourceIP).Should(o.ContainSubstring(freeIP3[0]))
+
+		var dstHost, primaryInf string
+		var infErr, snifErr error
+		var tcpdumpDS *tcpdumpDaemonSet
+		errMsgFmt := "Any error in finding %v in tcpdump?: %v\n\n\n"
+		switch flag {
+		case "ipecho":
+			e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
+			sourceIP, err := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..15}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf(sourceIP)
+			o.Expect(sourceIP).Should(o.ContainSubstring(freeIP1[0]))
+			o.Expect(sourceIP).Should(o.ContainSubstring(freeIP2[0]))
+			o.Expect(sourceIP).Should(o.ContainSubstring(freeIP3[0]))
+		case "tcpdump":
+			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "tcpdump")
+			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, "tcpdump", "true")
+			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "tcpdump")
+			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, "tcpdump", "true")
+			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[2].Name, "tcpdump")
+			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[2].Name, "tcpdump", "true")
+			primaryInf, infErr = getSnifPhyInf(oc, nodeList.Items[0].Name)
+			o.Expect(infErr).NotTo(o.HaveOccurred())
+			dstHost = nslookDomainName("ifconfig.me")
+			defer deleteTcpdumpDS(oc, "tcpdump-47033", ns1)
+			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns1, "tcpdump-47033", "tcpdump", "true", dstHost, primaryInf, 80)
+			o.Expect(snifErr).NotTo(o.HaveOccurred())
+
+			g.By("Verify all egressIP is randomly used as sourceIP.")
+			egressipErr := wait.Poll(30*time.Second, timer, func() (bool, error) {
+				randomStr, url := getRequestURL(dstHost)
+				_, cmdErr := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..30}; do curl -s "+url+" --connect-timeout 5 ; sleep 2;echo ;done")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				egressIPCheck1 := checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, freeIP1[0], true)
+				e2e.Logf(errMsgFmt, freeIP1[0], egressIPCheck1)
+				egressIPCheck2 := checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, freeIP2[0], true)
+				e2e.Logf(errMsgFmt, freeIP2[0], egressIPCheck2)
+				egressIPCheck3 := checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, freeIP3[0], true)
+				e2e.Logf(errMsgFmt, freeIP3[0], egressIPCheck3)
+				e2e.Logf("Any cmdErr when running curl?: %v\n\n\n", cmdErr)
+				if egressIPCheck1 != nil || egressIPCheck2 != nil || egressIPCheck3 != nil || cmdErr != nil {
+					e2e.Logf("Did not find egressIPs %s or %s or %s in tcpdump log, try next round.", freeIP1[0], freeIP2[0], freeIP3[0])
+					return false, nil
+				}
+				e2e.Logf("Found all other 3 egressIP in tcpdump log as expected")
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to get all EgressIPs %s,%s, %s in tcpdump", freeIP1[0], freeIP2[0], freeIP3[0]))
+		default:
+			g.Skip("Skip for not support scenarios!")
+		}
+
+		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
+
+		// Choose one egress node and shut it down
+		nodeToBeShutdown := egressIPMaps1[2]["node"]
+		e2e.Logf("\n\n\n the worker node to be shutdown is: %v\n\n\n", nodeToBeShutdown)
+		e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeToBeShutdown, "tcpdump")
 
 		g.By("9. Stop one egress node.\n")
 		var instance []string
 		var zone string
 		var az *exutil.AzureSession
 		var rg string
+		var ospObj exutil.Osp
+		var vspObj *exutil.Vmware
+		var vspClient *govmomi.Client
 		switch exutil.CheckPlatform(oc) {
 		case "aws":
 			e2e.Logf("\n AWS is detected \n")
-			defer checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
-			defer startInstanceOnAWS(a, nodeList.Items[1].Name)
-			stopInstanceOnAWS(a, nodeList.Items[1].Name)
-			checkNodeStatus(oc, nodeList.Items[1].Name, "NotReady")
+			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+			defer startInstanceOnAWS(a, nodeToBeShutdown)
+			stopInstanceOnAWS(a, nodeToBeShutdown)
+			checkNodeStatus(oc, nodeToBeShutdown, "NotReady")
 		case "gcp":
 			// for gcp, remove the postfix "c.openshift-qe.internal" to get its instance name
-			instance = strings.Split(nodeList.Items[1].Name, ".")
+			instance = strings.Split(nodeToBeShutdown, ".")
 			e2e.Logf("\n\n\n the worker node to be shutdown is: %v\n\n\n", instance[0])
 			infraID, err := exutil.GetInfraID(oc)
 			zone, err = getZoneOfInstanceFromGcp(oc, infraID, instance[0])
 			o.Expect(err).NotTo(o.HaveOccurred())
-			defer checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
+			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
 			defer startInstanceOnGcp(oc, instance[0], zone)
 			err = stopInstanceOnGcp(oc, instance[0], zone)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1087,73 +1150,168 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			az, err = exutil.NewAzureSessionFromEnv()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			defer checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
-			defer startVMOnAzure(az, nodeList.Items[1].Name, rg)
-			stopVMOnAzure(az, nodeList.Items[1].Name, rg)
-			checkNodeStatus(oc, nodeList.Items[1].Name, "NotReady")
+			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+			defer startVMOnAzure(az, nodeToBeShutdown, rg)
+			stopVMOnAzure(az, nodeToBeShutdown, rg)
+			checkNodeStatus(oc, nodeToBeShutdown, "NotReady")
+		case "openstack":
+			e2e.Logf("\n OpenStack is detected, stop the instance %v on OSP now \n", nodeToBeShutdown)
+			ospObj = exutil.Osp{}
+			OspCredentials(oc)
+			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+			defer ospObj.GetStartOspInstance(nodeToBeShutdown)
+			err = ospObj.GetStopOspInstance(nodeToBeShutdown)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, nodeToBeShutdown, "NotReady")
+		case "vsphere":
+			e2e.Logf("\n vSphere is detected, stop the instance %v on OSP now \n", nodeToBeShutdown)
+			vspObj, vspClient = VsphereCloudClient(oc)
+			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+			defer vspObj.StartVsphereInstance(vspClient, nodeToBeShutdown)
+			err = vspObj.StopVsphereInstance(vspClient, nodeToBeShutdown)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, nodeToBeShutdown, "NotReady")
+		case "baremetal":
+			e2e.Logf("\n IPI baremetal is detected \n")
+			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+			defer startVMOnIPIBM(oc, nodeToBeShutdown)
+			stopErr := stopVMOnIPIBM(oc, nodeToBeShutdown)
+			o.Expect(stopErr).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, nodeToBeShutdown, "NotReady")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
 			g.Skip("Not support cloud provider for auto egressip cases for now.")
 		}
 
 		g.By("10. Check EgressIP updated in EIP object, sourceIP contains 2 IPs. \n")
-		egressipErr := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-			egressIPMaps2 := getAssignedEIPInEIPObject(oc, egressip1.name)
-			if len(egressIPMaps2) != 2 {
-				return false, nil
-			}
-			sourceIP, err := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..15}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
-			e2e.Logf(sourceIP)
-			if err != nil {
-				return false, nil
-			}
-			if strings.Contains(sourceIP, egressIPMaps2[0]["egressIP"]) && strings.Contains(sourceIP, egressIPMaps2[1]["egressIP"]) {
-				sourceIPSlice := findIP(sourceIP)
-				if len(unique(sourceIPSlice)) == 2 {
-					return true, nil
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 2)
+
+		switch flag {
+		case "ipecho":
+			egressipErr := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+				sourceIP, err := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..30}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
+				e2e.Logf(sourceIP)
+				if err != nil {
+					e2e.Logf("Getting error: %v while curl %s from the pod.", err, ipEchoURL)
+					return false, nil
 				}
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("The source Ip is not same as the egressIP expected!"))
+				if strings.Contains(sourceIP, egressIPMaps1[0]["egressIP"]) && strings.Contains(sourceIP, egressIPMaps1[1]["egressIP"]) {
+					sourceIPSlice := findIP(sourceIP)
+					if len(unique(sourceIPSlice)) == 2 {
+						return true, nil
+					}
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("The source Ip is not same as the egressIP expected!"))
+		case "tcpdump":
+			g.By("Verify other available egressIP is randomly used as sourceIP.")
+			egressipErr := wait.Poll(30*time.Second, timer, func() (bool, error) {
+				randomStr, url := getRequestURL(dstHost)
+				_, cmdErr := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..30}; do curl -s "+url+" --connect-timeout 5 ; sleep 3;echo ;done")
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				egressIPCheck1 := checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, egressIPMaps1[0]["egressIP"], true)
+				e2e.Logf(errMsgFmt, egressIPMaps1[0]["egressIP"], egressIPCheck1)
+				egressIPCheck2 := checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, egressIPMaps1[1]["egressIP"], true)
+				e2e.Logf(errMsgFmt, egressIPMaps1[1]["egressIP"], egressIPCheck2)
+				egressIPCheck3 := checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, egressIPMaps1[2]["egressIP"], false)
+				e2e.Logf("Any error in finding %v in tcpdump when it is not expected to be in tcpdump log?: %v\n\n\n", egressIPMaps1[2]["egressIP"], egressIPCheck3)
+				e2e.Logf("Any cmdErr when running curl?: %v\n\n\n", cmdErr)
+				if egressIPCheck1 != nil || egressIPCheck2 != nil || egressIPCheck3 != nil || cmdErr != nil {
+					e2e.Logf("Did not find egressIPs %v or %v in tcpdump log, or found %v unexpected, try next round.", egressIPMaps1[0]["egressIP"], egressIPMaps1[1]["egressIP"], egressIPMaps1[2]["egressIP"])
+					return false, nil
+				}
+				e2e.Logf("After the egress node is shut down, found all other 2 egressIP in tcpdump log!as expected")
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to get all expected EgressIPs in tcpdump log"))
+		default:
+			g.Skip("Skip for not support scenarios!")
+		}
 
 		g.By("11. Start the stopped egress node \n")
 		switch exutil.CheckPlatform(oc) {
 		case "aws":
-			defer checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
-			startInstanceOnAWS(a, nodeList.Items[1].Name)
-			checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
+			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+			startInstanceOnAWS(a, nodeToBeShutdown)
+			checkNodeStatus(oc, nodeToBeShutdown, "Ready")
 		case "gcp":
-			defer checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
+			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
 			err = startInstanceOnGcp(oc, instance[0], zone)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
+			checkNodeStatus(oc, nodeToBeShutdown, "Ready")
 		case "azure":
-			defer checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
-			startVMOnAzure(az, nodeList.Items[1].Name, rg)
-			checkNodeStatus(oc, nodeList.Items[1].Name, "Ready")
+			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+			startVMOnAzure(az, nodeToBeShutdown, rg)
+			checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+		case "openstack":
+			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+			err = ospObj.GetStartOspInstance(nodeToBeShutdown)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+		case "vsphere":
+			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+			err = vspObj.StartVsphereInstance(vspClient, nodeToBeShutdown)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+		case "baremetal":
+			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
+			startErr := startVMOnIPIBM(oc, nodeToBeShutdown)
+			o.Expect(startErr).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, nodeToBeShutdown, "Ready")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
 			g.Skip("Not support cloud provider for auto egressip cases for now.")
 		}
 
 		g.By("12. Check source IP is randomly one of 3 egress IPs.\n")
-		egressipErr = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-			egressIPMaps2 := getAssignedEIPInEIPObject(oc, egressip1.name)
-			if len(egressIPMaps2) != 3 {
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 3)
+
+		switch flag {
+		case "ipecho":
+			egressipErr := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+				sourceIP, err := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..30}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
+				e2e.Logf(sourceIP)
+				if err != nil {
+					e2e.Logf("Getting error: %v while curl %s from the pod.", err, ipEchoURL)
+					return false, nil
+				}
+				if strings.Contains(sourceIP, freeIP1[0]) && strings.Contains(sourceIP, freeIP2[0]) && strings.Contains(sourceIP, freeIP3[0]) {
+					return true, nil
+				}
 				return false, nil
-			}
-			sourceIP, err := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..15}; do curl -s "+ipEchoURL+" --connect-timeout 5 ; sleep 2;echo ;done")
-			e2e.Logf(sourceIP)
-			if err != nil {
-				return false, nil
-			}
-			if strings.Contains(sourceIP, freeIP1[0]) && strings.Contains(sourceIP, freeIP2[0]) && strings.Contains(sourceIP, freeIP3[0]) {
+			})
+			exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("The source Ip is not same as the egressIP expected!"))
+		case "tcpdump":
+			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeToBeShutdown, "tcpdump")
+			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeToBeShutdown, "tcpdump", "true")
+			egressipErr := wait.Poll(30*time.Second, timer, func() (bool, error) {
+				randomStr, url := getRequestURL(dstHost)
+				_, cmdErr := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..30}; do curl -s "+url+" --connect-timeout 5 ; sleep 3;echo ;done")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				egressIPCheck1 := checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, freeIP1[0], true)
+				e2e.Logf(errMsgFmt, freeIP1[0], egressIPCheck1)
+
+				egressIPCheck2 := checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, freeIP2[0], true)
+				e2e.Logf(errMsgFmt, freeIP2[0], egressIPCheck2)
+
+				egressIPCheck3 := checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, freeIP3[0], true)
+				e2e.Logf(errMsgFmt, freeIP3[0], egressIPCheck3)
+
+				e2e.Logf("Any cmdErr when running curl?: %v\n\n\n", cmdErr)
+				if egressIPCheck1 != nil || egressIPCheck2 != nil || egressIPCheck3 != nil || cmdErr != nil {
+					e2e.Logf("Did not find egressIPs %s or %s or %s in tcpdump log, try next round.", freeIP1[0], freeIP2[0], freeIP3[0])
+					return false, nil
+				}
+				e2e.Logf("After the egress node is brought back up, found all 3 egressIP in tcpdump log!as expected")
 				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("The source Ip is not same as the egressIP expected!"))
+			})
+			exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to get all EgressIPs %s,%s, %s in tcpdump", freeIP1[0], freeIP2[0], freeIP3[0]))
+		default:
+			g.Skip("Skip for not support scenarios!")
+		}
+
 	})
 
 	// author: huirwang@redhat.com
