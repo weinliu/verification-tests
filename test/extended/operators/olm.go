@@ -12250,7 +12250,7 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 	g.It("HyperShiftMGMT-Author:bandrade-High-45408-Eliminate use of imagestreams in catalog management", func() {
 		exutil.SkipBaselineCapsNone(oc)
 		g.By("1) check the cronjob in the control-plane project")
-		controlProject := fmt.Sprintf("clusters-%s", guestClusterName)
+		controlProject := fmt.Sprintf("%s-%s", hostedClusterNS, guestClusterName)
 		cronjobs, err := oc.AsAdmin().Run("get").Args("cronjob", "-n", controlProject).Output()
 		if err != nil {
 			e2e.Failf("Fail to get cronjob in project: %s, error:%v", controlProject, err)
