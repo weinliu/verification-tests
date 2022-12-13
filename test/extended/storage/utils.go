@@ -827,3 +827,8 @@ func isSpecifiedResourceExist(oc *exutil.CLI, resourceKindAndName string, resour
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return !strings.EqualFold(output, "")
 }
+
+// expectSpecifiedResourceExist one-time checks whether the specified resource exist or not, case will fail if it is not expected
+func expectSpecifiedResourceExist(oc *exutil.CLI, resourceKindAndName string, resourceNamespace string, checkFlag bool) {
+	o.Expect(isSpecifiedResourceExist(oc, resourceKindAndName, resourceNamespace)).Should(o.Equal(checkFlag))
+}
