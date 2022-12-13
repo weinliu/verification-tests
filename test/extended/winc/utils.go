@@ -126,6 +126,9 @@ func getNumNodesWithAnnotation(oc *exutil.CLI, annotationValue string) int {
 
 func getWindowsMachineSetName(oc *exutil.CLI, name string, iaasPlatform string, zone string) string {
 	machinesetName := name
+	if iaasPlatform == "vsphere" {
+		machinesetName = "winworker"
+	}
 	if iaasPlatform == "aws" || iaasPlatform == "gcp" {
 		infrastructureID, err := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
