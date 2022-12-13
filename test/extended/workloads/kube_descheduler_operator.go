@@ -59,6 +59,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deploydpT := filepath.Join(buildPruningBaseDir, "deploy_duplicatepodsrs.yaml")
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create the descheduler namespace")
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
@@ -303,6 +304,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deploydT := filepath.Join(buildPruningBaseDir, "deploy_demopod.yaml")
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Create test project
 		g.By("Create test project")
@@ -437,6 +439,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("podName still containts space which is not expected"))
 
 		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+		o.Expect(podName).ShouldNot(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Set descheduler mode to Automatic")
@@ -485,6 +488,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("podName still containts space which is not expected"))
 
 		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
+		o.Expect(podName).ShouldNot(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Test for RemovePodsViolatingNodeAffinity
@@ -572,13 +576,28 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		testd3.createDeployInterPodAntiAffinity(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		g.By("Check all the pods should running")
+		if ok := waitForAvailableRsRunning(oc, "deployment", "d3746321", oc.Namespace(), "1"); ok {
+			e2e.Logf("All pods are runnnig now\n")
+		} else {
+			e2e.Failf("All pods related to deployment d3746321 are not running")
+		}
+
 		g.By("Get pod name")
 		podNameIpa, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=d3746321", "-n", testd3.namespace, "-o=jsonpath={.items..metadata.name}").Output()
+		o.Expect(podNameIpa).NotTo(o.BeEmpty())
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create the test4 deploy")
 		testd4.createDeployInterPodAntiAffinity(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check all the pods should running")
+		if ok := waitForAvailableRsRunning(oc, "deployment", "d374632", oc.Namespace(), "6"); ok {
+			e2e.Logf("All pods are runnnig now\n")
+		} else {
+			e2e.Failf("All pods related to deployment d374632 are not running")
+		}
 
 		g.By("Add label to the pod")
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("pod", podNameIpa, "key374632=value374632", "-n", testd3.namespace).Execute()
@@ -728,6 +747,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deploysdT := filepath.Join(buildPruningBaseDir, "deploy_softdemopod.yaml")
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		deschu = kubedescheduler{
 			namespace:        kubeNamespace,
@@ -993,6 +1013,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschedulerpT := filepath.Join(buildPruningBaseDir, "kubedescheduler_podlifetime.yaml")
 
 		_, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		deschu = kubedescheduler{
 			namespace:        kubeNamespace,
@@ -1281,6 +1302,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(podName).NotTo(o.BeEmpty())
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Set descheduler mode to Automatic")
 		defer func() {
@@ -1314,6 +1336,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(podName).NotTo(o.BeEmpty())
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Test for RemovePodsViolatingInterPodAntiAffinity when thresholdPriorityName set in descheduler is less than the one set in the pod spec
 
@@ -1345,6 +1368,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschedulereinsT := filepath.Join(buildPruningBaseDir, "kubedescheduler_includeexcludens.yaml")
 
 		_, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		deschu = kubedescheduler{
 			namespace:        kubeNamespace,
@@ -1440,6 +1464,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(podName).NotTo(o.BeEmpty())
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Test for included namespaces
 		// Create a project here so that it can be referred in kubedescheduler yaml
@@ -1499,6 +1524,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(podName).NotTo(o.BeEmpty())
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the descheduler deploy logs, should see config error logs")
 		checkLogsFromRs(oc, kubeNamespace, "pod", podName, regexp.QuoteMeta(`"Evicted pod"`)+".*"+regexp.QuoteMeta(`test-52303`)+".*"+regexp.QuoteMeta(`reason=""`)+".*"+regexp.QuoteMeta(`strategy="PodLifeTime"`))
@@ -1513,6 +1539,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		deschedulerinsT := filepath.Join(buildPruningBaseDir, "kubedescheduler_excludins.yaml")
 
 		_, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		deschu = kubedescheduler{
 			namespace:        kubeNamespace,
@@ -1594,6 +1621,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		podName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(podName).NotTo(o.BeEmpty())
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Test for excluded namespaces
 		// Create a project here so that it can be referred in kubedescheduler yaml
@@ -1678,6 +1706,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(podName).NotTo(o.BeEmpty())
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the descheduler deploy logs, should not see pod eviction logs")
 		err = wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
@@ -1900,6 +1929,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		podName, err = oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 		o.Expect(podName).NotTo(o.BeEmpty())
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check the descheduler deploy logs, should see config error logs")
 		checkLogsFromRs(oc, kubeNamespace, "pod", podName, regexp.QuoteMeta(`"Evicted pod"`)+".*"+regexp.QuoteMeta(oc.Namespace())+".*"+regexp.QuoteMeta(`reason=""`)+".*"+regexp.QuoteMeta(`strategy="PodLifeTime"`))
