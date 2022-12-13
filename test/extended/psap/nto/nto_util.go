@@ -336,18 +336,6 @@ func isOneMasterNode(oc *exutil.CLI) bool {
 	return false
 }
 
-// isSNOCluster
-func isSNOCluster(oc *exutil.CLI) bool {
-
-	//Only 1 master, 1 worker node and with the same hostname.
-	masterNodes, _ := exutil.GetClusterNodesBy(oc, "master")
-	workerNodes, _ := exutil.GetClusterNodesBy(oc, "worker")
-	if len(masterNodes) == 1 && len(workerNodes) == 1 && masterNodes[0] == workerNodes[0] {
-		return true
-	}
-	return false
-}
-
 // assertAffineDefaultCPUSets
 func assertAffineDefaultCPUSets(oc *exutil.CLI, tunedPodName, namespace string) bool {
 

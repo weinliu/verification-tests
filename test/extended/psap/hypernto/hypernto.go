@@ -37,7 +37,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		tunedWithKernelBootProfileName = exutil.FixturePath("testdata", "psap", "hypernto", "nto-basic-tuning-kernel-boot.yaml")
 		// ensure NTO operator is installed
 
-		guestClusterNS = hostedClusterNS + guestClusterName
+		guestClusterNS = hostedClusterNS + "-" + guestClusterName
 		e2e.Logf("HostedClusterControlPlaneNS: %v", guestClusterNS)
 		isNTO = isHyperNTOPodInstalled(oc, guestClusterNS)
 

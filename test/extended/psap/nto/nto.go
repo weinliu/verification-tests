@@ -145,7 +145,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			_ = patchTunedState(oc, ntoNamespace, "default", "Managed")
 		}()
 
-		isSNO := isSNOCluster(oc)
+		isSNO := exutil.IsSNOCluster(oc)
 		var profileCheck string
 
 		g.By("Create logging namespace")
@@ -335,7 +335,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-36881-Node Tuning Operator will provide machine config for the master machine config pool [Disruptive] [Slow]", func() {
 
 		// test requires NTO to be installed
-		isSNO := isSNOCluster(oc)
+		isSNO := exutil.IsSNOCluster(oc)
 		if !isNTO || isSNO {
 			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
 		}
@@ -616,7 +616,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes.delete(oc)
 
 		//Check if restore to default profile.
-		isSNO := isSNOCluster(oc)
+		isSNO := exutil.IsSNOCluster(oc)
 		if isSNO {
 			assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-control-plane")
 			assertNTOOperatorLogs(oc, ntoNamespace, ntoOperatorPod, "openshift-control-plane")
@@ -1010,7 +1010,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-30589-NTO Use MachineConfigs to lay down files needed for tuned [Disruptive] [Slow]", func() {
 
 		// test requires NTO to be installed
-		isSNO := isSNOCluster(oc)
+		isSNO := exutil.IsSNOCluster(oc)
 		if !isNTO || isSNO {
 			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
 		}
@@ -1154,7 +1154,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 	})
 	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-39123-NTO Operator will update tuned after changing included profile [Disruptive] [Slow]", func() {
 		// test requires NTO to be installed
-		isSNO := isSNOCluster(oc)
+		isSNO := exutil.IsSNOCluster(oc)
 		if !isNTO || isSNO {
 			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
 		}
@@ -1295,7 +1295,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-45686-NTO Creating tuned profile with references to not yet existing Performance Profile configuration.[Disruptive] [Slow]", func() {
 		// test requires NTO to be installed
-		isSNO := isSNOCluster(oc)
+		isSNO := exutil.IsSNOCluster(oc)
 		if !isNTO || isSNO {
 			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
 		}
@@ -1340,7 +1340,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		g.By("Assert if the MCP has been successfully applied ...")
 		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-optimize", 600)
 
-		isSNO = isSNOCluster(oc)
+		isSNO = exutil.IsSNOCluster(oc)
 		if isSNO {
 			g.By("Apply include-performance-profile tuned profile")
 			exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", paoIncludePerformanceProfile, "-p", "ROLENAME=master")
@@ -1551,7 +1551,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-49370-NTO add huge pages to boot time via bootloader [Disruptive] [Slow]", func() {
 		// test requires NTO to be installed
-		isSNO := isSNOCluster(oc)
+		isSNO := exutil.IsSNOCluster(oc)
 		if !isNTO || isSNO {
 			g.Skip("NTO is not installed or it's Single Node Cluster- skipping test ...")
 		}
@@ -2038,7 +2038,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		isSNO := isSNOCluster(oc)
+		isSNO := exutil.IsSNOCluster(oc)
 		//NTO will provides two default tuned, one is openshift-control-plane, another is openshift-node
 		g.By("Check the default tuned profile list per nodes")
 		profileOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("profile", "-n", ntoNamespace).Output()
@@ -2154,7 +2154,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			paoBaseQoSPod     = exutil.FixturePath("testdata", "psap", "pao", "pao-baseqos-pod.yaml")
 		)
 		// test requires NTO to be installed
-		isSNO := isSNOCluster(oc)
+		isSNO := exutil.IsSNOCluster(oc)
 		if !isNTO || isSNO {
 			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
 		}

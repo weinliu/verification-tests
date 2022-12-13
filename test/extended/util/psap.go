@@ -699,3 +699,13 @@ func AssertIfNodePoolUpdatingConfigByName(oc *CLI, nodePoolName string, timeDura
 	})
 	AssertWaitPollNoErr(err, "Nodepool checks were not successful within timeout limit")
 }
+
+// IsSNOCluster will check if OCP is a single node cluster
+func IsSNOCluster(oc *CLI) bool {
+
+	topologyTypeStdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "-ojsonpath={.items[*].status.infrastructureTopology}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(topologyTypeStdOut).NotTo(o.BeEmpty())
+	topologyType := strings.ToLower(topologyTypeStdOut)
+	return topologyType == "singlereplica"
+}
