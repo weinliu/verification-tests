@@ -1840,6 +1840,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, firstNode, "app_54038", "dev")
 
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--show-labels", "--no-headers").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Node labels " + msg)
 
 		g.By("4) Install the Prometheus CR")
@@ -3286,6 +3287,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		validatingwebhookName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfiguration", "-l", "olm.owner.namespace=test-operators-30312", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		err = wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfiguration", validatingwebhookName, "-o=jsonpath={..operations}").Output()
 			e2e.Logf(output)
@@ -3344,6 +3346,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		mutatingwebhookName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mutatingwebhookconfiguration", "-l", "olm.owner.namespace=test-operators-30317", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		err = wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mutatingwebhookconfiguration", mutatingwebhookName, "-o=jsonpath={..operations}").Output()
 			e2e.Logf(output)
@@ -3398,6 +3401,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("validatingwebhookconfiguration which owner namespace %s is not created", newNamespace))
 
 			validatingwebhookName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfiguration", "-l", fmt.Sprintf("olm.owner.namespace=%s", newNamespace), "-o=jsonpath={.items[0].metadata.name}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			if i == 1 {
 				validatingwebhookName1 = validatingwebhookName
 			}
@@ -3654,7 +3658,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		g.By("4 Unsubscribe to operator learn")
 		sub.delete(itName, dr)
 		sub.deleteCSV(itName, dr)
-		msgSub, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace()).Output()
+		msgSub, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace()).Output()
 		msgCsv, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace()).Output()
 		if !strings.Contains(msgSub, "No resources found") && (!strings.Contains(msgCsv, "No resources found") || strings.Contains(msgCsv, finalCSV)) {
 			e2e.Failf("Cycle #1 subscribe/unsubscribe failed %v:\n%v \n%v \n", err, msgSub, msgCsv)
@@ -3686,7 +3690,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				}
 				return false, nil
 			})
-			s = fmt.Sprintf("STEP error sub or csv not deleted on cycle #%v:\nsub %v\ncsv", i, msgSub, msgCsv)
+			s = fmt.Sprintf("STEP error sub or csv not deleted on cycle #%v:\nsub %v\ncsv %v\n", i, msgSub, msgCsv)
 			exutil.AssertWaitPollNoErr(waitErr, s)
 		}
 
@@ -3792,7 +3796,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 						cpu := strings.Split(cpuOutput, "m")[0]
 						if cpu > "98" {
 							e2e.Logf("cpu: %v", cpu)
-							e2e.Failf("CPU Limit usage is more the 99%: %v", checkRel)
+							e2e.Failf("CPU Limit usage is more than: %v", checkRel)
 						}
 					}
 
@@ -3807,6 +3811,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		provider, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "learn", "-o", "jsonpath={.status.provider.name}", "-n", "openshift-marketplace").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		providerInLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "learn", "-o", "jsonpath={.metadata.labels.provider}", "-n", "openshift-marketplace").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(provider).To(o.Equal(providerInLabels))
 	})
 
@@ -4061,6 +4066,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			}
 			return false, nil
 		})
+		exutil.AssertWaitPollNoErr(err, "fails to get pod of redhat-operators")
 	})
 
 	// author: scolange@redhat.com
@@ -4082,6 +4088,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			e2e.Logf("binaryConfigMap: %v", binaryConfigMap)
 
 			resultBase64, err := exec.Command("bash", "-c", fmt.Sprintf("cat %s | base64 -d", binaryConfigMap)).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(resultBase64).NotTo(o.BeEmpty())
 		}
 
@@ -5055,13 +5062,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		g.By("Check the API labes should be hash")
 		apiLabels := getResource(oc, asUser, withNamespace, "csv", sub.installedCSV, "-o=jsonpath={.metadata.labels}")
 		o.Expect(len(apiLabels)).NotTo(o.BeZero())
-
+		pattern, err := regexp.Compile(`^[a-fA-F0-9]{16}$|^[a-fA-F0-9]{15}$`)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, v := range strings.Split(strings.Trim(apiLabels, "{}"), ",") {
 			if strings.Contains(v, "olm.api") {
 				hash := strings.Trim(strings.Split(strings.Split(v, ":")[0], ".")[2], "\"")
-				match, err := regexp.MatchString(`^[a-fA-F0-9]{16}$|^[a-fA-F0-9]{15}$`, hash)
-				o.Expect(err).NotTo(o.HaveOccurred())
-				o.Expect(match).To(o.BeTrue())
+				// calling regexp.MatchString in a loop has poor performance, consider using regexp.Compile (SA6000)
+				// match, err := regexp.MatchString(`^[a-fA-F0-9]{16}$|^[a-fA-F0-9]{15}$`, hash)
+				// o.Expect(err).NotTo(o.HaveOccurred())
+				// o.Expect(match).To(o.BeTrue())
+				res := pattern.Find([]byte(hash))
+				o.Expect(string(res)).NotTo(o.BeEmpty())
 			}
 		}
 	})
@@ -6913,7 +6924,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		var err error
 		var (
 			catName             = "installed-community-25782-global-operators"
-			msg                 = ""
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 			// the namespace and catName are hardcoded in the files
 			cmTemplate       = filepath.Join(buildPruningBaseDir, "cm-csv-etcd.yaml")
@@ -6945,7 +6955,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		// Make sure bad configmap was created
 		g.By("Check configmap")
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", oc.Namespace()).Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(msg, catName)).To(o.BeTrue())
 
@@ -6971,6 +6981,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(msg, "TRANSIENT_FAILURE") && strings.Contains(msg, "lastObservedState") {
 				msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", catName, "-n", oc.Namespace(), "-o=jsonpath={.status.connectionState.lastObservedState}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
 				e2e.Logf("catalogsource had lastObservedState =  %v as expected ", msg)
 				return true, nil
 			}
@@ -7198,7 +7209,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		g.By("Create cluster-scoped OperatorGroup")
 		ogAll.create(oc, itName, dr)
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "-n", oc.Namespace()).Output()
+		msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "-n", oc.Namespace()).Output()
 		e2e.Logf("og: %v, %v", msg, og.name)
 
 		g.By("Subscribe to etcd operator and wait for the csv to fail")
@@ -7210,11 +7221,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.findInstalledCSV(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Failed", ok, []string{"csv", csvName, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), csvName, "-o=jsonpath={.status.conditions..reason}").Output()
+		msg, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), csvName, "-o=jsonpath={.status.conditions..reason}").Output()
 		e2e.Logf("--> get the csv reason: %v ", msg)
 		o.Expect(strings.Contains(msg, "UnsupportedOperatorGroup") || strings.Contains(msg, "NoOperatorGroup")).To(o.BeTrue())
 
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), csvName, "-o=jsonpath={.status.conditions..message}").Output()
+		msg, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), csvName, "-o=jsonpath={.status.conditions..message}").Output()
 		e2e.Logf("--> get the csv message: %v\n", msg)
 		o.Expect(strings.Contains(msg, "InstallModeType not supported") || strings.Contains(msg, "csv in namespace with no operatorgroup")).To(o.BeTrue())
 
@@ -7257,20 +7268,20 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		g.By("reset og to single namespace")
 		og.delete(itName, dr)
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "-n", oc.Namespace()).Output()
+		msg, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "-n", oc.Namespace()).Output()
 		e2e.Logf("og deleted:%v", msg)
 
 		og.create(oc, itName, dr)
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "-n", oc.Namespace(), "--no-headers").Output()
+		msg, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "-n", oc.Namespace(), "--no-headers").Output()
 		e2e.Logf("og created:%v", msg)
 
 		g.By("Wait for csv to recreate and ready")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.4", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), csvName, "-o=jsonpath={.status.reason}").Output()
+		msg, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), csvName, "-o=jsonpath={.status.reason}").Output()
 		e2e.Logf("--> get the csv reason: %v ", msg)
 		o.Expect(strings.Contains(msg, "InstallSucceeded")).To(o.BeTrue())
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), csvName, "-o=jsonpath={.status.message}").Output()
+		msg, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", oc.Namespace(), csvName, "-o=jsonpath={.status.message}").Output()
 		e2e.Logf("--> get the csv message: %v\n", msg)
 		o.Expect(strings.Contains(msg, "completed with no errors")).To(o.BeTrue())
 
@@ -7551,7 +7562,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		itName := g.CurrentSpecReport().FullText()
 
 		//oc get proxy cluster
-		g.By(fmt.Sprintf("0) get the cluster proxy configuration"))
+		g.By("0) get the cluster proxy configuration")
 		httpProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-o=jsonpath={.status.httpProxy}")
 		httpsProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-o=jsonpath={.status.httpsProxy}")
 		noProxy := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-o=jsonpath={.status.noProxy}")
@@ -8259,6 +8270,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 		g.By("3) check sub status")
 		err := newCheck("expect", asAdmin, withoutNamespace, contain, "found 0 operatorgroups", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).checkWithoutAssert(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("4) install og")
 		og.createwithCheck(oc, itName, dr)
@@ -11440,6 +11452,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		err = os.MkdirAll(TmpDataPath, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("extract", indexImageTag, "--path", "/database/index.db:"+TmpDataPath).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("get index.db SUCCESS, path is %s", dbFilePath)
 		if _, err := os.Stat(dbFilePath); os.IsNotExist(err) {
 			e2e.Logf("get index.db Failed")
@@ -12201,8 +12214,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		g.By("Query node label value")
 		// Look at the setting for the node to be on the master
 		olmErrs = true
-		olmJpath = fmt.Sprintf("-o=jsonpath={.metadata.labels}")
-		nodes, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-n", olmNamespace, olmNodeName, olmJpath).Output()
+		nodes, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-n", olmNamespace, olmNodeName, "-o=jsonpath={.metadata.labels}").Output()
 		if err != nil {
 			e2e.Failf("Unable to query nodes -n %v %v %v.", olmNamespace, err, nodes)
 		}
@@ -12213,7 +12225,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		// Found the setting, verify that it's really on the master node
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-n", olmNamespace, olmNodeName, "--show-labels", "--no-headers").Output()
 		if err != nil {
-			e2e.Failf("Unable to query the %v node of pod %v for %v's status", olmNodeName, olmPodFullName, err, msg)
+			e2e.Failf("Unable to query the %v node of pod %v for %v's status", olmNodeName, olmPodFullName, msg)
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).NotTo(o.ContainSubstring("No resources found"))
