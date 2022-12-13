@@ -65,6 +65,22 @@ type bridgevlanPolicyResource struct {
 	template   string
 }
 
+type stIPRoutePolicyResource struct {
+	name          string
+	nodelabel     string
+	labelvalue    string
+	ifacename     string
+	descr         string
+	state         string
+	ipaddrv4      string
+	destaddrv4    string
+	nexthopaddrv4 string
+	ipaddrv6      string
+	destaddrv6    string
+	nexthopaddrv6 string
+	template      string
+}
+
 func generateTemplateAbsolutePath(fileName string) string {
 	testDataDir := exutil.FixturePath("testdata", "networking/nmstate")
 	return filepath.Join(testDataDir, fileName)
@@ -135,6 +151,16 @@ func (bvpr *bridgevlanPolicyResource) configNNCP(oc *exutil.CLI) error {
 	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", bvpr.template, "-p", "NAME="+bvpr.name, "NODELABEL="+bvpr.nodelabel, "LABELVALUE="+bvpr.labelvalue, "IFACENAME="+bvpr.ifacename, "DESCR="+bvpr.descr, "STATE="+bvpr.state, "PORT="+bvpr.port)
 	if err != nil {
 		e2e.Logf("Error configure bridge %v", err)
+		return err
+	}
+	return nil
+}
+
+func (stpr *stIPRoutePolicyResource) configNNCP(oc *exutil.CLI) error {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", stpr.template, "-p", "NAME="+stpr.name, "NODELABEL="+stpr.nodelabel, "LABELVALUE="+stpr.labelvalue, "IFACENAME="+stpr.ifacename, "DESCR="+stpr.descr, "STATE="+stpr.state,
+		"IPADDRV4="+stpr.ipaddrv4, "DESTADDRV4="+stpr.destaddrv4, "NEXTHOPADDRV4="+stpr.nexthopaddrv4, "IPADDRV6="+stpr.ipaddrv6, "DESTADDRV6="+stpr.destaddrv6, "NEXTHOPADDRV6="+stpr.nexthopaddrv6)
+	if err != nil {
+		e2e.Logf("Error configure static ip and route %v", err)
 		return err
 	}
 	return nil

@@ -53,13 +53,13 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 
 	})
 
-	g.It("Author:qiowang-High-47088-NMState Operator installation ", func() {
+	g.It("NonHyperShiftHOST-Author:qiowang-High-47088-NMState Operator installation ", func() {
 		g.By("Checking nmstate operator installation")
 		e2e.Logf("Operator install check successfull as part of setup !!!!!")
 		e2e.Logf("SUCCESS - NMState operator installed")
 	})
 
-	g.It("NonPreRelease-Longduration-Author:qiowang-High-46380-High-46382-High-46379-Create/Disable/Remove interface on node [Disruptive] [Slow]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:qiowang-High-46380-High-46382-High-46379-Create/Disable/Remove interface on node [Disruptive] [Slow]", func() {
 
 		g.By("1. Create NMState CR")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
@@ -91,6 +91,13 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 			template:   ifacePolicyTemplate,
 		}
 		defer deleteNNCP(oc, policyName)
+		defer func() {
+			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			if strings.Contains(ifaces, ifacePolicy.ifacename) {
+				exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "delete", ifacePolicy.ifacename)
+			}
+		}()
 		result, configErr1 := configIface(oc, ifacePolicy)
 		o.Expect(configErr1).NotTo(o.HaveOccurred())
 		o.Expect(result).To(o.BeTrue())
@@ -201,7 +208,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 		e2e.Logf("SUCCESS - interface is removed from the node")
 	})
 
-	g.It("Author:qiowang-Medium-46329-Configure bond on node [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:qiowang-Medium-46329-Configure bond on node [Disruptive]", func() {
 
 		g.By("1. Create NMState CR")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
@@ -234,6 +241,15 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 			template:   bondPolicyTemplate,
 		}
 		defer deleteNNCP(oc, policyName)
+		defer func() {
+			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			if strings.Contains(ifaces, bondPolicy.ifacename) {
+				exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "delete", bondPolicy.port1)
+				exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "delete", bondPolicy.port2)
+				exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "delete", bondPolicy.ifacename)
+			}
+		}()
 		configErr1 := configBond(oc, bondPolicy)
 		o.Expect(configErr1).NotTo(o.HaveOccurred())
 
@@ -303,7 +319,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 		e2e.Logf("SUCCESS - bond is removed from the node")
 	})
 
-	g.It("Author:qiowang-Medium-46383-VLAN [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:qiowang-Medium-46383-VLAN [Disruptive]", func() {
 
 		g.By("1. Create NMState CR")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
@@ -337,6 +353,14 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 			template:   vlanPolicyTemplate,
 		}
 		defer deleteNNCP(oc, policyName)
+		defer func() {
+			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			if strings.Contains(ifaces, vlanPolicy.ifacename) {
+				exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "delete", vlanPolicy.ifacename)
+				exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "delete", vlanPolicy.baseiface)
+			}
+		}()
 		configErr1 := vlanPolicy.configNNCP(oc)
 		o.Expect(configErr1).NotTo(o.HaveOccurred())
 
@@ -404,7 +428,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 		e2e.Logf("SUCCESS - vlan is removed from the node")
 	})
 
-	g.It("Author:qiowang-Medium-53346-Verify that it is able to reset linux-bridge vlan-filtering with vlan is empty [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Author:qiowang-Medium-53346-Verify that it is able to reset linux-bridge vlan-filtering with vlan is empty [Disruptive]", func() {
 
 		g.By("1. Create NMState CR")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
@@ -437,6 +461,14 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 			template:   bridgePolicyTemplate1,
 		}
 		defer deleteNNCP(oc, policyName)
+		defer func() {
+			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			if strings.Contains(ifaces, bridgePolicy.ifacename) {
+				exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "delete", bridgePolicy.port)
+				exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "delete", bridgePolicy.ifacename)
+			}
+		}()
 		configErr1 := bridgePolicy.configNNCP(oc)
 		o.Expect(configErr1).NotTo(o.HaveOccurred())
 
@@ -549,6 +581,151 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 		o.Expect(ifaceErr3).NotTo(o.HaveOccurred())
 		o.Expect(ifaceList2).ShouldNot(o.ContainSubstring(bridgePolicy.ifacename))
 		e2e.Logf("SUCCESS - linux-bridge is removed from the node")
+	})
+
+	g.It("NonHyperShiftHOST-Author:qiowang-Medium-46327-Medium-46795-Static IP and Route can be applied [Disruptive]", func() {
+		var (
+			ipAddrV4      = "192.0.2.251"
+			destAddrV4    = "198.51.100.0/24"
+			nextHopAddrV4 = "192.0.2.1"
+			ipAddrV6      = "2001:db8::1:1"
+			destAddrV6    = "2001:dc8::/64"
+			nextHopAddrV6 = "2001:db8::1:2"
+		)
+		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+
+		g.By("1. Create NMState CR")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		result, crErr := createNMStateCR(oc, nmstateCR, opNamespace)
+		exutil.AssertWaitPollNoErr(crErr, "create nmstate cr failed")
+		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("SUCCESS - NMState CR Created")
+
+		g.By("2. Apply static IP and Route on node")
+		g.By("2.1 Configure NNCP for static IP and Route")
+		policyName := "static-ip-route-46327"
+		policyTemplate := generateTemplateAbsolutePath("apply-static-ip-route-template.yaml")
+		stIPRoutePolicy := stIPRoutePolicyResource{
+			name:          policyName,
+			nodelabel:     "kubernetes.io/hostname",
+			labelvalue:    nodeName,
+			ifacename:     "dummyst",
+			descr:         "apply static ip and route",
+			state:         "up",
+			ipaddrv4:      ipAddrV4,
+			destaddrv4:    destAddrV4,
+			nexthopaddrv4: nextHopAddrV4,
+			ipaddrv6:      ipAddrV6,
+			destaddrv6:    destAddrV6,
+			nexthopaddrv6: nextHopAddrV6,
+			template:      policyTemplate,
+		}
+		defer deleteNNCP(oc, policyName)
+		defer func() {
+			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			if strings.Contains(ifaces, stIPRoutePolicy.ifacename) {
+				exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "delete", stIPRoutePolicy.ifacename)
+			}
+		}()
+		configErr := stIPRoutePolicy.configNNCP(oc)
+		o.Expect(configErr).NotTo(o.HaveOccurred())
+
+		g.By("2.2 Verify the policy is applied")
+		nncpErr := checkNNCPStatus(oc, policyName, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr, "policy applied failed")
+		e2e.Logf("SUCCESS - policy is applied")
+
+		g.By("2.3 Verify the status of enactments is updated")
+		nnceName := nodeName + "." + policyName
+		nnceErr := checkNNCEStatus(oc, nnceName, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr, "status of enactments updated failed")
+		e2e.Logf("SUCCESS - status of enactments is updated")
+
+		g.By("2.4 Verify the static ip and route found in node network state")
+		iface, nnsIfaceErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.interfaces[?(@.name=="`+stIPRoutePolicy.ifacename+`")]}`).Output()
+		o.Expect(nnsIfaceErr).NotTo(o.HaveOccurred())
+		o.Expect(iface).Should(o.ContainSubstring(ipAddrV4))
+		o.Expect(iface).Should(o.ContainSubstring(ipAddrV6))
+		routes, nnsRoutesErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.routes.config[?(@.next-hop-interface=="`+stIPRoutePolicy.ifacename+`")]}`).Output()
+		o.Expect(nnsRoutesErr).NotTo(o.HaveOccurred())
+		o.Expect(routes).Should(o.ContainSubstring(destAddrV4))
+		o.Expect(routes).Should(o.ContainSubstring(nextHopAddrV4))
+		o.Expect(routes).Should(o.ContainSubstring(destAddrV6))
+		o.Expect(routes).Should(o.ContainSubstring(nextHopAddrV6))
+		e2e.Logf("SUCCESS - the static ip and route found in node network state")
+
+		g.By("2.5 Verify the static ip and route are shown on the node")
+		ifaceInfo, ifaceErr := exutil.DebugNode(oc, nodeName, "ifconfig", stIPRoutePolicy.ifacename)
+		o.Expect(ifaceErr).NotTo(o.HaveOccurred())
+		o.Expect(ifaceInfo).Should(o.ContainSubstring(ipAddrV4))
+		o.Expect(ifaceInfo).Should(o.ContainSubstring(ipAddrV6))
+		v4Routes, routesV4Err := exutil.DebugNode(oc, nodeName, "ip", "-4", "route")
+		o.Expect(routesV4Err).NotTo(o.HaveOccurred())
+		o.Expect(v4Routes).Should(o.ContainSubstring(destAddrV4 + " via " + nextHopAddrV4 + " dev " + stIPRoutePolicy.ifacename))
+		v6Routes, routesV6Err := exutil.DebugNode(oc, nodeName, "ip", "-6", "route")
+		o.Expect(routesV6Err).NotTo(o.HaveOccurred())
+		o.Expect(v6Routes).Should(o.ContainSubstring(destAddrV6 + " via " + nextHopAddrV6 + " dev " + stIPRoutePolicy.ifacename))
+
+		e2e.Logf("SUCCESS - static ip and route are shown on the node")
+
+		g.By("3. Remove static ip and route on node")
+		g.By("3.1 Configure NNCP for removing static ip and route")
+		policyTemplate = generateTemplateAbsolutePath("remove-static-ip-route-template.yaml")
+		stIPRoutePolicy = stIPRoutePolicyResource{
+			name:       policyName,
+			nodelabel:  "kubernetes.io/hostname",
+			labelvalue: nodeName,
+			ifacename:  "dummyst",
+			descr:      "remove static ip and route",
+			state:      "absent",
+			template:   policyTemplate,
+		}
+		configErr1 := stIPRoutePolicy.configNNCP(oc)
+		o.Expect(configErr1).NotTo(o.HaveOccurred())
+
+		g.By("3.2 Verify the policy is applied")
+		nncpErr1 := checkNNCPStatus(oc, policyName, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+		e2e.Logf("SUCCESS - policy is applied")
+
+		g.By("3.3 Verify the status of enactments is updated")
+		nnceErr1 := checkNNCEStatus(oc, nnceName, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr1, "status of enactments updated failed")
+		e2e.Logf("SUCCESS - status of enactments is updated")
+
+		g.By("3.4 Verify static ip and route cannot be found in node network state")
+		iface1, nnsIfaceErr1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, "-ojsonpath={.status.currentState.interfaces[*]}").Output()
+		o.Expect(nnsIfaceErr1).NotTo(o.HaveOccurred())
+		o.Expect(iface1).ShouldNot(o.ContainSubstring(stIPRoutePolicy.ifacename))
+		o.Expect(iface1).ShouldNot(o.ContainSubstring(ipAddrV4))
+		o.Expect(iface1).ShouldNot(o.ContainSubstring(ipAddrV6))
+		routes1, nnsRoutesErr1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.routes}`).Output()
+		o.Expect(nnsRoutesErr1).NotTo(o.HaveOccurred())
+		o.Expect(routes1).ShouldNot(o.ContainSubstring(destAddrV4))
+		o.Expect(routes1).ShouldNot(o.ContainSubstring(nextHopAddrV4))
+		o.Expect(routes1).ShouldNot(o.ContainSubstring(destAddrV6))
+		o.Expect(routes1).ShouldNot(o.ContainSubstring(nextHopAddrV6))
+
+		g.By("3.5 Verify the static ip and route are removed from the node")
+		ifaceInfo1, ifaceErr1 := exutil.DebugNode(oc, nodeName, "ifconfig")
+		o.Expect(ifaceErr1).NotTo(o.HaveOccurred())
+		o.Expect(ifaceInfo1).ShouldNot(o.ContainSubstring(stIPRoutePolicy.ifacename))
+		o.Expect(ifaceInfo1).ShouldNot(o.ContainSubstring(ipAddrV4))
+		o.Expect(ifaceInfo1).ShouldNot(o.ContainSubstring(ipAddrV6))
+		v4Routes1, routesV4Err1 := exutil.DebugNode(oc, nodeName, "ip", "-4", "route")
+		o.Expect(routesV4Err1).NotTo(o.HaveOccurred())
+		o.Expect(v4Routes1).ShouldNot(o.ContainSubstring(destAddrV4 + " via " + nextHopAddrV4 + " dev " + stIPRoutePolicy.ifacename))
+		v6Routes1, routesV6Err1 := exutil.DebugNode(oc, nodeName, "ip", "-6", "route")
+		o.Expect(routesV6Err1).NotTo(o.HaveOccurred())
+		o.Expect(v6Routes1).ShouldNot(o.ContainSubstring(destAddrV6 + " via " + nextHopAddrV6 + " dev " + stIPRoutePolicy.ifacename))
+		e2e.Logf("SUCCESS - static ip and route are removed from the node")
 	})
 
 })
