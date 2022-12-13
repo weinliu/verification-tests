@@ -47,7 +47,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-ingress", "service", "router-default", "-o=jsonpath={.spec.type}").Output()
 		if strings.Contains(output, "LoadBalancer") {
 			annotation = fetchJSONPathValue(oc, "openshift-ingress", "svc/router-default", ".metadata.annotations")
-			o.Expect(annotation).To(o.ContainSubstring(`traffic-policy.network.alpha.openshift.io/local-with-fallback`))
+			// In IBM private cloud there will not be default LB service, so skipping the same
+			if strings.Contains(annotation, "private") {
+				e2e.Logf("as this is IBM private cloud, default LB service is not supported")
+			} else {
+				o.Expect(annotation).To(o.ContainSubstring(`traffic-policy.network.alpha.openshift.io/local-with-fallback`))
+			}
 		} else {
 			e2e.Logf("skip the LB service checking part, since it is not supported on this cluster")
 		}
@@ -175,7 +180,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
 
 		g.By("check the LB service and ensure the annotations are updated")
-		findAnnotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "router-ocp52837", "-n", "openshift-ingress", "-o=jsonpath={.metadata.annotations}").Output()
+		findAnnotation, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "router-ocp52837", "-n", "openshift-ingress", "-o=jsonpath={.metadata.annotations}").Output()
 		o.Expect(findAnnotation).To(o.ContainSubstring("nlb"))
 		o.Expect(findAnnotation).NotTo(o.ContainSubstring("aws-load-balancer-proxy-protocol"))
 
@@ -188,7 +193,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		// Classic LB doesn't has explicit "classic" annotation but it needs proxy-protocol annotation
 		// so we use "aws-load-balancer-proxy-protocol" to check if using CLB
 		g.By("check the LB service and ensure the annotations are updated")
-		findAnnotation, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "router-ocp52837", "-n", "openshift-ingress", "-o=jsonpath={.metadata.annotations}").Output()
+		findAnnotation, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "router-ocp52837", "-n", "openshift-ingress", "-o=jsonpath={.metadata.annotations}").Output()
 		o.Expect(findAnnotation).To(o.ContainSubstring("aws-load-balancer-proxy-protocol"))
 		o.Expect(findAnnotation).NotTo(o.ContainSubstring("nlb"))
 	})
