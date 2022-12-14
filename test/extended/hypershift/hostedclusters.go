@@ -2,12 +2,13 @@ package hypershift
 
 import (
 	"encoding/base64"
+	"fmt"
 	"strings"
 
 	o "github.com/onsi/gomega"
-	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
 type hostedCluster struct {
@@ -19,6 +20,14 @@ type hostedCluster struct {
 
 func newHostedCluster(oc *exutil.CLI, namespace string, name string) *hostedCluster {
 	return &hostedCluster{oc: oc, namespace: namespace, name: name}
+}
+
+func (h *hostedCluster) getHostedClusterKubeconfigFile() string {
+	return h.hostedClustersKubeconfigFile
+}
+
+func (h *hostedCluster) setHostedClusterKubeconfigFile(kubeconfig string) {
+	h.hostedClustersKubeconfigFile = kubeconfig
 }
 
 func (h *hostedCluster) getHostedClusterReadyNodeCount() (int, error) {
@@ -177,4 +186,97 @@ func (h *hostedCluster) getHostedclusterConsoleInfo() (string, string) {
 	pwd, err := base64.StdEncoding.DecodeString(pwdbase64)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	return url, string(pwd)
+}
+
+func (h *hostedCluster) createAwsNodePool(name string, nodeCount int) {
+	var bashClient = NewCmdClient().WithShowInfo(true)
+	cmd := fmt.Sprintf("hypershift create nodepool aws --name %s --namespace %s --cluster-name %s --node-count %d",
+		name, h.namespace, h.name, nodeCount)
+	_, err := bashClient.Run(cmd).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+}
+
+func (h *hostedCluster) deleteNodePool(name string) {
+	_, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpDelete).Args("--ignore-not-found", "nodepool", "-n", h.namespace, name).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+}
+
+func (h *hostedCluster) checkNodePoolReady(name string) bool {
+	//check condition {Ready:True}
+	readyCond := `-ojsonpath={.status.conditions[?(@.type=="Ready")].status}`
+	isReady, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("np", "-n", h.namespace, name, readyCond).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	if !strings.Contains(isReady, "True") {
+		e2e.Logf("nodePool ready condition: %s", isReady)
+		return false
+	}
+
+	//check condition {AutoscalingEnabled:True/False}
+	autoScalCond := `-ojsonpath={.status.conditions[?(@.type=="AutoscalingEnabled")].status}`
+	autoscaleEnabled, err := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("np", "-n", h.namespace, name, autoScalCond).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+
+	//if not autoscaleEnabled, check repicas is as expected
+	if autoscaleEnabled != "True" {
+		desiredNodes, err := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("np", "-n", h.namespace, name, "-o=jsonpath={.spec.replicas}").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		currentNodes, err := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("np", "-n", h.namespace, name, "-o=jsonpath={.status.replicas}").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		return strings.Contains(desiredNodes, currentNodes)
+	}
+	return true
+}
+
+func (h *hostedCluster) pollCheckHostedClustersNodePoolReady(name string) func() bool {
+	return func() bool {
+		return h.checkNodePoolReady(name)
+	}
+}
+
+func (h *hostedCluster) setNodepoolAutoScale(name, max, min string) {
+	removeNpConfig := `[{"op": "remove", "path": "/spec/replicas"}]`
+	autoscalConfig := fmt.Sprintf(`--patch={"spec": {"autoScaling": {"max": %s, "min":%s}}}`, max, min)
+
+	_, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpPatch).Args("-n", h.namespace, "nodepools", name, "--type=json", "-p", removeNpConfig).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	_, err = h.oc.AsAdmin().WithoutNamespace().Run(OcpPatch).Args("-n", h.namespace, "nodepools", name, autoscalConfig, "--type=merge").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+}
+
+func (h *hostedCluster) pollCheckNodepoolCurrentNodes(name, expected string) func() bool {
+	return func() bool {
+		return h.checkNodepoolCurrentNodes(name, expected)
+	}
+}
+
+func (h *hostedCluster) checkNodepoolCurrentNodes(name, expected string) bool {
+	currentNodes, err := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("--ignore-not-found", "np", "-n", h.namespace, name, "-o=jsonpath={.status.replicas}").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return currentNodes == expected
+}
+
+func (h *hostedCluster) isNodepoolAutosaclingEnabled(name string) bool {
+	autoScalCond := `-ojsonpath={.status.conditions[?(@.type=="AutoscalingEnabled")].status}`
+	autoscaleEnabled, err := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("--ignore-not-found", "np", "-n", h.namespace, name, autoScalCond).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return strings.Contains(autoscaleEnabled, "True")
+}
+
+func (h *hostedCluster) pollCheckAllNodepoolReady() func() bool {
+	return func() bool {
+		return h.checkAllNodepoolReady()
+	}
+}
+
+func (h *hostedCluster) checkAllNodepoolReady() bool {
+	nodeReadyCond := fmt.Sprintf(`-ojsonpath={.items[?(@.spec.clusterName=="%s")].status.conditions[?(@.type=="Ready")].status}`, h.name)
+	nodesStatus, err := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("--ignore-not-found", "np", "-A", nodeReadyCond, "--namespace", h.namespace, "--ignore-not-found").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	if len(nodesStatus) <= 0 {
+		return true
+	}
+	if strings.Contains(nodesStatus, "False") {
+		return false
+	}
+	return true
 }

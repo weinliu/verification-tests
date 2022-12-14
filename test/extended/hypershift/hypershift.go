@@ -32,6 +32,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		hostedClusterName, hostedclusterKubeconfig, hostedClusterNs := exutil.ValidHypershiftAndGetGuestKubeConf(oc)
 		oc.SetGuestKubeconf(hostedclusterKubeconfig)
 		hostedcluster = newHostedCluster(oc, hostedClusterNs, hostedClusterName)
+		hostedcluster.setHostedClusterKubeconfigFile(hostedclusterKubeconfig)
 
 		operator := doOcpReq(oc, OcpGet, false, "pods", "-n", "hypershift", "-ojsonpath={.items[*].metadata.name}")
 		if len(operator) <= 0 {
@@ -141,46 +142,26 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 43272 is for AWS - skipping test ...")
 		}
-		nodeReplicasJSONPath := fmt.Sprintf(`-ojsonpath={.items[?(@.spec.clusterName=="%s")].spec.replicas}`, guestClusterName)
-		nodeReplicas := doOcpReq(oc, OcpGet, true, "-n", "clusters", "nodepools", nodeReplicasJSONPath)
-		e2e.Logf("The nodepool replicas is : %s\n", nodeReplicas)
 
-		var bashClient = NewCmdClient().WithShowInfo(true)
+		g.By("create a nodepool")
 		npCount := 1
 		npName := "jz-43272-test-01"
-
 		defer func() {
-			res := doOcpReq(oc, OcpGet, false, "-n", "clusters", "nodepools", npName, "--ignore-not-found")
-			if res != "" {
-				doOcpReq(oc, OcpDelete, false, "-n", "clusters", "nodepools", npName)
-			}
+			hostedcluster.deleteNodePool(npName)
+			o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "in defer check all nodes ready error")
 		}()
 
-		cmd := fmt.Sprintf("hypershift create nodepool aws --name %s --cluster-name %s --node-count %d", npName, guestClusterName, npCount)
-		_, err := bashClient.Run(cmd).Output()
-		o.Expect(err).ShouldNot(o.HaveOccurred())
+		hostedcluster.createAwsNodePool(npName, npCount)
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool ready error")
 
+		g.By("enable the nodepool to be autoscaling")
 		//remove replicas and set autoscaling max:4, min:1
 		autoScalingMax := "2"
 		autoScalingMin := "1"
-		removeNpConfig := `[{"op": "remove", "path": "/spec/replicas"}]`
-		autoscalConfig := fmt.Sprintf(`--patch={"spec": {"autoScaling": {"max": %s, "min":%s}}}`, autoScalingMax, autoScalingMin)
+		hostedcluster.setNodepoolAutoScale(npName, autoScalingMax, autoScalingMin)
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool ready after setting autoscaling error")
 
-		doOcpReq(oc, OcpPatch, true, "-n", "clusters", "nodepools", npName, "--type=json", "-p", removeNpConfig)
-		doOcpReq(oc, OcpPatch, true, "-n", "clusters", "nodepools", npName, autoscalConfig, "--type=merge")
-
-		res := doOcpReq(oc, OcpGet, true, "-n", "clusters", "nodepools", npName, "-ojsonpath={.spec.autoScaling.max}")
-		o.Expect(res).To(o.ContainSubstring(autoScalingMax))
-		res = doOcpReq(oc, OcpGet, true, "-n", "clusters", "nodepools", npName, "-ojsonpath={.spec.autoScaling.min}")
-		o.Expect(res).To(o.ContainSubstring(autoScalingMin))
-
-		guestClusterKubeconfigFile := "/tmp/guestcluster-kubeconfig-43272"
-		defer os.Remove(guestClusterKubeconfigFile)
-
-		//get hostedcluster kubeconfig
-		_, err = bashClient.Run(fmt.Sprintf("hypershift create kubeconfig --name=%s > %s", guestClusterName, guestClusterKubeconfigFile)).Output()
-		o.Expect(err).ShouldNot(o.HaveOccurred())
-
+		g.By("create a job as workload in the hosted cluster")
 		hypershiftTeamBaseDir := exutil.FixturePath("testdata", "hypershift")
 		workloadTemplate := filepath.Join(hypershiftTeamBaseDir, "workload.yaml")
 
@@ -193,21 +174,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		//create workload
 		parsedWorkloadFile := "ocp-43272-workload-template.config"
-		defer wl.delete(oc, guestClusterKubeconfigFile, parsedWorkloadFile)
-		wl.create(oc, guestClusterKubeconfigFile, parsedWorkloadFile)
+		defer wl.delete(oc, hostedcluster.getHostedClusterKubeconfigFile(), parsedWorkloadFile)
+		wl.create(oc, hostedcluster.getHostedClusterKubeconfigFile(), parsedWorkloadFile)
 
-		//wait a bit for nodepool scale up, max=20mins
-		err = wait.Poll(30*time.Second, 20*time.Minute, func() (bool, error) {
-			resNp := doOcpReq(oc, OcpGet, false, "nodepool", npName, "-n", "clusters", "-ojsonpath={.status.replicas}")
-			if resNp == autoScalingMax {
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "nodepool auto scaling check error")
-
-		//clear
-		doOcpReq(oc, OcpDelete, true, "-n", "clusters", "nodepools", npName)
+		g.By("check nodepool is autosacled to max")
+		o.Eventually(hostedcluster.pollCheckNodepoolCurrentNodes(npName, autoScalingMax), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.BeTrue(), "nodepool autoscaling max error")
 	})
 
 	// author: heli@redhat.com
@@ -215,56 +186,25 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 43829 is for AWS - skipping test ...")
 		}
-		//check nodepool autoscale status
-		npNameJSONPath := fmt.Sprintf(`-ojsonpath={.items[?(@.spec.clusterName=="%s")].metadata.name}`, guestClusterName)
-		existingNodePools := doOcpReq(oc, OcpGet, false, "nodepool", "-n", "clusters", npNameJSONPath)
-		existNp := strings.Split(existingNodePools, " ")[0]
-		res := doOcpReq(oc, OcpGet, true, "nodepool", existNp, "-n", "clusters", `-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}}`)
-		o.Expect(res).To(o.ContainSubstring("AutoscalingEnabled False"))
 
-		nodeReplicas := doOcpReq(oc, OcpGet, true, "-n", "clusters", "nodepools", existNp, "-ojsonpath={.spec.replicas}")
-		e2e.Logf("The nodepool size is : %s\n", nodeReplicas)
-
-		//create nodepool
-		var bashClient = NewCmdClient().WithShowInfo(true)
+		g.By("create a nodepool")
 		npCount := 2
 		npName := "jz-43829-test-01"
-
 		defer func() {
-			res := doOcpReq(oc, OcpGet, false, "-n", "clusters", "nodepools", npName, "--ignore-not-found")
-			if res != "" {
-				doOcpReq(oc, OcpDelete, false, "-n", "clusters", "nodepools", npName)
-			}
+			hostedcluster.deleteNodePool(npName)
+			o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "in defer check all nodes ready error")
 		}()
 
-		cmd := fmt.Sprintf("hypershift create nodepool aws --name %s --cluster-name %s --node-count %d", npName, guestClusterName, npCount)
-		_, err := bashClient.Run(cmd).Output()
-		o.Expect(err).ShouldNot(o.HaveOccurred())
+		hostedcluster.createAwsNodePool(npName, npCount)
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool ready error")
+		o.Expect(hostedcluster.isNodepoolAutosaclingEnabled(npName)).ShouldNot(o.BeTrue())
 
-		//check nodepool autoscale status
-		o.Eventually(func() string {
-			return doOcpReq(oc, OcpGet, true, "nodepool", npName, "-n", "clusters", `-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}}`)
-		}, ShortTimeout, ShortTimeout/10).Should(o.ContainSubstring("AutoscalingEnabled False"))
-
-		//Set autoscaling and keep nodeReplicas in the nodepool:
+		g.By("enable the nodepool to be autoscaling")
 		autoScalingMax := "4"
 		autoScalingMin := "1"
-		autoscalConfig := fmt.Sprintf(`--patch={"spec": {"autoScaling": {"max": %s, "min":%s}}}`, autoScalingMax, autoScalingMin)
-		doOcpReq(oc, OcpPatch, true, "-n", "clusters", "nodepools", npName, autoscalConfig, "--type=merge")
-
-		//Check autoscaling status
-		o.Eventually(func() string {
-			return doOcpReq(oc, OcpGet, true, "nodepool", npName, "-n", "clusters", `-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}}`)
-		}, ShortTimeout, ShortTimeout/10).Should(o.ContainSubstring("AutoscalingEnabled False"))
-
-		//Remove nodeReplicas, keep autoscaling in the nodepool:
-		removeNpConfig := `[{"op": "remove", "path": "/spec/replicas"}]`
-		doOcpReq(oc, OcpPatch, true, "-n", "clusters", "nodepools", npName, "--type=json", "-p", removeNpConfig)
-
-		//Check autoscaling status
-		o.Eventually(func() string {
-			return doOcpReq(oc, OcpGet, true, "nodepool", npName, "-n", "clusters", `-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}}`)
-		}, ShortTimeout, ShortTimeout/10).Should(o.ContainSubstring("AutoscalingEnabled True"))
+		hostedcluster.setNodepoolAutoScale(npName, autoScalingMax, autoScalingMin)
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool ready after setting autoscaling error")
+		o.Expect(hostedcluster.isNodepoolAutosaclingEnabled(npName)).Should(o.BeTrue())
 	})
 
 	// author: heli@redhat.com

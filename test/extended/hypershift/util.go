@@ -42,6 +42,7 @@ const (
 	NodepoolNameSpace = "clusters"
 
 	ClusterInstallTimeout = 3600 * time.Second
+	DoubleLongTimeout     = 1800 * time.Second
 	LongTimeout           = 900 * time.Second
 	DefaultTimeout        = 300 * time.Second
 	ShortTimeout          = 50 * time.Second
@@ -324,6 +325,7 @@ func getJSONByFile(filePath string, path string) gjson.Result {
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	defer file.Close()
 	con, err := ioutil.ReadAll(file)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
 	return gjson.Get(string(con), path)
 }
 
