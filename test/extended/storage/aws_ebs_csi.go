@@ -54,6 +54,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			if isAwsOutpostCluster(oc) && volumeType != "gp2" {
 				g.Skip("Skipped: Currently volumeType/" + volumeType + "is not supported on Outpost clusters")
 			}
+
+			// The Provisioned IOPS SSD (io2) EBS volume type is not available on AWS GovCloud.
+			// https://docs.aws.amazon.com/govcloud-us/latest/UserGuide/govcloud-ebs.html
+			if strings.HasPrefix(getClusterRegion(oc), "us-gov-") && volumeType == "io2" {
+				g.Skip("Skipped: Currently volumeType/" + volumeType + "is not supported on AWS GovCloud")
+			}
+
 			// Set the resource objects definition for the scenario
 			var (
 				storageClass = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("ebs.csi.aws.com"))
