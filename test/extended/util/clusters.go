@@ -82,14 +82,19 @@ func SkipARM64(oc *CLI) {
 	}
 }
 
-// SkipBaselineCapsNone skip the test if cluster has no default catsrc
-func SkipBaselineCapsNone(oc *CLI) {
+// SkipBaselineCaps skip the test if cluster has no required resources.
+// sets is comma separated list of baselineCapabilitySets to skip.
+// for example: "None, v4.11"
+func SkipBaselineCaps(oc *CLI, sets string) {
 	baselineCapabilitySet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.spec.capabilities.baselineCapabilitySet}").Output()
 	if err != nil {
 		e2e.Failf("get baselineCapabilitySet failed err %v .", err)
 	}
-	if strings.Contains(baselineCapabilitySet, "None") {
-		g.Skip("Skip for cluster with baselineCapabilitySet = None")
+	sets = strings.ReplaceAll(sets, " ", "")
+	for _, s := range strings.Split(sets, ",") {
+		if strings.Contains(baselineCapabilitySet, s) {
+			g.Skip("Skip for cluster with baselineCapabilitySet = " + s)
+		}
 	}
 }
 

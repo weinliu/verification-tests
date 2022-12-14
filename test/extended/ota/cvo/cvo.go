@@ -966,7 +966,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	//author: yanyang@redhat.com
 	g.It("Author:yanyang-Medium-46724-cvo defaults deployment replicas to one if it's unset in manifest [Flaky]", func() {
-		exutil.SkipBaselineCapsNone(oc)
+		exutil.SkipBaselineCaps(oc, "None, v4.11")
 		g.By("Check the replicas for openshift-insights/insights-operator is unset in manifest")
 		tempDataDir, err := extractManifest(oc)
 		defer os.RemoveAll(tempDataDir)
@@ -1091,7 +1091,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	//author: yanyang@redhat.com
 	g.It("Author:yanyang-Medium-47757-cvo respects the deployment strategy in manifests [Serial]", func() {
-		exutil.SkipBaselineCapsNone(oc)
+		exutil.SkipBaselineCaps(oc, "None, v4.11")
 		g.By("Get the strategy for openshift-insights/insights-operator in manifest")
 		tempDataDir, err := extractManifest(oc)
 		defer os.RemoveAll(tempDataDir)
@@ -1399,7 +1399,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 	//author: jiajliu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:jiajliu-High-46017-CVO should keep reconcile manifests when update failed on precondition check [Disruptive]", func() {
-		exutil.SkipBaselineCapsNone(oc)
+		exutil.SkipBaselineCaps(oc, "None")
 		//Take openshift-marketplace/deployment as an example, it can be any resource which included in manifest files
 		resourceKindName := "deployment/marketplace-operator"
 		resourceNamespace := "openshift-marketplace"
