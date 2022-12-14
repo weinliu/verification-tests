@@ -642,10 +642,13 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		// OCP-40219
 		g.By("Generate the bundle image and catalog index image")
 		_, err = exec.Command("bash", "-c", "cd /tmp/ocp-34462/catalogtest && sed -i 's#controller:latest#quay.io/olmqe/catalogtest-operator:v4.10#g' /tmp/ocp-34462/catalogtest/Makefile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = exec.Command("bash", "-c", "cp -rf test/extended/testdata/operatorsdk/ocp-34462-data/manifests/bases/ /tmp/ocp-34462/catalogtest/config/manifests/").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = exec.Command("bash", "-c", "cd /tmp/ocp-34462/catalogtest && make bundle").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = exec.Command("bash", "-c", "cd /tmp/ocp-34462/catalogtest && sed -i 's/--container-tool docker //g' Makefile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = exec.Command("bash", "-c", "cd /tmp/ocp-34462/catalogtest && make bundle-build bundle-push catalog-build catalog-push BUNDLE_IMG=quay.io/olmqe/catalogtest-bundle:v4.10 CATALOG_IMG=quay.io/olmqe/catalogtest-index:v4.10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer containerCLI.RemoveImage("quay.io/olmqe/catalogtest-bundle:v" + ocpversion)
@@ -1110,9 +1113,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		g.By("migrate OLM tests- status descriptors test")
 		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-status-descriptors-test", "-n", oc.Namespace()).Output()
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("State: fail"))
-		o.Expect(output).To(o.ContainSubstring("memcacheds.cache.example.com does not have a status descriptor"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("State: pass"))
+		o.Expect(output).To(o.ContainSubstring("memcacheds.cache.example.com does not have status spec"))
 
 		// OCP-48630
 		g.By("scorecard proxy container port should be configurable")
@@ -1130,7 +1133,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		g.By("migrate OLM tests-status descriptors to generate a failed xunit output")
 		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=olm-status-descriptors-test", "-o", "xunit", "-n", oc.Namespace()).Output()
-		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("<testcase name=\"olm-status-descriptors\""))
 		o.Expect(output).To(o.ContainSubstring("<system-out>Loaded ClusterServiceVersion:"))
 		o.Expect(output).To(o.ContainSubstring("failure"))
