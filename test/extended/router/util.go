@@ -460,13 +460,6 @@ func getPodv4Address(oc *exutil.CLI, podName, namespace string) string {
 	return podIPv4
 }
 
-// this function will describe the given pod details
-func describePod(oc *exutil.CLI, podName, namespace string) string {
-	podDescribe, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod", "-n", podName, namespace).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return podDescribe
-}
-
 // this function will replace the octate of the ipaddress with the given value
 func replaceIPOctet(ipaddress string, octet int, octetValue string) string {
 	ipList := strings.Split(ipaddress, ".")
@@ -509,10 +502,9 @@ func readDNSCorefile(oc *exutil.CLI, DNSPodName, searchString, grepOption string
 
 // this function get all cluster's operators
 func getClusterOperators(oc *exutil.CLI) []string {
-	opList := []string{}
 	outputOps, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperators", "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	opList = strings.Split(outputOps, " ")
+	opList := strings.Split(outputOps, " ")
 	return opList
 }
 
@@ -1085,9 +1077,8 @@ func getNamespaceRouteDetails(oc *exutil.CLI, namespace, resourceName, jsonSearc
 // this function is to make sure a command such as curl the route successfully, for the route isn't reachable occasionally
 func repeatCmd(oc *exutil.CLI, cmd []string, expectOutput string, repeatTimes int) string {
 	result := "failed"
-	output := "none"
 	for i := 0; i < repeatTimes; i++ {
-		output, _ = oc.Run("exec").Args(cmd...).Output()
+		output, _ := oc.Run("exec").Args(cmd...).Output()
 		if strings.Contains(output, expectOutput) {
 			result = "passed"
 			break

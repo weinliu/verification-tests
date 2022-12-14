@@ -121,11 +121,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.AssertWaitPollNoErr(err1, "the pod with ipfailover=hello-openshift Ready status not met")
 		ensureIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		newPodName := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
-		checkenv := readPodEnv(oc, newPodName[0], oc.Namespace(), "OPENSHIFT_HA_VIRTUAL_IPS")
+		checkenv := pollReadPodData(oc, oc.Namespace(), newPodName[0], "/usr/bin/env ", "OPENSHIFT_HA_VIRTUAL_IPS")
 		o.Expect(checkenv).To(o.ContainSubstring("OPENSHIFT_HA_VIRTUAL_IPS=" + virtualIP))
 
 		g.By("check the ipfailover configurations and verify the other ENV variables")
-		result := describePod(oc, oc.Namespace(), newPodName[0])
+		result := describePodResource(oc, newPodName[0], oc.Namespace())
 		o.Expect(result).To(o.ContainSubstring("OPENSHIFT_HA_VIP_GROUPS:         4"))
 		o.Expect(result).To(o.ContainSubstring("OPENSHIFT_HA_CONFIG_NAME:        IPFailover"))
 		o.Expect(result).To(o.ContainSubstring("OPENSHIFT_HA_MONITOR_PORT:       30061"))
@@ -177,7 +177,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.AssertWaitPollNoErr(err1, "the pod with ipfailover=hello-openshift Ready status not met")
 		ensureIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		newPodName := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
-		checkenv := readPodEnv(oc, newPodName[0], oc.Namespace(), "OPENSHIFT_HA_VIP_GROUPS")
+		checkenv := pollReadPodData(oc, oc.Namespace(), newPodName[0], "/usr/bin/env ", "OPENSHIFT_HA_VIP_GROUPS")
 		o.Expect(checkenv).To(o.ContainSubstring("OPENSHIFT_HA_VIP_GROUPS=238"))
 	})
 
@@ -216,7 +216,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.AssertWaitPollNoErr(err1, "the pod with ipfailover=hello-openshift Ready status not met")
 		ensureIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		newPodName := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
-		checkenv := readPodEnv(oc, newPodName[0], oc.Namespace(), "OPENSHIFT_HA_VIRTUAL_IPS")
+		checkenv := pollReadPodData(oc, oc.Namespace(), newPodName[0], "/usr/bin/env ", "OPENSHIFT_HA_VIRTUAL_IPS")
 		o.Expect(checkenv).To(o.ContainSubstring("OPENSHIFT_HA_VIRTUAL_IPS=" + virtualIP))
 
 		g.By("find the primary and the secondary pod")
@@ -266,9 +266,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.AssertWaitPollNoErr(err1, "the pod with ipfailover=hello-openshift Ready status not met")
 		ensureIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		newPodName := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
-		checkenv := readPodEnv(oc, newPodName[0], oc.Namespace(), "OPENSHIFT_HA_VIRTUAL_IPS")
+		checkenv := pollReadPodData(oc, oc.Namespace(), newPodName[0], "/usr/bin/env ", "OPENSHIFT_HA_VIRTUAL_IPS")
 		o.Expect(checkenv).To(o.ContainSubstring("OPENSHIFT_HA_VIRTUAL_IPS=" + virtualIP))
-		checkenv1 := readPodEnv(oc, newPodName[0], oc.Namespace(), "OPENSHIFT_HA_PREEMPTION")
+		checkenv1 := pollReadPodData(oc, oc.Namespace(), newPodName[0], "/usr/bin/env ", "OPENSHIFT_HA_PREEMPTION")
 		o.Expect(checkenv1).To(o.ContainSubstring("preempt_delay 60"))
 
 		g.By("find the primary and the secondary pod")
@@ -286,7 +286,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		// Identifying the new pod from the other
 		futurePrimaryPod := slicingElement(secondaryPod[0], latestpods)
 		// Waiting till the preempt delay 60 seconds expires
-		time.Sleep(60 * time.Second)
+		time.Sleep(65 * time.Second)
 		waitForPreemptPod(oc, oc.Namespace(), futurePrimaryPod[0], virtualIP)
 	})
 
@@ -325,11 +325,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.AssertWaitPollNoErr(err1, "the pod with ipfailover=hello-openshift Ready status not met")
 		ensureIpfailoverEnterMaster(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		newPodName := getPodName(oc, oc.Namespace(), "ipfailover=hello-openshift")
-		checkenv := readPodEnv(oc, newPodName[0], oc.Namespace(), "HA_EXCLUDED_VRRP_IDS")
+		checkenv := pollReadPodData(oc, oc.Namespace(), newPodName[0], "/usr/bin/env ", "HA_EXCLUDED_VRRP_IDS")
 		o.Expect(checkenv).To(o.ContainSubstring("HA_EXCLUDED_VRRP_IDS=9"))
 
 		g.By("verify the excluded VIP is removed from the router_ids of ipfailover pods")
-		routerIds := readPodData(oc, newPodName[0], oc.Namespace(), `cat /etc/keepalived/keepalived.conf`, `virtual_router_id`)
+		routerIds := pollReadPodData(oc, oc.Namespace(), newPodName[0], `cat /etc/keepalived/keepalived.conf`, `virtual_router_id`)
 		o.Expect(routerIds).NotTo(o.ContainSubstring(`virtual_router_id 9`))
 	})
 })
