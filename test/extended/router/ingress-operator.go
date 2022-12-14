@@ -514,4 +514,51 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("Patch the same loadBalancerSourceRanges value in the LB service to remove the Progressing from the ingress operator")
 		patchResourceAsAdmin(oc, "openshift-ingress", "svc/router-ocp55381", "{\"spec\":{\"loadBalancerSourceRanges\":[]}}")
 	})
+
+	// bug: 2007246
+	g.It("Author:shudili-Medium-56772-Ingress Controller does not set allowPrivilegeEscalation in the router deployment [Serial]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			scc                 = filepath.Join(buildPruningBaseDir, "scc-bug2007246.json")
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp56772",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		g.By("Create a custom ingresscontrollers")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("Create the custom-restricted SecurityContextConstraints")
+		defer operateResourceFromFile(oc, "delete", "openshift-ingress", scc)
+		operateResourceFromFile(oc, "create", "openshift-ingress", scc)
+
+		g.By("check the allowPrivilegeEscalation in the router deployment, which should be true")
+		jsonPath := ".spec.template.spec.containers..securityContext.allowPrivilegeEscalation"
+		value := fetchJSONPathValue(oc, "openshift-ingress", "deployment/router-"+ingctrl.name, jsonPath)
+		o.Expect(value).To(o.ContainSubstring("true"))
+
+		g.By("get router pods and then delete one router pod")
+		podList1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+ingctrl.name, "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-ingress").Output()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		routerpod := getRouterPod(oc, ingctrl.name)
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", routerpod, "-n", "openshift-ingress").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
+
+		g.By("get router pods again, and check if it is different with the previous router pod list")
+		podList2, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+ingctrl.name, "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-ingress").Output()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		o.Expect(len(podList1)).To(o.Equal(len(podList2)))
+		o.Expect(strings.Compare(podList1, podList2)).NotTo(o.Equal(0))
+	})
 })

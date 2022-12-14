@@ -217,6 +217,13 @@ func createResourceFromFile(oc *exutil.CLI, ns, file string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// For admin user to create/delete resources in the specified namespace from the file (not template)
+// oper, should be create or delete
+func operateResourceFromFile(oc *exutil.CLI, oper, ns, file string) {
+	err := oc.AsAdmin().WithoutNamespace().Run(oper).Args("-f", file, "-n", ns).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 // For normal user to patch a resource in the specified namespace
 func patchResourceAsUser(oc *exutil.CLI, ns, resource, patch string) {
 	err := oc.WithoutNamespace().Run("patch").Args(resource, "-p", patch, "--type=merge", "-n", ns).Execute()
