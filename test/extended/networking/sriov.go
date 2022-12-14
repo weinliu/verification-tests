@@ -140,7 +140,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 	})
 
-	g.It("Author:zzhao-Medium-Longduration-25321-[E810-C] Check intel dpdk works well [Disruptive]", func() {
+	g.It("Author:zzhao-Medium-NonPreRelease-Longduration-25321-[E810-C] Check intel dpdk works well [Disruptive]", func() {
 		var (
 			buildPruningBaseDir            = exutil.FixturePath("testdata", "networking/sriov")
 			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy-template.yaml")
@@ -217,7 +217,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 	})
 
-	g.It("Author:zzhao-Medium-Longduration-49213-[E810-C] VF with large number can be inited for intel card [Disruptive]", func() {
+	g.It("Author:zzhao-Medium-NonPreRelease-Longduration-49213-[E810-C] VF with large number can be inited for intel card [Disruptive]", func() {
 		var (
 			buildPruningBaseDir            = exutil.FixturePath("testdata", "networking/sriov")
 			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy-template.yaml")
@@ -256,7 +256,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		o.Expect(output).To(o.ContainSubstring("40"))
 	})
 
-	g.It("Author:zzhao-Medium-Longduration-47660-[E810-XXV] DPDK works well in pod with vfio-pci for E810-XXVDA4 adapter [Disruptive]", func() {
+	g.It("Author:zzhao-Medium-NonPreRelease-Longduration-47660-[E810-XXV] DPDK works well in pod with vfio-pci for E810-XXVDA4 adapter [Disruptive]", func() {
 		var (
 			buildPruningBaseDir            = exutil.FixturePath("testdata", "networking/sriov")
 			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy-template.yaml")
@@ -325,7 +325,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 	})
 
-	g.It("Author:zzhao-Medium-Longduration-47661-[E810-XXV] sriov pod with netdevice deviceType for E810-XXVDA4 adapter [Disruptive]", func() {
+	g.It("Author:zzhao-Medium-NonPreRelease-Longduration-47661-[E810-XXV] sriov pod with netdevice deviceType for E810-XXVDA4 adapter [Disruptive]", func() {
 		var (
 			buildPruningBaseDir            = exutil.FixturePath("testdata", "networking/sriov")
 			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy-template.yaml")
@@ -393,7 +393,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 	})
 
-	g.It("Author:zzhao-Medium-Longduration-41145-[xl710] sriov pod can be worked well with netdevice deviceType for xl710 adapter [Disruptive]", func() {
+	g.It("Author:zzhao-Medium-NonPreRelease-Longduration-41145-[xl710] sriov pod can be worked well with netdevice deviceType for xl710 adapter [Disruptive]", func() {
 		var (
 			buildPruningBaseDir            = exutil.FixturePath("testdata", "networking/sriov")
 			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy-template.yaml")
@@ -460,7 +460,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		o.Expect(testpmdOutput).Should(o.MatchRegexp("10.56.217"))
 
 	})
-	g.It("Author:zzhao-Medium-Longduration-41144-[xl710] DPDK works well in pod with vfio-pci for xl710 adapter [Disruptive]", func() {
+	g.It("Author:zzhao-Medium-NonPreRelease-Longduration-41144-[xl710] DPDK works well in pod with vfio-pci for xl710 adapter [Disruptive]", func() {
 		var (
 			buildPruningBaseDir            = exutil.FixturePath("testdata", "networking/sriov")
 			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy-template.yaml")
@@ -587,6 +587,141 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		defer rmSriovNetworkPolicy(oc, sriovNetPolicy1.policyName, sriovOpNs)
 		sriovNetPolicy1.createPolicy(oc)
 		waitForSriovPolicyReady(oc, sriovOpNs)
+
+	})
+	g.It("Author:zzhao-Medium-NonPreRelease-Longduration-56613-[sts] sriov pod can be worked well with netdevice deviceType for sts adapter [Disruptive]", func() {
+		var (
+			buildPruningBaseDir            = exutil.FixturePath("testdata", "networking/sriov")
+			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy-template.yaml")
+			sriovNeworkTemplate            = filepath.Join(buildPruningBaseDir, "sriovnetwork-hostlocal-template.yaml")
+			sriovTestPodTemplate           = filepath.Join(buildPruningBaseDir, "sriov-netdevice-template.yaml")
+			sriovOpNs                      = "openshift-sriov-network-operator"
+		)
+		sriovPolicy := sriovNetworkNodePolicy{
+			policyName:   "stsnet",
+			deviceType:   "netdevice",
+			deviceID:     "1591",
+			pfName:       "ens5f3",
+			vondor:       "8086",
+			numVfs:       3,
+			resourceName: "stsnetdevice",
+			template:     sriovNetworkNodePolicyTemplate,
+			namespace:    sriovOpNs,
+		}
+
+		g.By("check the sriov operator is running")
+		chkSriovOperatorStatus(oc, sriovOpNs)
+
+		g.By("Check the deviceID if exist on the cluster worker")
+		if !checkDeviceIDExist(oc, sriovOpNs, sriovPolicy.deviceID) {
+			g.Skip("the cluster do not contain the sriov card. skip this testing!")
+		}
+
+		g.By("Create sriovnetworkpolicy to init VF and check they are inited successfully")
+		defer rmSriovNetworkPolicy(oc, sriovPolicy.policyName, sriovOpNs)
+		sriovPolicy.createPolicy(oc)
+		waitForSriovPolicyReady(oc, sriovOpNs)
+
+		g.By("setup one namespace")
+		ns1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns1)
+
+		g.By("Create sriovNetwork to generate net-attach-def on the target namespace")
+		sriovnetwork := sriovNetwork{
+			name:             sriovPolicy.policyName,
+			resourceName:     sriovPolicy.resourceName,
+			networkNamespace: ns1,
+			template:         sriovNeworkTemplate,
+			namespace:        sriovOpNs,
+		}
+		defer rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
+		sriovnetwork.createSriovNetwork(oc)
+
+		g.By("Create test pod on the target namespace")
+
+		sriovTestPod := sriovTestPod{
+			name:        "stsnetdevice",
+			namespace:   ns1,
+			networkName: sriovnetwork.name,
+			template:    sriovTestPodTemplate,
+		}
+		sriovTestPod.createSriovTestPod(oc)
+		err := waitForPodWithLabelReady(oc, ns1, "name=sriov-netdevice")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=sriov-netdevice not ready")
+
+		g.By("Check test pod have second interface with assigned ip")
+		command := "ip a show net1"
+		testpmdOutput, err := e2e.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(testpmdOutput).Should(o.MatchRegexp("10.56.217"))
+
+	})
+	g.It("Author:zzhao-Medium-NonPreRelease-Longduration-56611-[sts] DPDK works well in pod with vfio-pci for sts adapter [Disruptive]", func() {
+		var (
+			buildPruningBaseDir            = exutil.FixturePath("testdata", "networking/sriov")
+			sriovNetworkNodePolicyTemplate = filepath.Join(buildPruningBaseDir, "sriovnetworkpolicy-template.yaml")
+			sriovNeworkTemplate            = filepath.Join(buildPruningBaseDir, "sriovnetwork-template.yaml")
+			sriovTestPodTemplate           = filepath.Join(buildPruningBaseDir, "sriov-dpdk-template.yaml")
+			sriovOpNs                      = "openshift-sriov-network-operator"
+		)
+		sriovPolicy := sriovNetworkNodePolicy{
+			policyName:   "stsdpdk",
+			deviceType:   "vfio-pci",
+			deviceID:     "1591",
+			pfName:       "ens5f3",
+			vondor:       "8086",
+			numVfs:       2,
+			resourceName: "stsdpdk",
+			template:     sriovNetworkNodePolicyTemplate,
+			namespace:    sriovOpNs,
+		}
+
+		g.By("check the sriov operator is running")
+		chkSriovOperatorStatus(oc, sriovOpNs)
+
+		g.By("Check the deviceID if exist on the cluster worker")
+		if !checkDeviceIDExist(oc, sriovOpNs, sriovPolicy.deviceID) {
+			g.Skip("the cluster do not contain the sriov card. skip this testing!")
+		}
+
+		g.By("Create sriovnetworkpolicy to init VF and check they are inited successfully")
+		defer rmSriovNetworkPolicy(oc, sriovPolicy.policyName, sriovOpNs)
+		sriovPolicy.createPolicy(oc)
+		waitForSriovPolicyReady(oc, sriovOpNs)
+
+		g.By("setup one namespace")
+		ns1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns1)
+
+		g.By("Create sriovNetwork to generate net-attach-def on the target namespace")
+		sriovnetwork := sriovNetwork{
+			name:             sriovPolicy.policyName,
+			resourceName:     sriovPolicy.resourceName,
+			networkNamespace: ns1,
+			template:         sriovNeworkTemplate,
+			namespace:        sriovOpNs,
+		}
+		defer rmSriovNetwork(oc, sriovnetwork.name, sriovOpNs)
+		sriovnetwork.createSriovNetwork(oc)
+
+		g.By("Create test pod on the target namespace")
+
+		sriovTestPod := sriovTestPod{
+			name:        "sriovdpdk",
+			namespace:   ns1,
+			networkName: sriovnetwork.name,
+			template:    sriovTestPodTemplate,
+		}
+		sriovTestPod.createSriovTestPod(oc)
+		err := waitForPodWithLabelReady(oc, ns1, "name=sriov-dpdk")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=sriov-dpdk not ready")
+
+		g.By("Check testpmd running well")
+		pciAddress := getPciAddress(sriovTestPod.namespace, sriovTestPod.name)
+		command := "testpmd -l 2-3 --in-memory -w " + pciAddress + " --socket-mem 1024 -n 4 --proc-type auto --file-prefix pg -- --disable-rss --nb-cores=1 --rxq=1 --txq=1 --auto-start --forward-mode=mac"
+		testpmdOutput, err := e2e.RunHostCmd(sriovTestPod.namespace, sriovTestPod.name, command)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(testpmdOutput).Should(o.MatchRegexp("forwards packets on 1 streams"))
 
 	})
 })
