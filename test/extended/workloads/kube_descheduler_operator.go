@@ -1741,7 +1741,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:knarra-High-50195-Descheduler-Validate priorityfiltering with thresholdPriority param [Slow][Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:knarra-High-50195-High-50942-Descheduler-Validate priorityfiltering with thresholdPriority param [Slow][Disruptive]", func() {
 		deschedulertpN := filepath.Join(buildPruningBaseDir, "kubedescheduler_thresholdPriority.yaml")
 		deploypmT := filepath.Join(buildPruningBaseDir, "deploy_podWithPriorityClassName.yaml")
 		deploypcT := filepath.Join(buildPruningBaseDir, "priorityclassm.yaml")
