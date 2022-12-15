@@ -197,19 +197,19 @@ func findUnUsedIPsOnNode(oc *exutil.CLI, nodeName, cidr string, number int) []st
 }
 
 func findFreeIPs(oc *exutil.CLI, nodeName string, number int) []string {
-	var freeIps = []string{}
+	var freeIPs []string
 	platform := exutil.CheckPlatform(oc)
-	if strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") {
+	if strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") {
 		sub1, err := getDefaultSubnet(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		freeIps = findUnUsedIPs(oc, sub1, number)
+		freeIPs = findUnUsedIPs(oc, sub1, number)
 
 	} else {
 		sub1 := getIfaddrFromNode(nodeName, oc)
-		freeIps = findUnUsedIPsOnNode(oc, nodeName, sub1, number)
+		freeIPs = findUnUsedIPsOnNode(oc, nodeName, sub1, number)
 	}
 
-	return freeIps
+	return freeIPs
 
 }
 
@@ -1127,4 +1127,31 @@ func specialPlatformCheck(oc *exutil.CLI) bool {
 		e2e.Logf("Skip this check for other platforms that do not have special STS scenario.")
 	}
 	return specialPlatform
+}
+
+// Get cluster proxy IP
+func getProxyIP(oc *exutil.CLI) string {
+	httpProxy, err := runOcWithRetry(oc.AsAdmin(), "get", "proxy", "cluster", "-o=jsonpath={.status.httpProxy}")
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	re := regexp.MustCompile(`(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}`)
+	proxyIPs := re.FindAllString(httpProxy, -1)
+	o.Expect(proxyIPs).ShouldNot(o.BeEmpty())
+	return proxyIPs[0]
+
+}
+
+// getIPechoURLFromUPIPrivateVlanBM,  this function is used for template upi-on-baremetal/versioned-installer-packet-http_proxy-private-vlan as IP echo was deployed as part of the template
+func getIPechoURLFromUPIPrivateVlanBM(oc *exutil.CLI) string {
+	if checkProxy(oc) {
+		proxyIP := getProxyIP(oc)
+		ipEchoURL := net.JoinHostPort(proxyIP, "9095")
+		workNode, err := exutil.GetFirstWorkerNode(oc)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		_, curlErr := exutil.DebugNode(oc, workNode, "curl", "-s", ipEchoURL, "--connect-timeout", "5")
+		if curlErr == nil {
+			return ipEchoURL
+		}
+	}
+	return ""
 }

@@ -31,11 +31,12 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		platform := exutil.CheckPlatform(oc)
 		networkType := checkNetworkType(oc)
 		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "azure")
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "azure") || strings.Contains(platform, "none")
 		if !acceptedPlatform || !strings.Contains(networkType, "ovn") {
 			g.Skip("Test cases should be run on AWS/GCP/Azure/Openstack/Vsphere/BareMetal cluster with ovn network plugin, skip for other platforms or other network plugin!!")
 		}
-		if checkProxy(oc) {
+
+		if !strings.Contains(platform, "none") && checkProxy(oc) {
 			g.Skip("This is proxy cluster, skip the test.")
 		}
 
@@ -137,6 +138,15 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			e2e.Logf("\n BareMetal is detected, running the case on BareMetal\n")
 			flag = "tcpdump"
 			e2e.Logf("Use tcpdump way to verify egressIP on BareMetal")
+		case "none":
+			e2e.Logf("\n UPI BareMetal is detected, running the case on UPI BareMetal\n")
+			ipEchoURL = getIPechoURLFromUPIPrivateVlanBM(oc)
+			e2e.Logf("IP echo URL is %s", ipEchoURL)
+			if ipEchoURL == "" {
+				g.Skip("This UPI Baremetal cluster did not fulfill the prequiste of testing egressIP cases, skip the test!!")
+			}
+			flag = "ipecho"
+			e2e.Logf("Use IP echo way to verify egressIP on UPI BareMetal")
 		default:
 			e2e.Logf("Not support cloud provider for  egressip cases for now.")
 			g.Skip("Not support cloud provider for  egressip cases for now.")
@@ -1120,6 +1130,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		var zone string
 		var az *exutil.AzureSession
 		var rg string
+		var infraID string
 		var ospObj exutil.Osp
 		var vspObj *exutil.Vmware
 		var vspClient *govmomi.Client
@@ -1134,7 +1145,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			// for gcp, remove the postfix "c.openshift-qe.internal" to get its instance name
 			instance = strings.Split(nodeToBeShutdown, ".")
 			e2e.Logf("\n\n\n the worker node to be shutdown is: %v\n\n\n", instance[0])
-			infraID, err := exutil.GetInfraID(oc)
+			infraID, err = exutil.GetInfraID(oc)
 			zone, err = getZoneOfInstanceFromGcp(oc, infraID, instance[0])
 			o.Expect(err).NotTo(o.HaveOccurred())
 			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
@@ -1429,11 +1440,20 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		platform := exutil.CheckPlatform(oc)
 		networkType := checkNetworkType(oc)
 		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
-		//acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "azure")
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "azure")
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "azure") || strings.Contains(platform, "none")
 		if !acceptedPlatform || !strings.Contains(networkType, "ovn") {
 			g.Skip("Test cases should be run on AWS/GCP/Azure/Openstack/Vsphere/Baremetal cluster with ovn network plugin, skip for other platforms or other network plugin!!")
 		}
+		if strings.Contains(platform, "none") {
+			// For UPI baremetal, egressIP cases only can be tested on clusters from upi-on-baremetal/versioned-installer-packet-http_proxy-private-vlan as some limitations on other clusters.
+			e2e.Logf("\n UPI BareMetal is detected, running the case on UPI BareMetal\n")
+			ipEchoURL := getIPechoURLFromUPIPrivateVlanBM(oc)
+			e2e.Logf("IP echo URL is %s", ipEchoURL)
+			if ipEchoURL == "" {
+				g.Skip("This UPI Baremetal cluster did not fulfill the prequiste of testing egressIP cases, skip the test!!")
+			}
+		}
+
 	})
 
 	// author: huirwang@redhat.com
