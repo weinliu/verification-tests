@@ -31,7 +31,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
-		waitRouteReady(oc, regRoute)
+		waitRouteReady(regRoute)
 
 		g.By("Save the external registry auth with the specific token")
 		authFile, err := saveImageRegistryAuth(oc, "builder", regRoute, oc.Namespace())
@@ -66,7 +66,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
-		waitRouteReady(oc, regRoute)
+		waitRouteReady(regRoute)
 		oc.SetupProject()
 
 		g.By("Save the external registry auth with the specific token")
@@ -124,7 +124,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
-		waitRouteReady(oc, regRoute)
+		waitRouteReady(regRoute)
 
 		g.By("Save the external registry auth with the specific token")
 		authFile, err := saveImageRegistryAuth(oc, "builder", regRoute, oc.Namespace())

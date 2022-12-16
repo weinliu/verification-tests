@@ -31,17 +31,17 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		insecuredImage := insecuredRoute + "/" + ns + "/insecuredimage:latest"
 
 		g.By("Push images to two registries")
-		waitRouteReady(oc, blockedImage)
+		waitRouteReady(blockedImage)
 		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", blockedImage, "--insecure", "--keep-manifest-list=true", "--filter-by-os=.*").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitRouteReady(oc, insecuredImage)
+		waitRouteReady(insecuredImage)
 		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", insecuredImage, "--insecure", "--keep-manifest-list=true", "--filter-by-os=.*").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Without --insecure the imagestream will import fail")
 		insecuredOut, insecuredErr := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("insecured-firstis:latest", "--from="+insecuredImage, "--confirm", "-n", ns).Output()
 		o.Expect(insecuredErr).NotTo(o.HaveOccurred())
-		o.Expect(string(insecuredOut)).To(o.ContainSubstring("x509"))
+		o.Expect(insecuredOut).To(o.ContainSubstring("x509"))
 
 		g.By("Add insecureRegistries and blockedRegistries to image.config")
 		err = oc.AsAdmin().Run("patch").Args("images.config.openshift.io/cluster", "-p", `{"spec":{"registrySources":{"blockedRegistries": ["`+blockedRoute+`"],"insecureRegistries": ["`+insecuredRoute+`"]}}}`, "--type=merge").Execute()
@@ -63,7 +63,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Could import image from the insecured registry without --insecure")
 		insecuredOut, insecuredErr = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("insecured-secondis:latest", "--from="+insecuredImage, "--confirm", "-n", ns).Output()
 		o.Expect(insecuredErr).NotTo(o.HaveOccurred())
-		o.Expect(string(insecuredOut)).NotTo(o.ContainSubstring("x509"))
+		o.Expect(insecuredOut).NotTo(o.ContainSubstring("x509"))
 	})
 
 	// author: wewang@redhat.com
@@ -79,7 +79,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		insecuredImage := insecuredRoute + "/" + ns + "/insecuredimage:latest"
 
 		g.By("Push images to two registries")
-		//After upgrade the reigstry pods restarted, the data should be lost
+		// After upgrade the reigstry pods restarted, the data should be lost
 		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", blockedImage, "--insecure", "--keep-manifest-list=true", "--filter-by-os=.*").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", insecuredImage, "--insecure", "--keep-manifest-list=true", "--filter-by-os=.*").Execute()
@@ -88,38 +88,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Can't import image from blocked registry")
 		blockedOut, blockedErr := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("blocked-secondis:latest", "--from="+blockedImage, "--reference-policy=local", "--insecure", "--confirm", "-n", ns).Output()
 		o.Expect(blockedErr).NotTo(o.HaveOccurred())
-		o.Expect(string(blockedOut)).To(o.ContainSubstring(blockedRoute + " blocked"))
+		o.Expect(blockedOut).To(o.ContainSubstring(blockedRoute + " blocked"))
 
 		g.By("Could import image from the insecured registry without --insecure")
 		insecuredOut, insecuredErr := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("insecured-thirdis:latest", "--from="+insecuredImage, "--confirm", "-n", ns).Output()
 		o.Expect(insecuredErr).NotTo(o.HaveOccurred())
-		o.Expect(string(insecuredOut)).NotTo(o.ContainSubstring("x509"))
-	})
-
-	// author: wewang@redhat.com
-	g.It("NonPreRelease-PreChkUpgrade-Author:wewang-High-41400-Users providing custom AWS tags are set with bucket creation prepare", func() {
-		g.By("Check platforms")
-		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure.config.openshift.io", "-o=jsonpath={..status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(output, "AWS") {
-			g.Skip("Skip for non-supported platform")
-		}
-		g.By("Check the cluster is with resourceTags")
-		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure.config.openshift.io", "-o=jsonpath={..status.platformStatus.aws}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(output, "resourceTags") {
-			g.Skip("Skip for no resourceTags")
-		}
-		g.By("Get bucket name")
-		bucket, _ := oc.AsAdmin().Run("get").Args("config.image", "-o=jsonpath={..spec.storage.s3.bucket}").Output()
-		o.Expect(bucket).NotTo(o.BeEmpty())
-
-		g.By("Check the tags")
-		aws := getAWSClient(oc)
-		tag, err := awsGetBucketTagging(aws, bucket)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(string(tag)).To(o.ContainSubstring("customTag"))
-		o.Expect(string(tag)).To(o.ContainSubstring("installer-qe"))
+		o.Expect(insecuredOut).NotTo(o.ContainSubstring("x509"))
 	})
 
 	// author: wewang@redhat.com
@@ -144,8 +118,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		aws := getAWSClient(oc)
 		tag, err := awsGetBucketTagging(aws, bucket)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(string(tag)).To(o.ContainSubstring("customTag"))
-		o.Expect(string(tag)).To(o.ContainSubstring("installer-qe"))
+		o.Expect(tag).To(o.ContainSubstring("customTag"))
+		o.Expect(tag).To(o.ContainSubstring("installer-qe"))
 	})
 
 	// author: xiuwang@redhat.com

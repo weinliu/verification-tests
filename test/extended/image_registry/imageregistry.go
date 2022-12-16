@@ -116,7 +116,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("Author:wewang-Critical-24262-Image registry operator can read/overlap gloabl proxy setting [Disruptive]", func() {
+	g.It("Author:wewang-Critical-24262-Image registry operator can read/overlap global proxy setting [Disruptive]", func() {
 		var (
 			buildFile = filepath.Join(imageRegistryBaseDir, "inputimage.yaml")
 			buildsrc  = bcSource{
@@ -132,7 +132,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		if !strings.Contains(output, "httpProxy") {
 			g.Skip("Skip for non-proxy platform")
 		}
-		//Check if openshift-sample operator installed
+		// Check if openshift-sample operator installed
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/openshift-samples").Output()
 		if err != nil && strings.Contains(output, `openshift-samples" not found`) {
 			g.Skip("Skip test for openshift-samples which managed templates and imagestream are not installed")
@@ -191,8 +191,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	g.It("Author:wewang-Critical-22893-PodAntiAffinity should work for image registry pod[Serial]", func() {
 		g.Skip("According devel comments: https://bugzilla.redhat.com/show_bug.cgi?id=2014940, still not work,when find a solution, will enable it")
 		g.By("Check platforms")
-		//We set registry use pv on openstack&disconnect cluster, the case will fail on this scenario.
-		//Skip all the fs volume test, only run on object storage backend.
+		// We set registry use pv on openstack&disconnect cluster, the case will fail on this scenario.
+		// Skip all the fs volume test, only run on object storage backend.
 		if checkRegistryUsingFSVolume(oc) {
 			g.Skip("Skip for fs volume")
 		}
@@ -352,8 +352,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("Author:VMonly-wewang-Medium-27985-Image with invalid resource name can be pruned [Disruptive]", func() {
-		//When registry configured pvc or emptryDir, the replicas is 1 and with recreate pod policy.
-		//This is not suitable for the defer recoverage. Only run this case on cloud storage.
+		// When registry configured pvc or emptryDir, the replicas is 1 and with recreate pod policy.
+		// This is not suitable for the defer recoverage. Only run this case on cloud storage.
 		platforms := map[string]bool{
 			"aws":          true,
 			"azure":        true,
@@ -372,7 +372,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Import image to internal registry")
 		oc.SetupProject()
-		//Change to use qe image to create build so we can run this on disconnect cluster.
+		// Change to use qe image to create build so we can run this on disconnect cluster.
 		var invalidInfo = "Invalid image name foo/bar/" + oc.Namespace() + "/test-27985"
 		checkRegistryFunctionFine(oc, "test-27985", oc.Namespace())
 
@@ -394,8 +394,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	// author: wewang@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:wewang-High-41414-There are 2 replicas for image registry on HighAvailable workers S3/Azure/GCS/Swift storage", func() {
 		g.By("Check image registry pod")
-		//We set registry use pv on openstack&disconnect cluster, the case will fail on this scenario.
-		//Skip all the fs volume test, only run on object storage backend.
+		// We set registry use pv on openstack&disconnect cluster, the case will fail on this scenario.
+		// Skip all the fs volume test, only run on object storage backend.
 		if checkRegistryUsingFSVolume(oc) {
 			g.Skip("Skip for fs volume")
 		}
@@ -614,7 +614,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		userroute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
-		waitRouteReady(oc, userroute)
+		waitRouteReady(userroute)
 
 		g.By("Get token from secret")
 		oc.SetupProject()
@@ -627,7 +627,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Import an image")
-		//Use multiarch image with digest, so it could be test on ARM cluster and disconnect cluster.
+		// Use multiarch image with digest, so it could be test on ARM cluster and disconnect cluster.
 		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("myimage", "--from=quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "latest")
@@ -765,29 +765,29 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		waitRegistryDefaultPodsReady(oc)
 
 		g.By("Set invalid authURL in image registry crd")
-		foundErrLog := false
-		foundErrLog = setImageregistryConfigs(oc, patchAuthURL, authErrInfo)
-		o.Expect(foundErrLog).To(o.BeTrue())
+		foundErrLog1 := false
+		foundErrLog1 = setImageregistryConfigs(oc, patchAuthURL, authErrInfo)
+		o.Expect(foundErrLog1).To(o.BeTrue())
 
 		g.By("Set invalid regionName")
-		foundErrLog = false
-		foundErrLog = setImageregistryConfigs(oc, patchRegion, regionErrInfo)
-		o.Expect(foundErrLog).To(o.BeTrue())
+		foundErrLog2 := false
+		foundErrLog2 = setImageregistryConfigs(oc, patchRegion, regionErrInfo)
+		o.Expect(foundErrLog2).To(o.BeTrue())
 
 		g.By("Set invalid domain")
-		foundErrLog = false
-		foundErrLog = setImageregistryConfigs(oc, patchDomain, domainErrInfo)
-		o.Expect(foundErrLog).To(o.BeTrue())
+		foundErrLog3 := false
+		foundErrLog3 = setImageregistryConfigs(oc, patchDomain, domainErrInfo)
+		o.Expect(foundErrLog3).To(o.BeTrue())
 
 		g.By("Set invalid domainID")
-		foundErrLog = false
-		foundErrLog = setImageregistryConfigs(oc, patchDomainID, domainIDErrInfo)
-		o.Expect(foundErrLog).To(o.BeTrue())
+		foundErrLog4 := false
+		foundErrLog4 = setImageregistryConfigs(oc, patchDomainID, domainIDErrInfo)
+		o.Expect(foundErrLog4).To(o.BeTrue())
 
 		g.By("Set invalid tenantID")
-		foundErrLog = false
-		foundErrLog = setImageregistryConfigs(oc, patchTenantID, tenantIDErrInfo)
-		o.Expect(foundErrLog).To(o.BeTrue())
+		foundErrLog5 := false
+		foundErrLog5 = setImageregistryConfigs(oc, patchTenantID, tenantIDErrInfo)
+		o.Expect(foundErrLog5).To(o.BeTrue())
 	})
 
 	// author: xiuwang@redhat.com
@@ -930,8 +930,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		aws := getAWSClient(oc)
 		tag, err := awsGetBucketTagging(aws, bucket)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(string(tag)).To(o.ContainSubstring("customTag"))
-		o.Expect(string(tag)).To(o.ContainSubstring("installer-qe"))
+		o.Expect(tag).To(o.ContainSubstring("customTag"))
+		o.Expect(tag).To(o.ContainSubstring("installer-qe"))
 
 		g.By("Removed managementState")
 		defer func() {
@@ -977,8 +977,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		tag, err = awsGetBucketTagging(aws, bucket)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(string(tag)).To(o.ContainSubstring("customTag"))
-		o.Expect(string(tag)).To(o.ContainSubstring("installer-qe"))
+		o.Expect(tag).To(o.ContainSubstring("customTag"))
+		o.Expect(tag).To(o.ContainSubstring("installer-qe"))
 	})
 
 	// author: tbuskey@redhat.com
@@ -1022,7 +1022,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			o.Expect(msg).NotTo(o.BeEmpty())
 			json.Unmarshal([]byte(msg), &data)
 			l = len(data.Data.Result) - 1
-			before[query], err = strconv.Atoi(data.Data.Result[l].Value[1].(string))
+			before[query], _ = strconv.Atoi(data.Data.Result[l].Value[1].(string))
 			// e2e.Logf("query %v ==  %v", query, before[query])
 		}
 		g.By("pause to get next metrics")
@@ -1031,11 +1031,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Collect metrics again")
 		for _, query = range metrics {
 			prometheusURLQuery = fmt.Sprintf("%v/query?query=%v", prometheusURL, query)
-			msg, _, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "-i", "--", "curl", "-k", "-H", authHeader, prometheusURLQuery).Outputs()
+			msg, _, _ = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "-i", "--", "curl", "-k", "-H", authHeader, prometheusURLQuery).Outputs()
 			o.Expect(msg).NotTo(o.BeEmpty())
 			json.Unmarshal([]byte(msg), &data)
 			l = len(data.Data.Result) - 1
-			after[query], err = strconv.Atoi(data.Data.Result[l].Value[1].(string))
+			after[query], _ = strconv.Atoi(data.Data.Result[l].Value[1].(string))
 			// e2e.Logf("query %v ==  %v", query, before[query])
 		}
 
@@ -1176,7 +1176,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Make sure the image can't be pulled without auth")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("firstis:latest", "--from="+myimage, "--reference-policy=local", "--insecure", "--confirm", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(string(output)).To(o.ContainSubstring("Unauthorized"))
+		o.Expect(output).To(o.ContainSubstring("Unauthorized"))
 
 		g.By("Update pull secret")
 		updatePullSecret(oc, newAuthFile)
@@ -1204,8 +1204,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("NonHyperShiftHOST-OSD_CCS-ARO-Author:wewang-Medium-43731-Image registry pods should have anti-affinity rules", func() {
-		//When replicas=2 the image registry pods follow requiredDuringSchedulingIgnoredDuringExecution
-		//anti-affinity rule on 4.11 and above version, other replicas will follow topologySpreadContraints
+		// When replicas=2 the image registry pods follow requiredDuringSchedulingIgnoredDuringExecution
+		// anti-affinity rule on 4.11 and above version, other replicas will follow topologySpreadContraints
 		g.By("Check replicas")
 		podNum := getImageRegistryPodNumber(oc)
 		if podNum != 2 {
@@ -1302,7 +1302,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		var regUser, regPass = "testuser", getRandomString()
 		tempDataDir := filepath.Join("/tmp/", fmt.Sprintf("ir-%s", getRandomString()))
 		defer os.RemoveAll(tempDataDir)
-		err := os.Mkdir(tempDataDir, 0755)
+		err := os.Mkdir(tempDataDir, 0o755)
 		if err != nil {
 			e2e.Logf("Fail to create directory: %v", err)
 		}
@@ -1347,6 +1347,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	g.It("NonHyperShiftHOST-DisconnectedOnly-Author:xiuwang-High-48739-Pull through works with icsp which source and mirror without full path", func() {
 		g.By("Check if image-policy-aosqe created")
 		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("imagecontentsourcepolicy").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(output, "image-policy-aosqe") {
 			e2e.Failf("image-policy-aosqe is not created in this disconnect cluster")
 		}
@@ -1404,7 +1405,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		host := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
-		waitRouteReady(oc, host)
+		waitRouteReady(host)
 
 		g.By("Grant public access to the openshift namespace")
 		defer oc.AsAdmin().WithoutNamespace().Run("policy").Args("remove-role-from-group", "system:image-puller", "system:unauthenticated", "--namespace", "openshift").Execute()
@@ -1600,7 +1601,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		}
 
 		g.By("Check whether the environment is SNO")
-		//Only 1 master, 1 worker node and with the same hostname.
+		// Only 1 master, 1 worker node and with the same hostname.
 		masterNodes, _ := exutil.GetClusterNodesBy(oc, "master")
 		workerNodes, _ := exutil.GetClusterNodesBy(oc, "worker")
 		if len(masterNodes) == 1 && len(workerNodes) == 1 && masterNodes[0] == workerNodes[0] {
@@ -1733,7 +1734,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
-		waitRouteReady(oc, regRoute)
+		waitRouteReady(regRoute)
 
 		g.By("push image to registry")
 		oc.SetupProject()
@@ -1743,7 +1744,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check disableRedirect function")
-		//disableRedirect: Controls whether to route all data through the registry, rather than redirecting to the back end. Defaults to false.
+		// disableRedirect: Controls whether to route all data through the registry, rather than redirecting to the back end. Defaults to false.
 		myimage := regRoute + "/" + oc.Namespace() + "/test-49455:latest"
 		cmd := "oc image info " + myimage + " -ojson -a " + authFile + " --insecure|jq -r '.layers[0].digest'"
 		imageblob, err := exec.Command("bash", "-c", cmd).Output()
@@ -2132,7 +2133,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
-		waitRouteReady(oc, regRoute)
+		waitRouteReady(regRoute)
 
 		g.By("Push a image to the project")
 		checkRegistryFunctionFine(oc, "test-10904", oc.Namespace())
@@ -2252,7 +2253,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
-		waitRouteReady(oc, regRoute)
+		waitRouteReady(regRoute)
 
 		g.By("Push a image to the project")
 		checkRegistryFunctionFine(oc, "test-11314", oc.Namespace())
@@ -2422,7 +2423,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	})
 
-	//author: yyou@redhat.com
+	// author: yyou@redhat.com
 	g.It("Author:yyou-High-23651-oc explain work for image-registry operator", func() {
 
 		g.By("Use oc explain to explain configs.imageregistry.operator.openshift.io")
@@ -2439,7 +2440,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	g.It("ConnectedOnly-Author:jitli-Medium-22596-ImageRegistry Create app with template eap74-basic-s2i with jbosseap rhel7 image", func() {
 
 		exutil.SkipARM64(oc)
-		//Check if openshift-sample operator installed
+		// Check if openshift-sample operator installed
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/openshift-samples").Output()
 		if err != nil && strings.Contains(output, `openshift-samples" not found`) {
 			g.Skip("Skip test for openshift-samples which managed templates and imagestream are not installed")
@@ -2464,7 +2465,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	})
 
-	//author: yyou@redhat.com
+	// author: yyou@redhat.com
 	g.It("NonHyperShiftHOST-Author:yyou-High-27562-Recreate Rollouts for Image Registry is enabled", func() {
 
 		g.By("Check Image registry's deployment defaults value")
@@ -2521,14 +2522,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	})
 
-	//author: xiuwang@redhat.com
+	// author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Low-18994-Copy internal image to another tag via 'oc image mirror'", func() {
 
 		g.By("Get external registry host")
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
-		waitRouteReady(oc, regRoute)
+		waitRouteReady(regRoute)
 
 		g.By("Save the external registry auth with the specific token")
 		authFile, err := saveImageRegistryAuth(oc, "builder", regRoute, oc.Namespace())
@@ -2547,12 +2548,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	})
 
-	//author: xiuwang@redhat.com
+	// author: xiuwang@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-18998-Mirror multiple images to another registry", func() {
 
 		g.By("Check the cluster using architecture")
 		// https://issues.redhat.com/browse/IR-192
-		//Since internal registry still not supports fat manifest, so skip test except x86_64
+		// Since internal registry still not supports fat manifest, so skip test except x86_64
 		masterNode, _ := exutil.GetFirstMasterNode(oc)
 		output, archErr := exutil.DebugNodeWithChroot(oc, masterNode, "uname", "-m")
 		o.Expect(archErr).NotTo(o.HaveOccurred())
@@ -2564,7 +2565,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
-		waitRouteReady(oc, regRoute)
+		waitRouteReady(regRoute)
 
 		g.By("Save the external registry auth with the specific token")
 		authFile, err := saveImageRegistryAuth(oc, "builder", regRoute, oc.Namespace())
@@ -2572,7 +2573,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Copy multiple images to internal registry")
-		//Using x86_64 images
+		// Using x86_64 images
 		firstImagePair := "quay.io/openshifttest/alpine@sha256:9c7da0f5d0f331d8f61d125c302a07d5eecfd89a346e2f5a119b8befc994d425=" + regRoute + "/" + oc.Namespace() + "/myimage1:latest"
 		secondImagePair := "quay.io/openshifttest/busybox@sha256:0415f56ccc05526f2af5a7ae8654baec97d4a614f24736e8eef41a4591f08019=" + regRoute + "/" + oc.Namespace() + "/myimage2:latest"
 		thirdImagePair := "quay.io/openshifttest/registry@sha256:f4cf1bfd98c39784777f614a5d8a7bd4f2e255e87d7a28a05ff7a3e452506fdb=" + regRoute + "/" + oc.Namespace() + "/myimage3:latest"
@@ -2586,7 +2587,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 	})
-	//author: yyou@redhat.com
+	// author: yyou@redhat.com
 	g.It("NonPreRelease-Author:yyou-High-34991-Add logLevel to registry config object [Serial]", func() {
 		g.By("Check image registry config")
 		podNum := getImageRegistryPodNumber(oc)
@@ -2640,7 +2641,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(envOutput).To(o.ContainSubstring("debug"))
 
 	})
-	//author: yyou@redhat.com
+	// author: yyou@redhat.com
 	g.It("Author:yyou-Medium-23030-Enable must-gather object refs in image-registry cluster", func() {
 		g.By("Check if cluster operator image-registry include related Objects")
 		output, checkErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/image-registry", "-o=jsonpath=`{.status.relatedObjects}`").Output()
@@ -2678,7 +2679,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	})
 
-	//author: yyou@redhat.com
+	// author: yyou@redhat.com
 	g.It("NonPreRelease-ConnectedOnly-Author:yyou-Medium-22230-Can set the Requests values in imageregistry config [Disruptive]", func() {
 		g.By("Check if openshift-sample operator installed")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/openshift-samples").Output()
@@ -2701,6 +2702,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		createAppError := oc.WithoutNamespace().AsAdmin().Run("new-app").Args("openshift/ruby:2.7~https://github.com/sclorg/ruby-ex", "-n", oc.Namespace()).Execute()
 		o.Expect(createAppError).NotTo(o.HaveOccurred())
 		result, err := exutil.StartBuildResult(oc, "ruby-ex")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.WaitForBuildResult(oc.BuildClient().BuildV1().Builds(oc.Namespace()), result)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result.BuildFailure).To(o.BeTrue(), "Build did succeed: %v", result)
@@ -2710,7 +2712,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	})
 
-	//author: xiuwang@redhat.com
+	// author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-High-12958-Read and write image signatures with registry endpoint", func() {
 		g.By("Create signature file")
 		var signFile = `'{"schemaVersion": 2,"type":"atomic","name":"digestid","content": "MjIK"}'`
@@ -2726,7 +2728,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
-		waitRouteReady(oc, regRoute)
+		waitRouteReady(regRoute)
 
 		g.By("Add signer role")
 		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "system:image-signer", "-z", "builder", "-n", oc.Namespace()).Execute()
@@ -2777,7 +2779,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
-	//author: xiuwang@redhat.com
+	// author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-VMonly-Author:xiuwang-Medium-10788-Medium-12059-Could import image and pull from private registry", func() {
 		g.By("Setup a private registry")
 		var regUser, regPass = "testuser", getRandomString()
@@ -2810,7 +2812,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		createSimpleRunPod(oc, "authis:latest", expectInfo)
 	})
 
-	//author: xiuwang@redhat.com
+	// author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-10909-Add/update/remove signatures to the images", func() {
 		var (
 			signFile = filepath.Join(imageRegistryBaseDir, "imagesignature.yaml")
@@ -2855,7 +2857,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring(`10909" deleted`))
 	})
 
-	//author: wewang@redhat.com
+	// author: wewang@redhat.com
 	g.It("Author:wewang-VMonly-Medium-23063-Check the related log from must-gather tool", func() {
 		g.By("Gather registry debugging information")
 		errWait := wait.Poll(15*time.Second, 2*time.Minute, func() (bool, error) {
@@ -2896,7 +2898,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(output).To(o.ContainSubstring("pass --confirm to create and import"))
 	})
 
-	//author: xiuwang@redhat.com
+	// author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Critical-10721-Could not import the tag when reference is true", func() {
 		var (
 			isFile = filepath.Join(imageRegistryBaseDir, "imagestream-reference-true.yaml")
@@ -2927,7 +2929,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
-		waitRouteReady(oc, regRoute)
+		waitRouteReady(regRoute)
 		getURL := "curl -kv " + "https://" + regRoute + "/v2/_catalog?n=5"
 		curlOutput, err := exec.Command("bash", "-c", getURL).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2949,7 +2951,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(string(curlOutput)).To(o.ContainSubstring("test18984"))
 	})
 
-	//author: wewang@redhat.com
+	// author: wewang@redhat.com
 	g.It("Author:wewang-Medium-24879-Mount trusted CA for cluster proxies to Image Registry Operator with invalid setting [Disruptive]", func() {
 		g.By("Check if it's a https_proxy cluster")
 		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("proxy/cluster", "-o=jsonpath={.spec}").Output()
@@ -2988,7 +2990,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		exutil.AssertWaitPollNoErr(err, "Update ca for proxy resource failed")
 	})
 
-	//author: wewang@redhat.com
+	// author: wewang@redhat.com
 	g.It("NonHyperShiftHOST-DisconnectedOnly-Author:wewang-Medium-31767-Warning appears when registry use invalid AdditionalTrustedCA [Disruptive]", func() {
 		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("image.config/cluster", "-o=jsonpath={.spec.additionalTrustedCA.name}").Output()
 		o.Expect(output).To(o.Equal("registry-config"))
@@ -3023,14 +3025,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		exutil.AssertWaitPollNoErr(err, "Update cm for image.config cluster failed")
 	})
 
-	//author: wewang@redhat.com
+	// author: wewang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:wewang-Critical-30231-Warning appears if use invalid value for image registry virtual-hosted buckets", func() {
 		g.By("Use invalid value for image registry virtual-hosted buckets")
 		output, _ := oc.AsAdmin().Run("patch").Args("config.imageregistry/cluster", "-p", `{"spec": {"storage": {"s3": {"virtualHostedStyle": "invalid"}}}}`, "--type=merge").Output()
-		o.Expect(string(output)).To(o.ContainSubstring("Invalid value: \"string\""))
+		o.Expect(output).To(o.ContainSubstring("Invalid value: \"string\""))
 	})
 
-	//author: xiuwang@redhat.com
+	// author: xiuwang@redhat.com
 	g.It("NonPreRelease-Longduration-Author:xiuwang-High-29435-Set the allowed list of image registry via allowedRegistriesForImport[Disruptive]", func() {
 		g.By("Set allowed list for import")
 		expectedStatus1 := map[string]string{"Progressing": "True"}
@@ -3042,7 +3044,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 			g.By("Check the openshift-apiserver operator status")
 			err = waitCoBecomes(oc, "openshift-apiserver", 60, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
 			err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus2)
+			o.Expect(err).NotTo(o.HaveOccurred())
 			exutil.AssertWaitPollNoErr(err, "openshift-apiserver operator does not become available in 480 seconds")
 		}()
 		err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("image.config/cluster", "-p", `{"spec":{"allowedRegistriesForImport":[{"domainName":"registry.redhat.io","insecure":true},{"domainName":"quay.io","insecure":false}]}}`, "--type=merge").Execute()
@@ -3050,7 +3054,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 		g.By("Check the openshift-apiserver operator status")
 		err = waitCoBecomes(oc, "openshift-apiserver", 60, expectedStatus1)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus2)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.AssertWaitPollNoErr(err, "openshift-apiserver operator does not become available in 480 seconds")
 
 		g.By("Import the not allowed image")
@@ -3058,7 +3064,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		if err == nil {
 			e2e.Failf("allowedRegistriesForImport does not work")
 		}
-		o.Expect(string(output)).To(o.ContainSubstring("Forbidden: registry \"registry.access.redhat.com\" not allowed by whitelist"))
+		o.Expect(output).To(o.ContainSubstring("Forbidden: registry \"registry.access.redhat.com\" not allowed by whitelist"))
 
 		g.By("Import the allowed image")
 		err = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "allowedquay:latest", "--reference-policy=local", "-n", oc.Namespace()).Execute()
@@ -3071,11 +3077,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		if err == nil {
 			e2e.Failf("allowedRegistriesForImport does not work")
 		}
-		o.Expect(string(output)).To(o.ContainSubstring("Forbidden: registry \"registry.redhat.io\" not allowed by whitelist"))
-		o.Expect(string(output)).To(o.ContainSubstring("registry.redhat.io:80"))
+		o.Expect(output).To(o.ContainSubstring("Forbidden: registry \"registry.redhat.io\" not allowed by whitelist"))
+		o.Expect(output).To(o.ContainSubstring("registry.redhat.io:80"))
 	})
 
-	//author: wewang@redhat.com
+	// author: wewang@redhat.com
 	g.It("Author:wewang-Critical-22945-Autoconfigure registry storage [Disruptive]", func() {
 		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		if !strings.Contains(output, "AWS") {
@@ -3083,7 +3089,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		}
 		g.By("Check image-registry-private-configuration secret if created")
 		output, _ = oc.AsAdmin().Run("get").Args("secret/image-registry-private-configuration", "-n", "openshift-image-registry").Output()
-		o.Expect(string(output)).To(o.ContainSubstring("image-registry-private-configuration"))
+		o.Expect(output).To(o.ContainSubstring("image-registry-private-configuration"))
 
 		g.By("Check Add s3 bucket to be invalid")
 		defer func() {
@@ -3102,6 +3108,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"bucket":"invalid"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		Bucket, err := oc.AsAdmin().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.storage.s3.bucket}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(Bucket).To(o.Equal("invalid"))
 		err = wait.PollImmediate(10*time.Second, 2*time.Minute, func() (bool, error) {
 			registryDegrade := checkRegistryDegraded(oc)
@@ -3113,7 +3120,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		exutil.AssertWaitPollNoErr(err, "Image registry is not degraded")
 	})
 
-	//author: wewang@redhat.com
+	// author: wewang@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:wewang-High-26732-Increase the limit on the number of image signatures [Disruptive]", func() {
 		g.By("Scale down cvo to zero")
 		defer func() {
@@ -3138,6 +3145,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Create configmap under ocm project")
 		cmFile := filepath.Join(imageRegistryBaseDir, "registry.access.redhat.com.yaml")
 		beforeGeneration, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/controller-manager", "-o=jsonpath={.metadata.generation}", "-n", "openshift-controller-manager").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		beforeNum, err := strconv.Atoi(beforeGeneration)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().Run("delete").Args("cm/sigstore-config", "-n", "openshift-controller-manager").Execute()
@@ -3192,7 +3200,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		defer restoreRouteExposeRegistry(oc)
 		createRouteExposeRegistry(oc)
 		regRoute := getRegistryDefaultRoute(oc)
-		waitRouteReady(oc, regRoute)
+		waitRouteReady(regRoute)
 
 		g.By("Save the external registry auth with the specific token")
 		authFile, err := saveImageRegistryAuth(oc, "builder", regRoute, oc.Namespace())
@@ -3217,7 +3225,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
-		waitRouteReady(oc, regRoute)
+		waitRouteReady(regRoute)
 
 		g.By("Save the external registry auth with the specific token")
 		authFile, err := saveImageRegistryAuth(oc, "default", regRoute, oc.Namespace())
@@ -3229,10 +3237,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		info, err := oc.AsAdmin().WithoutNamespace().Run("image").Args("info", regRoute+"/openshift/cli:latest", "--insecure", "-a", authFile).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(string(info)).To(o.ContainSubstring("application/vnd.docker.distribution.manifest.v2+json"))
-		o.Expect(string(info)).To(o.ContainSubstring("OS:          linux"))
-		o.Expect(string(info)).To(o.ContainSubstring("Image Size"))
-		o.Expect(string(info)).To(o.ContainSubstring("Layers"))
+		o.Expect(info).To(o.ContainSubstring("application/vnd.docker.distribution.manifest.v2+json"))
+		o.Expect(info).To(o.ContainSubstring("OS:          linux"))
+		o.Expect(info).To(o.ContainSubstring("Image Size"))
+		o.Expect(info).To(o.ContainSubstring("Layers"))
 
 		g.By("Check a manifest list image without option")
 		info, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c").Output()
@@ -3243,7 +3251,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Check a manifest list image with --filter-by-os option for specific arch")
 		info, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", "--filter-by-os=linux/amd64").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(string(info)).To(o.ContainSubstring("Arch:          amd64"))
+		o.Expect(info).To(o.ContainSubstring("Arch:          amd64"))
 
 		g.By("Check a manifest list image with --show-multiarch option")
 		info, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("info", "quay.io/openshifttest/base-alpine@sha256:3126e4eed4a3ebd8bf972b2453fa838200988ee07c01b2251e3ea47e4b1f245c", "--filter-by-os=linux/arm64", "-o", "json").Output()
@@ -3374,7 +3382,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Import image with an invalid tag")
 		output, err := oc.WithoutNamespace().AsAdmin().Run("import-image").Args("jenkins:invalid", "--from", "registry.access.redhat.com/openshift3/jenkins-2-rhel7:invalid", "--confirm", "-n", oc.Namespace()).Output()
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(string(output)).To(o.ContainSubstring("Import failed"))
+		o.Expect(output).To(o.ContainSubstring("Import failed"))
 		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("imagestream/jenkins", "-p", `{"spec":{"tags":[{"from":{"kind": "DockerImage", "name": "registry.access.redhat.com/openshift3/jenkins-2-rhel7:invalid"},"name": "invalid","reference": true}]}}`, "--type=merge", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		isOut, err := oc.WithoutNamespace().AsAdmin().Run("describe").Args("imagestream/jenkins", "-n", oc.Namespace()).Output()

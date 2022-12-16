@@ -34,6 +34,9 @@ const (
 	withoutNamespace = true
 	contain          = false
 	ok               = true
+	pvcType          = "pvc"
+	swiftType        = "swift"
+	emptyDir         = "emptyDir"
 )
 
 type prometheusResponse struct {
@@ -94,7 +97,7 @@ func dePodLogs(pods []corev1.Pod, oc *exutil.CLI, matchlogs string) bool {
 	return false
 }
 
-func getBearerTokenURLViaPod(ns string, execPodName string, url string, bearer string) (string, error) {
+func getBearerTokenURLViaPod(ns, execPodName, url, bearer string) (string, error) {
 	g.By("Get token via pod")
 	cmd := fmt.Sprintf("curl --retry 15 --max-time 4 --retry-delay 1 -s -k -H 'Authorization: Bearer %s' %s", bearer, url)
 	output, err := e2e.RunHostCmd(ns, execPodName, cmd)
@@ -188,8 +191,8 @@ func getRandomString() string {
 	return string(buffer)
 }
 
-// the method is to get something from resource. it is "oc get xxx" actaully
-func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) string {
+// the method is to get something from resource. it is "oc get xxx" actually
+func getResource(oc *exutil.CLI, asAdmin, withoutNamespace bool, parameters ...string) string {
 	var result string
 	var err error
 	err = wait.Poll(3*time.Second, 150*time.Second, func() (bool, error) {
@@ -206,7 +209,7 @@ func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters
 }
 
 // the method is to do something with oc.
-func doAction(oc *exutil.CLI, action string, asAdmin bool, withoutNamespace bool, parameters ...string) (string, error) {
+func doAction(oc *exutil.CLI, action string, asAdmin, withoutNamespace bool, parameters ...string) (string, error) {
 	if asAdmin && withoutNamespace {
 		return oc.AsAdmin().WithoutNamespace().Run(action).Args(parameters...).Output()
 	}
@@ -352,12 +355,12 @@ func getRegistryStorageConfig(oc *exutil.CLI) (string, string) {
 		storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.gcs.bucket}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	case "OpenStack":
-		storagetype = "swift"
+		storagetype = swiftType
 		storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.swift.container}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		//On disconnect & openstack, the registry configure to use persistent volume
+		// On disconnect & openstack, the registry configure to use persistent volume
 		if storageinfo == "" {
-			storagetype = "pvc"
+			storagetype = pvcType
 			storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.pvc.claim}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
@@ -370,11 +373,11 @@ func getRegistryStorageConfig(oc *exutil.CLI) (string, string) {
 		storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.ibmocs.bucket}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	case "BareMetal", "None", "VSphere", "Nutanix":
-		storagetype = "pvc"
+		storagetype = pvcType
 		storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.pvc.claim}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if storageinfo == "" {
-			storagetype = "emptyDir"
+			storagetype = emptyDir
 			storageinfo, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.emptyDir}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if storageinfo == "" {
@@ -391,7 +394,7 @@ func getRegistryStorageConfig(oc *exutil.CLI) (string, string) {
 
 func waitRegistryDefaultPodsReady(oc *exutil.CLI) {
 	storagetype, _ := getRegistryStorageConfig(oc)
-	if storagetype == "pvc" || storagetype == "emptyDir" {
+	if storagetype == pvcType || storagetype == emptyDir {
 		podNum := getImageRegistryPodNumber(oc)
 		o.Expect(podNum).Should(o.Equal(1))
 		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", podNum)
@@ -427,7 +430,7 @@ func (stafulsrc *staSource) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func checkPodsRunningWithLabel(oc *exutil.CLI, namespace string, label string, number int) {
+func checkPodsRunningWithLabel(oc *exutil.CLI, namespace, label string, number int) {
 	err := wait.Poll(25*time.Second, 6*time.Minute, func() (bool, error) {
 		podList, _ := oc.AdminKubeClient().CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		if len(podList.Items) != number {
@@ -464,7 +467,7 @@ func (icspsrc *icspSource) delete(oc *exutil.CLI) {
 func getRegistryDefaultRoute(oc *exutil.CLI) (defaultroute string) {
 	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
 		defroute, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("route", "-n", "openshift-image-registry", "default-route", "-o=jsonpath={.spec.host}").Output()
-		if len(defroute) == 0 || err != nil {
+		if defroute == "" || err != nil {
 			e2e.Logf("Continue to next round")
 			return false, nil
 		}
@@ -475,7 +478,7 @@ func getRegistryDefaultRoute(oc *exutil.CLI) (defaultroute string) {
 	return defaultroute
 }
 
-func setImageregistryConfigs(oc *exutil.CLI, pathinfo string, matchlogs string) bool {
+func setImageregistryConfigs(oc *exutil.CLI, pathinfo, matchlogs string) bool {
 	foundInfo := false
 	defer recoverRegistrySwiftSet(oc)
 	err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"swift":{`+pathinfo+`}}}}`, "--type=merge").Execute()
@@ -525,7 +528,7 @@ func (podsrc *podSource) create(oc *exutil.CLI) {
 func checkRegistryUsingFSVolume(oc *exutil.CLI) bool {
 	storageinfo, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if strings.Contains(storageinfo, "pvc") || strings.Contains(storageinfo, "emptyDir") {
+	if strings.Contains(storageinfo, pvcType) || strings.Contains(storageinfo, emptyDir) {
 		return true
 	}
 	return false
@@ -540,8 +543,8 @@ func saveImageMetadataName(oc *exutil.CLI, image string) string {
 	return strings.TrimSuffix(string(manifest), "\n")
 }
 
-func checkRegistryFunctionFine(oc *exutil.CLI, bcname string, namespace string) {
-	//Check if could push images to image registry
+func checkRegistryFunctionFine(oc *exutil.CLI, bcname, namespace string) {
+	// Check if could push images to image registry
 	err := oc.AsAdmin().WithoutNamespace().Run("new-build").Args("-D", "FROM quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "--to="+bcname, "-n", namespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	err = exutil.WaitForABuild(oc.BuildClient().BuildV1().Builds(namespace), bcname+"-1", nil, nil, nil)
@@ -552,7 +555,7 @@ func checkRegistryFunctionFine(oc *exutil.CLI, bcname string, namespace string) 
 	err = exutil.WaitForAnImageStreamTag(oc, namespace, bcname, "latest")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	//Check if could pull images from image registry
+	// Check if could pull images from image registry
 	imagename := "image-registry.openshift-image-registry.svc:5000/" + namespace + "/" + bcname + ":latest"
 	err = oc.AsAdmin().WithoutNamespace().Run("run").Args(bcname, "--image", imagename, `--overrides={"spec":{"securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}}}`, "-n", namespace, "--command", "--", "/bin/sleep", "120").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -585,7 +588,7 @@ func getCreditFromCluster(oc *exutil.CLI) (string, string, string) {
 	o.Expect(err2).NotTo(o.HaveOccurred())
 	clusterRegion, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 	o.Expect(err3).NotTo(o.HaveOccurred())
-	return string(accessKeyID), string(secureKey), string(clusterRegion)
+	return string(accessKeyID), string(secureKey), clusterRegion
 }
 
 func getAWSClient(oc *exutil.CLI) *s3.Client {
@@ -612,8 +615,8 @@ func awsGetBucketTagging(client *s3.Client, bucket string) (string, error) {
 }
 
 // the method is to make newCheck object.
-// the method paramter is expect, it will check something is expceted or not
-// the method paramter is present, it will check something exists or not
+// the method parameter is expect, it will check something is expceted or not
+// the method parameter is present, it will check something exists or not
 // the executor is asAdmin, it will exectue oc with Admin
 // the executor is asUser, it will exectue oc with User
 // the inlineNamespace is withoutNamespace, it will execute oc with WithoutNamespace()
@@ -669,7 +672,7 @@ func (ck checkDescription) check(oc *exutil.CLI) {
 // asAdmin means if taking admin to check it
 // withoutNamespace means if take WithoutNamespace() to check it.
 // present means if you expect the resource presence or not. if it is ok, expect presence. if it is nok, expect not present.
-func isPresentResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, present bool, parameters ...string) bool {
+func isPresentResource(oc *exutil.CLI, asAdmin, withoutNamespace, present bool, parameters ...string) bool {
 	parameters = append(parameters, "--ignore-not-found")
 	err := wait.Poll(3*time.Second, 70*time.Second, func() (bool, error) {
 		output, err := doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
@@ -695,7 +698,7 @@ func isPresentResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, pres
 // content is the substing to be expected
 // the expect is ok, contain or compare result is OK for method == expect, no error raise. if not OK, error raise
 // the expect is nok, contain or compare result is NOK for method == expect, no error raise. if OK, error raise
-func expectedResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, isCompare bool, content string, expect bool, parameters ...string) error {
+func expectedResource(oc *exutil.CLI, asAdmin, withoutNamespace, isCompare bool, content string, expect bool, parameters ...string) error {
 	expectMap := map[bool]string{
 		true:  "do",
 		false: "do not",
@@ -752,7 +755,7 @@ func exposeRouteFromSVC(oc *exutil.CLI, rType, ns, route, service string) string
 	return regRoute
 }
 
-func listRepositories(oc *exutil.CLI, regRoute, expect string) {
+func listRepositories(regRoute, expect string) {
 	curlCmd := fmt.Sprintf("curl -k  https://%s/v2/_catalog | grep %s", regRoute, expect)
 	result, _ := exec.Command("bash", "-c", curlCmd).Output()
 	o.Expect(string(result)).To(o.ContainSubstring(expect))
@@ -764,8 +767,8 @@ func setSecureRegistryWithoutAuth(oc *exutil.CLI, ns, regName, image, port strin
 	checkPodsRunningWithLabel(oc, ns, "app="+regName, 1)
 	exposeService(oc, ns, "deploy/"+regName, regName, port)
 	regRoute := exposeRouteFromSVC(oc, "edge", ns, regName, regName)
-	waitRouteReady(oc, regRoute)
-	listRepositories(oc, regRoute, "repositories")
+	waitRouteReady(regRoute)
+	listRepositories(regRoute, "repositories")
 	return regRoute
 }
 
@@ -804,7 +807,7 @@ func generateHtpasswdFile(tempDataDir, user, pass string) (string, error) {
 
 func extractPullSecret(oc *exutil.CLI) (string, error) {
 	tempDataDir := filepath.Join("/tmp/", fmt.Sprintf("ir-%s", getRandomString()))
-	err := os.Mkdir(tempDataDir, 0755)
+	err := os.Mkdir(tempDataDir, 0o755)
 	if err != nil {
 		e2e.Logf("Fail to create directory: %v", err)
 		return tempDataDir, err
@@ -843,7 +846,6 @@ func foundAffinityRules(oc *exutil.CLI, affinityRules string) bool {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(out, affinityRules) {
 			return false
-			break
 		}
 	}
 	return true
@@ -897,7 +899,7 @@ func saveGeneration(oc *exutil.CLI, ns, resource string) string {
 
 // Create route to expose the registry
 func createRouteExposeRegistry(oc *exutil.CLI) {
-	//Don't forget to restore the environment use func restoreRouteExposeRegistry
+	// Don't forget to restore the environment use func restoreRouteExposeRegistry
 	output, err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"defaultRoute":true}}`, "--type=merge").Output()
 	if err != nil {
 		e2e.Logf(output)
@@ -915,7 +917,7 @@ func restoreRouteExposeRegistry(oc *exutil.CLI) {
 	o.Expect(output).To(o.ContainSubstring("patched"))
 }
 
-func getPodNodeListByLabel(oc *exutil.CLI, namespace string, labelKey string) []string {
+func getPodNodeListByLabel(oc *exutil.CLI, namespace, labelKey string) []string {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-o", "wide", "-n", namespace, "-l", labelKey, "-o=jsonpath={.items[*].spec.nodeName}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	nodeNameList := strings.Fields(output)
@@ -1102,7 +1104,7 @@ func (limitsrc *limitSource) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func waitRouteReady(oc *exutil.CLI, route string) {
+func waitRouteReady(route string) {
 	curlCmd := "curl -k https://" + route
 	pollErr := wait.Poll(5*time.Second, 1*time.Minute, func() (bool, error) {
 		_, curlErr := exec.Command("bash", "-c", curlCmd).Output()
@@ -1142,9 +1144,11 @@ func (issrc *isSource) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+/*
 func setWaitForAnImageStreamTag(oc *exutil.CLI, namespace, name, tag string, timeout time.Duration) error {
 	return exutil.TimedWaitForAnImageStreamTag(oc, namespace, name, tag, timeout)
 }
+*/
 
 func waitForAnImageStreamTag(oc *exutil.CLI, namespace, name, tag string) error {
 	return exutil.TimedWaitForAnImageStreamTag(oc, namespace, name, tag, time.Second*360)
@@ -1173,7 +1177,7 @@ func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]strin
 	return newStatusToCompare
 }
 
-func checkPodsRemovedWithLabel(oc *exutil.CLI, namespace string, label string) {
+func checkPodsRemovedWithLabel(oc *exutil.CLI, namespace, label string) {
 	err := wait.Poll(25*time.Second, 3*time.Minute, func() (bool, error) {
 		podList, err := oc.AdminKubeClient().CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1210,7 +1214,7 @@ func (issrc *isImportSource) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func pruneImage(oc *exutil.CLI, isName string, imageName string, refRoute string, token string, num int) {
+func pruneImage(oc *exutil.CLI, isName, imageName, refRoute, token string, num int) {
 	g.By("Check image object and sub-manifest created for the manifest list")
 	isOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("is/"+isName, "-n", oc.Namespace()).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())

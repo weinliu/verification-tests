@@ -196,7 +196,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		manifest := saveImageMetadataName(oc, oc.Namespace()+"/image-15126")
-		if len(manifest) == 0 {
+		if manifest == "" {
 			e2e.Failf("Expect image not existing")
 		}
 
@@ -251,7 +251,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		regRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
-		waitRouteReady(oc, regRoute)
+		waitRouteReady(regRoute)
 
 		token, err := getSAToken(oc, "default", oc.Namespace())
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -351,7 +351,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	//author: wewang@redhat.com
 	g.It("ConnectedOnly-Author:wewang-High-16495-High-19196-No prune layer of a valid Image due to minimum aging and prune images when DC reference to invalid image [Disruptive]", func() {
-		//Check if openshift-sample operator installed
+		// Check if openshift-sample operator installed
 		sampleOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/openshift-samples").Output()
 		if err != nil && strings.Contains(sampleOut, `openshift-samples" not found`) {
 			g.Skip("Skip test for openshift-samples which managed templates and imagestream are not installed")
@@ -367,7 +367,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		refRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
-		waitRouteReady(oc, refRoute)
+		waitRouteReady(refRoute)
 
 		g.By("Add system:image-pruner role to user")
 		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "system:image-pruner", oc.Username()).Execute()
@@ -512,7 +512,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		routeName := getRandomString()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
 		refRoute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
-		waitRouteReady(oc, refRoute)
+		waitRouteReady(refRoute)
 
 		g.By("Prune the images")
 		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "system:image-pruner", oc.Username()).Execute()
