@@ -2617,6 +2617,118 @@ nulla pariatur.`
 			), "audit log contains excluded msgtype NETFILTER_CFG or ANOM_PROMISCUOUS")
 		}
 	})
+	g.It("Author:sregidor-DEPRECATED-NonPreRelease-Medium-43279-Alert message of drain error contains pod info [Disruptive]", func() {
+		var (
+			mcp               = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			mcc               = NewController(oc.AsAdmin())
+			nsName            = oc.Namespace()
+			pdbName           = "dont-evict-43279"
+			podName           = "dont-evict-43279"
+			podTemplate       = generateTemplateAbsolutePath("create-pod.yaml")
+			mcName            = "test-file"
+			mcTemplate        = "add-mc-to-trigger-node-drain.yaml"
+			expectedAlertName = "MCDDrainError"
+		)
+		// Get the first node that will be updated
+		sortedWorkerNodes, sErr := mcp.GetSortedNodes()
+		o.Expect(sErr).NotTo(o.HaveOccurred(), "Error getting the nodes that belong to %s pool", mcp.GetName())
+		workerNode := sortedWorkerNodes[0]
+
+		g.By("Start machine-config-controller logs capture")
+		ignoreMccLogErr := mcc.IgnoreLogsBeforeNow()
+		o.Expect(ignoreMccLogErr).NotTo(o.HaveOccurred(), "Ignore mcc log failed")
+		logger.Infof("OK!\n")
+
+		g.By("Create a pod disruption budget to set minAvailable to 1")
+		pdbTemplate := generateTemplateAbsolutePath("pod-disruption-budget.yaml")
+		pdb := PodDisruptionBudget{name: pdbName, namespace: nsName, template: pdbTemplate}
+		defer pdb.delete(oc)
+		pdb.create(oc)
+		logger.Infof("OK!\n")
+
+		g.By("Create new pod for pod disruption budget")
+		hostname, err := workerNode.GetNodeHostname()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		pod := exutil.Pod{Name: podName, Namespace: nsName, Template: podTemplate, Parameters: []string{"HOSTNAME=" + hostname}}
+		defer func() { o.Expect(pod.Delete(oc)).NotTo(o.HaveOccurred()) }()
+		pod.Create(oc)
+		logger.Infof("OK!\n")
+
+		g.By("Create new mc to add new file on the node and trigger node drain")
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate(mcTemplate)
+		mc.skipWaitForMcp = true
+		defer mc.delete()
+		defer func() {
+			_ = pod.Delete(oc)
+			mcp.WaitForNotDegradedStatus()
+		}()
+		mc.create()
+		logger.Infof("OK!\n")
+
+		g.By("Wait until node is cordoned")
+		o.Eventually(workerNode.Poll(`{.spec.taints[?(@.effect=="NoSchedule")].effect}`),
+			"20m", "1m").Should(o.Equal("NoSchedule"), fmt.Sprintf("Node %s was not cordoned", workerNode.name))
+		logger.Infof("OK!\n")
+
+		g.By("Verify that node is not degraded until the alarm timeout")
+		o.Consistently(mcp.pollDegradedStatus(),
+			"58m", "5m").Should(o.Equal("False"),
+			"The worker MCP was degraded too soon. The worker MCP should not be degraded until 1 hour timeout happens")
+		logger.Infof("OK!\n")
+
+		g.By("Verify that node is degraded after the 1h timeout")
+		o.Eventually(mcp.pollDegradedStatus(),
+			"5m", "1m").Should(o.Equal("True"),
+			"1 hour passed since the eviction problems were reported and the worker MCP has not been degraded")
+		logger.Infof("OK!\n")
+
+		g.By("Verify that the error is properly reported in the controller pod's logs")
+		logger.Debugf("CONTROLLER LOGS BEGIN!\n")
+		logger.Debugf(mcc.GetFilteredLogs(workerNode.GetName()))
+		logger.Debugf("CONTROLLER LOGS END!\n")
+
+		o.Expect(mcc.GetFilteredLogs(workerNode.GetName())).Should(
+			o.ContainSubstring("node %s: drain exceeded timeout: 1h0m0s. Will continue to retry.",
+				workerNode.GetName()),
+			"The eviction problem is not properly reported in the MCController pod logs")
+		logger.Infof("OK!\n")
+
+		g.By("Verify that the error is properly reported in the MachineConfigPool status")
+		nodeDegradedCondition := mcp.GetConditionByType("NodeDegraded")
+		nodeDegradedConditionJSON := JSON(nodeDegradedCondition)
+		nodeDegradedMessage := nodeDegradedConditionJSON.Get("message").ToString()
+		expectedDegradedNodeMessage := fmt.Sprintf("failed to drain node: %s after 1 hour. Please see machine-config-controller logs for more information", workerNode.GetName())
+
+		logger.Infof("MCP NodeDegraded condition: %s", nodeDegradedCondition)
+		o.Expect(nodeDegradedMessage).To(o.ContainSubstring(expectedDegradedNodeMessage),
+			"The error reported in the MCP NodeDegraded condition in not the expected one")
+		logger.Infof("OK!\n")
+
+		g.By("Verify that the alert is triggered with the right message")
+		alertJSON, err := getAlertsByName(oc, expectedAlertName)
+
+		logger.Infof("Found %s alerts: %s", expectedAlertName, alertJSON)
+
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error trying to get the %s alert", expectedAlertName)
+		o.Expect(alertJSON).To(o.HaveLen(1),
+			"One and only one %s alert should be reported because of the eviction problems", expectedAlertName)
+
+		expectedAnnotation := fmt.Sprintf("Drain failed on %s , updates may be blocked. For more details check MachineConfigController pod logs: oc logs -f -n openshift-machine-config-operator machine-config-controller-xxxxx -c machine-config-controller", workerNode.GetName())
+		o.Expect(alertJSON[0].Get("annotations").Get("message")).Should(o.ContainSubstring(expectedAnnotation),
+			"The error description should make a reference to the pod info")
+		logger.Infof("OK!\n")
+
+		g.By("Remove the  pod disruption budget")
+		pdb.delete(oc)
+		logger.Infof("OK!\n")
+
+		g.By("Verfiy that the pool stops being degraded")
+		o.Eventually(mcp.pollDegradedStatus(),
+			"10m", "30s").Should(o.Equal("False"),
+			"After removing the PodDisruptionBudget the eviction should have succeeded and the worker pool should stop being degraded")
+		logger.Infof("OK!\n")
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching xpectedNDStatus, expectedNDMessage, expectedNDReason
