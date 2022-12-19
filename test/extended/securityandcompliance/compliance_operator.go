@@ -435,7 +435,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 
 	})
 	// author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:xiyuan-Medium-33611-Verify the tolerations could work for compliancescan when there is more than one taint on node [Exclusive]", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:xiyuan-Medium-33611-Verify the tolerations could work for compliancescan when there is more than one taint on node [Disruptive]", func() {
 		var cscanD = complianceScanDescription{
 			name:         "example-compliancescan3" + getRandomString(),
 			namespace:    "",
@@ -783,7 +783,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-ARO-NonPreRelease-ConnectedOnly-Author:pdhamdhe-High-33609-Verify the tolerations could work for compliancesuite [Exclusive]", func() {
+	g.It("NonHyperShiftHOST-ARO-NonPreRelease-ConnectedOnly-Author:pdhamdhe-High-33609-Verify the tolerations could work for compliancesuite [Disruptive]", func() {
 		var (
 			csuiteD = complianceSuiteDescription{
 				name:         "worker-compliancesuite" + getRandomString(),
@@ -891,7 +891,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:pdhamdhe-High-33610-Verify the tolerations could work for compliancescan [Exclusive]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:pdhamdhe-High-33610-Verify the tolerations could work for compliancescan [Disruptive]", func() {
 
 		var (
 			cscanD = complianceScanDescription{
@@ -2221,7 +2221,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:xiyuan-High-33429-The Compliance Operator performs scan successfully on taint node without tolerations [Exclusive] [Slow]", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:xiyuan-High-33429-The Compliance Operator performs scan successfully on taint node without tolerations [Disruptive] [Slow]", func() {
 		var csuiteD = complianceSuiteDescription{
 			name:         "example-compliancesuite" + getRandomString(),
 			namespace:    "",
