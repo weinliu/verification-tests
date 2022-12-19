@@ -94,7 +94,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		e2e.Logf("user on bastion is  : %v", userForBastion)
 
 		g.By("Make sure all the nodes are normal")
-		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
 		checkMessage := []string{
 			"SchedulingDisabled",
 			"NotReady",
@@ -112,7 +112,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 
 		g.By("Run the backup on the first master")
 		defer runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo rm -rf /home/core/assets/backup", privateKeyForBastion, userForBastion)
-		err = wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
+		err := wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
 			msg, err := runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo /usr/local/bin/cluster-backup.sh /home/core/assets/backup", privateKeyForBastion, userForBastion)
 			if err != nil {
 				e2e.Logf("backup failed with the err:%v, and try next round", err)
@@ -272,13 +272,18 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		if platform == "aws" {
 
 			g.By("Verify that the machine is getting deleted and new machine is automatically created")
-			o.Expect(in("Deleting", masterMachineStatus)).To(o.Equal(true))
-			o.Expect(in("Provisioning", masterMachineStatus)).To(o.Equal(true))
+			waitforDesiredMachineCount(oc, masterNodeCount+1)
 			output, errMachineConfig := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath={.items[*].metadata.name}").Output()
 			o.Expect(errMachineConfig).NotTo(o.HaveOccurred())
 			masterMachineNameList := strings.Fields(output)
-			newMasterMachine := masterMachineNameList[masterNodeCount]
 
+			machineStatusOutput, errStatus := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o", "jsonpath={.items[*].status.phase}").Output()
+			o.Expect(errStatus).NotTo(o.HaveOccurred())
+			masterMachineStatus := strings.Fields(machineStatusOutput)
+			e2e.Logf("masterMachineStatus after deletion is %v", masterMachineStatus)
+			o.Expect(in("Deleting", masterMachineStatus)).To(o.Equal(true))
+
+			newMasterMachine := getNewMastermachine(masterMachineStatus, masterMachineNameList, "Provision")
 			g.By("Verify that the new machine is in running state.")
 			waitMachineStatusRunning(oc, newMasterMachine)
 

@@ -79,6 +79,17 @@ func getUserNameAndKeyonBationByPlatform(iaasPlatform string) string {
 	}
 	return user
 }
+func getNewMastermachine(masterMachineStatus []string, masterMachineNameList []string, desiredStatus string) string {
+	newMasterMachine := ""
+	for p, v := range masterMachineStatus {
+		if strings.Contains(v, desiredStatus) {
+			newMasterMachine = masterMachineNameList[p]
+			break
+		}
+	}
+	e2e.Logf("New machine is %s", newMasterMachine)
+	return newMasterMachine
+}
 
 func getNodeInternalIPListByLabel(oc *exutil.CLI, labelKey string) []string {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", labelKey, "-o=jsonpath='{.items[*].status.addresses[?(.type==\"InternalIP\")].address}'").Output()
