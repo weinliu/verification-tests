@@ -82,8 +82,13 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		ocpMajorVer, ocpMinorVer, clusterVersion = getClusterVersion(oc)
 		e2e.Logf("Running %v.%v on: %v", ocpMajorVer, ocpMinorVer, clusterVersion)
 
+		if checkKataInstalled(oc, subscription, commonKataConfigName) {
+			g.By(fmt.Sprintf("(2) subscription %v and kataconfig %v exists, skipping operator deployment", subscription.subName, commonKataConfigName))
+			return
+		}
+
 		// check if there is a CM override
-		testrunInitial, msg, err = getTestRunConfigmap(oc, testrunDefault, "default", "osc-config")
+		testrunInitial, _, _ = getTestRunConfigmap(oc, testrunDefault, "default", "osc-config")
 		if testrunInitial.exists { // then override
 			subscription.catalogSourceName = testrunInitial.catalogSourceName
 			subscription.channel = testrunInitial.channel
@@ -104,7 +109,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		}
 
 		// check env to override defaults or CM
-		testrun, msg = getTestRunEnvVars("OSCS", testrunDefault)
+		testrun, _ = getTestRunEnvVars("OSCS", testrunDefault)
 		// change subscription to match testrun.  env options override default and CM values
 		if testrun.exists {
 			testrunInitial = testrun
@@ -113,21 +118,21 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			mustGatherImage = testrunInitial.mustgatherImage
 			kcMonitorImageName = testrunInitial.katamonitorImage
 			operatorVer = testrunInitial.operatorVer
-			e2e.Logf("environment OSCS found. subscription: %v", subscription)
+			e2e.Logf("environment OSCS found. subscription: %v, operator version: %v", subscription, operatorVer)
 		}
 
 		if testrunInitial.icspNeeded {
 			e2e.Logf("An ICSP is being applied to allow %v and %v to work", testrunInitial.katamonitorImage, testrunInitial.mustgatherImage)
 			msg, err = imageContentSourcePolicy(oc, icspFile, icspName)
 			if err != nil || msg == "" {
-				logErrorAndFail(oc, fmt.Sprintf("Error: applying ICSP"), msg, err)
+				logErrorAndFail(oc, fmt.Sprintf("Error: applying ICSP %v", icspName), msg, err)
 			}
 		}
 
 		ns := filepath.Join(testDataDir, "namespace.yaml")
 		og := filepath.Join(testDataDir, "operatorgroup.yaml")
 
-		msg, err = subscribeFromTemplate(oc, subscription, subTemplate, ns, og)
+		_, err = subscribeFromTemplate(oc, subscription, subTemplate, ns, og)
 		e2e.Logf("---------- subscription %v succeeded with channel %v %v", subscription.subName, subscription.channel, err)
 
 		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, kcLogLevel, subscription)
@@ -250,7 +255,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Pod logs are not getting generated"))
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Pod %v logs are not getting generated", newPodName))
 		g.By("SUCCESS - Logs for pods with kata validated")
 		g.By("TEARDOWN - deleting the kata pod")
 	})
@@ -499,8 +504,8 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			mustgatherLog         = mustgatherName + ".log"
 			mustgatherTopdir      string
 			msg                   string
-			nodeControlCount      = 0
-			nodeWorkerCount       = 0
+			nodeControlCount      int
+			nodeWorkerCount       int
 			podNs                 = oc.Namespace()
 			singleNode            = false
 		)
@@ -517,11 +522,11 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			describeVwebhook: 0,
 		}
 
-		nodeControlList, msg, err := getNodeListByLabel(oc, subscription.namespace, "node-role.kubernetes.io/master=")
+		nodeControlList, _, err := getNodeListByLabel(oc, subscription.namespace, "node-role.kubernetes.io/master=")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodeControlCount = len(nodeControlList)
 
-		nodeWorkerList, msg, err := getNodeListByLabel(oc, subscription.namespace, "node-role.kubernetes.io/worker=")
+		nodeWorkerList, _, err := getNodeListByLabel(oc, subscription.namespace, "node-role.kubernetes.io/worker=")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodeWorkerCount = len(nodeWorkerList)
 
@@ -758,7 +763,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		)
 
 		g.By("Checking for configmap " + cmName)
-		testrunUpgrade, msg, err = getTestRunConfigmap(oc, testrunDefault, cmNs, cmName)
+		testrunUpgrade, _, err = getTestRunConfigmap(oc, testrunDefault, cmNs, cmName)
 
 		g.By("Checking for OSCU environment vars") // env options override default and CM values
 		testrun, msg = getTestRunEnvVars("OSCU", testrunDefault)

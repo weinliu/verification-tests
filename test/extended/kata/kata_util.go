@@ -122,7 +122,7 @@ func createKataConfig(oc *exutil.CLI, kcTemplate, kcName, kcMonitorImageName, kc
 	}
 
 	g.By("(2.1) Apply kataconfig file")
-	errCheck := wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+	errCheck := wait.PollImmediate(10*time.Second, snooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Output()
 		if err == nil {
 			return true, nil
@@ -133,7 +133,7 @@ func createKataConfig(oc *exutil.CLI, kcTemplate, kcName, kcMonitorImageName, kc
 	// -o=jsonpath={.status.installationStatus.IsInProgress} "" at this point
 
 	g.By("(2.2) Check kataconfig creation has started")
-	errCheck = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+	errCheck = wait.PollImmediate(10*time.Second, snooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", "--no-headers").Output()
 		if strings.Contains(msg, kcName) {
 			return true, nil
@@ -169,28 +169,26 @@ func createKataPod(oc *exutil.CLI, podNs, commonPod, commonPodName string) strin
 
 // author: abhbaner@redhat.com, vvoronko@redhat.com
 func deleteKataPod(oc *exutil.CLI, podNs, delPodName string) bool {
-	output, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", delPodName, "-n", podNs).Output()
+	_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", delPodName, "-n", podNs).Output()
 	if err != nil {
 		e2e.Logf("issue deleting pod %v in namespace %v, error: %v", delPodName, podNs, err)
 		return false
 	}
-	e2e.Logf("%s in namespace %s", output, podNs)
 
-	errCheck := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
-		podsList, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", podNs).Output()
-		if !strings.Contains(podsList, delPodName) {
+	errCheck := wait.PollImmediate(10*time.Second, 100*time.Second, func() (bool, error) {
+		_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", delPodName, "-n", podNs).Output()
+		if err != nil {
 			return true, nil
 		}
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Pod %v was not finally deleted in ns %v", delPodName, podNs))
-	e2e.Logf("Pod %s in namespace %s deletion verified", delPodName, podNs)
 	return true
 }
 
 // author: abhbaner@redhat.com
 func checkKataPodStatus(oc *exutil.CLI, podNs, newPodName string) {
-	errCheck := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+	errCheck := wait.PollImmediate(10*time.Second, 100*time.Second, func() (bool, error) {
 		podsStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", newPodName, "-n", podNs, "-o=jsonpath={.status.phase}").Output()
 		if strings.Contains(podsStatus, "Running") {
 			return true, nil
@@ -279,12 +277,45 @@ func getVersionInfo(oc *exutil.CLI, subscription subscriptionDescription, opVer 
 	return operatorVer, sub
 }
 
+func checkKataInstalled(oc *exutil.CLI, sub subscriptionDescription, kcName string) bool {
+	var (
+		jsonpathSubState   = "-o=jsonpath={.status.state}"
+		jsonpathCsv        = "-o=jsonpath={.status.installedCSV}"
+		jsonpathCsvState   = "-o=jsonpath={.status.phase}{.status.reason}"
+		jsonpathKataconfig = "-o=jsonpath={.status.installationStatus.IsInProgress}{.status.unInstallationStatus.inProgress.status}"
+		expectSubState     = "AtLatestKnown"
+		expectCsvState     = "SucceededInstallSucceeded"
+		expectKataconfig   = "false"
+	)
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, jsonpathSubState).Output()
+	if err != nil || msg != expectSubState {
+		e2e.Logf("issue with subscription or state isn't expected: %v, actual: %v error: %v", expectSubState, msg, err)
+	} else {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, jsonpathCsv).Output()
+		if err != nil || !strings.Contains(msg, sub.subName) {
+			e2e.Logf("Error: get installedCSV for subscription %v %v", msg, err)
+		} else {
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", msg, "-n", sub.namespace, jsonpathCsvState).Output()
+			if err != nil || msg != expectCsvState {
+				e2e.Logf("Error: CSV in wrong state, expected: %v actual: %v %v", expectCsvState, msg, err)
+			} else {
+				msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-n", sub.namespace, jsonpathKataconfig).Output()
+				if err == nil && msg == expectKataconfig {
+					return true
+				}
+				e2e.Logf("Error: Kataconfig in wrong state, expected: %v actual: %v error: %v", expectKataconfig, msg, err)
+			}
+		}
+	}
+	return false
+}
+
 func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg string, err error) {
 	var (
 		csvName string
 		v       string
 	)
-	errCheck := wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+	errCheck := wait.PollImmediate(10*time.Second, snooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}").Output()
 		// o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Compare(msg, "AtLatestKnown") == 0 {
@@ -306,7 +337,7 @@ func subscriptionIsFinished(oc *exutil.CLI, sub subscriptionDescription) (msg st
 	o.Expect(csvName).NotTo(o.BeEmpty())
 
 	g.By("Check that the csv '" + csvName + "' has finished")
-	errCheck = wait.Poll(10*time.Second, snooze*time.Second, func() (bool, error) {
+	errCheck = wait.PollImmediate(10*time.Second, snooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", sub.namespace, "-o=jsonpath={.status.phase}{.status.reason}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Compare(msg, "SucceededInstallSucceeded") == 0 {
@@ -359,7 +390,7 @@ func waitForNodesInDebug(oc *exutil.CLI, opNamespace string) (msg string, err er
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Error: only %v of %v total worker nodes are in debug: %v\n %v", count, workerNodeCount, workerNodeList, msg, err))
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Error: only %v of %v total worker nodes are in debug: %v\n %v", count, workerNodeCount, workerNodeList, msg))
 	msg = fmt.Sprintf("All %v worker nodes are in debug mode: %v", workerNodeCount, workerNodeList)
 	err = nil
 	return msg, err
@@ -534,7 +565,7 @@ func getTestRunEnvVars(envPrefix string, testrunDefault testrunConfigmap) (testr
 
 	var (
 		err error
-		val = ""
+		val string
 	)
 	testrunEnv = testrunDefault
 
