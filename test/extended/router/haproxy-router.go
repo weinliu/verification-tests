@@ -1354,4 +1354,73 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	})
 
+	// author: mjoseph@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-High-56898-Accessing the route should wake up the idled resources", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp56898",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		g.By("Create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		ingressErr := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(ingressErr, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		custContPod := getRouterPod(oc, "ocp56898")
+		custContIP := getPodv4Address(oc, custContPod, "openshift-ingress")
+
+		g.By("Deploy a backend pod and its service resources")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
+
+		g.By("Create a client pod")
+		createResourceFromFile(oc, project1, clientPod)
+		err = waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+
+		g.By("Expose a route with the unsecure service inside the project")
+		routehost := "service-unsecure-" + project1 + "." + ingctrl.domain
+		SrvErr := oc.Run("expose").Args("svc/service-unsecure", "--hostname="+routehost).Execute()
+		o.Expect(SrvErr).NotTo(o.HaveOccurred())
+		routeOutput := getRoutes(oc, project1)
+		o.Expect(routeOutput).To(o.ContainSubstring("service-unsecure"))
+
+		g.By("Check the router pod and ensure the routes are loaded in haproxy.config")
+		haproxyOutput := readRouterPodData(oc, custContPod, "cat haproxy.config", "service-unsecure")
+		o.Expect(haproxyOutput).To(o.ContainSubstring("backend be_http:" + project1 + ":service-unsecure"))
+
+		g.By("Check the reachability of the insecure route")
+		waitForCurl(oc, cltPodName, baseDomain, "service-unsecure-"+project1+"."+"ocp56898.", "HTTP/1.1 200 OK", custContIP)
+
+		g.By("Idle the insecure service")
+		idleOutput, err := oc.AsAdmin().WithoutNamespace().Run("idle").Args("service-unsecure", "-n", project1).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(idleOutput).To(o.ContainSubstring("The service \"" + project1 + "/service-unsecure\" has been marked as idled"))
+
+		g.By("Verify the Idle annotation")
+		findAnnotation := getAnnotation(oc, project1, "svc", "service-unsecure")
+		o.Expect(findAnnotation).To(o.ContainSubstring("idling.alpha.openshift.io/idled-at"))
+		o.Expect(findAnnotation).To(o.ContainSubstring(`idling.alpha.openshift.io/unidle-targets":"[{\"kind\":\"ReplicationController\",\"name\":\"web-server-rc\",\"replicas\":1}]`))
+
+		g.By("Wake the Idle resource by accessing its route")
+		waitForCurl(oc, cltPodName, baseDomain, "service-unsecure-"+project1+"."+"ocp56898.", "HTTP/1.1 200 OK", custContIP)
+
+		g.By("Confirm the Idle annotation got removed")
+		findAnnotation = getAnnotation(oc, project1, "svc", "service-unsecure")
+		o.Expect(findAnnotation).NotTo(o.ContainSubstring("idling.alpha.openshift.io/idled-at"))
+	})
 })
