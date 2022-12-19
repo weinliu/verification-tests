@@ -162,12 +162,16 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		g.By("Set status variables")
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+
 		g.By("Set wrong proxy to imageregistry cluster")
 		defer func() {
 			g.By("Remove proxy for imageregistry cluster")
 			err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec": {"proxy": null}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitRegistryDefaultPodsReady(oc)
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
 			result, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-image-registry", "deployment.apps/image-registry", "env").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(result).NotTo(o.ContainSubstring("HTTP_PROXY=http://test:3128"))
@@ -203,6 +207,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"affinity":null}}`, "--type=merge").Execute()
 
+		g.By("Set status variables")
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+
 		g.By("Set image registry replica to 3")
 		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"replicas":3}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -210,7 +217,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			g.By("Set image registry replica to 2")
 			err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"replicas":2}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitRegistryDefaultPodsReady(oc)
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 
 		g.By("Confirm 3 pods scaled up")
@@ -237,12 +245,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Set image registry replica to 4")
 		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"replicas":4}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer func() {
-			g.By("Set image registry replica to 2")
-			err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"replicas":2}}`, "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			waitRegistryDefaultPodsReady(oc)
-		}()
 
 		g.By("Confirm 4 pods scaled up")
 		err = wait.Poll(50*time.Second, 2*time.Minute, func() (bool, error) {
@@ -351,7 +353,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("Author:VMonly-wewang-Medium-27985-Image with invalid resource name can be pruned [Disruptive]", func() {
+	g.It("Author:wewang-Medium-27985-Image with invalid resource name can be pruned [Disruptive]", func() {
 		// When registry configured pvc or emptryDir, the replicas is 1 and with recreate pod policy.
 		// This is not suitable for the defer recoverage. Only run this case on cloud storage.
 		platforms := map[string]bool{
@@ -411,7 +413,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("Author:xiuwang-Critical-21593-Critical-34680-Medium-35906-High-27588-Image registry storage cannot be removed if set to Unamanaged when image registry is set to Removed [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:xiuwang-Critical-21593-Critical-34680-Medium-35906-High-27588-Image registry storage cannot be removed if set to Unamanaged when image registry is set to Removed [Disruptive]", func() {
+		g.By("Set status variables")
+		expectedStatus1 := map[string]string{"Progressing": "True"}
+		expectedStatus2 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+
 		g.By("Get registry storage info")
 		var storageinfo1, storageinfo2, storageinfo3 string
 		_, storageinfo1 = getRegistryStorageConfig(oc)
@@ -431,7 +437,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			patchInfo := fmt.Sprintf("{\"spec\":{\"managementState\":\"Managed\",\"replicas\": %v,\"storage\":{\"managementState\":\"Managed\"}}}", podNum)
 			err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", patchInfo, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitRegistryDefaultPodsReady(oc)
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus2)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus2)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "kube-apiserver", 480, expectedStatus2)
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Removed","storage":{"managementState":"Unmanaged"}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -459,7 +470,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Set image registry operator to Managed again")
 		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Managed"}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitRegistryDefaultPodsReady(oc)
+		err = waitCoBecomes(oc, "image-registry", 60, expectedStatus1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "image-registry", 240, expectedStatus2)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		_, storageinfo3 = getRegistryStorageConfig(oc)
 		if strings.Compare(storageinfo1, storageinfo3) != 0 {
@@ -655,8 +669,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:jitli-ConnectedOnly-VMonly-Medium-33051-Images can be imported from an insecure registry without 'insecure: true' if it is in insecureRegistries in image.config/cluster [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:jitli-ConnectedOnly-Medium-33051-Images can be imported from an insecure registry without 'insecure: true' if it is in insecureRegistries in image.config/cluster [Disruptive]", func() {
 
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 		masterNode, _ := exutil.GetFirstMasterNode(oc)
 		defer func() {
 			err := wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
@@ -670,7 +685,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 			})
 			exutil.AssertWaitPollNoErr(err, "registries.conf not contains docker.io")
-			waitRegistryDefaultPodsReady(oc)
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 		g.By("import image from an insecure registry directly without --insecure=true")
 		output, err := oc.WithoutNamespace().AsAdmin().Run("import-image").Args("image-33051", "--from=registry.access.redhat.com/rhel7").Output()
@@ -751,6 +767,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			g.Skip("Skip for non-supported platform")
 		}
 
+		g.By("Set status variables")
+		expectedStatus1 := map[string]string{"Progressing": "True"}
+		expectedStatus2 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+
 		g.By("Set a different container in registry config")
 		oricontainer, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.storage.swift.container}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -758,11 +778,15 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		defer func() {
 			err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"swift":{"container": "`+oricontainer+`"}}}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitRegistryDefaultPodsReady(oc)
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus2)
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 		err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"swift":{"container": "`+newcontainer+`"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitRegistryDefaultPodsReady(oc)
+		err = waitCoBecomes(oc, "image-registry", 60, expectedStatus1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "image-registry", 240, expectedStatus2)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Set invalid authURL in image registry crd")
 		foundErrLog1 := false
@@ -832,12 +856,15 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		if !strings.Contains(output, "AlibabaCloud") {
 			g.Skip("Skip for non-supported platform")
 		}
+		g.By("Set status variables")
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 
 		g.By("Configure OSS with Public endpoint")
 		defer func() {
 			err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"oss":{"endpointAccessibility":null}}}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitRegistryDefaultPodsReady(oc)
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 		_, err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"oss":{"endpointAccessibility":"Public"}}}}`, "--type=merge").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -921,6 +948,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		if !strings.Contains(output, "resourceTags") {
 			g.Skip("Skip for no resourceTags")
 		}
+
+		g.By("Set status variables")
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+
 		g.By("Get bucket name")
 		bucket, err := oc.AsAdmin().Run("get").Args("config.image", "-o=jsonpath={..spec.storage.s3.bucket}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -944,7 +975,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			} else {
 				e2e.Logf("config.image cluster is Managed")
 			}
-			waitRegistryDefaultPodsReady(oc)
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "kube-apiserver", 480, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 		err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"managementState": "Removed"}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1097,11 +1133,15 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		clusterID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.infrastructureName}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		g.By("Set status variables")
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+
 		if exutil.CheckPlatform(oc) == "none" && strings.HasPrefix(firstMaster, "master") && !strings.HasPrefix(firstMaster, clusterID) && !strings.HasPrefix(firstMaster, "internal") {
 			defer func() {
 				err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"tolerations":[]}}`, "--type=merge").Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
-				waitRegistryDefaultPodsReady(oc)
+				err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+				o.Expect(err).NotTo(o.HaveOccurred())
 			}()
 			output, err := oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"tolerations":[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]}}`, "--type=merge").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1249,6 +1289,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		if !strings.Contains(output, "us-gov") {
 			g.Skip("Skip for wrong region")
 		}
+		g.By("Set status variables")
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 
 		g.By("Set regionEndpoint if it not set")
 		regionEndpoint, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.status.storage.s3.regionEndpoint}").Output()
@@ -1257,7 +1299,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			defer func() {
 				err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"storage":{"s3":{"regionEndpoint": null ,"virtualHostedStyle": null}}}}`, "--type=merge").Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
-				waitRegistryDefaultPodsReady(oc)
+				err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+				o.Expect(err).NotTo(o.HaveOccurred())
 			}()
 			err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"storage":{"s3":{"regionEndpoint": "https://s3.us-gov-west-1.amazonaws.com" ,"virtualHostedStyle": true}}}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1429,11 +1472,15 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			g.Skip("Skip for non-supported platform")
 		}
 
-		g.By("Configure image-registry-private-configuration  secret to use new application credentials")
+		g.By("Set status variables")
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+
+		g.By("Configure image-registry-private-configuration secret to use new application credentials")
 		defer func() {
 			err := oc.AsAdmin().WithoutNamespace().Run("set").Args("data", "secret/image-registry-private-configuration", "--from-literal=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALID='' ", "--from-literal=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALNAME='' ", "--from-literal=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALSECRET='' ", "-n", "openshift-image-registry").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitRegistryDefaultPodsReady(oc)
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 		err := oc.AsAdmin().WithoutNamespace().Run("set").Args("data", "secret/image-registry-private-configuration", "--from-file=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALID=/root/auto/44037/applicationid", "--from-file=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALNAME=/root/auto/44037/applicationname", "--from-file=REGISTRY_STORAGE_SWIFT_APPLICATIONCREDENTIALSECRET=/root/auto/44037/applicationsecret", "-n", "openshift-image-registry").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1451,6 +1498,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	// author: jitli@redhat.com
 	// Cover test case: OCP-46069 and 49886
 	g.It("NonPreRelease-Author:jitli-Critical-46069-High-49886-Could override the default topology constraints and Topology Constraints works well in non zone cluster [Disruptive]", func() {
+		g.By("Set status variables")
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 
 		g.By("Get image registry pod replicas num")
 		podNum := getImageRegistryPodNumber(oc)
@@ -1473,7 +1522,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			defer func() {
 				err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"topologySpreadConstraints":null}}`, "--type=merge").Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
-				waitRegistryDefaultPodsReady(oc)
+				err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+				o.Expect(err).NotTo(o.HaveOccurred())
 			}()
 			err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"topologySpreadConstraints":[{"labelSelector":{"matchLabels":{"docker-registry":"bar"}},"maxSkew":2,"topologyKey":"zone","whenUnsatisfiable":"ScheduleAnyway"}]}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1528,6 +1578,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		if len(workerNodes) != 3 {
 			g.Skip("Skip for not three workers")
 		}
+		g.By("Set status variables")
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+
 		zone, err := oc.AsAdmin().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker", `-o=jsonpath={.items[*].metadata.labels.topology\.kubernetes\.io\/zone}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		zoneList := strings.Fields(zone)
@@ -1558,7 +1611,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			defer func() {
 				err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"replicas":2}}`, "--type=merge").Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
-				waitRegistryDefaultPodsReady(oc)
+				err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+				o.Expect(err).NotTo(o.HaveOccurred())
 			}()
 			err := oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"replicas":3}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1651,6 +1705,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: jitli@redhat.com
 	g.It("NonHyperShiftHOST-Author:jitli-NonPreRelease-Medium-22032-High-50219-Setting nodeSelector and tolerations on nodes with taints registry works well [Disruptive]", func() {
+		g.By("Set status variables")
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 
 		g.By("Check the image-registry default topology")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.template.spec.topologySpreadConstraints}").Output()
@@ -1662,7 +1718,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		defer func() {
 			err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"nodeSelector":null,"tolerations":null}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitRegistryDefaultPodsReady(oc)
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 		err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"nodeSelector":{"node-role.kubernetes.io/master": ""},"tolerations":[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1900,8 +1957,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(envList).To(o.ContainSubstring("REGISTRY_STORAGE_GCS_KEYFILE=/gcs/keyfile"))
 
 		g.By("Check registry pod well")
-		waitRegistryDefaultPodsReady(oc)
-
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		err := waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
 	// author: jitli@redhat.com
@@ -1958,12 +2016,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Set up the routes")
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 		defer func() {
 			g.By("Recover resources for imageregistry")
 			err := oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"routes":`+initialConfig+`}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			g.By("Check registry pod well")
-			waitRegistryDefaultPodsReady(oc)
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 
 		err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"routes":[{"hostname":"test24133route-image-registry.openshift.com","name":"test24133route","secretName":"`+tls+`"}]}}`, "--type=merge").Execute()
