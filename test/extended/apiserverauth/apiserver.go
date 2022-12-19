@@ -3,6 +3,7 @@ package apiserverauth
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net"
@@ -108,7 +109,9 @@ var _ = g.Describe("[sig-api-machinery] API_Server", func() {
 
 			var oasEncNumber, kasEncNumber int
 			oasEncNumber, err = GetEncryptionKeyNumber(oc, `encryption-key-openshift-apiserver-[^ ]*`)
+			o.Expect(err).NotTo(o.HaveOccurred())
 			kasEncNumber, err = GetEncryptionKeyNumber(oc, `encryption-key-openshift-kube-apiserver-[^ ]*`)
+			o.Expect(err).NotTo(o.HaveOccurred())
 
 			t := time.Now().Format(time.RFC3339)
 			patchYamlToRestore := `[{"op":"replace","path":"/spec/unsupportedConfigOverrides","value":null}]`
@@ -542,7 +545,7 @@ spec:
 					e2e.Logf("Apiserver/cluster is not changed from the default values")
 					restoreClusterOcp41899(oc)
 				} else {
-					output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patchToRecover).Output()
+					err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", "-p", patchToRecover).Execute()
 					o.Expect(err).NotTo(o.HaveOccurred())
 					restoreClusterOcp41899(oc)
 				}
@@ -781,6 +784,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd := fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, dirname+"node.log")
 		nodeLogs, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("%s", nodeLogs)
 		if len(nodeLogs) > 0 {
 			e2e.Logf("Some nodes are NotReady or SchedulingDisabled...Please check")
@@ -883,6 +887,7 @@ spec:
 		// Skipped case on arm64 cluster
 		exutil.SkipARM64(oc)
 		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Check the configuration of priority level")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "workload-low", "-o", `jsonpath={.spec.limited.assuredConcurrencyShares}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -896,6 +901,7 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd := fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, dirname+"node.log")
 		nodeLogs, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("%s", nodeLogs)
 		if len(nodeLogs) > 0 {
 			e2e.Logf("Some nodes are NotReady or SchedulingDisabled...Please check")
@@ -2393,7 +2399,6 @@ spec:
 		totalAbnormalLogCount += len(externalPanicLogs)
 
 		g.By("7) On all master nodes, check kas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
-		format = `[0-9TZm.:]{2,}|namespace="([a-zA-Z0-9]|\-)*"|name="([a-zA-Z0-9]|\-)*"`
 		keywords = "panic|fatal|SHOULD NOT HAPPEN"
 		exceptions = "allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*:.*(net/http: abort Handler - InternalError|context deadline exceeded - InternalError)|panicked: false|e2e-test-.*|kernel.*-panic|(ocp|OCP)[0-9]{4,}|49167-fatal|LogLevelFatal"
 		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/kube-apiserver/audit*.log | grep -Ev '%s' > /tmp/OCP-39601-audit-errors.log
@@ -2618,7 +2623,6 @@ spec:
 		totalAbnormalLogCount += len(masterNodeAbnormalLogs)
 
 		g.By("7) On all master nodes, check oas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
-		format = `[0-9TZm.:]{2,}|namespace="([a-zA-Z0-9]|\-)*"|name="([a-zA-Z0-9]|\-)*"`
 		keywords = "panic|fatal|SHOULD NOT HAPPEN"
 		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/openshift-apiserver/audit*.log > /tmp/OCP-38865-audit-errors.log
 		echo '%s'
@@ -3587,5 +3591,67 @@ EOF`, dcpolicyrepo)
 		o.Eventually(func() bool {
 			return crDeleteMatchRegex.MatchString(backgroundBuf2.String())
 		}, 60*time.Second, 1*time.Second).Should(o.BeTrue(), "crd is not deleted")
+	})
+
+	// author: zxiao@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-Medium-22565-[origin_platformexp_214][REST] Check if the given user or group have the privilege via SubjectAccessReview", func() {
+		g.By("1) Create new project required for this test execution")
+		oc.SetupProject()
+		namespace := oc.Namespace()
+		username := oc.Username()
+
+		// helper function for executing post request to SubjectAccessReview
+		postSubjectAccessReview := func(username string, namespace string, step string, expectStatus string) {
+			g.By(fmt.Sprintf("%s>>) Get base URL for API requests", step))
+			baseURL, err := oc.Run("whoami").Args("--show-server").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By(fmt.Sprintf("%s>>) Get access token", step))
+			token, err := oc.Run("whoami").Args("-t").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			authHeader := fmt.Sprintf(`Authorization: Bearer %s`, token)
+
+			g.By(fmt.Sprintf("%s>>) Submit POST request to API SubjectAccessReview", step))
+			url := baseURL + filepath.Join("/apis/authorization.openshift.io/v1/namespaces", namespace, "localsubjectaccessreviews")
+			e2e.Logf("Get post SubjectAccessReview REST API server %s", url)
+
+			postMap := map[string]string{
+				"kind":       "LocalSubjectAccessReview",
+				"apiVersion": "authorization.openshift.io/v1",
+				"verb":       "create",
+				"resource":   "pods",
+				"user":       username,
+			}
+			postJSON, err := json.Marshal(postMap)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			command := fmt.Sprintf("curl -X POST %s -w '%s' -o /dev/null -k -H '%s' -H 'Content-Type: application/json' -d '%s'", url, "%{http_code}", authHeader, string(postJSON))
+			postSubjectAccessReviewStatus, err := exec.Command("bash", "-c", command).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(string(postSubjectAccessReviewStatus)).To(o.Equal(expectStatus))
+		}
+
+		// setup role for user and post to API
+		testUserAccess := func(role string, step string, expectStatus string) {
+			g.By(fmt.Sprintf("%s>>) Remove default role [admin] from the current user [%s]", step, username))
+			err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-role-from-user", "admin", username, "-n", namespace).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By(fmt.Sprintf("%s>>) Add new role [%s] to the current user [%s]", step, role, username))
+			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-role-to-user", role, username, "-n", namespace).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By(fmt.Sprintf("%s>>) POST to SubjectAccessReview API for user %s under namespace %s, expect status %s", step, username, namespace, expectStatus))
+			postSubjectAccessReview(username, namespace, step, expectStatus)
+		}
+
+		g.By("2) Test user access with role [view], expect failure")
+		testUserAccess("view", "2", "403")
+
+		g.By("3) Test user access with role [edit], expect failure")
+		testUserAccess("edit", "3", "403")
+
+		g.By("4) Test user access with role [admin], expect success")
+		testUserAccess("admin", "4", "201")
 	})
 })
