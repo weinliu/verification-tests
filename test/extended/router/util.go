@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -1207,4 +1208,27 @@ func deleteTaint(oc *exutil.CLI, resource, resourceName, taint string) {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("taint", resource, resourceName, taint).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(output).To(o.ContainSubstring(resource + "/" + resourceName + " untainted"))
+}
+
+func waitCoBecomes(oc *exutil.CLI, coName string, waitTime int, expectedStatus map[string]string) error {
+	return wait.Poll(10*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+		gottenStatus := getCoStatus(oc, coName, expectedStatus)
+		eq := reflect.DeepEqual(expectedStatus, gottenStatus)
+		if eq {
+			e2e.Logf("Given operator %s becomes %s", coName, gottenStatus)
+			return true, nil
+		}
+		return false, nil
+	})
+}
+
+func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]string) map[string]string {
+	newStatusToCompare := make(map[string]string)
+	for key := range statusToCompare {
+		args := fmt.Sprintf(`-o=jsonpath={.status.conditions[?(.type == '%s')].status}`, key)
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", args, coName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newStatusToCompare[key] = status
+	}
+	return newStatusToCompare
 }

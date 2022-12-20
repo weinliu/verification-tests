@@ -433,9 +433,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		project1 := oc.Namespace()
 
 		g.By("Check updated value in dns operator file")
-		output1, err1 := oc.AsAdmin().Run("get").Args("cm/dns-default", "-n", "openshift-dns", "-o=jsonpath={.data.Corefile}").Output()
-		o.Expect(err1).NotTo(o.HaveOccurred())
-		o.Expect(output1).To(o.ContainSubstring("bufsize 512"))
+		output, err := oc.AsAdmin().Run("get").Args("cm/dns-default", "-n", "openshift-dns", "-o=jsonpath={.data.Corefile}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("bufsize 512"))
 
 		g.By("Check the cache value in Corefile of coredns under all dns-default-xxx pods")
 		podList := getAllDNSPodsNames(oc)
@@ -443,24 +443,24 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("Create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
-		err := waitForPodWithLabelReady(oc, project1, cltPodLabel)
-		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+		err1 := waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err1, "A client pod failed to be ready state within allowed time!")
 
 		g.By("Client send out a dig for google.com to check response")
-		digOutput, err := oc.Run("exec").Args(cltPodName, "--", "dig", "google.com").Output()
-		o.Expect(err1).NotTo(o.HaveOccurred())
+		digOutput, err2 := oc.Run("exec").Args(cltPodName, "--", "dig", "google.com").Output()
+		o.Expect(err2).NotTo(o.HaveOccurred())
 		o.Expect(digOutput).To(o.ContainSubstring("udp: 512"))
 
 		g.By("Client send out a dig for NXDOMAIN to check response")
-		digOutput, err = oc.Run("exec").Args(cltPodName, "--", "dig", "nxdomain.google.com").Output()
-		o.Expect(err1).NotTo(o.HaveOccurred())
-		o.Expect(digOutput).To(o.ContainSubstring("udp: 512"))
+		digOutput1, err3 := oc.Run("exec").Args(cltPodName, "--", "dig", "nxdomain.google.com").Output()
+		o.Expect(err3).NotTo(o.HaveOccurred())
+		o.Expect(digOutput1).To(o.ContainSubstring("udp: 512"))
 
 		// bug:- 1884053
 		g.By("Check Readiness probe configured to use the '/ready' path")
 		dnsPodName2 := getRandomDNSPodName(podList)
-		output2, err2 := oc.AsAdmin().Run("get").Args("pod/"+dnsPodName2, "-n", "openshift-dns", "-o=jsonpath={.spec.containers[0].readinessProbe.httpGet}").Output()
-		o.Expect(err2).NotTo(o.HaveOccurred())
+		output2, err4 := oc.AsAdmin().Run("get").Args("pod/"+dnsPodName2, "-n", "openshift-dns", "-o=jsonpath={.spec.containers[0].readinessProbe.httpGet}").Output()
+		o.Expect(err4).NotTo(o.HaveOccurred())
 		o.Expect(output2).To(o.ContainSubstring(`"path":"/ready"`))
 
 		// bug:- 1756344
@@ -564,5 +564,90 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		if !strings.Contains(podOut2, "Number of Nodes Misscheduled: 2") {
 			e2e.Logf("Number of Nodes Misscheduled: 2 is not expected")
 		}
+	})
+
+	// Bug: 1916907
+	g.It("Author:mjoseph-Longduration-NonPreRelease-High-56539-Disabling internal registry should not corrupt /etc/hosts [Disruptive]", func() {
+
+		g.By("Pre-flight check for the platform type in the environment")
+		platformtype := exutil.CheckPlatform(oc)
+		platforms := map[string]bool{
+			// ‘None’ also for Baremetal
+			"none":      true,
+			"baremetal": true,
+			"vsphere":   true,
+			"openstack": true,
+			"nutanix":   true,
+		}
+		if platforms[platformtype] {
+			g.Skip("Skip for non-supported platform")
+		}
+
+		g.By("Get the Cluster IP of image-registry")
+		clusterIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+			"service", "image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.clusterIP}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("SSH to the node and confirm the /etc/hosts have the same clusterIP")
+		allNodeList, _ := exutil.GetAllNodes(oc)
+		// get a random node
+		node := getRandomDNSPodName(allNodeList)
+		hostOutput, err := exutil.DebugNodeWithChroot(oc, node, "cat", "/etc/hosts")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(hostOutput).To(o.And(
+			o.ContainSubstring("127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4"),
+			o.ContainSubstring("::1         localhost localhost.localdomain localhost6 localhost6.localdomain6"),
+			o.ContainSubstring(clusterIP)))
+		o.Expect(hostOutput).NotTo(o.And(o.ContainSubstring("error"), o.ContainSubstring("failed"), o.ContainSubstring("timed out")))
+
+		g.By("Set status variables")
+		expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+
+		g.By("Delete the image-registry svc and check whether it receives a new Cluster IP")
+		err1 := oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "image-registry", "-n", "openshift-image-registry").Execute()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "image-registry", 60, expectedStatus)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "kube-apiserver", 600, expectedStatus)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		newClusterIP, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+			"service", "image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.clusterIP}").Output()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		o.Expect(newClusterIP).NotTo(o.ContainSubstring(clusterIP))
+
+		g.By("SSH to the node and confirm the /etc/hosts details, after deletion")
+		hostOutput1, err3 := exutil.DebugNodeWithChroot(oc, node, "cat", "/etc/hosts")
+		o.Expect(err3).NotTo(o.HaveOccurred())
+		o.Expect(hostOutput1).To(o.And(
+			o.ContainSubstring("127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4"),
+			o.ContainSubstring("::1         localhost localhost.localdomain localhost6 localhost6.localdomain6")))
+		o.Expect(hostOutput1).NotTo(o.And(o.ContainSubstring("error"), o.ContainSubstring("failed"), o.ContainSubstring("timed out")))
+
+		g.By("Disable the internal registry and check /host details")
+		defer func() {
+			g.By("Recover image registry change")
+			err4 := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", "{\"spec\":{\"managementState\":\"Managed\"}}", "--type=merge").Execute()
+			o.Expect(err4).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "kube-apiserver", 600, expectedStatus)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		// Set image registry to 'Removed'
+		_, err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Removed"}}`, "--type=merge").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("SSH to the node and confirm the /etc/hosts details, after disabling")
+		hostOutput2, err5 := exutil.DebugNodeWithChroot(oc, node, "cat", "/etc/hosts")
+		o.Expect(err5).NotTo(o.HaveOccurred())
+		o.Expect(hostOutput2).To(o.And(
+			o.ContainSubstring("127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4"),
+			o.ContainSubstring("::1         localhost localhost.localdomain localhost6 localhost6.localdomain6")))
+		o.Expect(hostOutput2).NotTo(o.And(o.ContainSubstring("error"), o.ContainSubstring("failed"), o.ContainSubstring("timed out")))
 	})
 })
