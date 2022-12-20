@@ -92,6 +92,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		g.It("CPaasrunOnly-Author:ikanse-Medium-49390-Vector Collecting Kubernetes events using event router[Serial][Slow]", func() {
 
+			g.Skip("Skip due to a known issue https://issues.redhat.com/browse/LOG-2999")
+
 			eventrouterTemplate := exutil.FixturePath("testdata", "logging", "eventrouter", "eventrouter.yaml")
 
 			g.By("Create ClusterLogging instance with Vector as collector")
