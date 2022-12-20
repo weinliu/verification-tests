@@ -175,6 +175,9 @@ func (h *hostedCluster) checkHCConditions() bool {
 			"ValidReleaseImage True", "ValidOIDCConfiguration True", "ReconciliationSucceeded True"})
 }
 
+// getHostedclusterConsoleInfo returns console url and password
+// the first return is console url
+// the second return is password of kubeadmin
 func (h *hostedCluster) getHostedclusterConsoleInfo() (string, string) {
 	url, cerr := h.oc.AsGuestKubeconf().WithoutNamespace().Run(OcpWhoami).Args("--show-console").Output()
 	o.Expect(cerr).ShouldNot(o.HaveOccurred())
@@ -270,7 +273,7 @@ func (h *hostedCluster) pollCheckAllNodepoolReady() func() bool {
 
 func (h *hostedCluster) checkAllNodepoolReady() bool {
 	nodeReadyCond := fmt.Sprintf(`-ojsonpath={.items[?(@.spec.clusterName=="%s")].status.conditions[?(@.type=="Ready")].status}`, h.name)
-	nodesStatus, err := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("--ignore-not-found", "np", "-A", nodeReadyCond, "--namespace", h.namespace, "--ignore-not-found").Output()
+	nodesStatus, err := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("--ignore-not-found", "np", nodeReadyCond, "--namespace", h.namespace).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	if len(nodesStatus) <= 0 {
 		return true
@@ -279,4 +282,87 @@ func (h *hostedCluster) checkAllNodepoolReady() bool {
 		return false
 	}
 	return true
+}
+
+func (h *hostedCluster) getNodepoolPayload(name string) string {
+	payloadCond := `-ojsonpath={.spec.release.image}`
+	payload, err := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("--ignore-not-found", "np", name, "-n", h.namespace, payloadCond).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return payload
+}
+
+func (h *hostedCluster) getNodepoolStatusPayloadVersion(name string) string {
+	payloadVersionCond := `-ojsonpath={.status.version}`
+	version, err := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("--ignore-not-found", "np", name, "-n", h.namespace, payloadVersionCond).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return version
+}
+
+func (h *hostedCluster) upgradeNodepoolPayloadInPlace(name, payload string) {
+	inplacePatchCond := `-p=[{"op": "replace", "path": "/spec/management/upgradeType", "value": "InPlace"}]`
+	_, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpPatch).Args("-n", h.namespace, "np", name,
+		"--type=json", inplacePatchCond).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+
+	patchOption := fmt.Sprintf(`-p=[{"op": "replace", "path": "/spec/release/image","value": "%s"}]`, payload)
+	_, err = h.oc.AsAdmin().WithoutNamespace().Run(OcpPatch).Args("-n", h.namespace, "np", name,
+		"--type=json", patchOption).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+}
+
+func (h *hostedCluster) pollCheckUpgradeNodepoolPayload(name, expectPayload, version string) func() bool {
+	return func() bool {
+		curPayload := h.getNodepoolPayload(name)
+		if strings.Contains(curPayload, expectPayload) {
+			v := h.getNodepoolStatusPayloadVersion(name)
+			if strings.Contains(v, version) {
+				return true
+			}
+		}
+
+		return false
+	}
+}
+
+// getCPReleaseImage return the .spec.release.image of hostedcluster
+// it is set by user and can be treated as expected release
+func (h *hostedCluster) getCPReleaseImage() string {
+	payload, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace, "hostedcluster", h.name,
+		`-ojsonpath={.spec.release.image}`).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return payload
+}
+
+// getCPPayload return current hosted cluster actual payload
+func (h *hostedCluster) getCPPayload() string {
+	payload, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace, "hostedcluster", h.name,
+		`-ojsonpath={.status.version.history[?(@.state=="Completed")].version}`).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return payload
+}
+
+// getCPDesiredPayload return desired payload in status
+func (h *hostedCluster) getCPDesiredPayload() string {
+	payload, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace, "hostedcluster", h.name,
+		`-ojsonpath={.status.version.desired.image}`).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return payload
+}
+
+func (h *hostedCluster) upgradeCPPayload(payload string) {
+	patchOption := fmt.Sprintf(`-p=[{"op": "replace", "path": "/spec/release/image","value": "%s"}]`, payload)
+	_, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpPatch).Args("-n", h.namespace, "hostedcluster", h.name,
+		"--type=json", patchOption).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+}
+
+func (h *hostedCluster) pollCheckUpgradeCPPayload(payload string) func() bool {
+	return func() bool {
+		curPayload := h.getCPPayload()
+		if strings.Contains(curPayload, payload) {
+			return true
+		}
+
+		return false
+	}
 }

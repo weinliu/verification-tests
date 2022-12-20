@@ -212,62 +212,33 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		if iaasPlatform != "aws" {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 43268 is for AWS - skipping test ...")
 		}
-		//create nodepool
-		var bashClient = NewCmdClient().WithShowInfo(true)
-		npCount := 2
+
+		g.By("create nodepool")
+		npCount := 1
 		npName := "jz-43268-test-01"
 
 		defer func() {
-			res := doOcpReq(oc, OcpGet, false, "-n", "clusters", "nodepools", npName, "--ignore-not-found")
-			if res != "" {
-				doOcpReq(oc, OcpDelete, false, "-n", "clusters", "nodepools", npName)
-			}
+			hostedcluster.deleteNodePool(npName)
+			o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), LongTimeout, LongTimeout/10).Should(o.BeTrue(),
+				"in defer check all nodes ready error")
 		}()
 
-		cmd := fmt.Sprintf("hypershift create nodepool aws --name %s --cluster-name %s --node-count %d", npName, guestClusterName, npCount)
-		_, err := bashClient.Run(cmd).Output()
-		o.Expect(err).ShouldNot(o.HaveOccurred())
+		hostedcluster.createAwsNodePool(npName, npCount)
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(),
+			"nodepool ready error")
 
-		//Get nodepool yaml file, edit spec.release.image, change it to 4.8.5
-		npImage := doOcpReq(oc, OcpGet, true, "nodepool", npName, "-n", "clusters", "-ojsonpath={.spec.release.image}")
-		e2e.Logf("The original image of nodepool %s is : %s\n", npName, npImage)
+		payload := hostedcluster.getNodepoolPayload(npName)
+		e2e.Logf("The original image of nodepool %s is : %s", npName, payload)
 
-		desiredImage := "quay.io/openshift-release-dev/ocp-release:4.8.5-x86_64"
-		patchOption := fmt.Sprintf("-p=[{\"op\": \"replace\", \"path\": \"/spec/release/image\",\"value\": \"%s\"}]", desiredImage)
-		doOcpReq(oc, OcpPatch, true, "-n", "clusters", "nodepool", npName, "--type=json", patchOption)
+		g.By("upgrade nodepool payload InPlace")
+		desiredVersion := "4.12.0-rc.1"
+		desiredImage := fmt.Sprintf("quay.io/openshift-release-dev/ocp-release:%s-x86_64", desiredVersion)
+		hostedcluster.upgradeNodepoolPayloadInPlace(npName, desiredImage)
+		o.Eventually(hostedcluster.pollCheckUpgradeNodepoolPayload(npName, desiredImage, desiredVersion), LongTimeout, LongTimeout/10).
+			Should(o.BeTrue(), "check upgrade np payload InPlace error")
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(),
+			"nodepool ready after upgrade error")
 
-		err = wait.Poll(1*time.Second, 60*time.Second, func() (bool, error) {
-			//Get nodepool yaml file
-			newImage := doOcpReq(oc, OcpGet, true, "nodepool", npName, "-n", "clusters", "-ojsonpath={.spec.release.image}")
-			if !strings.Contains(newImage, desiredImage) {
-				return false, nil
-			}
-
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "enable rolling update image error")
-
-		//remove nodeReplicas, add autoscaling, change spec.release.image back
-		autoScalingMax := "4"
-		autoScalingMin := "1"
-		removeNpConfig := "[{\"op\": \"remove\", \"path\": \"/spec/replicas\"}]"
-		doOcpReq(oc, OcpPatch, true, "-n", "clusters", "nodepools", npName, "--type=json", "-p", removeNpConfig)
-		autoscalConfig := fmt.Sprintf("--patch={\"spec\": {\"autoScaling\":   {\"max\": %s, \"min\":%s}}}", autoScalingMax, autoScalingMin)
-		doOcpReq(oc, OcpPatch, true, "-n", "clusters", "nodepools", npName, autoscalConfig, "--type=merge")
-
-		patchOption = fmt.Sprintf("-p=[{\"op\": \"replace\", \"path\": \"/spec/release/image\",\"value\": \"%s\"}]", npImage)
-		doOcpReq(oc, OcpPatch, true, "-n", "clusters", "nodepool", npName, "--type=json", patchOption)
-
-		err = wait.Poll(1*time.Second, 60*time.Second, func() (bool, error) {
-			//Get nodepool yaml file
-			newImage := doOcpReq(oc, OcpGet, true, "nodepool", npName, "-n", "clusters", "-ojsonpath={.spec.release.image}")
-			if !strings.Contains(newImage, npImage) {
-				return false, nil
-			}
-
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "enable rolling update node count error")
 	})
 
 	// author: heli@redhat.com
