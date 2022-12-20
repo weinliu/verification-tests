@@ -23,7 +23,6 @@ objects:
             daemonSetName: ovnkube-node
             containerName: ovnkube-node
         ebpf:
-          image: "${EBPF_IMAGE}"
           imagePullPolicy: IfNotPresent
           sampling: 50
           cacheActiveTimeout: 5s
@@ -41,7 +40,6 @@ objects:
           kafkaBatchSize: 10485760
       processor:
         port: 2055
-        image: "${FLOWLOGSPIPELINE_IMAGE}"
         imagePullPolicy: IfNotPresent
         logLevel: trace
         enableKubeProbes: true
@@ -68,7 +66,7 @@ objects:
         kafkaConsumerBatchSize: 10485760
       kafka:
         address: "kafka-cluster-kafka-bootstrap.netobserv"
-        topic: "network-flows"
+        topic: network-flows
         tls:
           enable: false
           caCert:
@@ -81,7 +79,15 @@ objects:
             certFile: user.crt
             certKey: user.key
       loki:
+        authToken: "${LOKI_AUTH_TOKEN}"
         url: "${LOKI_URL}"
+        tls:
+          enable: "${{LOKI_TLS_ENABLE}}"
+          caCert:
+            type: configmap
+            name: openshift-service-ca.crt
+            certFile: service-ca.crt
+          insecureSkipVerify: false
         batchWait: 1s
         batchSize: 10485760
         minBackoff: 1s
@@ -89,39 +95,56 @@ objects:
         maxRetries: 2
         staticLabels:
           app: netobserv-flowcollector
-        tls:
-          enable: false
-          caCert:
-            type: configmap
-            name: openshift-service-ca.crt
-            certFile: service-ca.crt
       consolePlugin:
         register: true
-        image: "${CONSOLEPLUGIN_IMAGE}"
         imagePullPolicy: IfNotPresent
         port: 9001
         logLevel: info
-        autoscaler: null
+        autoscaler:
+          status: DISABLED
+          minReplicas: 1
+          maxReplicas: 3
+          metrics:
+          - type: Resource
+            resource:
+              name: cpu
+              target:
+                type: Utilization
+              averageUtilization: 50
         portNaming:
           enable: true
           portNames:
             "3100": loki
+        quickFilters:
+        - name: Applications
+          filter:
+            src_namespace!: 'openshift-,netobserv'
+            dst_namespace!: 'openshift-,netobserv'
+          default: true
+        - name: Infrastructure
+          filter:
+            src_namespace: 'openshift-,netobserv'
+            dst_namespace: 'openshift-,netobserv'
+        - name: Pods network
+          filter:
+            src_kind: 'Pod'
+            dst_kind: 'Pod'
+          default: true
+        - name: Services network
+          filter:
+            dst_kind: 'Service'
+      exporters: []
 parameters:
   - name: NAMESPACE
     description: "namespace where you want flowlogsPipeline and consoleplugin pods to be deployed"
     value: "netobserv"
-  - name: FLOWLOGSPIPELINE_IMAGE
-    value: 'quay.io/netobserv/flowlogs-pipeline:main'
-    required: true
-  - name: CONSOLEPLUGIN_IMAGE
-    value: 'quay.io/netobserv/network-observability-console-plugin:main'
-    required: true
-  - name: EBPF_IMAGE
-    value: 'quay.io/netobserv/netobserv-ebpf-agent:main'
-    required: true
   - name: METRIC_SERVER_TLS_TYPE
     value: "DISABLED"
   - name: LOKI_URL
     value: 'http://loki.netobserv.svc:3100/'
   - name: DEPLOYMENT_MODEL
     value: "DIRECT"
+  - name: LOKI_AUTH_TOKEN
+    value: "DISABLED"
+  - name: LOKI_TLS_ENABLE
+    value: "false"

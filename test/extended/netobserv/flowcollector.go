@@ -2,9 +2,11 @@ package netobserv
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
+	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -13,13 +15,13 @@ import (
 
 // Flowcollector struct to handle Flowcollector resources
 type Flowcollector struct {
-	Namespace             string
-	FlowlogsPipelineImage string
-	ConsolePlugin         string
-	ProcessorKind         string
-	Template              string
-	MetricServerTLSType   string
-	LokiURL               string
+	Namespace           string
+	ProcessorKind       string
+	Template            string
+	MetricServerTLSType string
+	LokiURL             string
+	LokiAuthToken       string
+	LokiTLSEnable       bool
 }
 
 // Metrics struct to handle Metrics resources
@@ -49,17 +51,21 @@ type LokiStorage struct {
 	Template  string
 }
 
+// ForwardClusterRoleBinding struct to handle ClusterRoleBinding in Forward mode
+type ForwardClusterRoleBinding struct {
+	Namespace string
+	Template  string
+}
+
+// HostClusterRoleBinding struct to handle ClusterRoleBinding in Host mode
+type HostClusterRoleBinding struct {
+	Namespace string
+	Template  string
+}
+
 // create flowcollector CRD for a given manifest file
 func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 	parameters := []string{"--ignore-unknown-parameters=true", "-f", flow.Template, "-p", "NAMESPACE=" + flow.Namespace}
-
-	if flow.FlowlogsPipelineImage != "" {
-		parameters = append(parameters, "FLOWLOGSPIPELINE_IMAGE="+flow.FlowlogsPipelineImage)
-	}
-
-	if flow.ConsolePlugin != "" {
-		parameters = append(parameters, "CONSOLEPLUGIN_IMAGE="+flow.ConsolePlugin)
-	}
 
 	if flow.ProcessorKind != "" {
 		parameters = append(parameters, "KIND="+flow.ProcessorKind)
@@ -68,8 +74,17 @@ func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 	if flow.MetricServerTLSType != "" {
 		parameters = append(parameters, "METRIC_SERVER_TLS_TYPE="+flow.MetricServerTLSType)
 	}
+
 	if flow.LokiURL != "" {
 		parameters = append(parameters, "LOKI_URL="+flow.LokiURL)
+	}
+
+	if flow.LokiAuthToken != "" {
+		parameters = append(parameters, "LOKI_AUTH_TOKEN="+flow.LokiAuthToken)
+	}
+
+	if strconv.FormatBool(flow.LokiTLSEnable) != "" {
+		parameters = append(parameters, "LOKI_TLS_ENABLE="+strconv.FormatBool(flow.LokiTLSEnable))
 	}
 
 	exutil.ApplyNsResourceFromTemplate(oc, flow.Namespace, parameters...)
@@ -121,6 +136,36 @@ func (loki *LokiStorage) deployLokiStorage(oc *exutil.CLI) {
 	e2e.Logf("Deploy Loki storage")
 	parameters := []string{"--ignore-unknown-parameters=true", "-f", loki.Template, "-p", "NAMESPACE=" + loki.Namespace}
 	exutil.ApplyNsResourceFromTemplate(oc, loki.Namespace, parameters...)
+}
+
+// delete LokiStorage
+func (loki *LokiStorage) deleteLokiStorage(oc *exutil.CLI) {
+	e2e.Logf("Delete Loki PVC")
+	command1 := []string{"delete", "pod", "loki", "-n", loki.Namespace}
+	_, err1 := oc.AsAdmin().WithoutNamespace().Run(command1...).Args().Output()
+
+	command2 := []string{"delete", "configmap", "loki-config", "-n", loki.Namespace}
+	_, err2 := oc.AsAdmin().WithoutNamespace().Run(command2...).Args().Output()
+
+	command3 := []string{"delete", "service", "loki", "-n", loki.Namespace}
+	_, err3 := oc.AsAdmin().WithoutNamespace().Run(command3...).Args().Output()
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	o.Expect(err2).NotTo(o.HaveOccurred())
+	o.Expect(err3).NotTo(o.HaveOccurred())
+}
+
+// deploy ForwardClusterRoleBinding
+func (crb *ForwardClusterRoleBinding) deployForwardCRB(oc *exutil.CLI) {
+	e2e.Logf("Deploy ClusterRoleBinding in Forward mode")
+	parameters := []string{"--ignore-unknown-parameters=true", "-f", crb.Template, "-p", "NAMESPACE=" + crb.Namespace}
+	exutil.ApplyNsResourceFromTemplate(oc, crb.Namespace, parameters...)
+}
+
+// deploy HostClusterRoleBinding
+func (crb *HostClusterRoleBinding) deployHostCRB(oc *exutil.CLI) {
+	e2e.Logf("Deploy ClusterRoleBinding in Host mode")
+	parameters := []string{"--ignore-unknown-parameters=true", "-f", crb.Template, "-p", "NAMESPACE=" + crb.Namespace}
+	exutil.ApplyNsResourceFromTemplate(oc, crb.Namespace, parameters...)
 }
 
 // get flow collector port

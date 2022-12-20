@@ -1,0 +1,37 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: clusterRoleBinding-host-template
+objects:
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRole
+  metadata:
+    name: lokistack-netobserv-tenant-logs
+  rules:
+  - apiGroups:
+    - 'loki.grafana.com'
+    resources:
+    - infrastructure
+    resourceNames:
+    - logs
+    verbs:
+    - 'get'
+    - 'create'
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRoleBinding
+  metadata:
+    name: lokistack-netobserv-tenant-logs
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: lokistack-netobserv-tenant-logs
+  subjects:
+  - kind: ServiceAccount
+    name: flowlogs-pipeline
+    namespace: "${NAMESPACE}"
+  - kind: ServiceAccount
+    name: netobserv-plugin
+    namespace: "${NAMESPACE}"
+parameters:
+- name: NAMESPACE
+  value: "netobserv"

@@ -2,9 +2,3 @@
 operator: 
   branch: "main"
   tagName: ""
-flowlogsPipeline:
-  image: "quay.io/netobserv/flowlogs-pipeline:main"
-consolePlugin:
-  image: "quay.io/netobserv/network-observability-console-plugin:main"
-ebpf:
-  image: "quay.io/netobserv/netobserv-ebpf-agent:main"
