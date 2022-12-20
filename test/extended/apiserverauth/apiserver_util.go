@@ -403,24 +403,27 @@ func isSNOCluster(oc *exutil.CLI) bool {
 
 // LoadCPUMemWorkload load cpu and memory workload
 func LoadCPUMemWorkload(oc *exutil.CLI) {
+	var (
+		workerCPUtopstr    string
+		workerCPUtopint    int
+		workerMEMtopstr    string
+		workerMEMtopint    int
+		n                  int
+		m                  int
+		c                  int
+		r                  int
+		dn                 int
+		s                  int
+		cpuMetric          = 800
+		memMetric          = 700
+		reserveCPUP        = 50
+		reserveMemP        = 50
+		snoPodCapacity     = 250
+		reservePodCapacity = 120
+	)
+
 	workerCPUtopall := []int{}
-	var workerCPUtopstr string
-	var workerCPUtopint int
 	workerMEMtopall := []int{}
-	var workerMEMtopstr string
-	var workerMEMtopint int
-	cpuMetric := 800
-	memMetric := 700
-	reserveCPUP := 50
-	reserveMemP := 50
-	snoPodCapacity := 250
-	reservePodCapacity := 60
-	n := 1
-	m := 1
-	dn := 1
-	r := 1
-	c := 0
-	s := 0
 
 	randomStr := exutil.GetRandomString()
 	dirname := fmt.Sprintf("/tmp/-load-cpu-mem_%s/", randomStr)
@@ -439,7 +442,7 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 	cpuUsage, err := exec.Command("bash", "-c", cpuUsageCmd).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	cpu1 := regexp.MustCompile(`[^0-9 ]+`).ReplaceAllString(string(cpuUsage), "")
-	cpu, err := strconv.Atoi(cpu1)
+	cpu, _ := strconv.Atoi(cpu1)
 	cpuUsageCmdP := fmt.Sprintf(`echo "%v" | awk '{print $3}'`, workerTop)
 	cpuUsageP, err := exec.Command("bash", "-c", cpuUsageCmdP).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -460,7 +463,7 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 		workerCPUUsage, err := exec.Command("bash", "-c", workerCPUtopcmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		workerCPUtopstr = regexp.MustCompile(`[^0-9 ]+`).ReplaceAllString(string(workerCPUUsage), "")
-		workerCPUtopint, err = strconv.Atoi(workerCPUtopstr)
+		workerCPUtopint, _ = strconv.Atoi(workerCPUtopstr)
 		workerCPUtopall = append(workerCPUtopall, workerCPUtopint)
 	}
 	for j := 1; j < len(workerCPU); j++ {
@@ -519,6 +522,7 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Wait for 3 mins(this time is based on many tests), when the load starts, it will reach a peak within a few minutes, then falls back.
 		time.Sleep(180 * time.Second)
+		e2e.Logf("----> Created cpuload related pods: %v", n*r*dn)
 	}
 
 	memUsageCmd := fmt.Sprintf(`echo "%v" | awk '{print $4}'`, workerTop)
@@ -597,8 +601,9 @@ func LoadCPUMemWorkload(oc *exutil.CLI) {
 		e2e.Logf("%v", memloadCmd)
 		_, err = exec.Command("bash", "-c", memloadCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		// Wait for 3 mins(this time is based on many tests), when the load starts, it will reach a peak within a few minutes, then falls back.
-		time.Sleep(180 * time.Second)
+		// Wait for 5 mins, ensure that all load pods are strated up.
+		time.Sleep(300 * time.Second)
+		e2e.Logf("----> Created memload related pods: %v", m*r*dn)
 	}
 	// If load are landed, will do some checking with logs
 	if n > 0 || m > 0 {
