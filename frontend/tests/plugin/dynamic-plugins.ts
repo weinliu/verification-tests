@@ -55,7 +55,8 @@ describe('Dynamic plugins features', () => {
         .should('contain', 'apiVersion: console.openshift.io/v1')        
   })
 
-  it('(OCP-51743,yapei) Preload - locale files are loaded once plugin is enabled', {tags: ['e2e','admin']},() => {
+  it('(OCP-51743,yapei) Implement check for the new i18n annotation for dynamic plugins', {tags: ['e2e','admin']},() => {
+    cy.log('Preload - locale files are loaded once plugin is enabled');
     // enable console-customization plugin
     cy.exec(`oc patch console.operator cluster -p '{"spec":{"plugins":["console-customization"]}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
       .then(result => expect(result.stdout).contains('patched'));
@@ -64,8 +65,8 @@ describe('Dynamic plugins features', () => {
     cy.wait(30000);
     cy.visit('/api-explorer');
     cy.wait('@getConsoleCustomizaitonPluginLocales',{timeout: 60000});
-  });
-  it('(OCP-51743,yapei) Lazy - do not load locale files during enablement', {tags: ['e2e','admin']},() => {
+
+    cy.log('Lazy - do not load locale files during enablement')
     cy.switchPerspective('Developer');
     guidedTour.close();
     // enable console-demo-plugin
@@ -80,9 +81,8 @@ describe('Dynamic plugins features', () => {
         throw e;
       }
     })
-  });
 
-  it('(OCP-51743,yapei) Lazy - locale files are only loaded when visit plugin pages',{tags: ['e2e','admin']},() => {
+    cy.log('Lazy - locale files are only loaded when visit plugin pages')
     cy.switchPerspective('Developer');
     cy.clickNavLink(['Demo Plugin', 'Test Consumer']);
     cy.wait('@getConsoleDemoPluginLocales', {timeout: 30000})
@@ -126,13 +126,20 @@ describe('Dynamic plugins features', () => {
       .should('have.text', 'Networking');
   });
 
-  it('(OCP-54322,yapei) Expose ErrorBoundary capabilities', {tags: ['e2e','admin']}, () => {
+  it('(OCP-54322,yapei) Expose ErrorBoundary and improve overview detail extension', {tags: ['e2e','admin']}, () => {
+    cy.log('Expose ErrorBoundary capabilities')
     cy.switchPerspective('Administrator');
     cy.visit('/sample-error-boundary-page');
     cy.contains('Launch buggy component').click({force: true});
     cy.contains('Show details').click({force: true});
     cy.contains('something went wrong in your dynamic plug-in').should('exist');
     cy.contains('test error').should('exist');
+
+    cy.log('Improve overview detail item extension')
+    cy.switchPerspective('Administrator');
+    Overview.goToDashboard();
+    cy.get('[data-test="detail-item-title"]').should('include.text','Custom Overview Detail Title');
+    cy.get('[data-test="detail-item-value"]').should('include.text','Custom Overview Detail Info');
   });
 
   it('(OCP-52366, xiangyli) Add Dyamic Plugins to Cluster Overview Status card and notification drawer', {tags: ['e2e','admin']}, () => {
@@ -147,13 +154,6 @@ describe('Dynamic plugins features', () => {
       cy.get('a:contains(View all)').should('have.attr', 'href', '/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins')
       cy.contains(`${2}/${total} enabled`).should('exist')
     })
-  });
-
-  it('(OCP-54322,yapei) Improve overview detail item extension', {tags: ['e2e','admin']}, () =>{
-    cy.switchPerspective('Administrator');
-    Overview.goToDashboard();
-    cy.get('[data-test="detail-item-title"]').should('include.text','Custom Overview Detail Title');
-    cy.get('[data-test="detail-item-value"]').should('include.text','Custom Overview Detail Info');
   });
   
   it('(OCP-42537,yapei) Allow disabling dynamic plugins through a query parameter', {tags: ['e2e','admin']}, () => {

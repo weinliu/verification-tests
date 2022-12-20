@@ -70,5 +70,6 @@ module.exports = (on, config) => {
   config.env.KUBECONFIG_PATH = process.env.KUBECONFIG_PATH;
   config.env.LOGIN_UP_PAIR = process.env.LOGIN_UP_PAIR;
   config.env.HOST_API = process.env.BRIDGE_BASE_ADDRESS.replace(/console-openshift-console.apps/, 'api').concat(':6443');
+  config.numTestsKeptInMemory = 0;
   return config;
 };

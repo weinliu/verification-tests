@@ -12,7 +12,8 @@ describe('Administration pages pesudo translation', () => {
   	cy.logout;
   });
 
-  it('(OCP-35766,yapei) cluster settings details', {tags: ['e2e','admin']}, () => {
+  it('(OCP-35766,yapei) administration pages pesudo translation', {tags: ['e2e','admin']}, () => {
+    cy.log('cluster settings details pesudo translation');
     cy.visit('/settings/cluster?pseudolocalization=true&lng=en');
     cy.get('.co-cluster-settings__section', {timeout: 10000});
     cy.get('.pf-c-alert__title').isPseudoLocalized();
@@ -21,23 +22,20 @@ describe('Administration pages pesudo translation', () => {
     cy.get(DetailsPageSelector.itemLabels).isPseudoLocalized();
     cy.get(DetailsPageSelector.sectionHeadings).isPseudoLocalized();
     cy.get('th').isPseudoLocalized();
-  });
 
-  it('(OCP-35766,yapei) cluster settings cluster operators', {tags: ['e2e','admin']}, () => {
+    cy.log('cluster settings cluster operators pesudo translation');
     cy.visit('/settings/cluster/clusteroperators?pseudolocalization=true&lng=en');
     listPage.rows.shouldBeLoaded();
     cy.get(ListPageSelector.tableColumnHeaders).isPseudoLocalized();
-  });
 
- it('(OCP-35766,yapei) cluster settings configurations', {tags: ['e2e','admin']}, () => {
+    cy.log('cluster settings configurations pesudo translation');
     cy.visit('/settings/cluster/globalconfig?pseudolocalization=true&lng=en');
     cy.get('.co-m-table-grid', {timeout: 10000});
     cy.get('.co-help-text').isPseudoLocalized();
     cy.byLegacyTestID('item-filter').isPseudoLocalized();
     cy.get('.co-m-table-grid__head').isPseudoLocalized();
-  });
 
-  it('(OCP-35766,yapei) Namespaces list and other pages pesudo translation', {tags: ['e2e','admin']}, () => {
+    cy.log('Namespaces list and other pages pesudo translation');
     // list page
     const test_ns = 'openshift-apiserver'
     cy.visit('/k8s/cluster/namespaces?pseudolocalization=true&lng=en');
@@ -58,11 +56,9 @@ describe('Administration pages pesudo translation', () => {
     cy.visit(`/k8s/cluster/namespaces/${test_ns}/roles?pseudolocalization=true&lng=en`);
     listPage.rows.shouldBeLoaded();
     cy.testI18n([ListPageSelector.tableColumnHeaders], ['item-create']);    
-  });
 
     // ResourceQuota and LimitRange has been covered in resource-crud.spec
-
-  it('(OCP-35766,yapei) CustomResourceDefinitions list and details pesudo translation', {tags: ['e2e','admin']}, () => {
+    cy.log('CustomResourceDefinitions list and details pesudo translation');
     const CRD_kind_group = 'consolequickstarts.console.openshift.io';
     cy.visit('/k8s/cluster/customresourcedefinitions?pseudolocalization=true&lng=en');
     listPage.rows.shouldBeLoaded();
@@ -79,6 +75,6 @@ describe('Administration pages pesudo translation', () => {
     // Instances page
     cy.visit(`/k8s/cluster/customresourcedefinitions/${CRD_kind_group}/instances?pseudolocalization=true&lng=en`);
     listPage.rows.shouldBeLoaded();
-    cy.testI18n([ListPageSelector.tableColumnHeaders], ['item-create']);        
+    cy.testI18n([ListPageSelector.tableColumnHeaders], ['item-create']);  
   });
 })
