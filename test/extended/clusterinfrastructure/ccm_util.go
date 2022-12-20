@@ -13,11 +13,11 @@ import (
 // waitForClusterHealthy check if new machineconfig is applied successfully
 func waitForClusterHealthy(oc *exutil.CLI) {
 	e2e.Logf("Waiting for the cluster healthy ...")
-	pollErr := wait.Poll(1*time.Minute, 25*time.Minute, func() (bool, error) {
-		master, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", "master", "-o", "jsonpath='{.status.conditions[?(@.type==\"Updated\")].status}'").Output()
-		worker, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", "worker", "-o", "jsonpath='{.status.conditions[?(@.type==\"Updated\")].status}'").Output()
-		if err != nil {
-			e2e.Logf("the err:%v, and try next round", err)
+	pollErr := wait.Poll(1*time.Minute, 30*time.Minute, func() (bool, error) {
+		master, errMaster := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", "master", "-o", "jsonpath='{.status.conditions[?(@.type==\"Updated\")].status}'").Output()
+		worker, errWorker := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", "worker", "-o", "jsonpath='{.status.conditions[?(@.type==\"Updated\")].status}'").Output()
+		if errMaster != nil || errWorker != nil {
+			e2e.Logf("the err:%v,%v, and try next round", errMaster, errWorker)
 			return false, nil
 		}
 		if strings.Contains(master, "True") && strings.Contains(worker, "True") {

@@ -46,9 +46,16 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			time.Sleep(360)
 		}
 
-		capi, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", clusterAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(capi).To(o.ContainSubstring("cluster-capi-operator"))
+		err = wait.Poll(20*time.Second, 6*time.Minute, func() (bool, error) {
+			capi, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", clusterAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(capi, "cluster-capi-operator") {
+				return true, nil
+			}
+			e2e.Logf("cluster-capi-operator pod hasn't been deployed, continue to next round")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "cluster-capi-operator pod deploy failed")
 
 		g.By("Check if machine approver is deployed")
 		approver, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", machineApproverNamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
@@ -58,7 +65,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Check if providers are deployed ")
 		providers, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("provider", "-n", clusterAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(providers).To(o.ContainSubstring("cluster-api infrastructure"))
+		o.Expect(providers).To(o.ContainSubstring("cluster-api"))
+		o.Expect(providers).To(o.ContainSubstring("infrastructure"))
 
 		g.By("Check user data secret is copied from openshift-machine-api namespace to openshift-cluster-api")
 		secret, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "-n", clusterAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
