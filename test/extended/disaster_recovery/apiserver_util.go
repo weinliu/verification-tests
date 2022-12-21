@@ -36,8 +36,8 @@ func ClusterSanitycheck(oc *exutil.CLI, projectName string) error {
 		e2e.Logf("oc new app succeeded")
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(errApp, "oc log deployment failed")
-	errDeployment := wait.Poll(15*time.Second, 500*time.Second, func() (bool, error) {
+	exutil.AssertWaitPollNoErr(errApp, "oc new app failed")
+	errDeployment := wait.Poll(15*time.Second, 600*time.Second, func() (bool, error) {
 		err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment/hello-openshift", "-n", projectName).Execute()
 		if err != nil {
 			return false, nil
@@ -49,7 +49,7 @@ func ClusterSanitycheck(oc *exutil.CLI, projectName string) error {
 	gettestpod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", projectName, "--no-headers", "-o", `jsonpath={.items[0].metadata.name}`).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	errExec := wait.Poll(15*time.Second, 200*time.Second, func() (bool, error) {
+	errExec := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
 		err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", projectName, gettestpod, "--", "/bin/sh", "-c", `echo 'Test'`).Execute()
 		if err != nil {
 			return false, nil
@@ -67,7 +67,7 @@ func ClusterHealthcheck(oc *exutil.CLI, dirname string) error {
 	if err != nil {
 		return fmt.Errorf("Cluster nodes health check failed")
 	}
-	err = ClusterOperatorHealthcheck(oc, 600, dirname)
+	err = ClusterOperatorHealthcheck(oc, 900, dirname)
 	if err != nil {
 		return fmt.Errorf("Cluster operators health check failed")
 	}
