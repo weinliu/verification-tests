@@ -1453,4 +1453,17 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		backendConfig := pollReadPodData(oc, "openshift-ingress", podname, "cat haproxy.config", svcName)
 		o.Expect(backendConfig).To(o.ContainSubstring("proto h2"))
 	})
+
+	// bug: 1816540 1803001 1816544
+	g.It("Author:shudili-High-57012-Forwarded header includes empty quoted proto-version parameter", func() {
+		g.By("Check haproxy-config.template file in a router pod and make sure proto-version is removed from the Forwarded header")
+		podname := getRouterPod(oc, "default")
+		templateConfig := readRouterPodData(oc, podname, "cat haproxy-config.template", "http-request add-header Forwarded")
+		o.Expect(templateConfig).To(o.ContainSubstring("proto"))
+		o.Expect(templateConfig).NotTo(o.ContainSubstring("proto-version"))
+
+		g.By("Check proto-version is also removed from the haproxy.config file in a router pod")
+		haproxyConfig := readRouterPodData(oc, podname, "cat haproxy.config", "proto")
+		o.Expect(haproxyConfig).NotTo(o.ContainSubstring("proto-version"))
+	})
 })
