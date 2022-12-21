@@ -938,21 +938,18 @@ func getNodeIP(oc *exutil.CLI, nodeName string) (string, string) {
 }
 
 func getLeaderInfo(oc *exutil.CLI, namespace string, cmName string, networkType string) string {
-	output1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-n", namespace, "-o=jsonpath={.metadata.annotations.control-plane\\.alpha\\.kubernetes\\.io/leader}").OutputToFile("oc_describe_nodes.txt")
-	o.Expect(err1).NotTo(o.HaveOccurred())
-	output2, err2 := exec.Command("bash", "-c", "cat "+output1+" |  jq -r .holderIdentity").Output()
-	o.Expect(err2).NotTo(o.HaveOccurred())
-	leaderNodeName := strings.Trim(strings.TrimSpace(string(output2)), "\"")
-	e2e.Logf("The leader node name is %s", leaderNodeName)
+	leaderNodeName, leaderNodeLogerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "-n", namespace, "-o=jsonpath={.items[*].spec.holderIdentity}").Output()
+	o.Expect(leaderNodeLogerr).NotTo(o.HaveOccurred())
 	if networkType == "ovnkubernetes" {
 		_, leaderNodeIP := getNodeIP(oc, leaderNodeName)
 		e2e.Logf("The leader node's IP is: %v", leaderNodeIP)
 		return leaderNodeIP
 	}
-	ocGetPods, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-sdn", "pod", "-l app=sdn", "-o=wide").OutputToFile("ocgetpods.txt")
-	o.Expect(err3).NotTo(o.HaveOccurred())
-	rawGrepOutput, err3 := exec.Command("bash", "-c", "cat "+ocGetPods+" | grep "+leaderNodeName+" | awk '{print $1}'").Output()
-	o.Expect(err3).NotTo(o.HaveOccurred())
+	ocGetPods, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-sdn", "pod", "-l app=sdn", "-o=wide").OutputToFile("ocgetpods.txt")
+	defer os.RemoveAll(ocGetPods)
+	o.Expect(podErr).NotTo(o.HaveOccurred())
+	rawGrepOutput, rawGrepErr := exec.Command("bash", "-c", "cat "+ocGetPods+" | grep "+leaderNodeName+" | awk '{print $1}'").Output()
+	o.Expect(rawGrepErr).NotTo(o.HaveOccurred())
 	leaderPodName := strings.TrimSpace(string(rawGrepOutput))
 	e2e.Logf("The leader Pod's name: %v", leaderPodName)
 	return leaderPodName
