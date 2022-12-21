@@ -228,8 +228,9 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 
 	g.It("Author:sregidor-VMonly-ConnectedOnly-Longduration-NonPreRelease-Critical-54159-Apply a new osImage on a cluster with already installed rpms [Disruptive]", func() {
 		var (
-			rpmName     = "wget"
-			yumRepoFile = "/etc/yum.repos.d/ubi.repo"
+			rpmName         = "wget"
+			yumRepoTemplate = generateTemplateAbsolutePath("centos.repo")
+			yumRepoFile     = "/etc/yum.repos.d/tc-54159-centos.repo"
 		)
 
 		skipTestIfSupportedArchNotMatched(oc.AsAdmin())
@@ -240,12 +241,11 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		// Install rpm in first worker node
 		g.By("Installing rpm package in first working node")
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
-		logger.Infof("Copy ubi yum repo to node")
-		cpOut, err := workerNode.DebugNode("cp", yumRepoFile, "/host"+yumRepoFile)
-		logger.Debugf("copy output: %s", cpOut)
-		o.Expect(err).
+
+		logger.Infof("Copy yum repo to node")
+		o.Expect(workerNode.CopyFromLocal(yumRepoTemplate, yumRepoFile)).
 			NotTo(o.HaveOccurred(),
-				"Error copying  %s to /host%s in node %s", yumRepoFile, yumRepoFile, workerNode.GetName())
+				"Error copying  %s to %s in node %s", yumRepoFile, yumRepoFile, workerNode.GetName())
 
 		defer func() {
 			logger.Infof("Start defer logic to uninstall the %s rpm", rpmName)

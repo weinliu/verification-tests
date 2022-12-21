@@ -1,0 +1,11 @@
+[baseos]
+name=CentOS-$releasever - Base
+baseurl=http://mirror.centos.org/centos/$releasever-stream/BaseOS/$basearch/os/
+gpgcheck=0
+enabled=1
+
+[appstream]
+name=CentOS-$releasever - AppStream
+baseurl=http://mirror.centos.org/centos/$releasever-stream/AppStream/$basearch/os/
+gpgcheck=0
+enabled=1
