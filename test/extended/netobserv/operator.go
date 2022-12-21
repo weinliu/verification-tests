@@ -313,17 +313,17 @@ func (so *SubscriptionObjects) uninstallOperator(oc *exutil.CLI) {
 }
 
 func checkOperatorStatus(oc *exutil.CLI, operatorNamespace string, operatorName string) bool {
-	ns, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", "|", "grep", operatorNamespace).Output()
-	o.Expect(err1).NotTo(o.HaveOccurred())
-	o.Expect(ns).NotTo(o.BeEmpty())
-	csvName, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", operatorName, "-n", operatorNamespace, "-o=jsonpath={.status.installedCSV}").Output()
-	o.Expect(err2).NotTo(o.HaveOccurred())
-	o.Expect(csvName).NotTo(o.BeEmpty())
-	csvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", operatorNamespace, "-o=jsonpath={.status.phase}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if strings.Compare(csvState, "Succeeded") == 0 {
-		e2e.Logf("CSV check complete!!!")
-		return true
+	err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", operatorNamespace).Execute()
+	if err1 == nil {
+		csvName, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", operatorName, "-n", operatorNamespace, "-o=jsonpath={.status.installedCSV}").Output()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		o.Expect(csvName).NotTo(o.BeEmpty())
+		csvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", operatorNamespace, "-o=jsonpath={.status.phase}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Compare(csvState, "Succeeded") == 0 {
+			e2e.Logf("CSV check complete!!!")
+			return true
+		}
 	}
 	return false
 }

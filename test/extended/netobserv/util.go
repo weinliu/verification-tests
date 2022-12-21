@@ -52,9 +52,9 @@ func getFlowlogsPipelinePod(oc *exutil.CLI, ns string, name string) string {
 // Verify some key and deterministic fields and their values
 func verifyFlowRecord(podLog string) {
 	re := regexp.MustCompile(`{\"Bytes\":.*}`)
-	e2e.Logf("the logs of flowlogs-pipeline pods are: %v", podLog)
+	//e2e.Logf("the logs of flowlogs-pipeline pods are: %v", podLog)
 	flowRecords := re.FindAllString(podLog, -3)
-	e2e.Logf("The flowRecords %v\n\n\n", flowRecords)
+	//e2e.Logf("The flowRecords %v\n\n\n", flowRecords)
 	for i, flow := range flowRecords {
 		e2e.Logf("The %d th flow record is: %v\n\n\n", i, flow)
 		o.Expect(flow).Should(o.And(
