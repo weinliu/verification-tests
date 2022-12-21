@@ -748,7 +748,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
 			projects, _ := json.Marshal([]string{app})
-			eesURL := "https://" + ees.serverName + "." + ees.namespace + ".svc:9200"
+			eesURL := "https://" + getRouteAddress(oc, ees.namespace, ees.serverName) + ":443"
 			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "DATA_PROJECTS="+string(projects), "-p", "STRUCTURED_TYPE_KEY=kubernetes.namespace_name", "-p", "URL="+eesURL, "-p", "SECRET_NAME="+ees.secretName)
 			o.Expect(err).NotTo(o.HaveOccurred())
 

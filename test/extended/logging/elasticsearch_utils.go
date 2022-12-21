@@ -155,7 +155,7 @@ func (es externalES) deploy(oc *exutil.CLI) {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		cert := certsConf{es.serverName, es.namespace, ""}
-		cert.generateCerts(keysPath)
+		cert.generateCerts(oc, keysPath)
 		// create secret for ES if needed
 		if es.httpSSL || es.clientAuth {
 			r := resource{"secret", es.serverName, es.namespace}
@@ -198,14 +198,13 @@ func (es externalES) deploy(oc *exutil.CLI) {
 		}
 	}
 
-	// set xpack.ml.enable to false when testing ES 6 on arm64 cluster
-	if es.version == "6" {
-		nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if nodes.Items[0].Status.NodeInfo.Architecture == "arm64" {
-			cmPatch = append(cmPatch, "-p", "MACHINE_LEARNING=false")
-		}
+	// set xpack.ml.enable to false when testing on arm64 cluster
+	nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if nodes.Items[0].Status.NodeInfo.Architecture == "arm64" {
+		cmPatch = append(cmPatch, "-p", "MACHINE_LEARNING=false")
 	}
+
 	cm.applyFromTemplate(oc, cmPatch...)
 
 	// create deployment and expose svc
@@ -217,9 +216,19 @@ func (es externalES) deploy(oc *exutil.CLI) {
 	WaitForDeploymentPodsToBeReady(oc, es.namespace, es.serverName)
 	err = oc.AsAdmin().WithoutNamespace().Run("expose").Args("-n", es.namespace, "deployment", es.serverName, "--name="+es.serverName).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// expose route
+	if es.httpSSL {
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", es.namespace, "route", "passthrough", "--service="+es.serverName, "--port=9200").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		err = oc.AsAdmin().WithoutNamespace().Run("expose").Args("svc/"+es.serverName, "-n", es.namespace, "--port=9200").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
 }
 
 func (es externalES) remove(oc *exutil.CLI) {
+	resource{"route", es.serverName, es.namespace}.clear(oc)
 	resource{"service", es.serverName, es.namespace}.clear(oc)
 	resource{"configmap", es.serverName, es.namespace}.clear(oc)
 	resource{"deployment", es.serverName, es.namespace}.clear(oc)

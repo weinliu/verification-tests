@@ -14,6 +14,7 @@ objects:
       http.host: 0.0.0.0
       transport.host: 127.0.0.1
       discovery.type: single-node
+      xpack.ml.enabled: ${MACHINE_LEARNING}
       xpack.security.enabled: false
       xpack.security.authc.api_key.enabled: false
       xpack.monitoring.enabled : false
@@ -28,3 +29,5 @@ parameters:
   value: elasticsearch-server
 - name: NAMESPACE
   value: openshift-logging
+- name: MACHINE_LEARNING
+  value: "true"

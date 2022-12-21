@@ -24,6 +24,7 @@ objects:
       xpack.monitoring.enabled : false
       xpack.license.self_generated.type: basic
       xpack.security.http.ssl.enabled: true
+      xpack.ml.enabled: ${MACHINE_LEARNING}
       xpack.security.http.ssl.key:  /usr/share/elasticsearch/config/secret/elasticsearch.key
       xpack.security.http.ssl.certificate: /usr/share/elasticsearch/config/secret/elasticsearch.crt
       xpack.security.http.ssl.certificate_authorities: [ "/usr/share/elasticsearch/config/secret/admin-ca" ]
@@ -40,3 +41,5 @@ parameters:
   value: openshift-logging
 - name: CLIENT_AUTH
   value: required
+- name: MACHINE_LEARNING
+  value: "true"

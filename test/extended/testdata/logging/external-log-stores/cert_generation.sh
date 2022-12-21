@@ -4,7 +4,8 @@ WORKING_DIR=${1:-/tmp/_working_dir}
 NAMESPACE=${2:-openshift-logging}
 CA_PATH=${CA_PATH:-$WORKING_DIR/ca.crt}
 LOG_STORE=${3:-elasticsearch}
-PASS_PHRASE=${4:-}
+BASE_DOMAIN=${4:-}
+PASS_PHRASE=${5:-}
 REGENERATE_NEEDED=0
 
 function init_cert_files() {
@@ -254,6 +255,10 @@ function generate_extensions() {
     extension_names="${extension_names},RID.1:1.2.3.4.5.5"
   fi
 
+  if [ ! -z "$BASE_DOMAIN" ]; then
+    extension_names="${extension_names},DNS.${extension_index}:${LOG_STORE}-${NAMESPACE}.apps.${BASE_DOMAIN}"
+  fi
+
   echo "$extension_names"
 }
 
@@ -265,6 +270,5 @@ generate_signing_ca
 init_cert_files
 create_signing_conf
 
-# TODO: get es SAN DNS, IP values from es service names
 generate_certs 'server' "$(generate_extensions false true $LOG_STORE{,-cluster}{,.${NAMESPACE}.svc}{,.cluster.local})"
 generate_certs 'client' "$(generate_extensions false false $LOG_STORE{,.${NAMESPACE}.svc}{,.cluster.local})"

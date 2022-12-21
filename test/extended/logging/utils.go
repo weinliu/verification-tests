@@ -841,19 +841,31 @@ func checkNetworkType(oc *exutil.CLI) string {
 	return strings.ToLower(output)
 }
 
+func getDomain(oc *exutil.CLI) (string, error) {
+	apiServerURL, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures.config.openshift.io/cluster", "-ojsonpath={.status.apiServerURL}").Output()
+	if err != nil {
+		return "", err
+	}
+
+	domain := strings.Split(apiServerURL, "api.")[1]
+	return strings.Split(domain, ":")[0], nil
+}
+
 type certsConf struct {
 	serverName string
 	namespace  string
 	passPhrase string //client private key passphrase
 }
 
-func (certs certsConf) generateCerts(keysPath string) {
+func (certs certsConf) generateCerts(oc *exutil.CLI, keysPath string) {
 	generateCertsSH := exutil.FixturePath("testdata", "logging", "external-log-stores", "cert_generation.sh")
-	cmd := []string{generateCertsSH, keysPath, certs.namespace, certs.serverName}
+	domain, err := getDomain(oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	cmd := []string{generateCertsSH, keysPath, certs.namespace, certs.serverName, domain}
 	if certs.passPhrase != "" {
 		cmd = append(cmd, certs.passPhrase)
 	}
-	err := exec.Command("sh", cmd...).Run()
+	err = exec.Command("sh", cmd...).Run()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -930,7 +942,7 @@ func (r rsyslog) deploy(oc *exutil.CLI) {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		cert := certsConf{r.serverName, r.namespace, r.clientKeyPassphrase}
-		cert.generateCerts(keysPath)
+		cert.generateCerts(oc, keysPath)
 		// create pipelinesecret
 		r.createPipelineSecret(oc, keysPath)
 		// create secret for rsyslog server
@@ -1052,7 +1064,7 @@ func (f fluentdServer) deploy(oc *exutil.CLI) {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		//generate certs
 		cert := certsConf{f.serverName, f.namespace, f.clientPrivateKeyPassphrase}
-		cert.generateCerts(keysPath)
+		cert.generateCerts(oc, keysPath)
 		//create pipelinesecret
 		f.createPipelineSecret(oc, keysPath)
 		//create secret for fluentd server
@@ -1699,18 +1711,16 @@ func (cw cloudwatchSpec) applicationLogsFoundLogType(client *cloudwatchlogs.Clie
 //	namespaceName:  anli48022-gwbb4.aosqe-log-json-1638788875
 //	namespaceUUID:   anli48022-gwbb4.0471c739-e38c-4590-8a96-fdd5298d47ae,uuid.audit,uuid.infrastructure
 func (cw cloudwatchSpec) applicationLogsFound(client *cloudwatchlogs.Client) bool {
-	var logFound bool = true
 	switch cw.groupType {
 	case "logType":
-		logFound = cw.applicationLogsFoundLogType(client)
+		return cw.applicationLogsFoundLogType(client)
 	case "namespaceName":
-		logFound = cw.applicationLogsFoundNamespaceName(client)
+		return cw.applicationLogsFoundNamespaceName(client)
 	case "namespaceUUID":
-		logFound = cw.applicationLogsFoundUUID(client)
+		return cw.applicationLogsFoundUUID(client)
 	default:
-		logFound = false
+		return false
 	}
-	return logFound
 }
 
 // The common function to verify if logs can be found or not. In general, customized the cloudwatchSpec before call this function

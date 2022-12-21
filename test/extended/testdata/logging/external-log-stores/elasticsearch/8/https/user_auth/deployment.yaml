@@ -32,7 +32,7 @@ objects:
           app: ${NAME}
       spec:
         containers:
-        - image: docker.elastic.co/elasticsearch/elasticsearch:8.4.3
+        - image: quay.io/openshifttest/elasticsearch@sha256:234e8ecfb6c1bdafffeb190c4a48e8e3c4b74b69d1b541b913dfbca29e952f63
           imagePullPolicy: IfNotPresent
           name: ${NAME}
           ports:

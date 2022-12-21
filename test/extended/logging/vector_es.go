@@ -354,7 +354,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			WaitForECKPodsToBeReady(oc, cl.namespace)
 
 			g.By("Make sure the Elasticsearch cluster is healthy")
-			cl.assertResourceStatus(oc, "jsonpath={.status.logStore.elasticsearchStatus[0].cluster.status}", "green")
+			resource{"elasticsearch", "elasticsearch", cloNS}.assertResourceStatus(oc, "jsonpath={.status.cluster.status}", "green")
 
 			g.By("Check Vector status")
 			podList, err := oc.AdminKubeClient().CoreV1().Pods(cl.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "component=collector"})
@@ -368,12 +368,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("Check the Vector metrics")
 			bearerToken := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
-			output, err := e2e.RunHostCmdWithRetries(cl.namespace, podList.Items[0].Name, "curl -k -H \"Authorization: Bearer "+bearerToken+"\" -H \"Content-type: application/json\" https://collector:24231/metrics", 10*time.Second, 20*time.Second)
+			output, err := e2e.RunHostCmdWithRetries(cl.namespace, podList.Items[0].Name, "curl -k -H \"Authorization: Bearer "+bearerToken+"\" -H \"Content-type: application/json\" https://collector.openshift-logging.svc:24231/metrics", 10*time.Second, 20*time.Second)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).Should(o.ContainSubstring("vector_component_received_event_bytes_total"))
 
 			g.By("Check the Log file metrics exporter metrics")
-			output, err = e2e.RunHostCmdWithRetries(cl.namespace, podList.Items[0].Name, "curl -k -H \"Authorization: Bearer "+bearerToken+"\" -H \"Content-type: application/json\" https://collector:2112/metrics", 10*time.Second, 20*time.Second)
+			output, err = e2e.RunHostCmdWithRetries(cl.namespace, podList.Items[0].Name, "curl -k -H \"Authorization: Bearer "+bearerToken+"\" -H \"Content-type: application/json\" https://collector.openshift-logging.svc:2112/metrics", 10*time.Second, 20*time.Second)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).Should(o.ContainSubstring("log_logged_bytes_total"))
 
@@ -570,6 +570,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-exteranl-es-and-default.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
+			//use "ES_URL=http://"+getRouteAddress(oc, ees.namespace, ees.serverName)+":80" once LOG-3381 is fixed
 			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_VERSION="+ees.version)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1112,19 +1113,20 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("Create ClusterLogForwarder instance to forward logs to both default and external log store")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-exteranl-es-and-default.yaml")
-			clf := resource{"clusterlogforwarder", "instance", cloNS}
-			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_VERSION="+ees.version)
-			o.Expect(err).NotTo(o.HaveOccurred())
-
 			g.By("Create ClusterLogging instance with Vector as collector")
 			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
 			g.By("Waiting for the Logging pods to be ready...")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By("Create ClusterLogForwarder instance to forward logs to both default and external log store")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-exteranl-es-and-default.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "ES_URL=http://"+ees.serverName+"."+esProj+".svc:9200", "-p", "ES_VERSION="+ees.version)
+			o.Expect(err).NotTo(o.HaveOccurred())
 			WaitForDaemonsetPodsToBeReady(oc, cloNS, "collector")
 
 			g.By("Check logs in default ES")

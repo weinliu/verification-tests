@@ -30,6 +30,7 @@ objects:
       xpack.security.authc.api_key.enabled: true
       xpack.monitoring.enabled : false
       xpack.license.self_generated.type: basic
+      xpack.ml.enabled: ${MACHINE_LEARNING}
       xpack.security.http.ssl.enabled: true
       xpack.security.http.ssl.key:  /usr/share/elasticsearch/config/secret/elasticsearch.key
       xpack.security.http.ssl.certificate: /usr/share/elasticsearch/config/secret/elasticsearch.crt
@@ -51,3 +52,5 @@ parameters:
   value: "redhat"
 - name: CLIENT_AUTH
   value: none
+- name: MACHINE_LEARNING
+  value: "true"
