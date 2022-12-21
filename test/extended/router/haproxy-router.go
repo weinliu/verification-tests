@@ -1423,4 +1423,34 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		findAnnotation = getAnnotation(oc, project1, "svc", "service-unsecure")
 		o.Expect(findAnnotation).NotTo(o.ContainSubstring("idling.alpha.openshift.io/idled-at"))
 	})
+
+	// bug: 1826225
+	g.It("Author:shudili-High-57001-edge terminated h2 (gRPC) connections need a haproxy template change to work correctly", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			srvPodSvc           = filepath.Join(buildPruningBaseDir, "bug1826225-proh2-rc.yaml")
+			srvrcInfo           = "web-server-rc"
+			svcName             = "service-h2c-57001"
+			routeName           = "myedge1"
+		)
+
+		g.By("Deploy a project with a backend pod and its service resources")
+		project1 := oc.Namespace()
+		defer exutil.RecoverNamespaceRestricted(oc, project1)
+		exutil.SetNamespacePrivileged(oc, project1)
+		g.By("create a h2c service and its backend pod")
+		createResourceFromFile(oc, project1, srvPodSvc)
+		err := waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
+
+		g.By("Create an edge route with the h2c service inside the project")
+		output, routeErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("route", "edge", routeName, "--service="+svcName, "-n", project1).Output()
+		o.Expect(routeErr).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(routeName))
+
+		g.By("Check the Haproxy backend configuration and make sure proto h2 is added for the route")
+		podname := getRouterPod(oc, "default")
+		backendConfig := pollReadPodData(oc, "openshift-ingress", podname, "cat haproxy.config", svcName)
+		o.Expect(backendConfig).To(o.ContainSubstring("proto h2"))
+	})
 })
