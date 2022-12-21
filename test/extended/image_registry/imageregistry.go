@@ -441,7 +441,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus2)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = waitCoBecomes(oc, "kube-apiserver", 480, expectedStatus2)
+			err = waitCoBecomes(oc, "kube-apiserver", 600, expectedStatus2)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Removed","storage":{"managementState":"Unmanaged"}}}`, "--type=merge").Execute()
@@ -619,16 +619,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("OSD_CCS-ARO-Author:wewang-Medium-23583-Registry should not try to pullthrough himself by any name ", func() {
-		g.By("Create route to expose the registry")
-		defer restoreRouteExposeRegistry(oc)
-		createRouteExposeRegistry(oc)
-
 		g.By("Get server host")
-		defroute := getRegistryDefaultRoute(oc)
-		routeName := getRandomString()
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
-		userroute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
-		waitRouteReady(userroute)
+		routeName1 := getRandomString()
+		routeName2 := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName1, routeName2, "-n", "openshift-image-registry").Execute()
+		userroute1 := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName1, "image-registry")
+		userroute2 := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName2, "image-registry")
+		waitRouteReady(userroute1)
+		waitRouteReady(userroute2)
 
 		g.By("Get token from secret")
 		oc.SetupProject()
@@ -637,7 +635,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(token).NotTo(o.BeEmpty())
 
 		g.By("Create a secret for user-defined route")
-		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("secret", "docker-registry", "mysecret", "--docker-server="+userroute, "--docker-username="+oc.Username(), "--docker-password="+token, "-n", oc.Namespace()).Execute()
+		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("secret", "docker-registry", "mysecret", "--docker-server="+userroute1, "--docker-username="+oc.Username(), "--docker-password="+token, "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Import an image")
@@ -648,13 +646,13 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Tag the image point to itself address")
-		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("myimage:test", "--from="+userroute+"/"+oc.Namespace()+"/myimage", "--insecure=true", "--confirm", "-n", oc.Namespace()).Execute()
+		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("myimage:test", "--from="+userroute1+"/"+oc.Namespace()+"/myimage", "--insecure=true", "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "myimage", "test")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Get blobs from the default registry")
-		getURL := "curl -Lks -u \"" + oc.Username() + ":" + token + "\" -I HEAD https://" + defroute + "/v2/" + oc.Namespace() + "/myimage@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+		getURL := "curl -Lks -u \"" + oc.Username() + ":" + token + "\" -I HEAD https://" + userroute2 + "/v2/" + oc.Namespace() + "/myimage@sha256:0000000000000000000000000000000000000000000000000000000000000000"
 		curlOutput, err := exec.Command("bash", "-c", getURL).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(string(curlOutput)).To(o.ContainSubstring("404 Not Found"))
@@ -696,11 +694,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		}
 
 		g.By("Create route to expose the registry")
-		defer restoreRouteExposeRegistry(oc)
-		createRouteExposeRegistry(oc)
-
-		g.By("Get server host")
-		host := getRegistryDefaultRoute(oc)
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		host := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(host)
 
 		g.By("Get token from secret")
 		oc.SetupProject()
@@ -979,7 +976,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus1)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = waitCoBecomes(oc, "kube-apiserver", 480, expectedStatus1)
+			err = waitCoBecomes(oc, "kube-apiserver", 600, expectedStatus1)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 		err = oc.AsAdmin().Run("patch").Args("config.image/cluster", "-p", `{"spec":{"managementState": "Removed"}}`, "--type=merge").Execute()
@@ -2413,51 +2410,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("NonPreRelease-Author:jitli-Medium-21926-Check function of oc registry info command [Serial]", func() {
-
-		g.By("Check options for oc registry info")
-		output, err := oc.AsAdmin().Run("registry").Args("info", "--internal=true").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("image-registry.openshift-image-registry.svc:5000"))
-
-		output, _ = oc.AsAdmin().Run("registry").Args("info", "--internal=true", "--quiet=true").Output()
-		o.Expect(output).To(o.ContainSubstring("error: registry could not be contacted"))
-
-		output, _ = oc.AsAdmin().Run("registry").Args("info", "--internal=21926").Output()
-		o.Expect(output).To(o.ContainSubstring("invalid"))
-
-		output, _ = oc.AsAdmin().Run("registry").Args("info", "--quiet=21926").Output()
-		o.Expect(output).To(o.ContainSubstring("invalid"))
-
-		g.By("Check options --public")
-		defer func() {
-			restoreRouteExposeRegistry(oc)
-			err = wait.Poll(25*time.Second, 200*time.Second, func() (bool, error) {
-				publicT, _ := oc.AsAdmin().Run("registry").Args("info", "--public=true").Output()
-				publicF, _ := oc.AsAdmin().Run("registry").Args("info", "--public=false").Output()
-				if strings.Contains(publicT, "registry does not have public hostname") && strings.Contains(publicF, "image-registry.openshift-image-registry.svc:5000") {
-					return true, nil
-				}
-				e2e.Logf("Not update, Continue to next round")
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(err, "registry configs are not changed")
-		}()
-		createRouteExposeRegistry(oc)
-		err = wait.Poll(25*time.Second, 200*time.Second, func() (bool, error) {
-			publicT, _ := oc.AsAdmin().Run("registry").Args("info", "--public=true").Output()
-			publicF, _ := oc.AsAdmin().Run("registry").Args("info", "--public=false").Output()
-			if strings.Contains(publicT, "default-route-openshift-image-registry") && strings.Contains(publicF, "default-route-openshift-image-registry") {
-				return true, nil
-			}
-			e2e.Logf("Not update, Continue to next round")
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "registry configs are not changed")
-
-	})
-
-	// author: jitli@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:jitli-Medium-11252-ImageRegistry Check the registry-admin permission", func() {
 
 		g.By("Add registry-admin role to a project")
@@ -3255,12 +3207,52 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The number of image signatures are not enough!"))
 	})
 
-	g.It("Author:xiuwang-High-21482-Set default externalRegistryHostname in image policy config globally[Serial]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:xiuwang-High-21482-Medium-21926-Set default externalRegistryHostname in image policy config globally[Disruptive]", func() {
+		// OCP-21926: Check function of oc registry info command
+		g.By("Check options for oc registry info")
+		output, err := oc.AsAdmin().Run("registry").Args("info", "--internal=true").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("image-registry.openshift-image-registry.svc:5000"))
+
+		output, _ = oc.AsAdmin().Run("registry").Args("info", "--internal=true", "--quiet=true").Output()
+		o.Expect(output).To(o.ContainSubstring("error: registry could not be contacted"))
+
+		output, _ = oc.AsAdmin().Run("registry").Args("info", "--internal=21926").Output()
+		o.Expect(output).To(o.ContainSubstring("invalid"))
+
+		output, _ = oc.AsAdmin().Run("registry").Args("info", "--quiet=21926").Output()
+		o.Expect(output).To(o.ContainSubstring("invalid"))
+
 		g.By("Set registry default route")
-		defer restoreRouteExposeRegistry(oc)
+		// Enable/disable default route will update image.config CRD,
+		// that will cause openshift-apiserver and kube-apiserver restart
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		defer func() {
+			g.By("Recover image registry change")
+			restoreRouteExposeRegistry(oc)
+			err := waitCoBecomes(oc, "image-registry", 60, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "kube-apiserver", 600, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
 		createRouteExposeRegistry(oc)
 		regRoute := getRegistryDefaultRoute(oc)
 		waitRouteReady(regRoute)
+
+		g.By("Check options --public")
+		err = wait.Poll(25*time.Second, 300*time.Second, func() (bool, error) {
+			publicT, _ := oc.AsAdmin().Run("registry").Args("info", "--public=true").Output()
+			publicF, _ := oc.AsAdmin().Run("registry").Args("info", "--public=false").Output()
+			e2e.Logf("print %s, %s", publicT, publicF)
+			if strings.Contains(publicT, "default-route-openshift-image-registry") && strings.Contains(publicF, "default-route-openshift-image-registry") {
+				return true, nil
+			}
+			e2e.Logf("Not update, Continue to next round")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "registry configs are not changed")
 
 		g.By("Save the external registry auth with the specific token")
 		authFile, err := saveImageRegistryAuth(oc, "builder", regRoute, oc.Namespace())
