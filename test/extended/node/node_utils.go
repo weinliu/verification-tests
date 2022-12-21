@@ -17,6 +17,12 @@ import (
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
+type podHelloDescription struct {
+	name      string
+	namespace string
+	template  string
+}
+
 type podModifyDescription struct {
 	name          string
 	namespace     string
@@ -112,6 +118,16 @@ type ctrcfgOverlayDescription struct {
 	name     string
 	overlay  string
 	template string
+}
+
+func (podHello *podHelloDescription) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podHello.template, "-p", "NAME="+podHello.name, "NAMESPACE="+podHello.namespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (podHello *podHelloDescription) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", podHello.namespace, "pod", podHello.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func (ctrcfg *ctrcfgOverlayDescription) create(oc *exutil.CLI) {
@@ -502,6 +518,30 @@ func getSingleMasterNode(oc *exutil.CLI) string {
 	return masterNodeName
 }
 
+func getPodNodeName(oc *exutil.CLI, namespace string) string {
+	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-o=jsonpath={.items[0].spec.nodeName}", "-n", namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Pod Node Name is %v \n", nodeName)
+	return nodeName
+}
+
+func getPodNetNs(oc *exutil.CLI, hostname string) (string, error) {
+	NetNsStr, err := exutil.DebugNodeWithChroot(oc, hostname, "/bin/bash", "-c", "journalctl -u crio --since=\"5 minutes ago\" | grep pod-56266 | grep NetNS")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("NetNs string : %v", NetNsStr)
+	keyword := "NetNS:[^\\s]*"
+	re := regexp.MustCompile(keyword)
+	found := re.FindAllString(NetNsStr, -1)
+	if len(found) == 0 {
+		e2e.Logf("can not find NetNS for pod")
+		return "", fmt.Errorf("can not find NetNS for pod")
+	}
+	e2e.Logf("found : %v \n", found[0])
+	NetNs := strings.Split(found[0], ":")
+	e2e.Logf("NetNs : %v \n", NetNs[1])
+	return NetNs[1], nil
+}
+
 func addLabelToNode(oc *exutil.CLI, label string, workerNodeName string, resource string) {
 	_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args(resource, workerNodeName, label).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -603,11 +643,26 @@ func checkPodOverlaySize(oc *exutil.CLI, overlaySize string) error {
 	})
 }
 
+func checkNetNs(oc *exutil.CLI, hostname string, netNsPath string) error {
+	return wait.Poll(1*time.Second, 3*time.Second, func() (bool, error) {
+		result, _ := exutil.DebugNodeWithChroot(oc, hostname, "ls", "-l", netNsPath)
+		e2e.Logf("the check result: %v", result)
+		if strings.Contains(string(result), "No such file or directory") {
+			e2e.Logf("the NetNS file is cleaned successfully")
+		} else {
+			e2e.Logf("the NetNS file still exist")
+			return false, nil
+		}
+		return true, nil
+	})
+}
+
 func cleanupObjectsClusterScope(oc *exutil.CLI, objs ...objectTableRefcscope) error {
 	return wait.Poll(1*time.Second, 1*time.Second, func() (bool, error) {
 		for _, v := range objs {
 			e2e.Logf("\n Start to remove: %v", v)
 			status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(v.kind, v.name).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(status, "Error") {
 				e2e.Logf("Error getting resources... Seems resources objects are already deleted. \n")
 				return true, nil

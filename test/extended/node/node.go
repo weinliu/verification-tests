@@ -26,6 +26,13 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		podTwoContainersTemp = filepath.Join(buildPruningBaseDir, "pod-with-two-containers.yaml")
 		podUserNSTemp        = filepath.Join(buildPruningBaseDir, "pod-user-namespace.yaml")
 		ctrcfgOverlayTemp    = filepath.Join(buildPruningBaseDir, "containerRuntimeConfig-overlay.yaml")
+		podHelloTemp         = filepath.Join(buildPruningBaseDir, "pod-hello.yaml")
+
+		podHello = podHelloDescription{
+			name:      "",
+			namespace: "",
+			template:  podHelloTemp,
+		}
 
 		podUserNS47663 = podUserNSDescription{
 			name:      "",
@@ -474,6 +481,34 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		g.By("Check in pod the root partition size for Overlay is correct.")
 		err = checkPodOverlaySize(oc, ctrcfgOverlay.overlay)
 		exutil.AssertWaitPollNoErr(err, "pod overlay size is not correct !!!")
+	})
+
+	g.It("Author:minmli-High-56266-kubelet/crio will delete netns when a pod is deleted", func() {
+		g.By("Test for case OCP-56266")
+		oc.SetupProject()
+
+		g.By("Create a pod")
+		podHello.name = "pod-56266"
+		podHello.namespace = oc.Namespace()
+		podHello.create(oc)
+
+		g.By("Check pod status")
+		err := podStatus(oc)
+		exutil.AssertWaitPollNoErr(err, "pod is not running")
+
+		g.By("Get Pod's Node name")
+		hostname := getPodNodeName(oc, podHello.namespace)
+
+		g.By("Get Pod's NetNS")
+		netNsPath, err := getPodNetNs(oc, hostname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Delete the pod")
+		podHello.delete(oc)
+
+		g.By("Check the NetNs file was cleaned")
+		err = checkNetNs(oc, hostname, netNsPath)
+		exutil.AssertWaitPollNoErr(err, "the NetNs file is not cleaned !!!")
 	})
 })
 
