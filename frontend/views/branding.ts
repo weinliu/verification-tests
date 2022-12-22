@@ -8,4 +8,7 @@ export const Branding = {
   checkLoginPageLogo: () => {
     cy.get("img").should("have.attr", "alt", "Red Hat OpenShift logo");
   },
+  closeModal: () => {
+    cy.get('[aria-label="Close Dialog"]').click();
+  }
 };

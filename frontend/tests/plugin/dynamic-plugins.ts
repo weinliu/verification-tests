@@ -1,6 +1,7 @@
 import { nav } from '../../upstream/views/nav';
 import { Overview, statusCard } from '../../views/overview';
 import { namespaceDropdown } from '../../views/namespace-dropdown';
+import { Branding } from '../../views/branding';
 import { guidedTour } from '../../upstream/views/guided-tour';
 import { listPage } from '../../upstream/views/list-page';
 
@@ -145,7 +146,7 @@ describe('Dynamic plugins features', () => {
   it('(OCP-52366, xiangyli) Add Dyamic Plugins to Cluster Overview Status card and notification drawer', {tags: ['e2e','admin']}, () => {
     cy.switchPerspective('Administrator');
     Overview.goToDashboard();
-    statusCard.togglePluginPopover();
+    statusCard.toggleItemPopover("Dynamic Plugins");
     let total = 0;
     cy.exec(`oc get consoleplugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`).then((result) => {
       total = result.stdout.split(/\r\n|\r|\n/).length - 1
@@ -156,6 +157,15 @@ describe('Dynamic plugins features', () => {
     })
   });
   
+  it('(OCP-56239,yapei) Add dynamic plugin info to About modal', {tags: ['e2e', 'admin']}, () => {
+    cy.switchPerspective('Administrator')
+    Overview.toggleAbout()
+    cy.contains('Dynamic plugins').should('exist')
+    cy.contains('console-demo-plugin (0.0.0)').should('exist')
+    cy.contains('console-customization (0.0.1)').should('exist')
+    Branding.closeModal()
+  });
+
   it('(OCP-42537,yapei) Allow disabling dynamic plugins through a query parameter', {tags: ['e2e','admin']}, () => {
     cy.switchPerspective('Administrator');
     // disable non-existing plugin will make no changes

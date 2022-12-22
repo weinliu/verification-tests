@@ -35,15 +35,15 @@ export const quotaCard = {
   checkResourceChartListed: (quotaname, quotainfo) => {
     quotaCard.checkResourceQuotaInfo(`${quotaname}`,`${quotainfo}`);
   },
-}
+};
 export namespace OverviewSelectors {
   export const skipTour = "[data-test=tour-step-footer-secondary]";
-}
-
+};
 export const statusCard = {
-  togglePluginPopover: () => {
-    cy.get('[data-item-id="Dynamic Plugins-health-item"]').within(() => {
-      cy.byButtonText('Dynamic Plugins').click({force: true})
-    })
+  toggleItemPopover: (item: string) => {
+    cy.get(`button[data-test="${item}"]`, {timeout: 30000}).click({force: true});
+  },
+  secondaryStatus: (item: string, status: string) => {
+    cy.get(`[data-status-id="${item}-secondary-status"]`,{timeout: 60000}).contains(status);
   }
 }
