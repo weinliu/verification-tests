@@ -145,12 +145,18 @@ func getWindowsMachineSetName(oc *exutil.CLI, name string, iaasPlatform string, 
 func getWindowsHostNames(oc *exutil.CLI) []string {
 	winHostNames, err := oc.WithoutNamespace().Run("get").Args("nodes", "-l", "kubernetes.io/os=windows", "-o=jsonpath={.items[*].status.addresses[?(@.type==\"Hostname\")].address}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	if winHostNames == "" {
+		return []string{}
+	}
 	return strings.Split(winHostNames, " ")
 }
 
 func getWindowsInternalIPs(oc *exutil.CLI) []string {
 	winInternalIPs, err := oc.WithoutNamespace().Run("get").Args("nodes", "-l", "kubernetes.io/os=windows", "-o=jsonpath={.items[*].status.addresses[?(@.type==\"InternalIP\")].address}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	if winInternalIPs == "" {
+		return []string{}
+	}
 	return strings.Split(winInternalIPs, " ")
 }
 
@@ -763,4 +769,39 @@ func waitForServicesCM(oc *exutil.CLI, cmName string) {
 	if pollErr != nil {
 		e2e.Failf("Expected windows-services configmap %v not found after %v seconds ...", cmName, 180)
 	}
+}
+
+// Function to force the WICD reconciliation, it simply overrides
+// the desired-version annotation.
+func forceWicdReconciliation(oc *exutil.CLI, winHostName string) {
+
+	initialDV, err := oc.WithoutNamespace().Run("get").Args("nodes", winHostName, "-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/desired-version}'").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	// Set the desired-version annotation to any string, for example: "anything"
+	_, err = oc.WithoutNamespace().Run("patch").Args("nodes", winHostName, "-p", `{"metadata":{"annotations":{"windowsmachineconfig.openshift.io/desired-version": "anything"}}}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	// And now, replace it back to the original value initalDV
+	_, err = oc.WithoutNamespace().Run("patch").Args("nodes", winHostName, "-p", `{"metadata":{"annotations":{"windowsmachineconfig.openshift.io/desired-version": "`+strings.Trim(strings.TrimSpace(initialDV), "'")+`"}}}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// Make sure that the annotation was properly restored
+	afterChangeDV, err := oc.WithoutNamespace().Run("get").Args("nodes", winHostName, "-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/desired-version}'").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(afterChangeDV).Should(o.Equal(initialDV))
+
+}
+
+func getServiceTimeStamp(oc *exutil.CLI, winHostIP string, privateKey string, iaasPlatform string, status string, serviceName string) time.Time {
+
+	bastionHost := getSSHBastionHost(oc, iaasPlatform)
+	layout := "Monday January 02 2006 15:04:05 PM"
+	cmd := fmt.Sprintf("(Get-EventLog -LogName \\\"System\\\" -Source \\\"Service Control Manager\\\" -EntryType \\\"Information\\\" -Message \\\"*%v service *%v*\\\" -Newest 1).TimeGenerated", serviceName, status)
+	msg, err := runPSCommand(bastionHost, winHostIP, cmd, privateKey, iaasPlatform)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	outSplitted := strings.Split(msg, "\r\n")
+	timeStamp, err := time.Parse(layout, strings.ReplaceAll(strings.TrimSpace(outSplitted[len(outSplitted)-4]), ",", ""))
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	return timeStamp
+
 }

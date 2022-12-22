@@ -46,6 +46,15 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 	)
 
+	// Struct used to define a service in the windows-services
+	type Service struct {
+		Name         string   `json:"name"`
+		Path         string   `json:"path"`
+		Bootstrap    bool     `json:"bootstrap"`
+		Priority     int      `json:"priority"`
+		Dependencies []string `json:"dependencies,omitempty"`
+	}
+
 	g.BeforeEach(func() {
 		output, _ := oc.WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		iaasPlatform = strings.ToLower(output)
@@ -486,6 +495,10 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		createLinuxWorkload(oc, namespace)
 		// we scale the deployment to 5 windows pods
 		scaleDeployment(oc, "windows", 5, namespace)
+		hostIPArray, err := getWorkloadsHostIP(oc, "windows", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check communication: Windows pod <--> Linux pod")
 		winPodNameArray, err := getWorkloadsNames(oc, "windows", namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		linuxPodNameArray, err := getWorkloadsNames(oc, "linux", namespace)
@@ -493,18 +506,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		winPodIPArray, err := getWorkloadsIP(oc, "windows", namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		linuxPodIPArray, err := getWorkloadsIP(oc, "linux", namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		hostIPArray, err := getWorkloadsHostIP(oc, "windows", namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("Check communication: Windows pod <--> Linux pod")
-		winPodNameArray, err = getWorkloadsNames(oc, "windows", namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		linuxPodNameArray, err = getWorkloadsNames(oc, "linux", namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		winPodIPArray, err = getWorkloadsIP(oc, "windows", namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		linuxPodIPArray, err = getWorkloadsIP(oc, "linux", namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		command := []string{"exec", "-n", namespace, linuxPodNameArray[0], "--", "curl", winPodIPArray[0]}
 		msg, err := oc.WithoutNamespace().Run(command...).Args().Output()
@@ -1085,15 +1086,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		payload, err := oc.WithoutNamespace().Run("get").Args("cm", windowsServicesCM, "-n", wmcoNamespace, "-o=jsonpath={.data.services}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		type service struct {
-			Name         string   `json:"name"`
-			Path         string   `json:"path"`
-			Bootstrap    bool     `json:"bootstrap"`
-			Priority     int      `json:"priority"`
-			Dependencies []string `json:"dependencies,omitempty"`
-		}
 
-		var services []service
+		var services []Service
 		json.Unmarshal([]byte(payload), &services)
 		bastionHost := getSSHBastionHost(oc, iaasPlatform)
 		winInternalIP := getWindowsInternalIPs(oc)
@@ -1215,6 +1209,85 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 				cancel() // Stop go routine
 				e2e.Logf("Ending checkConnectivity")
 			}
+		}
+
+	})
+
+	g.It("Author:jfrancoa-Medium-56354-Stop dependent services before stopping a service in WICD [Disruptive]", func() {
+
+		targetService := "kubelet"
+
+		g.By("Check configmap services running on Windows workers")
+		windowsServicesCM, err := popItemFromList(oc, "cm", "windows-services", "openshift-windows-machine-config-operator")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		payload, err := oc.WithoutNamespace().Run("get").Args("cm", windowsServicesCM, "-n", "openshift-windows-machine-config-operator", "-o=jsonpath={.data.services}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		var services []Service
+		json.Unmarshal([]byte(payload), &services)
+
+		g.By("Retrieve dependent services from windows-services configmap")
+
+		// Using an annonymous function to obtain the dependent services
+		// in a recursive way.
+		var recursiveDependencies func([]Service, string) []string
+		recursiveDependencies = func(svcs []Service, service string) []string {
+			for _, svc := range services {
+				for _, dep := range svc.Dependencies {
+					if dep == service {
+						return append(recursiveDependencies(services, svc.Name), service)
+					}
+				}
+			}
+			return []string{service}
+		}
+
+		deps := recursiveDependencies(services, targetService)
+
+		bastionHost := getSSHBastionHost(oc, iaasPlatform)
+		winInternalIP := getWindowsInternalIPs(oc)
+		winHostNames := getWindowsHostNames(oc)
+
+		for idx, winhost := range winInternalIP {
+
+			g.By(fmt.Sprintf("Modify %v service binPath and check dependents stopped timestamp in host with IP %v", targetService, winhost))
+			cmd := fmt.Sprintf("Get-WmiObject win32_service | Where-Object { $_.Name -eq \\\"%v\\\" } | select -ExpandProperty PathName", targetService)
+			msg, _ := runPSCommand(bastionHost, winhost, cmd, privateKey, iaasPlatform)
+			listOut := strings.Split(msg, "\r\n")
+			initialBinPath := strings.TrimSpace(listOut[len(listOut)-2])
+
+			// Add --log-file-max-size 2000 as argument to kubelet service
+			cmd = fmt.Sprintf("sc.exe config %v binPath=\\\"%v --log-file-max-size 2000\\\"", targetService, initialBinPath)
+			msg, _ = runPSCommand(bastionHost, winhost, cmd, privateKey, iaasPlatform)
+			o.Expect(msg).Should(o.ContainSubstring("SUCCESS"))
+
+			// TODO: Remove once https://issues.redhat.com/browse/WINC-736 is finished
+			// This is a workaround to force the WICD reconciliation
+			winHostName := winHostNames[idx]
+			forceWicdReconciliation(oc, winHostName)
+
+			// Ensure that the binPath command was restored
+			time.Sleep(15 * time.Second) // Give time to WICD to reconcile
+			cmd = fmt.Sprintf("Get-WmiObject win32_service | Where-Object { $_.Name -eq \\\"%v\\\" } | select -ExpandProperty PathName", targetService)
+			msg, _ = runPSCommand(bastionHost, winhost, cmd, privateKey, iaasPlatform)
+			listOut = strings.Split(msg, "\r\n")
+			afterReconciliationBinPath := strings.TrimSpace(listOut[len(listOut)-2])
+
+			o.Expect(afterReconciliationBinPath).Should(o.Equal(initialBinPath))
+
+			g.By(fmt.Sprintf("Verifying that dependant services got stopped first for node %v", winHostName))
+			// kube-proxy stopped < hybrid-overlay-node stopped < kubelet stopped
+			var previousTS time.Time = time.Time{}
+			for i, svc := range deps {
+				serviceTimeStamp := getServiceTimeStamp(oc, winhost, privateKey, iaasPlatform, "stopped", svc)
+				if !previousTS.IsZero() {
+					if serviceTimeStamp.Before(previousTS) {
+						e2e.Failf("Service %v was stopped before service %v", svc, deps[i-1])
+					}
+				}
+				previousTS = serviceTimeStamp
+			}
+
 		}
 
 	})
