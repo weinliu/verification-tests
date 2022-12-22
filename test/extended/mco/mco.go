@@ -2617,6 +2617,7 @@ nulla pariatur.`
 			), "audit log contains excluded msgtype NETFILTER_CFG or ANOM_PROMISCUOUS")
 		}
 	})
+
 	g.It("Author:sregidor-DEPRECATED-NonPreRelease-Medium-43279-Alert message of drain error contains pod info [Disruptive]", func() {
 		var (
 			mcp               = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
@@ -2727,6 +2728,53 @@ nulla pariatur.`
 		o.Eventually(mcp.pollDegradedStatus(),
 			"10m", "30s").Should(o.Equal("False"),
 			"After removing the PodDisruptionBudget the eviction should have succeeded and the worker pool should stop being degraded")
+		logger.Infof("OK!\n")
+	})
+
+	g.It("Author:sregidor-NonPreRelease-Medium-57009-Kubeletconfig custom tlsSecurityProfile [Disruptive]", func() {
+		var (
+			kcName     = "tc-57009-set-kubelet-custom-tls-profile"
+			kcTemplate = generateTemplateAbsolutePath("custom-tls-profile-kubelet-config.yaml")
+			mcp        = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			workerNode = NewNodeList(oc.AsAdmin()).GetAllLinuxWorkerNodesOrFail()[0]
+
+			expectedTlsMinVersion   = `"VersionTLS11"`
+			expectedTlsCipherSuites = `[
+						    "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+						    "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+						    "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
+						    "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+						  ]`
+		)
+
+		g.By("Create Kubeletconfig to configure a custom tlsSecurityProfile")
+		kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
+		defer mcp.waitForComplete()
+		defer kc.DeleteOrFail()
+		kc.create()
+		logger.Infof("KubeletConfig was created. Waiting for success.")
+		kc.waitUntilSuccess("5m")
+		logger.Infof("OK!\n")
+
+		g.By("Wait for MachineConfigPools to be updated")
+		mcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		g.By("Verify that the tls is configured properly")
+		rf := NewRemoteFile(workerNode, "/etc/kubernetes/kubelet.conf")
+		o.Expect(rf.Fetch()).To(o.Succeed(),
+			"Error trying to get the kubelet config from node %s", workerNode.GetName())
+
+		jsonConfig := JSON(rf.GetTextContent())
+		logger.Infof("Verifying tlsMinVersion")
+		o.Expect(jsonConfig.Get("tlsMinVersion")).To(
+			o.MatchJSON(expectedTlsMinVersion),
+			"The configured tlsMinVersion in /etc/kubernetes/kubelet.conf file is not the expected one")
+
+		logger.Infof("Verifying tlsCipherSuites")
+		o.Expect(jsonConfig.Get("tlsCipherSuites")).To(
+			o.MatchJSON(expectedTlsCipherSuites),
+			"The configured tlsCipherSuites in /etc/kubernetes/kubelet.conf file are not the expected one")
 		logger.Infof("OK!\n")
 	})
 })
