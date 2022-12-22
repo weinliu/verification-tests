@@ -18,8 +18,6 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	var (
 		oc                   = exutil.NewCLI("default-image-prune", exutil.KubeConfigPath())
-		monitoringns         = "openshift-monitoring"
-		promPod              = "prometheus-k8s-0"
 		queryImagePruner     = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=image_registry_operator_image_pruner_install_status"
 		queryImageRegistry   = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=image_registry_operator_storage_reconfigured_total"
 		priorityClassName    = "system-cluster-critical"
@@ -44,29 +42,21 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		token, err := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Prometheus query results report image pruner installed")
-		foundValue := metricReportStatus(queryImagePruner, monitoringns, promPod, token, 2)
-		o.Expect(foundValue).To(o.BeTrue())
+		o.Expect(doPrometheusQuery(oc, token, queryImagePruner)).To(o.Equal(2))
+
 		g.By("Prometheus query results report image registry operator not reconfiged")
-		foundValue = metricReportStatus(queryImageRegistry, monitoringns, promPod, token, 0)
-		o.Expect(foundValue).To(o.BeTrue())
+		o.Expect(doPrometheusQuery(oc, token, queryImageRegistry)).To(o.Equal(0))
 
 		g.By("Set imagepruner suspend")
+		defer oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"suspend":false}}`, "--type=merge").Execute()
 		err = oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"suspend":true}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"suspend":false}}`, "--type=merge").Execute()
+
 		g.By("Prometheus query results report image registry operator not reconfiged")
-		foundValue = metricReportStatus(queryImageRegistry, monitoringns, promPod, token, 0)
-		o.Expect(foundValue).To(o.BeTrue())
+		o.Expect(doPrometheusQuery(oc, token, queryImageRegistry)).To(o.Equal(0))
+
 		g.By("Prometheus query results report image pruner not installed")
-		err = wait.PollImmediate(30*time.Second, 1*time.Minute, func() (bool, error) {
-			foundValue = metricReportStatus(queryImagePruner, monitoringns, promPod, token, 1)
-			if !foundValue {
-				e2e.Logf("wait for next round")
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "Don't find the value")
+		o.Expect(doPrometheusQuery(oc, token, queryImagePruner)).To(o.Equal(1))
 	})
 
 	// author: xiuwang@redhat.com

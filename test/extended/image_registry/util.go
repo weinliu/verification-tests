@@ -107,31 +107,6 @@ func getBearerTokenURLViaPod(ns, execPodName, url, bearer string) (string, error
 	return output, nil
 }
 
-func runQuery(queryURL, ns, execPodName, bearerToken string) (*prometheusResponse, error) {
-	g.By("Run query")
-	contents, err := getBearerTokenURLViaPod(ns, execPodName, queryURL, bearerToken)
-	if err != nil {
-		return nil, fmt.Errorf("unable to execute query %v", err)
-	}
-	var result prometheusResponse
-	if err := json.Unmarshal([]byte(contents), &result); err != nil {
-		return nil, fmt.Errorf("unable to parse query response: %v", err)
-	}
-	metrics := result.Data.Result
-	if result.Status != "success" {
-		data, _ := json.MarshalIndent(metrics, "", "  ")
-		return nil, fmt.Errorf("incorrect response status: %s with error %s", data, result.Error)
-	}
-	return &result, nil
-}
-
-func metricReportStatus(queryURL, ns, execPodName, bearerToken string, value model.SampleValue) bool {
-	g.By("Return metric status")
-	result, err := runQuery(queryURL, ns, execPodName, bearerToken)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return result.Data.Result[0].Value == value
-}
-
 type bcSource struct {
 	outname   string
 	name      string
@@ -1221,4 +1196,31 @@ func pruneImage(oc *exutil.CLI, isName, imageName, refRoute, token string, num i
 	o.Expect(err).NotTo(o.HaveOccurred())
 	imageCount = strings.Count(imageOut, imageName)
 	o.Expect(imageCount).To(o.Equal(num))
+}
+
+func doPrometheusQuery(oc *exutil.CLI, token, url string) int {
+	var (
+		data  prometheusImageregistryQueryHTTP
+		count int
+	)
+
+	msg, _, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(
+		"-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "-i", "--",
+		"curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", token),
+		fmt.Sprintf("%s", url)).Outputs()
+	if err != nil {
+		e2e.Failf("Failed Prometheus query, error: %v", err)
+	}
+	o.Expect(msg).NotTo(o.BeEmpty())
+	json.Unmarshal([]byte(msg), &data)
+	err = wait.Poll(60*time.Second, 120*time.Second, func() (bool, error) {
+		if len(data.Data.Result) != 0 {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "cannot get query result")
+	count, err = strconv.Atoi(data.Data.Result[0].Value[1].(string))
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return count
 }
