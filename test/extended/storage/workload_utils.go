@@ -697,7 +697,7 @@ func (dep *deployment) createWithInlineVolume(oc *exutil.CLI, inVol InlineVolume
 	case "genericEphemeralVolume", "csiEphemeralVolume":
 		extraParameters = map[string]interface{}{
 			"jsonPath":  jsonPath,
-			"ephemeral": inVol.VolumeDefination,
+			"ephemeral": inVol.VolumeDefinition,
 		}
 	case "emptyDir":
 		extraParameters = map[string]interface{}{
@@ -775,14 +775,17 @@ func (dep *deployment) deleteAsAdmin(oc *exutil.CLI) {
 }
 
 // Get deployment pod list
-func (dep *deployment) getPodList(oc *exutil.CLI) []string {
-	selectorLable := dep.applabel
+func (dep *deployment) getPodList(oc *exutil.CLI) (podList []string) {
+	selectorLabel := dep.applabel
 	if !strings.Contains(dep.applabel, "=") {
-		selectorLable = "app=" + dep.applabel
+		selectorLabel = "app=" + dep.applabel
 	}
-	output, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", dep.namespace, "-l", selectorLable, "-o=jsonpath={.items[*].metadata.name}").Output()
+	output, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", dep.namespace, "-l", selectorLabel, "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	return strings.Split(output, " ")
+	if output != "" {
+		podList = strings.Split(output, " ")
+	}
+	return podList
 }
 
 // Get ReplicasNum of the Deployment
@@ -858,9 +861,13 @@ func (dep *deployment) waitReady(oc *exutil.CLI) {
 	})
 
 	if err != nil {
-		e2e.Logf("$ oc describe pod %s:\n%s", dep.name, dep.describe(oc))
-		for _, podName := range dep.getPodList(oc) {
-			e2e.Logf("$ oc describe pod %s:\n%s", podName, describePod(oc, dep.namespace, podName))
+		podsNames := dep.getPodList(oc)
+		if len(podsNames) > 0 {
+			for _, podName := range podsNames {
+				e2e.Logf("$ oc describe pod %s:\n%s", podName, describePod(oc, dep.namespace, podName))
+			}
+		} else {
+			e2e.Logf("The deployment/%s currently has no pods scheduled", dep.name)
 		}
 		// When the deployment with persistVolumeClaim and not ready describe the persistVolumeClaim detail
 		if dep.pvcname != "" {

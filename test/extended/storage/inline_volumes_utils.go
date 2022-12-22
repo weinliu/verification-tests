@@ -23,7 +23,7 @@ type GenericEphemeralVolume struct {
 // InlineVolume Object defination
 type InlineVolume struct {
 	Kind             string
-	VolumeDefination interface{}
+	VolumeDefinition interface{}
 	StorageClass     string
 }
 

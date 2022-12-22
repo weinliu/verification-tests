@@ -3187,10 +3187,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
-		// Known issue of api-auth default scc restricted don't allow ephemeral type volumes
-		// https://bugzilla.redhat.com/show_bug.cgi?id=2100429
-		// Temp change the default sa scc to "privileged" to avoid the known issue
-		o.Expect(oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "default").Output()).Should(o.ContainSubstring("added"))
+
+		// Known issue of api-auth default scc restricted don't allow ephemeral type volumes (Fixed on 4.12+)
+		// https://bugzilla.redhat.com/show_bug.cgi?id=2100429 (4.13)
+		// https://issues.redhat.com/browse/OCPBUGS-3037 (4.12)
+		// As OCP does not touch/update SCCs during upgrade (at least in 4.0-4.12), so the fix patch only works on fresh install clusters
+		// https://bugzilla.redhat.com/show_bug.cgi?id=2100429#c11
+		// Change the default sa scc in current namespace to "privileged" on upgrade clusters to avoid the known limitation
+		if isClusterHistoryVersionsContains(oc, "4.11") {
+			o.Expect(oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "default").Output()).Should(o.ContainSubstring("added"))
+		}
 
 		for _, provisioner := range supportProvisioners {
 			func() {
@@ -3200,7 +3206,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				dep := newDeployment(setDeploymentTemplate(deploymentTemplate))
 				inlineVolume := InlineVolume{
 					Kind:             "genericEphemeralVolume",
-					VolumeDefination: newGenericEphemeralVolume(setGenericEphemeralVolumeWorkloadLabel(dep.name), setGenericEphemeralVolumeStorageClassName(presetStorageClassName)),
+					VolumeDefinition: newGenericEphemeralVolume(setGenericEphemeralVolumeWorkloadLabel(dep.name), setGenericEphemeralVolumeStorageClassName(presetStorageClassName)),
 				}
 
 				g.By("# Create deployment with Generic ephemeral volume service account default")
@@ -3270,10 +3276,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Use the framework created project as default, if use your own, exec the follow code setupProject
 		g.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
-		// Known issue of api-auth default scc restricted don't allow ephemeral type volumes
-		// https://bugzilla.redhat.com/show_bug.cgi?id=2100429
-		// Temp change the default sa scc to "privileged" to avoid the known issue
-		o.Expect(oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "default").Output()).Should(o.ContainSubstring("added"))
+
+		// Known issue of api-auth default scc restricted don't allow ephemeral type volumes (Fixed on 4.12+)
+		// https://bugzilla.redhat.com/show_bug.cgi?id=2100429 (4.13)
+		// https://issues.redhat.com/browse/OCPBUGS-3037 (4.12)
+		// As OCP does not touch/update SCCs during upgrade (at least in 4.0-4.12), so the fix patch only works on fresh install clusters
+		// https://bugzilla.redhat.com/show_bug.cgi?id=2100429#c11
+		// Change the default sa scc in current namespace to "privileged" on upgrade clusters to avoid the known limitation
+		if isClusterHistoryVersionsContains(oc, "4.11") {
+			o.Expect(oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "default").Output()).Should(o.ContainSubstring("added"))
+		}
 
 		for _, provisioner := range supportProvisioners {
 			func() {
@@ -3283,7 +3295,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				dep := newDeployment(setDeploymentTemplate(deploymentTemplate))
 				inlineVolume := InlineVolume{
 					Kind:             "genericEphemeralVolume",
-					VolumeDefination: newGenericEphemeralVolume(setGenericEphemeralVolumeWorkloadLabel(dep.name), setGenericEphemeralVolumeStorageClassName(storageClass.name)),
+					VolumeDefinition: newGenericEphemeralVolume(setGenericEphemeralVolumeWorkloadLabel(dep.name), setGenericEphemeralVolumeStorageClassName(storageClass.name)),
 				}
 				newpvc := newPersistentVolumeClaim(setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimTemplate(pvcTemplate))
 				newpod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(newpvc.name))
@@ -3340,8 +3352,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				waitForPersistentVolumeStatusAsExpected(oc, pvName, "Released")
 
 				g.By("# Delete the PV and check the volume already umount from node")
-				originpv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o", "json").Output()
-				debugLogf(originpv)
+				originPv, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o", "json").Output()
+				debugLogf(originPv)
 				o.Expect(err).ShouldNot(o.HaveOccurred())
 				deleteSpecifiedResource(oc.AsAdmin(), "pv", pvName, "")
 				checkVolumeNotMountOnNode(oc, pvName, originNodeName)
@@ -3352,7 +3364,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				g.By("# Use the retained volume create new pv,pvc,pod and wait for the pod running")
 				newPvName := "newpv-" + getRandomString()
 				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv", newPvName).Execute()
-				createNewPersistVolumeWithRetainVolume(oc, originpv, storageClass.name, newPvName)
+				createNewPersistVolumeWithRetainVolume(oc, originPv, storageClass.name, newPvName)
 				newpvc.capacity = pvSize
 				newpvc.createWithSpecifiedPV(oc, newPvName)
 				defer newpvc.deleteAsAdmin(oc)
@@ -3396,10 +3408,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Use the framework created project as default, if use your own, exec the follow code setupProject
 		g.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
-		// Known issue of api-auth default scc restricted don't allow ephemeral type volumes
-		// https://bugzilla.redhat.com/show_bug.cgi?id=2100429
-		// Temp change the default sa scc to "privileged" to avoid the known issue
-		o.Expect(oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "default").Output()).Should(o.ContainSubstring("added"))
+
+		// Known issue of api-auth default scc restricted don't allow ephemeral type volumes (Fixed on 4.12+)
+		// https://bugzilla.redhat.com/show_bug.cgi?id=2100429 (4.13)
+		// https://issues.redhat.com/browse/OCPBUGS-3037 (4.12)
+		// As OCP does not touch/update SCCs during upgrade (at least in 4.0-4.12), so the fix patch only works on fresh install clusters
+		// https://bugzilla.redhat.com/show_bug.cgi?id=2100429#c11
+		// Change the default sa scc in current namespace to "privileged" on upgrade clusters to avoid the known limitation
+		if isClusterHistoryVersionsContains(oc, "4.11") {
+			o.Expect(oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "default").Output()).Should(o.ContainSubstring("added"))
+		}
 
 		for _, provisioner := range supportProvisioners {
 			func() {
@@ -3409,7 +3427,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				presetStorageClassName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
 				inlineVolume := InlineVolume{
 					Kind:             "genericEphemeralVolume",
-					VolumeDefination: newGenericEphemeralVolume(setGenericEphemeralVolumeWorkloadLabel(dep.name), setGenericEphemeralVolumeStorageClassName(presetStorageClassName)),
+					VolumeDefinition: newGenericEphemeralVolume(setGenericEphemeralVolumeWorkloadLabel(dep.name), setGenericEphemeralVolumeStorageClassName(presetStorageClassName)),
 				}
 
 				g.By("# Create deployment with Generic ephemeral volume specified the csi storageClass and wait for deployment become ready")

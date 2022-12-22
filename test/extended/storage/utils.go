@@ -773,6 +773,19 @@ func getClusterHistoryVersions(oc *exutil.CLI) []string {
 	return historyVersions
 }
 
+// isClusterHistoryVersionsContains checks whether the cluster history versions contains specified version
+func isClusterHistoryVersionsContains(oc *exutil.CLI, version string) bool {
+	clusterHistoryVersions := getClusterHistoryVersions(oc)
+	if len(clusterHistoryVersions) > 0 {
+		for _, historyVersion := range clusterHistoryVersions {
+			if strings.HasPrefix(historyVersion, version) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Get valid volume size by cloudProvider
 func getValidVolumeSize() (validVolSize string) {
 	switch cloudProvider {
