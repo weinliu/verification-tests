@@ -20,16 +20,38 @@ import (
 func waitForCPMSUpdateCompleted(oc *exutil.CLI, replicas int) {
 	e2e.Logf("Waiting for the Update completed ...")
 	timeToWait := time.Duration(replicas*35) * time.Minute
+	count := 0
 	err := wait.Poll(1*time.Minute, timeToWait, func() (bool, error) {
-		readyReplicas, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
-		currentReplicas, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.replicas}", "-n", machineAPINamespace).Output()
-		desiredReplicas, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.replicas}", "-n", machineAPINamespace).Output()
-		updatedReplicas, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.updatedReplicas}", "-n", machineAPINamespace).Output()
+		count++
+		if count == 1 {
+			e2e.Logf("Wait for the update to start and waiting up to 1 minutes ... count %d", count)
+			return false, nil
+		}
+		desiredReplicas, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.replicas}", "-n", machineAPINamespace).Output()
+		if err1 != nil {
+			e2e.Logf("The server was unable to return a response and waiting up to 1 minutes ... count %d", count)
+			return false, nil
+		}
+		readyReplicas, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
+		if err2 != nil {
+			e2e.Logf("The server was unable to return a response and waiting up to 1 minutes ... count %d", count)
+			return false, nil
+		}
+		currentReplicas, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.replicas}", "-n", machineAPINamespace).Output()
+		if err3 != nil {
+			e2e.Logf("The server was unable to return a response and waiting up to 1 minutes ... count %d", count)
+			return false, nil
+		}
+		updatedReplicas, err4 := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.updatedReplicas}", "-n", machineAPINamespace).Output()
+		if err4 != nil {
+			e2e.Logf("The server was unable to return a response and waiting up to 1 minutes ... count %d", count)
+			return false, nil
+		}
 		if desiredReplicas == currentReplicas && desiredReplicas == readyReplicas && desiredReplicas == updatedReplicas {
-			e2e.Logf("The Update is completed!")
+			e2e.Logf("The Update is completed! desiredReplicas is %s, count %d", desiredReplicas, count)
 			return true, nil
 		}
-		e2e.Logf("The Update is still ongoing and waiting up to 1 minutes ...")
+		e2e.Logf("The Update is still ongoing and waiting up to 1 minutes ... count %d", count)
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "Wait Update failed.")
@@ -176,11 +198,28 @@ func getMasterMachineNameBySuffix(oc *exutil.CLI, suffix string) string {
 // waitForClusterStable wait cluster to stabilize
 func waitForClusterStable(oc *exutil.CLI) {
 	e2e.Logf("Wait cluster to stabilize ...")
-	err := wait.Poll(2*time.Minute, 20*time.Minute, func() (bool, error) {
-		statusAvailable, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator", "-o=jsonpath={.items[*].status.conditions[?(@.type==\"Available\")].status}").Output()
-		statusProgressing, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator", "-o=jsonpath={.items[*].status.conditions[?(@.type==\"Progressing\")].status}").Output()
-		statusDegraded, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator", "-o=jsonpath={.items[*].status.conditions[?(@.type==\"Degraded\")].status}").Output()
-		if !strings.Contains(statusAvailable, "False") && !strings.Contains(statusProgressing, "True") && !strings.Contains(statusDegraded, "True") {
+	err := wait.Poll(2*time.Minute, 30*time.Minute, func() (bool, error) {
+		authenticationState, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/authentication", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
+		if err1 != nil {
+			e2e.Logf("The server was unable to return a response and waiting up to 2 minutes ...")
+			return false, nil
+		}
+		etcdState, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/etcd", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
+		if err2 != nil {
+			e2e.Logf("The server was unable to return a response and waiting up to 2 minutes ...")
+			return false, nil
+		}
+		kubeapiserverState, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/kube-apiserver", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
+		if err3 != nil {
+			e2e.Logf("The server was unable to return a response and waiting up to 2 minutes ...")
+			return false, nil
+		}
+		openshiftapiserverState, err4 := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/openshift-apiserver", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
+		if err4 != nil {
+			e2e.Logf("The server was unable to return a response and waiting up to 2 minutes ...")
+			return false, nil
+		}
+		if strings.Contains(authenticationState, "TrueFalseFalse") && strings.Contains(etcdState, "TrueFalseFalse") && strings.Contains(kubeapiserverState, "TrueFalseFalse") && strings.Contains(openshiftapiserverState, "TrueFalseFalse") {
 			e2e.Logf("The cluster is stable!")
 			return true, nil
 		}
@@ -206,13 +245,15 @@ func getArchitectureType(oc *exutil.CLI) string {
 
 // skipForClusterNotStable skip the test if the cluster is not stable
 func skipForClusterNotStable(oc *exutil.CLI) {
-	statusAvailable, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator", "-o=jsonpath={.items[*].status.conditions[?(@.type==\"Available\")].status}").Output()
+	authenticationState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/authentication", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	statusProgressing, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator", "-o=jsonpath={.items[*].status.conditions[?(@.type==\"Progressing\")].status}").Output()
+	etcdState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/etcd", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	statusDegraded, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator", "-o=jsonpath={.items[*].status.conditions[?(@.type==\"Degraded\")].status}").Output()
+	kubeapiserverState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/kube-apiserver", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if strings.Contains(statusAvailable, "False") || strings.Contains(statusProgressing, "True") || strings.Contains(statusDegraded, "True") {
+	openshiftapiserverState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/openshift-apiserver", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if !(strings.Contains(authenticationState, "TrueFalseFalse") && strings.Contains(etcdState, "TrueFalseFalse") && strings.Contains(kubeapiserverState, "TrueFalseFalse") && strings.Contains(openshiftapiserverState, "TrueFalseFalse")) {
 		g.Skip("Skip for cluster is not stable!")
 	}
 }
