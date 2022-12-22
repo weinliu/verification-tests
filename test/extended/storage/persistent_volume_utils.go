@@ -457,13 +457,22 @@ func checkPvNodeAffinityContains(oc *exutil.CLI, pvName string, content string) 
 
 // Get persistent volume nodeAffinity nodeSelectorTerms matchExpressions "topology.gke.io/zone" values
 func getPvNodeAffinityAvailableZones(oc *exutil.CLI, pvName string) []string {
+
+	topologyPath := map[string]string{
+		"aws":          `topology.ebs.csi.aws.com/zone`,
+		"azure":        `topology.disk.csi.azure.com/zone`,
+		"alibabacloud": `topology.diskplugin.csi.alibabacloud.com/zone`,
+		"ibmcloud":     `failure-domain.beta.kubernetes.io/zone`,
+		"gcp":          `topology.gke.io/zone`,
+	}
+
 	pvInfo, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o", "json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	availableZonesStr := gjson.Get(pvInfo, `spec.nodeAffinity.required.nodeSelectorTerms.#.matchExpressions.#(key=topology.gke.io/zone)#.values|@ugly|@flatten`).String()
+	availableZonesStr := gjson.Get(pvInfo, `spec.nodeAffinity.required.nodeSelectorTerms.#.matchExpressions.#(key=`+topologyPath[cloudProvider]+`)#.values|@ugly|@flatten`).String()
 	delSybols := []string{"[", "]", "\""}
 	for _, delSybol := range delSybols {
 		availableZonesStr = strings.ReplaceAll(availableZonesStr, delSybol, "")
 	}
-	e2e.Logf("PV \"%s\" nodeAffinity \"topology.gke.io/zone\" values: %s", pvName, availableZonesStr)
+	e2e.Logf("PV \"%s\" nodeAffinity \" %s \"values: %s", topologyPath[cloudProvider], pvName, availableZonesStr)
 	return strings.Split(availableZonesStr, ",")
 }

@@ -434,7 +434,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer newpvc.deleteAsAdmin(oc)
 
 		g.By("# Create deployment with the created new pvc and wait ready")
-		dep.create(oc)
+		volAvailableZones := pvc.getVolumeNodeAffinityAvailableZones(oc)
+		dep.createWithNodeSelector(oc, `topology\.kubernetes\.io\/zone`, volAvailableZones[0])
 		defer dep.deleteAsAdmin(oc)
 		dep.waitReady(oc)
 
