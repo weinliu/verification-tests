@@ -55,7 +55,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 		sub = subscriptionDescription{
 			subName:                "file-integrity-operator",
 			namespace:              "",
-			channel:                "release-0.1",
+			channel:                "v1",
 			ipApproval:             "Automatic",
 			operatorPackage:        "file-integrity-operator",
 			catalogSourceName:      "qe-app-registry",
