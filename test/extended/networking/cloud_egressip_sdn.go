@@ -31,9 +31,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		platform := exutil.CheckPlatform(oc)
 		networkType := checkNetworkType(oc)
 		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "azure") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere")
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "azure") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal")
 		if !acceptedPlatform || !strings.Contains(networkType, "sdn") {
-			g.Skip("Test cases should be run on AWS, GCP, Azure, OpenStack or vSphere cluster with Openshift-SDN network plugin, skip for other platforms or other network plugin or ipv6 single stack type!!")
+			g.Skip("Test cases should be run on AWS, GCP, Azure, OpenStack, vSphere, IPI BM cluster with Openshift-SDN network plugin, skip for other platforms or other network plugin!!")
 		}
 
 		switch platform {
@@ -132,6 +132,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			e2e.Logf("\n vSphere is detected, running the case on vSphere\n")
 			flag = "tcpdump"
 			e2e.Logf("Use tcpdump way to verify egressIP on vSphere")
+		case "baremetal":
+			e2e.Logf("\n BareMetal is detected, running the case on BareMetal\n")
+			flag = "tcpdump"
+			e2e.Logf("Use tcpdump way to verify egressIP on BareMetal")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
 			g.Skip("Not support cloud provider for auto egressip cases for now.")
@@ -253,7 +257,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		}
 
 		g.By("11.Error would be logged into SDN pod log on master node")
-		sdnPodName, err := exutil.GetPodName(oc, "openshift-sdn", "app=sdn", egressNode)
+		sdnPodName, getPodErr := exutil.GetPodName(oc, "openshift-sdn", "app=sdn", egressNode)
+		o.Expect(getPodErr).NotTo(o.HaveOccurred())
 		e2e.Logf("\n Got sdn pod name for egressNode %v: %v\n", egressNode, sdnPodName)
 
 		podLogs, err := exutil.GetSpecificPodLogs(oc, "openshift-sdn", "sdn", sdnPodName, "'Error processing egress IPs'")
@@ -538,10 +543,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		e2e.Logf("\nnonEgressNode: %v\n", nonEgressNode)
 
 		g.By("2.Check SDN pod log of the non-egress node first time to get baseline")
-		sdnPodName, err := exutil.GetPodName(oc, "openshift-sdn", "app=sdn", nonEgressNode)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		sdnPodName, getPodErr := exutil.GetPodName(oc, "openshift-sdn", "app=sdn", nonEgressNode)
+		o.Expect(getPodErr).NotTo(o.HaveOccurred())
 		o.Expect(sdnPodName).NotTo(o.BeEmpty())
-		podlogs, err := exutil.WaitAndGetSpecificPodLogs(oc, "openshift-sdn", "sdn", sdnPodName, `egressip`)
+		podlogs, podLogErr := exutil.WaitAndGetSpecificPodLogs(oc, "openshift-sdn", "sdn", sdnPodName, `egressip`)
+		o.Expect(podLogErr).NotTo(o.HaveOccurred())
 		countBaseline := strings.Count(podlogs, `may be offline`)
 
 		g.By("3. Get subnet from egressIP node, add egressCIDRs to both egressIP nodes")
@@ -1107,6 +1113,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			instance = strings.Split(foundHost, ".")
 			e2e.Logf("\n\n\n GCP is detected, the worker node to be shutdown on GCP is: %v\n\n\n", instance[0])
 			infraID, err := exutil.GetInfraID(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
 			zone, err = getZoneOfInstanceFromGcp(oc, infraID, instance[0])
 			o.Expect(err).NotTo(o.HaveOccurred())
 			defer checkNodeStatus(oc, foundHost, "Ready")
@@ -1141,6 +1148,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			err = vspObj.StopVsphereInstance(vspClient, foundHost)
 			e2e.Logf("\n Did I get error while stopping instance: %v \n", err)
 			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "NotReady")
+		case "baremetal":
+			e2e.Logf("\n IPI baremetal is detected \n")
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			defer startVMOnIPIBM(oc, foundHost)
+			stopErr := stopVMOnIPIBM(oc, foundHost)
+			o.Expect(stopErr).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, foundHost, "NotReady")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
@@ -1205,6 +1219,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer checkNodeStatus(oc, foundHost, "Ready")
 			err = vspObj.StartVsphereInstance(vspClient, foundHost)
 			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "Ready")
+		case "baremetal":
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			startErr := startVMOnIPIBM(oc, foundHost)
+			o.Expect(startErr).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, foundHost, "Ready")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
@@ -1353,6 +1372,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			instance = strings.Split(foundHost, ".")
 			e2e.Logf("\n\n\n GCP is detected, the worker node to be shutdown is: %v\n\n\n", instance[0])
 			infraID, err := exutil.GetInfraID(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
 			zone, err = getZoneOfInstanceFromGcp(oc, infraID, instance[0])
 			o.Expect(err).NotTo(o.HaveOccurred())
 			defer checkNodeStatus(oc, foundHost, "Ready")
@@ -1388,6 +1408,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer vspObj.StartVsphereInstance(vspClient, foundHost)
 			err = vspObj.StopVsphereInstance(vspClient, foundHost)
 			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "NotReady")
+		case "baremetal":
+			e2e.Logf("\n IPI baremetal is detected \n")
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			defer startVMOnIPIBM(oc, foundHost)
+			stopErr := stopVMOnIPIBM(oc, foundHost)
+			o.Expect(stopErr).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, foundHost, "NotReady")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
@@ -1449,6 +1476,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			defer checkNodeStatus(oc, foundHost, "Ready")
 			err = vspObj.StartVsphereInstance(vspClient, foundHost)
 			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "Ready")
+		case "baremetal":
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			startErr := startVMOnIPIBM(oc, foundHost)
+			o.Expect(startErr).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, foundHost, "Ready")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
@@ -1642,6 +1674,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		case "openstack":
 			ipOutOfCIDR = "172.16.1.100" //since OSP use 192.168.x.x as its CIDR, need to use some other private IP for this test
 		case "vsphere":
+			ipOutOfCIDR = "192.168.1.100"
+		case "baremetal":
 			ipOutOfCIDR = "192.168.1.100"
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
@@ -2858,6 +2892,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			instance = strings.Split(foundHost, ".")
 			e2e.Logf("\n\n\n GCP is detected, the worker node to be shutdown on GCP is: %v\n\n\n", instance[0])
 			infraID, err := exutil.GetInfraID(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
 			zone, err = getZoneOfInstanceFromGcp(oc, infraID, instance[0])
 			o.Expect(err).NotTo(o.HaveOccurred())
 			defer checkNodeStatus(oc, foundHost, "Ready")
@@ -2892,6 +2927,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			err = vspObj.StopVsphereInstance(vspClient, foundHost)
 			e2e.Logf("\n Did I get error while stopping instance: %v \n", err)
 			o.Expect(err).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "NotReady")
+		case "baremetal":
+			e2e.Logf("\n IPI baremetal is detected \n")
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			defer startVMOnIPIBM(oc, foundHost)
+			stopErr := stopVMOnIPIBM(oc, foundHost)
+			o.Expect(stopErr).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, foundHost, "NotReady")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
@@ -2954,6 +2996,11 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			err = vspObj.StartVsphereInstance(vspClient, foundHost)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, foundHost, "Ready")
+		case "baremetal":
+			defer checkNodeStatus(oc, foundHost, "Ready")
+			startErr := startVMOnIPIBM(oc, foundHost)
+			o.Expect(startErr).NotTo(o.HaveOccurred())
+			checkNodeStatus(oc, foundHost, "Ready")
 		default:
 			e2e.Logf("Not support cloud provider for auto egressip cases for now.")
 			g.Skip("Not support cloud provider for auto egressip cases for now.")
@@ -2971,9 +3018,9 @@ var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
 		platform := exutil.CheckPlatform(oc)
 		networkType := checkNetworkType(oc)
 		e2e.Logf("\n\nThe platform is %v,  networkType is %v\n", platform, networkType)
-		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "azure") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere")
+		acceptedPlatform := strings.Contains(platform, "aws") || strings.Contains(platform, "gcp") || strings.Contains(platform, "azure") || strings.Contains(platform, "openstack") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal")
 		if !acceptedPlatform || !strings.Contains(networkType, "sdn") {
-			g.Skip("Test cases should be run on AWS, GCP, Azure, OpenStack or vSphere cluster with Openshift-SDN network plugin, skip for other platforms or other network plugin!!")
+			g.Skip("Test cases should be run on AWS, GCP, Azure, OpenStack, vSphere, IPI BM cluster with Openshift-SDN network plugin, skip for other platforms or other network plugin!!")
 		}
 	})
 
@@ -3081,7 +3128,7 @@ var _ = g.Describe("[sig-networking] SDN EgressIPs Basic", func() {
 
 		g.By("7.Unpatch egressIP to the namespace, verify iptable rule is removed from egressNode")
 		patchResourceAsAdmin(oc, "netnamespace/"+ns, "{\"egressIPs\":[]}")
-		CmdOutput, CmdErr = execCommandInSDNPodOnNode(oc, egressNode, IPtableCmd)
+		_, CmdErr = execCommandInSDNPodOnNode(oc, egressNode, IPtableCmd)
 		o.Expect(CmdErr).To(o.HaveOccurred())
 
 		g.By("8.Verify openflow rule is removed from egressNode")
