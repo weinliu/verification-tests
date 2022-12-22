@@ -32,6 +32,14 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		e2e.Logf("Cluster should be healthy befor running dr case.")
+		err = ClusterHealthcheck(oc, "OCP-19941/log")
+		if err == nil {
+			e2e.Logf("Cluster health check passed before running dr case")
+		} else {
+			e2e.Failf("Cluster health check failed before running dr case :: %s ", err)
+		}
+
 		platform := exutil.CheckPlatform(oc)
 		g.By("1. Get the leader master node of cluster")
 
@@ -102,7 +110,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		timeFirstServiceDisruption := time.Now()
 		isFirstServiceDisruption := false
 		e2e.Logf("#### Watching start time(s) :: %v ####\n", time.Now().Format("2006-01-02 15:04:05"))
-		apiserverOutageWatcher := wait.Poll(2*time.Second, 150*time.Second, func() (bool, error) {
+		apiserverOutageWatcher := wait.Poll(2*time.Second, 300*time.Second, func() (bool, error) {
 			// KAS health check
 			_, getNodeError := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
 			if getNodeError == nil {
