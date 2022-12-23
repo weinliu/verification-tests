@@ -1144,6 +1144,22 @@ func waitForOutput(oc *exutil.CLI, ns, resourceName, searchString, value string)
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the desired searchString does not appear"))
 }
 
+// this function keep checking util the searching for the regular expression matches
+func waitForRegexpOutput(oc *exutil.CLI, ns, resourceName, searchString, regExpress string) string {
+	result := "NotMatch"
+	wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		sourceRange := fetchJSONPathValue(oc, ns, resourceName, searchString)
+		searchRe := regexp.MustCompile(regExpress)
+		searchInfo := searchRe.FindStringSubmatch(sourceRange)
+		if len(searchInfo) > 0 {
+			result = searchInfo[0]
+			return true, nil
+		}
+		return false, nil
+	})
+	return result
+}
+
 // this function check the polled output of config map
 func waitForConfigMapOutput(oc *exutil.CLI, ns, resourceName, searchString string) string {
 	var output string

@@ -66,11 +66,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("create project, pod, svc, and ingress that mismatch with default ingressclass")
 		oc.SetupProject()
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
 		createResourceFromFile(oc, oc.Namespace(), testIngress)
 
 		g.By("ensure no route is created from the ingress")
-		output, err = oc.Run("get").Args("route").Output()
+		output, err := oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).NotTo(o.ContainSubstring("ingress-with-clalss"))
 
@@ -350,5 +350,42 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		svcCreatedTime2 := fetchJSONPathValue(oc, namespace, svcResource, jsonPath)
 		o.Expect(svcCreatedTime2).NotTo(o.BeEmpty())
 		o.Expect(svcCreatedTime1).NotTo(o.Equal(svcCreatedTime2))
+	})
+
+	// bug: 2013004
+	g.It("ARO-Author:shudili-High-57089-Error syncing load balancer and failed to parse the VMAS ID on Azure platform", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			lbServices          = filepath.Join(buildPruningBaseDir, "bug2013004-lb-services.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			srvrcInfo           = "web-server-rc"
+			externalSvc         = "external-lb-57089"
+			internalSvc         = "internal-lb-57089"
+		)
+
+		// skip if platform is not AZURE
+		g.By("Pre-flight check for the platform type")
+		platformtype := exutil.CheckPlatform(oc)
+		if platformtype != "azure" {
+			g.Skip("Skip for it not azure platform")
+		}
+
+		g.By("create a server pod")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		err := waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
+
+		g.By("try to create an external load balancer service and an internal load balancer service")
+		operateResourceFromFile(oc, "create", project1, lbServices)
+		waitForOutput(oc, project1, "service/"+externalSvc, ".metadata.name", externalSvc)
+		waitForOutput(oc, project1, "service/"+internalSvc, ".metadata.name", internalSvc)
+
+		g.By("check if the lb services have obtained the EXTERNAL-IPs")
+		regExp := "([0-9]+.[0-9]+.[0-9]+.[0-9]+)"
+		searchOutput1 := waitForRegexpOutput(oc, project1, "service/"+externalSvc, ".status.loadBalancer.ingress..ip", regExp)
+		o.Expect(searchOutput1).NotTo(o.ContainSubstring("NotMatch"))
+		searchOutput2 := waitForRegexpOutput(oc, project1, "service/"+internalSvc, ".status.loadBalancer.ingress..ip", regExp)
+		o.Expect(searchOutput2).NotTo(o.ContainSubstring("NotMatch"))
 	})
 })
