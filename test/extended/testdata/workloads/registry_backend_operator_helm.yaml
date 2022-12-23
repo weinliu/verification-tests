@@ -10,10 +10,3 @@ mirror:
    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.11
      packages:
        - name: openshift-secondary-scheduler-operator
- helm:
-    repositories:
-      - name: podinfo
-        url: https://stefanprodan.github.io/podinfo
-        charts:
-          - name: podinfo
-            version: 5.0.0

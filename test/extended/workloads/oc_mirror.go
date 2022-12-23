@@ -243,7 +243,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("init", "--registry", "localhost:5000/test:latest", "--output", "json").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-High-46769-Critical-46515-High-46767-registry backend test", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-High-46769-Critical-46515-High-registry backend test", func() {
 		g.By("Set podman registry config")
 		dirname := "/tmp/case46769"
 		err := os.MkdirAll(dirname, 0755)
