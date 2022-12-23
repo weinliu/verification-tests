@@ -649,7 +649,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = exec.Command("bash", "-c", "cd /tmp/ocp-34462/catalogtest && sed -i 's/--container-tool docker //g' Makefile").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = exec.Command("bash", "-c", "cd /tmp/ocp-34462/catalogtest && make bundle-build bundle-push catalog-build catalog-push BUNDLE_IMG=quay.io/olmqe/catalogtest-bundle:v4.10 CATALOG_IMG=quay.io/olmqe/catalogtest-index:v4.10").Output()
+		_, err = exec.Command("bash", "-c", "cd /tmp/ocp-34462/catalogtest && make bundle-build bundle-push catalog-build catalog-push BUNDLE_IMG=quay.io/olmqe/catalogtest-bundle:v4.12 CATALOG_IMG=quay.io/olmqe/catalogtest-index:v4.12").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer containerCLI.RemoveImage("quay.io/olmqe/catalogtest-bundle:v" + ocpversion)
 		defer containerCLI.RemoveImage("quay.io/olmqe/catalogtest-index:v" + ocpversion)
