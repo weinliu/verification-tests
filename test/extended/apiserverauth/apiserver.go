@@ -1329,7 +1329,7 @@ spec:
 		g.By("3) Get kube-apiserver pods")
 		err = oc.AsAdmin().Run("project").Args("openshift-kube-apiserver").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().Run("project").Args("defult").Execute() // switch to default project
+		defer oc.AsAdmin().Run("project").Args("default").Execute() // switch to default project
 
 		podList, err := oc.AdminKubeClient().CoreV1().Pods("openshift-kube-apiserver").List(context.Background(), metav1.ListOptions{LabelSelector: "apiserver"})
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -3653,5 +3653,51 @@ EOF`, dcpolicyrepo)
 
 		g.By("4) Test user access with role [admin], expect success")
 		testUserAccess("admin", "4", "201")
+	})
+
+	// author: zxiao@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:zxiao-Medium-33830-[MSTR-990][Apiserver]customize audit config of apiservers negative test [Serial]", func() {
+		var (
+			namespace = "openshift-kube-apiserver"
+			label     = fmt.Sprintf("app=%s", namespace)
+			pod       string
+		)
+
+		g.By(fmt.Sprintf("1) Wait for a pod with the label %s to show up", label))
+		err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			pods, err := exutil.GetAllPodsWithLabel(oc, namespace, label)
+			if err != nil || len(pods) == 0 {
+				e2e.Logf("Fail to get pod, error: %s. Trying again", err)
+				return false, nil
+			}
+			pod = pods[0]
+			e2e.Logf("Got pod with name:%s", pod)
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot find pod with label %s", label))
+
+		g.By(fmt.Sprintf("2) Record number of revisions of apiserver pod with name %s before test", pod))
+		beforeRevision, err := oc.AsAdmin().Run("get").Args("pod", pod, "-o=jsonpath={.metadata.labels.revision}", "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		apiserver := "apiserver/cluster"
+		g.By(fmt.Sprintf("3) Set invalid audit profile name to %s, expect failure", apiserver))
+		output, err := oc.AsAdmin().Run("patch").Args(apiserver, "-p", `{"spec": {"audit": {"profile": "myprofile"}}}`, "--type=merge", "-n", namespace).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`Unsupported value: "myprofile"`))
+
+		g.By(fmt.Sprintf("4) Set valid empty patch to %s, expect success", apiserver))
+		output, err = oc.AsAdmin().Run("patch").Args(apiserver, "-p", `{"spec": {}}`, "--type=merge", "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`cluster patched (no change)`))
+
+		g.By(fmt.Sprintf("5) Try to delete %s, expect failure", apiserver))
+		err = oc.AsAdmin().Run("delete").Args(apiserver, "-n", namespace).Execute()
+		o.Expect(err).To(o.HaveOccurred())
+
+		g.By(fmt.Sprintf("6) Compare number of revisions of apiserver pod with name %s to the one before test, expect unchanged", pod))
+		afterRevision, err := oc.AsAdmin().Run("get").Args("pod", pod, "-o=jsonpath={.metadata.labels.revision}", "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(afterRevision).To(o.Equal(beforeRevision))
 	})
 })
