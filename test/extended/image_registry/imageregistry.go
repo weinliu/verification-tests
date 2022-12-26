@@ -132,6 +132,13 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		if !strings.Contains(output, "httpProxy") {
 			g.Skip("Skip for non-proxy platform")
 		}
+
+		g.By("Check if it's a https_proxy cluster")
+		output, _ = oc.WithoutNamespace().AsAdmin().Run("get").Args("proxy/cluster", "-o=jsonpath={.spec}").Output()
+		if strings.Contains(output, "httpProxy") && strings.Contains(output, "user-ca-bundle") {
+			g.Skip("Skip for https_proxy platform")
+		}
+
 		// Check if openshift-sample operator installed
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/openshift-samples").Output()
 		if err != nil && strings.Contains(output, `openshift-samples" not found`) {
