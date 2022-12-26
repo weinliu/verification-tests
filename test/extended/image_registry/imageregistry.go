@@ -580,16 +580,30 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	//author: xiuwang@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:xiuwang-High-45540-Registry should fall back to secondary ImageContentSourcePolicy Mirror [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:xiuwang-High-45540-Registry should fall back to secondary ImageContentSourcePolicy Mirror [Disruptive]", func() {
 		var (
 			icspFile = filepath.Join(imageRegistryBaseDir, "icsp-multi-mirrors.yaml")
 			icspsrc  = icspSource{
 				name:     "image-policy-fake",
 				template: icspFile,
 			}
+			mc = machineConfig{
+				name:     "",
+				pool:     "worker",
+				source:   "",
+				path:     "",
+				template: "",
+			}
 		)
 		g.By("Create imagecontentsourcepolicy with multiple mirrors")
-		defer icspsrc.delete(oc)
+		defer func() {
+			icspsrc.delete(oc)
+			// Update registry of icsp will restart crio to apply change to every node
+			// Need ensure master and worker update completed
+			mc.waitForMCPComplete(oc)
+			mc.pool = "master"
+			mc.waitForMCPComplete(oc)
+		}()
 		icspsrc.create(oc)
 
 		g.By("Check registry configs get updated")
@@ -675,30 +689,18 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: jitli@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:jitli-ConnectedOnly-Medium-33051-Images can be imported from an insecure registry without 'insecure: true' if it is in insecureRegistries in image.config/cluster [Disruptive]", func() {
+		var (
+			expectedStatus1 = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			mc              = machineConfig{
+				name:     "",
+				pool:     "worker",
+				source:   "",
+				path:     "",
+				template: "",
+			}
+		)
 
-		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 		masterNode, _ := exutil.GetFirstMasterNode(oc)
-		defer func() {
-			err := wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
-				regStatus, _ := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--to-namespace=openshift-image-registry"}, "cat", "/etc/containers/registries.conf")
-				if !strings.Contains(regStatus, "location = \"docker.io\"") {
-					e2e.Logf("registries.conf updated")
-					return true, nil
-				}
-				e2e.Logf("registries.conf not update")
-				return false, nil
-
-			})
-			exutil.AssertWaitPollNoErr(err, "registries.conf not contains docker.io")
-			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}()
-		g.By("import image from an insecure registry directly without --insecure=true")
-		output, err := oc.WithoutNamespace().AsAdmin().Run("import-image").Args("image-33051", "--from=registry.access.redhat.com/rhel7").Output()
-		o.Expect(err).To(o.HaveOccurred())
-		if err != nil {
-			e2e.Logf(output)
-		}
 
 		g.By("Create route to expose the registry")
 		routeName := getRandomString()
@@ -716,16 +718,29 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("secret", "docker-registry", "secret33051", "--docker-server="+host, "--docker-username="+oc.Username(), "--docker-password="+token, "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Add the insecure registry to images.config.openshift.io cluster")
-		defer oc.AsAdmin().Run("patch").Args("images.config.openshift.io/cluster", "-p", `{"spec": {"registrySources": null}}`, "--type=merge").Execute()
-		output, err = oc.AsAdmin().Run("patch").Args("images.config.openshift.io/cluster", "-p", `{"spec": {"registrySources": {"insecureRegistries": ["`+host+`"]}}}`, "--type=merge").Output()
-		e2e.Logf(output)
+		g.By("Import image from an insecure registry directly without --insecure=true")
+		output, _ := oc.WithoutNamespace().AsAdmin().Run("import-image").Args("image-33051", "--from="+host+"/openshift/tools:latest", "--confirm", "-n", oc.Namespace()).Output()
+		o.Expect(output).To(o.ContainSubstring("x509"))
+
+		g.By("Add the insecure registry to images.config.openshift.io cluster, add docker.io to blockedRegistries list")
+		defer func() {
+			err = oc.AsAdmin().Run("patch").Args("images.config.openshift.io/cluster", "-p", `{"spec": {"registrySources": null}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			// image.conf.spec.registrySources will restart crio to apply change to every node
+			// Need ensure master and worker update completed
+			mc.waitForMCPComplete(oc)
+			mc.pool = "master"
+			mc.waitForMCPComplete(oc)
+			err := waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = oc.AsAdmin().Run("patch").Args("images.config.openshift.io/cluster", "-p", `{"spec": {"registrySources": {"insecureRegistries": ["`+host+`"],"blockedRegistries": ["docker.io"]}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("registries.conf gets updated")
 		err = wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
-			registriesstatus, _ := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--to-namespace=openshift-image-registry"}, "cat", "/etc/containers/registries.conf")
-			if strings.Contains(registriesstatus, "default-route-openshift-image-registry.apps") {
+			registriesstatus, _ := exutil.DebugNodeWithChroot(oc, masterNode, "cat", "/etc/containers/registries.conf")
+			if strings.Contains(registriesstatus, host) {
 				e2e.Logf("registries.conf updated")
 				return true, nil
 			}
@@ -734,29 +749,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "registries.conf not update")
 
-		g.By("Tag the image")
-		output, err = oc.WithoutNamespace().AsAdmin().Run("tag").Args(host+"/openshift/ruby:latest", "ruby:33051", "-n", oc.Namespace()).Output()
+		g.By("Importing image from an insecure registry directly without --insecure=true should succeed")
+		err = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("tools:33051", "--from="+host+"/openshift/tools:latest", "--confirm", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Tag ruby:33051 set"))
-
-		g.By("Add docker.io to blockedRegistries list")
-		defer oc.AsAdmin().Run("patch").Args("images.config.openshift.io/cluster", "-p", `{"spec": {"additionalTrustedCA": null,"registrySources": null}}`, "--type=merge").Execute()
-		output, err = oc.AsAdmin().Run("patch").Args("images.config.openshift.io/cluster", "-p", `{"spec": {"additionalTrustedCA": {"name": ""},"registrySources": {"blockedRegistries": ["docker.io"]}}}`, "--type=merge").Output()
-		e2e.Logf(output)
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "tools", "33051")
 		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("registries.conf gets updated")
-		err = wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
-			registriesstatus, _ := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--to-namespace=openshift-image-registry"}, "cat", "/etc/containers/registries.conf")
-			if strings.Contains(registriesstatus, "location = \"docker.io\"") {
-				e2e.Logf("registries.conf updated")
-				return true, nil
-			}
-			e2e.Logf("registries.conf not update")
-			return false, nil
-
-		})
-		exutil.AssertWaitPollNoErr(err, "registries.conf not contains docker.io")
 
 		g.By("Import an image from docker.io")
 		output, _ = oc.WithoutNamespace().AsAdmin().Run("import-image").Args("image2-33051", "--from=docker.io/centos/ruby-22-centos7", "--confirm=true", "-n", oc.Namespace()).Output()
@@ -1197,7 +1194,17 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		e2e.Logf("Only baremetal platform supported for the test")
 	})
 
-	g.It("NonHyperShiftHOST-VMonly-Author:xiuwang-Medium-48045-Update global pull secret for additional private registries[Disruptive]", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-VMonly-Author:xiuwang-Medium-48045-Update global pull secret for additional private registries[Disruptive]", func() {
+		var (
+			mc = machineConfig{
+				name:     "",
+				pool:     "worker",
+				source:   "",
+				path:     "",
+				template: "",
+			}
+		)
+
 		g.By("Setup a private registry")
 		oc.SetupProject()
 		var regUser, regPass = "testuser", getRandomString()
@@ -1218,13 +1225,19 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Make sure the image can't be pulled without auth")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("firstis:latest", "--from="+myimage, "--reference-policy=local", "--insecure", "--confirm", "-n", oc.Namespace()).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("firstis:latest", "--from="+myimage, "--reference-policy=local", "--insecure", "--confirm", "-n", oc.Namespace()).Output()
 		o.Expect(output).To(o.ContainSubstring("Unauthorized"))
 
 		g.By("Update pull secret")
 		updatePullSecret(oc, newAuthFile)
-		defer updatePullSecret(oc, originAuth)
+		defer func() {
+			updatePullSecret(oc, originAuth)
+			// Update pull-secret will restart crio to apply change to every node
+			// Need ensure master and worker update completed
+			mc.waitForMCPComplete(oc)
+			mc.pool = "master"
+			mc.waitForMCPComplete(oc)
+		}()
 		err = wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
 			podList, _ := oc.AdminKubeClient().CoreV1().Pods("openshift-apiserver").List(context.Background(), metav1.ListOptions{LabelSelector: "apiserver=true"})
 			for _, pod := range podList.Items {

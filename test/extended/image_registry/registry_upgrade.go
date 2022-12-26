@@ -20,9 +20,18 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		oc = exutil.NewCLI("default-registry-upgrade", exutil.KubeConfigPath())
 	)
 	// author: wewang@redhat.com
-	g.It("NonPreRelease-PreChkUpgrade-Author:wewang-High-26401-Upgrade cluster with insecureRegistries and blockedRegistries defined prepare [Disruptive]", func() {
+	g.It("NonPreRelease-PreChkUpgrade-Author:wewang-High-264013-Upgrade cluster with insecureRegistries and blockedRegistries defined prepare [Disruptive]", func() {
+		var (
+			ns = "26401-upgrade-ns"
+			mc = machineConfig{
+				name:     "",
+				pool:     "worker",
+				source:   "",
+				path:     "",
+				template: "",
+			}
+		)
 		g.By("Create two registries")
-		ns := "26401-upgrade-ns"
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		blockedRoute := setSecureRegistryWithoutAuth(oc, ns, "blockedreg", "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3", "5000")
@@ -30,38 +39,38 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		blockedImage := blockedRoute + "/" + ns + "/blockedimage:latest"
 		insecuredImage := insecuredRoute + "/" + ns + "/insecuredimage:latest"
 
-		g.By("Push images to two registries")
-		waitRouteReady(blockedImage)
-		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", blockedImage, "--insecure", "--keep-manifest-list=true", "--filter-by-os=.*").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Push image to insecured registries")
 		waitRouteReady(insecuredImage)
 		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", insecuredImage, "--insecure", "--keep-manifest-list=true", "--filter-by-os=.*").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Without --insecure the imagestream will import fail")
-		insecuredOut, insecuredErr := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("insecured-firstis:latest", "--from="+insecuredImage, "--confirm", "-n", ns).Output()
-		o.Expect(insecuredErr).NotTo(o.HaveOccurred())
+		insecuredOut, _ := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("insecured-firstis:latest", "--from="+insecuredImage, "--confirm", "-n", ns).Output()
 		o.Expect(insecuredOut).To(o.ContainSubstring("x509"))
 
 		g.By("Add insecureRegistries and blockedRegistries to image.config")
 		err = oc.AsAdmin().Run("patch").Args("images.config.openshift.io/cluster", "-p", `{"spec":{"registrySources":{"blockedRegistries": ["`+blockedRoute+`"],"insecureRegistries": ["`+insecuredRoute+`"]}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		// image.conf.spec.registrySources will restart crio to apply change to every node
+		// Need ensure master and worker update completed
+		mc.waitForMCPComplete(oc)
+		mc.pool = "master"
+		mc.waitForMCPComplete(oc)
+
+		g.By("Push images to two registries")
+		waitRouteReady(blockedImage)
+		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", blockedImage, "--insecure", "--keep-manifest-list=true", "--filter-by-os=.*").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// worker restart, data is removed, need mirror again
+		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", insecuredImage, "--insecure", "--keep-manifest-list=true", "--filter-by-os=.*").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Can't import image from blocked registry")
-		err = wait.Poll(30*time.Second, 6*time.Minute, func() (bool, error) {
-			blockedOut, blockedErr := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("blocked-firstis:latest", "--from="+blockedImage, "--reference-policy=local", "--insecure", "--confirm", "-n", ns).Output()
-			o.Expect(blockedErr).NotTo(o.HaveOccurred())
-			if strings.Contains(blockedOut, blockedRoute+" blocked") {
-				e2e.Logf("output is %s", blockedOut)
-				return true, nil
-			}
-			e2e.Logf("blockedRegistries function does not work")
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "blockedRegistries function does not work")
+		blockedOut, _ := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("blocked-firstis:latest", "--from="+blockedImage, "--reference-policy=local", "--insecure", "--confirm", "-n", ns).Output()
+		o.Expect(blockedOut).To(o.ContainSubstring(blockedRoute + " blocked"))
 
 		g.By("Could import image from the insecured registry without --insecure")
-		insecuredOut, insecuredErr = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("insecured-secondis:latest", "--from="+insecuredImage, "--confirm", "-n", ns).Output()
+		insecuredOut, insecuredErr := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("insecured-secondis:latest", "--from="+insecuredImage, "--confirm", "-n", ns).Output()
 		o.Expect(insecuredErr).NotTo(o.HaveOccurred())
 		o.Expect(insecuredOut).NotTo(o.ContainSubstring("x509"))
 	})
@@ -86,8 +95,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Can't import image from blocked registry")
-		blockedOut, blockedErr := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("blocked-secondis:latest", "--from="+blockedImage, "--reference-policy=local", "--insecure", "--confirm", "-n", ns).Output()
-		o.Expect(blockedErr).NotTo(o.HaveOccurred())
+		blockedOut, _ := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("blocked-secondis:latest", "--from="+blockedImage, "--reference-policy=local", "--insecure", "--confirm", "-n", ns).Output()
 		o.Expect(blockedOut).To(o.ContainSubstring(blockedRoute + " blocked"))
 
 		g.By("Could import image from the insecured registry without --insecure")
