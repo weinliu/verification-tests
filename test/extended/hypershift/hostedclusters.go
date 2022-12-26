@@ -3,6 +3,7 @@ package hypershift
 import (
 	"encoding/base64"
 	"fmt"
+	"strconv"
 	"strings"
 
 	o "github.com/onsi/gomega"
@@ -365,4 +366,48 @@ func (h *hostedCluster) pollCheckUpgradeCPPayload(payload string) func() bool {
 
 		return false
 	}
+}
+
+func (h *hostedCluster) isFIPEnabled() bool {
+	res, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace, "hostedcluster", h.name, "-ojsonpath={.spec.fips}").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	enable, err := strconv.ParseBool(res)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return enable
+}
+
+// checkFIPInHostedCluster check FIP settings in hosted cluster nodes
+func (h *hostedCluster) checkFIPInHostedCluster() bool {
+	nodes, err := h.oc.AsGuestKubeconf().WithoutNamespace().Run(OcpGet).Args("no", "-ojsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	for _, nodename := range strings.Split(nodes, " ") {
+		res, err := h.oc.AsGuestKubeconf().WithoutNamespace().Run(OcpDebug).Args("node/"+nodename, "-q", "--", "fips-mode-setup", "--check").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		if !strings.Contains(res, "FIPS mode is enabled") {
+			e2e.Logf("Warning: node %s fips-mode-setup check FIP false", nodename)
+			return false
+		}
+
+		res, err = h.oc.AsGuestKubeconf().WithoutNamespace().Run(OcpDebug).Args("node/"+nodename, "-q", "--", "cat", "/proc/sys/crypto/fips_enabled").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		if !strings.Contains(res, "1") {
+			e2e.Logf("Warning: node %s /proc/sys/crypto/fips_enabled != 1", nodename)
+			return false
+		}
+
+		res, err = h.oc.AsGuestKubeconf().WithoutNamespace().Run(OcpDebug).Args("node/"+nodename, "-q", "--", "sysctl", "crypto.fips_enabled").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		if !strings.Contains(res, "crypto.fips_enabled = 1") {
+			e2e.Logf("Warning: node %s crypto.fips_enabled != 1", nodename)
+			return false
+		}
+
+	}
+	return true
+}
+
+func (h *hostedCluster) isCPHighlyAvailable() bool {
+	res, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace, "hostedcluster", h.name, "-ojsonpath={.spec.controllerAvailabilityPolicy}").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return strings.Contains(res, HighlyAvailable)
 }

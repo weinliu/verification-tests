@@ -3,7 +3,6 @@ package hypershift
 import (
 	"encoding/base64"
 	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -243,39 +242,17 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: heli@redhat.com
 	g.It("HyperShiftMGMT-Author:heli-Critical-43554-Check FIPS support in the Hosted Cluster", func() {
-		res := doOcpReq(oc, OcpGet, false, "-n", "clusters", "hostedcluster", guestClusterName, "-ojsonpath={.spec.fips}")
-		if res != "true" {
+		if !hostedcluster.isFIPEnabled() {
 			g.Skip("only for the fip enabled hostedcluster, skip test run")
 		}
 
-		guestClusterKubeconfigFile := "/tmp/guestcluster-kubeconfig-43554"
-		defer os.Remove(guestClusterKubeconfigFile)
-		var bashClient = NewCmdClient()
-		_, err := bashClient.Run(fmt.Sprintf("hypershift create kubeconfig --name %s > %s", guestClusterName, guestClusterKubeconfigFile)).Output()
-		o.Expect(err).ShouldNot(o.HaveOccurred())
-
-		hostedNodes := doOcpReq(oc, OcpGet, true, "--kubeconfig="+guestClusterKubeconfigFile, "node", "-ojsonpath={.items[*].metadata.name}")
-		for _, nodename := range strings.Split(hostedNodes, " ") {
-			na := strings.TrimSpace(nodename)
-			//check node FIP mode
-			res = doOcpReq(oc, OcpDebug, true, "--kubeconfig="+guestClusterKubeconfigFile, "node/"+na, "-q", "--", "fips-mode-setup", "--check")
-			o.Expect(res).To(o.ContainSubstring("FIPS mode is enabled"))
-
-			//ignore cat /etc/system-fips because chroot /host failed
-			res = doOcpReq(oc, OcpDebug, true, "--kubeconfig="+guestClusterKubeconfigFile, "node/"+na, "-q", "--", "cat", "/proc/sys/crypto/fips_enabled")
-			o.Expect(res).To(o.ContainSubstring("1"))
-
-			res = doOcpReq(oc, OcpDebug, true, "--kubeconfig="+guestClusterKubeconfigFile, "node/"+na, "-q", "--", "sysctl", "crypto.fips_enabled")
-			o.Expect(res).To(o.ContainSubstring("crypto.fips_enabled = 1"))
-		}
+		o.Expect(hostedcluster.checkFIPInHostedCluster()).Should(o.BeTrue())
 	})
 
 	// author: heli@redhat.com
 	g.It("HyperShiftMGMT-Author:heli-Critical-45770-Test basic fault resilient HA-capable etcd[Serial][Disruptive]", func() {
-		controlplaneMode := doOcpReq(oc, OcpGet, true, "hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.spec.controllerAvailabilityPolicy}")
-		e2e.Logf("get hostedcluster %s controllerAvailabilityPolicy: %s ", guestClusterName, controlplaneMode)
-		if controlplaneMode != "HighlyAvailable" {
-			g.Skip("this is for guest cluster HA mode testrun, skip...")
+		if !hostedcluster.isCPHighlyAvailable() {
+			g.Skip("this is for hosted cluster HA mode , skip test run")
 		}
 
 		//check etcd
@@ -284,32 +261,34 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		desiredTopogyKey := "topology.kubernetes.io/zone"
 
 		etcdSts := "etcd"
-		doOcpReq(oc, OcpGet, true, "-n", guestClusterNamespace, "statefulset", etcdSts, "-ojsonpath={"+antiAffinityJSONPath+"}")
-		res := doOcpReq(oc, OcpGet, true, "-n", guestClusterNamespace, "statefulset", etcdSts, "-ojsonpath={"+topologyKeyJSONPath+"}")
+
+		controlplaneNS := hostedcluster.namespace + "-" + hostedcluster.name
+		doOcpReq(oc, OcpGet, true, "-n", controlplaneNS, "statefulset", etcdSts, "-ojsonpath={"+antiAffinityJSONPath+"}")
+		res := doOcpReq(oc, OcpGet, true, "-n", controlplaneNS, "statefulset", etcdSts, "-ojsonpath={"+topologyKeyJSONPath+"}")
 		o.Expect(res).To(o.ContainSubstring(desiredTopogyKey))
 
 		//check etcd healthy
-		etcdCmd := "ETCDCTL_API=3 /usr/bin/etcdctl --cacert /etc/etcd/tls/client/etcd-client-ca.crt " +
+		etcdCmd := "ETCDCTL_API=3 /usr/bin/etcdctl --cacert /etc/etcd/tls/etcd-ca/ca.crt " +
 			"--cert /etc/etcd/tls/client/etcd-client.crt --key /etc/etcd/tls/client/etcd-client.key --endpoints=localhost:2379"
 		etcdHealthCmd := etcdCmd + " endpoint health"
 		etcdStatusCmd := etcdCmd + " endpoint status"
 		for i := 0; i < 3; i++ {
-			res = doOcpReq(oc, OcpExec, true, "-n", guestClusterNamespace, "etcd-"+strconv.Itoa(i), "--", "sh", "-c", etcdHealthCmd)
+			res = doOcpReq(oc, OcpExec, true, "-n", controlplaneNS, "etcd-"+strconv.Itoa(i), "--", "sh", "-c", etcdHealthCmd)
 			o.Expect(res).To(o.ContainSubstring("localhost:2379 is healthy"))
 		}
 
 		for i := 0; i < 3; i++ {
 			etcdPodName := "etcd-" + strconv.Itoa(i)
-			res = doOcpReq(oc, OcpExec, true, "-n", guestClusterNamespace, etcdPodName, "--", "sh", "-c", etcdStatusCmd)
+			res = doOcpReq(oc, OcpExec, true, "-n", controlplaneNS, etcdPodName, "--", "sh", "-c", etcdStatusCmd)
 			if strings.Contains(res, "false, false") {
 				e2e.Logf("find etcd follower etcd-%d, begin to delete this pod", i)
 
 				//delete the first follower
-				doOcpReq(oc, OcpDelete, true, "-n", guestClusterNamespace, "pod", etcdPodName)
+				doOcpReq(oc, OcpDelete, true, "-n", controlplaneNS, "pod", etcdPodName)
 
 				//check the follower can be restarted and keep health
 				err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-					status := doOcpReq(oc, OcpGet, true, "-n", guestClusterNamespace, "pod", etcdPodName, "-ojsonpath={.status.phase}")
+					status := doOcpReq(oc, OcpGet, true, "-n", controlplaneNS, "pod", etcdPodName, "-ojsonpath={.status.phase}")
 					if status == "Running" {
 						return true, nil
 					}
@@ -318,11 +297,11 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 				exutil.AssertWaitPollNoErr(err, "etcd cluster health check error")
 
 				//check the follower pod running
-				status := doOcpReq(oc, OcpGet, true, "-n", guestClusterNamespace, "pod", etcdPodName, "-ojsonpath={.status.phase}")
+				status := doOcpReq(oc, OcpGet, true, "-n", controlplaneNS, "pod", etcdPodName, "-ojsonpath={.status.phase}")
 				o.Expect(status).To(o.ContainSubstring("Running"))
 
 				//check the follower health
-				execEtcdHealthCmd := append([]string{"-n", guestClusterNamespace, etcdPodName, "--", "sh", "-c"}, etcdHealthCmd)
+				execEtcdHealthCmd := append([]string{"-n", controlplaneNS, etcdPodName, "--", "sh", "-c"}, etcdHealthCmd)
 				res = doOcpReq(oc, OcpExec, true, execEtcdHealthCmd...)
 				o.Expect(res).To(o.ContainSubstring("localhost:2379 is healthy"))
 

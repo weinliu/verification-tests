@@ -48,6 +48,22 @@ const (
 	ShortTimeout          = 50 * time.Second
 )
 
+type AvailabilityPolicy = string
+
+const (
+	// HighlyAvailable means components should be resilient to problems across
+	// fault boundaries as defined by the component to which the policy is
+	// attached. This usually means running critical workloads with 3 replicas and
+	// with little or no toleration of disruption of the component.
+	HighlyAvailable AvailabilityPolicy = "HighlyAvailable"
+
+	// SingleReplica means components are not expected to be resilient to problems
+	// across most fault boundaries associated with high availability. This
+	// usually means running critical workloads with just 1 replica and with
+	// toleration of full disruption of the component.
+	SingleReplica AvailabilityPolicy = "SingleReplica"
+)
+
 func doOcpReq(oc *exutil.CLI, verb OcpClientVerb, notEmpty bool, args ...string) string {
 	e2e.Logf("running command : oc %s %s", string(verb), strings.Join(args, " "))
 	res, err := oc.AsAdmin().WithoutNamespace().Run(string(verb)).Args(args...).Output()
