@@ -27,7 +27,7 @@ func checkAlertRaised(oc *exutil.CLI, alertName string) {
 	url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "prometheus-k8s", "-n", "openshift-monitoring", "-o=jsonpath={.spec.host}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"%s\")'", token, url, alertName)
-	err = wait.Poll(30*time.Second, 300*time.Second, func() (bool, error) {
+	err = wait.Poll(30*time.Second, 600*time.Second, func() (bool, error) {
 		result, err := exec.Command("bash", "-c", alertCMD).Output()
 		if err != nil {
 			e2e.Logf("Error '%v' retrieving prometheus alert, retry ...", err)
