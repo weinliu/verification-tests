@@ -1443,7 +1443,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		})
 
 		g.By("Check the deployment was reconciled back.")
-		err = wait.Poll(30*time.Second, 5*time.Minute, func() (bool, error) {
+		err = wait.Poll(30*time.Second, 20*time.Minute, func() (bool, error) {
 			valueMaxUnavailable, err := oc.AsAdmin().WithoutNamespace().Run("get").
 				Args(resourceKindName, "-o=jsonpath={.spec.strategy.rollingUpdate.maxUnavailable}", "-n", resourceNamespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1453,7 +1453,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			}
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "the deployment was not reconciled back in 5min.")
+		exutil.AssertWaitPollNoErr(err, "the deployment was not reconciled back in 20min.")
 	})
 
 	//author: jiajliu@redhat.com
