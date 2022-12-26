@@ -16,13 +16,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 	defer g.GinkgoRecover()
 
 	var (
-		oc                      = exutil.NewCLI("compliance-"+getRandomString(), exutil.KubeConfigPath())
-		buildPruningBaseDir     string
-		ogSpoTemplate           string
-		subSpoTemplate          string
-		secProfileTemplate      string
-		secProfileStackTemplate string
-		podWithProfileTemplate  string
+		oc                            = exutil.NewCLI("compliance-"+getRandomString(), exutil.KubeConfigPath())
+		buildPruningBaseDir           string
+		ogSpoTemplate                 string
+		subSpoTemplate                string
+		secProfileTemplate            string
+		secProfileStackTemplate       string
+		podWithProfileTemplate        string
+		selinuxProfileNginxTemplate   string
+		podWithSelinuxProfileTemplate string
 
 		ogD                 operatorGroupDescription
 		subD                subscriptionDescription
@@ -31,11 +33,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 
 	g.BeforeEach(func() {
 		buildPruningBaseDir = exutil.FixturePath("testdata", "securityandcompliance")
-		ogSpoTemplate = filepath.Join(buildPruningBaseDir, "operator-group.yaml")
+		ogSpoTemplate = filepath.Join(buildPruningBaseDir, "operator-group-all-namespaces.yaml")
 		subSpoTemplate = filepath.Join(buildPruningBaseDir, "subscription.yaml")
 		secProfileTemplate = filepath.Join(buildPruningBaseDir, "seccompprofile.yaml")
 		secProfileStackTemplate = filepath.Join(buildPruningBaseDir, "seccompprofilestack.yaml")
 		podWithProfileTemplate = filepath.Join(buildPruningBaseDir, "pod-with-seccompprofile.yaml")
+		selinuxProfileNginxTemplate = filepath.Join(buildPruningBaseDir, "/spo/selinux-profile-nginx.yaml")
+		podWithSelinuxProfileTemplate = filepath.Join(buildPruningBaseDir, "/spo/pod-with-selinux-profile.yaml")
 
 		ogD = operatorGroupDescription{
 			name:      "security-profiles-operator",
@@ -164,6 +168,37 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		if strings.Contains(result2, "/tmpo/foo") && !strings.Contains(result2, "Operation not permittedd") {
 			e2e.Logf("%s is expected result", result2)
 		}
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("ConnectedOnly-Author:xiyuan-High-56704-Create a SelinuxProfile and apply it to pod", func() {
+		ns := "nginx-deploy" + getRandomString()
+		selinuxProfileName := "nginx-secure"
+
+		g.By("Create selinuxprofile !!!")
+		defer deleteNamespace(oc, ns)
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("selinuxprofile", selinuxProfileName, "-n", ns, "--ignore-not-found").Execute()
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", selinuxProfileNginxTemplate, "-p", "NAME="+selinuxProfileName, "NAMESPACE="+ns)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		assertKeywordsExists(oc, 300, "Installed", "selinuxprofiles", selinuxProfileName, "-o=jsonpath={.status.status}", "-n", ns)
+		usage := selinuxProfileName + "_" + ns + ".process"
+		newCheck("expect", asAdmin, withoutNamespace, contain, usage, ok, []string{"selinuxprofiles", selinuxProfileName, "-n",
+			ns, "-o=jsonpath={.status.usage}"}).check(oc)
+		fileName := selinuxProfileName + "_" + ns + ".cil"
+		assertKeywordsExistsInSelinuxFile(oc, usage, "-n", subD.namespace, "-c", "selinuxd", "ds/spod", "cat", "/etc/selinux.d/"+fileName)
+		assertKeywordsExistsInSelinuxFile(oc, selinuxProfileName+"_"+ns, "-n", subD.namespace, "-c", "selinuxd", "ds/spod", "semodule", "-l")
+
+		g.By("Create pod and apply above selinuxprofile to the pod !!!")
+		lableNamespace(oc, "namespace", ns, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "--overwrite=true")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", selinuxProfileName, "-n", ns, "--ignore-not-found").Execute()
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podWithSelinuxProfileTemplate, "-p", "NAME="+selinuxProfileName, "NAMESPACE="+ns, "USAGE="+usage)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check pod status and seLinuxOptions type of the pod !!!")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", selinuxProfileName, "-n", ns, "-o=jsonpath={.status.phase}"})
+		newCheck("expect", asAdmin, withoutNamespace, compare, usage, ok, []string{"pod", selinuxProfileName, "-n", ns, ".spec.containers[0].securityContext.seLinuxOptions.type"})
 	})
 
 	// author: minmli@redhat.com
