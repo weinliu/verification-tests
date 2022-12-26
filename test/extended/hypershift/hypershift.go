@@ -312,21 +312,22 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: heli@redhat.com
 	g.It("HyperShiftMGMT-Author:heli-Critical-46711-Test HCP components to use service account tokens", func() {
+		controlplaneNS := hostedcluster.namespace + "-" + hostedcluster.name
 		//get capi-provider secret
 		apiPattern := `-ojsonpath={.spec.template.spec.volumes[?(@.name=="credentials")].secret.secretName}`
-		apiSecret := doOcpReq(oc, OcpGet, true, "deploy", "capi-provider", "-n", guestClusterNamespace, apiPattern)
+		apiSecret := doOcpReq(oc, OcpGet, true, "deploy", "capi-provider", "-n", controlplaneNS, apiPattern)
 
 		//get control plane operator secret
 		cpoPattern := `-ojsonpath={.spec.template.spec.volumes[?(@.name=="provider-creds")].secret.secretName}`
-		cpoSecret := doOcpReq(oc, OcpGet, true, "deploy", "control-plane-operator", "-n", guestClusterNamespace, cpoPattern)
+		cpoSecret := doOcpReq(oc, OcpGet, true, "deploy", "control-plane-operator", "-n", controlplaneNS, cpoPattern)
 
 		//get kube-apiserver secret
 		kubeAPIPattern := `-ojsonpath={.spec.template.spec.volumes[?(@.name=="cloud-creds")].secret.secretName}`
-		kubeAPISecret := doOcpReq(oc, OcpGet, true, "deploy", "kube-apiserver", "-n", guestClusterNamespace, kubeAPIPattern)
+		kubeAPISecret := doOcpReq(oc, OcpGet, true, "deploy", "kube-apiserver", "-n", controlplaneNS, kubeAPIPattern)
 
 		secrets := []string{apiSecret, cpoSecret, kubeAPISecret}
 		for _, sec := range secrets {
-			cre := doOcpReq(oc, OcpGet, true, "secret", sec, "-n", guestClusterNamespace, "-ojsonpath={.data.credentials}")
+			cre := doOcpReq(oc, OcpGet, true, "secret", sec, "-n", controlplaneNS, "-ojsonpath={.data.credentials}")
 			roleInfo, err := base64.StdEncoding.DecodeString(cre)
 			o.Expect(err).ShouldNot(o.HaveOccurred())
 			checkSubstring(string(roleInfo), []string{"role_arn", "web_identity_token_file"})
@@ -395,35 +396,52 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 				"openshift-apiserver",
 				"packageserver",
 			},
+			//oc get deploy -n clusters-demo-02 -o jsonpath='{range .items[*]}{@.metadata.name}{" "}{@.spec.template.
+			//spec.priorityClassName}{"\n"}{end}'  | grep hypershift-control-plane | awk '{print "\""$1"\""","}'
 			"hypershift-control-plane": {
+				"aws-ebs-csi-driver-controller",
+				"aws-ebs-csi-driver-operator",
 				"capi-provider",
 				"catalog-operator",
+				"certified-operators-catalog",
 				"cluster-api",
 				"cluster-autoscaler",
+				"cluster-image-registry-operator",
+				"cluster-network-operator",
+				"cluster-node-tuning-operator",
 				"cluster-policy-controller",
+				"cluster-storage-operator",
+				"cluster-version-operator",
+				"community-operators-catalog",
 				"control-plane-operator",
+				"csi-snapshot-controller",
+				"csi-snapshot-controller-operator",
+				"csi-snapshot-webhook",
+				"dns-operator",
+				"hosted-cluster-config-operator",
 				"ignition-server",
-				"kube-controller-manager",
-				"kube-scheduler",
-				"olm-operator",
-				"openshift-controller-manager",
-				//no etcd operator yet
-				//"etcd-operator",
+				"ingress-operator",
 				"konnectivity-agent",
 				"konnectivity-server",
-				"cluster-version-operator",
-				"hosted-cluster-config-operator",
-				"certified-operators-catalog",
-				"community-operators-catalog",
+				"kube-controller-manager",
+				"kube-scheduler",
+				"machine-approver",
+				"multus-admission-controller",
+				"olm-operator",
+				"openshift-controller-manager",
+				"openshift-route-controller-manager",
 				"redhat-marketplace-catalog",
 				"redhat-operators-catalog",
+				//https://issues.redhat.com/browse/OCPBUGS-5060
+				//"cloud-network-config-controller",
 			},
 		}
 
+		controlplaneNS := hostedcluster.namespace + "-" + hostedcluster.name
 		for priority, components := range priorityClasses {
 			e2e.Logf("priorityClass: %s %v\n", priority, components)
 			for _, c := range components {
-				res := doOcpReq(oc, OcpGet, true, "deploy", c, "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.priorityClassName}")
+				res := doOcpReq(oc, OcpGet, true, "deploy", c, "-n", controlplaneNS, "-ojsonpath={.spec.template.spec.priorityClassName}")
 				o.Expect(res).To(o.Equal(priority))
 			}
 		}
@@ -431,8 +449,14 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		//check statefulset for etcd
 		etcdSts := "etcd"
 		etcdPriorityClass := "hypershift-etcd"
-		res := doOcpReq(oc, OcpGet, true, "statefulset", etcdSts, "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.priorityClassName}")
+		res := doOcpReq(oc, OcpGet, true, "statefulset", etcdSts, "-n", controlplaneNS, "-ojsonpath={.spec.template.spec.priorityClassName}")
 		o.Expect(res).To(o.Equal(etcdPriorityClass))
+
+		//check statefulset for ovnkube-master
+		ovnSts := "ovnkube-master"
+		ovnPriorityClass := "hypershift-api-critical"
+		res = doOcpReq(oc, OcpGet, true, "statefulset", ovnSts, "-n", controlplaneNS, "-ojsonpath={.spec.template.spec.priorityClassName}")
+		o.Expect(res).To(o.Equal(ovnPriorityClass))
 	})
 
 	// author: heli@redhat.com
