@@ -45,7 +45,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(doPrometheusQuery(oc, token, queryImagePruner)).To(o.Equal(2))
 
 		g.By("Prometheus query results report image registry operator not reconfiged")
-		o.Expect(doPrometheusQuery(oc, token, queryImageRegistry)).To(o.Equal(0))
+		o.Expect(doPrometheusQuery(oc, token, queryImageRegistry) >= 0).Should(o.BeTrue())
 
 		g.By("Set imagepruner suspend")
 		defer oc.AsAdmin().Run("patch").Args("imagepruner/cluster", "-p", `{"spec":{"suspend":false}}`, "--type=merge").Execute()
@@ -53,7 +53,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Prometheus query results report image registry operator not reconfiged")
-		o.Expect(doPrometheusQuery(oc, token, queryImageRegistry)).To(o.Equal(0))
+		o.Expect(doPrometheusQuery(oc, token, queryImageRegistry) >= 0).Should(o.BeTrue())
 
 		g.By("Prometheus query results report image pruner not installed")
 		o.Expect(doPrometheusQuery(oc, token, queryImagePruner)).To(o.Equal(1))
