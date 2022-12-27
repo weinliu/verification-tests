@@ -65,7 +65,6 @@
       "storageclass": {
         "default_sc": "standard-csi",
         "pre_defined_sc": [
-          "standard",
           "standard-csi"
         ]
       }
