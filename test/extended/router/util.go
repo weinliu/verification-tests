@@ -164,7 +164,7 @@ func waitForCustomIngressControllerAvailable(oc *exutil.CLI, icname string) erro
 	return wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
 		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingresscontroller", icname, "--namespace=openshift-ingress-operator", "-ojsonpath={.status.conditions[?(@.type==\"Available\")].status}").Output()
 		e2e.Logf("the status of ingresscontroller is %v", status)
-		if err != nil {
+		if err != nil || status == "" {
 			e2e.Logf("failed to get ingresscontroller %s: %v, retrying...", icname, err)
 			return false, nil
 		}
