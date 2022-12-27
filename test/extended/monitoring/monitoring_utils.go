@@ -225,3 +225,19 @@ func deleteConfig(oc *exutil.CLI, configName, ns string) {
 	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ConfigMap", configName, "-n", ns, "--ignore-not-found").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
+
+// patch&check enforcedBodySizeLimit value in cluster-monitoring-config
+func patchAndCheckBodySizeLimit(oc *exutil.CLI, limitValue string, checkValue string) {
+	patchLimit := oc.AsAdmin().WithoutNamespace().Run("patch").Args("cm", "cluster-monitoring-config", "-p", `{"data": {"config.yaml": "prometheusK8s:\n enforcedBodySizeLimit: `+limitValue+`"}}`, "--type=merge", "-n", "openshift-monitoring").Execute()
+	o.Expect(patchLimit).NotTo(o.HaveOccurred())
+	e2e.Logf("failed to patch enforcedBodySizeLimit value: %v", limitValue)
+
+	checkLimit := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		limit, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "bash", "-c", "cat /etc/prometheus/config_out/prometheus.env.yaml | grep body_size_limit | uniq").Output()
+		if err != nil || !strings.Contains(limit, checkValue) {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(checkLimit, "failed to check limit")
+}

@@ -436,6 +436,38 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		o.Expect(output).To(o.ContainSubstring("Error from server (Forbidden):"))
 	})
 
+	//author: tagao@redhat.com
+	g.It("Author:tagao-NonPreRelease-Medium-49191-Enforce body_size_limit [Serial]", func() {
+		g.By("delete uwm-config/cm-config at the end of a serial case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		g.By("set `enforcedBodySizeLimit` to 0, and check from the k8s pod")
+		patchAndCheckBodySizeLimit(oc, "0", "0")
+
+		g.By("set `enforcedBodySizeLimit` to a invalid value, and check from the k8s pod")
+		patchAndCheckBodySizeLimit(oc, "20MiBPS", "")
+
+		g.By("set `enforcedBodySizeLimit` to 1MB to trigger PrometheusScrapeBodySizeLimitHit alert, and check from the k8s pod")
+		patchAndCheckBodySizeLimit(oc, "1MB", "1MB")
+
+		g.By("check PrometheusScrapeBodySizeLimitHit alert is triggered")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusScrapeBodySizeLimitHit"}'`, token, "PrometheusScrapeBodySizeLimitHit", 5*uwmLoadTime)
+
+		g.By("set `enforcedBodySizeLimit` to 40MB, and check from the k8s pod")
+		patchAndCheckBodySizeLimit(oc, "40MB", "40MB")
+
+		g.By("check from alert, should not have enforcedBodySizeLimit")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusScrapeBodySizeLimitHit"}'`, token, `"result":[]`, 5*uwmLoadTime)
+
+		g.By("set `enforcedBodySizeLimit` to automatic, and check from the k8s pod")
+		patchAndCheckBodySizeLimit(oc, "automatic", "body_size_limit")
+
+		g.By("check from alert, should not have enforcedBodySizeLimit")
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusScrapeBodySizeLimitHit"}'`, token, `"result":[]`, 5*uwmLoadTime)
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
