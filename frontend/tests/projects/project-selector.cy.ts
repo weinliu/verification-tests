@@ -1,5 +1,5 @@
-import {podsPage} from "../views/pods";
-import {namespaceDropdown} from "../views/namespace-dropdown";
+import {podsPage} from "../../views/pods";
+import {namespaceDropdown} from "../../views/namespace-dropdown";
 
 
 describe('Projects dropdown tests', () => {
@@ -23,13 +23,13 @@ describe('Projects dropdown tests', () => {
                 cy.wrap($el).should('not.have.text', 'kube')
                 cy.wrap($el).should('not.have.text', 'openshift')
             })
-        namespaceDropdown.clickDefaultProjectToggle()
+        namespaceDropdown.showSystemProjects()
         namespaceDropdown.getProjectsDisplayed().then(($els) => {
             const texts = Array.from($els, el => el.innerText);
             expect(texts.toString()).to.have.string('default')
             expect(texts.toString()).to.have.string('kube')
             expect(texts.toString()).to.have.string('openshift')
         });
-        namespaceDropdown.clickDefaultProjectToggle()
+        namespaceDropdown.hideSystemProjects()
     });
 })

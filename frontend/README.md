@@ -32,12 +32,12 @@ drwxr-xr-x  node_modules
 ### Export necessary variables
 in order to run Cypress tests, we need to export some environment variables that Cypress can read then pass down to our tests, currently we have following environment variables defined and used.
 ```bash
-export BRIDGE_BASE_ADDRESS=https://<console_route_spec_host>
-export LOGIN_IDP=kube:admin
-export LOGIN_USERNAME=testuser
-export LOGIN_PASSWORD=testpassword
-export KUBECONFIG_PATH=/path/to/kubeconfig
-export LOGIN_UP_PAIR=uiauto1:redhat(optional)
+export CYPRESS_BASE_URL=https://<console_route_spec_host>
+export CYPRESS_LOGIN_IDP=kube:admin
+export CYPRESS_LOGIN_USERNAME=testuser
+export CYPRESS_LOGIN_PASSWORD=testpassword
+export CYPRESS_KUBECONFIG_PATH=/path/to/kubeconfig
+export CYPRESS_LOGIN_UP_PAIR=uiauto1:redhat(optional)
 ```
 ### Start Cypress
 we can either open Cypress GUI(open) or run Cypress in headless mode(run)

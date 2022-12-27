@@ -25,11 +25,11 @@ ln -s ./upstream_console/frontend/packages/integration-tests-cypress upstream
 yarn install
 
 set +x
-export BRIDGE_BASE_ADDRESS=`cat $SHARED_DIR/hostedcluster_console.url`
-export LOGIN_IDP=kube:admin
-export LOGIN_USERNAME=kubeadmin
-export LOGIN_PASSWORD=`cat $SHARED_DIR/hostedcluster_kubeadmin_password`
-export KUBECONFIG_PATH="${KUBECONFIG}"
+export CYPRESS_BASE_URL=`cat $SHARED_DIR/hostedcluster_console.url`
+export CYPRESS_LOGIN_IDP=kube:admin
+export CYPRESS_LOGIN_USERNAME=kubeadmin
+export CYPRESS_LOGIN_PASSWORD=`cat $SHARED_DIR/hostedcluster_kubeadmin_password`
+export CYPRESS_KUBECONFIG_PATH="${KUBECONFIG}"
 ls -ltr
 echo "Triggering tests"
 set -x

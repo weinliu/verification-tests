@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ARTIFACT_DIR=${ARTIFACT_DIR:=/tmp/artifacts}
-cp -L $KUBECONFIG /tmp/kubeconfig && export KUBECONFIG_PATH=/tmp/kubeconfig
+cp -L $KUBECONFIG /tmp/kubeconfig && export CYPRESS_KUBECONFIG_PATH=/tmp/kubeconfig
 mkdir -p $ARTIFACT_DIR
 SCREENSHOTS_DIR=gui_test_screenshots
 
@@ -69,11 +69,11 @@ yarn install
 # trigger tests
 set +x
 console_route=$(oc get route console -n openshift-console -o jsonpath='{.spec.host}')
-export BRIDGE_BASE_ADDRESS=https://$console_route
-export LOGIN_IDP=uiauto-htpasswd-idp
-export LOGIN_USERNAME=uiauto-test-1
-export LOGIN_PASSWORD=$(echo $users | awk -F ',' '{print $1}' | awk -F ':' '{print $2}')
-export LOGIN_UP_PAIR=$users
+export CYPRESS_BASE_URL=https://$console_route
+export CYPRESS_LOGIN_IDP=uiauto-htpasswd-idp
+export CYPRESS_LOGIN_USERNAME=uiauto-test-1
+export CYPRESS_LOGIN_PASSWORD=$(echo $users | awk -F ',' '{print $1}' | awk -F ':' '{print $2}')
+export CYPRESS_LOGIN_UP_PAIR=$users
 ls -ltr
 echo "triggering tests"
 set -x

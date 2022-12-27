@@ -12,7 +12,7 @@ describe('Workload Secrets test', () => {
     cy.createProject(testName);
     cy.exec(`oc create -f ./fixtures/secret-tls.yaml -n ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);   
     cy.exec(`oc create secret generic test1 -n ${testName} --from-file=data1=./fixtures/original.jks --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
-    cy.exec(`oc get secret -n ${testName} test1 -o yaml > ./fixtures/secret1.yaml --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+    cy.exec(`oc get secret -n ${testName} test1 -o yaml > /tmp/secret1.yaml --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
   });
 
   after(() => {
@@ -37,8 +37,8 @@ describe('Workload Secrets test', () => {
   it('(OCP-54014, xiangyli) Check Base64 data value for jave keystore secret would not change without changing anything', {tags: ['e2e','admin']}, () => {
     cy.visit(`/k8s/ns/${testName}/secrets/test1/edit`)
     cy.byTestID('save-changes').click()
-    cy.exec(`oc get secret -n ${testName} test1 -o yaml --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} > ./fixtures/secret2.yaml`)
-    cy.exec(`diff ./fixtures/secret1.yaml ./fixtures/secret2.yaml`)
+    cy.exec(`oc get secret -n ${testName} test1 -o yaml --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} > /tmp/secret2.yaml`)
+    cy.exec(`diff /tmp/secret1.yaml /tmp/secret2.yaml`)
       .its('stdout')
       .should('eq', '')
   });
