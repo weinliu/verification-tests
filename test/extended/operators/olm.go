@@ -3245,61 +3245,6 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 	})
 
-	// author: xzha@redhat.com
-	g.It("ConnectedOnly-Author:xzha-Medium-30319-Admission Webhook Configuration names should be unique", func() {
-		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
-		operatorGroup := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-		validatingCsv := filepath.Join(buildPruningBaseDir, "validatingwebhook-csv.yaml")
-
-		var validatingwebhookName1, validatingwebhookName2 string
-		for i := 1; i < 3; i++ {
-			istr := strconv.Itoa(i)
-			g.By("create new namespace")
-			newNamespace := "test-operators-30319-"
-			newNamespace += istr
-			err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", newNamespace).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", newNamespace).Execute()
-
-			g.By("create operatorGroup")
-			configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", operatorGroup, "-p", "NAME=test-operator", fmt.Sprintf("NAMESPACE=%s", newNamespace)).OutputToFile("config-30319.json")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", configFile).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			g.By("create csv")
-			configFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", validatingCsv, "-p", fmt.Sprintf("NAMESPACE=%s", newNamespace), "OPERATION=CREATE").OutputToFile("config-30319.json")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
-			err = wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
-				err := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfiguration", "-l", fmt.Sprintf("olm.owner.namespace=%s", newNamespace)).Execute()
-				if err != nil {
-					e2e.Logf("The validatingwebhookconfiguration is not created:%v", err)
-					return false, nil
-				}
-				return true, nil
-			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("validatingwebhookconfiguration which owner namespace %s is not created", newNamespace))
-
-			validatingwebhookName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfiguration", "-l", fmt.Sprintf("olm.owner.namespace=%s", newNamespace), "-o=jsonpath={.items[0].metadata.name}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if i == 1 {
-				validatingwebhookName1 = validatingwebhookName
-			}
-			if i == 2 {
-				validatingwebhookName2 = validatingwebhookName
-			}
-		}
-		if validatingwebhookName1 != validatingwebhookName2 {
-			e2e.Logf("The test case pass")
-		} else {
-			err := "The test case fail"
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-	})
-
 	// author: scolange@redhat.com
 	// only community operator ready for the disconnected env now
 	g.It("ConnectedOnly-Author:scolange-Medium-32862-Pods found with invalid container images not present in release payload [Flaky]", func() {
@@ -7444,6 +7389,84 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("mutatingwebhookconfiguration %s has no DELETE operation", validatingwebhookName))
+	})
+
+	// author: xzha@redhat.com
+	g.It("ConnectedOnly-Author:xzha-Medium-30319-Admission Webhook Configuration names should be unique", func() {
+		var (
+			itName                 = g.CurrentSpecReport().FullText()
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "olm")
+			ogSingleTemplate       = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+			catsrcImageTemplate    = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			subTemplate            = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+			validatingwebhookName1 = ""
+			validatingwebhookName2 = ""
+			og                     = operatorGroupDescription{
+				name:      "og-30319",
+				namespace: "",
+				template:  ogSingleTemplate,
+			}
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-30319",
+				namespace:   "",
+				displayName: "Test Catsrc 30319 Operators",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/nginx-operator-index-30312:v2",
+				template:    catsrcImageTemplate,
+			}
+			sub = subscriptionDescription{
+				subName:                "nginx-operator-30319",
+				namespace:              "",
+				channel:                "alpha",
+				ipApproval:             "Automatic",
+				operatorPackage:        "nginx-operator-30312",
+				catalogSourceName:      catsrc.name,
+				catalogSourceNamespace: "",
+				template:               subTemplate,
+			}
+		)
+		for i := 1; i < 3; i++ {
+			oc.SetupProject()
+			ns := oc.Namespace()
+			og.namespace = ns
+			sub.namespace = ns
+			catsrc.namespace = ns
+			sub.catalogSourceNamespace = ns
+
+			g.By("create og")
+			og.create(oc, itName, dr)
+
+			g.By("create catalog source")
+			defer catsrc.delete(itName, dr)
+			catsrc.createWithCheck(oc, itName, dr)
+
+			g.By("install operator")
+			defer sub.delete(itName, dr)
+			sub.create(oc, itName, dr)
+
+			err := wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
+				err := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfiguration", "-l", "olm.owner.namespace="+ns).Execute()
+				if err != nil {
+					e2e.Logf("The validatingwebhookconfiguration is not created:%v", err)
+					return false, nil
+				}
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("validatingwebhookconfiguration which owner ns %s is not created", ns))
+
+			validatingwebhookName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfiguration", "-l", fmt.Sprintf("olm.owner.namespace=%s", ns), "-o=jsonpath={.items[0].metadata.name}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if i == 1 {
+				validatingwebhookName1 = validatingwebhookName
+			}
+			if i == 2 {
+				validatingwebhookName2 = validatingwebhookName
+			}
+		}
+		o.Expect(validatingwebhookName1).NotTo(o.BeEmpty())
+		o.Expect(validatingwebhookName2).NotTo(o.BeEmpty())
+		o.Expect(validatingwebhookName2).NotTo(o.Equal(validatingwebhookName1))
 	})
 
 	// author: xzha@redhat.com
