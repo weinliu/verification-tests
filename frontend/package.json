@@ -10,6 +10,7 @@
     "cypress-generate": "marge -o ./gui_test_screenshots/ -f cypress-report -t 'OpenShift QE Console Cypress Test Results' -p 'OpenShift QE Cypress Test Results' --showPassed false --assetsDir ./gui_test_screenshots/cypress/assets ./gui_test_screenshots/cypress.json",
     "cypress-a11y-report": "echo '\nA11y Test Results:' && mv ./cypress-a11y-report.json ./gui_test_screenshots/ && node -e \"console.table(JSON.parse(require('fs').readFileSync(process.argv[1])));\" ./gui_test_screenshots/cypress-a11y-report.json",
     "cypress-postreport": "yarn cypress-merge && yarn cypress-generate",
+    "delete:reports": "rm -rf gui_test_screenshots/* || true",
     "merge-reports": "jrm combined.xml \"gui_test_screenshots/junit_cypress-*.xml\""
   },
   "author": "OpenShift UI QE",

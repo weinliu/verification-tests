@@ -6,9 +6,12 @@ declare global {
             switchPerspective(perspective: string);
             cliLogin();
             cliLogout();
+            adminCLI(command: string);
         }
     }
 }
+
+const kubeconfig = Cypress.env('KUBECONFIG_PATH')
 
 Cypress.Commands.add("switchPerspective", (perspective: string) => {
 
@@ -35,4 +38,9 @@ Cypress.Commands.add("cliLogout", () => {
     cy.log(result.stderr);
     cy.log(result.stdout);
   });
+});
+
+Cypress.Commands.add("adminCLI", (command: string) => {
+  cy.log(`Run admin command: ${command}`)
+  cy.exec(`${command} --kubeconfig ${kubeconfig}`)
 });

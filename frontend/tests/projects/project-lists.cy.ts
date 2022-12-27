@@ -20,14 +20,13 @@ describe('project list tests', () => {
         cy.login(Cypress.env('LOGIN_IDP'), login_user_two, login_passwd_two);
         guidedTour.close();
         cy.createProject('usertwo-project');
-        cy.exec(`oc adm policy add-role-to-user admin ${login_user_two} -n userone-project --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+        cy.adminCLI(`oc adm policy add-role-to-user admin ${login_user_two} -n userone-project`);
     });
 
     after(() => {
-        cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${login_user_two} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
-        cy.exec(`oc delete project userone-project --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-        cy.exec(`oc delete project usertwo-project --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-        cy.logout;
+        cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${login_user_two}`);
+        cy.adminCLI('oc delete project userone-project');
+        cy.adminCLI('oc delete project usertwo-project');
     });
 
     it('(OCP-43131) normal and admin user able to filter projects with Requester', {tags: ['e2e','admin']}, () => {
@@ -50,7 +49,7 @@ describe('project list tests', () => {
 
 
         cy.log('cluster admin user able to filter with Requester');
-        cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${login_user_two} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+        cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${login_user_two}`)
         cy.visit('/k8s/cluster/projects');
         // filter by System
         projectsPage.filterSystemProjects();
