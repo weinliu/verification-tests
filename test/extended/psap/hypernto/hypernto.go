@@ -455,7 +455,12 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
 		}
 
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("nodepool", "hugepages-nodepool", "-n", hostedClusterNS, "--ignore-not-found").Execute()
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("nodepool", "hugepages-nodepool", "-n", hostedClusterNS, "--ignore-not-found").Execute()
+			isMatch := exutil.CheckAllNodepoolReadyByHostedClusterName(oc, "hugepages-nodepool", hostedClusterNS, 300)
+			o.Expect(isMatch).To(o.Equal(true))
+		}()
+
 		//Create custom node pool yaml file
 		g.By("Create custom node pool in hosted cluster")
 		exutil.CreateCustomNodePoolInHypershift(oc, "aws", guestClusterName, "hugepages-nodepool", "1", "m5.xlarge", hostedClusterNS)
@@ -540,5 +545,102 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("Assert hugepagesz match in /proc/cmdline on the worker node in custom node pool")
 		assertIfMatchKenelBootOnNodePoolLevelInHostedCluster(oc, ntoNamespace, "hugepages-nodepool", "hugepagesz", false)
+	})
+
+	g.It("Longduration-NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-56609-NTO Scale out node pool which applied tuning with required kernel boot. [Disruptive]", func() {
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		// currently test is only supported on AWS, GCP, and Azure
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
+		}
+
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("nodepool", "hugepages-nodepool", "-n", hostedClusterNS, "--ignore-not-found").Execute()
+			isMatch := exutil.CheckAllNodepoolReadyByHostedClusterName(oc, "hugepages-nodepool", hostedClusterNS, 300)
+			o.Expect(isMatch).To(o.Equal(true))
+		}()
+
+		//Create custom node pool yaml file
+		g.By("Create custom node pool in hosted cluster")
+		exutil.CreateCustomNodePoolInHypershift(oc, "aws", guestClusterName, "hugepages-nodepool", "1", "m5.xlarge", hostedClusterNS)
+
+		g.By("Check if custom node pool is ready in hosted cluster")
+		exutil.AssertIfNodePoolIsReadyByName(oc, "hugepages-nodepool", 360, hostedClusterNS)
+
+		//Delete configmap in clusters namespace
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "hugepages", "-n", hostedClusterNS, "--ignore-not-found").Execute()
+
+		//Create configmap, it will create custom tuned profile based on this configmap
+		g.By("Create configmap hc-nodepool-pidmax in management cluster")
+		exutil.ApplyOperatorResourceByYaml(oc, hostedClusterNS, tunedWithKernelBootProfileName)
+		configmapsInMgmtClusters, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", hostedClusterNS).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(configmapsInMgmtClusters).NotTo(o.BeEmpty())
+		o.Expect(configmapsInMgmtClusters).To(o.ContainSubstring("hugepages"))
+
+		g.By("Pick one worker node in custom node pool of hosted cluster")
+		workerNodeName, err := exutil.GetFirstWorkerNodeByNodePoolNameInHostedCluster(oc, "hugepages-nodepool")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(workerNodeName).NotTo(o.BeEmpty())
+		e2e.Logf("Worker Node: %v", workerNodeName)
+
+		//Delete configmap in hosted cluster namespace and disable tuningConfig
+		defer assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeName, "openshift-node")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-hugepages-nodepool", "-n", guestClusterNS, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", "hugepages-nodepool", "-n", hostedClusterNS, "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[]}}").Execute()
+
+		//Enable tuned in hosted clusters
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", "hugepages-nodepool", "-n", hostedClusterNS, "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[{\"name\": \"tuned-hugepages\"}]}}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check if the configmap tuned-hugepages-nodepool created in corresponding hosted ns in management cluster")
+		configMaps := getTuningConfigMapNameWithRetry(oc, guestClusterNS, "hugepages-nodepool")
+		o.Expect(configMaps).To(o.ContainSubstring("hugepages-nodepool"))
+
+		g.By("Check if the configmap applied to tuned-hugepages-nodepool in management cluster")
+		exutil.AssertIfNodePoolUpdatingConfigByName(oc, "hugepages-nodepool", 360, hostedClusterNS)
+
+		g.By("Check if the tuned hugepages-xxxxxx is created in hosted cluster nodepool")
+		tunedNameList, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("tuned", "-n", ntoNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNameList).NotTo(o.BeEmpty())
+		e2e.Logf("The list of tuned tunedNameList is: \n%v", tunedNameList)
+		o.Expect(tunedNameList).To(o.ContainSubstring("hugepages"))
+
+		g.By("Check if the tuned rendered contain openshift-node-hugepages")
+		renderCheck, err := getTunedRenderInHostedCluster(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).NotTo(o.BeEmpty())
+		o.Expect(renderCheck).To(o.ContainSubstring("openshift-node-hugepages"))
+
+		g.By("Get the tuned pod name that running on custom node pool worker node")
+		tunedPodName, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedPodName).NotTo(o.BeEmpty())
+		e2e.Logf("Tuned Pod: %v", tunedPodName)
+
+		g.By("Check if the tuned profile applied to custom node pool worker nodes")
+		assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeName, "openshift-node-hugepages")
+
+		g.By("Assert hugepagesz match in /proc/cmdline on the worker node in custom node pool")
+		assertIfMatchKenelBootOnNodePoolLevelInHostedCluster(oc, ntoNamespace, "hugepages-nodepool", "hugepagesz", true)
+
+		g.By("Scale out a new worker node in custom nodepool hugepages-nodepool")
+		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("nodepool", "hugepages-nodepool", "-n", hostedClusterNS, "--replicas=2").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check if custom node pool is ready in hosted cluster")
+		exutil.AssertIfNodePoolIsReadyByName(oc, "hugepages-nodepool", 360, hostedClusterNS)
+
+		g.By("Check if the custom tuned profile openshift-node-hugepages applied to all nodes of custom nodepool.")
+		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, "hugepages-nodepool", "openshift-node-hugepages")
+
+		g.By("Assert hugepagesz match in /proc/cmdline on all nodes include the second new worker node in custom node pool")
+		assertIfMatchKenelBootOnNodePoolLevelInHostedCluster(oc, ntoNamespace, "hugepages-nodepool", "hugepagesz", true)
+
 	})
 })

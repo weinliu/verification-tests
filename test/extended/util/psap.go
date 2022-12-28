@@ -638,7 +638,6 @@ func DeleteMCAndMCPByName(oc *CLI, mcName string, mcpName string, timeDurationMi
 func CreateCustomNodePoolInHypershift(oc *CLI, cloudProvider, guestClusterName, nodePoolName, nodeCount, instanceType, clustersNS string) {
 
 	cmdString := fmt.Sprintf("hypershift create nodepool %s --cluster-name %s --name %s --node-count %s --instance-type %s --namespace %s --render", cloudProvider, guestClusterName, nodePoolName, nodeCount, instanceType, clustersNS)
-	fmt.Println(cmdString)
 	rawOutput, err := exec.Command("bash", "-c", cmdString).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -708,4 +707,26 @@ func IsSNOCluster(oc *CLI) bool {
 	o.Expect(topologyTypeStdOut).NotTo(o.BeEmpty())
 	topologyType := strings.ToLower(topologyTypeStdOut)
 	return topologyType == "singlereplica"
+}
+
+// CheckAllNodepoolReadyByHostedClusterName used for checking if all nodepool is ready
+// eg. CheckAllNodepoolReadyByHostedClusterName(oc, psap-qe-hcluster01,clusters,3600)
+func CheckAllNodepoolReadyByHostedClusterName(oc *CLI, nodePoolName, hostedClusterNS string, timeDurationSec int) bool {
+
+	var (
+		isMatch bool
+	)
+
+	err := wait.Poll(90*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
+		nodesStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("--ignore-not-found", "np", nodePoolName, `-ojsonpath='{.status.conditions[?(@.type=="Ready")].status}'`, "--namespace", hostedClusterNS).Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		e2e.Logf("The nodepool ready status is %v ...", nodesStatus)
+		if len(nodesStatus) <= 0 {
+			isMatch = true
+			return true, nil
+		}
+		return false, nil
+	})
+	AssertWaitPollNoErr(err, "The status of nodepool isn't ready")
+	return isMatch
 }

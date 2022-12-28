@@ -1812,7 +1812,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		if iaasPlatform == "vsphere" || iaasPlatform == "openStack" {
+		if iaasPlatform == "vsphere" || iaasPlatform == "openStack" || iaasPlatform == "none" {
 			g.Skip("IAAS platform: " + iaasPlatform + " doesn't support cloud provider profile - skipping test ...")
 		}
 
@@ -2070,7 +2070,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		if iaasPlatform == "vsphere" {
+		if iaasPlatform == "vsphere" || iaasPlatform == "none" {
 			g.Skip("IAAS platform: " + iaasPlatform + " doesn't support cloud provider profile - skipping test ...")
 		}
 
