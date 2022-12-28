@@ -256,6 +256,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 		g.By("Get the created configmap")
 		newConfigmapS, err := oc.Run("logs").Args("-n", oc.Namespace(), "pod/"+pod43034.name, "--tail=1").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		newConfigmapN := strings.Split(newConfigmapS, " ")[0]
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-config-managed", newConfigmapN).Execute()
 
@@ -489,7 +490,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-44061-Check the default registry credential path for oc", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-44061-Check the default registry credential path for oc", func() {
 		g.By("check the help info for the registry config locations")
 		clusterImage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.desired.image}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -560,6 +561,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		checkPodStatus(oc, "deploymentconfig=hello-openshift", oc.Namespace(), "Running")
 		checkPodStatus(oc, "openshift.io/deployer-pod-for.name=hello-openshift-1", oc.Namespace(), "Succeeded")
 		output, err := oc.Run("describe").Args("quota", "compute-resources-42982").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		if matched, _ := regexp.MatchString("requests.memory.*Ki.*8Gi", output); matched {
 			e2e.Logf("describe the quota with units:\n%s", output)
 		}
@@ -583,6 +585,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		checkPodStatus(oc, "deploymentconfig=hello-openshift", "p42982-1", "Running")
 		checkPodStatus(oc, "openshift.io/deployer-pod-for.name=hello-openshift-1", "p42982-1", "Succeeded")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("clusterresourcequota", "for-user42982").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		if matched, _ := regexp.MatchString("requests.memory.*Ki.*8Gi", output); matched {
 			e2e.Logf("describe the quota with units:\n%s", output)
 		}
