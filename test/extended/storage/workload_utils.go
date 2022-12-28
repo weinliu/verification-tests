@@ -795,6 +795,16 @@ func (dep *deployment) getReplicasNum(oc *exutil.CLI) string {
 	return replicasNum
 }
 
+// Get the Deployments in mentioned ns
+func getSpecifiedNamespaceDeployments(oc *exutil.CLI, ns string) []string {
+	depNames, err := oc.WithoutNamespace().Run("get").Args("deployments", "-n", ns, "-o=jsonpath={range.items[*]}{.metadata.name}{\" \"}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if len(depNames) == 0 {
+		return []string{}
+	}
+	return strings.Split(depNames, " ")
+}
+
 // Scale Replicas for the Deployment
 func (dep *deployment) scaleReplicas(oc *exutil.CLI, replicasno string) {
 	err := oc.WithoutNamespace().Run("scale").Args("deployment", dep.name, "--replicas="+replicasno, "-n", dep.namespace).Execute()
