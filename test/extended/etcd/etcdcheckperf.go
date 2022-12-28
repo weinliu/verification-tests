@@ -16,7 +16,7 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 
 	var oc = exutil.NewCLIWithoutNamespace("openshift-etcd")
 	// author: jgeorge@redhat.com
-	g.It("NonHyperShiftHOST-DEPRECATED-Author:jgeorge-High-44199-run etcd benchmark [Exclusive]", func() {
+	g.It("NonHyperShiftHOST-DEPRECATED-Author:jgeorge-CPaasrunOnly-High-44199-run etcd benchmark [Exclusive]", func() {
 		var platform = exutil.CheckPlatform(oc)
 		rttTh := map[string]string{
 			"aws": "0.03",
