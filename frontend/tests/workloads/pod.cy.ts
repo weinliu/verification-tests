@@ -6,11 +6,11 @@ describe('pod page', () => {
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));        
         guidedTour.close();
         cy.createProject(testName);
-        cy.exec(`oc create -f ./fixtures/poddefault.yaml -n ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+        cy.adminCLI(`oc create -f ./fixtures/poddefault.yaml -n ${testName}`);
     });
 
     after(() => {
-        cy.exec(`oc delete project ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+        cy.adminCLI(`oc delete project ${testName}`);
     });
 
     it('(OCP-53357,xiyuzhao) Pod host IP is visible on Pod details page', {tags: ['e2e']}, () => {

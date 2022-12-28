@@ -12,16 +12,16 @@ describe('Display All Namespace Operands for Global Operators', () => {
   }
 
   before(() => {
-    cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
-    cy.exec(`oc apply -f ./fixtures/${params.catalogSourceFile} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
-    cy.exec(`oc new-project ${params.anotherNamespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+    cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
+    cy.adminCLI(`oc apply -f ./fixtures/${params.catalogSourceFile}`)
+    cy.adminCLI(`oc new-project ${params.anotherNamespace}`)
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
   })
   
   after(() => {
-    cy.exec(`oc delete project ${params.anotherNamespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
-    cy.exec(`oc delete csv argocd-operator.v0.0.15 -n openshift-operators --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
-    cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+    cy.adminCLI(`oc delete project ${params.anotherNamespace}`)
+    cy.adminCLI(`oc delete csv argocd-operator.v0.0.15 -n openshift-operators`)
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
     cy.logout()
   })
 
@@ -32,7 +32,7 @@ describe('Display All Namespace Operands for Global Operators', () => {
     cy.contains('View Operator').click()
 
     // install the operands
-    cy.exec(`oc apply -f ./fixtures/${params.operandFile} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+    cy.adminCLI(`oc apply -f ./fixtures/${params.operandFile}`)
 
     // check namespace radio button is selected for operand on the operator page
     cy.byLegacyTestID('horizontal-link-olm~All instances').click()

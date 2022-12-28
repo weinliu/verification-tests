@@ -10,13 +10,13 @@ describe('Workload Secrets test', () => {
     guidedTour.close();
     cy.switchPerspective('Administrator');
     cy.createProject(testName);
-    cy.exec(`oc create -f ./fixtures/secret-tls.yaml -n ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);   
-    cy.exec(`oc create secret generic test1 -n ${testName} --from-file=data1=./fixtures/original.jks --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
-    cy.exec(`oc get secret -n ${testName} test1 -o yaml > /tmp/secret1.yaml --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+    cy.adminCLI(`oc create -f ./fixtures/secret-tls.yaml -n ${testName}`);   
+    cy.adminCLI(`oc create secret generic test1 -n ${testName} --from-file=data1=./fixtures/original.jks`)
+    cy.adminCLI(`oc get secret -n ${testName} test1 -o yaml > /tmp/secret1.yaml`)
   });
 
   after(() => {
-    cy.exec(`oc delete project ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc delete project ${testName}`);
     cy.logout();
   });
 

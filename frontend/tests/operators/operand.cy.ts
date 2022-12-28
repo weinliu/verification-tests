@@ -3,10 +3,10 @@ import { testName } from "upstream/support";
 describe('operand tests', () => {
     before(() => {
         const fileNames = ['crd','csv1','csv2','csv3','operand']
-        cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-        cy.exec(`oc new-project ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+        cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
+        cy.adminCLI(`oc new-project ${testName}`);
         cy.wrap(fileNames).each(fileName => {
-            cy.exec(`oc create -f ./fixtures/${fileName}.yaml -n ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+            cy.adminCLI(`oc create -f ./fixtures/${fileName}.yaml -n ${testName}`)
               .then(result => { expect(result.stdout).contain("created")
             })
         });  
@@ -14,9 +14,9 @@ describe('operand tests', () => {
     });
 
     after(() => {
-        cy.exec(`oc delete project ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-        cy.exec(`oc delete customresourcedefinition mock-resources.test.tectonic.com --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-        cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+        cy.adminCLI(`oc delete project ${testName}`);
+        cy.adminCLI(`oc delete customresourcedefinition mock-resources.test.tectonic.com`);
+        cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
         cy.logout();
     });
 

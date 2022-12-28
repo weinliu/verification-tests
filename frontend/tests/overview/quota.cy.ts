@@ -1,23 +1,22 @@
 import { quotaCard } from '../../views/overview';
 import { quotaPage } from '../../views/quotas';
-import { ClusterSettingPage } from '../../views/cluster-setting';
 describe('quota related feature', () => {
   before(() => {
-    cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc new-project test-ocp52470 --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc label namespace test-ocp52470 test=ocp52470 --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc create resourcequota quota1 --hard=pods=4,requests.cpu=1,limits.cpu=2,limits.memory=1Gi,services=3,requests.nvidia.com/gpu=5,requests.storage=88,persistentvolumeclaims=10 -n test-ocp52470 --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc create resourcequota quota2 --hard=configmaps=4,openshift.io/imagestreams=8,secrets=4 -n test-ocp52470 --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc create clusterresourcequota testcrq1 --hard=services=10 --project-label-selector='test=ocp52470' --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc create clusterresourcequota testcrq2 --hard=secrets=6,configmaps=3,pods=6,limits.memory=200Mi,requests.storage=50Gi --project-label-selector='test=ocp52470' --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
+    cy.adminCLI(`oc new-project test-ocp52470`);
+    cy.adminCLI(`oc label namespace test-ocp52470 test=ocp52470`);
+    cy.adminCLI(`oc create resourcequota quota1 --hard=pods=4,requests.cpu=1,limits.cpu=2,limits.memory=1Gi,services=3,requests.nvidia.com/gpu=5,requests.storage=88,persistentvolumeclaims=10 -n test-ocp52470`);
+    cy.adminCLI(`oc create resourcequota quota2 --hard=configmaps=4,openshift.io/imagestreams=8,secrets=4 -n test-ocp52470`);
+    cy.adminCLI(`oc create clusterresourcequota testcrq1 --hard=services=10 --project-label-selector='test=ocp52470'`);
+    cy.adminCLI(`oc create clusterresourcequota testcrq2 --hard=secrets=6,configmaps=3,pods=6,limits.memory=200Mi,requests.storage=50Gi --project-label-selector='test=ocp52470'`);
 
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
   });
 
   after(() => {
-    cy.exec(`oc delete project test-ocp52470 --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc delete clusterresourcequota testcrq1 testcrq2 --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc delete project test-ocp52470`);
+    cy.adminCLI(`oc delete clusterresourcequota testcrq1 testcrq2`);
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.logout;
   });
 

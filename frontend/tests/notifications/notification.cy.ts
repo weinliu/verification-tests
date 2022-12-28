@@ -5,8 +5,8 @@ import testAlert from '../../fixtures/testalert.json';
 describe('Notification drawer tests', () => {
   let $cmexisting = 0;
   before(() => {
-    cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc new-project test-ocp45305 --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
+    cy.adminCLI(`oc new-project test-ocp45305`);
     cy.exec(`oc get cm cluster-monitoring-config -n openshift-monitoring --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((result) => {
       const $ret = result.code;
       if($ret == 0){
@@ -23,12 +23,12 @@ describe('Notification drawer tests', () => {
   })
 
   after(() => {
-    cy.exec(`oc delete project test-ocp45305 --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc delete project test-ocp45305`);
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     if ($cmexisting == 1){
-      cy.exec(`oc patch cm cluster-monitoring-config -n openshift-monitoring --type='json' -p='[{"op": "remove", "path": "/data/config.yaml"}]' --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+      cy.adminCLI(`oc patch cm cluster-monitoring-config -n openshift-monitoring --type='json' -p='[{"op": "remove", "path": "/data/config.yaml"}]'`);
     }else{
-      cy.exec(`oc delete cm cluster-monitoring-config -n openshift-monitoring --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+      cy.adminCLI(`oc delete cm cluster-monitoring-config -n openshift-monitoring`);
     }
     cy.logout;
   })

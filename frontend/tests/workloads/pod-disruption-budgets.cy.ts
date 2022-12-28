@@ -11,16 +11,16 @@ describe('PDB List Page and Detail Page Test', () => {
   }
 
   before(() => {
-    cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
-    cy.exec(`oc new-project ${testParams.projectName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
-    cy.exec(`oc create -f ./fixtures/${testParams.fileName}.yaml -n ${testParams.projectName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc new-project ${testParams.projectName}`)
+    cy.adminCLI(`oc create -f ./fixtures/${testParams.fileName}.yaml -n ${testParams.projectName}`);
   })
 
   after(() => {
     cy.logout();
-    cy.exec(`oc delete project ${testParams.projectName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
-    cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc delete project ${testParams.projectName}`)
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   })
 
   it('(OCP-50657, xiangyli) - Add support for PDB (Pod Disruption Budget)', {tags: ['e2e','admin']}, () => {

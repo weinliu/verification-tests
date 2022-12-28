@@ -11,14 +11,14 @@ describe("Improve MachineConfigPool list table for update status", () => {
   const {fileName, testMCPName} = params;
 
   before(() => {
-    cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env("LOGIN_USERNAME")} --kubeconfig ${Cypress.env("KUBECONFIG_PATH")}`);
-    cy.exec(`oc create -f ./fixtures/${fileName}.yaml --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env("LOGIN_USERNAME")}`);
+    cy.adminCLI(`oc create -f ./fixtures/${fileName}.yaml`);
     cy.login(Cypress.env("LOGIN_IDP"), Cypress.env("LOGIN_USERNAME"), Cypress.env("LOGIN_PASSWORD"));
   });
   
   after(() => {
-    cy.exec(`oc delete machineconfigpools ${params.testName} --kubeconfig ${Cypress.env("KUBECONFIG_PATH")}`);
-    cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc delete machineconfigpools ${params.testName}`);
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.logout();
   });
 

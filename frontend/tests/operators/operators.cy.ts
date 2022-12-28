@@ -2,14 +2,14 @@ import { operatorHubPage } from "../../views/operator-hub-page";
 
 describe('Operators related features', () => {
   before(() => {
-    cy.exec(`oc new-project test-ocp40457 --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc new-project test-ocp40457`);
+    cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     });
 
   after(() => {
-    cy.exec(`oc delete project test-ocp40457 --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc delete project test-ocp40457`);
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.logout;
     });
 

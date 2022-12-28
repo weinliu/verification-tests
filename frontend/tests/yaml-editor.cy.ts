@@ -15,7 +15,7 @@ describe("yaml editor tests", () => {
   });
 
   after(() => {
-    cy.exec(`oc delete project ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc delete project ${testName}`);
   });
 
   it("(OCP-21956,xiyuzhao) drag and drop file for Import YAML page", {tags: ['e2e','admin']}, () => {

@@ -8,12 +8,12 @@ const project = 'netobserv'
 describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests', function () {
 
     before('any test', function () {
-        cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+        cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
-        cy.exec(`oc new-project ${project} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+        cy.adminCLI(`oc new-project ${project}`)
 
         // deploy loki
-        cy.exec(`oc create -f ./fixtures/netobserv/loki.yaml -n ${project} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+        cy.adminCLI(`oc create -f ./fixtures/netobserv/loki.yaml -n ${project}`)
 
         // sepcify --env noo_catalog_src=community-operators to run tests for community operator NOO release
         let catalogImg, catalogDisplayName
@@ -273,8 +273,8 @@ describe('(OCP-50532, OCP-50531, OCP-50530 NETOBSERV) Netflow Table view tests',
         if (this.catalogSource != "community-operators") {
             Operator.deleteCatalogSource(this.catalogSource)
         }
-        cy.exec(`oc delete project ${project} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
-        cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+        cy.adminCLI(`oc delete project ${project}`)
+        cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
         cy.logout()
 
     })

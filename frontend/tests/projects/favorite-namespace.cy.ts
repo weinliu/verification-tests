@@ -2,11 +2,7 @@ import { namespaceDropdown } from "views/namespace-dropdown";
 
 describe("namespace dropdown favorite test", () => {
   before(() => {
-    cy.exec(
-      `oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env(
-        "LOGIN_USERNAME"
-      )} --kubeconfig ${Cypress.env("KUBECONFIG_PATH")}`
-    );
+    cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env("LOGIN_USERNAME")}`);
     cy.login(
       Cypress.env("LOGIN_IDP"),
       Cypress.env("LOGIN_USERNAME"),
@@ -16,7 +12,7 @@ describe("namespace dropdown favorite test", () => {
 
   after(() => {
     cy.logout();
-    cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
   it("(OCP-45319, xiangyli) - Check the system namespaces that are Favorited will list in the Favorited list even if 'show default projects' is unselectedt", {tags: ['e2e','admin']}, () => {

@@ -2,7 +2,6 @@ import { guidedTour } from "upstream/views/guided-tour"
 import { listPage } from "upstream/views/list-page"
 
 describe('Check rollout restart and retry in Deployment/DC', () => {
-  // --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}
   const params = {
     namespace: 'auto-52579',
     deploymentName: 'hello-openshift',
@@ -17,33 +16,33 @@ describe('Check rollout restart and retry in Deployment/DC', () => {
     cy.switchPerspective('Administrator');
     cy.createProject(params.namespace)
     cy.byTestID('resource-status').contains('Active')
-    cy.exec(`oc apply -f ./fixtures/${params.deploymentFile} -n ${params.namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
-    cy.exec(`oc apply -f ./fixtures/${params.dcFileName} -n ${params.namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+    cy.adminCLI(`oc apply -f ./fixtures/${params.deploymentFile} -n ${params.namespace}`)
+    cy.adminCLI(`oc apply -f ./fixtures/${params.dcFileName} -n ${params.namespace}`)
   })
 
   after(() => {
-    cy.exec(`oc delete project ${params.namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+    cy.adminCLI(`oc delete project ${params.namespace}`)
     cy.logout()
   })
 
   it('(OCP-52579, xiangyli) Add Rollout Restart and Retry function to Deployment/Deployment Config', {tags: ['e2e']}, () => {
       // Check point 1: Kebab and action list button click for deployment
       cy.visit(`/k8s/ns/${params.namespace}/apps~v1~Deployment`)
-      cy.exec(`oc get deployment/${params.deploymentName} -n ${params.namespace} -o yaml --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} `)
+      cy.adminCLI(`oc get deployment/${params.deploymentName} -n ${params.namespace} -o yaml`)
         .its('stdout')
         .should('not.contain', 'restartedAt')
-      cy.exec(`oc rollout history deployment/${params.deploymentName} -n ${params.namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+      cy.adminCLI(`oc rollout history deployment/${params.deploymentName} -n ${params.namespace}`)
         .its('stdout')
         .should('not.contain', '2') // There should be only one revision
       listPage.rows.clickKebabAction(params.deploymentName, 'Restart rollout')
       cy.visit(`/k8s/ns/${params.namespace}/deployments/${params.deploymentName}`)
-      cy.exec(`oc get deployment/${params.deploymentName} -n ${params.namespace} -o yaml --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+      cy.adminCLI(`oc get deployment/${params.deploymentName} -n ${params.namespace} -o yaml`)
         .its('stdout')
         .should('contain', 'restartedAt')
-      cy.exec(`oc rollout history deployment/${params.deploymentName} -n ${params.namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+      cy.adminCLI(`oc rollout history deployment/${params.deploymentName} -n ${params.namespace}`)
         .its('stdout')
         .should('contain', '2')
-      cy.exec(`oc rollout pause deployment/${params.deploymentName} -n ${params.namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+      cy.adminCLI(`oc rollout pause deployment/${params.deploymentName} -n ${params.namespace}`)
         .its('stdout')
         .should('contain', 'paused')
       cy.byLegacyTestID('actions-menu-button').click()
@@ -68,15 +67,15 @@ describe('Check rollout restart and retry in Deployment/DC', () => {
       // 2.2 Go to detail page
       cy.visit(`/k8s/ns/${params.namespace}/deploymentconfigs/${params.dcName}/replicationcontrollers`)
       cy.byTestID('status-text').contains('Complete')
-      cy.exec(`oc rollout latest dc/${params.dcName} -n ${params.namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
-      cy.exec(`oc rollout cancel dc/${params.dcName} -n ${params.namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+      cy.adminCLI(`oc rollout latest dc/${params.dcName} -n ${params.namespace}`)
+      cy.adminCLI(`oc rollout cancel dc/${params.dcName} -n ${params.namespace}`)
       cy.visit(`/k8s/ns/${params.namespace}/deploymentconfigs/${params.dcName}/replicationcontrollers`) // refresh the page
       cy.byTestID('status-text').contains('Failed')
       cy.byLegacyTestID('actions-menu-button').click()
       cy.get('[data-test-action="Retry rollout"]').click()
       cy.byTestID('status-text').contains('Failed').should('not.exist')
       // start to check if the rollout was successful
-      cy.exec(`oc rollout status dc/${params.dcName} -n ${params.namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+      cy.adminCLI(`oc rollout status dc/${params.dcName} -n ${params.namespace}`)
         .its('stdout')
         .should('contain', 'successfully')
     })

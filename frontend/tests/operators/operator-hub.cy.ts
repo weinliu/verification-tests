@@ -11,15 +11,15 @@ describe('Operator Hub tests', () => {
       }
     
     before(() => {
-        cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-        cy.exec(`oc create -f ./fixtures/operators/custom-catalog-source.json --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+        cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
+        cy.adminCLI(`oc create -f ./fixtures/operators/custom-catalog-source.json`);
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     });
 
     after(() => {
-        cy.exec(`oc delete CatalogSource custom-catalogsource -n openshift-marketplace --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-        cy.exec(`oc delete project ${testParams.suggestedNamespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-        cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+        cy.adminCLI(`oc delete CatalogSource custom-catalogsource -n openshift-marketplace`);
+        cy.adminCLI(`oc delete project ${testParams.suggestedNamespace}`);
+        cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     });
 
     it('(OCP-45874) Check source labels on the operator hub page tiles', {tags: ['e2e','admin']}, () => {
@@ -45,7 +45,7 @@ describe('Operator Hub tests', () => {
         let excludedOperatorsList = [];
         operatorHubPage.goTo();
         operatorHubPage.checkSourceCheckBox("custom-auto-source");
-        cy.exec(`oc get node --selector node-role.kubernetes.io/worker= --show-labels --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`).then((result) =>{
+        cy.adminCLI(`oc get node --selector node-role.kubernetes.io/worker= --show-labels`).then((result) =>{
             if(result.stdout.search('kubernetes.io/arch=arm64') != -1) includedOperatorsList.push('etcd');
             if(result.stdout.search('kubernetes.io/arch=amd64') != -1) includedOperatorsList.push('argocd');
             excludedOperatorsList = allOperatorsList.filter(item => !includedOperatorsList.includes(item));

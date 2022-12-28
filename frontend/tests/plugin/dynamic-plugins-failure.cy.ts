@@ -18,22 +18,22 @@ describe('Dynamic Plugins notification features', () => {
   };
 
   before(() => {
-    cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc create -f ./fixtures/plugin/${testParams.failPluginFileName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc create -f ./fixtures/plugin/${testParams.pendingPluginFileName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc patch console.operator cluster -p '{"spec":{"plugins":["${testParams.failPluginName}", "${testParams.pendingPluginName}"]}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
+    cy.adminCLI(`oc create -f ./fixtures/plugin/${testParams.failPluginFileName}`);
+    cy.adminCLI(`oc create -f ./fixtures/plugin/${testParams.pendingPluginFileName}`);
+    cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"plugins":["${testParams.failPluginName}", "${testParams.pendingPluginName}"]}}' --type merge`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
   })
 
   after(() => {
-    cy.exec(`oc patch console.operator cluster -p '{"spec":{"plugins":null}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc delete consoleplugin ${testParams.failPluginName} ${testParams.pendingPluginName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc delete namespace ${testParams.failPluginNamespace} ${testParams.pendingPluginNamespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"plugins":null}}' --type merge`);
+    cy.adminCLI(`oc delete consoleplugin ${testParams.failPluginName} ${testParams.pendingPluginName}`);
+    cy.adminCLI(`oc delete namespace ${testParams.failPluginNamespace} ${testParams.pendingPluginNamespace}`);
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   })
 
   it('(OCP-55427,yapei) Improve information for Pending or Failed plugins', {tags: ['e2e', 'admin']}, () => {
-    cy.exec(`oc get cm console-config -n openshift-console -o yaml --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+    cy.adminCLI(`oc get cm console-config -n openshift-console -o yaml`)
       .its('stdout')
       .should('include', 'console-customization')
       .and('include','console-demo-plugin-1')

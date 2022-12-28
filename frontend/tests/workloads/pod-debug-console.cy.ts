@@ -20,7 +20,7 @@ describe('Debug console for pods', () => {
   })
 
   after(() => {
-    cy.exec(`oc delete project ${testParams.namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+    cy.adminCLI(`oc delete project ${testParams.namespace}`)
     cy.logout()
   })
 
@@ -54,7 +54,7 @@ describe('Debug console for pods', () => {
     // Get pod name via cli
     let podName: string
     let rows: string[]
-    cy.exec(`oc get pod -n ${testParams.namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+    cy.adminCLI(`oc get pod -n ${testParams.namespace}`)
       .then((res) => {
         rows = res.stdout.split('\n').slice(1)
         podName = rows[1].split(' ')[0]
@@ -71,7 +71,7 @@ describe('Debug console for pods', () => {
 
     // Check customer bug for debug container not terminating after closing tab
     cy.visit(`/dashboard`)
-    cy.exec(`oc get pod -n ${testParams.namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+    cy.adminCLI(`oc get pod -n ${testParams.namespace}`)
       .should('not.match', /${testParams.name}.*-debug.*/)
   })
 })
