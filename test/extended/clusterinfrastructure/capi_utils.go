@@ -41,6 +41,7 @@ type awsMachineTemplateDescription struct {
 	zone       string
 	ami        string
 	subnetName string
+	subnetID   string
 	sgName     string
 	template   string
 }
@@ -55,7 +56,7 @@ type gcpMachineTemplateDescription struct {
 	template    string
 }
 
-type capiMachineSetDescription struct {
+type capiMachineSetAWSDescription struct {
 	name                string
 	namespace           string
 	clusterName         string
@@ -115,7 +116,7 @@ func (gcpCluster *gcpClusterDescription) deleteGCPCluster(oc *exutil.CLI) error 
 
 func (awsMachineTemplate *awsMachineTemplateDescription) createAWSMachineTemplate(oc *exutil.CLI) {
 	e2e.Logf("Creating awsMachineTemplate ...")
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", awsMachineTemplate.template, "-p", "NAME="+awsMachineTemplate.name, "NAMESPACE="+clusterAPINamespace, "PROFILE="+awsMachineTemplate.profile, "ZONE="+awsMachineTemplate.zone, "AMI="+awsMachineTemplate.ami, "SUBNETNAME="+awsMachineTemplate.subnetName, "SGNAME="+awsMachineTemplate.sgName)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", awsMachineTemplate.template, "-p", "NAME="+awsMachineTemplate.name, "NAMESPACE="+clusterAPINamespace, "PROFILE="+awsMachineTemplate.profile, "ZONE="+awsMachineTemplate.zone, "AMI="+awsMachineTemplate.ami, "SUBNETNAME="+awsMachineTemplate.subnetName, "SUBNETID="+awsMachineTemplate.subnetID, "SGNAME="+awsMachineTemplate.sgName)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -135,19 +136,19 @@ func (gcpMachineTemplate *gcpMachineTemplateDescription) deleteGCPMachineTemplat
 	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("gcpmachinetemplate", gcpMachineTemplate.name, "-n", clusterAPINamespace).Execute()
 }
 
-func (capiMachineSet *capiMachineSetDescription) createCapiMachineSet(oc *exutil.CLI) {
+func (capiMachineSetAWS *capiMachineSetAWSDescription) createCapiMachineSet(oc *exutil.CLI) {
 	e2e.Logf("Creating awsMachineSet ...")
-	if err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", capiMachineSet.template, "-p", "NAME="+capiMachineSet.name, "NAMESPACE="+clusterAPINamespace, "CLUSTERNAME="+capiMachineSet.clusterName, "MACHINETEMPLATENAME="+capiMachineSet.machineTemplateName, "KIND="+capiMachineSet.kind, "REPLICAS="+strconv.Itoa(capiMachineSet.replicas)); err != nil {
-		capiMachineSet.deleteCapiMachineSet(oc)
+	if err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", capiMachineSetAWS.template, "-p", "NAME="+capiMachineSetAWS.name, "NAMESPACE="+clusterAPINamespace, "CLUSTERNAME="+capiMachineSetAWS.clusterName, "MACHINETEMPLATENAME="+capiMachineSetAWS.machineTemplateName, "KIND="+capiMachineSetAWS.kind, "REPLICAS="+strconv.Itoa(capiMachineSetAWS.replicas)); err != nil {
+		capiMachineSetAWS.deleteCapiMachineSet(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else {
-		waitForCapiMachinesRunning(oc, capiMachineSet.replicas, capiMachineSet.name)
+		waitForCapiMachinesRunning(oc, capiMachineSetAWS.replicas, capiMachineSetAWS.name)
 	}
 }
 
-func (capiMachineSet *capiMachineSetDescription) deleteCapiMachineSet(oc *exutil.CLI) error {
+func (capiMachineSetAWS *capiMachineSetAWSDescription) deleteCapiMachineSet(oc *exutil.CLI) error {
 	e2e.Logf("Deleting awsMachineSet ...")
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(capiMachineset, capiMachineSet.name, "-n", clusterAPINamespace).Execute()
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args(capiMachineset, capiMachineSetAWS.name, "-n", clusterAPINamespace).Execute()
 }
 
 func (capiMachineSetgcp *capiMachineSetgcpDescription) createCapiMachineSetgcp(oc *exutil.CLI) {
