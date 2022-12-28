@@ -8,17 +8,17 @@ import { listPage } from '../../upstream/views/list-page';
 describe('Dynamic plugins features', () => {
   before(() => {
     const demoPluginNamespace = 'console-demo-plugin';
-    cy.exec(`oc create namespace ${demoPluginNamespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc create namespace ${demoPluginNamespace}`);
+    cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
 
     // deploy plugin manifests
-    cy.exec(`oc create -f ./fixtures/demo-plugin-consoleplugin.yaml -n ${demoPluginNamespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc create -f ./fixtures/demo-plugin-consoleplugin.yaml -n ${demoPluginNamespace}`);
     const resources = ['demo-plugin-deployment', 'demo-plugin-service']
     resources.forEach((resource) => {
-      cy.exec(`oc create -f ./fixtures/${resource}.yaml -n ${demoPluginNamespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+      cy.adminCLI(`oc create -f ./fixtures/${resource}.yaml -n ${demoPluginNamespace}`)
         .then(result => { expect(result.stdout).contain("created")})
     });
-    cy.exec(`oc apply -f ./fixtures/console-customization-plugin-manifest.yaml --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI('oc apply -f ./fixtures/console-customization-plugin-manifest.yaml');
     
     // login via web
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
@@ -41,11 +41,11 @@ describe('Dynamic plugins features', () => {
     ).as('getConsoleCustomizaitonPluginLocales');    
   });
   after(() => {
-    cy.exec(`oc patch console.operator cluster -p '{"spec":{"managementState":"Managed"}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc delete consoleplugin --all --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc patch console.operator cluster -p '{"spec":{"plugins":null}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc delete namespace console-demo-plugin console-customization-plugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
-    cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+    cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"managementState":"Managed"}}' --type merge`);
+    cy.adminCLI(`oc delete consoleplugin --all`);
+    cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"plugins":null}}' --type merge`);
+    cy.adminCLI(`oc delete namespace console-demo-plugin console-customization-plugin`);
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
   it('(OCP-54170, xiangyli) Promote ConsolePlugins API version to v1', {tags: ['e2e', 'admin']}, () => {
@@ -59,7 +59,7 @@ describe('Dynamic plugins features', () => {
   it('(OCP-51743,yapei) Implement check for the new i18n annotation for dynamic plugins', {tags: ['e2e','admin']},() => {
     cy.log('Preload - locale files are loaded once plugin is enabled');
     // enable console-customization plugin
-    cy.exec(`oc patch console.operator cluster -p '{"spec":{"plugins":["console-customization"]}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+    cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"plugins":["console-customization"]}}' --type merge`)
       .then(result => expect(result.stdout).contains('patched'));
     // Use visiting pages to refresh instead of click on 'Refresh console' button
     // which is unreliable
@@ -71,7 +71,7 @@ describe('Dynamic plugins features', () => {
     cy.switchPerspective('Developer');
     guidedTour.close();
     // enable console-demo-plugin
-    cy.exec(`oc patch console.operator cluster -p '{"spec":{"plugins":["console-customization", "console-demo-plugin"]}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`)
+    cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"plugins":["console-customization", "console-demo-plugin"]}}' --type merge`)
       .then(result => expect(result.stdout).contains('patched'));
     cy.wait(30000);
     cy.visit('/topology/all-namespaces');
@@ -148,7 +148,7 @@ describe('Dynamic plugins features', () => {
     Overview.goToDashboard();
     statusCard.toggleItemPopover("Dynamic Plugins");
     let total = 0;
-    cy.exec(`oc get consoleplugin --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`).then((result) => {
+    cy.adminCLI(`oc get consoleplugin`).then((result) => {
       total = result.stdout.split(/\r\n|\r|\n/).length - 1
     })
     cy.get(".pf-c-popover__body").within(($div) => {
@@ -184,7 +184,7 @@ describe('Dynamic plugins features', () => {
     cy.get('.pf-c-nav__link',{timeout: 60000}).should('not.have.text','Customization');
   });
 
-  it('(OCP-53123,yapei) Exposed components in dynamic-plugin-sdk', {tags: ['e2e','admin']}, () => {
+  it('(OCP-53123,OCP-41459,yapei) Exposed components in dynamic-plugin-sdk', {tags: ['e2e','admin']}, () => {
     // ResourceIcon is exposed
     cy.switchPerspective('Administrator');
     cy.visit('/demo-list-page');
@@ -193,7 +193,11 @@ describe('Dynamic plugins features', () => {
     cy.get('[title="Pod"]').should('exist');
 
     // Modal is exposed
-    cy.visit('/test-modal');
+    cy.visit('/test-modal', {
+      onBeforeLoad (win) {
+        cy.spy(win.console, 'log').as('console.log')
+      }
+    });
     cy.contains('Launch Modal').click({force: true});
     cy.get('[role="dialog"]').should('be.visible');
     cy.get('button[aria-label="Close"]').as('closebutton').click();
@@ -208,11 +212,15 @@ describe('Dynamic plugins features', () => {
     namespaceDropdown.selectNamespace('openshift-dns');
     cy.get('h1').contains('Currently selected namespace').should('exist');
     cy.get('h2').contains('openshift-dns').should('exist');
+    // Add support for analytics and integration with Segment
+    cy.get('@console.log').should('be.calledWith', "Demo Plugin received telemetry event: ", "page");
+    cy.get('@console.log').should('be.calledWith', "Demo Plugin received telemetry event: ", "Perspective Changed");
+    cy.get('@console.log').should('be.calledWith', "Demo Plugin received telemetry event: ", "identify");
   });
 
   it('(OCP-53234,yapei) Show alert when console operator is Unmanaged', {tags: ['e2e','admin']}, () => {
     // set console to Unmanaged
-    cy.exec(`oc patch console.operator cluster -p '{"spec":{"managementState":"Unmanaged"}}' --type merge --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`).then((result) => {
+    cy.adminCLI(`oc patch console.operator cluster -p '{"spec":{"managementState":"Unmanaged"}}' --type merge`).then((result) => {
       expect(result.stdout).contains('patched')
     });
     cy.visit('/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins');
