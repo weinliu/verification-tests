@@ -143,15 +143,17 @@ func getZoneAndMachineFromCPMSZones(oc *exutil.CLI, availabilityZones []string) 
 }
 
 // deleteControlPlaneMachineSet delete the ControlPlaneMachineSet to make it Inactive
-func deleteControlPlaneMachineSet(oc *exutil.CLI) error {
+func deleteControlPlaneMachineSet(oc *exutil.CLI) {
 	e2e.Logf("Deleting ControlPlaneMachineSet ...")
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("controlplanemachineset", "cluster", "-n", machineAPINamespace).Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("controlplanemachineset", "cluster", "-n", machineAPINamespace, "--wait=false").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // activeControlPlaneMachineSet active the ControlPlaneMachineSet
-func activeControlPlaneMachineSet(oc *exutil.CLI) error {
+func activeControlPlaneMachineSet(oc *exutil.CLI) {
 	e2e.Logf("Active ControlPlaneMachineSet ...")
-	return oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"state":"Active"}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"state":"Active"}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // replaceOneMasterMachine create a new master machine and delete the old master machine

@@ -53,13 +53,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Delete controlplanemachineset")
 		defer printNodeInfo(oc)
-		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"state":"Active"}}`, "--type=merge", "-n", machineAPINamespace).Execute()
-		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		defer activeControlPlaneMachineSet(oc)
+		deleteControlPlaneMachineSet(oc)
 
 		g.By("Check ownerReferences is removed from master machines")
 
-		err = wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
+		err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
 			cpmsState, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace, "-o=jsonpath={.spec.state}").Output()
 			if cpmsState == "Inactive" {
 				for _, masterMachineName := range masterMachineList {
@@ -67,8 +66,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 					o.Expect(err).NotTo(o.HaveOccurred())
 					o.Expect(ownerReferences).Should(o.BeEmpty())
 				}
+				return true, nil
 			}
-			return true, nil
+			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "controlplanemachineset is not re-created")
 	})
@@ -100,6 +100,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-High-53610-[CPMS] Operator control-plane-machine-set should be in Available state and report version information", func() {
 		state, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/control-plane-machine-set", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		version, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/control-plane-machine-set", "-o=jsonpath={.status.versions[0].version}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(state).To(o.ContainSubstring("TrueFalseFalse"))
@@ -204,7 +205,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		availabilityZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, machineName, "-n", "openshift-machine-api", getMachineAvailabilityZoneJSON).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		labels := "machine.openshift.io/zone=" + availabilityZone + ",machine.openshift.io/cluster-api-machine-type=master"
-
+		if availabilityZone == "" {
+			labels = "machine.openshift.io/cluster-api-machine-type=master"
+		}
 		g.By("Delete the master machine to trigger RollingUpdate")
 		defer printNodeInfo(oc)
 		defer waitForClusterStable(oc)
@@ -398,6 +401,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		availabilityZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, toDeletedMachineName, "-n", "openshift-machine-api", getMachineAvailabilityZoneJSON).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		labels := "machine.openshift.io/zone=" + availabilityZone + ",machine.openshift.io/cluster-api-machine-type=master"
+		if availabilityZone == "" {
+			labels = "machine.openshift.io/cluster-api-machine-type=master"
+		}
 		exutil.DeleteMachine(oc, toDeletedMachineName)
 
 		g.By("Check new master will be created and old master will be deleted")
@@ -457,12 +463,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 		g.By("Delete controlplanemachineset")
 		defer printNodeInfo(oc)
-		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"state":"Active"}}`, "--type=merge", "-n", machineAPINamespace).Execute()
-		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		defer activeControlPlaneMachineSet(oc)
+		deleteControlPlaneMachineSet(oc)
 
 		g.By("Check a new controlplanemachineset will be created and state is Inactive ")
-		err = wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
+		err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
 			cpmsState, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace, "-o=jsonpath={.spec.state}").Output()
 			if cpmsState != "Inactive" {
 				e2e.Logf("controlplanemachineset is not in Inactive state and waiting up to 2 seconds ...")
@@ -487,8 +492,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"`+instanceTypeName+`":"invalid"}}}}}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"state":"Active"}}`, "--type=merge", "-n", machineAPINamespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		activeControlPlaneMachineSet(oc)
 		o.Expect(checkIfCPMSIsStable(oc)).To(o.BeTrue())
 	})
 
