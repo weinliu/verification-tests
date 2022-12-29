@@ -3700,4 +3700,148 @@ EOF`, dcpolicyrepo)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(afterRevision).To(o.Equal(beforeRevision))
 	})
+
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PreChkUpgrade-NonPreRelease-Author:dpunia-High-54745-Bug clusterResourceQuota objects check", func() {
+		var (
+			caseID           = "ocp-54745"
+			namespace        = caseID + "-quota-test"
+			clusterQuotaName = caseID + "-crq-test"
+			crqLimits        = map[string]string{
+				"pods":           "4",
+				"secrets":        "10",
+				"cpu":            "7",
+				"memory":         "5Gi",
+				"requestsCpu":    "6",
+				"requestsMemory": "6Gi",
+				"limitsCpu":      "6",
+				"limitsMemory":   "6Gi",
+				"configmaps":     "5",
+			}
+		)
+
+		g.By("1) Create custom project for Pre & Post Upgrade ClusterResourceQuota test.")
+		nsError := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", namespace).Execute()
+		o.Expect(nsError).NotTo(o.HaveOccurred())
+
+		g.By("2) Create resource ClusterResourceQuota")
+		template := getTestDataFilePath("clusterresourcequota.yaml")
+		params := []string{"-n", namespace, "-f", template, "-p", "NAME=" + clusterQuotaName, "LABEL=" + namespace, "PODS_LIMIT=" + crqLimits["pods"], "SECRETS_LIMIT=" + crqLimits["secrets"], "CPU_LIMIT=" + crqLimits["cpu"], "MEMORY_LIMIT=" + crqLimits["memory"], "REQUESTS_CPU=" + crqLimits["requestsCpu"], "REQUEST_MEMORY=" + crqLimits["requestsMemory"], "LIMITS_CPU=" + crqLimits["limitsCpu"], "LIMITS_MEMORY=" + crqLimits["limitsMemory"], "CONFIGMAPS_LIMIT=" + crqLimits["configmaps"]}
+		quotaConfigFile := exutil.ProcessTemplate(oc, params...)
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("-n", namespace, "-f", quotaConfigFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("3) Create multiple secrets to test created ClusterResourceQuota, expect failure for secrets creations that exceed quota limit")
+		secretCount, err := oc.Run("get").Args("-n", namespace, "clusterresourcequota", clusterQuotaName, "-o", `jsonpath={.status.namespaces[*].status.used.secrets}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		usedCount, _ := strconv.Atoi(secretCount)
+		limits, _ := strconv.Atoi(crqLimits["secrets"])
+		for i := usedCount; i <= limits; i++ {
+			secretName := fmt.Sprintf("%v-secret-%d", caseID, i)
+			output, err := oc.Run("create").Args("-n", namespace, "secret", "generic", secretName).Output()
+			g.By(fmt.Sprintf("3.%d) creating secret %s", i, secretName))
+			if i < limits {
+				o.Expect(err).NotTo(o.HaveOccurred())
+			} else {
+				o.Expect(output).To(o.MatchRegexp("secrets.*forbidden: exceeded quota"))
+			}
+		}
+
+		g.By("4) Create few pods before upgrade to check ClusterResourceQuota, Remaining Quota pod will create after upgrade.")
+		podsCount, err := oc.Run("get").Args("-n", namespace, "clusterresourcequota", clusterQuotaName, "-o", `jsonpath={.status.namespaces[*].status.used.pods}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		existingPodCount, _ := strconv.Atoi(podsCount)
+		limits, _ = strconv.Atoi(crqLimits["pods"])
+		podTemplate := getTestDataFilePath("ocp54745-pod.yaml")
+		for i := existingPodCount; i < limits-2; i++ {
+			podname := fmt.Sprintf("%v-pod-%d", caseID, i)
+			params := []string{"-n", namespace, "-f", podTemplate, "-p", "NAME=" + podname, "REQUEST_MEMORY=1Gi", "REQUEST_CPU=1", "LIMITS_MEMORY=1Gi", "LIMITS_CPU=1"}
+			podConfigFile := exutil.ProcessTemplate(oc, params...)
+			err = oc.AsAdmin().WithoutNamespace().Run("-n", namespace, "create").Args("-f", podConfigFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		g.By("5) Compare applied ClusterResourceQuota")
+		for _, resourceName := range []string{"pods", "secrets", "cpu", "memory", "configmaps"} {
+			resource, err := oc.Run("get").Args("-n", namespace, "clusterresourcequota", clusterQuotaName, "-o", fmt.Sprintf(`jsonpath={.status.namespaces[*].status.used.%v}`, resourceName)).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			usedResource, _ := strconv.Atoi(strings.Trim(resource, "Gi"))
+			limits, _ := strconv.Atoi(strings.Trim(crqLimits[resourceName], "Gi"))
+			if 0 < usedResource && usedResource <= limits {
+				e2e.Logf("Test Passed: ClusterResourceQuota for Resource %v is in applied limit", resourceName)
+			} else {
+				e2e.Failf("Test Failed: ClusterResourceQuota for Resource %v is not in applied limit", resourceName)
+			}
+		}
+	})
+
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PstChkUpgrade-NonPreRelease-Author:dpunia-High-54745-Bug clusterResourceQuota objects check", func() {
+		var (
+			caseID           = "ocp-54745"
+			namespace        = caseID + "-quota-test"
+			clusterQuotaName = caseID + "-crq-test"
+			crqLimits        = map[string]string{
+				"pods":           "4",
+				"secrets":        "10",
+				"cpu":            "7",
+				"memory":         "5Gi",
+				"requestsCpu":    "6",
+				"requestsMemory": "6Gi",
+				"limitsCpu":      "6",
+				"limitsMemory":   "6Gi",
+				"configmaps":     "5",
+			}
+		)
+
+		// Cleanup resources after this test, created in PreChkUpgrade
+		defer oc.AsAdmin().WithoutNamespace().Run("delete", "project").Args(namespace).Execute()
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("-n", namespace, "clusterresourcequota", clusterQuotaName).Execute()
+
+		g.By("6) Create pods after upgrade to check ClusterResourceQuota")
+		podsCount, err := oc.Run("get").Args("-n", namespace, "clusterresourcequota", clusterQuotaName, "-o", `jsonpath={.status.namespaces[*].status.used.pods}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		existingPodCount, _ := strconv.Atoi(podsCount)
+		limits, _ := strconv.Atoi(crqLimits["pods"])
+		podTemplate := getTestDataFilePath("ocp54745-pod.yaml")
+		for i := existingPodCount; i <= limits; i++ {
+			podname := fmt.Sprintf("%v-pod-%d", caseID, i)
+			params := []string{"-n", namespace, "-f", podTemplate, "-p", "NAME=" + podname, "REQUEST_MEMORY=1Gi", "REQUEST_CPU=1", "LIMITS_MEMORY=1Gi", "LIMITS_CPU=1"}
+			podConfigFile := exutil.ProcessTemplate(oc, params...)
+			output, err := oc.AsAdmin().WithoutNamespace().Run("-n", namespace, "create").Args("-f", podConfigFile).Output()
+			g.By(fmt.Sprintf("5.%d) creating pod %s", i, podname))
+			if i < limits {
+				o.Expect(err).NotTo(o.HaveOccurred())
+			} else {
+				o.Expect(output).To(o.MatchRegexp("pods.*forbidden: exceeded quota"))
+			}
+		}
+
+		g.By("7) Create multiple configmap to test created ClusterResourceQuota, expect failure for configmap creations that exceed quota limit")
+		cmCount, err := oc.Run("get").Args("-n", namespace, "clusterresourcequota", clusterQuotaName, "-o", `jsonpath={.status.namespaces[*].status.used.configmaps}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmUsedCount, _ := strconv.Atoi(cmCount)
+		limits, _ = strconv.Atoi(crqLimits["configmaps"])
+		for i := cmUsedCount; i <= limits; i++ {
+			configmapName := fmt.Sprintf("%v-configmap-%d", caseID, i)
+			output, err := oc.Run("create").Args("-n", namespace, "configmap", configmapName).Output()
+			g.By(fmt.Sprintf("7.%d) creating configmap %s", i, configmapName))
+			if i < limits {
+				o.Expect(err).NotTo(o.HaveOccurred())
+			} else {
+				o.Expect(output).To(o.MatchRegexp("configmaps.*forbidden: exceeded quota"))
+			}
+		}
+
+		g.By("8) Compare applied ClusterResourceQuota")
+		for _, resourceName := range []string{"pods", "secrets", "cpu", "memory", "configmaps"} {
+			resource, err := oc.Run("get").Args("-n", namespace, "clusterresourcequota", clusterQuotaName, "-o", fmt.Sprintf(`jsonpath={.status.namespaces[*].status.used.%v}`, resourceName)).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			usedResource, _ := strconv.Atoi(strings.Trim(resource, "mGi"))
+			limits, _ := strconv.Atoi(strings.Trim(crqLimits[resourceName], "mGi"))
+			if 0 < usedResource && usedResource <= limits {
+				e2e.Logf("Test Passed: ClusterResourceQuota for Resource %v is in applied limit", resourceName)
+			} else {
+				e2e.Failf("Test Failed: ClusterResourceQuota for Resource %v is not in applied limit", resourceName)
+			}
+		}
+	})
 })
