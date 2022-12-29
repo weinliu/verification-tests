@@ -523,6 +523,7 @@ func createOperator(oc *exutil.CLI, subD subscriptionDescription, ogD operatorGr
 
 	msg, err = subscriptionIsFinished(oc, subD)
 	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("err %v, msg %v", err, msg)
 }
 
 func createFileIntegrityOperator(oc *exutil.CLI, subD subscriptionDescription, ogD operatorGroupDescription) {
@@ -546,4 +547,17 @@ func createComplianceOperator(oc *exutil.CLI, subD subscriptionDescription, ogD 
 		subD.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
 
 	g.By("Check compliance operator sucessfully installed !!! ")
+}
+
+// skipForSingleNodeCluster mean to skip test on Single Node Cluster
+func skipForSingleNodeCluster(oc *exutil.CLI) {
+	nodeMasterString, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/master=", "-o=jsonpath={.items[*].metadata.name}").Output()
+	nodeMasterWorkerString, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/master=,node-role.kubernetes.io/worker=", "-o=jsonpath={.items[*].metadata.name}").Output()
+	nodeMasterList := strings.Fields(nodeMasterString)
+	nodeMasterCount := len(nodeMasterList)
+	nodeMasterWorkerList := strings.Fields(nodeMasterWorkerString)
+	nodeMasterWorkerCount := len(nodeMasterWorkerList)
+	if nodeMasterCount == 1 && nodeMasterWorkerCount == 1 && !strings.Contains(nodeMasterWorkerList[0], "worker") {
+		g.Skip("Skip since it is single node cluster")
+	}
 }
