@@ -3895,9 +3895,14 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		err = copy(dockerfileFilePath, filepath.Join(tmpPath, "Dockerfile"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
-		// update the rbac file
-		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
-		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		// copy manager_auth_proxy_patch.yaml
+		authFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
+		err = copy(filepath.Join(dataPath, "manager_auth_proxy_patch.yaml"), authFilePath)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		replaceContent(authFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:vocpversion", "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		// copy manager.yaml
+		err = copy(filepath.Join(dataPath, "manager.yaml"), filepath.Join(tmpPath, "config", "manager", "manager.yaml"))
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("step: Build and push the operator image")
 		tokenDir := "/tmp/ocp-27977" + getRandomString()
@@ -3929,7 +3934,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			for _, line := range lines {
 				if strings.Contains(line, "ansibletest-controller-manager") {
 					e2e.Logf("found pod ansibletest-controller-manager")
-					if strings.Contains(line, "Running") {
+					if strings.Contains(line, "2/2") {
 						e2e.Logf("the status of pod ansibletest-controller-manager is Running")
 						return true, nil
 					}
@@ -3948,6 +3953,17 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if !strings.Contains(msg, "Starting workers") {
 			e2e.Failf("Starting workers failed")
 		}
+
+		// OCP-34292
+		waitErr = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deploy/ansibletest-controller-manager", "-c", "manager", "-n", nsOperator).Output()
+			if strings.Contains(msg, "\"worker count\":1") {
+				e2e.Logf("found worker count:1")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("log of deploy/ansibletest-controller-manager of %s doesn't have worker count:4", nsOperator))
 
 		// add the admin policy
 		err = oc.AsAdmin().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", "system:serviceaccount:"+nsOperator+":ansibletest-controller-manager").Execute()
@@ -4006,17 +4022,6 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get basetest-sample hello world in %s", nsOperator))
-
-		// OCP-34292
-		waitErr = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
-			msg, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deploy/ansibletest-controller-manager", "-c", "manager", "-n", nsOperator).Output()
-			if strings.Contains(msg, "\"worker count\":4") {
-				e2e.Logf("found worker count:4")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("log of deploy/ansibletest-controller-manager of %s doesn't have worker count:4", nsOperator))
 
 		// OCP-29374
 		waitErr = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
