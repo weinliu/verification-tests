@@ -33,6 +33,9 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		testOCPImage string
 	)
 	g.BeforeEach(func() {
+		// skip ARM64 arch
+		exutil.SkipARM64(oc)
+
 		//Install Hive operator if not
 		testDataDir = exutil.FixturePath("testdata", "cluster_operator/hive")
 		installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)
@@ -1026,6 +1029,7 @@ spec:
 		o.Expect(cdauthmessage).Should(o.ContainSubstring("does not match the signature"))
 		e2e.Logf("Change aws awsAccessKey to valid")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret", "aws-creds", "-n", oc.Namespace(), "-p", `{"data":{"aws_secret_access_key":"`+awsAccessKey+`"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Check correct cd and dnszone conditions ")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "False", ok, 3*DefaultTimeout, []string{"DNSZone", cdName + "-zone", "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="AuthenticationFailure")].status}`}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "False", ok, 3*DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="DNSNotReady")].status}`}).check(oc)

@@ -31,6 +31,9 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		testOCPImage string
 	)
 	g.BeforeEach(func() {
+		// skip ARM64 arch
+		exutil.SkipARM64(oc)
+
 		//Install Hive operator if not
 		testDataDir = exutil.FixturePath("testdata", "cluster_operator/hive")
 		installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)

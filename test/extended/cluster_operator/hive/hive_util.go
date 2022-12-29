@@ -735,7 +735,7 @@ func printProvisionPodLogs(oc *exutil.CLI, provisionPodOutput, namespace string)
 	provisionPodOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "hive.openshift.io/job-type=provision", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 	e2e.Logf("provisionPodOutput is %s", provisionPodOutput)
 	//if err == nil , print out provision pod logs
-	if err == nil {
+	if err == nil && len(strings.TrimSpace(provisionPodOutput)) > 0 {
 		var provisionPod []string
 		provisionPod = strings.Split(strings.TrimSpace(provisionPodOutput), " ")
 		e2e.Logf("provisionPod is %s", provisionPod)

@@ -26,6 +26,9 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		testDataDir string
 	)
 	g.BeforeEach(func() {
+		// skip ARM64 arch
+		exutil.SkipARM64(oc)
+
 		//Install Hive operator if not
 		testDataDir = exutil.FixturePath("testdata", "cluster_operator/hive")
 		installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)
@@ -112,7 +115,9 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 
 		g.By("Check HiveConfig status from Metric...")
 		expectedType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HiveConfig", "hive", "-o=jsonpath={.status.conditions[0].type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		expectedReason, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HiveConfig", "hive", "-o=jsonpath={.status.conditions[0].reason}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		checkHiveConfigMetric(oc, "condition", expectedType, token, PrometheusURL, query4)
 		checkHiveConfigMetric(oc, "reason", expectedReason, token, PrometheusURL, query4)
 	})
