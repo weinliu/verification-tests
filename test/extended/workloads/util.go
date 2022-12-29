@@ -675,10 +675,28 @@ func createDeployment(oc *exutil.CLI, namespace string, deployname string) {
 }
 
 func triggerSucceedDeployment(oc *exutil.CLI, namespace string, deployname string, num int, expectedPods int) {
+	var generation string
+	err := wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
+		generation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", deployname, "-n", namespace, "-o=jsonpath={.status.observedGeneration}").Output()
+		if err != nil {
+			e2e.Logf("Err Occurred, try again: %v", err)
+			return false, err
+		}
+		if generation == "" {
+			e2e.Logf("Can't get generation, try again: %v", generation)
+			return false, err
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to get  generation "))
+
+	generationNum, err := strconv.Atoi(generation)
+	o.Expect(err).NotTo(o.HaveOccurred())
 	for i := 0; i < num; i++ {
+		generationNum++
 		err := oc.Run("set").Args("-n", namespace, "env", "deployment", deployname, "paramtest=test"+strconv.Itoa(i)).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, currentRsName := getCurrentRs(oc, namespace, "app="+deployname)
+		_, currentRsName := getCurrentRs(oc, namespace, "app="+deployname, generationNum)
 		err = wait.Poll(5*time.Second, 120*time.Second, func() (bool, error) {
 			availablePodNum, errGet := oc.Run("get").Args("-n", namespace, "rs", currentRsName, "-o=jsonpath='{.status.availableReplicas}'").Output()
 			if errGet != nil {
@@ -778,24 +796,34 @@ func getRemainingRs(oc *exutil.CLI, namespace string, deployname string) []strin
 	return remainRsList
 }
 
-func getCurrentRs(oc *exutil.CLI, projectName string, labels string) (string, string) {
+func getCurrentRs(oc *exutil.CLI, projectName string, labels string, generationNum int) (string, string) {
 	var podTHash, rsName string
-	currentGeneration, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", projectName, "-l", labels, "-o=jsonpath={.items[*].status.observedGeneration}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("rs", "-n", projectName, "-l", labels, "-o=jsonpath={.items[*].metadata.name}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	rsNameList := strings.Fields(output)
-	for _, rsname := range rsNameList {
-		version, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("rs", rsname, "-n", projectName, "-o=jsonpath={.metadata.annotations.deployment\\.kubernetes\\.io/revision}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if matched, _ := regexp.MatchString(currentGeneration, version); matched {
-			podTHash, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("rs", rsname, "-n", projectName, "-o=jsonpath={.spec.selector.matchLabels.pod-template-hash}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("%s is the current rs", rsname)
-			rsName = rsname
-			break
+	e2e.Logf("Print the deploy current generation %v", generationNum)
+	err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		generationC, err1 := oc.Run("get").Args("deploy", "-n", projectName, "-l", labels, "-o=jsonpath={.items[*].status.observedGeneration}").Output()
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
 		}
-	}
+		if matched, _ := regexp.MatchString(strconv.Itoa(generationNum), generationC); !matched {
+			e2e.Logf("the generation is not expected, and try next round")
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "The deploy generation is failed to update")
+	err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+		rsName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("rs", "-n", projectName, "-l", labels, fmt.Sprintf(`-o=jsonpath={.items[?(@.metadata.annotations.deployment\.kubernetes\.io/revision=='%s')].metadata.name}`, strconv.Itoa(generationNum))).Output()
+		e2e.Logf("Print the deploy current rs is %v", rsName)
+		if err != nil {
+			e2e.Logf("the err:%v, and try next round", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "Failed to get the current rs for deploy")
+	podTHash, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("rs", rsName, "-n", projectName, "-o=jsonpath={.spec.selector.matchLabels.pod-template-hash}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
 	return podTHash, rsName
 }
 
