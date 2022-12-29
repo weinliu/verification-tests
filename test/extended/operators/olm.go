@@ -7393,6 +7393,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-Medium-30319-Admission Webhook Configuration names should be unique", func() {
+		exutil.SkipARM64(oc)
 		var (
 			itName                 = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "olm")
