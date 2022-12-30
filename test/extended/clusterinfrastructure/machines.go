@@ -152,10 +152,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Check machine stuck in Deleting phase because of lifecycle hook")
 		outDrain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].status.conditions[0]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("outDrain:%s", outDrain)
 		o.Expect(strings.Contains(outDrain, "\"message\":\"Drain operation currently blocked by: [{Name:drain1 Owner:drain-controller1}]\"") && strings.Contains(outDrain, "\"reason\":\"HookPresent\"") && strings.Contains(outDrain, "\"status\":\"False\"") && strings.Contains(outDrain, "\"type\":\"Drainable\"")).To(o.BeTrue())
 
 		outTerminate, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].status.conditions[2]}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("outTerminate:%s", outTerminate)
 		o.Expect(strings.Contains(outTerminate, "\"message\":\"Terminate operation currently blocked by: [{Name:terminate2 Owner:terminate-controller2}]\"") && strings.Contains(outTerminate, "\"reason\":\"HookPresent\"") && strings.Contains(outTerminate, "\"status\":\"False\"") && strings.Contains(outTerminate, "\"type\":\"Terminable\"")).To(o.BeTrue())
 
@@ -250,6 +252,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-High-35513-Windows machine should successfully provision for aws [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		exutil.SkipARM64(oc)
 		g.By("Create a new machineset")
 		machinesetName := "machineset-35513"
 		ms := exutil.MachineSetDescription{machinesetName, 0}
@@ -262,7 +265,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		case "us-east-1", "us-iso-east-1":
 			amiID = "ami-0e09e139aca053387"
 		case "us-east-2":
-			amiID = "ami-0d939f6eeb364cbc6"
+			amiID = "ami-0191b19432fb00e69"
 		case "cn-north-1":
 			amiID = "ami-07a0c9b547ce24896"
 		case "us-gov-west-1":
@@ -328,8 +331,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Check machine and node were labelled as an `interruptible-instance`")
 		machine, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(machine).NotTo(o.BeEmpty())
 		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-n", machineAPINamespace, "-l", "machine.openshift.io/interruptible-instance=").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(node).NotTo(o.BeEmpty())
 	})
 
@@ -337,6 +342,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-48594-AWS EFA network interfaces should be supported via machine api [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		exutil.SkipARM64(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if region == "us-iso-east-1" {
@@ -363,6 +369,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-48595-Negative validation for AWS NetworkInterfaceType [Disruptive]", func() {
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws")
+		exutil.SkipARM64(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if region == "us-iso-east-1" {
