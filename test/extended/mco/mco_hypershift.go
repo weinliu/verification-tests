@@ -523,8 +523,14 @@ func (ht *HypershiftTest) CheckMcAnnotationsOnNode() {
 	g.By("check machine config annotation to verify update is done")
 	clusterName := ht.StrValue(TestCtxKeyCluster)
 	kubeconf := ht.StrValue(TestCtxKeyKubeConfig)
+	npName := ht.StrValue(HypershiftCrNodePool)
 	ht.oc.SetGuestKubeconf(kubeconf)
-	workerNode := NewNodeList(ht.oc.AsAdmin().AsGuestKubeconf()).GetAllLinuxWorkerNodesOrFail()[0]
+	workerList := NewNodeList(ht.oc.AsAdmin().AsGuestKubeconf())
+	workerList.ByLabel(fmt.Sprintf("%s=%s", "hypershift.openshift.io/nodePool", npName))
+	allNpWorkerNodes, listNpWorkerErr := workerList.GetAll()
+	o.Expect(listNpWorkerErr).NotTo(o.HaveOccurred(), "list all workers in new nodepool error")
+	o.Expect(allNpWorkerNodes).NotTo(o.BeEmpty(), "no worker node found for new nodepool")
+	workerNode := allNpWorkerNodes[0]
 
 	// get machine config name
 	secrets := NewNamespacedResourceList(ht.oc.AsAdmin(), "secrets", fmt.Sprintf("%s-%s", ht.clusterNS, clusterName))
