@@ -3844,4 +3844,84 @@ EOF`, dcpolicyrepo)
 			}
 		}
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Author:rgangwar-Medium-10350-[Apiserver] compensate for raft/cache delay in namespace admission", func() {
+		tmpnamespace := "ocp-10350" + exutil.GetRandomString()
+		defer oc.AsAdmin().Run("delete").Args("ns", tmpnamespace, "--ignore-not-found").Execute()
+		g.By("1.) Create new namespace")
+		// We observe how long it takes to delete one Terminating namespace that has Terminating pod when cluster is under some load.
+		// Thus wait up to 200 seconds and also calculate the actual time so that when it FIRST hits > 200 seconds, we fail it IMMEDIATELY.
+		// Through this way we know the actual time DIRECTLY from the test logs, useful to file a performance bug with PRESENT evidence already, meanwhile the scenario will not cost really long time.
+		expectedOutageTime := 200
+		for i := 0; i < 15; i++ {
+			var namespaceErr error
+			projectSuccTime := time.Now()
+			err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+				namespaceOutput, namespaceErr := oc.WithoutNamespace().Run("create").Args("ns", tmpnamespace).Output()
+				if namespaceErr == nil {
+					e2e.Logf("oc create ns %v created successfully", tmpnamespace)
+					projectSuccTime = time.Now()
+					o.Expect(namespaceOutput).Should(o.ContainSubstring(fmt.Sprintf("namespace/%v created", tmpnamespace)), fmt.Sprintf("namespace/%v not created", tmpnamespace))
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("oc create ns %v failed :: %v", tmpnamespace, namespaceErr))
+
+			g.By("2.) Create new app")
+			var apperr error
+			errApp := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+				apperr := oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", tmpnamespace).Execute()
+				if apperr != nil {
+					return false, nil
+				}
+				e2e.Logf("oc new app succeeded")
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(errApp, fmt.Sprintf("oc new app failed :: %v", apperr))
+
+			var poderr error
+			errPod := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+				podOutput, poderr := oc.WithoutNamespace().Run("get").Args("pod", "-n", tmpnamespace, "--no-headers").Output()
+				if poderr == nil && strings.Contains(podOutput, "Running") {
+					e2e.Logf("Pod %v succesfully", podOutput)
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(errPod, fmt.Sprintf("Pod not running :: %v", poderr))
+
+			g.By("3.) Delete new namespace")
+			var delerr error
+			projectdelerr := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+				delerr = oc.Run("delete").Args("namespace", tmpnamespace).Execute()
+				if delerr != nil {
+					return false, nil
+				}
+				e2e.Logf("oc delete namespace succeeded")
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(projectdelerr, fmt.Sprintf("oc delete namespace failed :: %v", delerr))
+
+			var chkNamespaceErr error
+			errDel := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
+				chkNamespaceOutput, chkNamespaceErr := oc.WithoutNamespace().Run("get").Args("namespace", tmpnamespace, "--ignore-not-found").Output()
+				if chkNamespaceErr == nil && strings.Contains(chkNamespaceOutput, "") {
+					e2e.Logf("Namespace deleted %v successfully", tmpnamespace)
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(errDel, fmt.Sprintf("Namespace %v not deleted successfully, still visible after delete :: %v", tmpnamespace, chkNamespaceErr))
+
+			projectDelTime := time.Now()
+			diff := projectDelTime.Sub(projectSuccTime)
+			e2e.Logf("#### Namespace success and delete time(s) :: %f ####\n", diff.Seconds())
+			if int(diff.Seconds()) > expectedOutageTime {
+				e2e.Failf("#### Test case Failed in %d run :: The Namespace success and deletion outage time lasted %d longer than we expected %d", i, int(diff.Seconds()), expectedOutageTime)
+			}
+			e2e.Logf("#### Test case passed in %d run :: Namespace success and delete time(s) :: %f ####\n", i, diff.Seconds())
+		}
+	})
 })
