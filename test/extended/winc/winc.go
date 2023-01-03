@@ -15,6 +15,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -1287,6 +1288,47 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 				}
 				previousTS = serviceTimeStamp
 			}
+
+		}
+
+	})
+
+	g.It("Smokerun-Author:jfrancoa-Medium-38188-Get Windows instance/core number and CPU arch", func() {
+
+		winMetrics := []string{"cluster:node_instance_type_count:sum", "cluster:capacity_cpu_cores:sum"}
+
+		mon, err := exutil.NewPrometheusMonitor(oc.AsAdmin())
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error creating new thanos monitor")
+
+		for _, metricQuery := range winMetrics {
+
+			g.By(fmt.Sprintf("Check that the metric %s is exposed to telemetry", metricQuery))
+
+			expectedExposedMetric := fmt.Sprintf(`{__name__=\"%s\"}`, metricQuery)
+			telemetryConfig, err := oc.WithoutNamespace().Run("get").Args("configmap", "-n", "openshift-monitoring", "telemetry-config", "-o=jsonpath={.data}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(telemetryConfig).To(o.ContainSubstring(expectedExposedMetric),
+				"Metric %s, is not exposed to telemetry", metricQuery)
+
+			g.By(fmt.Sprintf("Verify the metric %s displays the right value", metricQuery))
+
+			queryResult, err := mon.SimpleQuery(metricQuery + "{label_node_openshift_io_os_id=\"Windows\"}")
+			o.Expect(err).NotTo(o.HaveOccurred(),
+				"Error querying metric: %s", metricQuery)
+
+			jsonResult := gjson.Parse(queryResult)
+			status := jsonResult.Get("status").String()
+			o.Expect(status).Should(o.Equal("success"),
+				"Query %s execution failed: %s", metricQuery, status)
+
+			metricValue := gjson.Parse(queryResult).Get("data.result.0.value.1").String()
+
+			valueFromCluster := getMetricsFromCluster(oc, metricQuery)
+
+			e2e.Logf("Query %s value: %s", metricQuery, metricValue)
+			o.Expect(metricValue).Should(o.Equal(valueFromCluster),
+				"Prometheus metric %s does not match the value %s obtained from the cluster", metricValue, valueFromCluster)
 
 		}
 

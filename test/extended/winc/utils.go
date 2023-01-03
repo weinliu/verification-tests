@@ -805,3 +805,31 @@ func getServiceTimeStamp(oc *exutil.CLI, winHostIP string, privateKey string, ia
 	return timeStamp
 
 }
+
+// This function tries to retrieve the values for the
+// prometheus metrics node_instance_type and capacity_cpu_cores
+func getMetricsFromCluster(oc *exutil.CLI, metric string) string {
+	retValue := 0
+	if strings.Contains(metric, "node_instance_type_count") {
+		// Get the number of Windows nodes into an array and give the lenght of array
+		output, err := oc.WithoutNamespace().Run("get").Args("nodes", "-l", "node.openshift.io/os_id=Windows", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		retValue = len(strings.Split(output, " "))
+
+	} else if strings.Contains(metric, "capacity_cpu_cores") {
+		// Obtain the cpus per Windows node and add up all cpu values
+		output, err := oc.WithoutNamespace().Run("get").Args("nodes", "-l", "node.openshift.io/os_id=Windows", "-o=jsonpath={.items[*].status.capacity.cpu}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cpusSlice := strings.Split(output, " ")
+		accum := 0
+		for _, cpuVal := range cpusSlice {
+			cpuCast, _ := strconv.Atoi(cpuVal)
+			accum += cpuCast
+		}
+		retValue = accum
+	} else {
+		e2e.Failf("Metric %s not supported yet", metric)
+	}
+
+	return strconv.Itoa(retValue)
+}
