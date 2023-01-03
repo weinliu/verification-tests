@@ -2953,13 +2953,13 @@ spec:
 		err = oc.Run("patch").Args("pod", podName, "-n", namespace, "-p", patch).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("4) Check pod status using get command")
+		g.By("4) Check if pod running")
+		exutil.AssertPodToBeReady(oc, podName, namespace)
+
+		g.By("5) Check pod status using get command")
 		describeOutput, err := oc.Run("get").Args("pod", podName, "-n", namespace, "-o=jsonpath={.status.containerStatuses[*].image}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(describeOutput).To(o.ContainSubstring("openshifttest/hello-openshift"))
-
-		g.By("5) Check if pod running")
-		exutil.AssertPodToBeReady(oc, podName, namespace)
 	})
 
 	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-High-11138-[origin_platformexp_407] [Apiserver] Deploy will fail with incorrently formed pull secrets", func() {
