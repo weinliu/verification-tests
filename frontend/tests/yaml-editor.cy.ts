@@ -24,9 +24,11 @@ describe("yaml editor tests", () => {
     importYamlPage.dragDropYamlFile("./fixtures/fakelargefile.yaml");  
     importYamlPage.checkDangerAlert(/Maximum|size|exceeded|limit/gi);
 
-    importYamlPage.dragDropYamlFile("./fixtures/default_operatorgroup.yaml");
-    yamlEditor.clickSaveCreateButton();
-    importYamlPage.checkDangerAlert(/forbidden|cannot|create/gi);
+    cy.fixture('default_operatorgroup.yaml').then((resourcesYAML) => {
+      yamlEditor.setEditorContent(resourcesYAML);
+      cy.byTestID('save-changes').click({force: true});
+      importYamlPage.checkDangerAlert(/forbidden|cannot|create/gi);
+    });
   });
 
   it("(OCP-42019,yapei) Create multiple resources by importing yaml", () => {
