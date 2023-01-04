@@ -1,54 +1,110 @@
 package hypershift
 
 import (
-	"os"
-	"path/filepath"
+	"fmt"
+	"strings"
 
 	o "github.com/onsi/gomega"
-	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-// Nodepool represents a common hypershift NodePool CR template configurations
-type Nodepool struct {
-	Name           string `json:"NAME"`
-	Namespace      string `json:"NAMESPACE"`
-	Clustername    string `json:"CLUSTER_NAME"`
-	RootVolumeType string `json:"ROOT_VOLUME_TYPE"`
-	RootVolumeSize *int   `json:"ROOT_VOLUME_SIZE"`
-	RootVolumeIops string `json:"ROOT_VOLUME_IOPS"`
-	ReleaseImage   string `json:"RELEASE_IMAGE"`
-	Replicas       *int   `json:"REPLICAS"`
-	AutoRepair     bool   `json:"AUTO_REPAIR"`
-	Template       string
+type NodePool struct {
+	Name        string `param:"name"`
+	ClusterName string `param:"cluster-name"`
+	Namespace   string `param:"namespace"`
+	//root-disk-size is for azure only, will op it later and move it to azureNodePool
+	RootDiskSize *int   `param:"root-disk-size"`
+	NodeCount    *int   `param:"node-count"`
+	ReleaseImage string `param:"release-image"`
 }
 
-// Create creates a nodepool CR in the management OCP
-func (np *Nodepool) Create(oc *exutil.CLI, parsedTemplate string) {
-	vars, err := parseTemplateVarParams(np)
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	var params = []string{"--ignore-unknown-parameters=true", "-f", np.Template, "-p"}
-	err = np.applyResourceFromTemplate(oc, parsedTemplate, append(params, vars...)...)
-	o.Expect(err).NotTo(o.HaveOccurred())
+func (c *NodePool) WithName(name string) *NodePool {
+	c.Name = name
+	return c
 }
 
-// Delete deletes a nodepool CR in the management OCP
-// parsedTemplate is the parsed template file that need to be removed
-func (np *Nodepool) Delete(oc *exutil.CLI, parsedTemplate string) {
-	defer func() {
-		if parsedTemplate != "" {
-			path := filepath.Join(e2e.TestContext.OutputDir, oc.Namespace()+"-"+parsedTemplate)
-			os.Remove(path)
-		}
-	}()
+func (c *NodePool) WithRootDiskSize(RootDiskSize int) *NodePool {
+	c.RootDiskSize = &RootDiskSize
+	return c
+}
 
-	res := doOcpReq(oc, OcpGet, false, "-n", "clusters", "nodepools", np.Name, "--ignore-not-found")
-	if res != "" {
-		doOcpReq(oc, OcpDelete, false, "-n", "clusters", "nodepools", np.Name)
+type AWSNodePool struct {
+	NodePool
+	InstanceProfile string `param:"instance-profile"`
+	InstanceType    string `param:"instance-type"`
+	RootVolumeIOPS  *int64 `param:"root-volume-iops"`
+	RootVolumeSize  *int64 `param:"root-volume-size"`
+	RootVolumeType  string `param:"root-volume-type"`
+	SecurityGroupID string `param:"securitygroup-id"`
+	SubnetID        string `param:"subnet-id"`
+}
+
+func NewAWSNodePool(name, clusterName, namespace string) *AWSNodePool {
+	return &AWSNodePool{
+		NodePool: NodePool{
+			Name:        name,
+			Namespace:   namespace,
+			ClusterName: clusterName,
+		},
 	}
 }
 
-func (np *Nodepool) applyResourceFromTemplate(oc *exutil.CLI, parsedTemplate string, parameters ...string) error {
-	return applyResourceFromTemplate(oc, "", parsedTemplate, parameters...)
+func (a *AWSNodePool) WithInstanceProfile(profile string) *AWSNodePool {
+	a.InstanceProfile = profile
+	return a
+}
+
+func (a *AWSNodePool) WithInstanceType(instanceType string) *AWSNodePool {
+	a.InstanceType = instanceType
+	return a
+}
+
+func (a *AWSNodePool) WithRootVolumeIOPS(rootVolumeIOPS *int64) *AWSNodePool {
+	a.RootVolumeIOPS = rootVolumeIOPS
+	return a
+}
+
+func (a *AWSNodePool) WithRootVolumeSize(rootVolumeSize *int64) *AWSNodePool {
+	a.RootVolumeSize = rootVolumeSize
+	return a
+}
+func (a *AWSNodePool) WithRootVolumeType(rootVolumeType string) *AWSNodePool {
+	a.RootVolumeType = rootVolumeType
+	return a
+}
+
+func (a *AWSNodePool) WithSecurityGroupID(securityGroupID string) *AWSNodePool {
+	a.SecurityGroupID = securityGroupID
+	return a
+}
+
+func (a *AWSNodePool) WithSubnetID(subnetID string) *AWSNodePool {
+	a.SubnetID = subnetID
+	return a
+}
+
+func (a *AWSNodePool) WithNodeCount(nodeCount *int) *AWSNodePool {
+	a.NodeCount = nodeCount
+	return a
+}
+
+func (a *AWSNodePool) WithReleaseImage(releaseImage string) *AWSNodePool {
+	a.ReleaseImage = releaseImage
+	return a
+}
+
+func (a *AWSNodePool) CreateAWSNodePool() {
+	gCreateNodePool[*AWSNodePool]("aws", a)
+}
+
+// gCreateNodePool creates a nodepool for different platforms,
+// nodepool C should be one kind of nodepools. e.g. *AWSNodePool *azureNodePool
+func gCreateNodePool[C any](platform string, nodepool C) {
+	vars, err := parse(nodepool)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	o.Expect(vars).ShouldNot(o.BeEmpty())
+
+	var bashClient = NewCmdClient().WithShowInfo(true)
+	cmd := fmt.Sprintf("hypershift create nodepool %s %s", platform, strings.Join(vars, " "))
+	_, err = bashClient.Run(cmd).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
 }

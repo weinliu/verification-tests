@@ -66,14 +66,6 @@ type iam struct {
 	OutputFile    string `param:"output-file"`
 }
 
-type createNodePool struct {
-	Name         string `param:"name"`
-	ClusterName  string `param:"cluster-name"`
-	Namespace    string `param:"namespace"`
-	RootDiskSize *int   `param:"root-disk-size"`
-	NodeCount    *int   `param:"node-count"`
-}
-
 type bastion struct {
 	Region     string `param:"region"`
 	InfraID    string `param:"infra-id"`
@@ -156,16 +148,6 @@ func (i *iam) withOutputFile(OutputFile string) *iam {
 	return i
 }
 
-func (c *createNodePool) withName(name string) *createNodePool {
-	c.Name = name
-	return c
-}
-
-func (c *createNodePool) withRootDiskSize(RootDiskSize int) *createNodePool {
-	c.RootDiskSize = &RootDiskSize
-	return c
-}
-
 func (receiver *installHelper) createClusterAWSCommonBuilder() *createCluster {
 	nodePoolReplicas := 3
 	baseDomain, err := getBaseDomain(receiver.oc)
@@ -219,6 +201,7 @@ func (receiver *installHelper) createIamCommonBuilder(infraFile string) *iam {
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	defer file.Close()
 	con, err := ioutil.ReadAll(file)
+	o.Expect(err).NotTo(o.HaveOccurred())
 
 	return &iam{
 		AWSCreds:      receiver.dir + "/credentials",
@@ -229,9 +212,9 @@ func (receiver *installHelper) createIamCommonBuilder(infraFile string) *iam {
 	}
 }
 
-func (receiver *installHelper) createNodePoolAzureCommonBuilder(clusterName string) *createNodePool {
+func (receiver *installHelper) createNodePoolAzureCommonBuilder(clusterName string) *NodePool {
 	nodeCount := 1
-	return &createNodePool{
+	return &NodePool{
 		Namespace:   receiver.oc.Namespace(),
 		ClusterName: clusterName,
 		NodeCount:   &nodeCount,
@@ -478,7 +461,7 @@ func (receiver *installHelper) deleteHostedClustersCRAllBackground() {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func (receiver *installHelper) createAzureNodePool(nodePool *createNodePool) {
+func (receiver *installHelper) createAzureNodePool(nodePool *NodePool) {
 	vars, err := parse(nodePool)
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	var bashClient = NewCmdClient().WithShowInfo(true)

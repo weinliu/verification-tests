@@ -237,6 +237,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		g.By("Check if pods of multi-zonal control plane components spread across multi-zone")
 		deploymentNames, err := hostedCluster.getHostedClustersHACPWorkloadNames("deployment")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, name := range deploymentNames {
 			value, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", hostedCluster.namespace+"-"+hostedCluster.name, name, `-ojsonpath={.spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[*].topologyKey}}`).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -244,6 +245,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			o.Expect(value).Should(o.ContainSubstring("topology.kubernetes.io/zone"), fmt.Sprintf("deployment: %s lack of anti-affinity of zone", name))
 		}
 		statefulSetNames, err := hostedCluster.getHostedClustersHACPWorkloadNames("statefulset")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, name := range statefulSetNames {
 			value, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("statefulset", "-n", hostedCluster.namespace+"-"+hostedCluster.name, name, `-ojsonpath={.spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[*].topologyKey}`).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -589,14 +591,14 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		g.By("create nodepool and check root-disk-size (default 120)")
 		nodePool1 := installHelper.createNodePoolAzureCommonBuilder(hostedCluster.name).
-			withName(hostedCluster.name + "-1")
+			WithName(hostedCluster.name + "-1")
 		installHelper.createAzureNodePool(nodePool1)
 		o.Expect(hostedCluster.getAzureDiskSizeGBByNodePool(nodePool1.Name)).Should(o.ContainSubstring("120"))
 
 		g.By("create nodepool and check root-disk-size (256)")
 		nodePool2 := installHelper.createNodePoolAzureCommonBuilder(hostedCluster.name).
-			withName(hostedCluster.name + "-2").
-			withRootDiskSize(256)
+			WithName(hostedCluster.name + "-2").
+			WithRootDiskSize(256)
 		installHelper.createAzureNodePool(nodePool2)
 		o.Expect(hostedCluster.getAzureDiskSizeGBByNodePool(nodePool2.Name)).Should(o.ContainSubstring("256"))
 

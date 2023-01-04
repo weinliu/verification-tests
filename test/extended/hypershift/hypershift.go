@@ -562,102 +562,61 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			g.Skip("IAAS platform is " + iaasPlatform + " while 48025 is for AWS - skipping test ...")
 		}
 
-		nodepoolName := doOcpReq(oc, OcpGet, true, "nodepool", "-n", "clusters", "-ojsonpath={.items[].metadata.name}")
-		e2e.Logf("get nodepool name: %s ", nodepoolName)
+		g.By("create aws nodepools with specified root-volume-type, root-volume size and root-volume-iops")
+		var dftNodeCount = 1
+		volumeSizes := []int64{
+			64, 250, 512,
+		}
+		volumeIops := []int64{
+			4000, 6000,
+		}
 
-		npVolumeSize := doOcpReq(oc, OcpGet, true, "nodepool", nodepoolName, "-n", "clusters", "-ojsonpath={.spec.platform.aws.rootVolume.size}")
-		e2e.Logf("the RootVolumeSize of %s is %s ", nodepoolName, npVolumeSize)
-
-		machineVolumeSize := doOcpReq(oc, OcpGet, true, "awsmachines", "-n", guestClusterNamespace, "-ojsonpath={.items[].spec.rootVolume.size}")
-		e2e.Logf("the RootVolumeSize of %s is %s ", nodepoolName, machineVolumeSize)
-
-		o.Expect(machineVolumeSize).To(o.Equal(npVolumeSize))
-
-		hypershiftTeamBaseDir := exutil.FixturePath("testdata", "hypershift")
-		nodepoolTemplate := filepath.Join(hypershiftTeamBaseDir, "nodepool.yaml")
-
-		//create new nodepools with specified root-volume-type, root-volume size and root-volume-iops
-		nodepoolConfig := []struct {
-			nodepoolName       string
-			rootVolumeSize     int
-			rootVolumeType     string
-			rootVolumeIops     string
-			parsedNodepoolFile string
+		awsConfigs := []struct {
+			nodepoolName   string
+			rootVolumeSize *int64
+			rootVolumeType string
+			rootVolumeIOPS *int64
 		}{
 			{
-				nodepoolName:       "jz-48025-01",
-				rootVolumeSize:     64,
-				rootVolumeType:     "gp2",
-				parsedNodepoolFile: "ocp-48025-jz-01.config",
+				nodepoolName:   "jz-48025-01",
+				rootVolumeSize: &volumeSizes[0],
+				rootVolumeType: "gp2",
 			},
 			{
-				nodepoolName:       "jz-48025-02",
-				rootVolumeSize:     250,
-				rootVolumeType:     "io1",
-				rootVolumeIops:     "4000",
-				parsedNodepoolFile: "ocp-48025-jz-02.config",
+				nodepoolName:   "jz-48025-02",
+				rootVolumeSize: &volumeSizes[1],
+				rootVolumeType: "io1",
+				rootVolumeIOPS: &volumeIops[0],
 			},
 			{
-				nodepoolName:       "jz-48025-03",
-				rootVolumeSize:     512,
-				rootVolumeType:     "io2",
-				rootVolumeIops:     "6000",
-				parsedNodepoolFile: "ocp-48025-jz-03.config",
+				nodepoolName:   "jz-48025-03",
+				rootVolumeSize: &volumeSizes[2],
+				rootVolumeType: "io2",
+				rootVolumeIOPS: &volumeIops[1],
 			},
 		}
 
-		releaseImage := doOcpReq(oc, OcpGet, true, "hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.spec.release.image}")
-		for i := 0; i < len(nodepoolConfig); i++ {
-			np := &Nodepool{
-				Name:           nodepoolConfig[i].nodepoolName,
-				Namespace:      NodepoolNameSpace,
-				Clustername:    guestClusterName,
-				RootVolumeType: nodepoolConfig[i].rootVolumeType,
-				RootVolumeSize: &nodepoolConfig[i].rootVolumeSize,
-				ReleaseImage:   releaseImage,
-				AutoRepair:     false,
-				Template:       nodepoolTemplate,
+		releaseImage := doOcpReq(oc, OcpGet, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-ojsonpath={.spec.release.image}")
+		for _, cf := range awsConfigs {
+			NewAWSNodePool(cf.nodepoolName, hostedcluster.name, hostedcluster.namespace).
+				WithRootVolumeType(cf.rootVolumeType).
+				WithNodeCount(&dftNodeCount).
+				WithReleaseImage(releaseImage).
+				WithRootVolumeSize(cf.rootVolumeSize).
+				WithRootVolumeIOPS(cf.rootVolumeIOPS).
+				CreateAWSNodePool()
+
+			o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(cf.nodepoolName), LongTimeout, LongTimeout/10).Should(o.BeTrue(),
+				fmt.Sprintf("nodepool %s ready error", cf.nodepoolName))
+
+			o.Expect(hostedcluster.checkAWSNodepoolRootVolumeType(cf.nodepoolName, cf.rootVolumeType)).To(o.BeTrue())
+
+			if cf.rootVolumeSize != nil {
+				o.Expect(hostedcluster.checkAWSNodepoolRootVolumeSize(cf.nodepoolName, *cf.rootVolumeSize)).To(o.BeTrue())
 			}
 
-			if nodepoolConfig[i].rootVolumeIops != "" {
-				np.RootVolumeIops = nodepoolConfig[i].rootVolumeIops
-			}
-
-			defer np.Delete(oc, nodepoolConfig[i].parsedNodepoolFile)
-			np.Create(oc, nodepoolConfig[i].parsedNodepoolFile)
-
-			templateClonedFromNameAnnotation := `cluster\.x-k8s\.io/cloned-from-name`
-			awsmachineVolumeJSONPathPtn := `-ojsonpath={.items[?(@.metadata.annotations.%s=="%s")].spec.rootVolume.%s}`
-			awsmachineVolumeSizeFilter := fmt.Sprintf(awsmachineVolumeJSONPathPtn, templateClonedFromNameAnnotation, np.Name, "size")
-			awsmachineVolumeTypeFilter := fmt.Sprintf(awsmachineVolumeJSONPathPtn, templateClonedFromNameAnnotation, np.Name, "type")
-			awsmachineVolumeIopsFilter := fmt.Sprintf(awsmachineVolumeJSONPathPtn, templateClonedFromNameAnnotation, np.Name, "iops")
-
-			//check rootVolume size
-			err := wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
-				res := doOcpReq(oc, OcpGet, true, "nodepool", np.Name, "-n", NodepoolNameSpace, "-ojsonpath={.spec.platform.aws.rootVolume.size}")
-				if !strings.Contains(res, strconv.Itoa(nodepoolConfig[i].rootVolumeSize)) {
-					return false, nil
-				}
-
-				res = doOcpReq(oc, OcpGet, true, "awsmachines", "-n", guestClusterNamespace, awsmachineVolumeSizeFilter)
-				if strings.Contains(res, strconv.Itoa(nodepoolConfig[i].rootVolumeSize)) {
-					return true, nil
-				}
-
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(err, "ocp-48025 nodepool rootVolume size not match error")
-
-			// check rootVolume type and rootVolume iops
-			res := doOcpReq(oc, OcpGet, true, "nodepool", np.Name, "-n", NodepoolNameSpace, "-ojsonpath={.spec.platform.aws.rootVolume.type}")
-			o.Expect(res).To(o.Equal(nodepoolConfig[i].rootVolumeType))
-			res = doOcpReq(oc, OcpGet, true, "awsmachines", "-n", guestClusterNamespace, awsmachineVolumeTypeFilter)
-			o.Expect(res).To(o.Equal(nodepoolConfig[i].rootVolumeType))
-			if nodepoolConfig[i].rootVolumeIops != "" {
-				res := doOcpReq(oc, OcpGet, true, "nodepool", np.Name, "-n", NodepoolNameSpace, "-ojsonpath={.spec.platform.aws.rootVolume.iops}")
-				o.Expect(res).To(o.Equal(nodepoolConfig[i].rootVolumeIops))
-				res = doOcpReq(oc, OcpGet, true, "awsmachines", "-n", guestClusterNamespace, awsmachineVolumeIopsFilter)
-				o.Expect(res).To(o.Equal(nodepoolConfig[i].rootVolumeIops))
+			if cf.rootVolumeIOPS != nil {
+				o.Expect(hostedcluster.checkAWSNodepoolRootVolumeIOPS(cf.nodepoolName, *cf.rootVolumeIOPS)).To(o.BeTrue())
 			}
 		}
 	})

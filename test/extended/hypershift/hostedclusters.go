@@ -411,3 +411,53 @@ func (h *hostedCluster) isCPHighlyAvailable() bool {
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	return strings.Contains(res, HighlyAvailable)
 }
+
+// checkAWSRooVolumes check aws root-volume configurations,
+// checkItems: iops, size, type
+func (h *hostedCluster) checkAWSRootVolumes(name string, checkItem string, expected interface{}) bool {
+	awsmachineVolumeJSONPathPtn := `-ojsonpath={.items[?(@.metadata.annotations.cluster\.x-k8s\.io/cloned-from-name=="%s")].spec.rootVolume.%s}`
+	awsmachineVolumeFilter := fmt.Sprintf(awsmachineVolumeJSONPathPtn, name, checkItem)
+	nodepoolVolumeFilter := fmt.Sprintf("-ojsonpath={.spec.platform.aws.rootVolume.%s}", checkItem)
+
+	var expectedVal string
+	switch v := expected.(type) {
+	case string:
+		expectedVal = v
+	case int64:
+		expectedVal = strconv.FormatInt(v, 10)
+	case *int64:
+		expectedVal = strconv.FormatInt(*v, 10)
+	default:
+		e2e.Logf("Error: not supported expected value while checking aws nodepool root-volume config")
+		return false
+	}
+
+	//check nodepool
+	rootVolumeConfig, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("np", name, "-n", h.namespace, nodepoolVolumeFilter).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	if strings.TrimSpace(rootVolumeConfig) != expectedVal {
+		e2e.Logf("Error: nodepool %s rootVolume item %s not matched: return %s and expect %s, original expected %v", name, checkItem, rootVolumeConfig, expectedVal, expected)
+		return false
+	}
+
+	//check awsmachine
+	awsRootVolumeConfig, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("awsmachines", "-n", h.namespace+"-"+h.name, awsmachineVolumeFilter).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	if strings.TrimSpace(awsRootVolumeConfig) != expectedVal {
+		e2e.Logf("Error: awsmachine for nodepool %s rootVolume item %s not matched: return %s and expect %s, original expected %v", name, checkItem, awsRootVolumeConfig, expectedVal, expected)
+		return false
+	}
+	return true
+}
+
+func (h *hostedCluster) checkAWSNodepoolRootVolumeSize(name string, expectedSize int64) bool {
+	return h.checkAWSRootVolumes(name, "size", expectedSize)
+}
+
+func (h *hostedCluster) checkAWSNodepoolRootVolumeIOPS(name string, expectedIOPS int64) bool {
+	return h.checkAWSRootVolumes(name, "iops", expectedIOPS)
+}
+
+func (h *hostedCluster) checkAWSNodepoolRootVolumeType(name string, expectedType string) bool {
+	return h.checkAWSRootVolumes(name, "type", expectedType)
+}

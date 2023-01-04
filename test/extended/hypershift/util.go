@@ -260,7 +260,7 @@ func getAzureKey(oc *exutil.CLI) (string, string, string, string, error) {
 }
 
 /*
-	parse a structure's tag 'param' and output cli command parameters
+	parse a structure's tag 'param' and output cli command parameters like --params=$var, support embedded struct
 
 e.g.
 Input:
@@ -278,38 +278,54 @@ Output:
 	--name="hypershift" --pull_secret="pullsecret.txt"
 */
 func parse(obj interface{}) ([]string, error) {
-	v := reflect.ValueOf(obj)
-	if v.Kind() != reflect.Ptr || v.Elem().Kind() != reflect.Struct {
-		return []string{}, errors.New("params must be a pointer pointed to a struct")
-	}
 	var params []string
-	t := v.Elem().Type()
+	v := reflect.ValueOf(obj)
+	for v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	if v.Kind() == reflect.Struct {
+		return parseStruct(v.Interface(), params)
+	}
+	return []string{}, nil
+}
+
+func parseStruct(obj interface{}, params []string) ([]string, error) {
+	v := reflect.ValueOf(obj)
+	t := v.Type()
+
 	for i := 0; i < t.NumField(); i++ {
-		varName := t.Field(i).Name
 		varType := t.Field(i).Type
-		varValue := v.Elem().Field(i).Interface()
+		varValueV := v.Field(i)
+
+		if !t.Field(i).IsExported() {
+			continue
+		}
+
+		if varType.Kind() == reflect.Ptr && varValueV.IsNil() {
+			continue
+		}
+
+		for varType.Kind() == reflect.Ptr {
+			varType = varType.Elem()
+			varValueV = varValueV.Elem()
+		}
+
+		var err error
+		if varType.Kind() == reflect.Struct {
+			params, err = parseStruct(varValueV.Interface(), params)
+			if err != nil {
+				return []string{}, err
+			}
+			continue
+		}
+
+		varValue := varValueV.Interface()
 		tagName := t.Field(i).Tag.Get("param")
 		if tagName == "" {
 			continue
 		}
-		if varType.Kind() == reflect.Ptr {
-			if reflect.ValueOf(varValue).IsNil() {
-				continue
-			}
-			switch reflect.ValueOf(varValue).Elem().Type().Kind() {
-			case reflect.Int:
-				p := fmt.Sprintf("--%s=%d", tagName, reflect.ValueOf(varValue).Elem().Interface().(int))
-				params = append(params, p)
-			case reflect.String:
-				params = append(params, "--"+tagName+"="+reflect.ValueOf(varValue).Elem().Interface().(string))
-			case reflect.Bool:
-				v, _ := reflect.ValueOf(varValue).Elem().Interface().(bool)
-				params = append(params, "--"+tagName+"="+strconv.FormatBool(v))
-			default:
-				e2e.Logf("parseTemplateVarParams params %v invalid, ignore it", varName)
-			}
-			continue
-		}
+
 		switch varType.Kind() {
 		case reflect.String:
 			if varValue.(string) != "" {
@@ -317,10 +333,12 @@ func parse(obj interface{}) ([]string, error) {
 			}
 		case reflect.Int:
 			params = append(params, "--"+tagName+"="+strconv.Itoa(varValue.(int)))
+		case reflect.Int64:
+			params = append(params, "--"+tagName+"="+strconv.FormatInt(varValue.(int64), 10))
 		case reflect.Bool:
 			params = append(params, "--"+tagName+"="+strconv.FormatBool(varValue.(bool)))
 		default:
-			e2e.Logf("parseTemplateVarParams params %v not support, ignore it", varValue)
+			e2e.Logf("parseTemplateVarParams params %s %v not support, ignore it", varType.Kind(), varValue)
 		}
 	}
 	return params, nil
