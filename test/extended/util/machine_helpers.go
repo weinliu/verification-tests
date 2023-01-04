@@ -248,7 +248,7 @@ func WaitForMachineRunningByName(oc *CLI, machineName string) {
 
 // WaitForMachineDisappearBySuffix check if the machine is disappear by machine suffix
 func WaitForMachineDisappearBySuffix(oc *CLI, machineNameSuffix string, labels string) {
-	e2e.Logf("Waiting for the machine disappear ...")
+	e2e.Logf("Waiting for the machine disappear by suffix ...")
 	err := wait.Poll(60*time.Second, 1200*time.Second, func() (bool, error) {
 		msg, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
 		if err2 != nil {
@@ -264,12 +264,12 @@ func WaitForMachineDisappearBySuffix(oc *CLI, machineNameSuffix string, labels s
 		e2e.Logf("The machine with suffix %s is disappear", machineNameSuffix)
 		return true, nil
 	})
-	AssertWaitPollNoErr(err, "Wait machine disappear failed.")
+	AssertWaitPollNoErr(err, "Wait machine disappear by suffix failed.")
 }
 
 // WaitForMachineDisappearByName check if the machine is disappear by machine name
 func WaitForMachineDisappearByName(oc *CLI, machineName string) {
-	e2e.Logf("Waiting for the machine disappear ...")
+	e2e.Logf("Waiting for the machine disappear by name ...")
 	err := wait.Poll(60*time.Second, 1200*time.Second, func() (bool, error) {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, "-n", machineAPINamespace).Output()
 		if strings.Contains(output, "not found") {
@@ -279,7 +279,7 @@ func WaitForMachineDisappearByName(oc *CLI, machineName string) {
 		e2e.Logf("machine %s is not disappear and waiting up to 1 minutes ...", machineName)
 		return false, nil
 	})
-	AssertWaitPollNoErr(err, "Wait machine disappear failed.")
+	AssertWaitPollNoErr(err, "Wait machine disappear by name failed.")
 }
 
 // CheckPlatform check the cluster's platform

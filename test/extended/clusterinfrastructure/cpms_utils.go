@@ -51,7 +51,7 @@ func waitForCPMSUpdateCompleted(oc *exutil.CLI, replicas int) {
 			e2e.Logf("The Update is completed! desiredReplicas is %s, count %d", desiredReplicas, count)
 			return true, nil
 		}
-		e2e.Logf("The Update is still ongoing and waiting up to 1 minutes ... count %d", count)
+		e2e.Logf("The Update is still ongoing and waiting up to 1 minutes ... count %d, desiredReplicas is %s,currentReplicas is %s,readyReplicas is %s", count, desiredReplicas, currentReplicas, readyReplicas)
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "Wait Update failed.")
@@ -93,17 +93,22 @@ func getMachineSuffix(oc *exutil.CLI, machineName string) string {
 
 // checkIfCPMSIsStable check if the Update is completed
 func checkIfCPMSIsStable(oc *exutil.CLI) bool {
-	readyReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	currentReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.replicas}", "-n", machineAPINamespace).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	desiredReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.replicas}", "-n", machineAPINamespace).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if !(desiredReplicas == currentReplicas && desiredReplicas == readyReplicas) {
+	err := wait.Poll(20*time.Second, 5*time.Minute, func() (bool, error) {
+		readyReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		currentReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.replicas}", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		desiredReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.replicas}", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if desiredReplicas == currentReplicas && desiredReplicas == readyReplicas {
+			e2e.Logf("cpms is stable!")
+			return true, nil
+		}
 		e2e.Logf("cpms is not stable, desiredReplicas :%s, currentReplicas:%s, readyReplicas:%s", desiredReplicas, currentReplicas, readyReplicas)
-		return false
-	}
-	return true
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "CPMS is not stable!!!.")
+	return err == nil
 }
 
 // getCPMSAvailabilityZones get zones from cpms
@@ -200,7 +205,7 @@ func getMasterMachineNameBySuffix(oc *exutil.CLI, suffix string) string {
 // waitForClusterStable wait cluster to stabilize
 func waitForClusterStable(oc *exutil.CLI) {
 	e2e.Logf("Wait cluster to stabilize ...")
-	err := wait.Poll(2*time.Minute, 30*time.Minute, func() (bool, error) {
+	err := wait.Poll(2*time.Minute, 40*time.Minute, func() (bool, error) {
 		authenticationState, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteroperator/authentication", "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}").Output()
 		if err1 != nil {
 			e2e.Logf("The server was unable to return a response and waiting up to 2 minutes ...")
@@ -228,6 +233,8 @@ func waitForClusterStable(oc *exutil.CLI) {
 		e2e.Logf("The cluster is not stable and waiting up to 2 minutes ...")
 		return false, nil
 	})
+	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Output()
+	e2e.Logf("%v", output)
 	exutil.AssertWaitPollNoErr(err, "Wait cluster to stabilize failed.")
 }
 
