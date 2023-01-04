@@ -188,7 +188,7 @@ func CheckIfResourceAvailable(oc *exutil.CLI, resource string, resourceNames []s
 }
 
 func waitCoBecomes(oc *exutil.CLI, coName string, waitTime int, expectedStatus map[string]string) error {
-	return wait.Poll(5*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+	return wait.Poll(20*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
 		gottenStatus := getCoStatus(oc, coName, expectedStatus)
 		eq := reflect.DeepEqual(expectedStatus, gottenStatus)
 		if eq {

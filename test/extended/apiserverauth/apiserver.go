@@ -3924,4 +3924,88 @@ EOF`, dcpolicyrepo)
 			e2e.Logf("#### Test case passed in %d run :: Namespace success and delete time(s) :: %f ####\n", i, diff.Seconds())
 		}
 	})
+
+	// author: kewang@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:kewang-High-56693-[Apiserver] Make SAR traffic from oauth and openshift apiserver exempt with API Priority and Fairness feature [Slow][Disruptive]", func() {
+		// The case is from customer bug 1888309
+		var (
+			patchJSON             = `[{"op": "replace", "path": "/spec/logLevel", "value": "TraceAll"}]`
+			restorePatchJSON      = `[{"op": "replace", "path": "/spec/logLevel", "value": "Normal"}]`
+			expectedStatus        = map[string]string{"Progressing": "True"}
+			kubeApiserverCoStatus = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			caseID                = "OCP-56693"
+			dirname               = "/tmp/-" + caseID
+		)
+
+		defer os.RemoveAll(dirname)
+		defer func() {
+			g.By("4)Restoring the loglevel to the default setting ...")
+			output, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubeapiserver/cluster", "--type=json", "-p", restorePatchJSON).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(output, "patched (no change)") {
+				e2e.Logf("kubeapiserver/cluster logLevel is not changed to the default values")
+			} else {
+				e2e.Logf("kubeapiserver/cluster logLevel is changed to the default values")
+				g.By("4) Checking KAS operator should be in Progressing and Available after rollout and recovery")
+				e2e.Logf("Checking kube-apiserver operator should be in Progressing in 100 seconds")
+				err = waitCoBecomes(oc, "kube-apiserver", 100, expectedStatus)
+				exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
+
+				e2e.Logf("Checking kube-apiserver operator should be Available in 1500 seconds")
+				err = waitCoBecomes(oc, "kube-apiserver", 1500, kubeApiserverCoStatus)
+				exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not becomes available in 1500 seconds")
+				logLevel, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath={.spec.logLevel}`).Output()
+				o.Expect(err1).NotTo(o.HaveOccurred())
+				o.Expect(logLevel).Should(o.Equal(`Normal`))
+			}
+
+		}()
+
+		err := os.MkdirAll(dirname, 0o755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("1) Checking if oauth and openshift apiserver exempt with API Priority and Fairness feature")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("FlowSchema").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.MatchRegexp("openshift-apiserver-sar.*exempt"))
+		o.Expect(output).Should(o.MatchRegexp("openshift-oauth-apiserver-sar.*exempt"))
+
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("kubeapiserver/cluster", "--type=json", "-p", patchJSON).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("2) Checking KAS operator should be in Progressing and Available after rollout and recovery")
+		e2e.Logf("Checking kube-apiserver operator should be in Progressing in 100 seconds")
+		err = waitCoBecomes(oc, "kube-apiserver", 100, expectedStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not start progressing in 100 seconds")
+		e2e.Logf("Checking kube-apiserver operator should be Available in 1500 seconds")
+		err = waitCoBecomes(oc, "kube-apiserver", 1500, kubeApiserverCoStatus)
+		exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not becomes available in 1500 seconds")
+		logLevel, logLevelErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeapiserver/cluster", "-o", `jsonpath={.spec.logLevel}`).Output()
+		o.Expect(logLevelErr).NotTo(o.HaveOccurred())
+		o.Expect(logLevel).Should(o.Equal(`TraceAll`))
+
+		g.By("3) Checking if SAR traffics from flowschema openshift-apiserver and oauth-apiserver found in KAS logs")
+		kasPods, err := exutil.GetAllPodsWithLabel(oc, "openshift-kube-apiserver", "app=openshift-kube-apiserver")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(kasPods).ShouldNot(o.BeEmpty())
+		for _, kasPod := range kasPods {
+			e2e.Logf("pod name:%s", kasPod)
+			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", kasPod).OutputToFile(caseID + "/kas.log." + kasPod)
+			o.Expect(errlog).NotTo(o.HaveOccurred())
+		}
+		cmd := fmt.Sprintf(`grep 'startRequest' %v | grep 'system:serviceaccount:openshift-apiserver:openshift-apiserver-sa' | grep -iE 'immediate|exempt' | head -1`, dirname+"/kas.log.*")
+		e2e.Logf(cmd)
+		noOASLogs, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd = fmt.Sprintf(`grep 'startRequest' %v | grep 'system:serviceaccount:openshift-oauth-apiserver:oauth-apiserver-sa' | grep -iE 'immediate|exempt' | head -1`, dirname+"/kas.log.*")
+		e2e.Logf(cmd)
+		noOAUTHLogs, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(noOASLogs) > 0 && len(noOAUTHLogs) > 0 {
+			e2e.Logf("Found SAR traffics from flowschema openshift-apiserver:%s", noOASLogs)
+			e2e.Logf("Found SAR traffics from flowschema oauth-apiserver: %s", noOAUTHLogs)
+			e2e.Logf("Test Passed!")
+		} else {
+			e2e.Failf("Test Failed: No SAR traffics from flowschema openshift-apiserver and oauth-apiserver found in KAS logs")
+		}
+	})
 })
