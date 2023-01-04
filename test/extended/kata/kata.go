@@ -39,6 +39,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		ocpMinorVer          string
 		operatorVer          = "1.2.0"
 		testrun              testrunConfigmap
+		podRunState          = "Running"
 	)
 
 	subscription := subscriptionDescription{
@@ -163,7 +164,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("Deploying pod with kata runtime and verify it")
 		newPodName := createKataPod(oc, podNs, commonPod, commonPodName)
 		defer deleteKataPod(oc, podNs, newPodName)
-		checkKataPodStatus(oc, podNs, newPodName)
+		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
 		g.By("SUCCESS - Pod with kata runtime installed")
 		g.By("TEARDOWN - deleting the kata pod")
@@ -177,6 +178,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			msg             string
 			err             error
 			kcTemplate      = filepath.Join(testDataDir, "kataconfig.yaml")
+			expectError     = "KataConfig instance already exists, refusing to create a duplicate"
 		)
 		g.By("Create 2nd kataconfig file")
 		configFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", kcTemplate, "-p", "NAME="+kataConfigName2, "-n", subscription.namespace).OutputToFile(getRandomString() + "kataconfig-common.json")
@@ -184,17 +186,19 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		e2e.Logf("the file of resource is %s", configFile)
 
 		g.By("Apply 2nd kataconfig")
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Output()
-		o.Expect(msg).To(o.ContainSubstring("KataConfig instance already exists"))
-		e2e.Logf("err %v, msg %v", err, msg)
+		//Error from server (A KataConfig instance already exists, refusing to create a duplicate): error when creating "kataconfig2.yaml":
+		// admission webhook "vkataconfig.kb.io" denied the request: A KataConfig instance already exists, refusing to create a duplicate
 
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(msg).To(o.ContainSubstring(expectError))
 		g.By("Success - cannot apply 2nd kataconfig")
 
 	})
 
 	g.It("Author:abhbaner-High-41263-Namespace check", func() {
 		g.By("Checking if ns 'openshift-sandboxed-containers-operator' exists")
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespaces").Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespaces", subscription.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring(subscription.namespace))
 		g.By("SUCCESS - Namespace check complete")
@@ -211,7 +215,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("Deploying pod with kata runtime and verify it")
 		newPodName := createKataPod(oc, podNs, commonPod, commonPodName)
 		defer deleteKataPod(oc, podNs, newPodName)
-		checkKataPodStatus(oc, podNs, newPodName)
+		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 
 		errCheck := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
 			podMetrics, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("podmetrics", newPodName, "-n", podNs).Output()
@@ -244,7 +248,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		/* checkKataPodStatus prints the pods with the podNs and validates if
 		its running or not thus verifying OCP-43616 */
 
-		checkKataPodStatus(oc, podNs, newPodName)
+		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
 		errCheck := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
 			podlogs, err := oc.AsAdmin().Run("logs").WithoutNamespace().Args("pod/"+newPodName, "-n", podNs).Output()
@@ -270,7 +274,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("Deploying pod with kata runtime and verify it")
 		newPodName := createKataPod(oc, podNs, commonPod, commonPodName)
 		defer deleteKataPod(oc, podNs, newPodName)
-		checkKataPodStatus(oc, podNs, newPodName)
+		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
 
 		g.By("Checking Pod Overhead")
@@ -301,7 +305,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("Deploy a pod with kata runtime")
 		podName = createKataPod(oc, podNs, commonPodTemplate, "admtop")
 		defer deleteKataPod(oc, podNs, podName)
-		checkKataPodStatus(oc, podNs, podName)
+		checkKataPodStatus(oc, podNs, podName, podRunState)
 
 		g.By("Get oc top adm metrics for the pod")
 		snooze = 360
@@ -359,7 +363,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 		g.By("Deploying pod with kata runtime and verify it")
 		newPodName := createKataPod(oc, podNs, commonPod, commonPodName)
-		checkKataPodStatus(oc, podNs, newPodName)
+		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
 		deleteKataPod(oc, podNs, newPodName)
 		g.By("Kata Pod deleted - now deleting kataconfig")

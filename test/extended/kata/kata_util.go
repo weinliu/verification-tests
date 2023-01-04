@@ -40,7 +40,7 @@ type testrunConfigmap struct {
 var (
 	snooze     time.Duration = 2400
 	kataSnooze time.Duration = 5400 // Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
-
+	podSnooze  time.Duration = 100
 )
 
 // author: tbuskey@redhat.com,abhbaner@redhat.com
@@ -98,8 +98,8 @@ func createKataConfig(oc *exutil.CLI, kcTemplate, kcName, kcMonitorImageName, kc
 		configFile string
 	)
 
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", "--no-headers", "-n", sub.namespace).Output()
-	if strings.Contains(msg, kcName) {
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "--no-headers", "-n", sub.namespace).Output()
+	if err == nil {
 		g.By("(2) kataconfig is previously installed")
 		return msg, err // no need to go through the rest
 	}
@@ -134,14 +134,13 @@ func createKataConfig(oc *exutil.CLI, kcTemplate, kcName, kcMonitorImageName, kc
 
 	g.By("(2.2) Check kataconfig creation has started")
 	errCheck = wait.PollImmediate(10*time.Second, snooze*time.Second, func() (bool, error) {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", "--no-headers").Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "--no-headers").Output()
 		if strings.Contains(msg, kcName) {
 			return true, nil
 		}
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("kataconfig %v did not get created: %v %v", kcName, msg, err))
-	// -o=jsonpath={.status.installationStatus.IsInProgress} "True" at this point
 
 	g.By("(2.3) Wait for kataconfig to finish install")
 	// Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
@@ -155,27 +154,25 @@ func createKataPod(oc *exutil.CLI, podNs, commonPod, commonPodName string) strin
 	newPodName := getRandomString() + commonPodName
 	configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", commonPod, "-p", "NAME="+newPodName).OutputToFile(getRandomString() + "Pod-common.json")
 	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("the file of resource is %s", configFile)
 
 	oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", podNs).Execute()
 
-	//validating kata runtime
+	g.By("(2) validating kata runtime")
 	podsRuntime, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", newPodName, "-n", podNs, "-o=jsonpath={.spec.runtimeClassName}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(podsRuntime).To(o.ContainSubstring("kata"))
-	e2e.Logf("The runtime used for this pod is %s", podsRuntime)
 	return newPodName
 }
 
 // author: abhbaner@redhat.com, vvoronko@redhat.com
 func deleteKataPod(oc *exutil.CLI, podNs, delPodName string) bool {
-	_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", delPodName, "-n", podNs).Output()
+	output, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", delPodName, "-n", podNs).Output()
 	if err != nil {
-		e2e.Logf("issue deleting pod %v in namespace %v, error: %v", delPodName, podNs, err)
+		e2e.Logf("issue deleting pod %v in namespace %v, output: %v/nerror: %v", delPodName, podNs, output, err)
 		return false
 	}
 
-	errCheck := wait.PollImmediate(10*time.Second, 100*time.Second, func() (bool, error) {
+	errCheck := wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
 		_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", delPodName, "-n", podNs).Output()
 		if err != nil {
 			return true, nil
@@ -187,16 +184,16 @@ func deleteKataPod(oc *exutil.CLI, podNs, delPodName string) bool {
 }
 
 // author: abhbaner@redhat.com
-func checkKataPodStatus(oc *exutil.CLI, podNs, newPodName string) {
-	errCheck := wait.PollImmediate(10*time.Second, 100*time.Second, func() (bool, error) {
-		podsStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", newPodName, "-n", podNs, "-o=jsonpath={.status.phase}").Output()
-		if strings.Contains(podsStatus, "Running") {
+func checkKataPodStatus(oc *exutil.CLI, podNs, podName, expStatus string) {
+	var actualStatus string
+	errCheck := wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
+		actualStatus, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", podName, "-n", podNs, "-o=jsonpath={.status.phase}").Output()
+		if strings.Contains(actualStatus, expStatus) {
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Pod %v is not correct status in ns %v", newPodName, podNs))
-	e2e.Logf("Pod %s in namespace %s is Running", newPodName, podNs)
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Pod %v is not correct status in ns %v. Expected status: %v, Actual status: %v", podName, podNs, expStatus, actualStatus))
 }
 
 func getRandomString() string {
@@ -210,13 +207,14 @@ func getRandomString() string {
 }
 
 func deleteKataConfig(oc *exutil.CLI, kcName string) (msg string, err error) {
-	g.By("(3) Deleting kataconfig")
+	g.By("(3.1) Trigger kataconfig deletion")
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("kataconfig", kcName).Output()
 	if err != nil || msg == "" {
-		e2e.Logf("%v %v", msg, err)
+		e2e.Logf("Unexpected error while trying to delete kataconfig: %v\nerror: %v", msg, err)
 	}
+	o.Expect(err).NotTo(o.HaveOccurred())
 
-	g.By("(3.1) Wait for kataconfig to be deleted")
+	g.By("(3.2) Wait for kataconfig to be deleted")
 	errCheck := wait.Poll(30*time.Second, kataSnooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig").Output()
 		if strings.Contains(msg, "No resources found") {
@@ -226,7 +224,7 @@ func deleteKataConfig(oc *exutil.CLI, kcName string) (msg string, err error) {
 	})
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("kataconfig %v did not get deleted: %v %v", kcName, msg, err))
 
-	g.By("(3.2) kataconfig is gone")
+	g.By("(3.3) kataconfig is gone")
 	return msg, err
 }
 
