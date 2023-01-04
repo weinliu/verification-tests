@@ -198,10 +198,10 @@ func (es externalES) deploy(oc *exutil.CLI) {
 		}
 	}
 
-	// set xpack.ml.enable to false when testing on arm64 cluster
+	// set xpack.ml.enable to false when the architecture is not amd64
 	nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if nodes.Items[0].Status.NodeInfo.Architecture == "arm64" {
+	if nodes.Items[0].Status.NodeInfo.Architecture != "amd64" {
 		cmPatch = append(cmPatch, "-p", "MACHINE_LEARNING=false")
 	}
 
