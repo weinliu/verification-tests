@@ -505,7 +505,7 @@ func createOperator(oc *exutil.CLI, subD subscriptionDescription, ogD operatorGr
 	e2e.Logf("err %v, msg %v", err, msg)
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", subD.namespace, "openshift.io/cluster-monitoring=true", "--overwrite").Output()
 	e2e.Logf("err %v, msg %v", err, msg)
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", subD.namespace, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "pod-security.kubernetes.io/audit=privileged", "pod-security.kubernetes.io/warn=privileged", "--overwrite").Output()
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", subD.namespace, "security.openshift.io/scc.podSecurityLabelSync=false", "--overwrite").Output()
 	e2e.Logf("err %v, msg %v", err, msg)
 
 	g.By("Create operatorGroup !!!")
@@ -560,4 +560,11 @@ func skipForSingleNodeCluster(oc *exutil.CLI) {
 	if nodeMasterCount == 1 && nodeMasterWorkerCount == 1 && !strings.Contains(nodeMasterWorkerList[0], "worker") {
 		g.Skip("Skip since it is single node cluster")
 	}
+}
+
+func getLinuxWorkerCount(oc *exutil.CLI) int {
+	workerNodeDetails, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=kubernetes.io/os=linux,node-role.kubernetes.io/worker=").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	nodeCount := int(strings.Count(workerNodeDetails, "Ready")) + int(strings.Count(workerNodeDetails, "NotReady"))
+	return nodeCount
 }

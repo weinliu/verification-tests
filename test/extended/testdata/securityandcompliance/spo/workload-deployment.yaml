@@ -1,0 +1,42 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: spo-workload-deployment-template
+objects:
+- apiVersion: apps/v1
+  kind: "${WORKLOADKIND}"
+  metadata:
+    name: "${NAME}"
+    namespace: "${NAMESPACE}"
+  spec:
+    replicas: 3
+    selector:
+      matchLabels:
+        "${LABELKEY}": "${LABELVALUE}"
+    template:
+      metadata:
+        labels:
+          "${LABELKEY}": "${LABELVALUE}"
+      spec:
+        serviceAccountName: "${SANAME}"
+        initContainers:
+        - name: wait
+          image: quay.io/openshifttest/centos:centos7
+          command: ["/bin/sh", "-c", "env"]
+        containers:
+        - name: nginx
+          image: quay.io/security-profiles-operator/test-nginx-unprivileged:1.21
+          ports:
+          - containerPort: 80
+        - name: redis
+          image: quay.io/security-profiles-operator/redis:6.2.1
+          ports:
+          - containerPort: 81
+
+parameters:
+- name: WORKLOADKIND
+- name: NAME
+- name: NAMESPACE
+- name: LABELKEY
+- name: LABELVALUE
+- name: SANAME
