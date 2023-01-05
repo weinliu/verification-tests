@@ -416,6 +416,47 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			output2, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-user-workload-monitoring", "-c", "prometheus", "prometheus-user-workload-0", "--", "bash", "-c", "cat /tmp/uwm_query.log | grep up").Output()
 			o.Expect(output2).To(o.ContainSubstring("up"))
 		})
+
+		// author: tagao@redhat.com
+		g.It("Author:tagao-Medium-50008-Expose sigv4 settings for remote write in the CMO configuration", func() {
+			var (
+				sigv4Secret    = filepath.Join(monitoringBaseDir, "sigv4-secret.yaml")
+				sigv4SecretUWM = filepath.Join(monitoringBaseDir, "sigv4-secret-uwm.yaml")
+			)
+			g.By("delete secret at the end of case")
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "sigv4-credentials", "-n", "openshift-monitoring").Execute()
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "sigv4-credentials-uwm", "-n", "openshift-user-workload-monitoring").Execute()
+
+			g.By("Create sigv4 secret under openshift-monitoring")
+			exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+			createResourceFromYaml(oc, "openshift-monitoring", sigv4Secret)
+
+			g.By("Check sig4 config under openshift-monitoring")
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheuses", "k8s", "-ojsonpath={.spec.remoteWrite}", "-n", "openshift-monitoring").Output()
+			o.Expect(output).To(o.ContainSubstring("sigv4-credentials"))
+			checkSig4Config(oc, "openshift-monitoring", "prometheus-k8s-0", "url: https://authorization.remotewrite.com/api/write")
+			checkSig4Config(oc, "openshift-monitoring", "prometheus-k8s-0", "sigv4:")
+			checkSig4Config(oc, "openshift-monitoring", "prometheus-k8s-0", "region: us-central1")
+			checkSig4Config(oc, "openshift-monitoring", "prometheus-k8s-0", "access_key: basic_user")
+			checkSig4Config(oc, "openshift-monitoring", "prometheus-k8s-0", "secret_key: basic_pass")
+			checkSig4Config(oc, "openshift-monitoring", "prometheus-k8s-0", "profile: SomeProfile")
+			checkSig4Config(oc, "openshift-monitoring", "prometheus-k8s-0", "role_arn: SomeRoleArn")
+
+			g.By("Create sigv4 secret under openshift-user-workload-monitoring")
+			createResourceFromYaml(oc, "openshift-user-workload-monitoring", sigv4SecretUWM)
+
+			g.By("Check sig4 config under openshift-user-workload-monitoring")
+			output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheuses", "user-workload", "-ojsonpath={.spec.remoteWrite}", "-n", "openshift-user-workload-monitoring").Output()
+			o.Expect(output2).To(o.ContainSubstring("sigv4-credentials-uwm"))
+			checkSig4Config(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "url: https://authorization.remotewrite.com/api/write")
+			checkSig4Config(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "sigv4:")
+			checkSig4Config(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "region: us-east2")
+			checkSig4Config(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "access_key: basic_user_uwm")
+			checkSig4Config(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "secret_key: basic_pass_uwm")
+			checkSig4Config(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "profile: umw_Profile")
+			checkSig4Config(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "role_arn: umw_RoleArn")
+		})
+
 	})
 
 	//author: tagao@redhat.com

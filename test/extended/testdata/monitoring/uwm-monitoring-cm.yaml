@@ -13,5 +13,17 @@ data:
         labelmy: test
       retentionSize: 5GiB
       retention: 15d
+      remoteWrite:
+      - url: "https://authorization.remotewrite.com/api/write"
+        sigv4:
+          region: us-east2
+          accessKey:
+            name: sigv4-credentials-uwm
+            key: access
+          secretKey:
+            name: sigv4-credentials-uwm
+            key: secret
+          profile: "umw_Profile"
+          roleArn: "umw_RoleArn"
     thanosRuler:
       retention: 15d
