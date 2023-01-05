@@ -336,24 +336,24 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: heli@redhat.com
 	g.It("HyperShiftMGMT-Author:heli-Critical-44824-Resource requests/limit configuration for critical control plane workloads[Serial][Disruptive]", func() {
-		cpuRequest := doOcpReq(oc, OcpGet, true, "deployment", "kube-apiserver", "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.cpu}")
-		memoryRequest := doOcpReq(oc, OcpGet, true, "deployment", "kube-apiserver", "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.memory}")
+		controlplaneNS := hostedcluster.namespace + "-" + hostedcluster.name
+		cpuRequest := doOcpReq(oc, OcpGet, true, "deployment", "kube-apiserver", "-n", controlplaneNS, `-ojsonpath={.spec.template.spec.containers[?(@.name=="kube-apiserver")].resources.requests.cpu}`)
+		memoryRequest := doOcpReq(oc, OcpGet, true, "deployment", "kube-apiserver", "-n", controlplaneNS, `-ojsonpath={.spec.template.spec.containers[?(@.name=="kube-apiserver")].resources.requests.memory}`)
 		e2e.Logf("cpu request: %s, memory request: %s\n", cpuRequest, memoryRequest)
 
 		defer func() {
 			//change back to original cpu, memory value
-			patchOptions := fmt.Sprintf("{\"spec\":{\"template\":{\"spec\": {\"containers\":"+
-				"[{\"name\":\"kube-apiserver\",\"resources\":{\"requests\":{\"cpu\":\"%s\", \"memory\": \"%s\"}}}]}}}}", cpuRequest, memoryRequest)
-			doOcpReq(oc, OcpPatch, true, "deploy", "kube-apiserver", "-n", guestClusterNamespace, "-p", patchOptions)
+			patchOptions := fmt.Sprintf(`{"spec":{"template":{"spec":{"containers":[{"name":"kube-apiserver","resources":{"requests":{"cpu":"%s", "memory": "%s"}}}]}}}}`, cpuRequest, memoryRequest)
+			doOcpReq(oc, OcpPatch, true, "deploy", "kube-apiserver", "-n", controlplaneNS, "-p", patchOptions)
 
 			//check new value of cpu, memory resource
 			err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-				cpuRes := doOcpReq(oc, OcpGet, true, "deployment", "kube-apiserver", "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.cpu}")
+				cpuRes := doOcpReq(oc, OcpGet, true, "deployment", "kube-apiserver", "-n", controlplaneNS, `-ojsonpath={.spec.template.spec.containers[?(@.name=="kube-apiserver")].resources.requests.cpu}`)
 				if cpuRes != cpuRequest {
 					return false, nil
 				}
 
-				memoryRes := doOcpReq(oc, OcpGet, true, "deployment", "kube-apiserver", "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.memory}")
+				memoryRes := doOcpReq(oc, OcpGet, true, "deployment", "kube-apiserver", "-n", controlplaneNS, `-ojsonpath={.spec.template.spec.containers[?(@.name=="kube-apiserver")].resources.requests.memory}`)
 				if memoryRes != memoryRequest {
 					return false, nil
 				}
@@ -365,18 +365,17 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		//change cpu, memory resources
 		desiredCPURequest := "200m"
 		desiredMemoryReqeust := "1700Mi"
-		patchOptions := fmt.Sprintf(`{"spec":{"template":{"spec": {"containers":`+
-			`[{"name":"kube-apiserver","resources":{"requests":{"cpu":"%s", "memory": "%s"}}}]}}}}`, desiredCPURequest, desiredMemoryReqeust)
-		doOcpReq(oc, OcpPatch, true, "deploy", "kube-apiserver", "-n", guestClusterNamespace, "-p", patchOptions)
+		patchOptions := fmt.Sprintf(`{"spec":{"template":{"spec":{"containers":[{"name":"kube-apiserver","resources":{"requests":{"cpu":"%s", "memory": "%s"}}}]}}}}`, desiredCPURequest, desiredMemoryReqeust)
+		doOcpReq(oc, OcpPatch, true, "deploy", "kube-apiserver", "-n", controlplaneNS, "-p", patchOptions)
 
 		//check new value of cpu, memory resource
 		err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-			cpuRes := doOcpReq(oc, OcpGet, false, "deployment", "kube-apiserver", "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.cpu}")
+			cpuRes := doOcpReq(oc, OcpGet, false, "deployment", "kube-apiserver", "-n", controlplaneNS, `-ojsonpath={.spec.template.spec.containers[?(@.name=="kube-apiserver")].resources.requests.cpu}`)
 			if cpuRes != desiredCPURequest {
 				return false, nil
 			}
 
-			memoryRes := doOcpReq(oc, OcpGet, false, "deployment", "kube-apiserver", "-n", guestClusterNamespace, "-ojsonpath={.spec.template.spec.containers[?(@.name==\"kube-apiserver\")].resources.requests.memory}")
+			memoryRes := doOcpReq(oc, OcpGet, false, "deployment", "kube-apiserver", "-n", controlplaneNS, `-ojsonpath={.spec.template.spec.containers[?(@.name=="kube-apiserver")].resources.requests.memory}`)
 			if memoryRes != desiredMemoryReqeust {
 				return false, nil
 			}
@@ -461,8 +460,8 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: heli@redhat.com
 	g.It("HyperShiftMGMT-Author:heli-NonPreRelease-Critical-44942-Enable control plane deployment restart on demand[Serial]", func() {
-		res := doOcpReq(oc, OcpGet, false, "hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.metadata.annotations}")
-		e2e.Logf("get hostedcluster %s annotation: %s ", guestClusterName, res)
+		res := doOcpReq(oc, OcpGet, false, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-ojsonpath={.metadata.annotations}")
+		e2e.Logf("get hostedcluster %s annotation: %s ", hostedcluster.name, res)
 
 		var cmdClient = NewCmdClient()
 		var restartDate string
@@ -483,25 +482,26 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		//value to be annotated
 		restartAnnotation := fmt.Sprintf("%s=%s", annotationKey, restartDate)
 		//annotations to be verified
-		desiredAnnotation := fmt.Sprintf("\"%s\":\"%s\"", annotationKey, restartDate)
+		desiredAnnotation := fmt.Sprintf(`"%s":"%s"`, annotationKey, restartDate)
 
 		//delete if already has this annotation
-		existingAnno := doOcpReq(oc, OcpGet, false, "hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.metadata.annotations}")
-		e2e.Logf("get hostedcluster %s annotation: %s ", guestClusterName, existingAnno)
+		existingAnno := doOcpReq(oc, OcpGet, false, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-ojsonpath={.metadata.annotations}")
+		e2e.Logf("get hostedcluster %s annotation: %s ", hostedcluster.name, existingAnno)
 		if strings.Contains(existingAnno, desiredAnnotation) {
 			removeAnno := annotationKey + "-"
-			doOcpReq(oc, OcpAnnotate, true, "hostedcluster", guestClusterName, "-n", "clusters", removeAnno)
+			doOcpReq(oc, OcpAnnotate, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, removeAnno)
 		}
 
-		doOcpReq(oc, OcpAnnotate, true, "hostedcluster", guestClusterName, "-n", "clusters", restartAnnotation)
-		e2e.Logf("set hostedcluster %s annotation %s done ", guestClusterName, restartAnnotation)
+		//add annotation
+		doOcpReq(oc, OcpAnnotate, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, restartAnnotation)
+		e2e.Logf("set hostedcluster %s annotation %s done ", hostedcluster.name, restartAnnotation)
 
-		res = doOcpReq(oc, OcpGet, true, "hostedcluster", guestClusterName, "-n", "clusters", "-ojsonpath={.metadata.annotations}")
-		e2e.Logf("get hostedcluster %s annotation: %s ", guestClusterName, res)
+		res = doOcpReq(oc, OcpGet, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-ojsonpath={.metadata.annotations}")
+		e2e.Logf("get hostedcluster %s annotation: %s ", hostedcluster.name, res)
 		o.Expect(res).To(o.ContainSubstring(desiredAnnotation))
 
 		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-			res = doOcpReq(oc, OcpGet, true, "deploy", "kube-apiserver", "-n", guestClusterNamespace, "-ojsonpath={.spec.template.metadata.annotations}")
+			res = doOcpReq(oc, OcpGet, true, "deploy", "kube-apiserver", "-n", hostedcluster.namespace+"-"+hostedcluster.name, "-ojsonpath={.spec.template.metadata.annotations}")
 			if strings.Contains(res, desiredAnnotation) {
 				return true, nil
 			}
