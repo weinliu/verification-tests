@@ -178,6 +178,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 
 		g.By("check the event")
 		eve, err := oc.WithoutNamespace().Run("get").Args("events", "-n", "p43092-2").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		if matched, _ := regexp.MatchString("OwnerRefInvalidNamespace", eve); matched {
 			e2e.Logf("found the events :\n%s", eve)
 		}
@@ -228,6 +229,11 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 
 	// author: yinzhou@redhat.com
 	g.It("NonHyperShiftHOST-Author:yinzhou-High-43035-KCM use internal LB to avoid outages during kube-apiserver rollout [Disruptive]", func() {
+		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if infra == "SingleReplica" {
+			g.Skip("This is a SNO cluster, skip.")
+		}
 		g.By("Get the route")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("--show-server").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -366,12 +372,14 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 
 		e2e.Logf("Get the quorum guard pod name on the master node which was cordoned")
 		etcdPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-etcd", "-l", "app=guard", fmt.Sprintf(`-o=jsonpath={.items[?(@.spec.nodeName=='%s')].metadata.name}`, masterNodeName)).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Delete one of the etcd quorum pod")
 		podDeletionErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", etcdPodName, "-n", "openshift-etcd").Execute()
 		o.Expect(podDeletionErr).NotTo(o.HaveOccurred())
 
 		token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", "prometheus-k8s", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		err = wait.Poll(5*time.Second, 100*time.Second, func() (bool, error) {
 			output, _, err := oc.AsAdmin().NotShowInfo().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", token), "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query=ALERTS").Outputs()
 			if err != nil {
