@@ -10,6 +10,8 @@ objects:
     namespace: "${NAMESPACE}"
   spec:
     displayName: "${DISPLAYNAME}"
+    grpcPodConfig:
+      securityContextConfig: restricted
     publisher: "${PUBLISHER}"
     sourceType: "${SOURCETYPE}"
     updateStrategy:
