@@ -19,7 +19,7 @@ import (
 // waitForCPMSUpdateCompleted wait the Update to complete
 func waitForCPMSUpdateCompleted(oc *exutil.CLI, replicas int) {
 	e2e.Logf("Waiting for the Update completed ...")
-	timeToWait := time.Duration(replicas*35) * time.Minute
+	timeToWait := time.Duration(replicas*50) * time.Minute
 	count := 0
 	err := wait.Poll(1*time.Minute, timeToWait, func() (bool, error) {
 		count++

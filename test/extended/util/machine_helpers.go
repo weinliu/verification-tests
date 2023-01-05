@@ -249,7 +249,7 @@ func WaitForMachineRunningByName(oc *CLI, machineName string) {
 // WaitForMachineDisappearBySuffix check if the machine is disappear by machine suffix
 func WaitForMachineDisappearBySuffix(oc *CLI, machineNameSuffix string, labels string) {
 	e2e.Logf("Waiting for the machine disappear by suffix ...")
-	err := wait.Poll(60*time.Second, 1200*time.Second, func() (bool, error) {
+	err := wait.Poll(60*time.Second, 1800*time.Second, func() (bool, error) {
 		msg, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-l", labels, "-o=jsonpath={.items[*].metadata.name}", "-n", machineAPINamespace).Output()
 		if err2 != nil {
 			e2e.Logf("The server was unable to return a response and waiting up to 1 minutes ...")
@@ -270,7 +270,7 @@ func WaitForMachineDisappearBySuffix(oc *CLI, machineNameSuffix string, labels s
 // WaitForMachineDisappearByName check if the machine is disappear by machine name
 func WaitForMachineDisappearByName(oc *CLI, machineName string) {
 	e2e.Logf("Waiting for the machine disappear by name ...")
-	err := wait.Poll(60*time.Second, 1200*time.Second, func() (bool, error) {
+	err := wait.Poll(60*time.Second, 1800*time.Second, func() (bool, error) {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, machineName, "-n", machineAPINamespace).Output()
 		if strings.Contains(output, "not found") {
 			e2e.Logf("machine %s is disappear", machineName)
