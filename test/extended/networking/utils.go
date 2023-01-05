@@ -1745,8 +1745,8 @@ func getNodeSubnet(oc *exutil.CLI, nodeName string) string {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		var data map[string]interface{}
 		json.Unmarshal([]byte(output), &data)
-		hostSubnets := data["default"].(interface{})
-		hostSubnet := hostSubnets.(string)
+		hostSubnets := data["default"].([]interface{})
+		hostSubnet := hostSubnets[0].(string)
 		return hostSubnet
 	}
 	nodeSubnet, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostsubnet", nodeName, "-o=jsonpath={.subnet}").Output()
