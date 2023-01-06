@@ -9,7 +9,6 @@ objects:
     name: "${NAME}"
     namespace: "${NAMESPACE}"
   spec:
-    replicas: 3
     selector:
       matchLabels:
         "${LABELKEY}": "${LABELVALUE}"
@@ -18,6 +17,8 @@ objects:
         labels:
           "${LABELKEY}": "${LABELVALUE}"
       spec:
+        nodeSelector:
+         node-role.kubernetes.io/worker: ""
         serviceAccountName: "${SANAME}"
         initContainers:
         - name: wait
@@ -27,11 +28,11 @@ objects:
         - name: nginx
           image: quay.io/security-profiles-operator/test-nginx-unprivileged:1.21
           ports:
-          - containerPort: 80
+          - containerPort: 8080
         - name: redis
           image: quay.io/security-profiles-operator/redis:6.2.1
           ports:
-          - containerPort: 81
+          - containerPort: 6379
 
 parameters:
 - name: WORKLOADKIND

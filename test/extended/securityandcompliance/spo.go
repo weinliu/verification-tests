@@ -335,6 +335,129 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		checkPrfolieNumbers(oc, "seccompprofile", ns1, linuxWorkerCount*3)
 		checkPrfolieNumbers(oc, "seccompprofile", ns2, 9)
 	})
+	// author: xiyuan@redhat.com
+	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
+	g.It("ConnectedOnly-NonPreRelease-Author:xiyuan-Medium-50262-High-50263-check Log enricher based selinuxprofile recording and metrics working as expected for daemonset/deployment [Slow][Disruptive]", func() {
+		ns1 := "mytest" + getRandomString()
+		ns2 := "mytest" + getRandomString()
+		var (
+			profileRecordingDae = profileRecordingDescription{
+				name:       "spo-recording1",
+				namespace:  ns1,
+				kind:       "SelinuxProfile",
+				labelKey:   "app",
+				labelValue: "hello-daemonset",
+				template:   profileRecordingTemplate,
+			}
+			saRoleRoleBindingDae = saRoleRoleBindingDescription{
+				saName:          "spo-record-sa1",
+				namespace:       ns1,
+				roleName:        "spo-record1" + getRandomString(),
+				roleBindingName: "spo-record1" + getRandomString(),
+				template:        saRoleRolebindingTemplate,
+			}
+			daemonsetHello = workloadDescription{
+				name:         "hello-daemonset",
+				namespace:    ns1,
+				workloadKind: "DaemonSet",
+				saName:       saRoleRoleBindingDae.saName,
+				labelKey:     profileRecordingDae.labelKey,
+				labelValue:   profileRecordingDae.labelValue,
+				template:     workloadDaeTemplate,
+			}
+			profileRecordingDep = profileRecordingDescription{
+				name:       "spo-recording2",
+				namespace:  ns2,
+				kind:       "SelinuxProfile",
+				labelKey:   "app",
+				labelValue: "hello-openshift",
+				template:   profileRecordingTemplate,
+			}
+			saRoleRoleBindingDep = saRoleRoleBindingDescription{
+				saName:          "spo-record-sa2",
+				namespace:       ns2,
+				roleName:        "spo-record2" + getRandomString(),
+				roleBindingName: "spo-record2" + getRandomString(),
+				template:        saRoleRolebindingTemplate,
+			}
+			deployHello = workloadDescription{
+				name:         "hello-deployment",
+				namespace:    ns2,
+				workloadKind: "Deployment",
+				saName:       saRoleRoleBindingDep.saName,
+				labelKey:     profileRecordingDep.labelKey,
+				labelValue:   profileRecordingDep.labelValue,
+				template:     workloadDeployTemplate,
+			}
+		)
+
+		g.By("Enable LogEnricher.. !!!\n")
+		patch := fmt.Sprintf("{\"spec\":{\"enableLogEnricher\":true}}")
+		patchResource(oc, asAdmin, withoutNamespace, "spod", "spod", "-n", subD.namespace, "--type", "merge", "-p", patch)
+		nodeCount := getNodeCount(oc)
+		checkReadyPodCountOfDaemonset(oc, "spod", subD.namespace, nodeCount)
+
+		g.By("Create namespace and add labels !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"ns", ns1, ns1},
+			objectTableRef{"ns", ns2, ns2})
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns1, "-n", ns1, "spo.x-k8s.io/enable-recording=true", "--overwrite=true")
+		lableNamespace(oc, "namespace", ns1, "-n", ns1, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "--overwrite=true")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns2).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lableNamespace(oc, "namespace", ns2, "-n", ns2, "spo.x-k8s.io/enable-recording=true", "--overwrite=true")
+		lableNamespace(oc, "namespace", ns2, "-n", ns2, "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=privileged", "--overwrite=true")
+
+		g.By("Create profilerecording !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"profilerecording", ns1, profileRecordingDae.name},
+			objectTableRef{"profilerecording", ns2, profileRecordingDep.name})
+		profileRecordingDae.create(oc)
+		profileRecordingDep.create(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"profilerecording", profileRecordingDae.name, "-n", ns1}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"profilerecording", profileRecordingDep.name, "-n", ns2}).check(oc)
+
+		g.By("Create sa, role, rolebinding !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"sa", ns1, saRoleRoleBindingDae.saName},
+			objectTableRef{"sa", ns2, saRoleRoleBindingDep.saName},
+			objectTableRef{"role", ns1, saRoleRoleBindingDae.roleName},
+			objectTableRef{"role", ns2, saRoleRoleBindingDep.roleName},
+			objectTableRef{"rolebinding", ns1, saRoleRoleBindingDae.roleBindingName},
+			objectTableRef{"rolebinding", ns2, saRoleRoleBindingDep.roleBindingName})
+		saRoleRoleBindingDae.create(oc)
+		saRoleRoleBindingDep.create(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"sa", saRoleRoleBindingDae.saName, "-n", ns1}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"sa", saRoleRoleBindingDep.saName, "-n", ns2}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"role", saRoleRoleBindingDae.roleName, "-n", ns1}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"role", saRoleRoleBindingDep.roleName, "-n", ns2}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"rolebinding", saRoleRoleBindingDae.roleBindingName, "-n", ns1}).check(oc)
+		newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"rolebinding", saRoleRoleBindingDep.roleBindingName, "-n", ns2}).check(oc)
+
+		g.By("Create workload !!!")
+		defer cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"daemonset", ns1, daemonsetHello.name},
+			objectTableRef{"deploy", ns2, deployHello.name})
+		daemonsetHello.create(oc)
+		deployHello.create(oc)
+		linuxWorkerCount := getLinuxWorkerCount(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, strconv.Itoa(linuxWorkerCount), ok, []string{"daemonset", daemonsetHello.name, "-n", ns1, "-o=jsonpath={.status.numberReady}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "3", ok, []string{"deploy", deployHello.name, "-n", ns2, "-o=jsonpath={.status.availableReplicas}"}).check(oc)
+
+		g.By("Check seccompprofile generated !!!")
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"SelinuxProfile", ns1, "--all"})
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"SelinuxProfile", ns1, "--all"})
+		//sleep 60s so the selinuxprofiles of the worklod could be recorded
+		time.Sleep(60 * time.Second)
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("daemonset", daemonsetHello.name, "-n", ns1, "--ignore-not-found").Execute()
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", deployHello.name, "-n", ns2, "--ignore-not-found").Execute()
+		checkPrfolieStatus(oc, "SelinuxProfile", ns1, "Installed")
+		checkPrfolieStatus(oc, "SelinuxProfile", ns2, "Installed")
+		checkPrfolieNumbers(oc, "SelinuxProfile", ns1, linuxWorkerCount*2)
+		checkPrfolieNumbers(oc, "SelinuxProfile", ns2, 6)
+	})
 
 	// author: minmli@redhat.com
 	g.It("Author:minmli-High-50397-check security profiles operator could be deleted successfully [Serial]", func() {

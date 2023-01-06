@@ -61,6 +61,7 @@ func createSecurityProfileOperator(oc *exutil.CLI, subD subscriptionDescription,
 	ogFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ogD.template, "-p", "NAME="+ogD.name, "NAMESPACE="+ogD.namespace, "-n", ogD.namespace).OutputToFile(getRandomString() + "og.json")
 	e2e.Logf("Created the operator-group yaml %s, %v", ogFile, err)
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", ogFile).Output()
+	e2e.Logf("err %v, msg %v", err, msg)
 
 	g.By("Create subscription for above catalogsource !!!")
 	subFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", subD.template, "-p", "SUBNAME="+subD.subName, "SUBNAMESPACE="+subD.namespace, "CHANNEL="+subD.channel, "APPROVAL="+subD.ipApproval,
@@ -71,6 +72,7 @@ func createSecurityProfileOperator(oc *exutil.CLI, subD subscriptionDescription,
 
 	msg, err = subscriptionIsFinished(oc, subD)
 	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("err %v, msg %v", err, msg)
 
 	g.By("Check Security Profile Operator &webhook &spod pods are in running state !!!")
 	nodeCount := getNodeCount(oc)
