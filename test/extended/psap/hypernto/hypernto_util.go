@@ -271,3 +271,29 @@ func assertIfMatchKenelBootOnNodePoolLevelInHostedCluster(oc *exutil.CLI, ntoNam
 
 	}
 }
+
+// assertNTOPodLogsLastLinesInHostedCluster
+func assertNTOPodLogsLastLinesInManagementCluster(oc *exutil.CLI, namespace string, ntoPod string, lineN string, timeDurationSec int, filter string) {
+
+	var logLineStr []string
+
+	err := wait.Poll(15*time.Second, time.Duration(timeDurationSec)*time.Second, func() (bool, error) {
+
+		//Remove err assert for SNO, the OCP will can not access temporily when master node restart or certificate key removed
+		ntoPodLogs, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", namespace, ntoPod, "--tail="+lineN).Output()
+
+		regNTOPodLogs, err := regexp.Compile(".*" + filter + ".*")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		isMatch := regNTOPodLogs.MatchString(ntoPodLogs)
+		if isMatch {
+			logLineStr = regNTOPodLogs.FindAllString(ntoPodLogs, -1)
+			e2e.Logf("The logs of nto pod %v is: \n%v", ntoPod, logLineStr[0])
+			return true, nil
+		}
+		e2e.Logf("The keywords of nto pod isn't found, try next ...")
+		return false, nil
+	})
+
+	e2e.Logf("The logs of nto pod %v is: \n%v", ntoPod, logLineStr[0])
+	exutil.AssertWaitPollNoErr(err, "The tuned pod's log doesn't contain the keywords, please check")
+}
