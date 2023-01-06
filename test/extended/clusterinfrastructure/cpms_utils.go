@@ -51,7 +51,7 @@ func waitForCPMSUpdateCompleted(oc *exutil.CLI, replicas int) {
 			e2e.Logf("The Update is completed! desiredReplicas is %s, count %d", desiredReplicas, count)
 			return true, nil
 		}
-		e2e.Logf("The Update is still ongoing and waiting up to 1 minutes ... count %d, desiredReplicas is %s,currentReplicas is %s,readyReplicas is %s", count, desiredReplicas, currentReplicas, readyReplicas)
+		e2e.Logf("The Update is still ongoing and waiting up to 1 minutes ... count %d, desiredReplicas is %s,currentReplicas is %s,readyReplicas is %s,updatedReplicas is %s", count, desiredReplicas, currentReplicas, readyReplicas, updatedReplicas)
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "Wait Update failed.")
@@ -73,7 +73,9 @@ func skipForCPMSNotStable(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	desiredReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.replicas}", "-n", machineAPINamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if !(desiredReplicas == currentReplicas && desiredReplicas == readyReplicas) {
+	updatedReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.updatedReplicas}", "-n", machineAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if !(desiredReplicas == currentReplicas && desiredReplicas == readyReplicas && desiredReplicas == updatedReplicas) {
 		g.Skip("Skip for cpms is not stable!")
 	}
 }
@@ -265,4 +267,22 @@ func skipForClusterNotStable(oc *exutil.CLI) {
 	if !(strings.Contains(authenticationState, "TrueFalseFalse") && strings.Contains(etcdState, "TrueFalseFalse") && strings.Contains(kubeapiserverState, "TrueFalseFalse") && strings.Contains(openshiftapiserverState, "TrueFalseFalse")) {
 		g.Skip("Skip for cluster is not stable!")
 	}
+}
+
+// waitMasterNodeReady wait all master node ready
+func waitMasterNodeReady(oc *exutil.CLI) {
+	err := wait.Poll(1*time.Minute, 5*time.Minute, func() (bool, error) {
+		masterMachineList := exutil.ListMasterMachineNames(oc)
+		for _, masterMachineName := range masterMachineList {
+			nodeName := exutil.GetNodeNameFromMachine(oc, masterMachineName)
+			readyStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.status.conditions[?(@.type==\"Ready\")].status}").Output()
+			if readyStatus != "True" {
+				e2e.Logf("node %s is not ready, status:%s", nodeName, readyStatus)
+				return false, nil
+			}
+		}
+		e2e.Logf("All master node are ready!")
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "wait master node ready failed!")
 }

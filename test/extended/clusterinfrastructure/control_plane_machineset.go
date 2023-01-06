@@ -109,6 +109,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: huliu@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-53323-[CPMS] Implement update logic for RollingUpdate CPMS strategy update instance type [Disruptive]", func() {
+		//There is a bug https://issues.redhat.com/browse/OCPBUGS-5306, so skip it for now.
+		g.Skip("Skip for bug for now")
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
@@ -162,6 +164,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Change instanceType to trigger RollingUpdate")
 		defer printNodeInfo(oc)
+		defer waitMasterNodeReady(oc)
 		defer waitForClusterStable(oc)
 		defer waitForCPMSUpdateCompleted(oc, 1)
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrRecover, "--type=merge", "-n", machineAPINamespace).Execute()
@@ -210,6 +213,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 		g.By("Delete the master machine to trigger RollingUpdate")
 		defer printNodeInfo(oc)
+		defer waitMasterNodeReady(oc)
 		defer waitForClusterStable(oc)
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(mapiMachine, machineName, "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -219,6 +223,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-Medium-54005-[CPMS] Control plane machine set OnDelete update strategies - update instance type [Disruptive]", func() {
+		//There is a bug https://issues.redhat.com/browse/OCPBUGS-5306, so skip it for now.
+		g.Skip("Skip for bug for now")
 		exutil.SkipConditionally(oc)
 		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCPMSNotExist(oc)
@@ -271,10 +277,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Update strategy to OnDelete, change instanceType to trigger OnDelete update")
 		defer printNodeInfo(oc)
+		defer waitMasterNodeReady(oc)
 		defer waitForClusterStable(oc)
 		defer waitForCPMSUpdateCompleted(oc, 1)
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"strategy":{"type":"RollingUpdate"}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrRecover, "--type=merge", "-n", machineAPINamespace).Execute()
+		defer waitForClusterStable(oc)
 
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"strategy":{"type":"OnDelete"}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -289,6 +297,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		newCreatedMachineName := exutil.WaitForMachinesRunningByLabel(oc, 1, labelsAfter)[0]
 		e2e.Logf("newCreatedMachineName:%s", newCreatedMachineName)
 		exutil.WaitForMachineDisappearByName(oc, toDeletedMachineName)
+		waitForClusterStable(oc)
 		o.Expect(checkIfCPMSIsStable(oc)).To(o.BeTrue())
 	})
 
@@ -325,6 +334,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		defer printNodeInfo(oc)
+		defer waitMasterNodeReady(oc)
 		defer waitForClusterStable(oc)
 		defer func() {
 			availabilityZonesStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getCPMSAvailabilityZonesJSON, "-n", machineAPINamespace).Output()
@@ -335,6 +345,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 			}
 		}()
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"strategy":{"type":"RollingUpdate"}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		defer waitForClusterStable(oc)
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"strategy":{"type":"OnDelete"}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -351,6 +362,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		labelsAfter := "machine.openshift.io/zone!=" + value + ",machine.openshift.io/cluster-api-machine-type=master"
 		newMachineNameRolledWithFailureDomain := exutil.WaitForMachineRunningBySuffix(oc, suffix, labelsAfter)
 		exutil.WaitForMachineDisappearBySuffix(oc, suffix, labelsBefore)
+		waitForClusterStable(oc)
 
 		g.By("Add the failureDomain back to check OnDelete strategy rebalance the machines")
 		availabilityZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, newMachineNameRolledWithFailureDomain, "-n", "openshift-machine-api", getMachineAvailabilityZoneJSON).Output()
@@ -366,6 +378,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		e2e.Logf("updatedMachineName:%s", newMachineNameRolledBalancedFailureDomain)
 		suffix = getMachineSuffix(oc, newMachineNameRolledBalancedFailureDomain)
 		exutil.WaitForMachineDisappearBySuffix(oc, suffix, labelsAfter)
+		waitForClusterStable(oc)
 		o.Expect(checkIfCPMSIsStable(oc)).To(o.BeTrue())
 	})
 
@@ -382,8 +395,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		}
 		g.By("Update strategy to OnDelete")
 		defer printNodeInfo(oc)
+		defer waitMasterNodeReady(oc)
 		defer waitForClusterStable(oc)
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"strategy":{"type":"RollingUpdate"}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		defer waitForClusterStable(oc)
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"strategy":{"type":"OnDelete"}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -410,6 +425,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		suffix := getMachineSuffix(oc, toDeletedMachineName)
 		exutil.WaitForMachineRunningBySuffix(oc, suffix, labels)
 		exutil.WaitForMachineDisappearByName(oc, toDeletedMachineName)
+		waitForClusterStable(oc)
 		o.Expect(checkIfCPMSIsStable(oc)).To(o.BeTrue())
 	})
 
@@ -574,6 +590,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		labelsBefore := "machine.openshift.io/zone=" + value + ",machine.openshift.io/cluster-api-machine-type=master"
 		labelsAfter := "machine.openshift.io/zone!=" + value + ",machine.openshift.io/cluster-api-machine-type=master"
 		defer printNodeInfo(oc)
+		defer waitMasterNodeReady(oc)
 		defer waitForClusterStable(oc)
 		defer func() {
 			availabilityZonesStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getCPMSAvailabilityZonesJSON, "-n", machineAPINamespace).Output()
@@ -587,6 +604,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newMachineNameRolledWithFailureDomain := exutil.WaitForMachineRunningBySuffix(oc, suffix, labelsAfter)
 		exutil.WaitForMachineDisappearBySuffix(oc, suffix, labelsBefore)
+		waitForClusterStable(oc)
 
 		g.By("Add the failureDomain back to check RollingUpdate strategy rebalance the machines")
 		availabilityZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, newMachineNameRolledWithFailureDomain, "-n", "openshift-machine-api", getMachineAvailabilityZoneJSON).Output()
@@ -597,6 +615,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		e2e.Logf("updatedMachineName:%s", newMachineNameRolledBalancedFailureDomain)
 		suffix = getMachineSuffix(oc, newMachineNameRolledBalancedFailureDomain)
 		exutil.WaitForMachineDisappearBySuffix(oc, suffix, labelsAfter)
+		waitForClusterStable(oc)
 		o.Expect(checkIfCPMSIsStable(oc)).To(o.BeTrue())
 	})
 })
