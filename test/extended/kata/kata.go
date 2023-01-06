@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,7 +27,8 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		testDataDir          = exutil.FixturePath("testdata", "kata")
 		iaasPlatform         string
 		kcTemplate           = filepath.Join(testDataDir, "kataconfig.yaml")
-		defaultDeployment    = filepath.Join(testDataDir, "deployment-example.yaml")
+		defaultDeployment    = filepath.Join(testDataDir, "workload-deployment-securityContext.yaml")
+		defaultPod           = filepath.Join(testDataDir, "workload-pod-securityContext.yaml")
 		subTemplate          = filepath.Join(testDataDir, "subscription_template.yaml")
 		kcLogLevel           = "info"
 		kcMonitorImageName   = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:1.2.0"
@@ -39,6 +41,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		ocpMinorVer          string
 		operatorVer          = "1.2.0"
 		testrun              testrunConfigmap
+		workload             = "have securityContext"
 		podRunState          = "Running"
 	)
 
@@ -71,17 +74,27 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		// tag with [Slow][Serial][Disruptive] when deleting/recreating kataconfig
 
 		var (
-			err error
-			msg string
+			err      error
+			msg      string
+			minorVer int
 		)
 
+		// Log where & what we are running every time
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		iaasPlatform = strings.ToLower(msg)
-		e2e.Logf("the current platform is %v", iaasPlatform)
-
 		ocpMajorVer, ocpMinorVer, clusterVersion = getClusterVersion(oc)
-		e2e.Logf("Running %v.%v on: %v", ocpMajorVer, ocpMinorVer, clusterVersion)
+		// 4.10 and earlier cannot have security context on pods or deployment
+		// defaultPod and defaultDeployment are global in kata.go
+		if ocpMajorVer == "4" {
+			minorVer, _ = strconv.Atoi(ocpMinorVer)
+			if minorVer <= 10 {
+				defaultDeployment = filepath.Join(testDataDir, "workload-deployment-nosecurityContext.yaml")
+				defaultPod = filepath.Join(testDataDir, "workload-pod-nosecurityContext.yaml")
+				workload = "do not have securityContext settings"
+			}
+		}
+		g.By(fmt.Sprintf("The current platform is %v. \nOCP is %v.%v on: %v\n Workloads %v", iaasPlatform, ocpMajorVer, ocpMinorVer, clusterVersion, workload))
 
 		if checkKataInstalled(oc, subscription, commonKataConfigName) {
 			g.By(fmt.Sprintf("(2) subscription %v and kataconfig %v exists, skipping operator deployment", subscription.subName, commonKataConfigName))
@@ -155,14 +168,13 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	})
 
 	g.It("Author:abhbaner-High-41566-High-41574-deploy & delete a pod with kata runtime", func() {
-		commonPodName := "example"
-		commonPod := filepath.Join(testDataDir, "example.yaml")
+		defaultPodName := "example"
 
 		oc.SetupProject()
 		podNs := oc.Namespace()
 
 		g.By("Deploying pod with kata runtime and verify it")
-		newPodName := createKataPod(oc, podNs, commonPod, commonPodName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName)
 		defer deleteKataPod(oc, podNs, newPodName)
 		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
@@ -206,14 +218,13 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	})
 
 	g.It("Author:abhbaner-High-43620-validate podmetrics for pod running kata", func() {
-		commonPodName := "example"
-		commonPod := filepath.Join(testDataDir, "example.yaml")
+		defaultPodName := "example"
 
 		oc.SetupProject()
 		podNs := oc.Namespace()
 
 		g.By("Deploying pod with kata runtime and verify it")
-		newPodName := createKataPod(oc, podNs, commonPod, commonPodName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName)
 		defer deleteKataPod(oc, podNs, newPodName)
 		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 
@@ -235,14 +246,13 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	})
 
 	g.It("Author:abhbaner-High-43617-High-43616-CLI checks pod logs & fetching pods in podNs", func() {
-		commonPodName := "example"
-		commonPod := filepath.Join(testDataDir, "example.yaml")
+		defaultPodName := "example"
 
 		oc.SetupProject()
 		podNs := oc.Namespace()
 
 		g.By("Deploying pod with kata runtime and verify it")
-		newPodName := createKataPod(oc, podNs, commonPod, commonPodName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName)
 		defer deleteKataPod(oc, podNs, newPodName)
 
 		/* checkKataPodStatus prints the pods with the podNs and validates if
@@ -265,14 +275,13 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	})
 
 	g.It("Author:abhbaner-High-43514-kata pod displaying correct overhead", func() {
-		commonPodName := "example"
-		commonPod := filepath.Join(testDataDir, "example.yaml")
+		defaultPodName := "example"
 
 		oc.SetupProject()
 		podNs := oc.Namespace()
 
 		g.By("Deploying pod with kata runtime and verify it")
-		newPodName := createKataPod(oc, podNs, commonPod, commonPodName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName)
 		defer deleteKataPod(oc, podNs, newPodName)
 		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
@@ -293,17 +302,16 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 		oc.SetupProject()
 		var (
-			commonPodTemplate = filepath.Join(testDataDir, "example.yaml")
-			podNs             = oc.Namespace()
-			podName           string
-			err               error
-			msg               string
-			waitErr           error
-			metricCount       = 0
+			podNs       = oc.Namespace()
+			podName     string
+			err         error
+			msg         string
+			waitErr     error
+			metricCount = 0
 		)
 
 		g.By("Deploy a pod with kata runtime")
-		podName = createKataPod(oc, podNs, commonPodTemplate, "admtop")
+		podName = createKataPod(oc, podNs, defaultPod, "admtop")
 		defer deleteKataPod(oc, podNs, podName)
 		checkKataPodStatus(oc, podNs, podName, podRunState)
 
@@ -355,14 +363,13 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 	g.It("Longduration-NonPreRelease-Author:abhbaner-High-41813-Build Acceptance test[Disruptive][Serial][Slow]", func() {
 		//This test will install operator,kataconfig,pod with kata - delete pod, delete kataconfig
-		commonPodName := "example"
-		commonPod := filepath.Join(testDataDir, "example.yaml")
+		defaultPodName := "example"
 
 		oc.SetupProject()
 		podNs := oc.Namespace()
 
 		g.By("Deploying pod with kata runtime and verify it")
-		newPodName := createKataPod(oc, podNs, commonPod, commonPodName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName)
 		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
 		deleteKataPod(oc, podNs, newPodName)
@@ -496,7 +503,6 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			crioTemplate          = filepath.Join(testDataDir, "containerruntimeconfig_template.yaml")
 			deployConfigFile      = ""
 			deployName            = "mg-42167"
-			deploymentTemplate    = filepath.Join(testDataDir, "deployment-example.yaml")
 			deploymentFile        = getRandomString() + "dep-common.json"
 			err                   error
 			fails                 = 0
@@ -581,7 +587,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		exit status 1
 		*/
 		errCheck := wait.Poll(10*time.Second, 360*time.Second, func() (bool, error) {
-			deployConfigFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", deploymentTemplate, "-p", "NAME="+deployName, "-p", "NAMESPACE="+podNs, "-p", "REPLICAS="+fmt.Sprintf("%v", nodeWorkerCount)).OutputToFile(deploymentFile)
+			deployConfigFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName, "-p", "NAMESPACE="+podNs, "-p", "REPLICAS="+fmt.Sprintf("%v", nodeWorkerCount)).OutputToFile(deploymentFile)
 			if strings.Contains(deployConfigFile, deploymentFile) {
 				return true, nil
 			}

@@ -1,0 +1,35 @@
+﻿apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: deployment-template
+objects:
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: "${NAME}"
+      namespace: "${NAMESPACE}"
+    spec:
+      replicas: ${{REPLICAS}}
+      selector:
+        matchLabels:
+          app: httpd-app
+      template:
+        metadata:
+          labels:
+            app: httpd-app
+        spec:
+          replicas: 1
+          runtimeClassName: kata
+          containers:
+            - image: registry.redhat.io/rhscl/httpd-24-rhel7
+              imagePullPolicy: IfNotPresent
+              name: "${NAME}"
+              ports:
+                - containerPort: 8080
+
+parameters:
+  - name: NAME
+    value: "none"
+  - name: REPLICAS
+    value: "1"
+  - name: NAMESPACE
