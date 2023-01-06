@@ -818,7 +818,7 @@ func chkMustGather(oc *exutil.CLI, ns string, clin string) {
 			cloImgDir + "/cluster-logging/eo/eo-deployment.describe",
 			cloImgDir + "/cluster-logging/es",
 			cloImgDir + "/cluster-logging/es/cluster-elasticsearch",
-			cloImgDir + "/cluster-logging/es/cr",
+			cloImgDir + "/cluster-logging/es/elasticsearch_cr.yaml",
 			cloImgDir + "/cluster-logging/collector",
 			cloImgDir + "/cluster-logging/install",
 			cloImgDir + "/cluster-logging/install/install_plan-clo",
