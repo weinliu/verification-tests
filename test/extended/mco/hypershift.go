@@ -370,7 +370,7 @@ func (np *HypershiftNodePool) WaitUntilConfigIsUpdating() {
 		}
 		logger.Infof("condition UpdatingConfig not found")
 		return nil
-	}, "5m", "10s").Should(o.SatisfyAll(
+	}, "5m", "2s").Should(o.SatisfyAll(
 		o.HaveKeyWithValue("status", "True"),
 		o.HaveKeyWithValue("message", o.ContainSubstring("Updating config in progress"))))
 	logger.Infof("status of condition UpdatingConfig is True")
@@ -386,7 +386,7 @@ func (np *HypershiftNodePool) WaitUntilVersionIsUpdating() {
 		}
 		logger.Infof("condition UpdatingVersion not found")
 		return nil
-	}, "5m", "10s").Should(o.SatisfyAll(
+	}, "5m", "2s").Should(o.SatisfyAll(
 		o.HaveKeyWithValue("status", "True"),
 		o.HaveKeyWithValue("message", o.ContainSubstring("Updating version in progress"))))
 	logger.Infof("status of condition UpdatingVersion is True")
@@ -414,7 +414,7 @@ func (np *HypershiftNodePool) WaitUntilVersionUpdateIsCompleted() {
 			return false
 		}
 		return true
-	}, np.EstimateTimeoutInMins(), "30s").Should(o.BeTrue(), "version update is not completed")
+	}, np.EstimateTimeoutInMins(), "2s").Should(o.BeTrue(), "version update is not completed")
 	logger.Infof("nodepool %s version update is completed", np.GetName())
 }
 

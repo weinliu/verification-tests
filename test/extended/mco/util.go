@@ -540,8 +540,10 @@ func getLatestImageURL(oc *exutil.CLI, release string) (string, string) {
 	imageJSON := JSON(imageInfo)
 	buildVersion := imageJSON.Get("config").Get("config").Get("Labels").Get(`io.openshift.release`).ToString()
 	o.Expect(buildVersion).NotTo(o.BeEmpty(), "nightly build version is empty")
+	imageDigest := imageJSON.Get("digest").ToString()
+	o.Expect(imageDigest).NotTo(o.BeEmpty(), "image digest is empty")
 
-	imageURL := fmt.Sprintf(imageURLFormat, registryBaseURL, buildVersion)
+	imageURL := fmt.Sprintf("%s@%s", registryBaseURL, imageDigest)
 	logger.Infof("Get latest nigthtly build of %s: %s", release, imageURL)
 
 	return imageURL, buildVersion

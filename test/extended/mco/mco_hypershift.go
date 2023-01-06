@@ -599,12 +599,12 @@ func (ht *HypershiftTest) VerifyFileContent() {
 func skipTestIfHostedClusterVersionIsNotMatched(oc *exutil.CLI, version string) {
 
 	// in CI env, there is a preinstalled hostedcluster, get release image info from the 1st one
-	imageURL := NewNamespacedResource(oc.AsAdmin(),
+	imageVersion := NewNamespacedResource(oc.AsAdmin(),
 		HypershiftHostedCluster,
 		exutil.GetHyperShiftHostedClusterNameSpace(oc),
-		getFirstHostedCluster(oc)).GetOrFail("{.spec.release.image}")
-	logger.Infof("hosted cluster is running with image %s", imageURL)
-	if !strings.Contains(imageURL, version) {
+		getFirstHostedCluster(oc)).GetOrFail("{.status.version.history[0].version}")
+	logger.Infof("hosted cluster is running with version %s", imageVersion)
+	if !strings.Contains(imageVersion, version) {
 		g.Skip(fmt.Sprintf("skip this test, hosted cluster is not running with %s image", version))
 	}
 }
