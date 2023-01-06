@@ -21,10 +21,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc                                      = exutil.NewCLI("hypershift", exutil.KubeConfigPath())
-		guestClusterName, guestClusterNamespace string
-		iaasPlatform                            string
-		hostedcluster                           *hostedCluster
+		oc            = exutil.NewCLI("hypershift", exutil.KubeConfigPath())
+		iaasPlatform  string
+		hostedcluster *hostedCluster
 	)
 
 	g.BeforeEach(func() {
@@ -42,13 +41,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		if len(clusterNames) <= 0 {
 			g.Skip("hypershift guest cluster not found, skip test run")
 		}
-
-		//get first guest cluster to run test
-		guestClusterName = strings.Split(clusterNames, " ")[0]
-		guestClusterNamespace = "clusters-" + guestClusterName
-
-		res := doOcpReq(oc, OcpGet, true, "-n", "hypershift", "pod", "-o=jsonpath={.items[0].status.phase}")
-		checkSubstring(res, []string{"Running"})
 
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
@@ -94,46 +86,27 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("HyperShiftMGMT-Author:heli-Critical-43282-Implement versioning API and report version status in hostedcluster[Serial][Disruptive]", func() {
-		oriImage := doOcpReq(oc, OcpGet, true, "-n", "clusters", "hostedcluster", guestClusterName, "-ojsonpath={.status.version.desired.image}")
-		e2e.Logf("hostedcluster %s image: %s", guestClusterName, oriImage)
+	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:heli-Critical-43282-Implement versioning API and report version status in hostedcluster[Serial][Disruptive]", func() {
+		oriImage := hostedcluster.getCPReleaseImage()
+		e2e.Logf("hostedcluster %s image: %s", hostedcluster.name, oriImage)
 
 		defer func() {
-			//change back
-			patchOption := fmt.Sprintf("-p=[{\"op\": \"replace\", \"path\": \"/spec/release/image\",\"value\": \"%s\"}]", oriImage)
-			doOcpReq(oc, OcpPatch, true, "-n", "clusters", "hostedcluster", guestClusterName, "--type=json", patchOption)
-
-			err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-				//check hostedcluster status image, check by spec/release/image
-				res := doOcpReq(oc, OcpGet, true, "-n", "clusters", "hostedcluster", guestClusterName, "-ojsonpath={.spec.release.image}")
-				if strings.Contains(res, oriImage) {
-					return true, nil
-				}
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(err, "release image of hostedcluster change back error")
+			hostedcluster.upgradeCPPayload(oriImage)
+			o.Eventually(hostedcluster.pollCheckUpgradeCPPayload(oriImage), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "defer: pollCheckUpgradeCPPayload ready error")
 		}()
 
-		//change image version to quay.io/openshift-release-dev/ocp-release:4.9.0-x86_64
-		desiredImage := "quay.io/openshift-release-dev/ocp-release:4.11.3-x86_64"
-		patchOption := fmt.Sprintf("-p=[{\"op\": \"replace\", \"path\": \"/spec/release/image\",\"value\": \"%s\"}]", desiredImage)
-		doOcpReq(oc, OcpPatch, true, "-n", "clusters", "hostedcluster", guestClusterName, "--type=json", patchOption)
+		g.By("replace controlplane image to the latest 4.12 nightly")
+		dirImage, err := exutil.GetLatestNightlyImage("4.12")
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		if strings.Contains(dirImage, oriImage) {
+			dirImage, err = exutil.GetLatest4StableImage()
+			o.Expect(err).ShouldNot(o.HaveOccurred())
+		}
 
-		err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-			//check hostedcluster status image
-			res := doOcpReq(oc, OcpGet, true, "-n", "clusters", "hostedcluster", guestClusterName, "-ojsonpath={.status.version.desired.image}")
-			if !strings.Contains(res, desiredImage) {
-				return false, nil
-			}
-
-			//check hostedcontrolplane spec.releaseImage
-			res = doOcpReq(oc, OcpGet, true, "-n", guestClusterNamespace, "hostedcontrolplane", guestClusterName, "-ojsonpath={.spec.releaseImage}")
-			if !strings.Contains(res, desiredImage) {
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "release image of hostedcluster update error")
+		hostedcluster.upgradeCPPayload(dirImage)
+		o.Eventually(hostedcluster.pollCheckUpgradeCPPayload(dirImage), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "pollCheckUpgradeCPPayload ready error")
+		imageInStatusDir := hostedcluster.getCPDesiredPayload()
+		o.Expect(imageInStatusDir).Should(o.ContainSubstring(dirImage))
 	})
 
 	// author: heli@redhat.com
@@ -518,41 +491,61 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			"oauth-openshift",
 			"openshift-oauth-apiserver",
 			"openshift-apiserver",
+			"packageserver",
 			"capi-provider",
 			"catalog-operator",
+			"certified-operators-catalog",
 			"cluster-api",
 			"cluster-autoscaler",
+			"cluster-image-registry-operator",
+			"cluster-network-operator",
+			"cluster-node-tuning-operator",
 			"cluster-policy-controller",
+			"cluster-storage-operator",
+			"cluster-version-operator",
+			"community-operators-catalog",
 			"control-plane-operator",
+			"csi-snapshot-controller-operator",
+			"dns-operator",
+			"hosted-cluster-config-operator",
 			"ignition-server",
-			"kube-controller-manager",
-			"kube-scheduler",
-			"olm-operator",
-			"openshift-controller-manager",
-			//no etcd operator yet
-			//"etcd-operator",
+			"ingress-operator",
 			"konnectivity-agent",
 			"konnectivity-server",
-			"cluster-version-operator",
-			"hosted-cluster-config-operator",
-			"packageserver",
-			"certified-operators-catalog",
-			"community-operators-catalog",
+			"kube-controller-manager",
+			"kube-scheduler",
+			"machine-approver",
+			"olm-operator",
+			"openshift-controller-manager",
+			"openshift-route-controller-manager",
 			"redhat-marketplace-catalog",
 			"redhat-operators-catalog",
+			//https://issues.redhat.com/browse/OCPBUGS-5060
+			//"aws-ebs-csi-driver-controller",
+			//"aws-ebs-csi-driver-operator",
+			//"cloud-network-config-controller",
+			//"csi-snapshot-controller",
+			//"csi-snapshot-webhook",
+			//"multus-admission-controller",
 		}
 
+		controlplaneNS := hostedcluster.namespace + "-" + hostedcluster.name
 		controlplanAffinityLabelKey := "hypershift.openshift.io/hosted-control-plane"
-		controlplanAffinityLabelValue := guestClusterNamespace
+		controlplanAffinityLabelValue := controlplaneNS
 		ocJsonpath := "-ojsonpath={.spec.template.spec.affinity.podAffinity.preferredDuringSchedulingIgnoredDuringExecution[0].podAffinityTerm.labelSelector.matchLabels}"
 
 		for _, component := range controlplaneComponents {
-			res := doOcpReq(oc, OcpGet, true, "deploy", component, "-n", guestClusterNamespace, ocJsonpath)
+			res := doOcpReq(oc, OcpGet, true, "deploy", component, "-n", controlplaneNS, ocJsonpath)
 			o.Expect(res).To(o.ContainSubstring(controlplanAffinityLabelKey))
 			o.Expect(res).To(o.ContainSubstring(controlplanAffinityLabelValue))
 		}
 
-		res := doOcpReq(oc, OcpGet, true, "pod", "-n", guestClusterNamespace, "-l", controlplanAffinityLabelKey+"="+controlplanAffinityLabelValue)
+		//https://issues.redhat.com/browse/OCPBUGS-5060 ovnkube-master
+		res := doOcpReq(oc, OcpGet, true, "sts", "etcd", "-n", controlplaneNS, ocJsonpath)
+		o.Expect(res).To(o.ContainSubstring(controlplanAffinityLabelKey))
+		o.Expect(res).To(o.ContainSubstring(controlplanAffinityLabelValue))
+
+		res = doOcpReq(oc, OcpGet, true, "pod", "-n", controlplaneNS, "-l", controlplanAffinityLabelKey+"="+controlplanAffinityLabelValue)
 		checkSubstring(res, controlplaneComponents)
 	})
 

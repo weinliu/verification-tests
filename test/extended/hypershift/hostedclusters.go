@@ -335,11 +335,12 @@ func (h *hostedCluster) getCPReleaseImage() string {
 }
 
 // getCPPayload return current hosted cluster actual payload
-func (h *hostedCluster) getCPPayload() string {
+func (h *hostedCluster) getCPPayloadTag() string {
 	payload, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace, "hostedcluster", h.name,
 		`-ojsonpath={.status.version.history[?(@.state=="Completed")].version}`).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
-	return payload
+	// for multi payloads just use the first one
+	return strings.TrimSpace(strings.Split(payload, " ")[0])
 }
 
 // getCPDesiredPayload return desired payload in status
@@ -359,8 +360,8 @@ func (h *hostedCluster) upgradeCPPayload(payload string) {
 
 func (h *hostedCluster) pollCheckUpgradeCPPayload(payload string) func() bool {
 	return func() bool {
-		curPayload := h.getCPPayload()
-		if strings.Contains(curPayload, payload) {
+		curPayload := h.getCPPayloadTag()
+		if strings.Contains(payload, curPayload) {
 			return true
 		}
 
