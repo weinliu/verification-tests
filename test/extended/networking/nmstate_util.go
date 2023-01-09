@@ -27,6 +27,7 @@ type ifacePolicyResource struct {
 	descr      string
 	ifacetype  string
 	state      string
+	ipv6flag   bool
 	template   string
 }
 
@@ -121,9 +122,9 @@ func deleteNMStateCR(oc *exutil.CLI, rs nmstateCRResource) {
 }
 
 func configIface(oc *exutil.CLI, ifacepolicy ifacePolicyResource) (bool, error) {
-	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ifacepolicy.template, "-p", "NAME="+ifacepolicy.name, "NODELABEL="+ifacepolicy.nodelabel, "LABELVALUE="+ifacepolicy.labelvalue, "IFACENAME="+ifacepolicy.ifacename, "DESCR="+ifacepolicy.descr, "IFACETYPE="+ifacepolicy.ifacetype, "STATE="+ifacepolicy.state)
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ifacepolicy.template, "-p", "NAME="+ifacepolicy.name, "NODELABEL="+ifacepolicy.nodelabel, "LABELVALUE="+ifacepolicy.labelvalue, "IFACENAME="+ifacepolicy.ifacename, "DESCR="+ifacepolicy.descr, "IFACETYPE="+ifacepolicy.ifacetype, "STATE="+ifacepolicy.state, "IPV6FLAG="+strconv.FormatBool(ifacepolicy.ipv6flag))
 	if err != nil {
-		e2e.Logf("Error configure interface %v", err)
+		e2e.Failf("Error configure interface %v", err)
 		return false, err
 	}
 	return true, nil
