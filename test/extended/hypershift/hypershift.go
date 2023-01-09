@@ -21,9 +21,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc            = exutil.NewCLI("hypershift", exutil.KubeConfigPath())
-		iaasPlatform  string
-		hostedcluster *hostedCluster
+		oc                                  = exutil.NewCLI("hypershift", exutil.KubeConfigPath())
+		iaasPlatform, hypershiftTeamBaseDir string
+		hostedcluster                       *hostedCluster
 	)
 
 	g.BeforeEach(func() {
@@ -44,6 +44,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
+		hypershiftTeamBaseDir = exutil.FixturePath("testdata", "hypershift")
 	})
 
 	// author: heli@redhat.com
@@ -134,7 +135,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "nodepool ready after setting autoscaling error")
 
 		g.By("create a job as workload in the hosted cluster")
-		hypershiftTeamBaseDir := exutil.FixturePath("testdata", "hypershift")
 		workloadTemplate := filepath.Join(hypershiftTeamBaseDir, "workload.yaml")
 
 		// workload is deployed on guest cluster default namespace, and will be cleared in the end
@@ -613,4 +613,65 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			}
 		}
 	})
+
+	// author: heli@redhat.com
+	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:heli-Critical-43553-Test MHC through nodePools[Disruptive]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 48025 is for AWS - skipping test ...")
+		}
+
+		g.By("create aws nodepool with replica 2")
+		npName := "jz-43553-01"
+		replica := 2
+		releaseImage := doOcpReq(oc, OcpGet, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-ojsonpath={.spec.release.image}")
+
+		defer func() {
+			hostedcluster.deleteNodePool(npName)
+			o.Eventually(hostedcluster.pollCheckDeletedNodePool(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "in defer check deleted nodepool error")
+		}()
+
+		NewAWSNodePool(npName, hostedcluster.name, hostedcluster.namespace).
+			WithNodeCount(&replica).
+			WithReleaseImage(releaseImage).
+			CreateAWSNodePool()
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(),
+			fmt.Sprintf("nodepool %s ready error", npName))
+
+		g.By("enable autoRepair for the nodepool")
+		hostedcluster.setNodepoolAutoRepair(npName, "true")
+		o.Eventually(hostedcluster.pollCheckNodepoolAutoRepairEnabled(npName), ShortTimeout, ShortTimeout/10).Should(o.BeTrue(), fmt.Sprintf("nodepool %s autoRepair enable error", npName))
+
+		g.By("find a hosted cluster node based on the nodepool")
+		labelFilter := "hypershift.openshift.io/nodePool=" + npName
+		nodes := hostedcluster.getHostedClusterNodeNameByLabelFilter(labelFilter)
+		o.Expect(nodes).ShouldNot(o.BeEmpty())
+		nodeName := strings.Split(nodes, " ")[0]
+
+		g.By("create a pod to kill kubelet in the corresponding node of the nodepool")
+		kubeletKillerTemplate := filepath.Join(hypershiftTeamBaseDir, "kubelet-killer.yaml")
+		kk := kubeletKiller{
+			Name:      "kubelet-killer-43553",
+			Namespace: "default",
+			NodeName:  nodeName,
+			Template:  kubeletKillerTemplate,
+		}
+
+		//create kubelet-killer pod to kill kubelet
+		parsedWorkloadFile := "ocp-43553-kubelet-killer-template.config"
+		defer kk.delete(oc, hostedcluster.getHostedClusterKubeconfigFile(), parsedWorkloadFile)
+		kk.create(oc, hostedcluster.getHostedClusterKubeconfigFile(), parsedWorkloadFile)
+		o.Eventually(hostedcluster.pollCheckNodeHealthByMHC(npName), ShortTimeout, ShortTimeout/10).ShouldNot(o.BeTrue(), fmt.Sprintf("mhc %s check failed", npName))
+		status := hostedcluster.getHostedClusterNodeReadyStatus(nodeName)
+		o.Expect(status).ShouldNot(o.BeEmpty())
+		//firstly the node status will be Unknown
+		o.Expect(status).ShouldNot(o.ContainSubstring("True"))
+
+		g.By("check if a new node is provisioned eventually")
+		o.Eventually(hostedcluster.pollGetHostedClusterReadyNodeCount(npName), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.Equal(replica), fmt.Sprintf("node pool %s: not expected ready node number error", npName))
+
+		g.By("disable autoRepair")
+		hostedcluster.setNodepoolAutoRepair(npName, "false")
+		o.Eventually(hostedcluster.pollCheckNodepoolAutoRepairDisabled(npName), ShortTimeout, ShortTimeout/10).Should(o.BeTrue(), fmt.Sprintf("nodepool %s autoRepair disable error", npName))
+	})
+
 })

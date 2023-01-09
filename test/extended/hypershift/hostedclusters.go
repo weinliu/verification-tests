@@ -31,8 +31,14 @@ func (h *hostedCluster) setHostedClusterKubeconfigFile(kubeconfig string) {
 	h.hostedClustersKubeconfigFile = kubeconfig
 }
 
-func (h *hostedCluster) getHostedClusterReadyNodeCount() (int, error) {
-	value, er := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("--kubeconfig="+h.hostedClustersKubeconfigFile, "node", `-ojsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}'`).Output()
+// getHostedClusterReadyNodeCount get ready nodes count
+// name: npName name, if empty, get all ready nodes' count
+func (h *hostedCluster) getHostedClusterReadyNodeCount(npName string) (int, error) {
+	cond := []string{"--kubeconfig=" + h.hostedClustersKubeconfigFile, "node", "--ignore-not-found", `-ojsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}'`}
+	if len(npName) > 0 {
+		cond = append(cond, "-l", "hypershift.openshift.io/nodePool="+npName)
+	}
+	value, er := h.oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run("get").Args(cond...).Output()
 	if er != nil {
 		e2e.Logf(" get node status ready error: %v", er)
 		return 0, er
@@ -40,9 +46,10 @@ func (h *hostedCluster) getHostedClusterReadyNodeCount() (int, error) {
 	return strings.Count(value, "True"), nil
 }
 
-func (h *hostedCluster) pollGetHostedClusterReadyNodeCount() func() int {
+func (h *hostedCluster) pollGetHostedClusterReadyNodeCount(npName string) func() int {
 	return func() int {
-		value, _ := h.getHostedClusterReadyNodeCount()
+		value, err := h.getHostedClusterReadyNodeCount(npName)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
 		return value
 	}
 }
@@ -226,7 +233,7 @@ func (h *hostedCluster) checkNodePoolReady(name string) bool {
 		o.Expect(err).ShouldNot(o.HaveOccurred())
 		currentNodes, err := h.oc.AsAdmin().WithoutNamespace().Run("get").Args("np", "-n", h.namespace, name, "-o=jsonpath={.status.replicas}").Output()
 		o.Expect(err).ShouldNot(o.HaveOccurred())
-		return strings.Contains(desiredNodes, currentNodes)
+		return desiredNodes == currentNodes
 	}
 	return true
 }
@@ -245,6 +252,126 @@ func (h *hostedCluster) setNodepoolAutoScale(name, max, min string) {
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 	_, err = h.oc.AsAdmin().WithoutNamespace().Run(OcpPatch).Args("-n", h.namespace, "nodepools", name, autoscalConfig, "--type=merge").Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
+}
+
+// getNodepoolNodeName get hosted cluster node names by labels
+// labelFileter: ${key1}={value1},${key2}={value2} e.g.hypershift.openshift.io/nodePool=hypershift-ci-22374-us-east-2a
+func (h *hostedCluster) getHostedClusterNodeNameByLabelFilter(labelFilter string) string {
+	nameCond := `-ojsonpath={.items[*].metadata.name}`
+	nodesName, err := h.oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run(OcpGet).Args("node", "--ignore-not-found", "-l", labelFilter, nameCond).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return nodesName
+}
+
+func (h *hostedCluster) getHostedClusterNodeReadyStatus(nodeName string) string {
+	labelFilter := "kubernetes.io/hostname=" + nodeName
+	readyCond := `-ojsonpath={.items[].status.conditions[?(@.type=="Ready")].status}`
+	status, err := h.oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run(OcpGet).Args("node", "--ignore-not-found", "-l", labelFilter, readyCond).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return status
+}
+
+// setNodepoolAutoRepair set spec.management.autoRepair value
+// enabled: true or false
+func (h *hostedCluster) setNodepoolAutoRepair(name, enabled string) {
+	autoRepairConfig := fmt.Sprintf(`--patch={"spec": {"management": {"autoRepair": %s}}}`, enabled)
+	_, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpPatch).Args("-n", h.namespace, "nodepools", name, autoRepairConfig, "--type=merge").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+}
+
+func (h *hostedCluster) pollCheckNodepoolAutoRepairDisabled(name string) func() bool {
+	return func() bool {
+		return h.checkNodepoolAutoRepairDisabled(name)
+	}
+}
+
+func (h *hostedCluster) checkNodepoolAutoRepairDisabled(name string) bool {
+	//check nodeool status
+	autoRepairCond := `-ojsonpath={.status.conditions[?(@.type=="AutorepairEnabled")].status}`
+	rc, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace, "nodepools", name, autoRepairCond).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	if strings.Contains(rc, "True") {
+		return false
+	}
+
+	//check mhc should not exist
+	mchCAPI := "machinehealthchecks.cluster.x-k8s.io"
+	rc, err = h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace+"-"+h.name, mchCAPI, name, "--ignore-not-found").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	if len(rc) > 0 {
+		return false
+	}
+
+	return true
+}
+
+func (h *hostedCluster) pollCheckNodepoolAutoRepairEnabled(name string) func() bool {
+	return func() bool {
+		return h.checkNodepoolAutoRepairEnabled(name)
+	}
+}
+
+func (h *hostedCluster) checkNodepoolAutoRepairEnabled(name string) bool {
+	//check nodeool status
+	autoRepairCond := `-ojsonpath={.status.conditions[?(@.type=="AutorepairEnabled")].status}`
+	rc, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace, "nodepools", name, autoRepairCond).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	if !strings.Contains(rc, "True") {
+		return false
+	}
+
+	//get np replica
+	npReplica, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace, "nodepools", name, "-ojsonpath={.status.replicas}").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+
+	//check mhc currentHealthy, mch name is same with nodepool name
+	mchCAPI := "machinehealthchecks.cluster.x-k8s.io"
+	currentHealthyNum, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace+"-"+h.name, mchCAPI, name, "-ojsonpath={.status.currentHealthy}").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return npReplica == currentHealthyNum
+}
+
+func (h *hostedCluster) pollCheckNodeHealthByMHC(mhcName string) func() bool {
+	return func() bool {
+		return h.checkNodeHealthByMHC(mhcName)
+	}
+}
+
+// checkNodeHealthByMHC checks if "Expected Machines" is same with "Current Healthy" in MHC
+func (h *hostedCluster) checkNodeHealthByMHC(mhcName string) bool {
+	mchCAPI := "machinehealthchecks.cluster.x-k8s.io"
+
+	expectedMachineCond := `-ojsonpath={.status.expectedMachines}`
+	expectedMachineNum, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace+"-"+h.name, mchCAPI, mhcName, expectedMachineCond).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+
+	currentHealthyCond := `-ojsonpath={.status.currentHealthy}`
+	currentHealthyNum, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace+"-"+h.name, mchCAPI, mhcName, currentHealthyCond).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return expectedMachineNum == currentHealthyNum
+}
+
+func (h *hostedCluster) pollCheckDeletedNodePool(npName string) func() bool {
+	return func() bool {
+		return h.checkDeletedNodePool(npName)
+	}
+}
+
+func (h *hostedCluster) checkDeletedNodePool(npName string) bool {
+	rc, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace, "np", npName, "--ignore-not-found").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	if len(strings.TrimSpace(rc)) > 0 {
+		return false
+	}
+
+	params := []string{"no", "--ignore-not-found", "-l", "hypershift.openshift.io/nodePool=" + npName}
+	rc, err = h.oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run(OcpGet).Args(params...).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	if len(strings.TrimSpace(rc)) > 0 {
+		return false
+	}
+
+	return true
 }
 
 func (h *hostedCluster) pollCheckNodepoolCurrentNodes(name, expected string) func() bool {
