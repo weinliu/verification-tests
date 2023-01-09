@@ -4408,6 +4408,26 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(output).To(o.ContainSubstring("deployment.apps/ansiblemetrics-controller-manager"))
 
 		waitErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+			podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", nsOperator).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			lines := strings.Split(podList, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "ansiblemetrics-controller-manager") {
+					if strings.Contains(line, "2/2") {
+						e2e.Logf("the status of pod ansiblemetrics-controller-manager is Running")
+						return true, nil
+					}
+					e2e.Logf("the status of pod ansiblemetrics-controller-manager is not Running")
+					return false, nil
+				}
+			}
+			return false, nil
+		})
+		if waitErr != nil {
+			logDebugInfo(oc, nsOperator, "events", "pod")
+		}
+
+		waitErr = wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/ansiblemetrics-controller-manager", "-c", "manager", "-n", nsOperator).Output()
 			if !strings.Contains(msg, "Starting workers") {
 				e2e.Failf("Starting workers failed")
