@@ -1466,4 +1466,67 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		haproxyConfig := readRouterPodData(oc, podname, "cat haproxy.config", "proto")
 		o.Expect(haproxyConfig).NotTo(o.ContainSubstring("proto-version"))
 	})
+
+	// Bug: 2044682
+	g.It("ROSA-OSD_CCS-ARO-Author:shudili-High-54998-Set Cookie2 by an application in a route should not kill all router pods", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "ocp54998-web-server-rc.yaml")
+			srvrcInfo           = "web-server-rc-54998"
+			srvName             = "service-unsecure-54998"
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+			ingctrl             = ingressControllerDescription{
+				name:      "54998",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		g.By("create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("get one custom ingress-controller router pod's IP")
+		podname := getRouterPod(oc, ingctrl.name)
+		podIP := getPodv4Address(oc, podname, "openshift-ingress")
+
+		g.By("create an unsecure service and its backend pod")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		err = waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
+
+		g.By("start the service on the backend server port 10081 by socat command")
+		jsonPath := ".items[0].metadata.name"
+		srvPodName := fetchJSONPathValue(oc, project1, "pods", jsonPath)
+		resWithSetCookie2 := `nohup socat -T 1 -d -d tcp-l:10081,reuseaddr,fork,crlf system:'echo -e "\"HTTP/1.0 200 OK\nDocumentType: text/html\nHeader: Set-Cookie2 X=Y;\n\nthis is a test\""'`
+		cmd1, _, _, errSetCookie2 := oc.AsAdmin().Run("exec").Args("-n", project1, srvPodName, "--", "bash", "-c", resWithSetCookie2).Background()
+		defer cmd1.Process.Kill()
+		o.Expect(errSetCookie2).NotTo(o.HaveOccurred())
+
+		g.By("expose a route with the unsecure service inside the project")
+		routehost := srvName + "-" + project1 + "." + ingctrl.domain
+		output, SrvErr := oc.Run("expose").Args("service", srvName, "--hostname="+routehost).Output()
+		o.Expect(SrvErr).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(srvName))
+
+		g.By("create a client pod to send traffic")
+		createResourceFromFile(oc, project1, clientPod)
+		err = waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+
+		g.By("curl the route from the client pod")
+		toDst := routehost + ":80:" + podIP
+		cmdOnPod := []string{cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst}
+		result := repeatCmd(oc, cmdOnPod, "Set-Cookie2 X=Y", 5)
+		o.Expect(result).To(o.ContainSubstring("passed"))
+	})
 })
