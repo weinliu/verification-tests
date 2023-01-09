@@ -522,6 +522,10 @@ func removeDuplicateElement(elements []string) []string {
 }
 
 func (registry *registry) createregistry(oc *exutil.CLI) serviceInfo {
+	defer func() {
+		oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "registry", "-n", registry.namespace, "-oyaml").Execute()
+		oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "deployment=registry", "-n", registry.namespace, "-oyaml").Execute()
+	}()
 	err := oc.AsAdmin().Run("new-app").Args("--image", registry.dockerImage, "-n", registry.namespace).Execute()
 	if err != nil {
 		e2e.Failf("Failed to create the registry server")
