@@ -39,7 +39,7 @@ objects:
             value: -Dlog4j.configuration=file:/etc/kafka/log4j.properties
           - name: JMX_PORT
             value: "5555"
-          image: quay.io/openshifttest/kafka@sha256:c5823a744a9c6944e3c2ba1e57f92a97835bccbd090226eaa119a50349e41a92
+          image: quay.io/openshifttest/kafka@sha256:2411662d89dd5700e1fe49aa8be1219843948da90cfe51a1c7a49bcef9d22dab
           imagePullPolicy: IfNotPresent
           lifecycle:
             preStop:
