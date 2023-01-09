@@ -394,4 +394,102 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get alert PodDisruptionBudgetAtLimit via prometheus"))
 	})
+
+	// author: knarra@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-Author:knarra-Critical-54195-Enable CronJobTimeZone feature and verify that it works fine", func() {
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		createCronJob := filepath.Join(buildPruningBaseDir, "cronjob54195.yaml")
+		cronJobIncorrectTz := filepath.Join(buildPruningBaseDir, "cronjob54195ic.yaml")
+		cronJobNoTz := filepath.Join(buildPruningBaseDir, "cronjob54195notz.yaml")
+
+		// Create test project
+		g.By("Create test project")
+		oc.SetupProject()
+
+		//Test CronJobTimeZone
+
+		g.By("Create cronJob With TimeZone")
+		cronCreationErr := oc.Run("create").Args("-f", createCronJob).Execute()
+		o.Expect(cronCreationErr).NotTo(o.HaveOccurred())
+
+		g.By("Verify that cronJob has been created successfully")
+		pollErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			cronjobCreated, cronDisplayErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("cronjob", "cronjob54195", "-n", oc.Namespace(), "-o=jsonpath={.metadata.name}").Output()
+			if cronDisplayErr != nil {
+				e2e.Logf("No cronjob is present: %s. Trying again", cronDisplayErr)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("cronjob54195", cronjobCreated); matched {
+				e2e.Logf("Cronjob has been created successfully\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("No job has been created"))
+
+		checkForTimezone, timeZoneDisplayErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("cronjob", "cronjob54195", "-n", oc.Namespace(), "-o=jsonpath={.spec.timeZone}").Output()
+		o.Expect(timeZoneDisplayErr).NotTo(o.HaveOccurred())
+		o.Expect(checkForTimezone).To(o.ContainSubstring("Asia/Calcutta"))
+
+		g.By("Verify job has been created successfully")
+		pollErr = wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			jobName, jobCreationErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("job", "-n", oc.Namespace()).Output()
+			if jobCreationErr != nil {
+				e2e.Logf("No job is present: %s. Trying again", jobCreationErr)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("cronjob54195", jobName); matched {
+				e2e.Logf("Job has been created successfully\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("No job has been created"))
+
+		//Test CronJob with incorrect timeZone
+
+		g.By("Verify that cronjob could not be created with incorrect time zone set")
+		incorrectCreation, incorrectCreationErr := oc.Run("create").Args("-f", cronJobIncorrectTz).Output()
+		o.Expect(incorrectCreationErr).To(o.HaveOccurred())
+		o.Expect(incorrectCreation).To(o.ContainSubstring("unknown time zone Asia/china"))
+
+		//Test CronJob with out timeZone param set
+
+		g.By("Verify that cronjob could be created with out timeZone param")
+		noTzCreationErr := oc.Run("create").Args("-f", cronJobNoTz).Execute()
+		o.Expect(noTzCreationErr).NotTo(o.HaveOccurred())
+
+		g.By("Verify that cronJob has been created successfully with out timezone param set")
+		pollErr = wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			cronjobCreatedNoTz, cronNoTzDisplayErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("cronjob", "cronjob54195notz", "-n", oc.Namespace(), "-o=jsonpath={.metadata.name}").Output()
+			if cronNoTzDisplayErr != nil {
+				e2e.Logf("No cronjob is present: %s. Trying again", cronNoTzDisplayErr)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("cronjob54195notz", cronjobCreatedNoTz); matched {
+				e2e.Logf("Cronjob has been created successfully\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("No job has been created"))
+
+		g.By("Verify job has been created successfully")
+		pollErr = wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			jobName, jobCreationErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("job", "-n", oc.Namespace()).Output()
+			if jobCreationErr != nil {
+				e2e.Logf("No job is present: %s. Trying again", jobCreationErr)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("cronjob54195notz", jobName); matched {
+				e2e.Logf("Job has been created successfully\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("No job has been created"))
+
+	})
+
 })
