@@ -510,6 +510,15 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		err = checkNetNs(oc, hostname, netNsPath)
 		exutil.AssertWaitPollNoErr(err, "the NetNs file is not cleaned !!!")
 	})
+
+	g.It("Author:minmli-High-55486-check not exist error MountVolume SetUp failed for volume serviceca object openshift-image-registry serviceca not registered", func() {
+		g.By("Test for case OCP-55486")
+		oc.SetupProject()
+
+		g.By("Check events of each cronjob")
+		err := checkEventsForErr(oc)
+		exutil.AssertWaitPollNoErr(err, "Found error: MountVolume.SetUp failed for volume ... not registered ")
+	})
 })
 
 var _ = g.Describe("[sig-node] NODE keda", func() {

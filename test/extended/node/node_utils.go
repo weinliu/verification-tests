@@ -657,6 +657,32 @@ func checkNetNs(oc *exutil.CLI, hostname string, netNsPath string) error {
 	})
 }
 
+// this function check if crontab events include error like : MountVolume.SetUp failed for volume "serviceca" : object "openshift-image-registry"/"serviceca" not registered
+func checkEventsForErr(oc *exutil.CLI) error {
+	return wait.Poll(1*time.Second, 3*time.Second, func() (bool, error) {
+		// get all cronjob's namespace from:
+		// NAMESPACE                              NAME               SCHEDULE       SUSPEND   ACTIVE   LAST SCHEDULE   AGE
+		// openshift-image-registry               image-pruner       0 0 * * *      False     0        <none>          4h36m
+		// openshift-operator-lifecycle-manager   collect-profiles   */15 * * * *   False     0        9m11s           4h40m
+		allcronjobs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cronjob", "--all-namespaces", "-o=jsonpath={range .items[*]}{@.metadata.namespace}{\"\\n\"}{end}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("the cronjobs namespaces are: %v", allcronjobs)
+		for _, s := range strings.Fields(allcronjobs) {
+			events, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("events", "-n", s).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			keyword := "MountVolume.SetUp failed for volume.*object.*not registered"
+			re := regexp.MustCompile(keyword)
+			found := re.FindAllString(events, -1)
+			if len(found) > 0 {
+				e2e.Logf("The events of ns [%v] hit the error: %v", s, found[0])
+				return false, nil
+			}
+		}
+		e2e.Logf("all the crontab events don't hit the error: MountVolume.SetUp failed for volume ... not registered")
+		return true, nil
+	})
+}
+
 func cleanupObjectsClusterScope(oc *exutil.CLI, objs ...objectTableRefcscope) error {
 	return wait.Poll(1*time.Second, 1*time.Second, func() (bool, error) {
 		for _, v := range objs {
