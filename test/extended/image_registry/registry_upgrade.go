@@ -20,7 +20,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		oc = exutil.NewCLI("default-registry-upgrade", exutil.KubeConfigPath())
 	)
 	// author: wewang@redhat.com
-	g.It("NonPreRelease-PreChkUpgrade-Author:wewang-High-264013-Upgrade cluster with insecureRegistries and blockedRegistries defined prepare [Disruptive]", func() {
+	g.It("NonPreRelease-PreChkUpgrade-Author:wewang-High-26401-Upgrade cluster with insecureRegistries and blockedRegistries defined prepare [Disruptive]", func() {
 		var (
 			ns = "26401-upgrade-ns"
 			mc = machineConfig{
