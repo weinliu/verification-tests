@@ -676,21 +676,20 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		g.By("Expose an route with the unsecure service inside the project")
 		routehost := srvName + "-" + project1 + "." + ingctrl.domain
-		output, SrvErr := oc.Run("expose").Args("service", srvName, "--hostname="+routehost).Output()
-		o.Expect(SrvErr).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring(srvName))
+		srvErr := oc.Run("expose").Args("service", srvName, "--hostname="+routehost).Execute()
+		o.Expect(srvErr).NotTo(o.HaveOccurred())
+		waitForOutput(oc, project1, "route", ".items[0].metadata.name", srvName)
 
 		g.By("curl a normal route from the client pod")
-		toDst := routehost + ":80:" + podIP
-		cmdOnPod := []string{cltPodName, "--", "curl", "-i", "http://" + routehost, "--resolve", toDst}
-		result := repeatCmd(oc, cmdOnPod, "200 OK", 5)
-		o.Expect(result).To(o.ContainSubstring("passed"))
+		routestring := srvName + "-" + project1 + "." + ingctrl.name + "."
+		waitForCurl(oc, cltPodName, baseDomain, routestring, "200 OK", podIP)
 
 		g.By("curl a non-existing route, expect to get custom http 404 Not Found error")
 		notExistRoute := "notexistroute" + "-" + project1 + "." + ingctrl.domain
+		toDst := routehost + ":80:" + podIP
 		toDst2 := notExistRoute + ":80:" + podIP
-		output, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-v", "http://"+notExistRoute, "--resolve", toDst2).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		output, errCurlRoute := oc.Run("exec").Args(cltPodName, "--", "curl", "-v", "http://"+notExistRoute, "--resolve", toDst2).Output()
+		o.Expect(errCurlRoute).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("404 Not Found"))
 		o.Expect(output).To(o.ContainSubstring("Custom error page:The requested document was not found"))
 
