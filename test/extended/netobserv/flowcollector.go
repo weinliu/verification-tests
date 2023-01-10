@@ -22,6 +22,7 @@ type Flowcollector struct {
 	LokiURL             string
 	LokiAuthToken       string
 	LokiTLSEnable       bool
+	LokiCertName        string
 }
 
 // Metrics struct to handle Metrics resources
@@ -87,6 +88,9 @@ func (flow *Flowcollector) createFlowcollector(oc *exutil.CLI) {
 		parameters = append(parameters, "LOKI_TLS_ENABLE="+strconv.FormatBool(flow.LokiTLSEnable))
 	}
 
+	if flow.LokiCertName != "" {
+		parameters = append(parameters, "LOKI_CERT_NAME="+flow.LokiCertName)
+	}
 	exutil.ApplyNsResourceFromTemplate(oc, flow.Namespace, parameters...)
 }
 

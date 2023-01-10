@@ -11,7 +11,7 @@ objects:
   - apiGroups:
     - 'loki.grafana.com'
     resources:
-    - infrastructure
+    - network
     resourceNames:
     - logs
     verbs:

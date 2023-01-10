@@ -276,7 +276,6 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 		}
 	}
 	//WaitForDeploymentPodsToBeReady(oc, so.Namespace, so.OperatorName)
-	waitForPodReadyWithLabel(oc, so.Namespace, "name="+so.OperatorName)
 }
 
 func deleteNamespace(oc *exutil.CLI, ns string) {
@@ -313,7 +312,7 @@ func (so *SubscriptionObjects) uninstallOperator(oc *exutil.CLI) {
 }
 
 func checkOperatorStatus(oc *exutil.CLI, operatorNamespace string, operatorName string) bool {
-	err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", operatorNamespace).Execute()
+	err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", operatorName, "-n", operatorNamespace).Execute()
 	if err1 == nil {
 		csvName, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", operatorName, "-n", operatorNamespace, "-o=jsonpath={.status.installedCSV}").Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
@@ -322,8 +321,10 @@ func checkOperatorStatus(oc *exutil.CLI, operatorNamespace string, operatorName 
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Compare(csvState, "Succeeded") == 0 {
 			e2e.Logf("CSV check complete!!!")
+			e2e.Logf("%s operator already present in the cluster", operatorName)
 			return true
 		}
 	}
+	e2e.Logf("%s operator will be created by tests", operatorName)
 	return false
 }

@@ -50,7 +50,7 @@ objects:
       endpoints:
       - interval: 15s
         port: main
-        scheme: https
+        scheme: "${SCHEME}"
         tlsConfig:
           insecureSkipVerify: true
       namespaceSelector:

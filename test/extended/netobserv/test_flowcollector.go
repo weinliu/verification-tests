@@ -16,65 +16,57 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 	defer g.GinkgoRecover()
 	var (
-		netobsdir string
-		versions  version
-		oc        = exutil.NewCLI("netobserv", exutil.KubeConfigPath())
+		oc = exutil.NewCLI("netobserv", exutil.KubeConfigPath())
+		// NetObserv Operator variables
+		operatorNamespace = "openshift-operators-redhat"
+		NOPackageName     = "netobserv-operator"
+		subTemplate       = exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
+		catsrc            = resource{"catsrc", "qe-app-registry", "openshift-marketplace"}
+		baseDir           = exutil.FixturePath("testdata", "netobserv")
+		flowFixturePath   = filePath.Join(baseDir, "flowcollector_v1alpha1_template.yaml")
+		NOSource          = CatalogSourceObjects{"v1.0.x", catsrc.name, catsrc.namespace}
+		NO                = SubscriptionObjects{
+			OperatorName:  "netobserv-operator",
+			Namespace:     operatorNamespace,
+			PackageName:   NOPackageName,
+			Subscription:  subTemplate,
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+			CatalogSource: NOSource,
+		}
 	)
 
 	g.BeforeEach(func() {
-		flowcollectorExists, err := isFlowCollectorAPIExists(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
+		if strings.Contains(output, "NotFound") {
+			g.Skip("Skip since catalogsource/qe-app-registry is not installed")
+		}
 
-		err = exutil.CheckNetworkOperatorStatus(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By(fmt.Sprintf("Subscribe operators to %s channel", NOSource.Channel))
 
-		versions.versionMap()
-		if !flowcollectorExists {
-			err := versions.deployNetobservOperator(true, &netobsdir)
+		// Check if Network Observability Operator is already present
+		NOexisting := checkOperatorStatus(oc, operatorNamespace, NOPackageName)
+
+		// Deply operator if not present
+		if !NOexisting {
+			NO.SubscribeOperator(oc)
+			// Check if NO operator is deployed
+			waitForPodReadyWithLabel(oc, operatorNamespace, "app="+NO.OperatorName)
+			NOStatus := checkOperatorStatus(oc, operatorNamespace, NOPackageName)
+			o.Expect((NOStatus)).To(o.BeTrue())
+
+			// check if flowcollector API exists
+			flowcollectorAPIExists, err := isFlowCollectorAPIExists(oc)
+			o.Expect((flowcollectorAPIExists)).To(o.BeTrue())
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
-
-	})
-
-	// author: jechen@redhat.com
-	g.It("Author:jechen-High-45304-Kube-enricher uses flowlogsPipeline as collector for network flow [Serial]", func() {
-		g.By("1. create new namespace")
-		namespace := oc.Namespace()
-		flowFixture := exutil.FixturePath("testdata", "netobserv", "flowcollector_v1alpha1_template.yaml")
-
-		flowlogsPipeline := Flowcollector{
-			Namespace: namespace,
-			Template:  flowFixture,
-		}
-
-		g.By("2. Create flowlogsPipeline deployment")
-		defer flowlogsPipeline.deleteFlowcollector(oc)
-		flowlogsPipeline.createFlowcollector(oc)
-
-		g.By("3. Verify flowlogsPipeline collector is added")
-		output := getFlowlogsPipelineCollector(oc, "flowCollector")
-		o.Expect(output).To(o.ContainSubstring("cluster"))
-
-		g.By("4. Wait for flowlogs-pipeline pods and eBPF pods are in running state")
-		exutil.AssertAllPodsToBeReady(oc, namespace)
-		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
-
-		g.By("5. Get flowlogs-pipeline pod, check the flowlogs-pipeline pod logs and verify that flows are recorded")
-		podname := getFlowlogsPipelinePod(oc, namespace, "flowlogs-pipeline")
-		podLogs, err := exutil.WaitAndGetSpecificPodLogs(oc, namespace, "", podname, `'{"Bytes":'`)
-		exutil.AssertWaitPollNoErr(err, "Did not get log for the pod with app=flowlogs-pipeline label")
-		verifyFlowRecord(podLogs)
 	})
 
 	g.It("Author:memodi-High-49107-verify pods are created [Serial]", func() {
 		namespace := oc.Namespace()
-		flowcollectorFixture := "flowcollector_v1alpha1_template.yaml"
-		flowFixture := exutil.FixturePath("testdata", "netobserv", flowcollectorFixture)
-
 		flow := Flowcollector{
 			Namespace:     namespace,
 			ProcessorKind: "DaemonSet",
-			Template:      flowFixture,
+			Template:      flowFixturePath,
 		}
 		defer flow.deleteFlowcollector(oc)
 		flow.createFlowcollector(oc)
@@ -91,15 +83,40 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 	})
 
+	// author: jechen@redhat.com
+	g.It("Author:jechen-High-45304-Kube-enricher uses flowlogsPipeline as collector for network flow [Serial]", func() {
+		namespace := oc.Namespace()
+		g.By("1. Create flowlogsPipeline deployment")
+		flowlogsPipeline := Flowcollector{
+			Namespace: namespace,
+			Template:  flowFixturePath,
+		}
+
+		defer flowlogsPipeline.deleteFlowcollector(oc)
+		flowlogsPipeline.createFlowcollector(oc)
+
+		g.By("2. Verify flowlogsPipeline collector is added")
+		output := getFlowlogsPipelineCollector(oc, "flowCollector")
+		o.Expect(output).To(o.ContainSubstring("cluster"))
+
+		g.By("3. Wait for flowlogs-pipeline pods and eBPF pods are in running state")
+		exutil.AssertAllPodsToBeReady(oc, namespace)
+		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
+
+		g.By("4. Get flowlogs-pipeline pod, check the flowlogs-pipeline pod logs and verify that flows are recorded")
+		podname := getFlowlogsPipelinePod(oc, namespace, "flowlogs-pipeline")
+		podLogs, err := exutil.WaitAndGetSpecificPodLogs(oc, namespace, "", podname, `'{"Bytes":'`)
+		exutil.AssertWaitPollNoErr(err, "Did not get log for the pod with app=flowlogs-pipeline label")
+		verifyFlowRecord(podLogs)
+	})
+
 	g.It("Author:memodi-High-46712-High-46444-verify collector as Deployment or DaemonSet [Serial]", func() {
 		g.Skip("The new CRD changes makes this testcase obsolete...")
 		namespace := oc.Namespace()
-		flowFixture := exutil.FixturePath("testdata", "netobserv", "flowcollector_v1alpha1_template.yaml")
-
 		flow := Flowcollector{
 			Namespace:     namespace,
 			ProcessorKind: "DaemonSet",
-			Template:      flowFixture,
+			Template:      flowFixturePath,
 		}
 		defer flow.deleteFlowcollector(oc)
 		flow.createFlowcollector(oc)
@@ -170,9 +187,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 	g.It("Author:aramesha-High-54043-verify metric server on TLS [Serial]", func() {
 		namespace := oc.Namespace()
-		baseDir := exutil.FixturePath("testdata", "netobserv")
-		// flowCollector Template path
-		flowFixturePath := filePath.Join(baseDir, "flowcollector_v1alpha1_template.yaml")
 		// metrics Template path
 		promMetricsFixturePath := filePath.Join(baseDir, "monitoring.yaml")
 		curlDest := fmt.Sprintf("https://flowlogs-pipeline-prom.%s.svc:9102/metrics", namespace)
@@ -181,19 +195,35 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		flowlogsPodCertPath := "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt"
 		// configMap Template path
 		configMapFixturePath := filePath.Join(baseDir, "cluster-monitoring-config-cm.yaml")
+		// Forward clusterRoleBinding Template path
+		forwardCRBPath := filePath.Join(baseDir, "clusterRoleBinding-FORWARD.yaml")
 
-		// lokiPVC template path
-		lokiPVCFixturePath := filePath.Join(baseDir, "loki-pvc.yaml")
-		// loki template path
-		lokiStorageFixturePath := filePath.Join(baseDir, "loki-storage.yaml")
+		// Loki Operator variables
+		packageName := "loki-operator"
+		lokiStackName := "lokistack"
+
+		// validate resources for lokiStack
+		// Update this section when changing clouds
+		if !validateInfraAndResourcesForLoki(oc, []string{"aws"}, "10Gi", "6") {
+			g.Skip("Current platform not supported/resources not available for this test!")
+		}
+
+		sc, err := getStorageClassName(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lokiStackTemplate := filePath.Join(baseDir, "lokistack-simple.yaml")
+		ls := lokiStack{lokiStackName, namespace, "1x.extra-small", "s3", "s3-secret", sc, "netobserv-loki-54043-" + getInfrastructureName(oc), lokiStackTemplate}
+
 		// loki URL
-		lokiURL := fmt.Sprintf("http://loki.%s.svc.cluster.local:3100/", namespace)
+		lokiURL := fmt.Sprintf("https://%s-gateway-http.%s.svc.cluster.local:8080/api/logs/v1/network/", lokiStackName, namespace)
 
 		flow := Flowcollector{
 			Namespace:           namespace,
 			Template:            flowFixturePath,
 			MetricServerTLSType: "AUTO",
 			LokiURL:             lokiURL,
+			LokiAuthToken:       "FORWARD",
+			LokiTLSEnable:       true,
+			LokiCertName:        fmt.Sprintf("%s-gateway-ca-bundle", lokiStackName),
 		}
 
 		metric := Metrics{
@@ -207,50 +237,74 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			Template:           configMapFixturePath,
 		}
 
-		lokiPVC := LokiPersistentVolumeClaim{
+		forwardCRB := ForwardClusterRoleBinding{
 			Namespace: namespace,
-			Template:  lokiPVCFixturePath,
+			Template:  forwardCRBPath,
 		}
 
-		loki := LokiStorage{
-			Namespace: namespace,
-			Template:  lokiStorageFixturePath,
+		g.By("1. Deploy loki operator")
+		lokiSource := CatalogSourceObjects{"stable-5.6", catsrc.name, catsrc.namespace}
+		LO := SubscriptionObjects{
+			OperatorName:  "loki-operator-controller-manager",
+			Namespace:     operatorNamespace,
+			PackageName:   packageName,
+			Subscription:  subTemplate,
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+			CatalogSource: lokiSource,
 		}
 
-		g.By("1. Deploy LokiPVC and storage")
-		defer loki.deleteLokiStorage(oc)
-		lokiPVC.deployLokiPVC(oc)
-		loki.deployLokiStorage(oc)
+		// Check if Loki Operator is already present
+		existing := checkOperatorStatus(oc, operatorNamespace, packageName)
 
-		g.By("2. Deploy FlowCollector")
+		// Defer Uninstall of Loki operator if created by tests
+		defer func(existing bool) {
+			if !existing {
+				LO.uninstallOperator(oc)
+			}
+		}(existing)
+
+		LO.SubscribeOperator(oc)
+		waitForPodReadyWithLabel(oc, operatorNamespace, "name="+LO.OperatorName)
+
+		g.By("2. Deploy lokiStack")
+		defer ls.removeObjectStorage(oc)
+		err = ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("3. Deploy FlowCollector")
 		defer flow.deleteFlowcollector(oc)
 		flow.createFlowcollector(oc)
 
-		g.By("3. Create ClusterMonitoring configMap")
+		g.By("4. Deploy FORWARD clusterRoleBinding")
+		forwardCRB.deployForwardCRB(oc)
+
+		g.By("5. Create ClusterMonitoring configMap")
 		defer monitoringCM.deleteConfigMap(oc)
 		monitoringCM.createConfigMap(oc)
 
-		g.By("4. Deploy metrics")
+		g.By("6. Deploy metrics")
 		metric.createMetrics(oc)
 
-		g.By("5. Ensure FLP pods and eBPF pods are ready")
+		g.By("7. Ensure FLP pods eBPF pods and lokistack are ready")
 		exutil.AssertAllPodsToBeReady(oc, namespace)
 		// ensure eBPF pods are ready
 		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
+		// check if lokistack is ready
+		ls.waitForLokiStackToBeReady(oc)
 
-		g.By("6. Verify metrics by running curl on FLP pod")
+		g.By("8. Verify metrics by running curl on FLP pod")
 		podName := getFlowlogsPipelinePod(oc, namespace, "flowlogs-pipeline")
 		verifyCurl(oc, podName, namespace, curlDest, flowlogsPodCertPath)
 
-		g.By("7. Verify metrics by running curl on prometheus pod")
+		g.By("9. Verify metrics by running curl on prometheus pod")
 		verifyCurl(oc, "prometheus-k8s-0", "openshift-monitoring", curlDest, promCertPath)
 	})
 
 	g.It("Author:aramesha-High-50504-Verify flowlogs-pipeline metrics and health [Serial]", func() {
 		namespace := oc.Namespace()
-		baseDir := exutil.FixturePath("testdata", "netobserv")
-		// flowCollector Template path
-		flowFixturePath := filePath.Join(baseDir, "flowcollector_v1alpha1_template.yaml")
 		// metrics Template path
 		promMetricsFixturePath := filePath.Join(baseDir, "monitoring.yaml")
 		// curl URL
@@ -258,18 +312,34 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		curlLive := "http://localhost:8080/live"
 		// configMap Template path
 		configMapFixturePath := filePath.Join(baseDir, "cluster-monitoring-config-cm.yaml")
+		// Forward clusterRoleBinding Template path
+		forwardCRBPath := filePath.Join(baseDir, "clusterRoleBinding-FORWARD.yaml")
 
-		// lokiPVC template path
-		lokiPVCFixturePath := filePath.Join(baseDir, "loki-pvc.yaml")
-		// loki template path
-		lokiStorageFixturePath := filePath.Join(baseDir, "loki-storage.yaml")
+		// Loki Operator variables
+		packageName := "loki-operator"
+		lokiStackName := "lokistack"
+
+		// validate resources for lokiStack
+		// Update this section when changing clouds
+		if !validateInfraAndResourcesForLoki(oc, []string{"aws"}, "10Gi", "6") {
+			g.Skip("Current platform not supported/resources not available for this test!")
+		}
+
+		sc, err := getStorageClassName(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lokiStackTemplate := filePath.Join(baseDir, "lokistack-simple.yaml")
+		ls := lokiStack{lokiStackName, namespace, "1x.extra-small", "s3", "s3-secret", sc, "netobserv-loki-54043-" + getInfrastructureName(oc), lokiStackTemplate}
+
 		// loki URL
-		lokiURL := fmt.Sprintf("http://loki.%s.svc.cluster.local:3100/", namespace)
+		lokiURL := fmt.Sprintf("https://%s-gateway-http.%s.svc.cluster.local:8080/api/logs/v1/network/", lokiStackName, namespace)
 
 		flow := Flowcollector{
-			Namespace: namespace,
-			Template:  flowFixturePath,
-			LokiURL:   lokiURL,
+			Namespace:     namespace,
+			Template:      flowFixturePath,
+			LokiURL:       lokiURL,
+			LokiAuthToken: "FORWARD",
+			LokiTLSEnable: true,
+			LokiCertName:  fmt.Sprintf("%s-gateway-ca-bundle", lokiStackName),
 		}
 
 		metric := Metrics{
@@ -282,42 +352,69 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			Template:           configMapFixturePath,
 		}
 
-		lokiPVC := LokiPersistentVolumeClaim{
+		forwardCRB := ForwardClusterRoleBinding{
 			Namespace: namespace,
-			Template:  lokiPVCFixturePath,
+			Template:  forwardCRBPath,
 		}
 
-		loki := LokiStorage{
-			Namespace: namespace,
-			Template:  lokiStorageFixturePath,
+		g.By("1. Deploy loki operator")
+		lokiSource := CatalogSourceObjects{"stable-5.6", catsrc.name, catsrc.namespace}
+		LO := SubscriptionObjects{
+			OperatorName:  "loki-operator-controller-manager",
+			Namespace:     operatorNamespace,
+			PackageName:   packageName,
+			Subscription:  subTemplate,
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+			CatalogSource: lokiSource,
 		}
 
-		g.By("1. Deploy LokiPVC and storage")
-		defer loki.deleteLokiStorage(oc)
-		lokiPVC.deployLokiPVC(oc)
-		loki.deployLokiStorage(oc)
+		// Check if Loki Operator is already present
+		existing := checkOperatorStatus(oc, operatorNamespace, packageName)
 
-		g.By("2. Deploy FlowCollector")
+		// Defer Uninstall of Loki operator if created by tests
+		defer func(existing bool) {
+			if !existing {
+				LO.uninstallOperator(oc)
+			}
+		}(existing)
+
+		LO.SubscribeOperator(oc)
+		waitForPodReadyWithLabel(oc, operatorNamespace, "name="+LO.OperatorName)
+
+		g.By("2. Deploy lokiStack")
+		defer ls.removeObjectStorage(oc)
+		err = ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("3. Deploy FlowCollector")
 		defer flow.deleteFlowcollector(oc)
 		flow.createFlowcollector(oc)
 
-		g.By("3. Create ClusterMonitoring configMap")
+		g.By("4. Deploy FORWARD clusterRoleBinding")
+		forwardCRB.deployForwardCRB(oc)
+
+		g.By("5. Create ClusterMonitoring configMap")
 		defer monitoringCM.deleteConfigMap(oc)
 		monitoringCM.createConfigMap(oc)
 
-		g.By("4. Deploy metrics")
+		g.By("6. Deploy metrics")
 		metric.createMetrics(oc)
 
-		g.By("5. Ensure FLP pods and eBPF pods are ready")
+		g.By("7. Ensure FLP pods, eBPF pods and lokistack are ready")
 		exutil.AssertAllPodsToBeReady(oc, namespace)
 		// ensure eBPF pods are ready
 		exutil.AssertAllPodsToBeReady(oc, namespace+"-privileged")
+		// check if lokistack is ready
+		ls.waitForLokiStackToBeReady(oc)
 
 		// get all flowlogs pipeline pods
 		FLPpods, err := exutil.GetAllPodsWithLabel(oc, namespace, "app=flowlogs-pipeline")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("6. Ensure metrics are reported")
+		g.By("8. Ensure metrics are reported")
 		for _, pod := range FLPpods {
 			command := []string{"exec", "-n", namespace, pod, "--", "curl", "-s", "-v", "-L", curlMetrics}
 			output, err := oc.AsAdmin().WithoutNamespace().Run(command...).Args().OutputToFile("metrics.txt")
@@ -342,33 +439,25 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 	g.It("Author:aramesha-High-54840-Use console-plugin authorize API [Serial]", func() {
 		namespace := oc.Namespace()
-		baseDir := exutil.FixturePath("testdata", "netobserv")
-		// flowCollector Template path
-		flowFixturePath := filePath.Join(baseDir, "flowcollector_v1alpha1_template.yaml")
-
 		// lokiPVC template path
 		lokiPVCFixturePath := filePath.Join(baseDir, "loki-pvc.yaml")
 		// loki template path
 		lokiStorageFixturePath := filePath.Join(baseDir, "loki-storage.yaml")
 		// loki URL
 		lokiURL := fmt.Sprintf("http://loki.%s.svc.cluster.local:3100/", namespace)
-		lokiAuthToken := "DISABLED"
-		lokiTLS := false
 
-		// Forward clusterRoleBinding Template path
+		// Forward and Host clusterRoleBinding Template path
 		forwardCRBPath := filePath.Join(baseDir, "clusterRoleBinding-FORWARD.yaml")
 		hostCRBPath := filePath.Join(baseDir, "clusterRoleBinding-HOST.yaml")
 
-		// Loki Operarator varibales
-		operatorNamespace := "openshift-operators-redhat"
-		operatorName := "loki-operator"
+		// Loki Operator variables
+		packageName := "loki-operator"
+		lokiStackName := "lokistack"
 
 		flow := Flowcollector{
-			Namespace:     namespace,
-			Template:      flowFixturePath,
-			LokiURL:       lokiURL,
-			LokiAuthToken: lokiAuthToken,
-			LokiTLSEnable: lokiTLS,
+			Namespace: namespace,
+			Template:  flowFixturePath,
+			LokiURL:   lokiURL,
 		}
 
 		lokiPVC := LokiPersistentVolumeClaim{
@@ -399,8 +488,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		sc, err := getStorageClassName(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
-		ls := lokiStack{"lokistack", "openshift-operators-redhat", "1x.extra-small", "s3", "s3-secret", sc, "netobserv-loki-54840-" + getInfrastructureName(oc), lokiStackTemplate}
+		lokiStackTemplate := filePath.Join(baseDir, "lokistack-simple.yaml")
+		ls := lokiStack{lokiStackName, namespace, "1x.extra-small", "s3", "s3-secret", sc, "netobserv-loki-54840-" + getInfrastructureName(oc), lokiStackTemplate}
 
 		g.By("1. Deploy LokiPVC and storage")
 		lokiPVC.deployLokiPVC(oc)
@@ -424,18 +513,18 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		loki.deleteLokiStorage(oc)
 
 		g.By("6. Deploy loki operator")
-		// Use logging team template to deploy Loki Operator
-		subTemplate := exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml")
+		lokiSource := CatalogSourceObjects{"stable-5.6", catsrc.name, catsrc.namespace}
 		LO := SubscriptionObjects{
 			OperatorName:  "loki-operator-controller-manager",
 			Namespace:     operatorNamespace,
-			PackageName:   operatorName,
+			PackageName:   packageName,
 			Subscription:  subTemplate,
 			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+			CatalogSource: lokiSource,
 		}
 
 		// Check if Loki Operator is already present
-		existing := checkOperatorStatus(oc, operatorNamespace, operatorName)
+		existing := checkOperatorStatus(oc, operatorNamespace, packageName)
 
 		// Defer Uninstall of Loki operator if created by tests
 		defer func(existing bool) {
@@ -445,6 +534,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}(existing)
 
 		LO.SubscribeOperator(oc)
+		waitForPodReadyWithLabel(oc, operatorNamespace, "name="+LO.OperatorName)
 
 		g.By("7. Deploy lokiStack")
 		defer ls.removeObjectStorage(oc)
@@ -454,12 +544,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		err = ls.deployLokiStack(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		flow.deleteFlowcollector(oc)
-
 		g.By("8. Deploy flowcollector with loki in Forward and TLS enabled")
-		flow.LokiURL = "https://lokistack-gateway-http.openshift-operators-redhat.svc:8080/api/logs/v1/infrastructure"
+		flow.LokiURL = fmt.Sprintf("https://%s-gateway-http.%s.svc.cluster.local:8080/api/logs/v1/network/", lokiStackName, namespace)
 		flow.LokiAuthToken = "FORWARD"
 		flow.LokiTLSEnable = true
+		flow.LokiCertName = fmt.Sprintf("%s-gateway-ca-bundle", lokiStackName)
 
 		flow.createFlowcollector(oc)
 

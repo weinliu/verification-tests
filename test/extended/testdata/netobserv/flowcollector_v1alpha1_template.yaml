@@ -85,7 +85,7 @@ objects:
           enable: "${{LOKI_TLS_ENABLE}}"
           caCert:
             type: configmap
-            name: openshift-service-ca.crt
+            name: "${{LOKI_CERT_NAME}}"
             certFile: service-ca.crt
           insecureSkipVerify: false
         batchWait: 1s
@@ -148,3 +148,5 @@ parameters:
     value: "DISABLED"
   - name: LOKI_TLS_ENABLE
     value: "false"
+  - name: LOKI_CERT_NAME
+    value: "lokistack-gateway-ca-bundle"
