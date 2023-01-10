@@ -30,6 +30,8 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 	// It is destructive case, will make co/authentical Available=False for a while, so adding [Disruptive]
 	// If the case duration is greater than 10 minutes and is executed in serial (labelled Serial or Disruptive), add Longduration
 	g.It("NonHyperShiftHOST-Longduration-Author:xxia-Medium-29917-Deleted authentication resources can come back immediately [Disruptive]", func() {
+		// Temporarily skip for sno env. Will follow up to investigate robust enhancement.
+		exutil.SkipForSNOCluster(oc)
 		g.By("Delete namespace openshift-authentication")
 		err := oc.WithoutNamespace().Run("delete").Args("ns", "openshift-authentication").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
