@@ -227,6 +227,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			g.Skip("Skip for non-supported platform, it requires AWS")
 		}
 
+		// skip if the AWS platform has NOT zones and thus the feature is not supported on this cluster
+		dnsZone, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("dnses.config", "cluster", "-o=jsonpath={.spec.privateZone}").Output()
+		if len(dnsZone) < 1 {
+			jsonPath := "{.status.conditions[?(@.type==\"DNSManaged\")].status}: {.status.conditions[?(@.type==\"DNSManaged\")].reason}"
+			output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("ingresscontrollers/default", "-n", "openshift-ingress-operator", "-o=jsonpath="+jsonPath).Output()
+			o.Expect(output).To(o.ContainSubstring("False: NoDNSZones"))
+			g.Skip("Skip for this AWS platform has NOT DNS zones, which means this case is not supported on this AWS platform")
+		}
+
 		g.By("Create two custom ingresscontrollers, one matches the cluster's base domain, the other doesn't")
 		baseDomain := getBaseDomain(oc)
 		ingctrl1.domain = ingctrl1.name + "." + baseDomain
