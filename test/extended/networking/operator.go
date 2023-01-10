@@ -18,7 +18,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	var oc = exutil.NewCLI("networking-operator", exutil.KubeConfigPath())
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-Medium-44954-Newline is added between user CAs and system CAs [Disruptive]", func() {
+	g.It("Longduration-NonPreRelease-Author:jechen-Medium-44954-Newline is added between user CAs and system CAs [Disruptive]", func() {
 		var (
 			dirname  = "/tmp/OCP-44954"
 			name     = dirname + "OCP-44954-custom"
@@ -57,8 +57,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("cm %v not found", configmapName))
 
 		g.By("4. Patch the configmap created above to proxy/cluster")
-		patchResourceAsAdmin(oc, "proxy/cluster", "{\"spec\":{\"trustedCA\":{\"name\":\"custom-ca\"}}}")
+		defer checkClusterStatus(oc, "Ready")
 		defer patchResourceAsAdmin(oc, "proxy/cluster", "{\"spec\":{\"trustedCA\":{\"name\":\"\"}}}")
+		patchResourceAsAdmin(oc, "proxy/cluster", "{\"spec\":{\"trustedCA\":{\"name\":\"custom-ca\"}}}")
 
 		g.By("5. Verify that a newline is added between custom user CAs and system CAs")
 		ns := "openshift-config-managed"

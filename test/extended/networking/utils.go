@@ -2207,3 +2207,25 @@ func excludeSriovNodes(oc *exutil.CLI) []string {
 	}
 	return workers
 }
+
+func checkClusterStatus(oc *exutil.CLI, expectedStatus string) {
+	// get all master nodes
+	masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+	o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+	o.Expect(masterNodes).NotTo(o.BeEmpty())
+
+	// check master nodes status, expect Ready status for them
+	for _, masterNode := range masterNodes {
+		checkNodeStatus(oc, masterNode, "Ready")
+	}
+
+	// get all worker nodes
+	workerNodes, getAllWorkerNodesErr := exutil.GetClusterNodesBy(oc, "worker")
+	o.Expect(getAllWorkerNodesErr).NotTo(o.HaveOccurred())
+	o.Expect(workerNodes).NotTo(o.BeEmpty())
+
+	// check worker nodes status, expect Ready status for them
+	for _, workerNode := range masterNodes {
+		checkNodeStatus(oc, workerNode, "Ready")
+	}
+}
