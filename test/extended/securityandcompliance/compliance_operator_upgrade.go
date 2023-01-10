@@ -47,7 +47,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Pre-check and post-check f
 		g.BeforeEach(func() {
 			g.By("Skip test when precondition not meet !!!")
 			SkipMissingCatalogsource(oc)
-			SkipARM64AndHetegenous(oc)
+			exutil.SkipARM64(oc)
 			SkipMissingDefaultSC(oc)
 			SkipMissingRhcosWorkers(oc)
 

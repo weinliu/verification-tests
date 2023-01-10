@@ -35,7 +35,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	g.BeforeEach(func() {
 		g.By("Skip test when missingcatalogsource, ARM64, or SkipHetegenous !!!")
 		SkipMissingCatalogsource(oc)
-		SkipARM64AndHetegenous(oc)
+		exutil.SkipARM64(oc)
 
 		buildPruningBaseDir = exutil.FixturePath("testdata", "securityandcompliance")
 		ogSingleTemplate = filepath.Join(buildPruningBaseDir, "operator-group.yaml")

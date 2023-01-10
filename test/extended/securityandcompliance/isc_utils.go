@@ -439,14 +439,6 @@ func SkipMissingCatalogsource(oc *exutil.CLI) {
 	}
 }
 
-// SkipARM64AndHetegenous mean to skip test for RAM64 or Hetegenous as not supported
-func SkipARM64AndHetegenous(oc *exutil.CLI) {
-	nodeArchs, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-o=jsonpath={.items[0].status.nodeInfo.architecture}", "-n", oc.Namespace()).Output()
-	if strings.Contains(nodeArchs, "arm64") {
-		g.Skip("Skip since ARM64 or Hetegenous not supported")
-	}
-}
-
 // SkipMissingDefaultSC mean to skip test when default storageclass is not available
 func SkipMissingDefaultSC(oc *exutil.CLI) {
 	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "-o=jsonpath={.items[?(@.metadata.annotations.storageclass\\.kubernetes\\.io/is-default-class==\"true\")].metadata.name}", "-n", oc.Namespace()).Output()

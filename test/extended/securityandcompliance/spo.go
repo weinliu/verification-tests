@@ -74,7 +74,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Security Profiles Oper
 		}
 
 		SkipMissingCatalogsource(oc)
-		SkipARM64AndHetegenous(oc)
+		exutil.SkipARM64(oc)
 
 		createSecurityProfileOperator(oc, subD, ogD)
 	})

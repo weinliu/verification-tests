@@ -42,7 +42,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Pre-check and post-check f
 		g.BeforeEach(func() {
 			g.By("Skip test when missingcatalogsource, ARM64, or SkipHetegenous !!!")
 			SkipMissingCatalogsource(oc)
-			SkipARM64AndHetegenous(oc)
+			exutil.SkipARM64(oc)
 
 			g.By("Check csv and pods for ns1 !!!")
 			rsCsvName := getResourceNameWithKeywordForNamespace(oc, "csv", "file-integrity-operator", ns1)
