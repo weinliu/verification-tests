@@ -4008,4 +4008,51 @@ EOF`, dcpolicyrepo)
 			e2e.Failf("Test Failed: No SAR traffics from flowschema openshift-apiserver and oauth-apiserver found in KAS logs")
 		}
 	})
+
+	// author: kewang@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:kewang-Medium-57243-[Apiserver] Viewing audit logs", func() {
+		var (
+			apiservers    = []string{"openshift-apiserver", "kube-apiserver", "oauth-apiserver"}
+			caseID        = "OCP-57243"
+			dirname       = "/tmp/-" + caseID
+			mustgatherDir = dirname + "/must-gather.ocp-57243"
+		)
+
+		defer os.RemoveAll(dirname)
+
+		err := os.MkdirAll(dirname, 0o755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = os.MkdirAll(mustgatherDir, 0o755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
+		o.Expect(masterErr).NotTo(o.HaveOccurred())
+		e2e.Logf("Master node is %v : ", masterNode)
+
+		for i, apiserver := range apiservers {
+			g.By(fmt.Sprintf("%d.1)View the %s audit logs are available for each control plane node:", i+1, apiserver))
+			output, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "--role=master", "--path="+apiserver+"/").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.MatchRegexp(".*audit.log"))
+			e2e.Logf("The OpenShift API server audit logs are available for each control plane node:\n%s", output)
+
+			g.By(fmt.Sprintf("%d.2) View a specific %s audit log by providing the node name and the log name:", i+1, apiserver))
+			auditLogFile := fmt.Sprintf("%s/%s-audit.log", caseID, apiserver)
+			_, err1 := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", masterNode, "--path="+apiserver+"/audit.log").OutputToFile(auditLogFile)
+			o.Expect(err1).NotTo(o.HaveOccurred())
+			cmd := fmt.Sprintf(`tail -1 %v`, "/tmp/-"+auditLogFile)
+			cmdOut, cmdErr := exec.Command("bash", "-c", cmd).Output()
+			o.Expect(cmdErr).NotTo(o.HaveOccurred())
+			e2e.Logf("An example of %s audit log:\n%s", apiserver, cmdOut)
+		}
+
+		g.By("4) Gathering audit logs to run the oc adm must-gather command and view the audit log files:")
+		_, mgErr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--dest-dir="+mustgatherDir, "--", "/usr/bin/gather_audit_logs").Output()
+		o.Expect(mgErr).NotTo(o.HaveOccurred())
+		cmd := fmt.Sprintf(`du -h %v`, mustgatherDir)
+		cmdOut, cmdErr := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		e2e.Logf("View the audit log files for running the oc adm must-gather command:\n%s", cmdOut)
+		// Empty audit log file is not expected.
+		o.Expect(cmdOut).ShouldNot(o.ContainSubstring("0B"))
+	})
 })
