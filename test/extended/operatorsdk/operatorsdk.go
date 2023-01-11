@@ -4458,10 +4458,24 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		metricsMsg, err := exec.Command("bash", "-c", "oc exec deployment/ansiblemetrics-controller-manager -n "+nsOperator+" -- curl -k -H \"Authorization: Bearer "+metricsToken+"\" 'https://"+promeEp+":8443/metrics'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(metricsMsg).To(o.ContainSubstring("my gague and set it to 2"))
-		o.Expect(metricsMsg).To(o.ContainSubstring("counter"))
-		o.Expect(metricsMsg).To(o.ContainSubstring("Observe my histogram"))
-		o.Expect(metricsMsg).To(o.ContainSubstring("Observe my summary"))
+		var strMetricsMsg string
+		strMetricsMsg = string(metricsMsg)
+		if !strings.Contains(strMetricsMsg, "my gague and set it to 2") {
+			e2e.Logf("%s", strMetricsMsg)
+			e2e.Failf("my gague and set it to 2 failed")
+		}
+		if !strings.Contains(strMetricsMsg, "counter") {
+			e2e.Logf("%s", strMetricsMsg)
+			e2e.Failf("counter failed")
+		}
+		if !strings.Contains(strMetricsMsg, "Observe my histogram") {
+			e2e.Logf("%s", strMetricsMsg)
+			e2e.Failf("Observe my histogram failed")
+		}
+		if !strings.Contains(strMetricsMsg, "Observe my summary") {
+			e2e.Logf("%s", strMetricsMsg)
+			e2e.Failf("Observe my summary failed")
+		}
 	})
 
 	// author: jfan@redhat.com
