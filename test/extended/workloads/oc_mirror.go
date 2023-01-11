@@ -181,6 +181,10 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	})
 
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-High-46506-High-46817-Mirror a single image works well", func() {
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture == "Multi-Arch" {
+			g.Skip("Skip for Multi-Arch")
+		}
 		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
 		operatorS := filepath.Join(ocmirrorBaseDir, "config_singleimage.yaml")
 
@@ -244,6 +248,10 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:yinzhou-High-46769-Critical-46515-High-registry backend test", func() {
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture == "Multi-Arch" {
+			g.Skip("Skip for Multi-Arch")
+		}
 		g.By("Set podman registry config")
 		dirname := "/tmp/case46769"
 		err := os.MkdirAll(dirname, 0755)
