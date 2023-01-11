@@ -93,8 +93,8 @@ func getTunedSystemSetValueByParamNameInHostedCluster(oc *exutil.CLI, ntoNamespa
 	return matchResult
 }
 
-// compareSpecifiedValueByNameOnLabelNodewithRetryInHostedCluster
-func compareSpecifiedValueByNameOnLabelNodewithRetryInHostedCluster(oc *exutil.CLI, ntoNamespace, nodeName, oscommand, sysctlparm, specifiedvalue string) {
+// compareSpecifiedValueByNameOnLabelNodeWithRetryInHostedCluster
+func compareSpecifiedValueByNameOnLabelNodeWithRetryInHostedCluster(oc *exutil.CLI, ntoNamespace, nodeName, oscommand, sysctlparm, specifiedvalue string) {
 
 	err := wait.Poll(15*time.Second, 180*time.Second, func() (bool, error) {
 
@@ -212,8 +212,8 @@ func assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc *exutil.CLI, n
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Profile was not applied to %s within timeout limit (30 seconds)", nodePoolName))
 }
 
-// compareSpecifiedValueByNameOnNodePoolLevelwithRetryInHostedCluster
-func compareSpecifiedValueByNameOnNodePoolLevelwithRetryInHostedCluster(oc *exutil.CLI, ntoNamespace, nodePoolName, oscommand, sysctlparm, specifiedvalue string) {
+// compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster
+func compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc *exutil.CLI, ntoNamespace, nodePoolName, oscommand, sysctlparm, specifiedvalue string) {
 
 	var (
 		isMatch  bool
@@ -242,8 +242,8 @@ func compareSpecifiedValueByNameOnNodePoolLevelwithRetryInHostedCluster(oc *exut
 	exutil.AssertWaitPollNoErr(err, "The value sysctl mismatch, please check")
 }
 
-// assertMisMatchTunedSystemSettingsByParmNameOnNodePoolLevelInHostedCluster used to compare the the value shouldn't match specified name
-func assertMisMatchTunedSystemSettingsByParmNameOnNodePoolLevelInHostedCluster(oc *exutil.CLI, ntoNamespace, nodePoolName, oscommand, sysctlparm, expectedMisMatchValue string) {
+// assertMisMatchTunedSystemSettingsByParamNameOnNodePoolLevelInHostedCluster used to compare the the value shouldn't match specified name
+func assertMisMatchTunedSystemSettingsByParamNameOnNodePoolLevelInHostedCluster(oc *exutil.CLI, ntoNamespace, nodePoolName, oscommand, sysctlparm, expectedMisMatchValue string) {
 	nodeNames, err := exutil.GetAllNodesByNodePoolNameInHostedCluster(oc, nodePoolName)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	nodesNum := len(nodeNames)
