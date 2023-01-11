@@ -205,6 +205,14 @@ type priorityPod struct {
 	template   string
 }
 
+type cronJobCreationTZ struct {
+	cName     string
+	namespace string
+	schedule  string
+	timeZone  string
+	template  string
+}
+
 func (pod *podNodeSelector) createPodNodeSelector(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := nonAdminApplyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace,
@@ -1126,4 +1134,63 @@ func findImageContentSourcePolicy() string {
 func removeOcMirrorLog() {
 	os.RemoveAll("oc-mirror-workspace")
 	os.RemoveAll(".oc-mirror.log")
+}
+
+func (cj *cronJobCreationTZ) createCronJobWithTimeZone(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", cj.template, "-p", "CNAME="+cj.cName, "NAMESPACE="+cj.namespace,
+			"SCHEDULE="+cj.schedule, "TIMEZONE="+cj.timeZone)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cronjob with %s is not created successfully", cj.cName))
+}
+
+func getTimeFromTimezone(oc *exutil.CLI) (string, string) {
+	var schedule, timeZoneName = "None", "None"
+	t := time.Now()
+	zoneName, _ := t.Zone()
+	if zoneName == "IST" {
+		timeZoneName = "Asia/Calcutta"
+		ist, err := time.LoadLocation("Asia/Calcutta")
+		if err != nil {
+			e2e.Failf("Error is %v", err)
+		}
+		e2e.Logf("location:", ist, "Time:", t.In(ist))
+		localTimeInHours := t.In(ist).Hour()
+		localTimeInMinutes := t.In(ist).Minute()
+		if localTimeInHours == 23 && localTimeInMinutes == 59 {
+			schedule = "0 0 * * *"
+		} else if localTimeInMinutes == 59 {
+			localTimeInHours = localTimeInHours + 1
+			schedule = "01 " + strconv.Itoa(localTimeInHours) + " " + "* * *"
+		} else {
+			localTimeInMinutes = localTimeInMinutes + 1
+			schedule = strconv.Itoa(localTimeInMinutes) + " " + strconv.Itoa(localTimeInHours) + " " + "* * *"
+		}
+	} else if zoneName == "UTC" {
+		timeZoneName = "America/New_York"
+		utc, err := time.LoadLocation("America/New_York")
+		if err != nil {
+			e2e.Failf("Error is: ", err.Error())
+		}
+		e2e.Logf("location:", utc, "Time:", t.In(utc))
+		localTimeInHours := t.In(utc).Hour()
+		localTimeInMinutes := t.In(utc).Minute()
+		if localTimeInHours == 23 && localTimeInMinutes == 59 {
+			schedule = "0 0 * * *"
+		} else if localTimeInMinutes == 59 {
+			localTimeInHours = localTimeInHours + 1
+			schedule = "01 " + strconv.Itoa(localTimeInHours) + " " + "* * *"
+		} else {
+			localTimeInMinutes = localTimeInMinutes + 1
+			schedule = strconv.Itoa(localTimeInMinutes) + " " + strconv.Itoa(localTimeInHours) + " " + "* * *"
+		}
+	} else {
+		e2e.Failf("Given zone name is %s", zoneName)
+	}
+	return schedule, timeZoneName
 }

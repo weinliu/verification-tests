@@ -474,22 +474,52 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("No job has been created"))
+	})
 
-		g.By("Verify job has been created successfully")
-		pollErr = wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+	// author: knarra@redhat.com
+	g.It("Author:knarra-High-54196-Create cronjob by retreiving current time by its timezone", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		createCronJobT := filepath.Join(buildPruningBaseDir, "cronjob_54196.yaml")
+
+		g.By("Retreive schedule and timeZoneName")
+		schedule, timeZoneName := getTimeFromTimezone(oc)
+		e2e.Logf("Schedule is %s", schedule)
+		e2e.Logf("timeZoneName is %s", timeZoneName)
+		o.Expect(schedule).NotTo(o.BeEmpty())
+		o.Expect(timeZoneName).NotTo(o.BeEmpty())
+
+		//Test CronJobTimeZone
+		testCronJobTimeZone := cronJobCreationTZ{
+			cName:     "cronjob54196",
+			namespace: oc.Namespace(),
+			schedule:  schedule,
+			timeZone:  timeZoneName,
+			template:  createCronJobT,
+		}
+
+		// Create test project
+		g.By("Create cronJob With TimeZone")
+		testCronJobTimeZone.createCronJobWithTimeZone(oc)
+
+		g.By("Verify that cronJob has been created successfully")
+		cronjobCreated, cronCreationErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("cronjob", "cronjob54196", "-n", oc.Namespace(), "-o=jsonpath={.metadata.name}").Output()
+		o.Expect(cronCreationErr).NotTo(o.HaveOccurred())
+		o.Expect(cronjobCreated).To(o.ContainSubstring("cronjob54196"))
+		o.Expect(cronjobCreated).To(o.ContainSubstring(timeZoneName))
+
+		g.By("Verify job has been created")
+		pollErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
 			jobName, jobCreationErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("job", "-n", oc.Namespace()).Output()
 			if jobCreationErr != nil {
 				e2e.Logf("No job is present: %s. Trying again", jobCreationErr)
 				return false, nil
 			}
-			if matched, _ := regexp.MatchString("cronjob54195notz", jobName); matched {
+			if matched, _ := regexp.MatchString("cronjob54196", jobName); matched {
 				e2e.Logf("Job has been created successfully\n")
 				return true, nil
 			}
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("No job has been created"))
-
 	})
-
 })
