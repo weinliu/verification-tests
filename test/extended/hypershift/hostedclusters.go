@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	o "github.com/onsi/gomega"
+	"github.com/tidwall/gjson"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -588,4 +589,208 @@ func (h *hostedCluster) checkAWSNodepoolRootVolumeIOPS(name string, expectedIOPS
 
 func (h *hostedCluster) checkAWSNodepoolRootVolumeType(name string, expectedType string) bool {
 	return h.checkAWSRootVolumes(name, "type", expectedType)
+}
+
+func (h *hostedCluster) setAWSNodepoolInstanceType(name, instanceType string) {
+	cond := fmt.Sprintf(`--patch={"spec": {"platform": {"aws": {"instanceType":"%s"}}}}`, instanceType)
+	_, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpPatch).Args("-n", h.namespace, "nodepools", name, cond, "--type=merge").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+}
+
+func (h *hostedCluster) getAWSNodepoolInstanceType(name string) string {
+	cond := `-ojsonpath={.spec.platform.aws.instanceType}`
+	instanceType, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace, "nodepools", name, cond, "--ignore-not-found").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	o.Expect(instanceType).ShouldNot(o.BeEmpty())
+	return instanceType
+}
+
+func (h *hostedCluster) getNodepoolUpgradeType(name string) string {
+	cond := `-ojsonpath={.spec.management.upgradeType}`
+	instanceType, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace, "nodepools", name, cond, "--ignore-not-found").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	o.Expect(instanceType).ShouldNot(o.BeEmpty())
+	return instanceType
+}
+
+func (h *hostedCluster) pollCheckAWSNodepoolInstanceType(name, expected string) func() bool {
+	return func() bool {
+		return h.checkAWSNodepoolInstanceType(name, expected)
+	}
+}
+
+func (h *hostedCluster) checkAWSNodepoolInstanceType(name, expected string) bool {
+	// check nodepool instanceType
+	instanceType := h.getAWSNodepoolInstanceType(name)
+	if instanceType != expected {
+		e2e.Logf("instanceType not matched, expected: %s, got: %s", expected, instanceType)
+		return false
+	}
+
+	// check awsmachinetemplates instanceType
+	cond := `-ojsonpath={.spec.template.spec.instanceType}`
+	templateInstanceType, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace+"-"+h.name, "awsmachinetemplates", name, cond, "--ignore-not-found").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	o.Expect(templateInstanceType).ShouldNot(o.BeEmpty())
+	return templateInstanceType == expected
+}
+
+func (h *hostedCluster) pollCheckNodepoolRollingUpgradeIntermediateStatus(name string) func() bool {
+	return func() bool {
+		return h.checkNodepoolRollingUpgradeIntermediateStatus(name)
+	}
+}
+
+func (h *hostedCluster) checkNodepoolRollingUpgradeIntermediateStatus(name string) bool {
+	// check machinedeployment UNAVAILABLE nodes should not be zero
+	cond := `-ojsonpath={.status.unavailableReplicas}`
+	unavailableNum, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace+"-"+h.name, "machinedeployment", name, cond, "--ignore-not-found").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	o.Expect(unavailableNum).ShouldNot(o.BeEmpty())
+	num, err := strconv.Atoi(unavailableNum)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	if num <= 0 {
+		return false
+	}
+
+	// get machinesets.cluster.x-k8s.io according to nodepool
+	machinesetCAPI := "machinesets.cluster.x-k8s.io"
+	labelFilter := "cluster.x-k8s.io/cluster-name=" + h.name
+	format := `-ojsonpath={.items[?(@.metadata.annotations.hypershift\.openshift\.io/nodePool=="%s/%s")].metadata.name}`
+	cond = fmt.Sprintf(format, h.namespace, name)
+	machinesets, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace+"-"+h.name, machinesetCAPI, "-l", labelFilter, cond, "--ignore-not-found").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	o.Expect(machinesets).ShouldNot(o.BeEmpty())
+
+	// a new machineset should be created, so number of machinsets should be 2
+	if len(strings.Split(machinesets, " ")) <= 1 {
+		return false
+	}
+	return true
+}
+
+func (h *hostedCluster) pollCheckNodepoolRollingUpgradeComplete(name string) func() bool {
+	return func() bool {
+		return h.checkNodepoolRollingUpgradeComplete(name)
+	}
+}
+
+func (h *hostedCluster) checkNodepoolRollingUpgradeComplete(name string) bool {
+	if !h.checkNodepoolRollingUpgradeCompleteByMachineDeployment(name) {
+		e2e.Logf("checkNodepoolRollingUpgradeCompleteByMachineDeployment false")
+		return false
+	}
+
+	if !h.checkNodePoolReady(name) {
+		e2e.Logf("checkNodePoolReady false")
+		return false
+	}
+
+	if !h.checkNodepoolHostedClusterNodeReady(name) {
+		e2e.Logf("checkNodepoolHostedClusterNodeReady false")
+		return false
+	}
+	return true
+}
+
+func (h *hostedCluster) getNodepoolReadyReplicas(name string) int {
+	// get nodepool ready replics
+	replicas, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace, "nodepools", name, "-ojsonpath={.status.replicas}").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	replicasNum, err := strconv.Atoi(replicas)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return replicasNum
+}
+
+func (h *hostedCluster) getNodepoolHostedClusterReadyNodesNumber(name string) int {
+	params := []string{"node", "--ignore-not-found", "-l", "hypershift.openshift.io/nodePool=" + name, `-ojsonpath={.items[*].status.conditions[?(@.type=="Ready")].status}`}
+	status, err := h.oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run("get").Args(params...).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	readyNodeNum := strings.Count(status, "True")
+	return readyNodeNum
+}
+
+// getNodepoolHostedClusterNodes gets hosted cluster ready nodes by nodepool label filer
+// name: nodepool name
+func (h *hostedCluster) getNodepoolHostedClusterNodes(name string) []string {
+	params := []string{"node", "--ignore-not-found", "-l", "hypershift.openshift.io/nodePool=" + name, `-ojsonpath={.items[*].metadata.name}`}
+	nameList, err := h.oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run(OcpGet).Args(params...).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	if len(strings.TrimSpace(nameList)) <= 0 {
+		return []string{}
+	}
+
+	return strings.Split(nameList, " ")
+}
+
+func (h *hostedCluster) getHostedClusterNodeInstanceType(nodeName string) string {
+	params := []string{"node", nodeName, "--ignore-not-found", `-ojsonpath={.metadata.labels.beta\.kubernetes\.io/instance-type}`}
+	instanceType, err := h.oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run(OcpGet).Args(params...).Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	o.Expect(instanceType).ShouldNot(o.BeEmpty())
+	return instanceType
+}
+
+func (h *hostedCluster) checkNodepoolHostedClusterNodeReady(name string) bool {
+	replicasNum := h.getNodepoolReadyReplicas(name)
+	readyNodeNum := h.getNodepoolHostedClusterReadyNodesNumber(name)
+	return replicasNum == readyNodeNum
+}
+
+func (h *hostedCluster) checkNodepoolRollingUpgradeCompleteByMachineDeployment(name string) bool {
+	// check machinedeployment status
+	cond := `-ojsonpath={.status}`
+	statusStr, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace+"-"+h.name, "machinedeployment", name, cond, "--ignore-not-found").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	o.Expect(statusStr).ShouldNot(o.BeEmpty())
+	status := gjson.Parse(statusStr).Value().(map[string]interface{})
+
+	var unavailable, replicas, ready, updated interface{}
+	var ok bool
+
+	//check unavailableReplicas should be zero
+	unavailable, ok = status["unavailableReplicas"]
+	o.Expect(ok).Should(o.BeTrue())
+	unavailableNum, err := strconv.Atoi(fmt.Sprint(unavailable))
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	if unavailableNum != 0 {
+		return false
+	}
+
+	//check replicas == ready == updated
+	replicas, ok = status["replicas"]
+	o.Expect(ok).Should(o.BeTrue())
+	replicaNum, err := strconv.Atoi(fmt.Sprint(replicas))
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+
+	ready, ok = status["readyReplicas"]
+	o.Expect(ok).Should(o.BeTrue())
+	readyNum, err := strconv.Atoi(fmt.Sprint(ready))
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+
+	updated, ok = status["updatedReplicas"]
+	o.Expect(ok).Should(o.BeTrue())
+	updatedNum, err := strconv.Atoi(fmt.Sprint(updated))
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+
+	if replicaNum != readyNum || replicaNum != updatedNum {
+		return false
+	}
+
+	return true
+}
+
+func (h *hostedCluster) checkNodepoolHostedClusterNodeInstanceType(npName string) bool {
+	expected := h.getAWSNodepoolInstanceType(npName)
+	replicas := h.getNodepoolReadyReplicas(npName)
+	nodes := h.getNodepoolHostedClusterNodes(npName)
+	o.Expect(len(nodes)).Should(o.Equal(replicas))
+	for _, name := range nodes {
+		instanceType := h.getHostedClusterNodeInstanceType(name)
+		if instanceType != expected {
+			e2e.Logf("hosted cluster node %s instanceType: %s is not expected %s", name, instanceType, expected)
+			return false
+		}
+	}
+	return true
 }

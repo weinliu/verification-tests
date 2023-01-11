@@ -617,7 +617,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	// author: heli@redhat.com
 	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:heli-Critical-43553-Test MHC through nodePools[Disruptive]", func() {
 		if iaasPlatform != "aws" {
-			g.Skip("IAAS platform is " + iaasPlatform + " while 48025 is for AWS - skipping test ...")
+			g.Skip("IAAS platform is " + iaasPlatform + " while 43553 is for AWS - skipping test ...")
 		}
 
 		g.By("create aws nodepool with replica 2")
@@ -672,6 +672,42 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		g.By("disable autoRepair")
 		hostedcluster.setNodepoolAutoRepair(npName, "false")
 		o.Eventually(hostedcluster.pollCheckNodepoolAutoRepairDisabled(npName), ShortTimeout, ShortTimeout/10).Should(o.BeTrue(), fmt.Sprintf("nodepool %s autoRepair disable error", npName))
+	})
+
+	// author: heli@redhat.com
+	g.It("HyperShiftMGMT-Longduration-NonPreRelease-Author:heli-Critical-48392-NodePool controller updates existing awsmachinetemplate when MachineDeployment rolled out[Serial][Disruptive]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 48392 is for AWS - skipping test ...")
+		}
+
+		g.By("create aws nodepool with replica 2")
+		npName := "jz-48392-01"
+		replica := 2
+		releaseImage := doOcpReq(oc, OcpGet, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-ojsonpath={.spec.release.image}")
+
+		defer func() {
+			hostedcluster.deleteNodePool(npName)
+			o.Eventually(hostedcluster.pollCheckDeletedNodePool(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "in defer check deleted nodepool error")
+		}()
+
+		NewAWSNodePool(npName, hostedcluster.name, hostedcluster.namespace).
+			WithNodeCount(&replica).
+			WithReleaseImage(releaseImage).
+			WithInstanceType("m5.large").
+			CreateAWSNodePool()
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), fmt.Sprintf("nodepool %s ready error", npName))
+
+		g.By("update nodepool instance type and check the change")
+		expectedInstanceType := "m5.xlarge"
+		hostedcluster.setAWSNodepoolInstanceType(npName, expectedInstanceType)
+		o.Eventually(hostedcluster.pollCheckAWSNodepoolInstanceType(npName, expectedInstanceType), ShortTimeout, ShortTimeout/10).Should(o.BeTrue(), fmt.Sprintf("nodepool %s check instance type error", npName))
+
+		// check default rolling upgrade of instanceType
+		upgradeType := hostedcluster.getNodepoolUpgradeType(npName)
+		o.Expect(upgradeType).Should(o.ContainSubstring("Replace"))
+		o.Eventually(hostedcluster.pollCheckNodepoolRollingUpgradeIntermediateStatus(npName), ShortTimeout, ShortTimeout/10).Should(o.BeTrue(), fmt.Sprintf("nodepool %s check replace upgrade intermediate state error", npName))
+		o.Eventually(hostedcluster.pollCheckNodepoolRollingUpgradeComplete(npName), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.BeTrue(), fmt.Sprintf("nodepool %s check replace upgrade complete state error", npName))
+		o.Expect(hostedcluster.checkNodepoolHostedClusterNodeInstanceType(npName)).Should(o.BeTrue())
 	})
 
 })
