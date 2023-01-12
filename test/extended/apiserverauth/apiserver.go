@@ -4055,4 +4055,60 @@ EOF`, dcpolicyrepo)
 		// Empty audit log file is not expected.
 		o.Expect(cmdOut).ShouldNot(o.ContainSubstring("0B"))
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("MicroShiftOnly-Author:rgangwar-Low-53693-[Apiserver] Identity and disable APIs not required for MVP", func() {
+		g.By("1. Check the MVP/recommended apis and status from below.")
+		apiResource, apiErr := oc.AsAdmin().WithoutNamespace().Run("api-resources").Args("--loglevel=6").Output()
+		o.Expect(apiErr).NotTo(o.HaveOccurred())
+		if !strings.Contains(apiResource, "security.openshift.io/v1") {
+			e2e.Failf("security.openshift.io/v1 api is missing")
+		}
+		if !strings.Contains(apiResource, "route.openshift.io/v1") {
+			e2e.Failf("route.openshift.io/v1 api is missing")
+		}
+
+		g.By("2. List out disable apis should not present.")
+		disabledApis := []string{"build", "apps", "image", "imageregistry", "config", "user", "operator", "template"}
+		for _, i := range disabledApis {
+			removedapi := i + ".openshift"
+			if strings.Contains(apiResource, removedapi) {
+				e2e.Failf("disabled %v api is present not removed from microshift", removedapi)
+			}
+		}
+		g.By("3. Check the security context of service-ca component which should be non-root")
+		security, securityErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-service-ca", "-o", `jsonpath='{.items[*].spec.containers[0].securityContext}'`).Output()
+		o.Expect(securityErr).NotTo(o.HaveOccurred())
+		o.Expect(security).Should(o.ContainSubstring(`"runAsNonRoot":true,"runAsUser":1000070000`))
+		podname, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-service-ca", "-o", `jsonpath={.items[*].metadata.name}`).Output()
+		o.Expect(podErr).NotTo(o.HaveOccurred())
+		execPod, execErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-service-ca", podname, "--", "/bin/sh", "-c", `id`).Output()
+		o.Expect(execErr).NotTo(o.HaveOccurred())
+		o.Expect(execPod).Should(o.ContainSubstring(`uid=1000070000(1000070000) gid=0(root) groups=0(root),1000070000`))
+
+		g.By("4. check removal for kube-proxy.")
+		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
+		o.Expect(masterErr).NotTo(o.HaveOccurred())
+		cmd := `iptables-save | grep -iE 'proxy|kube-proxy' || true`
+		proxy, proxyErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=default"}, "bash", "-c", cmd)
+		o.Expect(proxyErr).NotTo(o.HaveOccurred())
+		proxy = regexp.MustCompile(`\n`).ReplaceAllString(string(proxy), "")
+		e2e.Logf("test ::%v::test", proxy)
+		o.Expect(proxy).Should(o.BeEmpty())
+
+		g.By("5. check oauth endpoint Curl oauth server url, it should not present.")
+		consoleurl, err := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("--show-console").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(consoleurl).ShouldNot(o.BeEmpty())
+		cmd = fmt.Sprintf(`curl -k %v/.well-known/oauth-authorization-server`, consoleurl)
+		cmdOut, cmdErr := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		o.Expect(cmdOut).Should(o.ContainSubstring("404"))
+
+		g.By("Apirequestcount is disabled in microshift.")
+		apierr := oc.AsAdmin().WithoutNamespace().Run("get").Args("apirequestcount").Execute()
+		if apierr == nil {
+			e2e.Failf("Apirequestcount has not disabled")
+		}
+	})
 })
