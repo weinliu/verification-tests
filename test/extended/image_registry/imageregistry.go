@@ -503,17 +503,17 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			statefulsetsrc  = staSource{
 				namespace: "",
 				name:      "example-statefulset",
-				image:     "ubi:latest",
+				image:     "hello-openshift:1.2.0",
 				template:  statefulsetFile,
 			}
 		)
 		g.By("Import an image stream and set image-lookup")
 		oc.SetupProject()
-		err := oc.Run("import-image").Args("registry.access.redhat.com/ubi8/ubi", "--scheduled", "--confirm", "--reference-policy=local").Execute()
+		err := oc.Run("import-image").Args("quay.io/openshifttest/hello-openshift:1.2.0", "--scheduled", "--confirm", "--reference-policy=local").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = waitForAnImageStreamTag(oc, oc.Namespace(), "ubi", "latest")
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "hello-openshift", "1.2.0")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.Run("set").Args("image-lookup", "ubi").Execute()
+		err = oc.Run("set").Args("image-lookup", "hello-openshift").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create the initial statefulset")
@@ -529,11 +529,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		checkPodsRunningWithLabel(oc, oc.Namespace(), "app=example-statefulset", 3)
 
 		g.By("setting a trigger, pods are still running")
-		err = oc.Run("set").Args("triggers", "statefulset/example-statefulset", "--from-image=ubi:latest", "--containers", "example-statefulset").Execute()
+		err = oc.Run("set").Args("triggers", "statefulset/example-statefulset", "--from-image=hello-openshift:latest", "--containers", "example-statefulset").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Check the pods are running")
 		checkPodsRunningWithLabel(oc, oc.Namespace(), "app=example-statefulset", 3)
-		interReg := "image-registry.openshift-image-registry.svc:5000/" + oc.Namespace() + "/ubi"
+		interReg := "image-registry.openshift-image-registry.svc:5000/" + oc.Namespace() + "/hello-openshift"
 		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("pods", "-o=jsonpath={.items[*].spec.containers[*].image}", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(interReg))
