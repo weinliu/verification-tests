@@ -4486,6 +4486,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 	// It will cover test case: OCP-22259, author: kuiwang@redhat.com
 	g.It("NonHyperShiftHOST-Author:kuiwang-Medium-22259-marketplace operator CR status on a running cluster [Exclusive]", func() {
 
+		exutil.SkipForSNOCluster(oc)
 		g.By("check marketplace status")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "TrueFalseFalse", ok, []string{"clusteroperator", "marketplace",
 			"-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"}).check(oc)
