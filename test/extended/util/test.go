@@ -100,7 +100,7 @@ func InitTest(dryRun bool) error {
 func AnnotateTestSuite() {
 	// qe take different method to select case, so no need to annotate it.
 	waitErr := wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
-		out, err := kubectlCmd("get", "clusterversion").CombinedOutput()
+		out, err := kubectlCmd("get", "node").CombinedOutput()
 		if err != nil && strings.Contains(string(out), "Service Unavailable") {
 			e2e.Logf("Fail to get the cluster:%v, error: %v, try again", string(out), err)
 			return false, nil
