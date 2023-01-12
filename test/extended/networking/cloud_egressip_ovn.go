@@ -2120,3 +2120,127 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 	})
 
 })
+
+var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc                                                          = exutil.NewCLI("networking-"+getRandomString(), exutil.KubeConfigPath())
+		egressNodeLabel                                             = "k8s.ovn.org/egress-assignable"
+		hostedClusterName, hostedClusterKubeconfig, hostedclusterNS string
+	)
+
+	g.BeforeEach(func() {
+		hostedClusterName, hostedClusterKubeconfig, hostedclusterNS = exutil.ValidHypershiftAndGetGuestKubeConf(oc)
+		oc.SetGuestKubeconf(hostedClusterKubeconfig)
+
+	})
+	g.It("HyperShiftMGMT-NonPreRelease-ConnectedOnly-Author:jechen-High-54741-EgressIP health check through monitoring port over GRPC on hypershift cluster. [Disruptive]", func() {
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+
+		g.By("1. Check ovnkube-config configmap in hypershift mgmt NS if egressip-node-healthcheck-port=9107 is in it \n")
+
+		configmapName := "ovnkube-config"
+		envString := " egressip-node-healthcheck-port=9107"
+		hyperShiftMgmtNS := hostedclusterNS + "-" + hostedClusterName
+		cmCheckErr := checkEnvInConfigMap(oc, hyperShiftMgmtNS, configmapName, envString)
+		o.Expect(cmCheckErr).NotTo(o.HaveOccurred())
+
+		g.By("2. Check if ovnkube-master is ready on hypershift cluster \n")
+		readyErr := waitForPodWithLabelReady(oc, hyperShiftMgmtNS, "app=ovnkube-master")
+		exutil.AssertWaitPollNoErr(readyErr, "ovnkube-master pods are not ready on the hypershift cluster")
+
+		leaderOVNMasterPodName := getLeaderOVNMasterPodOnMgmtCluster(oc, "openshift-ovn-kubernetes", "ovn-kubernetes-master", hyperShiftMgmtNS)
+		e2e.Logf("\n\n leaderOVNMasterPodName: %s\n\n", leaderOVNMasterPodName)
+
+		readyErr = waitForPodWithLabelReadyOnHostedCluster(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+		exutil.AssertWaitPollNoErr(readyErr, "ovnkube-node pods are not ready on hosted cluster")
+		ovnkubeNodePods := getPodNameOnHostedCluster(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+
+		g.By("3. Get list of scheduleable nodes on hosted cluster, pick one as egressNode, apply EgressLabel Key to it \n")
+		scheduleableNodes, err := getReadySchedulableNodesOnHostedCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// Pick first scheduleable node as egressNode
+		egressNode := scheduleableNodes[0]
+
+		defer exutil.DeleteLabelFromNode(oc.AsAdmin().AsGuestKubeconf(), egressNode, egressNodeLabel)
+		labelValue := ""
+		exutil.AddLabelToNode(oc.AsAdmin().AsGuestKubeconf(), egressNode, egressNodeLabel, labelValue)
+
+		g.By("4. Check leader ovnkube-master pod's log that health check connection has been made to the egressNode on port 9107 \n")
+		// get the OVNK8s managementIP for the egressNode on hosted cluster
+		nodeOVNK8sMgmtIP := getOVNK8sNodeMgmtIPv4OnHostedCluster(oc, egressNode)
+		e2e.Logf("\n\n OVNK8s managementIP of the egressNode on hosted cluster is: %s\n\n", nodeOVNK8sMgmtIP)
+
+		expectedConnectString := "Connected to " + egressNode + " (" + nodeOVNK8sMgmtIP + ":9107)"
+		podLogs, LogErr := checkLogMessageInPod(oc, hyperShiftMgmtNS, "ovnkube-master", leaderOVNMasterPodName, "'"+expectedConnectString+"'"+"| tail -1")
+		o.Expect(LogErr).NotTo(o.HaveOccurred())
+		o.Expect(podLogs).To(o.ContainSubstring(expectedConnectString))
+
+		g.By("5. Check each ovnkube-node pod's log on hosted cluster that health check server is started on it \n")
+		expectedSeverStartString := "Starting Egress IP Health Server on "
+		for _, ovnkubeNodePod := range ovnkubeNodePods {
+			podLogs, LogErr := checkLogMessageInPodOnHostedCluster(oc, "openshift-ovn-kubernetes", "ovnkube-node", ovnkubeNodePod, "'egress ip'")
+			o.Expect(LogErr).NotTo(o.HaveOccurred())
+			o.Expect(podLogs).To(o.ContainSubstring(expectedSeverStartString))
+		}
+
+		g.By("6. Create an egressip object, verify egressIP is assigned to the egressNode")
+		freeIPs := findFreeIPs(oc.AsAdmin().AsGuestKubeconf(), egressNode, 1)
+		o.Expect(len(freeIPs)).Should(o.Equal(1))
+		egressip1 := egressIPResource1{
+			name:          "egressip-54741",
+			template:      egressIP2Template,
+			egressIP1:     freeIPs[0],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "red",
+		}
+		defer egressip1.deleteEgressIPObject1(oc.AsAdmin().AsGuestKubeconf())
+		egressip1.createEgressIPObject2(oc.AsAdmin().AsGuestKubeconf())
+		egressIPMaps1 := getAssignedEIPInEIPObject(oc.AsAdmin().AsGuestKubeconf(), egressip1.name)
+		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
+
+		g.By("7. Add iptables on to block port 9107 on egressNode, verify from log of ovnkube-master pod that the health check connection is closed.\n")
+		delCmdOptions := []string{"iptables", "-D", "INPUT", "-p", "tcp", "--destination-port", "9107", "-j", "DROP"}
+		addCmdOptions := []string{"iptables", "-I", "INPUT", "1", "-p", "tcp", "--destination-port", "9107", "-j", "DROP"}
+		defer execCmdOnDebugNodeOfHostedCluster(oc, egressNode, delCmdOptions)
+		debugNodeErr := execCmdOnDebugNodeOfHostedCluster(oc, egressNode, addCmdOptions)
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+
+		expectedCloseConnectString := "Closing connection with " + egressNode + " (" + nodeOVNK8sMgmtIP + ":9107)"
+		podLogs, LogErr = checkLogMessageInPod(oc, hyperShiftMgmtNS, "ovnkube-master", leaderOVNMasterPodName, "'"+expectedCloseConnectString+"'"+"| tail -1")
+		o.Expect(LogErr).NotTo(o.HaveOccurred())
+		o.Expect(podLogs).To(o.ContainSubstring(expectedCloseConnectString))
+		expectedCouldNotConnectString := "Could not connect to " + egressNode + " (" + nodeOVNK8sMgmtIP + ":9107)"
+		podLogs, LogErr = checkLogMessageInPod(oc, hyperShiftMgmtNS, "ovnkube-master", leaderOVNMasterPodName, "'"+expectedCouldNotConnectString+"'"+"| tail -1")
+		o.Expect(LogErr).NotTo(o.HaveOccurred())
+		o.Expect(podLogs).To(o.ContainSubstring(expectedCouldNotConnectString))
+
+		g.By("8. Verify egressIP is not in cloudprivateipconfig after blocking iptable rule on port 9170 is added.\n")
+		waitCloudPrivateIPconfigUpdate(oc, freeIPs[0], false)
+
+		g.By("9. Delete the iptables rule, verify from log of ovnkube-master pod that the health check connection is re-established.\n")
+		debugNodeErr = execCmdOnDebugNodeOfHostedCluster(oc, egressNode, delCmdOptions)
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+
+		podLogs, LogErr = checkLogMessageInPod(oc, hyperShiftMgmtNS, "ovnkube-master", leaderOVNMasterPodName, "'"+expectedConnectString+"'"+"| tail -1")
+		o.Expect(LogErr).NotTo(o.HaveOccurred())
+		o.Expect(podLogs).To(o.ContainSubstring(expectedConnectString))
+
+		g.By("10. Verify egressIP is re-applied after blocking iptable rule on port 9170 is deleted.\n")
+		egressIPMaps := getAssignedEIPInEIPObject(oc.AsAdmin().AsGuestKubeconf(), egressip1.name)
+		o.Expect(len(egressIPMaps)).Should(o.Equal(1))
+
+		g.By("8. Unlabel the egressNoe egressip-assignable, verify from log of ovnkube-master pod that the health check connection is closed.\n")
+		exutil.DeleteLabelFromNode(oc.AsAdmin().AsGuestKubeconf(), egressNode, egressNodeLabel)
+
+		podLogs, LogErr = checkLogMessageInPod(oc, hyperShiftMgmtNS, "ovnkube-master", leaderOVNMasterPodName, "'"+expectedCloseConnectString+"'"+"| tail -1")
+		o.Expect(LogErr).NotTo(o.HaveOccurred())
+		o.Expect(podLogs).To(o.ContainSubstring(expectedCloseConnectString))
+	})
+
+})

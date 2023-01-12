@@ -899,7 +899,7 @@ func checkNetworkOperatorState(oc *exutil.CLI, interval int, timeout int) {
 	o.Expect(errCheck.Error()).To(o.ContainSubstring("timed out waiting for the condition"))
 }
 
-func getNodeIPv4(oc *exutil.CLI, namespace string, nodeName string) string {
+func getNodeIPv4(oc *exutil.CLI, namespace, nodeName string) string {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", oc.Namespace(), "node", nodeName, "-o=jsonpath={.status.addresses[?(@.type==\"InternalIP\")].address}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if err != nil {
@@ -1882,11 +1882,11 @@ func checkEnvInConfigMap(oc *exutil.CLI, ns, configmapName string, envString str
 // check if certain log message is in a pod in specific namespace
 func checkLogMessageInPod(oc *exutil.CLI, namespace string, containerName string, podName string, filter string) (string, error) {
 	var podLogs string
-	var err error
-	checkErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+	var err, checkErr error
+	checkErr = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
 		podLogs, err = exutil.GetSpecificPodLogs(oc, namespace, containerName, podName, filter)
 		if len(podLogs) == 0 || err != nil {
-			e2e.Logf("did not get podLogs: %v, or have err:%v, try again", podLogs, err)
+			e2e.Logf("did not get expected podLogs: %v, or have err:%v, try again", podLogs, err)
 			return false, nil
 		}
 		return true, nil
@@ -2228,4 +2228,125 @@ func checkClusterStatus(oc *exutil.CLI, expectedStatus string) {
 	for _, workerNode := range masterNodes {
 		checkNodeStatus(oc, workerNode, "Ready")
 	}
+}
+
+func getLeaderOVNMasterPodOnMgmtCluster(oc *exutil.CLI, namespace, cmName, hyperShiftMgmtNS string) string {
+	// get leader node on hypershift hosted cluster
+	output1, err1 := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("configmap", cmName, "-n", namespace, "-o=jsonpath={.metadata.annotations.control-plane\\.alpha\\.kubernetes\\.io/leader}").OutputToFile("oc_describe_nodes.txt")
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	output2, err2 := exec.Command("bash", "-c", "cat "+output1+" |  jq -r .holderIdentity").Output()
+	o.Expect(err2).NotTo(o.HaveOccurred())
+	leaderNodeName := strings.Trim(strings.TrimSpace(string(output2)), "\"")
+	e2e.Logf("The leader node name is %s", leaderNodeName)
+
+	// get OVNkube-master pod on this leader node
+	ovnMasterPod, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", hyperShiftMgmtNS, "pod", "-l app=ovnkube-master", "--field-selector", "spec.nodeName="+leaderNodeName, "-o=jsonpath='{.items[0].metadata.name}'").Output()
+	o.Expect(err3).NotTo(o.HaveOccurred())
+	leaderOVNMasterPodName := ""
+	masterPodList := strings.Split(ovnMasterPod, "'")
+	if len(masterPodList) >= 2 {
+		leaderOVNMasterPodName = masterPodList[1]
+	}
+	o.Expect(leaderOVNMasterPodName).NotTo(o.BeEmpty(), "cannot get leaderOVNMasterPodName")
+	e2e.Logf("The leader Pod's name: %s", leaderOVNMasterPodName)
+	return leaderOVNMasterPodName
+}
+
+func waitForPodWithLabelReadyOnHostedCluster(oc *exutil.CLI, ns, label string) error {
+	return wait.Poll(15*time.Second, 10*time.Minute, func() (bool, error) {
+		status, err := oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-ojsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}").Output()
+		e2e.Logf("the Ready status of pod is %v", status)
+		if err != nil || status == "" {
+			e2e.Logf("failed to get pod status: %v, retrying...", err)
+			return false, nil
+		}
+		if strings.Contains(status, "False") {
+			e2e.Logf("the pod Ready status not met; wanted True but got %v, retrying...", status)
+			return false, nil
+		}
+		return true, nil
+	})
+}
+
+func getPodNameOnHostedCluster(oc *exutil.CLI, namespace, label string) []string {
+	var podName []string
+	podNameAll, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "pod", "-l", label, "-ojsonpath={.items..metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	podName = strings.Split(podNameAll, " ")
+	e2e.Logf("The pod(s) are  %v ", podName)
+	return podName
+}
+
+func getReadySchedulableNodesOnHostedCluster(oc *exutil.CLI) ([]string, error) {
+	output, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("node", "-ojsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	var nodesOnHostedCluster, schedulableNodes []string
+	nodesOnHostedCluster = strings.Split(output, " ")
+	for _, nodeName := range nodesOnHostedCluster {
+		err := wait.Poll(10*time.Second, 15*time.Minute, func() (bool, error) {
+			statusOutput, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("nodes", nodeName, "-ojsonpath={.status.conditions[-1].status}").Output()
+			if err != nil {
+				e2e.Logf("\nGet node status with error : %v", err)
+				return false, nil
+			}
+			if statusOutput != "True" {
+				return false, nil
+			}
+			schedulableNodes = append(schedulableNodes, nodeName)
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Node %s is not in expected status %s", nodeName, "Ready"))
+	}
+	e2e.Logf("Scheduleable nodes on hosted cluster are:  %v ", schedulableNodes)
+	return schedulableNodes, nil
+}
+
+func checkLogMessageInPodOnHostedCluster(oc *exutil.CLI, namespace string, containerName string, podName string, filter string) (string, error) {
+	var podLogs string
+	var err, checkErr error
+	checkErr = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		podLogs, err = exutil.GetSpecificPodLogs(oc.AsAdmin().AsGuestKubeconf(), namespace, containerName, podName, filter)
+		if len(podLogs) == 0 || err != nil {
+			e2e.Logf("did not get expected podLog: %v, or have err:%v, try again", podLogs, err)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("fail to get expected log in pod %v, err: %v", podName, checkErr))
+	return podLogs, nil
+
+}
+
+// get OVN-Kubernetes management interface (ovn-k8s-mp0) IP for the node on hosted cluster
+func getOVNK8sNodeMgmtIPv4OnHostedCluster(oc *exutil.CLI, nodeName string) string {
+	var output string
+	var outputErr error
+	checkErr := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+		output, outputErr = oc.AsGuestKubeconf().WithoutNamespace().Run("debug").Args("-n", "default", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", "/usr/sbin/ip -4 -brief address show | grep ovn-k8s-mp0").Output()
+		if output == "" || outputErr != nil {
+			e2e.Logf("Did not get node's management interface on hosted cluster, errors: %v, try again", outputErr)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("fail to get management interface for node %v, err: %v", nodeName, checkErr))
+
+	e2e.Logf("Match out the OVN-Kubernetes management IP address for the node on hosted cluster")
+	re := regexp.MustCompile(`(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}`)
+	nodeOVNK8sMgmtIPOnHostedCluster := re.FindAllString(output, -1)[0]
+	e2e.Logf("Got ovn-k8s management interface IP for node on hosted cluster %v as: %v", nodeName, nodeOVNK8sMgmtIPOnHostedCluster)
+	return nodeOVNK8sMgmtIPOnHostedCluster
+}
+
+// execute command on debug node with chroot on node of hosted cluster
+func execCmdOnDebugNodeOfHostedCluster(oc *exutil.CLI, nodeName string, cmdOptions []string) error {
+	cargs := []string{"node/" + nodeName, "--", "chroot", "/host"}
+	if len(cmdOptions) > 0 {
+		cargs = append(cargs, cmdOptions...)
+	}
+
+	debugErr := oc.AsGuestKubeconf().WithoutNamespace().Run("debug").Args(cargs...).Execute()
+
+	return debugErr
 }
