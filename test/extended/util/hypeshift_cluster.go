@@ -2,6 +2,7 @@ package util
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
@@ -17,6 +18,14 @@ import (
 // the third return is the hostedcluster namespace in mgmt cluster which contains the generated resources
 // if it is not hypershift env, it will skip test.
 func ValidHypershiftAndGetGuestKubeConf(oc *CLI) (string, string, string) {
+	if IsROSA() {
+		e2e.Logf("there is a ROSA env")
+		hostedClusterName, hostedclusterKubeconfig, hostedClusterNs := ROSAValidHypershiftAndGetGuestKubeConf(oc)
+		if len(hostedClusterName) == 0 || len(hostedclusterKubeconfig) == 0 || len(hostedClusterNs) == 0 {
+			g.Skip("there is a ROSA env, but the env is problematic, skip test run")
+		}
+		return hostedClusterName, hostedclusterKubeconfig, hostedClusterNs
+	}
 	operatorNS := GetHyperShiftOperatorNameSpace(oc)
 	if len(operatorNS) <= 0 {
 		g.Skip("there is no hypershift operator on host cluster, skip test run")
@@ -66,6 +75,10 @@ func ValidHypershiftAndGetGuestKubeConf(oc *CLI) (string, string, string) {
 // the third return is the hostedcluster namespace in mgmt cluster which contains the generated resources
 // if it is not hypershift env, it will not skip the testcase and return null string.
 func ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc *CLI) (string, string, string) {
+	if IsROSA() {
+		e2e.Logf("there is a ROSA env")
+		return ROSAValidHypershiftAndGetGuestKubeConf(oc)
+	}
 	operatorNS := GetHyperShiftOperatorNameSpace(oc)
 	if len(operatorNS) <= 0 {
 		return "", "", ""
@@ -144,4 +157,31 @@ func GetHyperShiftHostedClusterNameSpace(oc *CLI) string {
 		}
 	}
 	return ns
+}
+
+// ROSAValidHypershiftAndGetGuestKubeConf check if it is ROSA-hypershift env and get kubeconf of the hosted cluster, only support prow
+// the first return is hosted cluster name
+// the second return is the file of kubeconfig of the hosted cluster
+// the third return is the hostedcluster namespace in mgmt cluster which contains the generated resources
+// if it is not hypershift env, it will skip test.
+func ROSAValidHypershiftAndGetGuestKubeConf(oc *CLI) (string, string, string) {
+	operatorNS := GetHyperShiftOperatorNameSpace(oc)
+	if len(operatorNS) <= 0 {
+		e2e.Logf("there is no hypershift operator on host cluster")
+		return "", "", ""
+	}
+
+	data, err := ioutil.ReadFile(os.Getenv("SHARED_DIR") + "/cluster-name")
+	if err != nil {
+		e2e.Logf("can't get hostedcluster name %s SHARE_DIR: %s", err.Error(), os.Getenv("SHARED_DIR"))
+		return "", "", ""
+	}
+	clusterName := string(data)
+	hostedclusterNS, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-A", "hostedclusters", `-o=jsonpath={.items[?(@.metadata.name=="`+clusterName+`")].metadata.namespace}`).Output()
+	if len(hostedclusterNS) <= 0 {
+		e2e.Logf("there is no hosted cluster NS in mgmt cluster")
+	}
+
+	hostedClusterKubeconfigFile := os.Getenv("SHARED_DIR") + "/nested_kubeconfig"
+	return clusterName, hostedClusterKubeconfigFile, hostedclusterNS
 }

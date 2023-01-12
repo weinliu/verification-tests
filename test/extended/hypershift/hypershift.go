@@ -37,14 +37,13 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			g.Skip("hypershift operator not found, skip test run")
 		}
 
-		clusterNames := doOcpReq(oc, OcpGet, false, "-n", "clusters", "hostedcluster", "-o=jsonpath={.items[*].metadata.name}")
-		if len(clusterNames) <= 0 {
-			g.Skip("hypershift guest cluster not found, skip test run")
-		}
-
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
 		hypershiftTeamBaseDir = exutil.FixturePath("testdata", "hypershift")
+
+		if exutil.IsROSA() {
+			exutil.ROSALogin()
+		}
 	})
 
 	// author: heli@redhat.com
@@ -223,7 +222,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: heli@redhat.com
-	g.It("HyperShiftMGMT-Author:heli-Critical-45770-Test basic fault resilient HA-capable etcd[Serial][Disruptive]", func() {
+	g.It("HyperShiftMGMT-ROSA-Author:heli-Critical-45770-Test basic fault resilient HA-capable etcd[Serial][Disruptive]", func() {
 		if !hostedcluster.isCPHighlyAvailable() {
 			g.Skip("this is for hosted cluster HA mode , skip test run")
 		}
