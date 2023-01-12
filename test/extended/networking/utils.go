@@ -798,7 +798,7 @@ func getPodIPv6(oc *exutil.CLI, namespace string, podName string, ipStack string
 		e2e.Logf("The pod  %s IP in namespace %s is %q", podName, namespace, podIPv6)
 		return podIPv6
 	} else if ipStack == "dualstack" {
-		podIPv6, err := oc.WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.podIPs[1].ip}").Output()
+		podIPv6, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, podName, "-o=jsonpath={.status.podIPs[1].ip}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("The pod  %s IP in namespace %s is %q", podName, namespace, podIPv6)
 		return podIPv6
@@ -808,7 +808,7 @@ func getPodIPv6(oc *exutil.CLI, namespace string, podName string, ipStack string
 
 // For normal user to create resources in the specified namespace from the file (not template)
 func createResourceFromFile(oc *exutil.CLI, ns, file string) {
-	err := oc.WithoutNamespace().Run("create").Args("-f", file, "-n", ns).Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", file, "-n", ns).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

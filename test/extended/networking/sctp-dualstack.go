@@ -244,4 +244,172 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(msg1).NotTo(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"))
 		}
 	})
+
+	// author: huirwang@redhat.com
+	g.It("NonPreRelease-PreChkUpgrade-Author:huirwang-Medium-44765-Check the sctp works well after upgrade. [Disruptive]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking/sctp")
+			sctpClientPod       = filepath.Join(buildPruningBaseDir, "sctpclient.yaml")
+			sctpServerPod       = filepath.Join(buildPruningBaseDir, "sctpserver.yaml")
+			sctpModule          = filepath.Join(buildPruningBaseDir, "load-sctp-module.yaml")
+			sctpServerPodName   = "sctpserver"
+			sctpClientPodname   = "sctpclient"
+			ns                  = "44765-upgrade-ns"
+		)
+
+		g.By("Enable sctp module in all workers")
+		prepareSCTPModule(oc, sctpModule)
+
+		g.By("create new namespace")
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("create sctpClientPod")
+		createResourceFromFile(oc, ns, sctpClientPod)
+		err1 := waitForPodWithLabelReady(oc, ns, "name=sctpclient")
+		exutil.AssertWaitPollNoErr(err1, "sctpClientPod is not running")
+
+		g.By("create sctpServerPod")
+		createResourceFromFile(oc, ns, sctpServerPod)
+		err2 := waitForPodWithLabelReady(oc, ns, "name=sctpserver")
+		exutil.AssertWaitPollNoErr(err2, "sctpServerPod is not running")
+
+		ipStackType := checkIPStackType(oc)
+
+		g.By("test ipv4 in ipv4 cluster or dualstack cluster")
+		if ipStackType == "ipv4single" || ipStackType == "dualstack" {
+			g.By("get ipv4 address from the sctpServerPod")
+			sctpServerPodIP := getPodIPv4(oc, ns, sctpServerPodName)
+
+			g.By("sctpserver pod start to wait for sctp traffic")
+			cmdNcat, _, _, err := oc.AsAdmin().Run("exec").Args("-n", ns, sctpServerPodName, "--", "/usr/bin/ncat", "-l", "30102", "--sctp").Background()
+			defer cmdNcat.Process.Kill()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("check sctp process enabled in the sctp server pod")
+			o.Eventually(func() string {
+				msg, err := e2e.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				return msg
+			}, "10s", "5s").Should(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "No sctp process running on sctp server pod")
+
+			g.By("sctpclient pod start to send sctp traffic")
+			_, err1 := e2e.RunHostCmd(ns, sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
+			o.Expect(err1).NotTo(o.HaveOccurred())
+
+			g.By("server sctp process will end after get sctp traffic from sctp client")
+			o.Eventually(func() string {
+				msg, err := e2e.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				return msg
+			}, "10s", "5s").ShouldNot(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "Sctp process didn't end after get sctp traffic from sctp client")
+		}
+
+		g.By("test ipv6 in ipv6 cluster or dualstack cluster")
+		if ipStackType == "ipv6single" || ipStackType == "dualstack" {
+			g.By("get ipv6 address from the sctpServerPod")
+			sctpServerPodIP := getPodIPv6(oc, ns, sctpServerPodName, ipStackType)
+
+			g.By("sctpserver pod start to wait for sctp traffic")
+			cmdNcat, _, _, err := oc.AsAdmin().Run("exec").Args("-n", ns, sctpServerPodName, "--", "/usr/bin/ncat", "-l", "30102", "--sctp").Background()
+			defer cmdNcat.Process.Kill()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("check sctp process enabled in the sctp server pod")
+			o.Eventually(func() string {
+				msg, err := e2e.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				return msg
+			}, "10s", "5s").Should(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "No sctp process running on sctp server pod")
+
+			g.By("sctpclient pod start to send sctp traffic")
+			_, err1 := e2e.RunHostCmd(ns, sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
+			o.Expect(err1).NotTo(o.HaveOccurred())
+
+			g.By("server sctp process will end after get sctp traffic from sctp client")
+			o.Eventually(func() string {
+				msg, err := e2e.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				return msg
+			}, "10s", "5s").ShouldNot(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "Sctp process didn't end after get sctp traffic from sctp client")
+		}
+	})
+
+	// author: huirwang@redhat.com
+	g.It("NonPreRelease-PstChkUpgrade-Author:huirwang-Medium-44765-Check the sctp works well after upgrade. [Disruptive]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking/sctp")
+			sctpModule          = filepath.Join(buildPruningBaseDir, "load-sctp-module.yaml")
+			sctpServerPodName   = "sctpserver"
+			sctpClientPodname   = "sctpclient"
+			ns                  = "44765-upgrade-ns"
+		)
+
+		g.By("Get sctp upgrade setup info")
+		e2e.Logf("The sctp upgrade namespace is %s ", ns)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("namespace", ns, "--ignore-not-found").Execute()
+
+		g.By("Enable sctp module on all workers")
+		prepareSCTPModule(oc, sctpModule)
+
+		ipStackType := checkIPStackType(oc)
+
+		g.By("test ipv4 in ipv4 cluster or dualstack cluster")
+		if ipStackType == "ipv4single" || ipStackType == "dualstack" {
+			g.By("get ipv4 address from the sctpServerPod")
+			sctpServerPodIP := getPodIPv4(oc, ns, sctpServerPodName)
+
+			g.By("sctpserver pod start to wait for sctp traffic")
+			cmdNcat, _, _, err := oc.AsAdmin().Run("exec").Args("-n", ns, sctpServerPodName, "--", "/usr/bin/ncat", "-l", "30102", "--sctp").Background()
+			defer cmdNcat.Process.Kill()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("check sctp process enabled in the sctp server pod")
+			o.Eventually(func() string {
+				msg, err := e2e.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				return msg
+			}, "10s", "5s").Should(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "No sctp process running on sctp server pod")
+
+			g.By("sctpclient pod start to send sctp traffic")
+			_, err1 := e2e.RunHostCmd(ns, sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
+			o.Expect(err1).NotTo(o.HaveOccurred())
+
+			g.By("server sctp process will end after get sctp traffic from sctp client")
+			o.Eventually(func() string {
+				msg, err := e2e.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				return msg
+			}, "10s", "5s").ShouldNot(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "Sctp process didn't end after get sctp traffic from sctp client")
+		}
+
+		g.By("test ipv6 in ipv6 cluster or dualstack cluster")
+		if ipStackType == "ipv6single" || ipStackType == "dualstack" {
+			g.By("get ipv6 address from the sctpServerPod")
+			sctpServerPodIP := getPodIPv6(oc, ns, sctpServerPodName, ipStackType)
+
+			g.By("sctpserver pod start to wait for sctp traffic")
+			cmdNcat, _, _, err := oc.AsAdmin().Run("exec").Args("-n", ns, sctpServerPodName, "--", "/usr/bin/ncat", "-l", "30102", "--sctp").Background()
+			defer cmdNcat.Process.Kill()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("check sctp process enabled in the sctp server pod")
+			o.Eventually(func() string {
+				msg, err := e2e.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				return msg
+			}, "10s", "5s").Should(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "No sctp process running on sctp server pod")
+
+			g.By("sctpclient pod start to send sctp traffic")
+			_, err1 := e2e.RunHostCmd(ns, sctpClientPodname, "echo 'Test traffic using sctp port from sctpclient to sctpserver' | { ncat -v "+sctpServerPodIP+" 30102 --sctp; }")
+			o.Expect(err1).NotTo(o.HaveOccurred())
+
+			g.By("server sctp process will end after get sctp traffic from sctp client")
+			o.Eventually(func() string {
+				msg, err := e2e.RunHostCmd(ns, sctpServerPodName, "ps aux | grep sctp")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				return msg
+			}, "10s", "5s").ShouldNot(o.ContainSubstring("/usr/bin/ncat -l 30102 --sctp"), "Sctp process didn't end after get sctp traffic from sctp client")
+		}
+	})
 })
