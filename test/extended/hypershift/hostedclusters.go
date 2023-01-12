@@ -172,16 +172,26 @@ func pollGetHostedClusters(oc *exutil.CLI, namespace string) func() string {
 
 // checkHCConditions check conditions and exit test if not available.
 func (h *hostedCluster) checkHCConditions() bool {
+	iaasPlatform := exutil.CheckPlatform(h.oc)
 	res, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("hostedcluster", h.name, "-n", h.namespace,
 		`-ojsonpath={range .status.conditions[*]}{@.type}{" "}{@.status}{" "}{end}`).Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
 
-	return checkSubstringWithNoExit(res,
-		[]string{"ValidHostedControlPlaneConfiguration True", "ClusterVersionSucceeding True",
-			"Degraded False", "EtcdAvailable True", "KubeAPIServerAvailable True", "InfrastructureReady True",
-			"Available True", "ValidConfiguration True", "SupportedHostedCluster True",
-			"ValidHostedControlPlaneConfiguration True", "IgnitionEndpointAvailable True", "ReconciliationActive True",
-			"ValidReleaseImage True", "ValidOIDCConfiguration True", "ReconciliationSucceeded True"})
+	if iaasPlatform == "azure" {
+		return checkSubstringWithNoExit(res,
+			[]string{"ValidHostedControlPlaneConfiguration True", "ClusterVersionSucceeding True",
+				"Degraded False", "EtcdAvailable True", "KubeAPIServerAvailable True", "InfrastructureReady True",
+				"Available True", "ValidConfiguration True", "SupportedHostedCluster True",
+				"ValidHostedControlPlaneConfiguration True", "IgnitionEndpointAvailable True", "ReconciliationActive True",
+				"ValidReleaseImage True", "ReconciliationSucceeded True"})
+	} else {
+		return checkSubstringWithNoExit(res,
+			[]string{"ValidHostedControlPlaneConfiguration True", "ClusterVersionSucceeding True",
+				"Degraded False", "EtcdAvailable True", "KubeAPIServerAvailable True", "InfrastructureReady True",
+				"Available True", "ValidConfiguration True", "SupportedHostedCluster True",
+				"ValidHostedControlPlaneConfiguration True", "IgnitionEndpointAvailable True", "ReconciliationActive True",
+				"ValidReleaseImage True", "ValidOIDCConfiguration True", "ReconciliationSucceeded True"})
+	}
 }
 
 // getHostedclusterConsoleInfo returns console url and password
