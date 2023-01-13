@@ -925,7 +925,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: pewang@redhat.com
 	// https://kubernetes.io/docs/concepts/storage/persistent-volumes/#delete
-	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-44906-[CSI Driver] [Dynamic PV] [Delete reclaimPolicy] volumes should be deleted after the pvc deletion", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:pewang-High-44906-[CSI Driver] [Dynamic PV] [Delete reclaimPolicy] volumes should be deleted after the pvc deletion", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
@@ -986,7 +986,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: pewang@redhat.com
 	// https://kubernetes.io/docs/concepts/storage/persistent-volumes/#retain
-	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-44907-[CSI Driver] [Dynamic PV] [Retain reclaimPolicy] [Static PV] volumes could be re-used after the pvc/pv deletion", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:pewang-High-44907-[CSI Driver] [Dynamic PV] [Retain reclaimPolicy] [Static PV] volumes could be re-used after the pvc/pv deletion", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		// Set the resource template for the scenario
@@ -3256,7 +3256,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: pewang@redhat.com
 	// OCP-52301-High [CSI Driver][Generic ephemeral volumes] [reclaimPolicy Retain] pvc's lifecycle should the same with pod but pv should be reused by pod
-	g.It("ROSA-OSD_CCS-ARO-Author:pewang-High-52301-[CSI Driver][Generic ephemeral volumes] [reclaimPolicy Retain] pvc's lifecycle should the same with pod but pv should be reused by pod", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:pewang-High-52301-[CSI Driver][Generic ephemeral volumes] [reclaimPolicy Retain] pvc's lifecycle should the same with pod but pv should be reused by pod", func() {
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com",
 			"cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
