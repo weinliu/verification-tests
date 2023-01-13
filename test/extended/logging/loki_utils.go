@@ -499,7 +499,7 @@ func (l lokiStack) waitForLokiStackToBeReady(oc *exutil.CLI) {
 	for _, deploy := range []string{l.name + "-distributor", l.name + "-gateway", l.name + "-querier", l.name + "-query-frontend"} {
 		WaitForDeploymentPodsToBeReady(oc, l.namespace, deploy)
 	}
-	for _, ss := range []string{l.name + "-compactor", l.name + "-index-gateway", l.name + "-ingester"} {
+	for _, ss := range []string{l.name + "-compactor", l.name + "-index-gateway", l.name + "-ingester", l.name + "-ruler"} {
 		waitForStatefulsetReady(oc, l.namespace, ss)
 	}
 }

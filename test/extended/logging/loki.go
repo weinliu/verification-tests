@@ -193,17 +193,21 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			ls.waitForLokiStackToBeReady(oc)
 			e2e.Logf("LokiStack deployed")
 
-			g.By("Checking Ingester Replica count for 1x.small tshirt size")
-			podList, err := oc.AdminKubeClient().CoreV1().Pods(ls.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=ingester"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(podList.Items) == 2).Should(o.BeTrue())
-			e2e.Logf("Ingester pod count is %d \n", len(podList.Items))
+			g.By("Checking Replica count for 1x.small tshirt size")
 
-			g.By("Checking Querier Replica count for 1x.small tshirt size")
-			podList, err = oc.AdminKubeClient().CoreV1().Pods(ls.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=querier"})
+			e2e.Logf("compactor replica check")
+			podList, err := oc.AdminKubeClient().CoreV1().Pods(ls.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=compactor"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(podList.Items) == 2).Should(o.BeTrue())
-			e2e.Logf("Querier pod count is %d \n", len(podList.Items))
+			o.Expect(len(podList.Items) == 1).Should(o.BeTrue())
+			e2e.Logf("compactor replica count is %d \n", len(podList.Items))
+
+			for _, component := range []string{"distributor", "lokistack-gateway", "index-gateway", "query-frontend", "ingester", "querier", "ruler"} {
+				e2e.Logf("%s replica check", component)
+				podList, err = oc.AdminKubeClient().CoreV1().Pods(ls.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=" + component})
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(len(podList.Items) == 2).Should(o.BeTrue())
+				e2e.Logf(component+" replica count is %d \n", len(podList.Items))
+			}
 
 			g.By("Redeploying LokiStack with 1x.medium tshirt size")
 			ls.removeLokiStack(oc)
@@ -213,17 +217,25 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			newls.waitForLokiStackToBeReady(oc)
 			e2e.Logf("LokiStack redeployed")
 
-			g.By("Checking Ingester Replica count for 1x.medium tshirt size")
-			podList, err = oc.AdminKubeClient().CoreV1().Pods(newls.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=ingester"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(podList.Items) == 3).Should(o.BeTrue())
-			e2e.Logf("Ingester pod count is %d \n", len(podList.Items))
+			g.By("Checking Replica replica for 1x.medium tshirt size")
 
-			g.By("Checking Querier Replica count for 1x.medium tshirt size")
-			podList, err = oc.AdminKubeClient().CoreV1().Pods(newls.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=querier"})
+			e2e.Logf("compactor replica check")
+			podList, err = oc.AdminKubeClient().CoreV1().Pods(ls.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=compactor"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(podList.Items) == 3).Should(o.BeTrue())
-			e2e.Logf("Querier pod count is %d \n", len(podList.Items))
+			o.Expect(len(podList.Items) == 1).Should(o.BeTrue())
+			e2e.Logf("compactor replica count is %d \n", len(podList.Items))
+
+			for _, component := range []string{"distributor", "lokistack-gateway", "index-gateway", "query-frontend", "ingester", "querier", "ruler"} {
+				e2e.Logf("%s replica check", component)
+				podList, err = oc.AdminKubeClient().CoreV1().Pods(ls.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/component=" + component})
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if component == "ingester" || component == "querier" {
+					o.Expect(len(podList.Items) == 3).Should(o.BeTrue())
+				} else {
+					o.Expect(len(podList.Items) == 2).Should(o.BeTrue())
+				}
+				e2e.Logf(component+" replica count is %d \n", len(podList.Items))
+			}
 
 		})
 

@@ -18,6 +18,14 @@ objects:
     storageClassName: ${STORAGE_CLASS}
     tenants:
       mode: "openshift-logging"
+    rules:
+      enabled: true
+      selector:
+        matchLabels:
+          openshift.io/cluster-monitoring: "true"
+      namespaceSelector:
+        matchLabels:
+          openshift.io/cluster-monitoring: "true"
 parameters:
 - name: NAME
   value: "my-loki"
