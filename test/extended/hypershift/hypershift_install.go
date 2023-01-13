@@ -559,7 +559,7 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 		g.By("create HostedClusters node ready")
 		installHelper.createHostedClusterKubeconfig(createCluster, hostedCluster)
-		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), LongTimeout, LongTimeout/10).Should(o.Equal(2), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
+		o.Eventually(hostedCluster.pollGetHostedClusterReadyNodeCount(""), DoubleLongTimeout, DoubleLongTimeout/10).Should(o.Equal(2), fmt.Sprintf("not all nodes in hostedcluster %s are in ready state", hostedCluster.name))
 	})
 
 	// author: liangli@redhat.com

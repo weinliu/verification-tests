@@ -39,7 +39,7 @@ func (h *hostedCluster) getHostedClusterReadyNodeCount(npName string) (int, erro
 	if len(npName) > 0 {
 		cond = append(cond, "-l", "hypershift.openshift.io/nodePool="+npName)
 	}
-	value, er := h.oc.AsGuestKubeconf().AsAdmin().WithoutNamespace().Run("get").Args(cond...).Output()
+	value, er := h.oc.AsAdmin().WithoutNamespace().Run("get").Args(cond...).Output()
 	if er != nil {
 		e2e.Logf(" get node status ready error: %v", er)
 		return 0, er
