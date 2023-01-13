@@ -22,8 +22,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 
 	g.BeforeEach(func() {
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(msg, "bm2-zzhao") {
+		if err != nil || !strings.Contains(msg, "bm2-zzhao") {
 			g.Skip("These cases only can be run on Beijing local baremetal server , skip for other envrionment!!!")
 		}
 	})

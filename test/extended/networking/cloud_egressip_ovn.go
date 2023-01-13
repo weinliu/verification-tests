@@ -1915,6 +1915,10 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 
+		if checkProxy(oc) {
+			g.Skip("This is proxy cluster, skip the test.")
+		}
+
 		g.By("Get the temporary namespace")
 		ns := oc.Namespace()
 
