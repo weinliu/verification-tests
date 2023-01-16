@@ -21,6 +21,10 @@ var _ = g.Describe("[sig-scheduling] Workloads", func() {
 
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-13538-Check Existing pods with matched NoExecute will stay on node for time of tolerationSeconds [Disruptive]", func() {
+		isSNO := exutil.IsSNOCluster(oc)
+		if isSNO {
+			g.Skip("Skip Testing on SNO ...")
+		}
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		podtolerateT := filepath.Join(buildPruningBaseDir, "pod_tolerationseconds.yaml")
 
