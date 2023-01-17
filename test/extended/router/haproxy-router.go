@@ -3,10 +3,12 @@ package router
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"github.com/tidwall/gjson"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
@@ -1527,5 +1529,20 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		cmdOnPod := []string{cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst}
 		result := repeatCmd(oc, cmdOnPod, "Set-Cookie2 X=Y", 5)
 		o.Expect(result).To(o.ContainSubstring("passed"))
+	})
+
+	// bugzilla: 1941592 1859134
+	g.It("Author:mjoseph-Medium-57406-HAProxyDown message only for pods and No reaper messages for zombie processes", func() {
+		g.By("Verify there will be precise message pointing to the  router nod, when HAProxy is down")
+		output := fetchJSONPathValue(oc, "openshift-ingress-operator", "PrometheusRule", ".items[0].spec.groups[0].rules[?(@.alert==\"HAProxyDown\")].annotations.message")
+		o.Expect(output).To(o.ContainSubstring(`HAProxy metrics are reporting that HAProxy is down on pod {{ $labels.namespace }} / {{ $labels.pod }}`))
+
+		g.By("Check the router pod logs and confirm there is no periodic reper error message  for zombie process")
+		podname := getRouterPod(oc, "default")
+		log, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress", podname).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(log, "waitid: no child processes") {
+			e2e.Failf("waitid: no child processes generated")
+		}
 	})
 })
