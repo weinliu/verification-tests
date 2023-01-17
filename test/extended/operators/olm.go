@@ -7275,6 +7275,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		g.By("install operator")
 		defer sub.delete(itName, dr)
 		sub.create(oc, itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 		err := wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
 			err := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfiguration", "-l", "olm.owner.namespace="+ns).Execute()
@@ -7287,6 +7288,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("validatingwebhookconfiguration which owner ns %s is not created", ns))
 
 		g.By("update csv")
+
 		_, err1 := oc.AsAdmin().WithoutNamespace().Run("patch").Args("csv", sub.installedCSV, "-n", ns,
 			"--type=json", "--patch", `[{"op":"replace","path":"/spec/webhookdefinitions/0/rules/0/operations", "value":["CREATE","DELETE"]}]`).Output()
 		o.Expect(err1).NotTo(o.HaveOccurred())
@@ -7305,6 +7307,12 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 			return false, nil
 		})
+		if err != nil {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfiguration", validatingwebhookName, "-o=jsonpath={.webhooks.rules}").Output()
+			e2e.Logf(output)
+			output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", sub.installedCSV, "-n", ns, "-o=jsonpath={.spec.webhookdefinitions}").Output()
+			e2e.Logf(output)
+		}
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("validatingwebhookconfiguration %s has no DELETE operation", validatingwebhookName))
 	})
 
@@ -7359,6 +7367,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		g.By("install operator")
 		defer sub.delete(itName, dr)
 		sub.create(oc, itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
 		err := wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
 			err := oc.AsAdmin().WithoutNamespace().Run("get").Args("mutatingwebhookconfiguration", "-l", "olm.owner.namespace="+ns).Execute()
@@ -7389,6 +7398,12 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			}
 			return false, nil
 		})
+		if err != nil {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mutatingwebhookconfiguration", validatingwebhookName, "-o=jsonpath={.webhooks.rules}").Output()
+			e2e.Logf(output)
+			output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", sub.installedCSV, "-n", ns, "-o=jsonpath={.spec.webhookdefinitions}").Output()
+			e2e.Logf(output)
+		}
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("mutatingwebhookconfiguration %s has no DELETE operation", validatingwebhookName))
 	})
 
