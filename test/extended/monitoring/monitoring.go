@@ -232,6 +232,51 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/label/__name__/values`, token, `"kube_pod_status_scheduled_time"`, uwmLoadTime)
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-High-56168-PreChkUpgrade-NonPreRelease-Prometheus never sees endpoint propagation of a deleted pod", func() {
+		var (
+			ns          = "56168-upgrade-ns"
+			exampleApp  = filepath.Join(monitoringBaseDir, "example-app.yaml")
+			roleBinding = filepath.Join(monitoringBaseDir, "sa-prometheus-k8s-access.yaml")
+		)
+		g.By("Create example app")
+		oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", ns).Execute()
+		createResourceFromYaml(oc, ns, exampleApp)
+		exutil.AssertAllPodsToBeReady(oc, ns)
+
+		g.By("add role and role binding for example app")
+		createResourceFromYaml(oc, ns, roleBinding)
+
+		g.By("label namespace")
+		oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", ns, "openshift.io/cluster-monitoring=true").Execute()
+
+		g.By("check target is up")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/targets`, token, "up", 2*uwmLoadTime)
+	})
+
+	// author: tagao@redhat.com
+	g.It("Author:tagao-High-56168-PstChkUpgrade-NonPreRelease-Prometheus never sees endpoint propagation of a deleted pod", func() {
+		g.By("get the ns name in PreChkUpgrade")
+		ns := "56168-upgrade-ns"
+
+		g.By("delete related resource at the end of case")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns).Execute()
+
+		g.By("delete example app deployment")
+		deleteApp, _ := oc.AsAdmin().WithoutNamespace().Run("delete").Args("deploy", "prometheus-example-app", "-n", ns).Output()
+		o.Expect(deleteApp).To(o.ContainSubstring(`"prometheus-example-app" deleted`))
+
+		g.By("Get token of SA prometheus-k8s")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+
+		g.By("check metric up==0, return null")
+		checkMetric(oc, "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query= up == 0'", token, `"result":[]`, 2*uwmLoadTime)
+
+		g.By("check no alert 'TargetDown'")
+		checkAlertNotExist(oc, "TargetDown", token)
+	})
+
 	g.Context("user workload monitoring", func() {
 		var (
 			uwmMonitoringConfig string

@@ -252,3 +252,12 @@ func checkSig4Config(oc *exutil.CLI, ns string, podName string, checkValue strin
 	})
 	exutil.AssertWaitPollNoErr(envCheck, "failed to check sig4 config")
 }
+
+func checkAlertNotExist(oc *exutil.CLI, token, alertName string) {
+	cmd := "curl -G -k -s -H \"Authorization:Bearer " + token + "\" " + "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/alerts"
+	chk, err := exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", cmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(chk, alertName) {
+		e2e.Failf("Target alert found: %s", alertName)
+	}
+}
