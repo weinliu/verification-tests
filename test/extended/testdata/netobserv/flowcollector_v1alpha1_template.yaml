@@ -24,7 +24,7 @@ objects:
             containerName: ovnkube-node
         ebpf:
           imagePullPolicy: IfNotPresent
-          sampling: 50
+          sampling: 1
           cacheActiveTimeout: 5s
           cacheMaxFlows: 100000
           interfaces: [ ]
@@ -36,7 +36,7 @@ objects:
               memory: 50Mi
               cpu: 100m
             limits:
-              memory: 100Mi
+              memory: 800Mi
           kafkaBatchSize: 10485760
       processor:
         port: 2055
