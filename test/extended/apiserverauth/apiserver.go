@@ -2975,7 +2975,7 @@ spec:
 		g.By("3) Wait for hello-world build to success")
 		err = exutil.WaitForABuild(oc.BuildClient().BuildV1().Builds(oc.Namespace()), buildName+"-1", nil, nil, nil)
 		if err != nil {
-			exutil.DumpBuildLogs(buildName+"-1", oc)
+			exutil.DumpBuildLogs(buildName, oc)
 		}
 		exutil.AssertWaitPollNoErr(err, "build is not complete")
 
@@ -3019,7 +3019,7 @@ spec:
 		exutil.AssertWaitPollNoErr(err, "pod did not showed up with the expected status")
 
 		g.By("9) Create generic secret from deploymentconfig in step 7.")
-		err = oc.Run("create").Run("secret", "generic", "notmatch-secret", "--from-file="+deploymentConfigYaml).Execute()
+		err = oc.Run("create").Args("secret", "generic", "notmatch-secret", "--from-file="+deploymentConfigYaml).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("10) Modify the deploymentconfig again and create a new deployment.")
