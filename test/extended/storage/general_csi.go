@@ -3928,11 +3928,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com", "disk.csi.azure.com", "file.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io", "diskplugin.csi.alibabacloud.com"}
 		// Set the resource template for the scenario
 		var (
-			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
-			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
-			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
-			podTemplate          = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
-			supportProvisioners  = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
+			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -3946,17 +3945,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 			// Set the resource definition for the scenario
-			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassReclaimPolicy("Delete"))
-			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)))
 			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
 
-			g.By("#. Create csi storageclass")
-			storageClass.provisioner = provisioner
-			storageClass.create(oc)
-			defer storageClass.deleteAsAdmin(oc)
-
-			g.By("# Create a pvc with the csi storageclass")
-			pvc.scname = storageClass.name
+			g.By("# Create a pvc with the preset csi storageclass")
 			pvc.create(oc)
 			defer pvc.deleteAsAdmin(oc)
 
