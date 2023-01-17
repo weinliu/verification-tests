@@ -388,4 +388,32 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		searchOutput2 := waitForRegexpOutput(oc, project1, "service/"+internalSvc, ".status.loadBalancer.ingress..ip", regExp)
 		o.Expect(searchOutput2).NotTo(o.ContainSubstring("NotMatch"))
 	})
+
+	// bugzilla: 2039256
+	g.It("Author:mjoseph-High-57370-hostname of componentRoutes should be RFC compliant", func() {
+		// Check whether the console operator is present or not
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("route", "console", "-n", "openshift-console").Output()
+		if strings.Contains(output, "namespaces \"openshift-console\" not found") || err != nil {
+			g.Skip("This cluster dont have console operator, so skipping the test.")
+		}
+		var (
+			resourceName = "ingress.config/cluster"
+		)
+
+		g.By("Create route and get the details")
+		removeRoute := fmt.Sprintf("[{\"op\":\"remove\", \"path\":\"/spec/componentRoutes\", \"value\":[{\"hostname\": \"1digit9.apps.%s\", \"name\": \"downloads\", \"namespace\": \"openshift-console\"}]}]}]", getBaseDomain(oc))
+		addRoute := fmt.Sprintf("[{\"op\":\"add\", \"path\":\"/spec/componentRoutes\", \"value\":[{\"hostname\": \"1digit9.apps.%s\", \"name\": \"downloads\", \"namespace\": \"openshift-console\"}]}]}]", getBaseDomain(oc))
+		defer patchGlobalResourceAsAdmin(oc, resourceName, removeRoute)
+		patchGlobalResourceAsAdmin(oc, resourceName, addRoute)
+		waitForOutput(oc, "openshift-console", "route", ".items..metadata.name", "downloads-custom")
+
+		g.By("Check the router pod and ensure the routes are loaded in haproxy.config")
+		podname := getRouterPod(oc, "default")
+		backendConfig := pollReadPodData(oc, "openshift-ingress", podname, "cat haproxy.config", "downloads-custom")
+		o.Expect(backendConfig).To(o.ContainSubstring("backend be_edge_http:openshift-console:downloads-custom"))
+
+		g.By("Confirm from the component Route, the RFC complaint hostname")
+		cmd := fmt.Sprintf(`1digit9.apps.%s`, getBaseDomain(oc))
+		waitForOutput(oc, oc.Namespace(), "ingress.config.openshift.io/cluster", ".spec.componentRoutes[0].hostname", cmd)
+	})
 })
