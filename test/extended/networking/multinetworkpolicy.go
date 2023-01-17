@@ -18,6 +18,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	var oc = exutil.NewCLI("networking-multinetworkpolicy", exutil.KubeConfigPath())
 
 	g.BeforeEach(func() {
+		if checkProxy(oc) {
+			g.Skip("This is proxy cluster, skip the test.")
+		}
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "sriov.openshift-qe.sdn.com") {
