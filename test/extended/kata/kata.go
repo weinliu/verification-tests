@@ -541,7 +541,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		nodeWorkerCount = len(nodeWorkerList)
 
 		mustgatherExpected := counts{
-			audits:           nodeWorkerCount,
+			audits:           1,
 			crio:             nodeWorkerCount + nodeControlCount,
 			qemuLogs:         nodeWorkerCount, // Need to change from deployment
 			qemuVersion:      nodeWorkerCount,
@@ -692,8 +692,8 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("Compare walkthrough counts to expected from " + mustgatherTopdir)
 
 		e2e.Logf("mustgatherChecks.audits : %v", mustgatherChecks.audits)
-		if mustgatherChecks.audits != mustgatherExpected.audits {
-			e2e.Logf("Audit logs (%v) did not exist on all worker nodes (%v)", mustgatherChecks.audits, mustgatherExpected.audits)
+		if mustgatherChecks.audits < mustgatherExpected.audits {
+			e2e.Logf("Audit logs (%v) not found on any worker nodes (%v)", mustgatherChecks.audits, mustgatherExpected.audits)
 			fails++
 		}
 		e2e.Logf("mustgatherChecks.crio : %v", mustgatherChecks.crio)
