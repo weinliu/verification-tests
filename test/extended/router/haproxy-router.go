@@ -1545,4 +1545,62 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 			e2e.Failf("waitid: no child processes generated")
 		}
 	})
+
+	// bugzilla: 1976894
+	g.It("Author:mjoseph-Medium-57404-Idling StatefulSet is not supported", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "ocp57404-stateful-set.yaml")
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp57404",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		g.By("Create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		ingressErr := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(ingressErr, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		custContPod := getRouterPod(oc, "ocp57404")
+		custContIP := getPodv4Address(oc, custContPod, "openshift-ingress")
+
+		g.By("Deploy the statefulset and its service resources")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		err := waitForPodWithLabelReady(oc, project1, "app=echoenv-sts")
+		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
+
+		g.By("Create a client pod")
+		createResourceFromFile(oc, project1, clientPod)
+		err = waitForPodWithLabelReady(oc, project1, "app=hello-pod")
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+
+		g.By("Expose a route with the unsecure service inside the project")
+		routehost := "echoenv-statefulset-service-" + project1 + "." + ingctrl.domain
+		SrvErr := oc.Run("expose").Args("svc/echoenv-statefulset-service", "--hostname="+routehost).Execute()
+		o.Expect(SrvErr).NotTo(o.HaveOccurred())
+		routeOutput := getRoutes(oc, project1)
+		o.Expect(routeOutput).To(o.ContainSubstring("echoenv-statefulset-service"))
+
+		g.By("Check the reachability of the insecure route")
+		waitForCurl(oc, "hello-pod", baseDomain, "echoenv-statefulset-service-"+project1+"."+"ocp57404.", "HTTP/1.1 200 OK", custContIP)
+
+		g.By("Trying to idle the statefulset-service")
+		idleOutput, _ := oc.AsAdmin().WithoutNamespace().Run("idle").Args("echoenv-statefulset-service", "-n", project1).Output()
+		o.Expect(idleOutput).To(o.ContainSubstring("idling StatefulSet is not supported yet"))
+
+		g.By("Verify the Idle annotation is not present")
+		findAnnotation := getAnnotation(oc, project1, "svc", "echoenv-statefulset-service")
+		o.Expect(findAnnotation).NotTo(o.ContainSubstring("idling.alpha.openshift.io/idled-at"))
+
+		g.By("Recheck the reachability of the insecure route")
+		waitForCurl(oc, "hello-pod", baseDomain, "echoenv-statefulset-service-"+project1+"."+"ocp57404.", "HTTP/1.1 200 OK", custContIP)
+	})
 })
