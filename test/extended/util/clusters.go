@@ -116,3 +116,17 @@ func SkipNoDefaultSC(oc *CLI) {
 		g.Skip("Skip for unexpected default storageclass!")
 	}
 }
+
+// SkipHypershift skip the test on a Hypershift cluster
+func SkipHypershift(oc *CLI) {
+	topology, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructures.config.openshift.io", "cluster", "-o=jsonpath={.status.controlPlaneTopology}").Output()
+	if err != nil {
+		e2e.Failf("get controlPlaneTopology failed err %v .", err)
+	}
+	if topology == "" {
+		e2e.Failf("failure: controlPlaneTopology returned empty")
+	}
+	if topology == "External" {
+		g.Skip("Skip for Hypershift cluster")
+	}
+}
