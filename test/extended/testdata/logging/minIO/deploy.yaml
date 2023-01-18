@@ -125,7 +125,7 @@ objects:
 parameters:
   - name: IMAGE
     displayName: " The MinIO image"
-    value: "quay.io/minio/minio:latest"
+    value: "quay.io/openshifttest/minio:latest"
   - name: NAMESPACE
     displayName: Namespace
     value: "minio-aosqe"
