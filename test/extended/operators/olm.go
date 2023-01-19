@@ -382,10 +382,11 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			e2e.Failf("cannot find the parsing error from CatalogSource message: %s", msg)
 		}
 
-		log, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-marketplace", "deploy/marketplace-operator", "--tail", "3").Output()
-		if !strings.Contains(log, "time: unknown unit") {
-			e2e.Failf("cannot find the parsing error logs from marketplace-operator: %s", log)
-		}
+		// No error logs print as default after refactor, details: https://github.com/operator-framework/api/blob/master/pkg/operators/v1alpha1/catalogsource_types.go#L157-L177
+		// log, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-marketplace", "deploy/marketplace-operator", "--tail", "3").Output()
+		// if !strings.Contains(log, "time: unknown unit") {
+		// 	e2e.Failf("cannot find the parsing error logs from marketplace-operator: %s", log)
+		// }
 	})
 
 	// author: jiazha@redhat.com
