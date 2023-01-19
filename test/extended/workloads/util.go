@@ -1163,12 +1163,12 @@ func getTimeFromTimezone(oc *exutil.CLI) (string, string) {
 		localTimeInHours := t.In(ist).Hour()
 		localTimeInMinutes := t.In(ist).Minute()
 		if localTimeInHours == 23 && localTimeInMinutes == 59 {
-			schedule = "0 0 * * *"
+			schedule = "01 0 * * *"
 		} else if localTimeInMinutes == 59 {
 			localTimeInHours = localTimeInHours + 1
-			schedule = "01 " + strconv.Itoa(localTimeInHours) + " " + "* * *"
+			schedule = "02 " + strconv.Itoa(localTimeInHours) + " " + "* * *"
 		} else {
-			localTimeInMinutes = localTimeInMinutes + 1
+			localTimeInMinutes = localTimeInMinutes + 2
 			schedule = strconv.Itoa(localTimeInMinutes) + " " + strconv.Itoa(localTimeInHours) + " " + "* * *"
 		}
 	} else if zoneName == "UTC" {
@@ -1181,12 +1181,12 @@ func getTimeFromTimezone(oc *exutil.CLI) (string, string) {
 		localTimeInHours := t.In(utc).Hour()
 		localTimeInMinutes := t.In(utc).Minute()
 		if localTimeInHours == 23 && localTimeInMinutes == 59 {
-			schedule = "0 0 * * *"
+			schedule = "01 0 * * *"
 		} else if localTimeInMinutes == 59 {
 			localTimeInHours = localTimeInHours + 1
-			schedule = "01 " + strconv.Itoa(localTimeInHours) + " " + "* * *"
+			schedule = "02 " + strconv.Itoa(localTimeInHours) + " " + "* * *"
 		} else {
-			localTimeInMinutes = localTimeInMinutes + 1
+			localTimeInMinutes = localTimeInMinutes + 2
 			schedule = strconv.Itoa(localTimeInMinutes) + " " + strconv.Itoa(localTimeInHours) + " " + "* * *"
 		}
 	} else {

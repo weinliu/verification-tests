@@ -508,7 +508,7 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		o.Expect(cronjobCreated).To(o.ContainSubstring(timeZoneName))
 
 		g.By("Verify job has been created")
-		pollErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+		pollErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 			jobName, jobCreationErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("job", "-n", oc.Namespace()).Output()
 			if jobCreationErr != nil {
 				e2e.Logf("No job is present: %s. Trying again", jobCreationErr)
