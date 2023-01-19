@@ -29,9 +29,9 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	oc := exutil.NewCLIWithoutNamespace(projectName)
 
 	//author: yanyang@redhat.com
-	g.It("Author:yanyang-Medium-49508-disable capabilities by modifying the cv.spec.capabilities.baselineCapabilitySet [Serial]", func() {
-		// currently unsupported in Hypershift
-		exutil.SkipHypershift(oc)
+	g.It("NonHyperShiftHOST-Author:yanyang-Medium-49508-disable capabilities by modifying the cv.spec.capabilities.baselineCapabilitySet [Serial]", func() {
+		// currently unsupported in Hypershift hosted
+		exutil.SkipHypershiftHostedCluster(oc)
 		orgBaseCap, err := getCVObyJP(oc, ".spec.capabilities.baselineCapabilitySet")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -87,9 +87,9 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	})
 
 	//author: yanyang@redhat.com
-	g.It("Author:yanyang-Low-49670-change spec.capabilities to invalid value", func() {
-		// currently unsupported in Hypershift
-		exutil.SkipHypershift(oc)
+	g.It("NonHyperShiftHOST-Author:yanyang-Low-49670-change spec.capabilities to invalid value", func() {
+		// currently unsupported in Hypershift hosted
+		exutil.SkipHypershiftHostedCluster(oc)
 		orgCap, err := getCVObyJP(oc, ".spec.capabilities")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if orgCap == "" {

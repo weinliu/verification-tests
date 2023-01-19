@@ -130,8 +130,10 @@ func SkipIfPlatformTypeNot(oc *CLI, platforms string) {
 	}
 }
 
-// SkipHypershift skip the test on a Hypershift cluster
-func SkipHypershift(oc *CLI) {
+// SkipHypershiftHostedCluster skip the test on a Hypershift cluster
+// NOTE: according to @kuiwang02 the preffered method is NonHyperShiftHOST label
+// leaving this one as a second line of defence just in case
+func SkipHypershiftHostedCluster(oc *CLI) {
 	topology, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructures.config.openshift.io", "cluster", "-o=jsonpath={.status.controlPlaneTopology}").Output()
 	if err != nil {
 		e2e.Failf("get controlPlaneTopology failed err %v .", err)
