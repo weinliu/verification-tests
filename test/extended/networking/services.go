@@ -2,12 +2,13 @@ package networking
 
 import (
 	"path/filepath"
+	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
@@ -216,6 +217,128 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.By("Curl from node1 to service:port")
 			CurlNode2SvcFail(oc, nodeList.Items[1].Name, ns1, "test-service")
 
+		}
+	})
+
+	// author: weliang@redhat.com
+	g.It("Author:weliang-Medium-57344-Add support for service session affinity timeout", func() {
+		//Bug: https://issues.redhat.com/browse/OCPBUGS-4502
+		var (
+			buildPruningBaseDir         = exutil.FixturePath("testdata", "networking")
+			servicesBaseDir             = exutil.FixturePath("testdata", "networking/services")
+			pingPodTemplate             = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+			sessionAffinitySvcv4        = filepath.Join(servicesBaseDir, "sessionaffinity-svcv4.yaml")
+			sessionAffinitySvcdualstack = filepath.Join(servicesBaseDir, "sessionaffinity-svcdualstack.yaml")
+			sessionAffinityPod1         = filepath.Join(servicesBaseDir, "sessionaffinity-pod1.yaml")
+			sessionAffinityPod2         = filepath.Join(servicesBaseDir, "sessionaffinity-pod2.yaml")
+		)
+
+		ns1 := oc.Namespace()
+
+		g.By("create two pods which will be the endpoints for sessionaffinity service in ns1")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", sessionAffinityPod1, "-n", ns1).Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", sessionAffinityPod2, "-n", ns1).Execute()
+		createResourceFromFile(oc, ns1, sessionAffinityPod1)
+		waitPodReady(oc, ns1, "blue-pod-1")
+		createResourceFromFile(oc, ns1, sessionAffinityPod2)
+		waitPodReady(oc, ns1, "blue-pod-2")
+
+		g.By("create a testing pod in ns1")
+		pod1 := pingPodResource{
+			name:      "hello-pod1",
+			namespace: ns1,
+			template:  pingPodTemplate,
+		}
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod1.name, "-n", pod1.namespace).Execute()
+		pod1.createPingPod(oc)
+		waitPodReady(oc, ns1, pod1.name)
+
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "ipv4single" {
+			g.By("test ipv4 singlestack cluster")
+			g.By("create a sessionaffinity service in ns1")
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", sessionAffinitySvcv4, "-n", ns1).Execute()
+			createsvcerr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", sessionAffinitySvcv4, "-n", ns1).Execute()
+			o.Expect(createsvcerr).NotTo(o.HaveOccurred())
+			svcoutput, svcerr := oc.AsAdmin().Run("get").Args("service", "-n", ns1).Output()
+			o.Expect(svcerr).NotTo(o.HaveOccurred())
+			o.Expect(svcoutput).To(o.ContainSubstring("sessionaffinitysvcv4"))
+			serviceIPv4 := getSvcIPv4(oc, ns1, "sessionaffinitysvcv4")
+
+			// timeoutSeconds in sessionAffinityConfig is set 10s, traffic will LB after curl sleep more than 10s
+			g.By("Traffic will LB to two endpoints with sleep 15s in curl")
+			trafficoutput, trafficerr := e2e.RunHostCmd(ns1, pod1.name, "for i in 1 2 3 4 5 6 7 8 9 10; do curl "+serviceIPv4+":8080; sleep 11; done")
+			o.Expect(trafficerr).NotTo(o.HaveOccurred())
+			if strings.Contains(trafficoutput, "Hello Blue Pod-1") && strings.Contains(trafficoutput, "Hello Blue Pod-2") {
+				e2e.Logf("Pass : Traffic LB to two endpoints when curl sleep more than 10s")
+			} else {
+				e2e.Failf("Fail: Traffic does not LB to two endpoints when curl sleep more than 10s")
+			}
+
+			// timeoutSeconds in sessionAffinityConfig is set 10s, traffic will not LB after curl sleep less than 10s
+			g.By("Traffic will not LB to two endpoints without sleep 15s in curl")
+			trafficoutput1, trafficerr1 := e2e.RunHostCmd(ns1, pod1.name, "for i in 1 2 3 4 5 6 7 8 9 10; do curl "+serviceIPv4+":8080; sleep 9; done")
+			o.Expect(trafficerr1).NotTo(o.HaveOccurred())
+			if (strings.Contains(trafficoutput1, "Hello Blue Pod-1") && !strings.Contains(trafficoutput1, "Hello Blue Pod-2")) || (strings.Contains(trafficoutput1, "Hello Blue Pod-2") && !strings.Contains(trafficoutput1, "Hello Blue Pod-1")) {
+				e2e.Logf("Pass : Traffic does not LB to two endpoints when curl sleep less than 10s")
+			} else {
+				e2e.Failf("Fail: Traffic LB to two endpoints when curl sleep less than 10s")
+			}
+		}
+
+		if ipStackType == "dualstack" {
+			g.By("test dualstack cluster")
+			g.By("create a sessionaffinity service in ns1")
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", sessionAffinitySvcdualstack, "-n", ns1).Execute()
+			createsvcerr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", sessionAffinitySvcdualstack, "-n", ns1).Execute()
+			o.Expect(createsvcerr).NotTo(o.HaveOccurred())
+			svcoutput, svcerr := oc.AsAdmin().Run("get").Args("service", "-n", ns1).Output()
+			o.Expect(svcerr).NotTo(o.HaveOccurred())
+			o.Expect(svcoutput).To(o.ContainSubstring("sessionaffinitysvcdualstack"))
+			serviceIPv4 := getSvcIPv4(oc, ns1, "sessionaffinitysvcdualstack")
+			serviceIPv6 := getSvcIPv6(oc, ns1, "sessionaffinitysvcdualstack")
+
+			// Test ipv4 traffic in dualstack cluster
+			// timeoutSeconds in sessionAffinityConfig is set 10s, traffic will LB after curl sleep more than 10s
+			g.By("Traffic will LB to two endpoints with sleep 15s in curl")
+			trafficoutput, trafficerr := e2e.RunHostCmd(ns1, pod1.name, "for i in 1 2 3 4 5 6 7 8 9 10; do curl "+serviceIPv4+":8080; sleep 11; done")
+			o.Expect(trafficerr).NotTo(o.HaveOccurred())
+			if strings.Contains(trafficoutput, "Hello Blue Pod-1") && strings.Contains(trafficoutput, "Hello Blue Pod-2") {
+				e2e.Logf("Pass : Traffic LB to two endpoints when curl sleep more than 10s")
+			} else {
+				e2e.Failf("Fail: Traffic does not LB to two endpoints when curl sleep more than 10s")
+			}
+
+			// timeoutSeconds in sessionAffinityConfig is set 10s, traffic will not LB after curl sleep less than 10s
+			g.By("Traffic will not LB to two endpoints without sleep 15s in curl")
+			trafficoutput1, trafficerr1 := e2e.RunHostCmd(ns1, pod1.name, "for i in 1 2 3 4 5 6 7 8 9 10; do curl "+serviceIPv4+":8080; sleep 9; done")
+			o.Expect(trafficerr1).NotTo(o.HaveOccurred())
+			if (strings.Contains(trafficoutput1, "Hello Blue Pod-1") && !strings.Contains(trafficoutput1, "Hello Blue Pod-2")) || (strings.Contains(trafficoutput1, "Hello Blue Pod-2") && !strings.Contains(trafficoutput1, "Hello Blue Pod-1")) {
+				e2e.Logf("Pass : Traffic does not LB to two endpoints when curl sleep less than 10s")
+			} else {
+				e2e.Failf("Fail: Traffic LB to two endpoints when curl sleep less than 10s")
+			}
+
+			// Tes ipv6 traffic in dualstack cluster
+			// timeoutSeconds in sessionAffinityConfig is set 10s, traffic will LB after curl sleep more than 10s
+			g.By("Traffic will LB to two endpoints with sleep 15s in curl")
+			v6trafficoutput, v6trafficerr := e2e.RunHostCmd(ns1, pod1.name, "for i in 1 2 3 4 5 6 7 8 9 10; do curl -g -6 ["+serviceIPv6+"]:8080; sleep 11; done")
+			o.Expect(v6trafficerr).NotTo(o.HaveOccurred())
+			if strings.Contains(v6trafficoutput, "Hello Blue Pod-1") && strings.Contains(v6trafficoutput, "Hello Blue Pod-2") {
+				e2e.Logf("Pass : Traffic LB to two endpoints when curl sleep more than 10s")
+			} else {
+				e2e.Failf("Fail: Traffic does not LB to two endpoints when curl sleep more than 10s")
+			}
+
+			// timeoutSeconds in sessionAffinityConfig is set 10s, traffic will not LB after curl sleep less than 10s
+			g.By("Traffic will not LB to two endpoints without sleep 15s in curl")
+			v6trafficoutput1, v6trafficerr1 := e2e.RunHostCmd(ns1, pod1.name, "for i in 1 2 3 4 5 6 7 8 9 10; do curl -g -6 ["+serviceIPv6+"]:8080; sleep 9; done")
+			o.Expect(v6trafficerr1).NotTo(o.HaveOccurred())
+			if (strings.Contains(v6trafficoutput1, "Hello Blue Pod-1") && !strings.Contains(v6trafficoutput1, "Hello Blue Pod-2")) || (strings.Contains(v6trafficoutput1, "Hello Blue Pod-2") && !strings.Contains(v6trafficoutput1, "Hello Blue Pod-1")) {
+				e2e.Logf("Pass : Traffic does not LB to two endpoints when curl sleep less than 10s")
+			} else {
+				e2e.Failf("Fail: Traffic LB to two endpoints when curl sleep less than 10s")
+			}
 		}
 	})
 })
