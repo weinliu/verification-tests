@@ -249,11 +249,9 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("NonPreRelease-PreChkUpgrade-Author:huirwang-Medium-44765-Check the sctp works well after upgrade. [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking/sctp")
-			sctpClientPod       = filepath.Join(buildPruningBaseDir, "sctpclient.yaml")
-			sctpServerPod       = filepath.Join(buildPruningBaseDir, "sctpserver.yaml")
+			sctpClientPod       = filepath.Join(buildPruningBaseDir, "sctpclient-upgrade.yaml")
+			sctpServerPod       = filepath.Join(buildPruningBaseDir, "sctpserver-upgrade.yaml")
 			sctpModule          = filepath.Join(buildPruningBaseDir, "load-sctp-module.yaml")
-			sctpServerPodName   = "sctpserver"
-			sctpClientPodname   = "sctpclient"
 			ns                  = "44765-upgrade-ns"
 		)
 
@@ -268,11 +266,13 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		createResourceFromFile(oc, ns, sctpClientPod)
 		err1 := waitForPodWithLabelReady(oc, ns, "name=sctpclient")
 		exutil.AssertWaitPollNoErr(err1, "sctpClientPod is not running")
+		sctpClientPodname := getPodName(oc, ns, "name=sctpclient")[0]
 
 		g.By("create sctpServerPod")
 		createResourceFromFile(oc, ns, sctpServerPod)
 		err2 := waitForPodWithLabelReady(oc, ns, "name=sctpserver")
 		exutil.AssertWaitPollNoErr(err2, "sctpServerPod is not running")
+		sctpServerPodName := getPodName(oc, ns, "name=sctpserver")[0]
 
 		ipStackType := checkIPStackType(oc)
 
@@ -340,14 +340,14 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking/sctp")
 			sctpModule          = filepath.Join(buildPruningBaseDir, "load-sctp-module.yaml")
-			sctpServerPodName   = "sctpserver"
-			sctpClientPodname   = "sctpclient"
 			ns                  = "44765-upgrade-ns"
 		)
 
 		g.By("Get sctp upgrade setup info")
 		e2e.Logf("The sctp upgrade namespace is %s ", ns)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("namespace", ns, "--ignore-not-found").Execute()
+		sctpClientPodname := getPodName(oc, ns, "name=sctpclient")[0]
+		sctpServerPodName := getPodName(oc, ns, "name=sctpserver")[0]
 
 		g.By("Enable sctp module on all workers")
 		prepareSCTPModule(oc, sctpModule)
