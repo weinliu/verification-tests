@@ -76,7 +76,6 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			"fuse-console",
 			"fuse-online",
 			"gatekeeper-operator-product",
-			"integration-operator",
 			"jaeger-product",
 			"jws-operator",
 			"kiali-ossm",
