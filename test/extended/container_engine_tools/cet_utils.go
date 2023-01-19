@@ -191,6 +191,7 @@ func cleanupObjectsClusterScope(oc *exutil.CLI, objs ...objectTableRefcscope) er
 		for _, v := range objs {
 			e2e.Logf("\n Start to remove: %v", v)
 			status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(v.kind, v.name).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(status, "Error") {
 				e2e.Logf("Error getting resources... Seems resources objects are already deleted. \n")
 				return true, nil
@@ -334,7 +335,7 @@ func machineconfigStatus(oc *exutil.CLI) error {
 }
 
 func checkPodmanCrictlVersion(oc *exutil.CLI) error {
-	return wait.Poll(1*time.Second, 1*time.Minute, func() (bool, error) {
+	return wait.Poll(1*time.Second, 10*time.Second, func() (bool, error) {
 		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("\nNode Names are %v", nodeName)
@@ -348,8 +349,10 @@ func checkPodmanCrictlVersion(oc *exutil.CLI) error {
 			if nodeStatus == "Ready" {
 				podmanver, err := exutil.DebugNodeWithChroot(oc, fmt.Sprintf("%s", v), "podman", "--version")
 				o.Expect(err).NotTo(o.HaveOccurred())
+				e2e.Logf("Podman version is:\n %v\n", podmanver)
 				crictlver, err1 := exutil.DebugNodeWithChroot(oc, fmt.Sprintf("%s", v), "crictl", "version")
 				o.Expect(err1).NotTo(o.HaveOccurred())
+				e2e.Logf("Crictl version is:\n %v\n", crictlver)
 				e2e.Logf(`NODE NAME IS :` + fmt.Sprintf("%s", v))
 
 				if strings.Contains(string(podmanver), "podman version 4.") && strings.Contains(string(crictlver), "RuntimeVersion:  1.2") {
