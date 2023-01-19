@@ -55,7 +55,7 @@ var _ = g.Describe("[sig-node] Container_Engine_Tools crio,scc", func() {
 	)
 
 	// author: pmali@redhat.com
-	g.It("Author:pmali-Medium-13117-SeLinuxOptions in pod should apply to container correctly [Flaky]", func() {
+	g.It("DEPRECATED-Author:pmali-Medium-13117-SeLinuxOptions in pod should apply to container correctly [Flaky]", func() {
 
 		oc.SetupProject()
 		podModify.name = "hello-pod"
