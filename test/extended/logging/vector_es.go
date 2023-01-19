@@ -521,6 +521,35 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
+		g.It("CPaasrunOnly-Author:ikanse-High-55396-Vector alert rule CollectorNodeDown [Serial][Slow]", func() {
+			g.By("Create ClusterLogging instance with Vector as collector")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "COLLECTOR_LIMITS_MEMORY=750Gi", "-p", "COLLECTOR_LIMITS_CPU=150m", "-p", "COLLECTOR_REQUESTS_CPU=150m", "-p", "COLLECTOR_REQUESTS_MEMORY=750Gi", "-p", "NAMESPACE="+cl.namespace)
+
+			g.By("Check Collector daemonset has no running pods")
+			esDeployNames := GetDeploymentsNameByLabel(oc, cloNS, "cluster-name=elasticsearch")
+			for _, name := range esDeployNames {
+				WaitForDeploymentPodsToBeReady(oc, cloNS, name)
+			}
+			WaitForDeploymentPodsToBeReady(oc, cloNS, "kibana")
+			checkResource(oc, true, true, "0", []string{"ds", "collector", "-n", cloNS, "-ojsonpath={.status.numberReady}"})
+
+			g.By("Set the ClusterLoging instance managementState to Unmanaged to avoid prometheus overwrite")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("clusterlogging/instance", "-n", cloNS, "-p", "{\"spec\": {\"managementState\": \"Unmanaged\"}}", "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Patch the collector Prometheus Rule for alert CollectorNodeDown to set alert firing time to 2m")
+			patch := `[{"op": "replace", "path": "/spec/groups/0/rules/0/for", "value":"2m"}]`
+			er := oc.AsAdmin().WithoutNamespace().Run("patch").Args("prometheusrules", "collector", "--type=json", "-p", patch, "-n", cloNS).Execute()
+			o.Expect(er).NotTo(o.HaveOccurred())
+
+			g.By("Check the alert CollectorNodeDown is in state firing")
+			checkAlert(oc, "CollectorNodeDown", "firing", 5)
+
+		})
+
 	})
 
 	g.Context("Vector Elasticsearch tests", func() {

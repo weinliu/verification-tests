@@ -2075,3 +2075,87 @@ func (gcl googleCloudLogging) removeLogs() error {
 	}
 	return nil
 }
+
+func getAlert(oc *exutil.CLI, alertSelector string) map[string]interface{} {
+	route, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+		"-n", "openshift-monitoring",
+		"route", "prometheus-k8s",
+		"-o=jsonpath={.spec.host}").Output()
+	if err != nil {
+		e2e.Logf("error getting the hostname of route prometheus-k8s: %v", err)
+		return nil
+	}
+	token, err := exutil.GetSAToken(oc)
+	if err != nil {
+		e2e.Logf("error getting SA token: %v", err)
+		return nil
+	}
+
+	alertsUrl := fmt.Sprintf("https://%s/api/v1/alerts", route)
+	req, err := http.NewRequest("GET", alertsUrl, nil)
+	if err != nil {
+		e2e.Logf("error creating request: %v", err)
+		return nil
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+
+	var tr *http.Transport
+	proxy := getProxyFromEnv()
+	if len(proxy) > 0 {
+		proxyURL, err := url.Parse(proxy)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		tr = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			Proxy:           http.ProxyURL(proxyURL),
+		}
+	} else {
+		tr = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
+	client := &http.Client{Transport: tr}
+
+	res, err := client.Do(req)
+	if err != nil {
+		e2e.Logf("error sending request: %v", err)
+		return nil
+	}
+	defer res.Body.Close()
+
+	var data struct {
+		Data struct {
+			Alerts []map[string]interface{} `json:"alerts"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&data); err != nil {
+		e2e.Logf("error decoding response: %v", err)
+		return nil
+	}
+
+	var alerts []map[string]interface{}
+	for _, a := range data.Data.Alerts {
+		if labels, ok := a["labels"].(map[string]interface{}); ok {
+			if alertName, ok := labels["alertname"].(string); ok && alertName == alertSelector {
+				alerts = append(alerts, a)
+			}
+		}
+	}
+	if len(alerts) == 0 {
+		e2e.Logf("no alert found for %s", alertSelector)
+		return nil
+	}
+	return alerts[0]
+}
+
+func checkAlert(oc *exutil.CLI, alertName string, status string, timeInMinutes int) {
+	e2e.Logf("Check alert %s status is %s.", alertName, status)
+	err := wait.Poll(1*time.Minute, time.Duration(timeInMinutes)*time.Minute, func() (bool, error) {
+		alert := getAlert(oc, alertName)
+		if alert["state"] != status {
+			e2e.Logf("Waiting for alert %s to be in state %s...", alertName, status)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s alert is not %s in %d minutes", alertName, status, timeInMinutes))
+}
