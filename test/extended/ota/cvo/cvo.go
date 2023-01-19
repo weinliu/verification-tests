@@ -121,11 +121,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	//author: yanyang@redhat.com
 	g.It("Longduration-NonPreRelease-ConnectedOnly-Author:yanyang-Medium-45879-check update info with oc adm upgrade --include-not-recommended [Serial][Slow]", func() {
 		g.By("Check if it's a GCP cluster")
-		platformType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.ToLower(platformType) != "gcp" {
-			g.Skip("Skip for non-gcp cluster!")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "gcp")
 
 		orgUpstream, err := getCVObyJP(oc, ".spec.upstream")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -206,11 +202,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	//author: yanyang@redhat.com
 	g.It("ConnectedOnly-Author:yanyang-Low-46422-cvo drops invalid conditional edges [Serial]", func() {
 		g.By("Check if it's a GCP cluster")
-		platformType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.ToLower(platformType) != "gcp" {
-			g.Skip("Skip for non-gcp cluster!")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "gcp")
 
 		orgUpstream, err := getCVObyJP(oc, ".spec.upstream")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -277,11 +269,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	//author: yanyang@redhat.com
 	g.It("ConnectedOnly-Author:yanyang-Low-47175-upgrade cluster when current version is in the upstream but there are not update paths [Serial]", func() {
 		g.By("Check if it's a GCP cluster")
-		platformType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.ToLower(platformType) != "gcp" {
-			g.Skip("Skip for non-gcp cluster!")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "gcp")
 
 		orgUpstream, err := getCVObyJP(oc, ".spec.upstream")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -473,11 +461,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	//author: yanyang@redhat.com
 	g.It("ConnectedOnly-Author:yanyang-Medium-43178-manage channel by using oc adm upgrade channel [Serial]", func() {
 		g.By("Check if it's a GCP cluster")
-		platformType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.ToLower(platformType) != "gcp" {
-			g.Skip("Skip for non-gcp cluster!")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "gcp")
 
 		orgUpstream, err := getCVObyJP(oc, ".spec.upstream")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -659,11 +643,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	//author: yanyang@redhat.com
 	g.It("ConnectedOnly-Author:yanyang-Medium-43172-get the upstream and channel info by using oc adm upgrade [Serial]", func() {
 		g.By("Check if it's a GCP cluster")
-		platformType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.ToLower(platformType) != "gcp" {
-			g.Skip("Skip for non-gcp cluster!")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "gcp")
 
 		orgUpstream, err := getCVObyJP(oc, ".spec.upstream")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1247,11 +1227,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			targetPayload = GenerateReleasePayload(oc)
 		} else {
 			g.By("Check if it's a GCP cluster")
-			platformType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.ToLower(platformType) != "gcp" {
-				g.Skip("Skip for non-gcp cluster!")
-			}
+			exutil.SkipIfPlatformTypeNot(oc, "gcp")
 			origUpstream, err := getCVObyJP(oc, ".spec.upstream")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			origChannel, err := getCVObyJP(oc, ".spec.channel")

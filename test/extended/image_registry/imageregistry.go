@@ -62,10 +62,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:wewang-High-39027-Check AWS secret and access key with an OpenShift installed in a regular way", func() {
-		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		if !strings.Contains(output, "AWS") {
-			g.Skip("Skip for non-supported platform")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		g.By("Skip test when the cluster is with STS credential")
 		token, err := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -542,11 +539,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	// author: wewang@redhat.com
 	g.It("Author:wewang-Medium-39028-Check aws secret and access key with an openShift installed with an STS credential", func() {
 		g.By("Check platforms")
-		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(output, "AWS") {
-			g.Skip("Skip for non-supported platform")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		g.By("Check if the cluster is with STS credential")
 		token, err := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -762,11 +755,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("NonPreRelease-Author:wewang-Critical-24838-Registry OpenStack Storage test with invalid settings [Disruptive]", func() {
-		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(output, "OpenStack") {
-			g.Skip("Skip for non-supported platform")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "OpenStack")
 
 		g.By("Set status variables")
 		expectedStatus1 := map[string]string{"Progressing": "True"}
@@ -817,14 +806,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: xiuwang@redhat.com
 	g.It("Author:xiuwang-Critical-47274-Image registry works with OSS storage on alibaba cloud", func() {
-		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(output, "AlibabaCloud") {
-			g.Skip("Skip for non-supported platform")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "AlibabaCloud")
 
 		g.By("Check OSS storage")
-		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.status.storage.oss}").Output()
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.status.storage.oss}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("bucket"))
 		o.Expect(output).To(o.ContainSubstring(`"endpointAccessibility":"Internal"`))
@@ -852,22 +837,18 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: xiuwang@redhat.com
 	g.It("NonPreRelease-Author:xiuwang-Medium-47342-Configure image registry works with OSS parameters [Disruptive]", func() {
-		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(output, "AlibabaCloud") {
-			g.Skip("Skip for non-supported platform")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "AlibabaCloud")
 		g.By("Set status variables")
 		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
 
 		g.By("Configure OSS with Public endpoint")
 		defer func() {
-			err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"oss":{"endpointAccessibility":null}}}}`, "--type=merge").Execute()
+			err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"oss":{"endpointAccessibility":null}}}}`, "--type=merge").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
-		_, err = oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"oss":{"endpointAccessibility":"Public"}}}}`, "--type=merge").Output()
+		_, err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"oss":{"endpointAccessibility":"Public"}}}}`, "--type=merge").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = wait.PollImmediate(10*time.Second, 2*time.Minute, func() (bool, error) {
 			registryDegrade := checkRegistryDegraded(oc)
@@ -880,7 +861,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		exutil.AssertWaitPollNoErr(err, "Image registry is degraded")
 		oc.SetupProject()
 		checkRegistryFunctionFine(oc, "test-47342", oc.Namespace())
-		output, err = oc.WithoutNamespace().AsAdmin().Run("logs").Args("deploy/image-registry", "--since=1m", "-n", "openshift-image-registry").Output()
+		output, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args("deploy/image-registry", "--since=1m", "-n", "openshift-image-registry").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).NotTo(o.ContainSubstring("internal.aliyuncs.com"))
 
@@ -908,14 +889,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: xiuwang@redhat.com
 	g.It("Author:xiuwang-Critical-45345-Image registry works with ibmcos storage on IBM cloud", func() {
-		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(output, "IBMCloud") {
-			g.Skip("Skip for non-supported platform")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "IBMCloud")
 
 		g.By("Check ibmcos storage")
-		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.status.storage.ibmcos}").Output()
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.status.storage.ibmcos}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("bucket"))
 		o.Expect(output).To(o.ContainSubstring("location"))
@@ -938,13 +915,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	g.It("NonHyperShiftHOST-Author:jitli-ConnectedOnly-Medium-41398-Users providing custom AWS tags are set with bucket creation [Disruptive]", func() {
 
 		g.By("Check platforms")
-		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure.config.openshift.io", "-o=jsonpath={..status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(output, "AWS") {
-			g.Skip("Skip for non-supported platform")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		g.By("Check the cluster is with resourceTags")
-		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure.config.openshift.io", "-o=jsonpath={..status.platformStatus.aws}").Output()
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure.config.openshift.io", "-o=jsonpath={..status.platformStatus.aws}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(output, "resourceTags") {
 			g.Skip("Skip for no resourceTags")
@@ -1294,14 +1267,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	g.It("NonPreRelease-Author:jitli-Critical-34895-Image registry can work well on Gov Cloud with custom endpoint defined [Disruptive]", func() {
 
 		g.By("Check platforms")
-		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure.config.openshift.io", "-o=jsonpath={..status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(output, "AWS") {
-			g.Skip("Skip for non-supported platform")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 
 		g.By("Check the cluster is with us-gov")
-		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.status.storage.s3.region}").Output()
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.status.storage.s3.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(output, "us-gov") {
 			g.Skip("Skip for wrong region")
@@ -3115,12 +3084,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("Author:wewang-Critical-22945-Autoconfigure registry storage [Disruptive]", func() {
-		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		if !strings.Contains(output, "AWS") {
-			g.Skip("Skip for non-supported platform")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		g.By("Check image-registry-private-configuration secret if created")
-		output, _ = oc.AsAdmin().Run("get").Args("secret/image-registry-private-configuration", "-n", "openshift-image-registry").Output()
+		output, _ := oc.AsAdmin().Run("get").Args("secret/image-registry-private-configuration", "-n", "openshift-image-registry").Output()
 		o.Expect(output).To(o.ContainSubstring("image-registry-private-configuration"))
 
 		g.By("Check Add s3 bucket to be invalid")

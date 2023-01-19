@@ -117,6 +117,19 @@ func SkipNoDefaultSC(oc *CLI) {
 	}
 }
 
+// SkipIfPlatformTypeNot skips all platforms other than supported
+// platforms is comma separated list of allowed platforms
+// for example: "gcp, aws"
+func SkipIfPlatformTypeNot(oc *CLI, platforms string) {
+	platformType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
+	if err != nil {
+		e2e.Failf("get infrastructure platformStatus type failed err %v .", err)
+	}
+	if !strings.Contains(strings.ToLower(platforms), strings.ToLower(platformType)) {
+		g.Skip("Skip for non-" + platforms + " cluster: " + platformType)
+	}
+}
+
 // SkipHypershift skip the test on a Hypershift cluster
 func SkipHypershift(oc *CLI) {
 	topology, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructures.config.openshift.io", "cluster", "-o=jsonpath={.status.controlPlaneTopology}").Output()

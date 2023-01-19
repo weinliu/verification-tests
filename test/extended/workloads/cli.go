@@ -598,10 +598,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			g.Skip("Skip for Multi-Arch")
 		}
 
-		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		if !strings.Contains(output, "AWS") {
-			g.Skip("Skip for non-supported platform")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		workloadsBaseDir := exutil.FixturePath("testdata", "workloads")
 		manifestlistImagestream := filepath.Join(workloadsBaseDir, "12708358_4.11.0-0.nightly-multi-2022-04-18-120932-release-imagestream.yaml")
 		ns := oc.Namespace()

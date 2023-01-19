@@ -32,10 +32,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		if modeInCloudCredential == "Manual" {
 			g.Skip("Skip since CCO mode is Manual")
 		}
-		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		if !strings.Contains(output, "AWS") {
-			g.Skip("Skip for non-supported platform, it requires AWS")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", operatorNamespace, "pod", "-l", operatorPodLabel).Output()
 		if !strings.Contains(output, "Running") {
 			createAWSLoadBalancerOperator(oc)

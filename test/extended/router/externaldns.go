@@ -51,10 +51,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		)
 
 		g.By("Ensure the case is runnable on the cluster")
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		if !strings.Contains(output, "AWS") {
-			g.Skip("Skip for non-supported platform, it requires AWS")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		createExternalDNSOperator(oc)
 
 		g.By("Create CR ExternalDNS sample-aws-rt and ensure operand pod is ready")
@@ -92,10 +89,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		)
 
 		g.By("Ensure the case is runnable on the cluster")
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		if !strings.Contains(output, "Azure") {
-			g.Skip("Skip for non-supported platform, it requires Azure")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "Azure")
 		zoneID, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.privateZone.id}").Output()
 		if !strings.Contains(zoneID, "openshift") {
 			g.Skip("Skip since no valid DNS privateZone is configured in this cluster")
@@ -147,10 +141,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		)
 
 		g.By("Ensure the case is runnable on the cluster")
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		if !strings.Contains(output, "GCP") {
-			g.Skip("Skip for non-supported platform, it requires GCP")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "GCP")
 		zoneID, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.privateZone.id}").Output()
 		if !strings.Contains(zoneID, "private") {
 			g.Skip("Skip since no valid DNS privateZone is configured in this cluster")

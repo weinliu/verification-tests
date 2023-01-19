@@ -10341,10 +10341,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 	// It will cover test case: OCP-43642, author: xzha@redhat.com
 	g.It("NonHyperShiftHOST-ConnectedOnly-Author:xzha-Medium-43642-Alerts should be raised if the catalogsources are missing [Disruptive]", func() {
 		exutil.SkipBaselineCaps(oc, "None")
-		output, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		if !strings.Contains(output, "AWS") {
-			g.Skip("Skip for non-supported platform")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		catalogs := []string{"certified-operators", "community-operators", "redhat-marketplace", "redhat-operators"}
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", "-n", "openshift-marketplace").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

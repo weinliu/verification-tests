@@ -82,6 +82,7 @@ spec:
 				g.By("Check cco mode when root credential is removed when cco is not in manual mode")
 				e2e.Logf("remove root creds")
 				rootSecretName, err := getRootSecretName(oc)
+				o.Expect(err).NotTo(o.HaveOccurred())
 				rootSecretYaml, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", rootSecretName, "-n=kube-system", "-o=yaml").OutputToFile("root-secret.yaml")
 				o.Expect(err).NotTo(o.HaveOccurred())
 				err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", rootSecretName, "-n=kube-system").Execute()
@@ -106,11 +107,7 @@ spec:
 	//For bug https://bugzilla.redhat.com/show_bug.cgi?id=1952891
 	g.It("NonHyperShiftHOST-Author:lwan-High-45415-[Bug 1940142] Reset CACert to correct path [Disruptive]", func() {
 		g.By("Check if it's an osp cluster")
-		platformType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.ToLower(platformType) != "openstack" {
-			g.Skip("Skip for non-osp cluster!")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "openstack")
 		g.By("Get openstack root credential clouds.yaml field")
 		goodCreds, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "openstack-credentials", "-n=kube-system", "-o=jsonpath={.data.clouds\\.yaml}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

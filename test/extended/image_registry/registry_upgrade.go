@@ -107,13 +107,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	// author: wewang@redhat.com
 	g.It("NonPreRelease-PstChkUpgrade-Author:wewang-High-41400- Users providing custom AWS tags are set with bucket creation after upgrade", func() {
 		g.By("Check platforms")
-		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure.config.openshift.io", "-o=jsonpath={..status.platformStatus.type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(output, "AWS") {
-			g.Skip("Skip for non-supported platform")
-		}
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		g.By("Check the cluster is with resourceTags")
-		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure.config.openshift.io", "-o=jsonpath={..status.platformStatus.aws}").Output()
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure.config.openshift.io", "-o=jsonpath={..status.platformStatus.aws}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(output, "resourceTags") {
 			g.Skip("Skip for no resourceTags")
