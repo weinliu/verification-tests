@@ -27,6 +27,14 @@ type subscriptionDescription struct {
 	template               string
 }
 
+type KataconfigDescription struct {
+	name                 string `json:"name"`
+	kataMonitorImageName string `json:"kataMonitorImage"`
+	logLevel             string `json:"logLevel"`
+	eligibility          bool   `json:"checkNodeEligibility"`
+	template             string
+}
+
 type testrunConfigmap struct {
 	exists            bool
 	catalogSourceName string
@@ -35,6 +43,7 @@ type testrunConfigmap struct {
 	mustgatherImage   string
 	katamonitorImage  string
 	operatorVer       string
+	eligibility       bool
 }
 
 var (
@@ -91,14 +100,14 @@ func subscribeFromTemplate(oc *exutil.CLI, sub subscriptionDescription, subTempl
 }
 
 // author: tbuskey@redhat.com, abhbaner@redhat.com
-func createKataConfig(oc *exutil.CLI, kcTemplate, kcName, kcMonitorImageName, kcLogLevel string, sub subscriptionDescription) (msg string, err error) {
+func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub subscriptionDescription) (msg string, err error) {
 	// If this is used, label the caller with [Disruptive][Serial][Slow]
 	// If kataconfig already exists, this must not error
 	var (
 		configFile string
 	)
 
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "--no-headers", "-n", sub.namespace).Output()
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconf.name, "--no-headers", "-n", sub.namespace).Output()
 	if err == nil {
 		g.By("(2) kataconfig is previously installed")
 		return msg, err // no need to go through the rest
@@ -113,7 +122,9 @@ func createKataConfig(oc *exutil.CLI, kcTemplate, kcName, kcMonitorImageName, kc
 	o.Expect(msg).NotTo(o.BeEmpty())
 
 	g.By("(2) Create kataconfig file")
-	configFile, err = oc.AsAdmin().WithoutNamespace().Run("process").Args("--ignore-unknown-parameters=true", "-f", kcTemplate, "-p", "NAME="+kcName, "MONITOR="+kcMonitorImageName, "LOGLEVEL="+kcLogLevel, "-n", sub.namespace).OutputToFile(getRandomString() + "kataconfig-common.json")
+	configFile, err = oc.AsAdmin().WithoutNamespace().Run("process").Args("--ignore-unknown-parameters=true", "-f", kataconf.template,
+		"-p", "NAME="+kataconf.name, "MONITOR="+kataconf.kataMonitorImageName, "LOGLEVEL="+kataconf.logLevel, "ELIGIBILITY="+strconv.FormatBool(kataconf.eligibility),
+		"-n", sub.namespace).OutputToFile(getRandomString() + "kataconfig-common.json")
 	if err != nil || configFile == "" {
 		_, configFileExists := os.Stat(configFile)
 		if configFileExists != nil {
@@ -134,17 +145,17 @@ func createKataConfig(oc *exutil.CLI, kcTemplate, kcName, kcMonitorImageName, kc
 
 	g.By("(2.2) Check kataconfig creation has started")
 	errCheck = wait.PollImmediate(10*time.Second, snooze*time.Second, func() (bool, error) {
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "--no-headers").Output()
-		if strings.Contains(msg, kcName) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kataconf.name, "--no-headers").Output()
+		if strings.Contains(msg, kataconf.name) {
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("kataconfig %v did not get created: %v %v", kcName, msg, err))
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("kataconfig %v did not get created: %v %v", kataconf.name, msg, err))
 
 	g.By("(2.3) Wait for kataconfig to finish install")
 	// Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
-	msg, err = waitForKataconfig(oc, kcName)
+	msg, err = waitForKataconfig(oc, kataconf.name)
 	return msg, err
 }
 
@@ -362,9 +373,9 @@ func getNodeListByLabel(oc *exutil.CLI, opNamespace, labelKey string) (nodeNameL
 }
 
 // author: tbuskey@redhat.com
-func waitForNodesInDebug(oc *exutil.CLI, opNamespace string) (msg string, err error) {
+func waitForNodesInDebug(oc *exutil.CLI, opNamespace, nodesLabel string) (msg string, err error) {
 	count := 0
-	workerNodeList, msg, err := getNodeListByLabel(oc, opNamespace, "node-role.kubernetes.io/worker=")
+	workerNodeList, msg, err := getNodeListByLabel(oc, opNamespace, nodesLabel)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	workerNodeCount := len(workerNodeList)
 	if workerNodeCount < 1 {
@@ -487,6 +498,10 @@ func getTestRunConfigmap(oc *exutil.CLI, testrunDefault testrunConfigmap, cmNs, 
 			if strings.Contains(msg, "brew.registry.redhat.io") {
 				testrun.icspNeeded = true
 			}
+		}
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.eligibility}", "-n", cmNs).Output()
+		if err == nil {
+			testrun.eligibility, err = strconv.ParseBool(msg)
 		}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.operatorVer }", "-n", cmNs).Output()
 		if err == nil {

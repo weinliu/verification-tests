@@ -8,12 +8,15 @@ objects:
     metadata:
       name: "${NAME}"
     spec:
-      checkNodeEligibility: false
+      checkNodeEligibility: ${{ELIGIBILITY}}
       kataMonitorImage: "${MONITOR}"
       logLevel: "${LOGLEVEL}"
 parameters:
   - name: NAME
     value: "example kataconfig"
+  - name: ELIGIBILITY
+    type: boolean
+    value: 'false'
   - name: MONITOR
     value: "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:1.2.0"
   - name: LOGLEVEL

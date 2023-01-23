@@ -30,7 +30,6 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		defaultDeployment    = filepath.Join(testDataDir, "workload-deployment-securityContext.yaml")
 		defaultPod           = filepath.Join(testDataDir, "workload-pod-securityContext.yaml")
 		subTemplate          = filepath.Join(testDataDir, "subscription_template.yaml")
-		kcLogLevel           = "info"
 		kcMonitorImageName   = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:1.2.0"
 		mustGatherImage      = "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel8:1.3.0"
 		icspName             = "kata-brew-registry"
@@ -43,6 +42,8 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		testrun              testrunConfigmap
 		workload             = "have securityContext"
 		podRunState          = "Running"
+		featureLabel         = "feature.node.kubernetes.io/runtime.kata=true"
+		workerLabel          = "node-role.kubernetes.io/worker"
 	)
 
 	subscription := subscriptionDescription{
@@ -56,6 +57,13 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		template:               subTemplate,
 	}
 
+	kataconfig := KataconfigDescription{
+		name:                 commonKataConfigName,
+		template:             kcTemplate,
+		kataMonitorImageName: kcMonitorImageName,
+		logLevel:             "info",
+		eligibility:          false,
+	}
 	testrunInitial.exists = false // no overrides yet
 
 	testrunDefault := testrunConfigmap{
@@ -65,6 +73,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		icspNeeded:        false,
 		mustgatherImage:   mustGatherImage,
 		katamonitorImage:  kcMonitorImageName,
+		eligibility:       false,
 	}
 
 	g.BeforeEach(func() {
@@ -107,8 +116,9 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			subscription.catalogSourceName = testrunInitial.catalogSourceName
 			subscription.channel = testrunInitial.channel
 			mustGatherImage = testrunInitial.mustgatherImage
-			kcMonitorImageName = testrunInitial.katamonitorImage
+			kataconfig.kataMonitorImageName = testrunInitial.katamonitorImage
 			operatorVer = testrunInitial.operatorVer
+			kataconfig.eligibility = testrunInitial.eligibility
 			e2e.Logf("subscription after testrun cm osc-config: %v", subscription)
 		}
 
@@ -116,7 +126,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		if os.Getenv("cmMsg") != "" { //env var cmMsg will have no value if configmap is not found
 			subscription.catalogSourceName = sub.catalogSourceName
 			subscription.channel = sub.channel
-			kcMonitorImageName = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:" + operatorVer
+			kataconfig.kataMonitorImageName = "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:" + operatorVer
 			e2e.Logf("subscription after Jenkins cm example-config-env: %v", subscription)
 			e2e.Logf("operatorVer : %s", operatorVer)
 			e2e.Logf("monitor : %s", kcMonitorImageName)
@@ -130,7 +140,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			subscription.catalogSourceName = testrunInitial.catalogSourceName
 			subscription.channel = testrunInitial.channel
 			mustGatherImage = testrunInitial.mustgatherImage
-			kcMonitorImageName = testrunInitial.katamonitorImage
+			kataconfig.kataMonitorImageName = testrunInitial.katamonitorImage
 			operatorVer = testrunInitial.operatorVer
 			e2e.Logf("environment OSCS found. subscription: %v, operator version: %v", subscription, operatorVer)
 		}
@@ -149,7 +159,22 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		_, err = subscribeFromTemplate(oc, subscription, subTemplate, ns, og)
 		e2e.Logf("---------- subscription %v succeeded with channel %v %v", subscription.subName, subscription.channel, err)
 
-		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, kcLogLevel, subscription)
+		//label all worker nodes for checkNodeEligibility
+		if kataconfig.eligibility {
+			workerNodeList, _, err := getNodeListByLabel(oc, opNamespace, workerLabel)
+			if err == nil && len(workerNodeList) > 0 {
+				for _, node := range workerNodeList {
+					//check if node has the label already
+					msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node, "-o=jsonpath={.metadata.labels}").Output()
+					if err == nil && !strings.Contains(msg, featureLabel) {
+						_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", node, featureLabel).Output()
+						o.Expect(err).NotTo(o.HaveOccurred())
+					}
+				}
+			}
+		}
+
+		msg, err = createKataConfig(oc, kataconfig, subscription)
 		e2e.Logf("---------- kataconfig %v create succeeded %v %v", commonKataConfigName, msg, err)
 	})
 
@@ -355,7 +380,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		e2e.Logf("kataconfig %v was deleted\n--------- %v %v", commonKataConfigName, msg, err)
 
 		g.By("Recreating kataconfig in 43523 for the remaining test cases")
-		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, kcLogLevel, subscription)
+		msg, err = createKataConfig(oc, kataconfig, subscription)
 		e2e.Logf("recreated kataconfig %v: %v %v", commonKataConfigName, msg, err)
 
 		g.By("SUCCESS")
@@ -380,7 +405,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("SUCCESSS - build acceptance passed")
 
 		g.By("Recreating kataconfig for the remaining test cases")
-		msg, err = createKataConfig(oc, kcTemplate, commonKataConfigName, kcMonitorImageName, kcLogLevel, subscription)
+		msg, err = createKataConfig(oc, kataconfig, subscription)
 		e2e.Logf("recreated kataconfig %v: %v %v", commonKataConfigName, msg, err)
 	})
 
@@ -575,7 +600,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		// oc patch kataconfig example-kataconfig --type merge --patch '{"spec":{"logLevel":"debug"}}'
 
 		g.By("Wait for worker nodes to be in crio debug mode")
-		msg, err = waitForNodesInDebug(oc, subscription.namespace)
+		msg, err = waitForNodesInDebug(oc, subscription.namespace, workerLabel)
 		e2e.Logf("%v", msg)
 
 		g.By("Create a deployment file from template")
