@@ -27,9 +27,13 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		oc               = exutil.NewCLIWithoutNamespace("default")
 		mcoNamespace     = "openshift-machine-api"
 		wmcoNamespace    = "openshift-windows-machine-config-operator"
+		wmcoDeployment   = "windows-machine-config-operator"
 		privateKey       = "../internal/config/keys/openshift-qe.pem"
 		publicKey        = "../internal/config/keys/openshift-qe.pub"
+		windowsWorkloads = "win-webserver"
+		linuxWorkloads   = "linux-webserver"
 		defaultWindowsMS = "windows"
+		defaultNamespace = "winc-test"
 		iaasPlatform     string
 		zone             string
 		svcs             = map[int]string{
@@ -217,23 +221,22 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	// author: sgao@redhat.com refactored:v1
 	g.It("Smokerun-Author:sgao-Critical-28632-Windows and Linux east west network during a long time", func() {
 		// Note: Flexy alredy created workload in winc-test, here we check it still works after a long time
-		namespace := "winc-test"
 		g.By("Check communication: Windows pod <--> Linux pod")
-		winPodNames, err := getWorkloadsNames(oc, "windows", namespace)
+		winPodNames, err := getWorkloadsNames(oc, windowsWorkloads, defaultNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		windPodIPs, err := getWorkloadsIP(oc, "windows", namespace)
+		windPodIPs, err := getWorkloadsIP(oc, windowsWorkloads, defaultNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		linuxPodNames, err := getWorkloadsNames(oc, "linux", namespace)
+		linuxPodNames, err := getWorkloadsNames(oc, linuxWorkloads, defaultNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		linuxPodIPs, err := getWorkloadsIP(oc, "linux", namespace)
+		linuxPodIPs, err := getWorkloadsIP(oc, linuxWorkloads, defaultNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		command := []string{"exec", "-n", namespace, winPodNames[0], "--", "curl", linuxPodIPs[0] + ":8080"}
+		command := []string{"exec", "-n", defaultNamespace, winPodNames[0], "--", "curl", linuxPodIPs[0] + ":8080"}
 		msg, err := oc.WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "Linux Container Web Server") {
 			e2e.Failf("Failed to curl Linux web server from Windows pod")
 		}
-		command = []string{"exec", "-n", namespace, linuxPodNames[0], "--", "curl", windPodIPs[0]}
+		command = []string{"exec", "-n", defaultNamespace, linuxPodNames[0], "--", "curl", windPodIPs[0]}
 		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(msg, "Windows Container Web Server") {
@@ -250,7 +253,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
 		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
-		externalIP, err := getExternalIP(iaasPlatform, oc, "windows", namespace)
+		externalIP, err := getExternalIP(iaasPlatform, oc, windowsWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Load balancer takes about 3 minutes to work, set timeout as 5 minutes
 		pollErr := wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
@@ -289,21 +292,21 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		if iaasPlatform == "gcp" {
 			g.By("Scalling up the Windows workload to 4")
-			scaleDeployment(oc, "windows", 4, namespace)
+			scaleDeployment(oc, windowsWorkloads, 4, namespace)
 
 			// now we need to test check whether the machines auto scalled to 4
 			g.By("Waiting for Windows nodes to auto scale to 4")
 			waitForMachinesetReady(oc, machinesetName, 15, 4)
 		} else {
 			g.By("Scalling up the Windows workload to 2")
-			scaleDeployment(oc, "windows", 2, namespace)
+			scaleDeployment(oc, windowsWorkloads, 2, namespace)
 
 			// now we need to test check whether the machines auto scalled to 2
 			g.By("Waiting for Windows nodes to auto scale to 2")
 			waitForMachinesetReady(oc, machinesetName, 15, 2)
 		}
 		g.By("Scalling down the Windows workload to 1")
-		scaleDeployment(oc, "windows", 1, namespace)
+		scaleDeployment(oc, windowsWorkloads, 1, namespace)
 		waitForMachinesetReady(oc, machinesetName, 10, 1)
 	})
 	// author rrasouli@redhat.com
@@ -342,9 +345,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		createWindowsWorkload(oc, namespace, "windows_webserver_secondary_os.yaml", replacement, true)
 		e2e.Logf("-------- Windows workload scaled on node IP %v -------------", machineIP[0])
 		e2e.Logf("-------- Scaling up workloads to 5 -------------")
-		scaleDeployment(oc, "windows", 5, namespace)
+		scaleDeployment(oc, windowsWorkloads, 5, namespace)
 		// we get a list of all hostIPs all should be on the same host
-		pods, err := getWorkloadsHostIP(oc, "windows", namespace)
+		pods, err := getWorkloadsHostIP(oc, windowsWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// we check that all workloads hostIP are similar for all pods
 		if !checkPodsHaveSimilarHostIP(oc, pods, machineIP[0]) {
@@ -396,7 +399,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
 		createWindowsWorkload(oc, namespace, "windows_web_server_byoh.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
-		scaleDeployment(oc, "windows", 5, namespace)
+		scaleDeployment(oc, windowsWorkloads, 5, namespace)
 		msg, err := oc.WithoutNamespace().Run("get").Args("pods", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
@@ -410,13 +413,13 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
 		createLinuxWorkload(oc, namespace)
 		g.By("Check access through clusterIP from Linux and Windows pods")
-		windowsClusterIP, err := getServiceClusterIP(oc, "windows", namespace)
+		windowsClusterIP, err := getServiceClusterIP(oc, windowsWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		linuxClusterIP, err := getServiceClusterIP(oc, "linux", namespace)
+		linuxClusterIP, err := getServiceClusterIP(oc, linuxWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		winPodArray, err := getWorkloadsNames(oc, "windows", namespace)
+		winPodArray, err := getWorkloadsNames(oc, windowsWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		linuxPodArray, err := getWorkloadsNames(oc, "linux", namespace)
+		linuxPodArray, err := getWorkloadsNames(oc, linuxWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("windows cluster IP: " + windowsClusterIP)
 		e2e.Logf("Linux cluster IP: " + linuxClusterIP)
@@ -439,10 +442,10 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		g.By("Scale up the Deployment Windows pod continue to be available to curl Linux web server")
 		e2e.Logf("Scalling up the Deployment to 2")
-		scaleDeployment(oc, "windows", 2, namespace)
+		scaleDeployment(oc, windowsWorkloads, 2, namespace)
 
 		o.Expect(err).NotTo(o.HaveOccurred())
-		winPodArray, err = getWorkloadsNames(oc, "windows", namespace)
+		winPodArray, err = getWorkloadsNames(oc, windowsWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		command = []string{"exec", "-n", namespace, linuxPodArray[0], "--", "curl", windowsClusterIP}
 		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
@@ -463,7 +466,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		windowsMachineSetName := getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone)
 		scaleWindowsMachineSet(oc, windowsMachineSetName, 15, 3, false)
 		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2, false)
-		waitWindowsNodesReady(oc, getWindowsHostNames(oc), 10*time.Second, 1200*time.Second)
+		waitWindowsNodesReady(oc, 3, 1200*time.Second)
 		// Testing the Windows server is reachable via Linux pod
 		command = []string{"exec", "-n", namespace, linuxPodArray[0], "--", "curl", windowsClusterIP}
 		msg, err = oc.WithoutNamespace().Run(command...).Args().Output()
@@ -495,18 +498,18 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
 		createLinuxWorkload(oc, namespace)
 		// we scale the deployment to 5 windows pods
-		scaleDeployment(oc, "windows", 5, namespace)
-		hostIPArray, err := getWorkloadsHostIP(oc, "windows", namespace)
+		scaleDeployment(oc, windowsWorkloads, 5, namespace)
+		hostIPArray, err := getWorkloadsHostIP(oc, windowsWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check communication: Windows pod <--> Linux pod")
-		winPodNameArray, err := getWorkloadsNames(oc, "windows", namespace)
+		winPodNameArray, err := getWorkloadsNames(oc, windowsWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		linuxPodNameArray, err := getWorkloadsNames(oc, "linux", namespace)
+		linuxPodNameArray, err := getWorkloadsNames(oc, linuxWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		winPodIPArray, err := getWorkloadsIP(oc, "windows", namespace)
+		winPodIPArray, err := getWorkloadsIP(oc, windowsWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		linuxPodIPArray, err := getWorkloadsIP(oc, "linux", namespace)
+		linuxPodIPArray, err := getWorkloadsIP(oc, linuxWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		command := []string{"exec", "-n", namespace, linuxPodNameArray[0], "--", "curl", winPodIPArray[0]}
 		msg, err := oc.WithoutNamespace().Run(command...).Args().Output()
@@ -661,8 +664,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	// author: rrasouli@redhat.com
 	g.It("Smokerun-Author:rrasouli-NonPreRelease-High-33794-Watch cloud private key secret [Slow][Disruptive]", func() {
 		g.By("Scale WMCO to 0")
-		defer scaleDeployment(oc, "wmco", 1, wmcoNamespace)
-		scaleDeployment(oc, "wmco", 0, wmcoNamespace)
+		defer scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
+		scaleDeployment(oc, wmcoDeployment, 0, wmcoNamespace)
 
 		g.By("Deleting the private key and user data")
 		defer oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", wmcoNamespace).Output()
@@ -672,7 +675,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Scale WMCO to 1")
-		scaleDeployment(oc, "wmco", 1, wmcoNamespace)
+		scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
 
 		g.By("Creating Windows machineset with 1")
 		machinesetName := getWindowsMachineSetName(oc, "winc", iaasPlatform, zone)
@@ -736,7 +739,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		waitVersionAnnotationReady(oc, windowsHostName, 60*time.Second, 1200*time.Second)
 		g.By("Check LB service works well")
 		if iaasPlatform != "vsphere" {
-			externalIP, err := getExternalIP(iaasPlatform, oc, "windows", namespace)
+			externalIP, err := getExternalIP(iaasPlatform, oc, windowsWorkloads, namespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			// Load balancer takes about 3 minutes to work, set timeout as 5 minutes
 			pollErr := wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
@@ -759,20 +762,19 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	// author: sgao@redhat.com
 	g.It("Author:sgao-NonPreRelease-Medium-39030-Re queue on Windows machine's edge cases [Slow][Disruptive]", func() {
 		g.By("Scale down WMCO")
-		namespace := wmcoNamespace
-		defer scaleDeployment(oc, "wmco", 1, namespace)
-		scaleDownWMCO(oc)
+		defer scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
+		scaleDeployment(oc, wmcoDeployment, 0, wmcoNamespace)
 
 		g.By("Scale up the MachineSet")
 		windowsMachineSetName := getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone)
 		defer scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 2, false)
 		scaleWindowsMachineSet(oc, windowsMachineSetName, 10, 3, true)
 		g.By("Scale up WMCO")
-		scaleDeployment(oc, "wmco", 1, namespace)
+		scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
 		waitForMachinesetReady(oc, windowsMachineSetName, 15, 3)
 
 		g.By("Check Windows machines created before WMCO starts are successfully reconciling and Windows nodes added")
-		waitWindowsNodesReady(oc, getWindowsHostNames(oc), 10*time.Second, 1200*time.Second)
+		waitWindowsNodesReady(oc, 3, 1200*time.Second)
 	})
 
 	// author: rrasouli@redhat.com
@@ -803,7 +805,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		createProject(oc, namespace)
 		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
 		// fetching here the external IP
-		externalIP, err := getExternalIP(iaasPlatform, oc, "windows", namespace)
+		externalIP, err := getExternalIP(iaasPlatform, oc, windowsWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// Wait for the Windows server to come up
 		time.Sleep(100 * time.Second)
@@ -815,7 +817,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		runInBackground(ctx, cancel, checkConnectivity, externalIP, 5)
 
 		g.By("2 Windows node + N Windows pods, N >= 2 and Windows pods should be landed on different nodes, we scale to 5 Windows workloads")
-		scaleDeployment(oc, "windows", 6, namespace)
+		scaleDeployment(oc, windowsWorkloads, 6, namespace)
 
 		// Context was cancelled due to an error
 		if ctx.Err() != nil {
@@ -892,7 +894,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			image = "mcr.microsoft.com/windows/servercore:ltsc2022"
 		}
 		createWindowsWorkload(oc, namespace, "windows_webserver_projected_volume.yaml", map[string]string{"<windows_container_image>": image}, true)
-		winpod, err := getWorkloadsNames(oc, "windows", namespace)
+		winpod, err := getWorkloadsNames(oc, windowsWorkloads, namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Check in Windows pod, the projected-volume directory contains your projected sources")
 		command := []string{"exec", winpod[0], "-n", namespace, "--", "powershell.exe", " ls .\\projected-volume", ";", "ls C:\\var\\run\\secrets\\kubernetes.io\\serviceaccount"}
@@ -935,31 +937,30 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	g.It("Longduration-Smokerun-Author:rrasouli-NonPreRelease-Critical-39858-Windows servicemonitor and endpoints check [Slow][Serial][Disruptive]", func() {
 
 		g.By("Get Endpoints and service monitor values")
-		namespace := wmcoNamespace
 		// need to fetch service monitor age
-		serviceMonitorAge1, err := oc.WithoutNamespace().Run("get").Args("endpoints", "-n", namespace, "-o=jsonpath={.items[].metadata.creationTimestamp}").Output()
+		serviceMonitorAge1, err := oc.WithoutNamespace().Run("get").Args("endpoints", "-n", wmcoNamespace, "-o=jsonpath={.items[].metadata.creationTimestamp}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// here we fetch a list of endpoints
-		endpointsIPsBefore := getEndpointsIPs(oc, namespace)
+		endpointsIPsBefore := getEndpointsIPs(oc, wmcoNamespace)
 		// restarting the WMCO deployment
 		g.By("Restart WMCO pod by deleting")
-		wmcoID, err := getWorkloadsNames(oc, "wmco", namespace)
+		wmcoID, err := getWorkloadsNames(oc, wmcoDeployment, wmcoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		wmcoStartTime, err := oc.WithoutNamespace().Run("get").Args("endpoints", "-n", namespace, "-o=jsonpath={.status.StartTime}").Output()
+		wmcoStartTime, err := oc.WithoutNamespace().Run("get").Args("endpoints", "-n", wmcoNamespace, "-o=jsonpath={.status.StartTime}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("WMCO start time before restart", wmcoStartTime)
-		oc.WithoutNamespace().Run("delete").Args("pod", wmcoID[0], "-n", namespace).Output()
+		oc.WithoutNamespace().Run("delete").Args("pod", wmcoID[0], "-n", wmcoNamespace).Output()
 		// checking that the WMCO has no errors and restarted properly
 		poolErr := wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
-			return checkWorkloadCreated(oc, "windows-machine-config-operator", namespace, 1), nil
+			return checkWorkloadCreated(oc, wmcoDeployment, wmcoNamespace, 1), nil
 		})
 		if poolErr != nil {
 			e2e.Failf("Error restarting WMCO up to 3 minutes ...")
 		}
 		g.By("Test endpoints IPs survives a WMCO restart")
-		waitForEndpointsReady(oc, namespace, 5, len(strings.Split(endpointsIPsBefore, " ")))
+		waitForEndpointsReady(oc, wmcoNamespace, 5, len(strings.Split(endpointsIPsBefore, " ")))
 
-		endpointsIPsAfter := getEndpointsIPs(oc, namespace)
+		endpointsIPsAfter := getEndpointsIPs(oc, wmcoNamespace)
 		endpointsIPsBeforeArray := strings.Split(endpointsIPsBefore, " ")
 		sort.Strings(endpointsIPsBeforeArray)
 		endpointsIPsAfterArray := strings.Split(endpointsIPsAfter, " ")
@@ -968,7 +969,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			e2e.Failf("Endpoints list mismatch after WMCO restart %v, %v", endpointsIPsBeforeArray, endpointsIPsAfterArray)
 		}
 		g.By("Test service-monitor restarted")
-		serviceMonitorAge2, err := oc.WithoutNamespace().Run("get").Args("endpoints", "-n", namespace, "-o=jsonpath={.items[].metadata.creationTimestamp}").Output()
+		serviceMonitorAge2, err := oc.WithoutNamespace().Run("get").Args("endpoints", "-n", wmcoNamespace, "-o=jsonpath={.items[].metadata.creationTimestamp}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		timeOriginal, err := time.Parse(time.RFC3339, serviceMonitorAge1)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -981,8 +982,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		defer scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 20, 2, false)
 		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 5, 0, false)
 		g.By("Test endpoints IP are deleted after scalling down")
-		waitForEndpointsReady(oc, namespace, 5, 0)
-		endpointsIPsLast := getEndpointsIPs(oc, namespace)
+		waitForEndpointsReady(oc, wmcoNamespace, 5, 0)
+		endpointsIPsLast := getEndpointsIPs(oc, wmcoNamespace)
 		if endpointsIPsLast != "" {
 			e2e.Failf("Endpoints %v are still exists after scalling down Windows nodes", endpointsIPsLast)
 		}
@@ -1146,26 +1147,26 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 
 		g.By("Stop WMCO, delete existing windows-services configmap and create new dummy ones. WMCO should delete all and leave only the valid one")
-		defer scaleDeployment(oc, "wmco", 1, wmcoNamespace)
-		scaleDownWMCO(oc)
+		defer scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
+		scaleDeployment(oc, wmcoDeployment, 0, wmcoNamespace)
 		_, err = oc.WithoutNamespace().Run("delete").Args("configmap", windowsServicesCM, "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		setConfigmap(oc, "wicd_configmap.yaml", map[string]string{"<version>": "8.8.8-55657c8"})
 		setConfigmap(oc, "wicd_configmap.yaml", map[string]string{"<version>": "0.0.1-55657c8"})
 		// Create also one with the same id as the existing
 		setConfigmap(oc, "wicd_configmap.yaml", map[string]string{"<version>": wmcoLogVersion})
-		scaleDeployment(oc, "wmco", 1, wmcoNamespace)
+		scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
 		waitForServicesCM(oc, windowsServicesCM)
 
 	})
+
 	g.It("Longduration-Author:rrasouli-NonPreRelease-High-35707-Re-create Windows nodes not matching wmco version annotation [Slow][Serial][Disruptive]", func() {
 
 		// go routine parameters
 		var ctx context.Context
 		var cancel context.CancelFunc
-		namespace := "winc-test"
 		if iaasPlatform != "vsphere" {
-			externalIP, err := getExternalIP(iaasPlatform, oc, "windows", namespace)
+			externalIP, err := getExternalIP(iaasPlatform, oc, windowsWorkloads, defaultNamespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			ctx, cancel = context.WithCancel(context.Background())
 			// defer cancel to avoid leaving a zombie goroutine
@@ -1178,24 +1179,24 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 18, 3, false)
 		// Wait for the added node to be in Ready state, otherwise workloads won't get
 		// scheduled into it.
-		waitWindowsNodesReady(oc, getWindowsHostNames(oc), 10*time.Second, 300*time.Second)
+		waitWindowsNodesReady(oc, 3, 300*time.Second)
 		g.By("Scalling workloads to 9")
-		defer scaleDeployment(oc, "windows", 5, namespace)
-		scaleDeployment(oc, "windows", 9, namespace)
+		defer scaleDeployment(oc, windowsWorkloads, 5, defaultNamespace)
+		scaleDeployment(oc, windowsWorkloads, 9, defaultNamespace)
 		// TODO fetch nodes age
 		// getWindowsNodesUptime(oc, privateKey, iaasPlatform)
 		g.By("Tampering 3 Window machines and service continue ")
-		defer scaleDeployment(oc, "wmco", 1, "openshift-windows-machine-config-operator")
-		err := scaleDeployment(oc, "wmco", 0, "openshift-windows-machine-config-operator")
+		defer scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
+		err := scaleDeployment(oc, wmcoDeployment, 0, wmcoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, node := range getWindowsHostNames(oc) {
 			oc.WithoutNamespace().Run("annotate").Args("node", node, "--overwrite", "windowsmachineconfig.openshift.io/version=invalidVersion").Output()
 			waitVersionAnnotationReady(oc, node, 30*time.Second, 600*time.Second)
 		}
 		// scaling WMCO back to 1 we can expect to have 3 new nodes instead of wrong version annotated nodes
-		err = scaleDeployment(oc, "wmco", 1, "openshift-windows-machine-config-operator")
+		err = scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		msg, err := oc.WithoutNamespace().Run("get").Args("pods", "-owide", "-n", "winc-test").Output()
+		msg, err := oc.WithoutNamespace().Run("get").Args("pods", "-owide", "-n", defaultNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
 		for ok := true; ok; ok = (getNumNodesWithAnnotation(oc, "invalidVersion") > 0) {
@@ -1219,9 +1220,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		targetService := "kubelet"
 
 		g.By("Check configmap services running on Windows workers")
-		windowsServicesCM, err := popItemFromList(oc, "cm", "windows-services", "openshift-windows-machine-config-operator")
+		windowsServicesCM, err := popItemFromList(oc, "cm", "windows-services", wmcoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		payload, err := oc.WithoutNamespace().Run("get").Args("cm", windowsServicesCM, "-n", "openshift-windows-machine-config-operator", "-o=jsonpath={.data.services}").Output()
+		payload, err := oc.WithoutNamespace().Run("get").Args("cm", windowsServicesCM, "-n", wmcoNamespace, "-o=jsonpath={.data.services}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		var services []Service
@@ -1290,9 +1291,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			}
 
 		}
-
 	})
-
+	// author jfrancoa@redhat.com
 	g.It("Smokerun-Author:jfrancoa-Medium-38188-Get Windows instance/core number and CPU arch", func() {
 
 		winMetrics := []string{"cluster:node_instance_type_count:sum", "cluster:capacity_cpu_cores:sum"}
@@ -1331,6 +1331,46 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 				"Prometheus metric %s does not match the value %s obtained from the cluster", metricValue, valueFromCluster)
 
 		}
+
+	})
+
+	// author rrasouli@redhat.com
+	g.It("Longduration-Author:rrasouli-NonPreRelease-High-39640-Replace private key during Windows machine configuration [Slow][Serial][Disruptive]", func() {
+
+		g.By("Scalling down the machineset to 1")
+		// defer
+		defer scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 45, 2, false)
+		defer waitWindowsNodesReady(oc, 2, 3000*time.Second)
+		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 18, 1, false)
+
+		g.By(" Scaling down WMCO to 0 ")
+		defer scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
+		err := scaleDeployment(oc, wmcoDeployment, 0, wmcoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By(" Replacing the private key with a newly created key during machine scale up ")
+		defer oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", wmcoNamespace).Output()
+		_, err = oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Scalling up the machineset to 2")
+		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 18, 2, true)
+
+		defer os.Remove("mykey")
+		defer os.Remove("mykey.pub")
+		cmd := "ssh-keygen  -N '' -C 'test key' -f mykey"
+		_, err = exec.Command("bash", "-c", cmd).CombinedOutput()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
+		_, err = oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem=mykey", "-n", wmcoNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// scaling WMCO back to 1 we can expect to have 2 new nodes instead of wrong version annotated nodes
+		g.By(" Waiting for nodes to be in a Ready status ")
+		err = scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// A delay waiting for machine upgrade to be completed
+		waitUntilWMCOStatusChanged(oc, "\"unhealthy\":0")
 
 	})
 
