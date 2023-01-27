@@ -17,7 +17,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	var (
 		oc                 = exutil.NewCLI("storage-iscsi", exutil.KubeConfigPath())
-		svcIscsiServer     iscsiServer
 		storageTeamBaseDir string
 		pvTemplate         string
 		pvcTemplate        string
@@ -30,17 +29,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.BeforeEach(func() {
 		cloudProvider = getCloudProvider(oc)
 		storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
-		svcIscsiServer = setupIscsiServer(oc, storageTeamBaseDir)
 		pvTemplate = filepath.Join(storageTeamBaseDir, "csi-pv-template.yaml")
 		pvcTemplate = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 		podTemplate = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
 		deploymentTemplate = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
 		svcTemplate = filepath.Join(storageTeamBaseDir, "service-template.yaml")
 		secTemplate = filepath.Join(storageTeamBaseDir, "secret-template.yaml")
-	})
-
-	g.AfterEach(func() {
-		svcIscsiServer.uninstall(oc)
 	})
 
 	// author: rdeore@redhat.com
@@ -61,8 +55,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.Skip("Skip: This test needs at least 2 worker nodes, test cluster has less than 2 schedulable workers!")
 		}
 
-		//Clean-up: delete network portal from iscsi target server
-		defer svcIscsiServer.deleteIscsiNetworkPortal(oc, svcIscsiServer.svc.clusterIP, svcIscsiServer.deploy.getPodList(oc)[0])
+		// Deploy iscsi target server
+		g.By("#. Deploy iscsi target server for the test scenario")
+		svcIscsiServer := setupIscsiServer(oc, storageTeamBaseDir)
+		defer svcIscsiServer.uninstall(oc)
 
 		g.By("#. Create a pv with the storageclass")
 		pv.iscsiServerIP = svcIscsiServer.svc.clusterIP
@@ -109,7 +105,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: rdeore@redhat.com
 	// OCP-52770 [ISCSI] Check iscsi multipath working
-	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-OSD_CCS-ARO-Author:rdeore-High-52770-[ISCSI] Check iscsi multipath working", func() {
+	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-OSD_CCS-ARO-Author:rdeore-High-52770-[ISCSI] Check iscsi multipath working [Serial]", func() {
+
+		// Deploy iscsi target server
+		g.By("#. Deploy iscsi target server for the test scenario")
+		svcIscsiServer := setupIscsiServer(oc, storageTeamBaseDir)
+		defer svcIscsiServer.uninstall(oc)
+
 		//Set the resource objects definition for the scenario
 		var (
 			scName      = "iscsi-sc-" + getRandomString()
@@ -123,8 +125,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			svc = newService(setServiceTemplate(svcTemplate), setServiceName(serviceName), setServiceSelectorLable(svcIscsiServer.deploy.applabel), setServiceNodePort("0"),
 				setServicePort(port), setServiceTargetPort(port), setServiceProtocol("TCP"))
 		)
-		//Clean-up: delete network portal from iscsi target server
-		defer svcIscsiServer.deleteIscsiNetworkPortal(oc, svcIscsiServer.svc.clusterIP, svcIscsiServer.deploy.getPodList(oc)[0])
 
 		g.By("#. Create a new iscsi service")
 		svc.create(oc)
@@ -195,11 +195,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 		//Set the resource objects definition for the scenario
 		var (
-			scName             = "iscsi-sc-" + getRandomString()
-			secretName         = "iscsi-secret-" + getRandomString()
-			iscsiTargetPodName = svcIscsiServer.deploy.getPodList(oc)[0]
-			secretType         = "kubernetes.io/iscsi-chap"
-			pvc                = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("2Gi"),
+			scName     = "iscsi-sc-" + getRandomString()
+			secretName = "iscsi-secret-" + getRandomString()
+			secretType = "kubernetes.io/iscsi-chap"
+			pvc        = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("2Gi"),
 				setPersistentVolumeClaimAccessmode("ReadWriteOnce"), setPersistentVolumeClaimStorageClassName(scName))
 			dep = newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
 			pv  = newPersistentVolume(setPersistentVolumeTemplate(pvTemplate), setPersistentVolumeAccessMode("ReadWriteOnce"), setPersistentVolumeKind("iscsi-chap"),
@@ -216,8 +215,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 		)
 
-		//Clean-up: delete network portal from iscsi target server
-		defer svcIscsiServer.deleteIscsiNetworkPortal(oc, svcIscsiServer.svc.clusterIP, svcIscsiServer.deploy.getPodList(oc)[0])
+		// Deploy iscsi target server
+		g.By("#. Deploy iscsi target server for the test scenario")
+		svcIscsiServer := setupIscsiServer(oc, storageTeamBaseDir)
+		defer svcIscsiServer.uninstall(oc)
+		iscsiTargetPodName := svcIscsiServer.deploy.getPodList(oc)[0]
 
 		g.By("#. Create a secret for iscsi chap authentication")
 		sec.createWithExtraParameters(oc, extraParameters)
@@ -315,8 +317,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.Skip("Skip: This test needs at least 2 worker nodes, test cluster has less than 2 schedulable workers!")
 		}
 
-		//Clean-up: delete network portal from iscsi target server
-		defer svcIscsiServer.deleteIscsiNetworkPortal(oc, svcIscsiServer.svc.clusterIP, svcIscsiServer.deploy.getPodList(oc)[0])
+		// Deploy iscsi target server
+		g.By("#. Deploy iscsi target server for the test scenario")
+		svcIscsiServer := setupIscsiServer(oc, storageTeamBaseDir)
+		defer svcIscsiServer.uninstall(oc)
 
 		g.By("#. Create a pv with the storageclass")
 		pv.iscsiServerIP = svcIscsiServer.svc.clusterIP

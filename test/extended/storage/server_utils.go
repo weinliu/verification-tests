@@ -107,6 +107,16 @@ func (iscsi *iscsiServer) install(oc *exutil.CLI) {
 
 // Uninstall the specified iSCSI Server from cluster
 func (iscsi *iscsiServer) uninstall(oc *exutil.CLI) {
+	iscsiTargetPodName := iscsi.deploy.getPodList(oc.AsAdmin())[0]
+	cleanIscsiConfigurationCMDs := []string{
+		"targetcli /iscsi delete iqn.2016-04.test.com:storage.target00",
+		"targetcli /backstores/fileio delete disk01",
+		"targetcli /backstores/fileio delete disk02",
+		"targetctl save",
+		"rm -f /iscsi_disks/*"}
+	for _, cleanIscsiConfigurationCMD := range cleanIscsiConfigurationCMDs {
+		execCommandInSpecificPod(oc.AsAdmin(), iscsi.deploy.namespace, iscsiTargetPodName, cleanIscsiConfigurationCMD)
+	}
 	iscsi.svc.deleteAsAdmin(oc)
 	iscsi.deploy.deleteAsAdmin(oc)
 }
