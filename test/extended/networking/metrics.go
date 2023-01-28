@@ -324,7 +324,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 	g.It("NonHyperShiftHOST-Author:weliang-Medium-45689-Metrics for idling enable/disabled.", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
-			testPodFile         = filepath.Join(buildPruningBaseDir, "metrics/metrics-pod.json")
+			testPodFile         = filepath.Join(buildPruningBaseDir, "metrics/metrics-pod.yaml")
 			testSvcFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
 			testPodName         = "hello-pod"
 		)
