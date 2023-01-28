@@ -4111,4 +4111,20 @@ EOF`, dcpolicyrepo)
 			e2e.Failf("Apirequestcount has not disabled")
 		}
 	})
+
+	// author : dpunia@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PstChkUpgrade-NonPreRelease-Author:dpunia-Medium-56934-[Apiserver] bug Ensure unique CA serial numbers, after enable automated service CA rotation", func() {
+		g.By("1. Get openshift-apiserver pods and endpoints ip & port")
+		podName, podGetErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-apiserver", "pod", "-o", "jsonpath={.items[1].metadata.name}").Output()
+		o.Expect(podGetErr).NotTo(o.HaveOccurred())
+		endpointIP, epGetErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-apiserver", "endpoints", "api", "-o", "jsonpath={.subsets[*].addresses[1].ip}").Output()
+		o.Expect(epGetErr).NotTo(o.HaveOccurred())
+
+		g.By("2. Check openshift-apiserver https api metrics endpoint URL")
+		metricsUrl := fmt.Sprintf(`https://%v:8443/metrics`, string(endpointIP))
+		metricsOut, metricsErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-apiserver", podName, "-c", "openshift-apiserver", "--", "curl", "-k", metricsUrl).Output()
+		o.Expect(metricsErr).NotTo(o.HaveOccurred())
+		o.Expect(metricsOut).ShouldNot(o.ContainSubstring("You are attempting to import a cert with the same issuer/serial as an existing cert, but that is not the same cert"))
+		o.Expect(metricsOut).Should(o.ContainSubstring("Forbidden"))
+	})
 })
