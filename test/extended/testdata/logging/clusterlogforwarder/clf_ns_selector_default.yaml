@@ -3,7 +3,7 @@ apiVersion: template.openshift.io/v1
 metadata:
   name: clusterlogforwarder-template
 objects:
-- apiVersion: "logging.openshift.io/v1"
+- apiVersion: logging.openshift.io/v1
   kind: ClusterLogForwarder
   metadata:
     name: ${NAME}
@@ -12,12 +12,11 @@ objects:
     inputs:
     - application:
         namespaces:
-        - ${APP_PROJECT}
-      name: app-input-namespace
+        - ${CUSTOM_APP}
+      name: custom-app-input
     pipelines:
-    - inputRefs:
-      - app-input-namespace
-      name: output-to-default-es
+    - name: forward-to-default
+      inputRefs: ${{INPUTS}}
       outputRefs:
       - default
 parameters:
@@ -25,5 +24,7 @@ parameters:
   value: "instance"
 - name: NAMESPACE
   value: "openshift-logging"
-- name: APP_PROJECT
-  required: true
+- name: INPUTS
+  value: "[\"infrastructure\", \"audit\", \"custom-app-input\"]"
+- name: CUSTOM_APP
+  value: my-app

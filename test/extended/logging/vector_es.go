@@ -849,10 +849,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogForwarder instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "48768.yaml")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf_ns_selector_default.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
-			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "APP_PROJECT="+appProj1)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "CUSTOM_APP="+appProj1)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create ClusterLogging instance with Vector as collector")

@@ -578,5 +578,88 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
+		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-High-57063-Forward app logs to Loki with namespace selectors (vector)[Serial]", func() {
+			cloNS := "openshift-logging"
+			if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
+				g.Skip("Current platform not supported/resources not available for this test!")
+			}
+			g.By("Creating 2 applications..")
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+
+			appProj1 := oc.Namespace()
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj1, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			oc.SetupProject()
+			appProj2 := oc.Namespace()
+			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj2, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			sc, err := getStorageClassName(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploying LokiStack CR for 1x.extra-small tshirt size")
+			lokiStackTemplate := exutil.FixturePath("testdata", "logging", "lokistack", "lokistack-simple.yaml")
+			ls := lokiStack{"my-loki", cloNS, "1x.extra-small", getStorageType(oc), "storage-secret", sc, "logging-loki-53145-" + getInfrastructureName(oc), lokiStackTemplate}
+			defer ls.removeObjectStorage(oc)
+			err = ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+			e2e.Logf("LokiStack deployed")
+
+			g.By("Create ClusterLogForwarder with Loki as default logstore for all tenants")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf_ns_selector_default.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "CUSTOM_APP="+appProj2)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create ClusterLogging instance with Loki as logstore")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-default-loki.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "LOKISTACKNAME="+ls.name)
+			resource{"serviceaccount", "logcollector", cl.namespace}.WaitForResourceToAppear(oc)
+			defer removeLokiStackPermissionFromSA(oc, "my-loki-tenant-logs")
+			grantLokiPermissionsToSA(oc, "my-loki-tenant-logs", "logcollector", cl.namespace)
+			collector := resource{"daemonset", "collector", cl.namespace}
+			collector.WaitForResourceToAppear(oc)
+			e2e.Logf("waiting for the collector pods to be ready...")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+			g.By("checking infra and audit logs in loki")
+			bearerToken := getSAToken(oc, "logcollector", cl.namespace)
+			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+			lc := newLokiClient(route).withToken(bearerToken).retry(5)
+			for _, logType := range []string{"infrastructure", "audit"} {
+				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+					res, err := lc.searchByKey(logType, "log_type", logType)
+					if err != nil {
+						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
+						return false, err
+					}
+					if len(res.Data.Result) > 0 {
+						e2e.Logf("%s logs found: \n", logType)
+						return true, nil
+					}
+					return false, nil
+				})
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+			}
+			g.By("check logs in loki for custom app input..")
+			appLog, err := lc.searchByNamespace("application", appProj2)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
+
+			//no logs found for app not defined as custom input in clf
+			appLog, err = lc.searchByNamespace("application", appProj1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(appLog.Data.Result) == 0).Should(o.BeTrue())
+
+		})
+
 	})
 })
