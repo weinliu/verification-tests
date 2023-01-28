@@ -463,22 +463,26 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		})
 
 		// author: tagao@redhat.com
-		g.It("Author:tagao-Medium-50008-Expose sigv4 settings for remote write in the CMO configuration", func() {
+		g.It("Author:tagao-Medium-50008-Expose sigv4 settings for remote write in the CMO configuration [Serial]", func() {
 			var (
+				sigv4ClusterCM = filepath.Join(monitoringBaseDir, "sigv4-cluster-monitoring-cm.yaml")
+				sigv4UwmCM     = filepath.Join(monitoringBaseDir, "sigv4-uwm-monitoring-cm.yaml")
 				sigv4Secret    = filepath.Join(monitoringBaseDir, "sigv4-secret.yaml")
 				sigv4SecretUWM = filepath.Join(monitoringBaseDir, "sigv4-secret-uwm.yaml")
 			)
-			g.By("delete secret at the end of case")
+			g.By("delete secret/cm at the end of case")
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "sigv4-credentials", "-n", "openshift-monitoring").Execute()
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "sigv4-credentials-uwm", "-n", "openshift-user-workload-monitoring").Execute()
+			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
 			g.By("Create sigv4 secret under openshift-monitoring")
-			exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
 			createResourceFromYaml(oc, "openshift-monitoring", sigv4Secret)
 
+			g.By("Configure remote write sigv4 and enable user workload monitoring")
+			createResourceFromYaml(oc, "openshift-monitoring", sigv4ClusterCM)
+
 			g.By("Check sig4 config under openshift-monitoring")
-			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheuses", "k8s", "-ojsonpath={.spec.remoteWrite}", "-n", "openshift-monitoring").Output()
-			o.Expect(output).To(o.ContainSubstring("sigv4-credentials"))
 			checkSig4Config(oc, "openshift-monitoring", "prometheus-k8s-0", "url: https://authorization.remotewrite.com/api/write")
 			checkSig4Config(oc, "openshift-monitoring", "prometheus-k8s-0", "sigv4:")
 			checkSig4Config(oc, "openshift-monitoring", "prometheus-k8s-0", "region: us-central1")
@@ -490,9 +494,10 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			g.By("Create sigv4 secret under openshift-user-workload-monitoring")
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", sigv4SecretUWM)
 
+			g.By("Configure remote write sigv4 setting for user workload monitoring")
+			createResourceFromYaml(oc, "openshift-user-workload-monitoring", sigv4UwmCM)
+
 			g.By("Check sig4 config under openshift-user-workload-monitoring")
-			output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheuses", "user-workload", "-ojsonpath={.spec.remoteWrite}", "-n", "openshift-user-workload-monitoring").Output()
-			o.Expect(output2).To(o.ContainSubstring("sigv4-credentials-uwm"))
 			checkSig4Config(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "url: https://authorization.remotewrite.com/api/write")
 			checkSig4Config(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "sigv4:")
 			checkSig4Config(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "region: us-east2")
