@@ -57,14 +57,6 @@ func waitForCPMSUpdateCompleted(oc *exutil.CLI, replicas int) {
 	exutil.AssertWaitPollNoErr(err, "Wait Update failed.")
 }
 
-// skipForCPMSNotExist skip the test if controlplanemachineset doesn't exist
-func skipForCPMSNotExist(oc *exutil.CLI) {
-	controlplanemachineset, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-n", machineAPINamespace).Output()
-	if err != nil || len(controlplanemachineset) == 0 {
-		g.Skip("Skip for controlplanemachineset doesn't exist!")
-	}
-}
-
 // skipForCPMSNotStable skip the test if the cpms is not stable
 func skipForCPMSNotStable(oc *exutil.CLI) {
 	readyReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.status.readyReplicas}", "-n", machineAPINamespace).Output()
