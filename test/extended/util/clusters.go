@@ -145,3 +145,8 @@ func SkipHypershiftHostedCluster(oc *CLI) {
 		g.Skip("Skip for Hypershift cluster")
 	}
 }
+
+// IsHeterogeneousCluster judges whether the test cluster has heterogeneous nodes
+func IsHeterogeneousCluster(oc *CLI) bool {
+	return GetClusterArchitecture(oc) == "Multi-Arch"
+}

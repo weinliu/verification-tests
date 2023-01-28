@@ -1489,8 +1489,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			o.Expect(outputTestfile).To(o.ContainSubstring("24680"))
 			o.Expect(outputTestfile).To(o.ContainSubstring("system_u:object_r:container_file_t:s0:c2,c13"))
 
-			_, err = pod.execCommandAsAdmin(oc, "cp /hello "+pod.mountPath)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(pod.execCommandAsAdmin(oc, fmt.Sprintf("echo '#!/bin/bash\necho \"Hello OpenShift Storage\"' > %s && chmod +x %s ", pod.mountPath+"/hello", pod.mountPath+"/hello"))).Should(o.Equal(""))
 			outputExecfile, err := pod.execCommandAsAdmin(oc, "cat "+pod.mountPath+"/hello")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(outputExecfile).To(o.ContainSubstring("Hello OpenShift Storage"))

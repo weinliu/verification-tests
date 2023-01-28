@@ -7,6 +7,7 @@ import (
 	o "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 // GetFirstLinuxWorkerNode returns the first linux worker node in the cluster
@@ -346,4 +347,12 @@ func getNodesByRoleAndOsID(oc *CLI, role string, osID string) ([]string, error) 
 // GetAllWorkerNodesByOSID returns list of worker nodes by OS ID
 func GetAllWorkerNodesByOSID(oc *CLI, osID string) ([]string, error) {
 	return getNodesByRoleAndOsID(oc, "worker", osID)
+}
+
+// GetNodeArchByName gets the node arch by its name
+func GetNodeArchByName(oc *CLI, nodeName string) string {
+	nodeArch, err := GetResourceSpecificLabelValue(oc, "node/"+nodeName, "", "kubernetes\\.io/arch")
+	o.Expect(err).NotTo(o.HaveOccurred(), "Fail to get node/%s arch: %v\n", nodeName, err)
+	e2e.Logf(`The node/%s arch is "%s"`, nodeName, nodeArch)
+	return nodeArch
 }
