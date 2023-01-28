@@ -119,7 +119,7 @@ func getNumNodesWithAnnotation(oc *exutil.CLI, annotationValue string) int {
 
 func getWindowsMachineSetName(oc *exutil.CLI, name string, iaasPlatform string, zone string) string {
 	machinesetName := name
-	if iaasPlatform == "vsphere" {
+	if iaasPlatform == "vsphere" && name == "windows" {
 		machinesetName = "winworker"
 	}
 	if iaasPlatform == "aws" || iaasPlatform == "gcp" {

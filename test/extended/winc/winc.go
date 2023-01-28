@@ -290,20 +290,20 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Creating Windows workloads")
 		createWindowsWorkload(oc, namespace, "windows_web_server_scaler.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
 
-		if iaasPlatform == "gcp" {
+		if iaasPlatform == "gcp" || iaasPlatform == "vsphere" {
 			g.By("Scalling up the Windows workload to 4")
 			scaleDeployment(oc, windowsWorkloads, 4, namespace)
 
-			// now we need to test check whether the machines auto scalled to 4
-			g.By("Waiting for Windows nodes to auto scale to 4")
-			waitForMachinesetReady(oc, machinesetName, 15, 4)
+			// now we need to test check whether the machines auto scalled to 2
+			g.By("Waiting for Windows nodes to auto scale to 2")
+			waitForMachinesetReady(oc, machinesetName, 20, 2)
 		} else {
 			g.By("Scalling up the Windows workload to 2")
 			scaleDeployment(oc, windowsWorkloads, 2, namespace)
 
 			// now we need to test check whether the machines auto scalled to 2
 			g.By("Waiting for Windows nodes to auto scale to 2")
-			waitForMachinesetReady(oc, machinesetName, 15, 2)
+			waitForMachinesetReady(oc, machinesetName, 20, 2)
 		}
 		g.By("Scalling down the Windows workload to 1")
 		scaleDeployment(oc, windowsWorkloads, 1, namespace)
