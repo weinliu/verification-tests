@@ -10,6 +10,12 @@ import (
 
 // IsROSA Determine whether it is a ROSA env, now only support prow
 func IsROSA() bool {
+	_, err := os.Stat(os.Getenv("SHARED_DIR") + "/cluster-name")
+	if err != nil {
+		if !os.IsExist(err) {
+			return false
+		}
+	}
 	return len(os.Getenv("TEST_ROSA_TOKEN")) > 0
 }
 
