@@ -55,6 +55,9 @@ func GetDrMasterNodes(oc *exutil.CLI) (ComputeNodes, func()) {
 	case "baremetal":
 		e2e.Logf("\n IPI Baremetal is detected, running the case on baremetal\n")
 		return GetBaremetalMasterNodes(oc)
+	case "none":
+		e2e.Logf("\n UPI Baremetal is detected, running the case on baremetal\n")
+		return GetUPIBaremetalMasterNodes(oc)
 	default:
 		g.Skip("Not support cloud provider for DR cases for now. Test cases should be run on vsphere or aws or gcp or openstack or azure or IPI baremetal, skip for other platforms!!")
 	}
