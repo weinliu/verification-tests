@@ -653,75 +653,13 @@ func (c *lokiClient) getHTTPRequestHeader() (http.Header, error) {
 }
 
 func (c *lokiClient) doRequest(path, query string, quiet bool, out interface{}) error {
-	us, err := buildURL(c.address, path, query)
-	if err != nil {
-		return err
-	}
-	if !quiet {
-		e2e.Logf(us)
-	}
-
-	req, err := http.NewRequest("GET", us, nil)
-	if err != nil {
-		return err
-	}
 
 	h, err := c.getHTTPRequestHeader()
 	if err != nil {
 		return err
 	}
-	req.Header = h
 
-	var tr *http.Transport
-	proxy := getProxyFromEnv()
-	if len(proxy) > 0 {
-		proxyURL, err := url.Parse(proxy)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		tr = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			Proxy:           http.ProxyURL(proxyURL),
-		}
-	} else {
-		tr = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-	}
-
-	client := &http.Client{Transport: tr}
-
-	var resp *http.Response
-	attempts := c.retries + 1
-	success := false
-
-	for attempts > 0 {
-		attempts--
-
-		resp, err = client.Do(req)
-		if err != nil {
-			e2e.Logf("error sending request %v", err)
-			continue
-		}
-		if resp.StatusCode/100 != 2 {
-			buf, _ := io.ReadAll(resp.Body) // nolint
-			e2e.Logf("Error response from server: %s (%v) attempts remaining: %d", string(buf), err, attempts)
-			if err := resp.Body.Close(); err != nil {
-				e2e.Logf("error closing body", err)
-			}
-			continue
-		}
-		success = true
-		break
-	}
-	if !success {
-		return fmt.Errorf("run out of attempts while querying the server")
-	}
-
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			e2e.Logf("error closing body", err)
-		}
-	}()
-	return json.NewDecoder(resp.Body).Decode(out)
+	return doHTTPRequest(h, c.address, path, query, "GET", quiet, c.retries, out)
 }
 
 func (c *lokiClient) doQuery(path string, query string, quiet bool) (*lokiQueryResponse, error) {
@@ -885,6 +823,73 @@ func (c *lokiClient) listLabels(logType, labelName string, start, end time.Time)
 		e2e.Failf("Error doing request: %+v", err)
 	}
 	return labelResponse.Data
+}
+
+func doHTTPRequest(header http.Header, address, path, query, method string, quiet bool, attempts int, out interface{}) error {
+	us, err := buildURL(address, path, query)
+	if err != nil {
+		return err
+	}
+	if !quiet {
+		e2e.Logf(us)
+	}
+
+	req, err := http.NewRequest(strings.ToUpper(method), us, nil)
+	if err != nil {
+		return err
+	}
+
+	req.Header = header
+
+	var tr *http.Transport
+	proxy := getProxyFromEnv()
+	if len(proxy) > 0 {
+		proxyURL, err := url.Parse(proxy)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		tr = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			Proxy:           http.ProxyURL(proxyURL),
+		}
+	} else {
+		tr = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
+
+	client := &http.Client{Transport: tr}
+
+	var resp *http.Response
+	success := false
+
+	for attempts > 0 {
+		attempts--
+
+		resp, err = client.Do(req)
+		if err != nil {
+			e2e.Logf("error sending request %v", err)
+			continue
+		}
+		if resp.StatusCode/100 != 2 {
+			buf, _ := io.ReadAll(resp.Body) // nolint
+			e2e.Logf("Error response from server: %s (%v) attempts remaining: %d", string(buf), err, attempts)
+			if err := resp.Body.Close(); err != nil {
+				e2e.Logf("error closing body", err)
+			}
+			continue
+		}
+		success = true
+		break
+	}
+	if !success {
+		return fmt.Errorf("run out of attempts while querying the server")
+	}
+
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			e2e.Logf("error closing body", err)
+		}
+	}()
+	return json.NewDecoder(resp.Body).Decode(out)
 }
 
 // buildURL concats a url `http://foo/bar` with a path `/buzz`.

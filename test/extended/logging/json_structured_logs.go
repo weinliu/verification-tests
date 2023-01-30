@@ -840,6 +840,54 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(len(log21.Hits.DataHits) == 0).To(o.BeTrue())
 		})
 
+		// author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-Medium-47834-Forward logs to both external ES and outputDefault using json and enable structure[Serial]", func() {
+			app := oc.Namespace()
+			logTemplate := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			err := oc.WithoutNamespace().Run("new-app").Args("-f", logTemplate, "-n", app).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			oc.SetupProject()
+			esProj := oc.Namespace()
+			ees := externalES{
+				namespace:  esProj,
+				version:    "7",
+				serverName: "external-es",
+				httpSSL:    true,
+				clientAuth: true,
+				secretName: "structured-log-47834",
+				loggingNS:  cloNS,
+			}
+			defer ees.remove(oc)
+			ees.deploy(oc)
+			eesURL := "https://" + ees.serverName + "." + ees.namespace + ".svc:9200"
+
+			g.By("create clusterlogforwarder/instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "47834.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-f", clfTemplate, "-p", "ES_URL="+eesURL, "ES_SECRET="+ees.secretName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			// create clusterlogging instance
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=fluentd")
+			WaitForECKPodsToBeReady(oc, cloNS)
+
+			g.By("check logs")
+			esPods, err := oc.AdminKubeClient().CoreV1().Pods(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "es-node-master=true"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForIndexAppear(cloNS, esPods.Items[0].Name, "app-"+app)
+			waitForIndexAppear(cloNS, esPods.Items[0].Name, "infra")
+			waitForIndexAppear(cloNS, esPods.Items[0].Name, "audit")
+
+			ees.waitForIndexAppear(oc, "app")
+			ees.waitForIndexAppear(oc, "infra")
+			ees.waitForIndexAppear(oc, "audit")
+		})
+
 	})
 
 })

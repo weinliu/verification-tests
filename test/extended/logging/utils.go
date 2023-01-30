@@ -2,11 +2,9 @@ package logging
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -625,38 +623,12 @@ func getSAToken(oc *exutil.CLI, name, ns string) string {
 	return string(bearerToken)
 }
 
-type prometheusQueryResult struct {
-	Data struct {
-		Result []struct {
-			Metric struct {
-				Name              string `json:"__name__"`
-				Cluster           string `json:"cluster,omitempty"`
-				Container         string `json:"container,omitempty"`
-				ContainerName     string `json:"containername,omitempty"`
-				Endpoint          string `json:"endpoint,omitempty"`
-				Instance          string `json:"instance,omitempty"`
-				Job               string `json:"job,omitempty"`
-				Namespace         string `json:"namespace,omitempty"`
-				Path              string `json:"path,omitempty"`
-				Pod               string `json:"pod,omitempty"`
-				PodName           string `json:"podname,omitempty"`
-				Service           string `json:"service,omitempty"`
-				ExportedNamespace string `json:"exported_namespace,omitempty"`
-				State             string `json:"state,omitempty"`
-			} `json:"metric"`
-			Value []interface{} `json:"value"`
-		} `json:"result"`
-		ResultType string `json:"resultType"`
-	} `json:"data"`
-	Status string `json:"status"`
-}
-
 // queryPrometheus returns the promtheus metrics which match the query string
 // token: the user token used to run the http request, if it's not specified, it will use the token of sa/prometheus-k8s in openshift-monitoring project
 // path: the api path, for example: /api/v1/query?
 // query: the metric/alert you want to search, e.g.: es_index_namespaces_total
 // action: it can be "GET", "get", "Get", "POST", "post", "Post"
-func queryPrometheus(oc *exutil.CLI, token string, path string, query string, action string) (prometheusQueryResult, error) {
+func queryPrometheus(oc *exutil.CLI, token string, path string, query string, action string) (*prometheusQueryResult, error) {
 	var bearerToken string
 	var err error
 	if token == "" {
@@ -664,47 +636,22 @@ func queryPrometheus(oc *exutil.CLI, token string, path string, query string, ac
 	} else {
 		bearerToken = token
 	}
-	prometheusURL := "https://" + getRouteAddress(oc, "openshift-monitoring", "prometheus-k8s") + path
-	if query != "" {
-		prometheusURL = prometheusURL + "query=" + url.QueryEscape(query)
+	address := "https://" + getRouteAddress(oc, "openshift-monitoring", "prometheus-k8s")
+
+	h := make(http.Header)
+	h.Add("Content-Type", "application/json")
+	h.Add("Authorization", "Bearer "+bearerToken)
+
+	params := url.Values{}
+	if len(query) > 0 {
+		params.Add("query", query)
 	}
 
-	var tr *http.Transport
-	proxy := getProxyFromEnv()
-	if len(proxy) > 0 {
-		proxyURL, err := url.Parse(proxy)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		tr = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			Proxy:           http.ProxyURL(proxyURL),
-		}
-	} else {
-		tr = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
+	var p prometheusQueryResult
+	if err = doHTTPRequest(h, address, path, params.Encode(), action, false, 5, &p); err != nil {
+		return nil, err
 	}
-
-	client := &http.Client{Transport: tr}
-	var request *http.Request
-	switch action {
-	case "GET", "get", "Get":
-		request, err = http.NewRequest("GET", prometheusURL, nil)
-		o.Expect(err).NotTo(o.HaveOccurred())
-	case "POST", "post", "Post":
-		request, err = http.NewRequest("POST", prometheusURL, nil)
-		o.Expect(err).NotTo(o.HaveOccurred())
-	default:
-		e2e.Failf("Unrecogonized action: %s", action)
-	}
-	request.Header.Add("Content-Type", "application/json")
-	request.Header.Add("Authorization", "Bearer "+bearerToken)
-	response, err := client.Do(request)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	defer response.Body.Close()
-	responseData, err := io.ReadAll(response.Body)
-	res := prometheusQueryResult{}
-	json.Unmarshal(responseData, &res)
-	return res, err
+	return &p, nil
 }
 
 // WaitUntilPodsAreGone waits for pods selected with labelselector to be removed
@@ -2076,82 +2023,27 @@ func (gcl googleCloudLogging) removeLogs() error {
 	return nil
 }
 
-func getAlert(oc *exutil.CLI, alertSelector string) map[string]interface{} {
-	route, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
-		"-n", "openshift-monitoring",
-		"route", "prometheus-k8s",
-		"-o=jsonpath={.spec.host}").Output()
+func getAlert(oc *exutil.CLI, alertSelector string) (alert, error) {
+	var al alert
+	alerts, err := queryPrometheus(oc, "", "/api/v1/alerts", "", "GET")
 	if err != nil {
-		e2e.Logf("error getting the hostname of route prometheus-k8s: %v", err)
-		return nil
+		return al, err
 	}
-	token, err := exutil.GetSAToken(oc)
-	if err != nil {
-		e2e.Logf("error getting SA token: %v", err)
-		return nil
-	}
-
-	alertsUrl := fmt.Sprintf("https://%s/api/v1/alerts", route)
-	req, err := http.NewRequest("GET", alertsUrl, nil)
-	if err != nil {
-		e2e.Logf("error creating request: %v", err)
-		return nil
-	}
-	req.Header.Add("Authorization", "Bearer "+token)
-
-	var tr *http.Transport
-	proxy := getProxyFromEnv()
-	if len(proxy) > 0 {
-		proxyURL, err := url.Parse(proxy)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		tr = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			Proxy:           http.ProxyURL(proxyURL),
-		}
-	} else {
-		tr = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	for i := 0; i < len(alerts.Data.Alerts); i++ {
+		if alerts.Data.Alerts[i].Labels.AlertName == alertSelector {
+			return alerts.Data.Alerts[i], nil
 		}
 	}
-	client := &http.Client{Transport: tr}
-
-	res, err := client.Do(req)
-	if err != nil {
-		e2e.Logf("error sending request: %v", err)
-		return nil
-	}
-	defer res.Body.Close()
-
-	var data struct {
-		Data struct {
-			Alerts []map[string]interface{} `json:"alerts"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&data); err != nil {
-		e2e.Logf("error decoding response: %v", err)
-		return nil
-	}
-
-	var alerts []map[string]interface{}
-	for _, a := range data.Data.Alerts {
-		if labels, ok := a["labels"].(map[string]interface{}); ok {
-			if alertName, ok := labels["alertname"].(string); ok && alertName == alertSelector {
-				alerts = append(alerts, a)
-			}
-		}
-	}
-	if len(alerts) == 0 {
-		e2e.Logf("no alert found for %s", alertSelector)
-		return nil
-	}
-	return alerts[0]
+	return al, nil
 }
 
-func checkAlert(oc *exutil.CLI, alertName string, status string, timeInMinutes int) {
-	e2e.Logf("Check alert %s status is %s.", alertName, status)
+func checkAlert(oc *exutil.CLI, alertName, status string, timeInMinutes int) {
 	err := wait.Poll(1*time.Minute, time.Duration(timeInMinutes)*time.Minute, func() (bool, error) {
-		alert := getAlert(oc, alertName)
-		if alert["state"] != status {
+		alert, err := getAlert(oc, alertName)
+		if err != nil {
+			return false, err
+		}
+		if alert.State != status {
 			e2e.Logf("Waiting for alert %s to be in state %s...", alertName, status)
 			return false, nil
 		}

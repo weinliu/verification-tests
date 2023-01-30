@@ -40,7 +40,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 
 	// author qitang@redhat.com
 	g.It("Author:qitang-Critical-53817-Logging acceptance testing: vector to loki[Slow][Serial]", func() {
-		if !compareClusterResources(oc, "6", "10Gi") {
+		if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
 			g.Skip("Current cluster doesn't have sufficient cpu/memory for this test!")
 		}
 		s := getStorageType(oc)

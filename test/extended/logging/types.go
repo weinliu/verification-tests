@@ -687,3 +687,203 @@ type labelResponse struct {
 	SearchStatus string   `json:"status"`
 	Data         []string `json:"data"`
 }
+
+// kibanaStatus example
+/*
+{
+  "name": "kibana-65c6bb454c-4cd92",
+  "uuid": "7a2053df-54aa-41d9-b0d6-a775f5ccb64b",
+  "version": {
+    "number": "6.8.1",
+    "build_hash": "6d53abe713ea55900cd683a7ffa2b2be402d08f8",
+    "build_number": 20385,
+    "build_snapshot": false
+  },
+  "status": {
+    "overall": {
+      "state": "green",
+      "title": "Green",
+      "nickname": "Looking good",
+      "icon": "success",
+      "uiColor": "secondary",
+      "since": "2022-11-29T00:59:57.690Z"
+    },
+    "statuses": [
+      {
+        "id": "plugin:kibana@6.8.1",
+        "state": "green",
+        "icon": "success",
+        "message": "Ready",
+        "uiColor": "secondary",
+        "since": "2022-11-29T00:59:57.690Z"
+      },
+      {
+        "id": "plugin:timelion@6.8.1",
+        "state": "green",
+        "icon": "success",
+        "message": "Ready",
+        "uiColor": "secondary",
+        "since": "2022-11-29T00:59:59.120Z"
+      }
+    ]
+  },
+  "metrics": {
+    "last_updated": "2022-11-29T01:23:51.295Z",
+    "collection_interval_in_millis": 5000,
+    "process": {
+      "memory": {
+        "heap": {
+          "total_in_bytes": 89083904,
+          "used_in_bytes": 79444720,
+          "size_limit": 426511151
+        },
+        "resident_set_size_in_bytes": 166354944
+      },
+      "event_loop_delay": 0.11902699992060661,
+      "pid": 116,
+      "uptime_in_millis": 1438288
+    },
+    "os": {
+      "load": {
+        "1m": 0.6796875,
+        "5m": 1.06640625,
+        "15m": 1.11181640625
+      },
+      "memory": {
+        "total_in_bytes": 15582965760,
+        "free_in_bytes": 4030087168,
+        "used_in_bytes": 11552878592
+      },
+      "uptime_in_millis": 4016000,
+      "platform": "linux",
+      "platformRelease": "linux-4.18.0-372.32.1.el8_6.x86_64",
+      "distro": "Red Hat Linux",
+      "distroRelease": "Red Hat Linux-8.7"
+    },
+    "response_times": {
+      "avg_in_millis": 26,
+      "max_in_millis": 26
+    },
+    "requests": {
+      "disconnects": 0,
+      "statusCodes": {},
+      "total": 1,
+      "status_codes": {
+        "200": 1
+      }
+    },
+    "concurrent_connections": 0
+  }
+}
+*/
+type kibanaStatus struct {
+	Name    string `json:"name"`
+	UUID    string `json:"uuid"`
+	Version struct {
+		Number        string `json:"number"`
+		BuildHash     string `json:"build_has"`
+		BuildNumber   int64  `json:"build_number"`
+		BuildSnapshot bool   `json:"build_snapshot"`
+	} `json:"version"`
+	Status struct {
+		Overall struct {
+			State    string `json:"state"`
+			Title    string `json:"title"`
+			Nickname string `json:"nickname"`
+			Icon     string `json:"icon"`
+			UIColor  string `json:"uiColor"`
+			Since    string `json:"since"`
+		} `json:"overall"`
+		Statuses []struct {
+			ID      string `json:"ID"`
+			State   string `json:"state"`
+			Message string `json:"message"`
+			Icon    string `json:"icon"`
+			UIColor string `json:"uiColor"`
+			Since   string `json:"since"`
+		} `json:"statuses"`
+	} `json:"status"`
+	Metrics struct {
+		LastUpdated               string `json:"last_updated"`
+		ColectionIntervalInMillis int64  `json:"collection_interval_in_millis"`
+		Process                   struct {
+			Memory struct {
+				Heap struct {
+					TotalInBytes int64 `json:"total_in_bytes"`
+					UsedInBytes  int64 `json:"used_in_bytes"`
+					SizeLimit    int64 `json:"size_limit"`
+				} `json:"heap"`
+				ResidentSetSizeInBytes int64 `json:"resident_set_size_in_bytes"`
+			} `json:"memory"`
+			EventLoopDelay float64 `json:"event_loop_delay"`
+			PID            int64   `json:"pid"`
+			UptimeInMillis int64   `json:"uptime_in_millis"`
+		} `json:"process"`
+		OS struct {
+			Memory struct {
+				TotalInBytes int64 `json:"total_in_bytes"`
+				UsedInBytes  int64 `json:"used_in_bytes"`
+				FreeInBytes  int64 `json:"free_in_bytes"`
+			} `json:"memory"`
+			UptimeInMillis  int64  `json:"uptime_in_millis"`
+			Platform        string `json:"platform"`
+			PlatformRelease string `json:"platformRelease"`
+			Distro          string `json:"distro"`
+			DistroRelease   string `json:"distroRelease"`
+		} `json:"os"`
+		Requests struct {
+			Total       int64       `json:"total"`
+			StatusCodes interface{} `json:"status_codes"`
+		} `json:"requests"`
+		ConcurrentConnections int64 `json:"concurrent_connections"`
+	} `json:"metrics"`
+}
+
+// prometheusQueryResult the response of querying prometheus APIs
+type prometheusQueryResult struct {
+	Data struct {
+		Result []struct {
+			Metric struct {
+				Name              string `json:"__name__"`
+				Cluster           string `json:"cluster,omitempty"`
+				Container         string `json:"container,omitempty"`
+				ContainerName     string `json:"containername,omitempty"`
+				Endpoint          string `json:"endpoint,omitempty"`
+				Instance          string `json:"instance,omitempty"`
+				Job               string `json:"job,omitempty"`
+				Namespace         string `json:"namespace,omitempty"`
+				Path              string `json:"path,omitempty"`
+				Pod               string `json:"pod,omitempty"`
+				PodName           string `json:"podname,omitempty"`
+				Service           string `json:"service,omitempty"`
+				ExportedNamespace string `json:"exported_namespace,omitempty"`
+				State             string `json:"state,omitempty"`
+			} `json:"metric"`
+			Value []interface{} `json:"value"`
+		} `json:"result"`
+		ResultType string  `json:"resultType"`
+		Alerts     []alert `json:"alerts,omitempty"`
+	} `json:"data"`
+	Status string `json:"status"`
+}
+
+// alert the pending/firing alert
+type alert struct {
+	Labels struct {
+		AlertName string `json:"alertname,omitempty"`
+		Condition string `json:"condition,omitempty"`
+		Endpoint  string `json:"endpoint,omitempty"`
+		Namespace string `json:"namespace,omitempty"`
+		Pod       string `json:"pod,omitempty"`
+		Instance  string `json:"instance,omitempty"`
+		Severity  string `json:"severity,omitempty"`
+	} `json:"labels,omitempty"`
+	Annotations struct {
+		Message    string `json:"message,omitempty"`
+		RunBookURL string `json:"runbook_url,omitempty"`
+		Summary    string `json:"summary,omitempty"`
+	} `json:"annotations,omitempty"`
+	State    string `json:"state,omitempty"`
+	ActiveAt string `json:"activeAt,omitempty"`
+	Value    string `json:"value,omitempty"`
+}

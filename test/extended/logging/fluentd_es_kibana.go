@@ -443,7 +443,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch 
 
 		g.By("check ES metric es_index_namespaces_total")
 		err = wait.Poll(5*time.Second, 120*time.Second, func() (done bool, err error) {
-			metricData1, err := queryPrometheus(oc, "", "/api/v1/query?", "es_index_namespaces_total", "GET")
+			metricData1, err := queryPrometheus(oc, "", "/api/v1/query", "es_index_namespaces_total", "GET")
 			if err != nil {
 				return false, err
 			}
@@ -460,7 +460,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Elasticsearch 
 		exutil.AssertWaitPollNoErr(err, "The value of metric es_index_namespaces_total isn't more than 0")
 
 		g.By("check ES metric es_index_document_count")
-		metricData2, err := queryPrometheus(oc, "", "/api/v1/query?", "es_index_document_count", "GET")
+		metricData2, err := queryPrometheus(oc, "", "/api/v1/query", "es_index_document_count", "GET")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, content := range metricData2.Data.Result {
 			metricValue, _ := strconv.Atoi(content.Value[1].(string))
@@ -626,9 +626,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Fluentd should
 		waitForIndexAppear(cloNS, podList.Items[0].Name, "infra")
 
 		g.By("check metrics")
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		for _, metric := range []string{"log_logged_bytes_total", "log_collected_bytes_total"} {
 			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
-				result, err := queryPrometheus(oc, "", "/api/v1/query?", metric, "GET")
+				result, err := queryPrometheus(oc, token, "/api/v1/query", metric, "GET")
 				if err != nil {
 					return false, err
 				}
@@ -730,6 +731,55 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Fluentd should
 		o.Expect(reflect.DeepEqual(labels, k8sLabelsInLoki)).Should(o.BeTrue())
 		flatLabelsInLoki := lokiLog[0].Kubernetes.FlatLabels
 		o.Expect(reflect.DeepEqual(flatLabelsInES, flatLabelsInLoki)).Should(o.BeTrue())
+	})
+
+})
+
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Kibana should", func() {
+	defer g.GinkgoRecover()
+
+	var oc = exutil.NewCLI("logging-kibana-"+getRandomString(), exutil.KubeConfigPath())
+	cloNS := "openshift-logging"
+	g.BeforeEach(func() {
+		g.By("deploy CLO and EO")
+		CLO := SubscriptionObjects{
+			OperatorName:  "cluster-logging-operator",
+			Namespace:     cloNS,
+			PackageName:   "cluster-logging",
+			Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+		}
+		EO := SubscriptionObjects{
+			OperatorName:  "elasticsearch-operator",
+			Namespace:     "openshift-operators-redhat",
+			PackageName:   "elasticsearch-operator",
+			Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+			OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "allnamespace-og.yaml"),
+		}
+		CLO.SubscribeOperator(oc)
+		EO.SubscribeOperator(oc)
+	})
+
+	//author qitang@redhat.com
+	g.It("CPaasrunOnly-Author:qitang-Medium-56253-Kibana availability healthchecks using blackbox exporter", func() {
+		// create clusterlogging instance
+		g.By("deploy ECK pods")
+		sc, err := getStorageClassName(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-storage-template.yaml")
+		cl := resource{"clusterlogging", "instance", cloNS}
+		cl.applyFromTemplate(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc)
+		g.By("wait for the ECK pods to be ready...")
+		WaitForECKPodsToBeReady(oc, cloNS)
+
+		g.By("check kibana status")
+		kibanaRoute := "https://" + getRouteAddress(oc, cloNS, "kibana")
+		kStatus := kibanaStatus{}
+		err = doHTTPRequest(nil, kibanaRoute, "/api/status", "", "GET", false, 6, &kStatus)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, s := range kStatus.Status.Statuses {
+			o.Expect(s.State == "green").Should(o.BeTrue(), "%s is not in green status: %s", s.ID, s.Message)
+		}
 	})
 
 })

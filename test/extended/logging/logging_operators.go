@@ -502,7 +502,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease elasticsearch-
 		WaitForECKPodsToBeReady(oc, cloNS)
 
 		g.By("check metrics exposed by EO")
-		metrics, err := queryPrometheus(oc, "", "/api/v1/query?", "eo_es_cluster_management_state_info", "GET")
+		metrics, err := queryPrometheus(oc, "", "/api/v1/query", "eo_es_cluster_management_state_info", "GET")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, metric := range metrics.Data.Result {
 			value, _ := strconv.Atoi(metric.Value[1].(string))

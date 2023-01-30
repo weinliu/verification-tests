@@ -380,7 +380,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Check Vector and Log File metrics exporter metrics from Prometheus")
 			for _, metric := range []string{"log_logged_bytes_total", "vector_processed_bytes_total"} {
 				err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
-					result, err := queryPrometheus(oc, "", "/api/v1/query?", metric, "GET")
+					result, err := queryPrometheus(oc, bearerToken, "/api/v1/query", metric, "GET")
 					if err != nil {
 						return false, err
 					}

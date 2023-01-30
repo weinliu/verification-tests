@@ -3,6 +3,7 @@ package logging
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -413,7 +414,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(len(appLog.Data.Result) > 0).Should(o.BeTrue())
 		})
 
-		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-Critical-53127-CLO Loki Integration-Verify that by default only app and infra logs are sent to Loki (fluentd)[Serial]", func() {
+		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-Critical-53127-Critical-48628-CLO Loki Integration-Verify that by default only app and infra logs are sent to Loki (fluentd) and Expose Loki metrics to Prometheus[Serial]", func() {
 			cloNS := "openshift-logging"
 			if !validateInfraAndResourcesForLoki(oc, []string{}, "10Gi", "6") {
 				g.Skip("Current platform not supported/resources not available for this test!")
@@ -464,7 +465,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 						return false, err
 					}
 					if len(res.Data.Result) > 0 {
-						e2e.Logf("%s logs found: \n", logType)
+						e2e.Logf("%s logs found\n", logType)
 						return true, nil
 					}
 					return false, nil
@@ -483,6 +484,30 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(len(res.Data.Result)).Should(o.BeZero())
 			e2e.Logf("Audit logs not found!")
+
+			svcs, err := oc.AdminKubeClient().CoreV1().Services(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/created-by=lokistack-controller"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			g.By("query metrics in prometheus")
+			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+			for _, svc := range svcs.Items {
+				if !strings.Contains(svc.Name, "grpc") && !strings.Contains(svc.Name, "ring") {
+					err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+						result, err := queryPrometheus(oc, token, "/api/v1/query", "{job=\""+svc.Name+"\"}", "GET")
+						if err != nil {
+							return false, err
+						}
+						return len(result.Data.Result) > 0, nil
+					})
+					exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can't find metrics exposed by svc %s", svc.Name))
+				}
+			}
+
+			for _, metric := range []string{"loki_boltdb_shipper_compactor_running", "loki_distributor_bytes_received_total", "loki_inflight_requests", "workqueue_work_duration_seconds_bucket{namespace=\"openshift-operators-redhat\", job=\"loki-operator-controller-manager-metrics-service\"}", "loki_build_info", "loki_ingester_received_chunks"} {
+				result, err := queryPrometheus(oc, token, "/api/v1/query", metric, "GET")
+				e2e.Logf("\n\nthe metric is: %v\n\n", result.Data.Result)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(len(result.Data.Result) > 0).Should(o.BeTrue())
+			}
 		})
 
 		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-Critical-53145-CLO Loki Integration-CLF works when send log to default-- fluentd[Serial]", func() {
@@ -542,7 +567,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 						return false, err
 					}
 					if len(res.Data.Result) > 0 {
-						e2e.Logf("%s logs found: \n", logType)
+						e2e.Logf("%s logs found\n", logType)
 						return true, nil
 					}
 					return false, nil
