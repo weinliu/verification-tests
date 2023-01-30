@@ -592,7 +592,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 
 	})
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Critical-51009-High-51017-oc adm release new support manifest list", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Critical-51009-High-51017-oc adm release new support manifest list", func() {
 		architecture := exutil.GetClusterArchitecture(oc)
 		if architecture == "Multi-Arch" {
 			g.Skip("Skip for Multi-Arch")
