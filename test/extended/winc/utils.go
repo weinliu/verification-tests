@@ -55,7 +55,7 @@ func getConfigMapData(oc *exutil.CLI, dataKey string) string {
 }
 
 func waitWindowsNodesReady(oc *exutil.CLI, expectedNodes int, timeout time.Duration) {
-	pollErr := wait.Poll(10, timeout, func() (bool, error) {
+	pollErr := wait.Poll(10*time.Second, timeout, func() (bool, error) {
 		out, err := oc.WithoutNamespace().Run("get").Args("nodes", "-l", "kubernetes.io/os=windows", "-o=jsonpath='{.items[*].status.conditions[?(@.type==\"Ready\")].status}'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		return (!strings.Contains(out, "False") && !strings.Contains(out, "Unknown") && len(strings.Fields(out)) == expectedNodes), nil
