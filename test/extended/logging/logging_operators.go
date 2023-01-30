@@ -577,7 +577,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 	})
 
 	// author: qitang@redhat.com
-	g.It("Longduration-CPaasrunOnly-Author:qitang-High-44983-Logging auto upgrade in minor version[Disruptive][Slow]", func() {
+	g.It("Longduration-CPaasrunOnly-Author:qitang-High-44983-Logging auto upgrade in minor version[Serial][Slow]", func() {
 		var targetchannel = "stable"
 		var oh OperatorHub
 		g.By("check source/redhat-operators status in operatorhub")
@@ -591,7 +591,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 				break
 			}
 		}
-		o.Expect(disabled).ShouldNot(o.BeTrue())
+		if disabled {
+			g.Skip("source/redhat-operators is disabled, skip this case.")
+		}
+
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", targetchannel))
 		source := CatalogSourceObjects{
 			Channel:         targetchannel,
@@ -633,16 +636,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 		preCloCSV := preCLO.getInstalledCSV(oc)
 		preEoCSV := preEO.getInstalledCSV(oc)
 
-		//disable source/redhat-operators if it's not disabled
-		if !disabled {
-			defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("operatorhub/cluster", "-p", "{\"spec\": {\"sources\": [{\"name\": \"redhat-operators\", \"disabled\": false}]}}", "--type=merge").Execute()
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("operatorhub/cluster", "-p", "{\"spec\": {\"sources\": [{\"name\": \"redhat-operators\", \"disabled\": true}]}}", "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-
 		// get currentCSV in packagemanifests
-		currentCloCSV := getCurrentCSVFromPackage(oc, targetchannel, preCLO.PackageName)
-		currentEoCSV := getCurrentCSVFromPackage(oc, targetchannel, preEO.PackageName)
+		currentCloCSV := getCurrentCSVFromPackage(oc, "qe-app-registry", targetchannel, preCLO.PackageName)
+		currentEoCSV := getCurrentCSVFromPackage(oc, "qe-app-registry", targetchannel, preEO.PackageName)
+
 		var upgraded = false
 		//change source to qe-app-registry if needed, and wait for the new operators to be ready
 		if preCloCSV != currentCloCSV {
@@ -684,11 +681,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease fluentd-elasti
 
 	// author: qitang@redhat.com
 	g.It("Longduration-CPaasrunOnly-Author:qitang-Medium-40508-upgrade from prior version to current version[Serial][Slow]", func() {
-		// to add logging 5.5, create a new catalog source with image: quay.io/openshift-qe-optional-operators/ocp4-index:latest
+		// to add logging 5.5, create a new catalog source with image: quay.io/openshift-qe-optional-operators/aosqe-index
 		catsrcTemplate := exutil.FixturePath("testdata", "logging", "subscription", "catsrc.yaml")
 		catsrc := resource{"catsrc", "logging-upgrade-" + getRandomString(), "openshift-marketplace"}
+		tag, err := getIndexImageTag(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		defer catsrc.clear(oc)
-		catsrc.applyFromTemplate(oc, "-f", catsrcTemplate, "-n", catsrc.namespace, "-p", "NAME="+catsrc.name, "-p", "IMAGE=quay.io/openshift-qe-optional-operators/ocp4-index:latest")
+		catsrc.applyFromTemplate(oc, "-f", catsrcTemplate, "-n", catsrc.namespace, "-p", "NAME="+catsrc.name, "-p", "IMAGE=quay.io/openshift-qe-optional-operators/aosqe-index:v"+tag)
 		waitForPodReadyWithLabel(oc, catsrc.namespace, "olm.catalogSource="+catsrc.name)
 
 		// for 5.6, test upgrade from 5.5 to 5.6
@@ -794,7 +793,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 	})
 
 	// author qitang@redhat.com
-	g.It("Longduration-CPaasrunOnly-Author:qitang-Critical-53407-Cluster Logging upgrade with Vector as collector - minor version.[Disruptive][Slow]", func() {
+	g.It("Longduration-CPaasrunOnly-Author:qitang-Critical-53407-Cluster Logging upgrade with Vector as collector - minor version.[Serial][Slow]", func() {
 		var targetchannel = "stable"
 		var oh OperatorHub
 		g.By("check source/redhat-operators status in operatorhub")
@@ -808,7 +807,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 				break
 			}
 		}
-		o.Expect(disabled).ShouldNot(o.BeTrue())
+		if disabled {
+			g.Skip("source/redhat-operators is disabled, skip this case.")
+		}
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", targetchannel))
 		source := CatalogSourceObjects{
 			Channel:         targetchannel,
@@ -864,16 +865,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		preCloCSV := preCLO.getInstalledCSV(oc)
 		preLoCSV := preLO.getInstalledCSV(oc)
 
-		//disable source/redhat-operators if it's not disabled
-		if !disabled {
-			defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("operatorhub/cluster", "-p", "{\"spec\": {\"sources\": [{\"name\": \"redhat-operators\", \"disabled\": false}]}}", "--type=merge").Execute()
-			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("operatorhub/cluster", "-p", "{\"spec\": {\"sources\": [{\"name\": \"redhat-operators\", \"disabled\": true}]}}", "--type=merge").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-
 		// get currentCSV in packagemanifests
-		currentCloCSV := getCurrentCSVFromPackage(oc, targetchannel, preCLO.PackageName)
-		currentLoCSV := getCurrentCSVFromPackage(oc, targetchannel, preLO.PackageName)
+		currentCloCSV := getCurrentCSVFromPackage(oc, "qe-app-registry", targetchannel, preCLO.PackageName)
+		currentLoCSV := getCurrentCSVFromPackage(oc, "qe-app-registry", targetchannel, preLO.PackageName)
 		var upgraded = false
 		//change source to qe-app-registry if needed, and wait for the new operators to be ready
 		if preCloCSV != currentCloCSV {
@@ -928,11 +922,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 
 	// author: qitang@redhat.com
 	g.It("Longduration-CPaasrunOnly-Author:qitang-Critical-53404-Cluster Logging upgrade with Vector as collector - major version.[Serial][Slow]", func() {
-		// to add logging 5.5, create a new catalog source with image: quay.io/openshift-qe-optional-operators/ocp4-index:latest
+		// to add logging 5.5, create a new catalog source with image: quay.io/openshift-qe-optional-operators/aosqe-index
 		catsrcTemplate := exutil.FixturePath("testdata", "logging", "subscription", "catsrc.yaml")
 		catsrc := resource{"catsrc", "logging-upgrade-" + getRandomString(), "openshift-marketplace"}
+		tag, err := getIndexImageTag(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		defer catsrc.clear(oc)
-		catsrc.applyFromTemplate(oc, "-f", catsrcTemplate, "-n", catsrc.namespace, "-p", "NAME="+catsrc.name, "-p", "IMAGE=quay.io/openshift-qe-optional-operators/ocp4-index:latest")
+		catsrc.applyFromTemplate(oc, "-f", catsrcTemplate, "-n", catsrc.namespace, "-p", "NAME="+catsrc.name, "-p", "IMAGE=quay.io/openshift-qe-optional-operators/aosqe-index:v"+tag)
 		waitForPodReadyWithLabel(oc, catsrc.namespace, "olm.catalogSource="+catsrc.name)
 
 		// for 5.6, test upgrade from 5.5 to 5.6

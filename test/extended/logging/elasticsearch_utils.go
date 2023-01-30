@@ -199,10 +199,13 @@ func (es externalES) deploy(oc *exutil.CLI) {
 	}
 
 	// set xpack.ml.enable to false when the architecture is not amd64
-	nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
+	nodes, err := exutil.GetSchedulableLinuxWorkerNodes(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if nodes.Items[0].Status.NodeInfo.Architecture != "amd64" {
-		cmPatch = append(cmPatch, "-p", "MACHINE_LEARNING=false")
+	for _, node := range nodes {
+		if node.Status.NodeInfo.Architecture != "amd64" {
+			cmPatch = append(cmPatch, "-p", "MACHINE_LEARNING=false")
+			break
+		}
 	}
 
 	cm.applyFromTemplate(oc, cmPatch...)

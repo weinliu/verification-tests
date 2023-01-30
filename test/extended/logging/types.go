@@ -313,6 +313,9 @@ type ESIndex struct {
 
 // PackageManifest gets the status filed of a packagemanifest
 type PackageManifest struct {
+	Metadata struct {
+		Name string `json:"name"`
+	} `json:"metadata"`
 	Status struct {
 		CatalogSource          string `json:"catalogSource"`
 		CatalogSourceNamespace string `json:"catalogSourceNamespace"`

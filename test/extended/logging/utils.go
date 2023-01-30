@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -688,16 +689,20 @@ func (r resource) checkLogsFromRs(oc *exutil.CLI, expected string, containerName
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s is not expected for %s", expected, r.name))
 }
 
-func getCurrentCSVFromPackage(oc *exutil.CLI, channel string, packagemanifest string) string {
+func getCurrentCSVFromPackage(oc *exutil.CLI, source, channel, packagemanifest string) string {
 	var currentCSV string
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", packagemanifest, "-ojson").Output()
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", "openshift-marketplace", "-l", "catalog="+source, "-ojsonpath={.items}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	PM := PackageManifest{}
-	json.Unmarshal([]byte(output), &PM)
-	for _, channels := range PM.Status.Channels {
-		if channels.Name == channel {
-			currentCSV = channels.CurrentCSV
-			break
+	packMS := []PackageManifest{}
+	json.Unmarshal([]byte(output), &packMS)
+	for _, pm := range packMS {
+		if pm.Metadata.Name == packagemanifest {
+			for _, channels := range pm.Status.Channels {
+				if channels.Name == channel {
+					currentCSV = channels.CurrentCSV
+					break
+				}
+			}
 		}
 	}
 	return currentCSV
@@ -2050,4 +2055,24 @@ func checkAlert(oc *exutil.CLI, alertName, status string, timeInMinutes int) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s alert is not %s in %d minutes", alertName, status, timeInMinutes))
+}
+
+// getIndexImageTag retruns a tag of index image
+// this is desigend for logging upgrade test, the logging packagemanifests in the cluster may only have the testing version
+// to provide a previous version for upgrade test, use clusterversion - 1 as the tag,
+// for example: in OCP 4.12, use 4.11 as the tag
+// index image: quay.io/openshift-qe-optional-operators/aosqe-index
+func getIndexImageTag(oc *exutil.CLI) (string, error) {
+	version, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion/version", "-ojsonpath={.status.desired.version}").Output()
+	if err != nil {
+		return "", err
+	}
+	major := strings.Split(version, ".")[0]
+	minor := strings.Split(version, ".")[1]
+
+	newMinor, err := strconv.Atoi(minor)
+	if err != nil {
+		return "", err
+	}
+	return major + "." + strconv.Itoa(newMinor-1), nil
 }
