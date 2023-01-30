@@ -11,6 +11,9 @@ objects:
       checkNodeEligibility: ${{ELIGIBILITY}}
       kataMonitorImage: "${MONITOR}"
       logLevel: "${LOGLEVEL}"
+      kataConfigPoolSelector:
+        matchLabels:
+          custom-label: test
 parameters:
   - name: NAME
     value: "example kataconfig"

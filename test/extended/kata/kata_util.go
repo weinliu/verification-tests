@@ -44,6 +44,8 @@ type testrunConfigmap struct {
 	katamonitorImage  string
 	operatorVer       string
 	eligibility       bool
+	labelSingleNode   bool
+	eligbleSingleNode bool
 }
 
 var (
@@ -223,7 +225,8 @@ func deleteKataConfig(oc *exutil.CLI, kcName string) (msg string, err error) {
 	if err != nil || msg == "" {
 		e2e.Logf("Unexpected error while trying to delete kataconfig: %v\nerror: %v", msg, err)
 	}
-	o.Expect(err).NotTo(o.HaveOccurred())
+	//SNO could become unavailable while restarting
+	//o.Expect(err).NotTo(o.HaveOccurred())
 
 	g.By("(3.2) Wait for kataconfig to be deleted")
 	errCheck := wait.Poll(30*time.Second, kataSnooze*time.Second, func() (bool, error) {
@@ -503,6 +506,14 @@ func getTestRunConfigmap(oc *exutil.CLI, testrunDefault testrunConfigmap, cmNs, 
 		if err == nil {
 			testrun.eligibility, err = strconv.ParseBool(msg)
 		}
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.eligbleSingleNode}", "-n", cmNs).Output()
+		if err == nil {
+			testrun.eligbleSingleNode, err = strconv.ParseBool(msg)
+		}
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.labelsinglenode}", "-n", cmNs).Output()
+		if err == nil {
+			testrun.labelSingleNode, err = strconv.ParseBool(msg)
+		}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", cmName, "-o=jsonpath={.data.operatorVer }", "-n", cmNs).Output()
 		if err == nil {
 			testrun.operatorVer = msg
@@ -637,4 +648,22 @@ func getTestRunEnvVars(envPrefix string, testrunDefault testrunConfigmap) (testr
 		testrunEnv.exists = true
 	}
 	return testrunEnv, msg
+}
+
+func labelSelectedNodes(oc *exutil.CLI, opNamespace, selectorLabel, customLabel string) {
+	nodeList, _, err := getNodeListByLabel(oc, opNamespace, selectorLabel)
+	if err == nil && len(nodeList) > 0 {
+		for _, node := range nodeList {
+			LabelNode(oc, opNamespace, node, customLabel)
+		}
+	}
+}
+
+func LabelNode(oc *exutil.CLI, opNamespace, node, customLabel string) {
+	//check if node has the label already
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node, "-o=jsonpath={.metadata.labels}").Output()
+	if err == nil && !strings.Contains(msg, customLabel) {
+		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", node, customLabel).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
 }

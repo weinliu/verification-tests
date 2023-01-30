@@ -44,6 +44,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		podRunState          = "Running"
 		featureLabel         = "feature.node.kubernetes.io/runtime.kata=true"
 		workerLabel          = "node-role.kubernetes.io/worker"
+		customLabel          = "custom-label=test"
 	)
 
 	subscription := subscriptionDescription{
@@ -74,6 +75,8 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		mustgatherImage:   mustGatherImage,
 		katamonitorImage:  kcMonitorImageName,
 		eligibility:       false,
+		labelSingleNode:   false,
+		eligbleSingleNode: false,
 	}
 
 	g.BeforeEach(func() {
@@ -161,34 +164,71 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 		//label all worker nodes for checkNodeEligibility
 		if kataconfig.eligibility {
-			workerNodeList, _, err := getNodeListByLabel(oc, opNamespace, workerLabel)
-			if err == nil && len(workerNodeList) > 0 {
-				for _, node := range workerNodeList {
-					//check if node has the label already
-					msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node, "-o=jsonpath={.metadata.labels}").Output()
-					if err == nil && !strings.Contains(msg, featureLabel) {
-						_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", node, featureLabel).Output()
-						o.Expect(err).NotTo(o.HaveOccurred())
-					}
-				}
+			if testrunInitial.eligbleSingleNode {
+				workerList, _, _ := getNodeListByLabel(oc, sub.namespace, workerLabel)
+				o.Expect(len(workerList)).NotTo(o.Equal(0))
+				LabelNode(oc, sub.namespace, workerList[0], featureLabel)
+			} else {
+				labelSelectedNodes(oc, sub.namespace, workerLabel, featureLabel)
+			}
+		}
+
+		//check and label nodes (or single node for custom label)
+		nodeCustomList, _, err := getNodeListByLabel(oc, sub.namespace, customLabel)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeCustomList) > 0 {
+			e2e.Logf("labeled nodes found %v", nodeCustomList)
+		} else {
+			if testrunInitial.labelSingleNode {
+				workerList, _, _ := getNodeListByLabel(oc, sub.namespace, workerLabel)
+				o.Expect(len(workerList)).NotTo(o.Equal(0))
+				LabelNode(oc, sub.namespace, workerList[0], customLabel)
+			} else {
+				labelSelectedNodes(oc, sub.namespace, workerLabel, customLabel)
 			}
 		}
 
 		msg, err = createKataConfig(oc, kataconfig, subscription)
-		e2e.Logf("---------- kataconfig %v create succeeded %v %v", commonKataConfigName, msg, err)
+		e2e.Logf("---------- kataconfig %v create succeeded %v\n %v %v", commonKataConfigName, msg, err)
 	})
 
 	g.It("Author:abhbaner-High-39499-Operator installation", func() {
 		g.By("Checking sandboxed-operator operator installation")
-		e2e.Logf("Operator install check successfull as part of setup !!!!!")
+		_, err := subscriptionIsFinished(oc, subscription)
+		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("SUCCESSS - sandboxed-operator operator installed")
-
 	})
 
 	g.It("Author:abhbaner-High-43522-Common Kataconfig installation", func() {
+		var (
+			nodeKataList          []string
+			totalNodesJsonpath    = "-o=jsonpath={.status.totalNodesCount}"
+			completedNodeJsonpath = "-o=jsonpath={.status.installationStatus.completed.completedNodesCount}"
+			completedListJsonpath = "-o=jsonpath={.status.installationStatus.completed.completedNodesList}"
+		)
 		g.By("Install Common kataconfig and verify it")
 		e2e.Logf("common kataconfig %v is installed", commonKataConfigName)
-		g.By("SUCCESSS - kataconfig installed")
+
+		nodeKataList, _, err := getNodeListByLabel(oc, subscription.namespace, customLabel)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeKataCount := fmt.Sprintf("%d", len(nodeKataList))
+
+		totalCount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", commonKataConfigName, totalNodesJsonpath).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(totalCount).To(o.Equal(nodeKataCount))
+
+		completeCount, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", commonKataConfigName, completedNodeJsonpath).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(totalCount).To(o.Equal(completeCount))
+
+		completededList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", commonKataConfigName, completedListJsonpath).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(completededList)).NotTo(o.Equal(0))
+		e2e.Logf("Completed nodes are %v", completededList[0])
+		e2e.Logf("Nodes with custom label are %v", nodeKataList[0])
+		// o.Expect(nodeKataList).To(o.Equal(completededList))
+
+		g.By("SUCCESSS - kataconfig installed and it's structure is verified")
 
 	})
 
