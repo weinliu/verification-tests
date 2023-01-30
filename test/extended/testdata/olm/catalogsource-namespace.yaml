@@ -5,6 +5,8 @@ metadata:
   name: scenario3
   namespace: scenario3
 spec:
+  grpcPodConfig:
+    securityContextConfig: restricted
   sourceType: internal
   configMap: scenario3
   displayName: Scenario 3 Operators
