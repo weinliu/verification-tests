@@ -3,6 +3,7 @@ package mco
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -202,6 +203,14 @@ func (b *OsImageBuilderInNode) pushImage() error {
 	output, err := b.node.DebugNodeWithChroot("podman", "push", b.osImage, "--authfile", b.remoteDockerConfig)
 	if err != nil {
 		msg := fmt.Sprintf("Podman failed pushing image %s:\n%s\n%s", b.osImage, output, err)
+		logger.Errorf(msg)
+		return fmt.Errorf(msg)
+	}
+
+	// If we don't have permissions to push the image, the `oc debug` command will not return an error
+	//  so we need to check manually that there is no unauthorized error
+	if strings.Contains(output, "unauthorized: access to the requested resource is not authorized") {
+		msg := fmt.Sprintf("Podman was not authorized to push the image %s:\n%s\n", b.osImage, output)
 		logger.Errorf(msg)
 		return fmt.Errorf(msg)
 	}
