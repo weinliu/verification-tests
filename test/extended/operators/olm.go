@@ -7780,6 +7780,66 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		}
 	})
 
+	g.It("ConnectedOnly-Author:xzha-Medium-59380-Upgrade should be success when there are multiple upgrade paths between channel entries", func() {
+		exutil.SkipARM64(oc)
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
+		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
+		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+
+		oc.SetupProject()
+		namespaceName := oc.Namespace()
+		var (
+			og = operatorGroupDescription{
+				name:      "test-og",
+				namespace: namespaceName,
+				template:  ogSingleTemplate,
+			}
+
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-59380",
+				namespace:   namespaceName,
+				displayName: "Test-Catsrc-59380-Operators",
+				publisher:   "Red-Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/nginxolm-operator-index:59380",
+				template:    catsrcImageTemplate,
+			}
+			subManual = subscriptionDescription{
+				subName:                "sub-59380",
+				namespace:              namespaceName,
+				catalogSourceName:      "catsrc-59380",
+				catalogSourceNamespace: namespaceName,
+				channel:                "v1.6",
+				ipApproval:             "Manual",
+				operatorPackage:        "nginx-operator",
+				startingCSV:            "nginx-operator.v1.6.0",
+				singleNamespace:        true,
+				template:               subTemplate,
+			}
+		)
+
+		itName := g.CurrentSpecReport().FullText()
+		g.By("STEP1: create the OperatorGroup ")
+		og.createwithCheck(oc, itName, dr)
+
+		g.By("STEP 2: Create catalog source")
+		catsrc.createWithCheck(oc, itName, dr)
+
+		g.By("STEP 3: install operator ")
+		subManual.createWithoutCheck(oc, itName, dr)
+		e2e.Logf("approve the install plan")
+		subManual.approveSpecificIP(oc, itName, dr, "nginx-operator.v1.6.0", "Complete")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "nginx-operator.v1.6.0", "-n", subManual.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("STEP 4: approve the install plan")
+		subManual.approveSpecificIP(oc, itName, dr, "nginx-operator.v1.6.2", "Complete")
+
+		g.By("STEP 5: check the csv nginx-operator.v1.6.2")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "nginx-operator.v1.6.2", "-n", subManual.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+
+	})
+
 	// author: tbuskey@redhat.com, test case OCP-21080
 	g.It("NonHyperShiftHOST-Author:jiazha-High-21080-OLM Check OLM metrics [Serial]", func() {
 		type metrics struct {
