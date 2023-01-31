@@ -1504,7 +1504,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		e2e.Logf("Release payload info in cv.status: %v", cvArchInfo)
 
 		releaseMeta := releaseInfo["metadata"].(map[string]interface{})["metadata"]
-		if releaseMeta == nil {
+		if relarch := releaseMeta.(map[string]interface{})["release.openshift.io/architecture"]; relarch == nil || relarch.(string) != heterogeneousArchKeyword {
 			e2e.Logf("This current release is a non-heterogeneous payload")
 			//It's a non-heterogeneous payload, the architecture info in clusterversion’s status should be consistent with runtime.GOARCH.
 			output, err := exec.Command("bash", "-c", "oc get nodes -ojson|jq .items[].status.nodeInfo.architecture|sort -u").Output()
@@ -1518,14 +1518,11 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 
 			e2e.Logf("Expected arch info: %v", nodesArchInfo)
 			o.Expect(cvArchInfo).To(o.ContainSubstring(nodesArchInfo))
-		} else if releaseMeta.(map[string]interface{})["release.openshift.io/architecture"].(string) == heterogeneousArchKeyword {
+		} else {
 			e2e.Logf("This current release is a heterogeneous payload")
 			// It's a heterogeneous payload, the architecture info in clusterversion’s status should be multi.
 			e2e.Logf("Expected arch info: %v", heterogeneousArchKeyword)
 			o.Expect(cvArchInfo).To(o.ContainSubstring(heterogeneousArchKeyword))
-		} else {
-			e2e.Logf("Unrecognized release payload: %v", releaseMeta)
-			g.Fail("Unexpected info detected in release info")
 		}
 	})
 })
