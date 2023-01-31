@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -275,6 +276,19 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		g.By("check no alert 'TargetDown'")
 		checkAlertNotExist(oc, "TargetDown", token)
+	})
+
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-57254-oc adm top node/pod output should not give negative numbers", func() {
+		g.By("check on node")
+		checkNode, err := exec.Command("bash", "-c", `oc adm top node | awk '{print $2,$3,$4,$5}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(checkNode).NotTo(o.ContainSubstring("-"))
+
+		g.By("check on pod under specific namespace")
+		checkNs, err := exec.Command("bash", "-c", `oc -n openshift-monitoring adm top pod | awk '{print $2,$3}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(checkNs).NotTo(o.ContainSubstring("-"))
 	})
 
 	g.Context("user workload monitoring", func() {
