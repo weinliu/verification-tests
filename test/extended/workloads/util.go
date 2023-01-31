@@ -688,15 +688,16 @@ func createDeployment(oc *exutil.CLI, namespace string, deployname string) {
 
 func triggerSucceedDeployment(oc *exutil.CLI, namespace string, deployname string, num int, expectedPods int) {
 	var generation string
+	var getGenerationerr error
 	err := wait.Poll(3*time.Second, 60*time.Second, func() (bool, error) {
-		generation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", deployname, "-n", namespace, "-o=jsonpath={.status.observedGeneration}").Output()
-		if err != nil {
-			e2e.Logf("Err Occurred, try again: %v", err)
-			return false, err
+		generation, getGenerationerr = oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", deployname, "-n", namespace, "-o=jsonpath={.status.observedGeneration}").Output()
+		if getGenerationerr != nil {
+			e2e.Logf("Err Occurred, try again: %v", getGenerationerr)
+			return false, nil
 		}
 		if generation == "" {
 			e2e.Logf("Can't get generation, try again: %v", generation)
-			return false, err
+			return false, nil
 		}
 		return true, nil
 	})
