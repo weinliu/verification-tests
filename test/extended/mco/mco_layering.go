@@ -53,7 +53,7 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 		// Capture current rpm-ostree status
 		g.By("Capture the current ostree deployment")
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
-		initialDeployment, err := workerNode.GetBootedOsTreeDeployment(true)
+		initialDeployment, err := workerNode.GetBootedOsTreeDeployment(false)
 		o.Expect(err).NotTo(o.HaveOccurred(),
 			"Error getting the booted ostree deployment")
 		logger.Infof("OK\n")
@@ -165,10 +165,10 @@ RUN cd /etc/yum.repos.d/ && curl -LO https://pkgs.tailscale.com/stable/fedora/ta
 
 		// Check the rpm-ostree status after the MC deletion
 		g.By("Check that the original ostree deployment was restored")
-		deployment, derr := workerNode.GetBootedOsTreeDeployment(true)
+		deployment, derr := workerNode.GetBootedOsTreeDeployment(false)
 		o.Expect(derr).NotTo(o.HaveOccurred(),
 			"Error getting the rpm-ostree status value in node %s", workerNode.GetName())
-		o.Expect(deployment).To(o.MatchJSON(initialDeployment),
+		o.Expect(deployment).To(o.Equal(initialDeployment),
 			"Error! the initial deployment was not properly restored after deleting the MachineConfig")
 		logger.Infof("OK!\n")
 
