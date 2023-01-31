@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -804,6 +806,47 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get debug with init container"))
+	})
+	// author: yinzhou@redhat.com
+	g.It("Author:yinzhou-High-12387-Check race condition in port forward connection handling logic [Serial]", func() {
+		g.By("Create pod")
+		err := oc.Run("run").Args("pod12387", "--image", "quay.io/openshifttest/hello-openshift@sha256:b6296396b632d15daf9b5e62cf26da20d76157161035fefddbd0e7f7749f4167").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Make sure pod running well")
+		checkPodStatus(oc, "run=pod12387", oc.Namespace(), "Running")
+
+		defer exec.Command("kill", "-9", `lsof -t -i:40032`).Output()
+		cmd1, _, _, err := oc.Run("port-forward").Args("pod12387", "40032:8081").Background()
+		defer cmd1.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("check if port forward succeed")
+		err = wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+			checkOutput, err := exec.Command("bash", "-c", "curl http://127.0.0.1:40032 --noproxy \"127.0.0.1\"").Output()
+			if err != nil {
+				e2e.Logf("failed to execute the curl: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("Hello OpenShift", string(checkOutput)); matched {
+				e2e.Logf("Check the port-forward command succeeded\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get the port-forward result"))
+		g.By("check concurrency request")
+		var wg sync.WaitGroup
+		for i := 0; i < 30; i++ {
+			wg.Add(1)
+			go func() {
+				defer g.GinkgoRecover()
+				defer wg.Done()
+				_, err := exec.Command("bash", "-c", "curl http://127.0.0.1:40032 --noproxy \"127.0.0.1\"").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}()
+		}
+		wg.Wait()
+
 	})
 
 })
