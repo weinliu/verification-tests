@@ -15,7 +15,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-//PrometheusQueryResult is struct
+// PrometheusQueryResult is struct
 type PrometheusQueryResult struct {
 	Status string `json:"status"`
 	Data   struct {
@@ -59,6 +59,12 @@ func getPodListByLabel(oc *exutil.CLI, labelKey string) []string {
 	return podNameList
 }
 
+func getIpOfMasterNode(oc *exutil.CLI, labelKey string) string {
+	ipOfNode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", labelKey, "-o=jsonpath={.items[0].status.addresses[0].address}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return ipOfNode
+}
+
 func verifyImageIDInDebugNode(oc *exutil.CLI, nodeNameList []string, imageID string, cVersion string) bool {
 	found := false
 	for _, node := range nodeNameList {
@@ -72,6 +78,20 @@ func verifyImageIDInDebugNode(oc *exutil.CLI, nodeNameList []string, imageID str
 		}
 	}
 	return found
+}
+
+func verifySSLHealth(oc *exutil.CLI, ipOfNode string, node string) bool {
+	healthCheck := false
+	NodeIpAndPort := ipOfNode + ":9979"
+	resultOutput, _ := exutil.DebugNodeWithChroot(oc, node, "openssl", "s_client", "-cipher", "ECDHE-RSA-DES-CBC3-SHA", "-connect", NodeIpAndPort)
+	if strings.Contains(resultOutput, "Verification: OK") {
+		e2e.Logf("SSL health on port 9979 is healhy")
+		healthCheck = true
+	} else {
+		e2e.Logf("SSL op %v ", resultOutput)
+		e2e.Failf("SSL health on port 9979 is vulnerable")
+	}
+	return healthCheck
 }
 
 func runDRBackup(oc *exutil.CLI, nodeNameList []string) (nodeName string, etcddb string) {

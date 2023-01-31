@@ -88,6 +88,18 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		e2e.Logf("Etcd db successfully backed up on node %v", masterN)
 
 	})
+	// author: skundu@redhat.com
+	g.It("NonHyperShiftHOST-Author:skundu-NonPreRelease-Critical-57119-SSL/TLS: Birthday attack against 64 bit block ciphers (SWEET32) etcd metrics port 9979 [Serial]", func() {
+		g.By("Test for case OCP-57119 SSL/TLS: Birthday attack against 64 bit block ciphers (SWEET32) etcd metrics port 9979 .")
+		e2e.Logf("select all the master nodes")
+		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
+		e2e.Logf("get the ip of the first node")
+		ipOfNode := getIpOfMasterNode(oc, "node-role.kubernetes.io/master=")
+		e2e.Logf("Node IP %v", ipOfNode)
+		e2e.Logf("Verify the SSL Health of port 9979")
+		verifySSLHealth(oc, ipOfNode, masterNodeList[0])
+
+	})
 	// author: geliu@redhat.com
 	g.It("NonHyperShiftHOST-Author:geliu-Critical-54129-New etcd alerts to be added to the monitoring stack in ocp 4.10.", func() {
 		g.By("Test for case OCP-54129-New etcd alerts to be added to the monitoring stack in ocp 4.10.")
