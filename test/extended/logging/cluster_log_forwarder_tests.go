@@ -542,7 +542,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			fluentd.deploy(oc)
 
 			g.By("create clusterlogforwarder/instance")
-			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "43250.yaml")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-fluentdforward.yaml")
 			clf := resource{"clusterlogforwarder", "instance", cloNS}
 			defer clf.clear(oc)
 			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=tls://"+fluentd.serverName+"."+fluentd.namespace+".svc:24224", "-p", "OUTPUT_SECRET="+fluentd.secretName)
@@ -750,7 +750,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if apierrors.IsNotFound(err) {
 				g.Skip("Can not find secret/aws-creds. Maybe that is an aws STS cluster.")
 			}
-			g.By("deploy CLO and EO")
+			g.By("deploy CLO")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
 				Namespace:     "openshift-logging",
@@ -874,7 +874,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		cloNS := "openshift-logging"
 
 		g.BeforeEach(func() {
-			g.By("deploy CLO and EO")
+			g.By("deploy CLO")
 			CLO := SubscriptionObjects{
 				OperatorName:  "cluster-logging-operator",
 				Namespace:     "openshift-logging",
@@ -1136,6 +1136,59 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				return false, nil
 			})
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", kafka.namespace, consumerPodPodName))
+		})
+	})
+
+	g.Context("Log Forward to Logstash", func() {
+		cloNS := "openshift-logging"
+
+		g.BeforeEach(func() {
+			g.By("deploy CLO")
+			CLO := SubscriptionObjects{
+				OperatorName:  "cluster-logging-operator",
+				Namespace:     cloNS,
+				PackageName:   "cluster-logging",
+				Subscription:  exutil.FixturePath("testdata", "logging", "subscription", "sub-template.yaml"),
+				OperatorGroup: exutil.FixturePath("testdata", "logging", "subscription", "singlenamespace-og.yaml"),
+			}
+			CLO.SubscribeOperator(oc)
+			oc.SetupProject()
+		})
+
+		// author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-Medium-48844-Fluentd forward logs to logstash[Serial]", func() {
+			g.By("Create log producer")
+			appProj := oc.Namespace()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploy Logstash")
+			oc.SetupProject()
+			logstash := logstash{
+				name:      "logstash",
+				namespace: oc.Namespace(),
+			}
+			logstash.deploy(oc)
+			defer logstash.remove(oc)
+
+			g.By("Create clusterlogforwarder")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "clf-fluentdforward-no-secret.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "URL=tcp://"+logstash.name+"."+logstash.namespace+".svc:24114", "-p", "NAMESPACE="+clf.namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploy collector pods")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "collector_only.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "COLLECTOR=fluentd")
+			WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
+
+			logstash.checkData(oc, true, "infra.log")
+			logstash.checkData(oc, true, "audit.log")
+			logstash.checkData(oc, true, "app.log")
 		})
 	})
 })

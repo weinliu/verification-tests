@@ -1111,6 +1111,62 @@ func (f fluentdServer) checkData(oc *exutil.CLI, expect bool, filename string) {
 
 }
 
+type logstash struct {
+	name      string
+	namespace string
+}
+
+func (l logstash) deploy(oc *exutil.CLI) {
+	cmFile := exutil.FixturePath("testdata", "logging", "external-log-stores", "logstash", "configmap.yaml")
+	deployFile := exutil.FixturePath("testdata", "logging", "external-log-stores", "logstash", "deployment.yaml")
+
+	deploy := resource{"deployment", l.name, l.namespace}
+	configmap := resource{"configmap", l.name, l.namespace}
+	svc := resource{"svc", l.name, l.namespace}
+
+	err := configmap.applyFromTemplate(oc, "-f", cmFile, "-n", l.namespace, "-p", "NAMESPACE="+l.namespace, "-p", "NAME="+l.name)
+	if err != nil {
+		e2e.Failf("can't create configmap %s in %s project: %v", l.name, l.namespace, err)
+	}
+
+	err = deploy.applyFromTemplate(oc, "-f", deployFile, "-n", l.namespace, "-p", "NAMESPACE="+l.namespace, "-p", "NAME="+l.name)
+	if err != nil {
+		e2e.Failf("can't create deployment %s in %s project: %v", l.name, l.namespace, err)
+	}
+	svc.WaitForResourceToAppear(oc)
+	WaitForDeploymentPodsToBeReady(oc, l.namespace, l.name)
+}
+
+func (l logstash) remove(oc *exutil.CLI) {
+	for _, k := range []string{"deployment", "configmap", "svc"} {
+		resource{k, l.name, l.namespace}.clear(oc)
+	}
+}
+
+func (l logstash) checkData(oc *exutil.CLI, expect bool, filename string) {
+	pods, err := oc.AdminKubeClient().CoreV1().Pods(l.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "component=" + l.name})
+	if err != nil {
+		e2e.Failf("can't get pod with label component=%s in %s project: %v", l.name, l.namespace, err)
+	}
+
+	cmd := "ls -l /usr/share/logstash/data/" + filename
+	err = wait.Poll(15*time.Second, 60*time.Second, func() (done bool, err error) {
+		stdout, err := e2e.RunHostCmdWithRetries(l.namespace, pods.Items[0].Name, cmd, 3*time.Second, 15*time.Second)
+		if err != nil {
+			return false, err
+		}
+		if (strings.Contains(stdout, filename) && expect) || (!strings.Contains(stdout, filename) && !expect) {
+			return true, nil
+		}
+		return false, nil
+	})
+	if expect {
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The %s doesn't exist", filename))
+	} else {
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The %s exists", filename))
+	}
+}
+
 // return the infrastructureName. For example:  anli922-jglp4
 func getInfrastructureName(oc *exutil.CLI) string {
 	infrastructureName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.infrastructureName}").Output()
