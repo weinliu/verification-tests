@@ -932,4 +932,199 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "openshift-node")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "openshift-node")
 	})
+
+	g.It("Longduration-NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-53885-NTO applies different configmaps that reference to into two node pool in the same hosted clusters. [Disruptive]", func() {
+		// test requires NTO to be installed
+		if !isNTO {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		// currently test is only supported on AWS, GCP, and Azure
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
+		}
+
+		firstNodePoolName = "hc-custom-nodepool"
+
+		//Delete configmap in clusters namespace
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "hc-nodepool-vmdratio", "-n", hostedClusterNS, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "hc-nodepool-pidmax", "-n", hostedClusterNS, "--ignore-not-found").Execute()
+
+		//Create configmap, it will create custom tuned profile based on this configmap
+		g.By("Create configmap hc-nodepool-vmdratio and hc-nodepool-pidmax in management cluster")
+		exutil.ApplyNsResourceFromTemplate(oc, hostedClusterNS, "--ignore-unknown-parameters=true", "-f", tunedWithNodeLevelProfileName, "-p", "TUNEDPROFILENAME=hc-nodepool-vmdratio", "SYSCTLPARM=vm.dirty_ratio", "SYSCTLVALUE=56", "PRIORITY=20")
+		exutil.ApplyNsResourceFromTemplate(oc, hostedClusterNS, "--ignore-unknown-parameters=true", "-f", tunedWithNodeLevelProfileName, "-p", "TUNEDPROFILENAME=hc-nodepool-pidmax", "SYSCTLPARM=kernel.pid_max", "SYSCTLVALUE=868686", "PRIORITY=20")
+
+		configmapsInMgmtClusters, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", hostedClusterNS).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(configmapsInMgmtClusters).NotTo(o.BeEmpty())
+		o.Expect(configmapsInMgmtClusters).To(o.ContainSubstring("hc-nodepool-vmdratio"))
+		o.Expect(configmapsInMgmtClusters).To(o.ContainSubstring("hc-nodepool-pidmax"))
+
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("nodepool", firstNodePoolName, "-n", hostedClusterNS, "--ignore-not-found").Execute()
+			isMatch := exutil.CheckAllNodepoolReadyByHostedClusterName(oc, firstNodePoolName, hostedClusterNS, 300)
+			o.Expect(isMatch).To(o.Equal(true))
+		}()
+
+		//Create custom node pool yaml file
+		g.By("Create custom node pool as the first nodepool in hosted cluster")
+		exutil.CreateCustomNodePoolInHypershift(oc, "aws", guestClusterName, firstNodePoolName, "1", "m5.xlarge", hostedClusterNS)
+
+		g.By("Check if custom node pool is ready in hosted cluster")
+		exutil.AssertIfNodePoolIsReadyByName(oc, firstNodePoolName, 360, hostedClusterNS)
+
+		//Apply tuned profile to hosted clusters
+		g.By("Ge the default nodepool in hosted cluster as secondary nodepool")
+		secondNodePoolName = getNodePoolNamebyHostedClusterName(oc, guestClusterName, hostedClusterNS)
+		o.Expect(secondNodePoolName).NotTo(o.BeEmpty())
+
+		g.By("Pick one worker node in first custom node pool of hosted cluster")
+		workerNodeNameInFirstNodepool, err := exutil.GetFirstWorkerNodeByNodePoolNameInHostedCluster(oc, firstNodePoolName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(workerNodeNameInFirstNodepool).NotTo(o.BeEmpty())
+		e2e.Logf("Worker node in first nodepool: %v", workerNodeNameInFirstNodepool)
+
+		g.By("Pick one worker node in second node pool of hosted cluster")
+		workerNodeNameInSecondtNodepool, err := exutil.GetFirstWorkerNodeByNodePoolNameInHostedCluster(oc, secondNodePoolName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(workerNodeNameInSecondtNodepool).NotTo(o.BeEmpty())
+		e2e.Logf("Worker node in second nodepool: %v", workerNodeNameInSecondtNodepool)
+
+		//Delete configmap in hosted cluster namespace and disable tuningConfig
+		defer assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeNameInFirstNodepool, "openshift-node")
+		defer assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeNameInSecondtNodepool, "openshift-node")
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-hc-nodepool-vmdratio", "-n", guestClusterNS, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-hc-nodepool-pidmax", "-n", guestClusterNS, "--ignore-not-found").Execute()
+
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", firstNodePoolName, "-n", hostedClusterNS, "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[]}}").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", secondNodePoolName, "-n", hostedClusterNS, "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[]}}").Execute()
+
+		//Apply the tuned profile in first nodepool {firstNodePoolName}
+		g.By("Apply the tuned profile in first nodepool {firstNodePoolName} in management cluster")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", firstNodePoolName, "-n", hostedClusterNS, "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[{\"name\": \"hc-nodepool-vmdratio\"}]}}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Apply the tuned profile in second nodepool {secondNodePoolName}
+		g.By("Apply the tuned profile in second nodepool {secondNodePoolName} in management cluster")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", secondNodePoolName, "-n", hostedClusterNS, "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[{\"name\": \"hc-nodepool-pidmax\"}]}}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check if the configmap tuned-{firstNodePoolName} created in corresponding hosted ns in management cluster")
+		configMaps := getTuningConfigMapNameWithRetry(oc, guestClusterNS, "tuned-"+firstNodePoolName)
+		o.Expect(configMaps).NotTo(o.BeEmpty())
+		o.Expect(configMaps).To(o.ContainSubstring("tuned-" + firstNodePoolName))
+
+		g.By("Check if the configmap tuned-{secondNodePoolName} created in corresponding hosted ns in management cluster")
+		configMaps = getTuningConfigMapNameWithRetry(oc, guestClusterNS, "tuned-"+secondNodePoolName)
+		o.Expect(configMaps).NotTo(o.BeEmpty())
+		o.Expect(configMaps).To(o.ContainSubstring("tuned-" + secondNodePoolName))
+
+		g.By("Check if the tuned hc-nodepool-vmdratio-xxxxxx and hc-nodepool-pidmax-xxxxxx is created in hosted cluster nodepool")
+		tunedNameList, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("tuned", "-n", ntoNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNameList).NotTo(o.BeEmpty())
+		e2e.Logf("The list of tuned tunedNameList is: \n%v", tunedNameList)
+		o.Expect(tunedNameList).To(o.ContainSubstring("hc-nodepool-vmdratio"))
+		o.Expect(tunedNameList).To(o.ContainSubstring("hc-nodepool-pidmax"))
+
+		g.By("Check if the tuned rendered contain hc-nodepool-vmdratio")
+		renderCheck, err := getTunedRenderInHostedCluster(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).NotTo(o.BeEmpty())
+		o.Expect(renderCheck).To(o.ContainSubstring("hc-nodepool-vmdratio"))
+		o.Expect(renderCheck).To(o.ContainSubstring("hc-nodepool-pidmax"))
+
+		g.By("Get the tuned pod name that running on first custom nodepool worker node")
+		tunedPodNameInFirstNodePool, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeNameInFirstNodepool)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedPodNameInFirstNodePool).NotTo(o.BeEmpty())
+		e2e.Logf("Tuned Pod: %v", tunedPodNameInFirstNodePool)
+
+		g.By("Get the tuned pod name that running on second nodepool worker node")
+		tunedPodNameInSecondNodePool, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeNameInSecondtNodepool)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedPodNameInSecondNodePool).NotTo(o.BeEmpty())
+		e2e.Logf("Tuned Pod: %v", tunedPodNameInSecondNodePool)
+
+		g.By("Check if the tuned profile applied to first custom nodepool worker nodes")
+		assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeNameInFirstNodepool, "hc-nodepool-vmdratio")
+
+		g.By("Check if the tuned profile applied to second nodepool worker nodes")
+		assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeNameInSecondtNodepool, "hc-nodepool-pidmax")
+
+		g.By("Check if the tuned profile applied to all worker node in the first nodepool.")
+		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "hc-nodepool-vmdratio")
+
+		g.By("Check if the tuned profile applied to all worker node in the second nodepool.")
+		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "hc-nodepool-pidmax")
+
+		g.By("Assert active and recommended profile (hc-nodepool-vmdratio) match in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "2", 300, `active and recommended profile \(hc-nodepool-vmdratio\) match`)
+
+		g.By("Assert active and recommended profile (hc-nodepool-pidmax) match in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "2", 300, `active and recommended profile \(hc-nodepool-pidmax\) match`)
+
+		g.By("Check if the setting of sysctl vm.dirty_ratio applied to worker nodes in the first custom nodepool, expected value is 56")
+		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, firstNodePoolName, "sysctl", "vm.dirty_ratio", "56")
+
+		g.By("Check if the setting of sysctl kernel.pid_max applied to worker nodes in the second custom nodepool, expected value is 868686")
+		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, secondNodePoolName, "sysctl", "kernel.pid_max", "868686")
+
+		//Compare the sysctl kernel.pid_max not equal to 868686 in first nodepool
+		g.By("Check if the setting of sysctl  kernel.pid_max shouldn't applied to worker nodes in the first nodepool, expected value is default value, not equal 868686")
+		assertMisMatchTunedSystemSettingsByParamNameOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "sysctl", "kernel.pid_max", "868686")
+
+		//Compare the sysctl vm.dirty_ratio not equal to 56 in second nodepool
+		g.By("Check if the setting of sysctl vm.dirty_ratio shouldn't applied to worker nodes in the second nodepool, expected value is default value, not equal 56")
+		assertMisMatchTunedSystemSettingsByParamNameOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "sysctl", "vm.dirty_ratio", "56")
+
+		g.By("Remove the custom tuned profile from the first nodepool in hosted cluster ...")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", firstNodePoolName, "-n", hostedClusterNS, "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[]}}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check if the tuned profile still applied to all worker node in the second nodepool.")
+		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "hc-nodepool-pidmax")
+
+		//Compare the sysctl vm.dirty_ratio not equal to 56 in first nodepool
+		g.By("Check if the setting of sysctl vm.dirty_ratio shouldn't applied to worker nodes in the first nodepool, expected value is default value, not equal 56")
+		assertMisMatchTunedSystemSettingsByParamNameOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "sysctl", "vm.dirty_ratio", "56")
+
+		g.By("Check if the setting of sysctl kernel.pid_max still applied to worker nodes in the second nodepool, no impact with removing vm.dirty_ratio setting in first nodepool")
+		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, secondNodePoolName, "sysctl", "kernel.pid_max", "868686")
+
+		g.By("Remove the custom tuned profile from the second nodepool in hosted cluster ...")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", secondNodePoolName, "-n", hostedClusterNS, "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[]}}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//Compare the sysctl vm.dirty_ratio not equal to 56 in first nodepool
+		g.By("Check if the setting of sysctl vm.dirty_ratio shouldn't applied to worker nodes in the first nodepool, expected value is default value, not equal 56")
+		assertMisMatchTunedSystemSettingsByParamNameOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "sysctl", "vm.dirty_ratio", "56")
+
+		//Compare the sysctl kernel.pid_max not equal to 868686 in second nodepool
+		g.By("Check if the setting of sysctl kernel.pid_max shouldn't applied to worker nodes in the second nodepool, expected value is default value, not equal 868686")
+		assertMisMatchTunedSystemSettingsByParamNameOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "sysctl", "kernel.pid_max", "868686")
+
+		//Clean up all left resrouce/settings
+		g.By("Remove configmap from management cluster")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "hc-nodepool-vmdratio", "-n", hostedClusterNS).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "hc-nodepool-pidmax", "-n", hostedClusterNS).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-"+firstNodePoolName, "-n", guestClusterNS, "--ignore-not-found").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-"+secondNodePoolName, "-n", guestClusterNS, "--ignore-not-found").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Assert active and recommended profile (openshift-node) match in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "3", 300, `active and recommended profile \(openshift-node\) match`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "3", 300, `active and recommended profile \(openshift-node\) match`)
+
+		g.By("Check if the custom tuned profile removed from worker nodes of nodepool, default openshift-node applied to worker node")
+		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "openshift-node")
+		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "openshift-node")
+	})
 })
