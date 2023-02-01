@@ -361,6 +361,9 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 
 	// author: heli@redhat.com
 	g.It("HyperShiftMGMT-Author:heli-Critical-44926-Test priority classes for Hypershift control plane workloads", func() {
+		if iaasPlatform != "aws" && iaasPlatform != "azure" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 44926 is for AWS or Azure - skipping test ...")
+		}
 		//deployment
 		priorityClasses := map[string][]string{
 			"hypershift-api-critical": {
@@ -373,8 +376,6 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 			//oc get deploy -n clusters-demo-02 -o jsonpath='{range .items[*]}{@.metadata.name}{" "}{@.spec.template.
 			//spec.priorityClassName}{"\n"}{end}'  | grep hypershift-control-plane | awk '{print "\""$1"\""","}'
 			"hypershift-control-plane": {
-				"aws-ebs-csi-driver-controller",
-				"aws-ebs-csi-driver-operator",
 				"capi-provider",
 				"catalog-operator",
 				"certified-operators-catalog",
@@ -409,6 +410,10 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 				//https://issues.redhat.com/browse/OCPBUGS-5060
 				//"cloud-network-config-controller",
 			},
+		}
+
+		if iaasPlatform == "aws" {
+			priorityClasses["hypershift-control-plane"] = append(priorityClasses["hypershift-control-plane"], "aws-ebs-csi-driver-operator", "aws-ebs-csi-driver-controller")
 		}
 
 		controlplaneNS := hostedcluster.namespace + "-" + hostedcluster.name
