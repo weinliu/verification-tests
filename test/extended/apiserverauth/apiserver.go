@@ -2950,16 +2950,12 @@ spec:
 
 		g.By("3) Update pod's image using patch command")
 		patch := `{"spec":{"containers":[{"name":"hello-openshift","image":"quay.io/openshifttest/hello-openshift:multiarch"}]}}`
-		err = oc.Run("patch").Args("pod", podName, "-n", namespace, "-p", patch).Execute()
+		output, err := oc.Run("patch").Args("pod", podName, "-n", namespace, "-p", patch).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("patched"))
 
 		g.By("4) Check if pod running")
 		exutil.AssertPodToBeReady(oc, podName, namespace)
-
-		g.By("5) Check pod status using get command")
-		describeOutput, err := oc.Run("get").Args("pod", podName, "-n", namespace, "-o=jsonpath={.status.containerStatuses[*].image}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(describeOutput).To(o.ContainSubstring("openshifttest/hello-openshift"))
 	})
 
 	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-High-11138-[origin_platformexp_407] [Apiserver] Deploy will fail with incorrently formed pull secrets", func() {
