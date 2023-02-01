@@ -343,10 +343,21 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			ns                  = "44765-upgrade-ns"
 		)
 
+		g.By("Check if sctp upgrade namespace existed")
+		//Skip if no 44765-upgrade-ns which means no prepare before upgrade or parepare failed
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", ns).Execute()
+		if nsErr != nil {
+			g.Skip("Skip for no namespace 44765-upgrade-ns in post upgrade.")
+		}
+
 		g.By("Get sctp upgrade setup info")
 		e2e.Logf("The sctp upgrade namespace is %s ", ns)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("namespace", ns, "--ignore-not-found").Execute()
+		err1 := waitForPodWithLabelReady(oc, ns, "name=sctpclient")
+		exutil.AssertWaitPollNoErr(err1, "sctpClientPod is not running")
 		sctpClientPodname := getPodName(oc, ns, "name=sctpclient")[0]
+		err2 := waitForPodWithLabelReady(oc, ns, "name=sctpserver")
+		exutil.AssertWaitPollNoErr(err2, "sctpServerPod is not running")
 		sctpServerPodName := getPodName(oc, ns, "name=sctpserver")[0]
 
 		g.By("Enable sctp module on all workers")
