@@ -1,9 +1,9 @@
 package storage
 
 import (
-	"path/filepath"
-	//"strconv"
 	"fmt"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -109,4 +109,100 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(fmt.Sprint(filestoreJSONMap["kmsKeyName"])).Should(o.ContainSubstring("projects/openshift-qe/locations/us-central1/keyRings/chaoyang/cryptoKeys/chaoyang"))
 
 	})
+
+	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-Author:chaoyang-Medium-57345-[GCP-Filestore-CSI Driver][Dynamic PV] [Filesystem]Dynamic provision standard volume", func() {
+		var (
+			storageClassParameters = map[string]string{
+				"network": network,
+				"tier":    "standard",
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": false,
+			}
+		)
+
+		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("filestore.csi.storage.gke.io"))
+
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
+		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
+		g.By("# Create csi storageclass")
+		storageClass.createWithExtraParameters(oc, extraParameters)
+		defer storageClass.deleteAsAdmin(oc)
+
+		g.By("# Create a pvc with the csi storageclass")
+		pvc.scname = storageClass.name
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("# Create deployment with the created pvc and wait ready")
+		dep.create(oc)
+		defer dep.delete(oc)
+		dep.longerTime().waitReady(oc)
+
+		g.By("# Check the deployment's pod mounted volume can be read and write")
+		dep.checkPodMountedVolumeCouldRW(oc)
+
+		g.By("# Check the deployment's pod mounted volume have the exec right")
+		dep.checkPodMountedVolumeHaveExecRight(oc)
+
+	})
+
+	g.It("ROSA-OSD_CCS-Longduration-NonPreRelease-Author:chaoyang-Medium-57349-[GCP-Filestore-CSI Driver][Dynamic PV]Volume online expansion is successful", func() {
+		var (
+			storageClassParameters = map[string]string{
+				"network": network,
+				"tier":    "standard",
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+
+		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("filestore.csi.storage.gke.io"))
+
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("1Ti"))
+		dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
+		g.By("# Create csi storageclass")
+		storageClass.createWithExtraParameters(oc, extraParameters)
+		defer storageClass.deleteAsAdmin(oc)
+
+		g.By("# Create a pvc with the csi storageclass")
+		pvc.scname = storageClass.name
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		g.By("# Create deployment with the created pvc and wait ready")
+		dep.create(oc)
+		defer dep.delete(oc)
+		dep.longerTime().waitReady(oc)
+
+		g.By("# Write some data")
+		dep.checkPodMountedVolumeCouldRW(oc)
+
+		//hardcode the expanded capacity
+		g.By(" Performing online resize volume")
+		capacityFloat64, err := strconv.ParseFloat(strings.TrimRight(pvc.capacity, "Ti"), 64)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		capacityFloat64 = capacityFloat64 + 0.1
+		expandedCapacity := strconv.FormatFloat(capacityFloat64, 'f', -1, 64) + "Ti"
+		pvc.expand(oc, expandedCapacity)
+		pvc.waitResizeSuccess(oc, "1126Gi")
+
+		g.By(" Check filesystem resized in the pod")
+		podName := dep.getPodList(oc)[0]
+		sizeString, err := execCommandInSpecificPod(oc, dep.namespace, podName, "df -h | grep "+dep.mpath+"|awk '{print $2}'")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		sizeFloat64, err := strconv.ParseFloat(strings.TrimSuffix(sizeString, "T"), 64)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(capacityFloat64).To(o.Equal(sizeFloat64))
+
+		g.By(" Check original data in the volume")
+		dep.checkPodMountedVolumeDataExist(oc, true)
+
+	})
+
 })
