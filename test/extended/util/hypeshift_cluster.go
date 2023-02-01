@@ -142,7 +142,11 @@ func GetHyperShiftOperatorNameSpace(oc *CLI) string {
 func GetHyperShiftHostedClusterNameSpace(oc *CLI) string {
 	namespace, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
 		"hostedcluster", "-A", "--ignore-not-found", "-ojsonpath={.items[*].metadata.namespace}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+
+	if err != nil && !strings.Contains(namespace, "the server doesn't have a resource type") {
+		o.Expect(err).NotTo(o.HaveOccurred(), "get hostedcluster fail: %v", err)
+	}
+
 	if len(namespace) <= 0 {
 		return namespace
 	}

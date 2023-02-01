@@ -260,7 +260,6 @@ func (ht *HypershiftTest) CreateClusterOnAws() {
 		WithBaseDomain(baseDomain).
 		WithPullSecret(secretFile).
 		WithRegion(awscred.region).
-		WithReleaseImage("quay.io/openshift-release-dev/ocp-release:4.12.0-rc.2-x86_64").
 		WithName(name)
 
 	_, createClusterErr := ht.cli.CreateCluster(createClusterOpts)
@@ -270,6 +269,9 @@ func (ht *HypershiftTest) CreateClusterOnAws() {
 	exutil.AssertAllPodsToBeReadyWithPollerParams(ht.oc, fmt.Sprintf("%s-%s", ht.clusterNS, name), 30*time.Second, 10*time.Minute)
 
 	logger.Infof("hosted cluster %s is created successfully on AWS", name)
+
+	ht.clusterNS = exutil.GetHyperShiftHostedClusterNameSpace(ht.oc)
+
 }
 
 // DestroyClusterOnAws destroy hosted cluster on aws
