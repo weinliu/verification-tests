@@ -1170,7 +1170,12 @@ func getTimeFromTimezone(oc *exutil.CLI) (string, string) {
 			schedule = "02 " + strconv.Itoa(localTimeInHours) + " " + "* * *"
 		} else {
 			localTimeInMinutes = localTimeInMinutes + 2
-			schedule = strconv.Itoa(localTimeInMinutes) + " " + strconv.Itoa(localTimeInHours) + " " + "* * *"
+			if localTimeInMinutes == 60 {
+				localTimeInHours = localTimeInHours + 1
+				schedule = "00 " + strconv.Itoa(localTimeInHours) + " " + "* * *"
+			} else {
+				schedule = strconv.Itoa(localTimeInMinutes) + " " + strconv.Itoa(localTimeInHours) + " " + "* * *"
+			}
 		}
 	} else if zoneName == "UTC" {
 		timeZoneName = "America/New_York"
@@ -1188,7 +1193,12 @@ func getTimeFromTimezone(oc *exutil.CLI) (string, string) {
 			schedule = "02 " + strconv.Itoa(localTimeInHours) + " " + "* * *"
 		} else {
 			localTimeInMinutes = localTimeInMinutes + 2
-			schedule = strconv.Itoa(localTimeInMinutes) + " " + strconv.Itoa(localTimeInHours) + " " + "* * *"
+			if localTimeInMinutes == 60 {
+				localTimeInHours = localTimeInHours + 1
+				schedule = "00 " + strconv.Itoa(localTimeInHours) + " " + "* * *"
+			} else {
+				schedule = strconv.Itoa(localTimeInMinutes) + " " + strconv.Itoa(localTimeInHours) + " " + "* * *"
+			}
 		}
 	} else {
 		e2e.Failf("Given zone name is %s", zoneName)
