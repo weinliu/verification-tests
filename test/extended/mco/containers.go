@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -167,7 +168,7 @@ func (b *OsImageBuilder) buildImage() error {
 
 	logger.Infof("Base image: %s\n", baseImage)
 
-	dockerFile := "FROM " + baseImage + "\n" + b.dockerFileCommands
+	dockerFile := "FROM " + baseImage + "\n" + b.dockerFileCommands + "\n" + ExpirationDokerfileLabel
 	logger.Infof(" Using Dockerfile:\n%s", dockerFile)
 
 	buildDir, err := prepareDockerfileDirectory(b.tmpDir, dockerFile)
@@ -307,6 +308,12 @@ func getLayeringTestImageRepository() string {
 
 	if !exists {
 		layeringImageRepo = DefaultLayeringQuayRepository
+	}
+
+	// If the tag is not specified we calculate a random one: polarionID+tmp+3randomchars
+	if !strings.Contains(layeringImageRepo, ":") {
+		tag := GetCurrentTestPolarionIDNumber() + "tmp" + exutil.GetRandomString()[:3]
+		layeringImageRepo = layeringImageRepo + ":" + tag
 	}
 
 	return layeringImageRepo

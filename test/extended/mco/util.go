@@ -565,3 +565,11 @@ func skipTestIfSupportedPlatformNotMatched(oc *exutil.CLI, supported ...string) 
 		g.Skip(fmt.Sprintf("skip test because current platform %s is not in supported list %v", p, supported))
 	}
 }
+
+// GetCurrentTestPolarionIDNumber inspects the name of the test case and return the number of the polarion ID linked to this automated test case. It returns an empty string if no ID found.
+func GetCurrentTestPolarionIDNumber() string {
+	name := g.CurrentSpecReport().FullText()
+
+	r, _ := regexp.Compile(`\d+`)
+	return r.FindString(name)
+}

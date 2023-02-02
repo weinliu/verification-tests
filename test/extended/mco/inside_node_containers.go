@@ -160,7 +160,7 @@ func (b *OsImageBuilderInNode) buildImage() error {
 	logger.Infof("Base image: %s\n", baseImage)
 
 	g.By("Prepare remote dockerFile directory")
-	dockerFile := "FROM " + baseImage + "\n" + b.dockerFileCommands
+	dockerFile := "FROM " + baseImage + "\n" + b.dockerFileCommands + "\n" + ExpirationDokerfileLabel
 	logger.Infof(" Using Dockerfile:\n%s", dockerFile)
 
 	localBuildDir, err := prepareDockerfileDirectory(b.tmpDir, dockerFile)
