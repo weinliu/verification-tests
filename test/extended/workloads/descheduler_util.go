@@ -330,7 +330,9 @@ func checkDeschedulerMetrics(oc *exutil.CLI, strategyname string, metricName str
 	o.Expect(err).NotTo(o.HaveOccurred())
 	err = wait.Poll(5*time.Second, 100*time.Second, func() (bool, error) {
 		output, _, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "prometheus-k8s-0", "-c", "prometheus", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="+metricName).Outputs()
+		// Adding code for debugging the case
 		if err != nil {
+			e2e.Logf("output from prometheus is\n", output)
 			e2e.Logf("Can't get descheduler metrics, error: %s. Trying again", err)
 			return false, nil
 		}

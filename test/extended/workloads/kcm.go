@@ -356,6 +356,10 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 
 	// author: knarra@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:knarra-Medium-56179-KCM Alert PodDisruptionBudget At and Limit do not alert with maxUnavailable or MinAvailable by percentage [Disruptive]", func() {
+		isSNO := exutil.IsSNOCluster(oc)
+		if isSNO {
+			g.Skip("Skip Testing on SNO since there is no quorum guard pod available here")
+		}
 		g.By("Get the first master nodename")
 		masterNodeName, err := exutil.GetFirstMasterNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
