@@ -17,6 +17,7 @@ import (
 	o "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	"sigs.k8s.io/yaml"
@@ -1528,28 +1529,33 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		g.By("Get release info from current cluster")
 		releaseInfo, err := getReleaseInfo(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(releaseInfo).NotTo(o.BeNil())
+		o.Expect(releaseInfo).NotTo(o.BeEmpty())
 
 		g.By("Check the arch info cv.status is expected")
-		cvArchInfo, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.conditions[?(@.type==\"ReleaseAccepted\")].message}").Output()
+		cvArchInfo, err := getCVObyJP(oc, ".status.conditions[?(.type=='ReleaseAccepted')].message")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Release payload info in cv.status: %v", cvArchInfo)
 
-		releaseMeta := releaseInfo["metadata"].(map[string]interface{})["metadata"]
-		if relarch := releaseMeta.(map[string]interface{})["release.openshift.io/architecture"]; relarch == nil || relarch.(string) != heterogeneousArchKeyword {
+		if releaseArch := gjson.Get(releaseInfo, `metadata.metadata.release\.openshift\.io/architecture`).String(); releaseArch != heterogeneousArchKeyword {
 			e2e.Logf("This current release is a non-heterogeneous payload")
 			//It's a non-heterogeneous payload, the architecture info in clusterversion’s status should be consistent with runtime.GOARCH.
-			output, err := exec.Command("bash", "-c", "oc get nodes -ojson|jq .items[].status.nodeInfo.architecture|sort -u").Output()
-			nodesArchInfo := strings.TrimSpace(string(output))
-			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("Nodes arch info: %v", nodesArchInfo)
 
-			nodesArchTypeNum, err := exec.Command("bash", "-c", fmt.Sprintf("echo %v|wc -l", nodesArchInfo)).Output()
+			output, err := oc.AsAdmin().WithoutNamespace().
+				Run("get").Args("nodes", "-o",
+				"jsonpath={.items[*].status.nodeInfo.architecture}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(strings.TrimSpace(string(nodesArchTypeNum))).To(o.Equal("1"))
+			nodesArchInfo := strings.Split(strings.TrimSpace(output), " ")
+			e2e.Logf("Nodes arch list: %v", nodesArchInfo)
 
-			e2e.Logf("Expected arch info: %v", nodesArchInfo)
-			o.Expect(cvArchInfo).To(o.ContainSubstring(nodesArchInfo))
+			for _, nArch := range nodesArchInfo {
+				if nArch != nodesArchInfo[0] {
+					e2e.Failf("unexpected node arch in non-hetero cluster: %s expecting: %s",
+						nArch, nodesArchInfo[0])
+				}
+			}
+
+			e2e.Logf("Expected arch info: %v", nodesArchInfo[0])
+			o.Expect(cvArchInfo).To(o.ContainSubstring(nodesArchInfo[0]))
 		} else {
 			e2e.Logf("This current release is a heterogeneous payload")
 			// It's a heterogeneous payload, the architecture info in clusterversion’s status should be multi.

@@ -685,25 +685,23 @@ func unsetCVOverrides(oc *exutil.CLI) {
 }
 
 // Run "oc adm release info" cmd to get release info of the current release
-func getReleaseInfo(oc *exutil.CLI) (map[string]interface{}, error) {
-	var releaseInfo map[string]interface{}
+func getReleaseInfo(oc *exutil.CLI) (output string, err error) {
 	tempDataDir := filepath.Join("/tmp/", fmt.Sprintf("ota-%s", getRandomString()))
-	err := os.Mkdir(tempDataDir, 0755)
+	err = os.Mkdir(tempDataDir, 0755)
 	defer os.RemoveAll(tempDataDir)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	err = oc.AsAdmin().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--confirm", "--to="+tempDataDir).Execute()
 	if err != nil {
-		return nil, fmt.Errorf("failed to extract dockerconfig: %v", err)
+		err = fmt.Errorf("failed to create tempdir %s: %v", tempDataDir, err)
+		return
 	}
-	output, err := oc.AsAdmin().Run("adm").Args("release", "info", "-a", tempDataDir+"/.dockerconfigjson", "-ojson").Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get release info: %v", err)
+	if err = oc.AsAdmin().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--confirm", "--to="+tempDataDir).Execute(); err != nil {
+		err = fmt.Errorf("failed to extract dockerconfig: %v", err)
+		return
 	}
-	err = json.Unmarshal([]byte(output), &releaseInfo)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal release info error: %v", err)
+	if output, err = oc.AsAdmin().Run("adm").Args("release", "info", "-a", tempDataDir+"/.dockerconfigjson", "-ojson").Output(); err != nil {
+		err = fmt.Errorf("failed to get release info: %v", err)
+		return
 	}
-	return releaseInfo, nil
+	return
 }
 
 // Get CVO pod object values by jsonpath
