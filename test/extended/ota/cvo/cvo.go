@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -27,6 +28,37 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	projectName := "openshift-cluster-version"
 
 	oc := exutil.NewCLIWithoutNamespace(projectName)
+
+	//author: yanyang@redhat.com
+	g.It("NonHyperShiftHOST-Author:yanyang-High-56072-CVO pod should not crash", func() {
+		g.By("Get CVO container status")
+		CVOStatus, err := getCVOPod(oc, ".status.containerStatuses[]")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(CVOStatus).NotTo(o.BeNil())
+
+		g.By("Check ready is true")
+		o.Expect(CVOStatus["ready"]).To(o.BeTrue())
+
+		g.By("Check started is true")
+		o.Expect(CVOStatus["started"]).To(o.BeTrue())
+
+		g.By("Check state is running")
+		o.Expect(CVOStatus["state"]).NotTo(o.BeNil())
+		o.Expect(CVOStatus["state"].(map[string]interface{})["running"]).NotTo(o.BeNil())
+
+		g.By("Check exitCode of lastState is 0 if lastState is not empty")
+		o.Expect(CVOStatus["lastState"]).NotTo(o.BeNil())
+		if reflect.ValueOf(CVOStatus["lastState"]).Len() == 0 {
+			e2e.Logf("lastState is empty which is expected")
+		} else {
+			lastState := CVOStatus["lastState"]
+			o.Expect(lastState.(map[string]interface{})["terminated"]).NotTo(o.BeNil())
+			exitCode := lastState.(map[string]interface{})["terminated"].(map[string]interface{})["exitCode"]
+			o.Expect(exitCode.(float64)).To(o.BeZero())
+			reason := lastState.(map[string]interface{})["terminated"].(map[string]interface{})["reason"]
+			o.Expect(reason.(string)).To(o.Equal("Completed"))
+		}
+	})
 
 	//author: yanyang@redhat.com
 	g.It("NonHyperShiftHOST-Author:yanyang-Medium-49508-disable capabilities by modifying the cv.spec.capabilities.baselineCapabilitySet [Serial]", func() {

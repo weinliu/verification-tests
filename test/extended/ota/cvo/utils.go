@@ -705,3 +705,24 @@ func getReleaseInfo(oc *exutil.CLI) (map[string]interface{}, error) {
 	}
 	return releaseInfo, nil
 }
+
+// Get CVO pod object values by jsonpath
+// Returns: object_value(map), error
+func getCVOPod(oc *exutil.CLI, jsonpath string) (map[string]interface{}, error) {
+	var objectValue map[string]interface{}
+	pod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-cluster-version", "-o=jsonpath={.items[].metadata.name}").Output()
+	if err != nil {
+		return nil, fmt.Errorf("getting CVO pod name failed: %v", err)
+	}
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").
+		Args("pod", pod, "-n", "openshift-cluster-version",
+			"-o", fmt.Sprintf("jsonpath={%s}", jsonpath)).Output()
+	if err != nil {
+		return nil, fmt.Errorf("getting CVO pod object values failed: %v", err)
+	}
+	err = json.Unmarshal([]byte(output), &objectValue)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal release info error: %v", err)
+	}
+	return objectValue, nil
+}
