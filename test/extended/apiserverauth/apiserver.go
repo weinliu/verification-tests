@@ -2786,8 +2786,11 @@ spec:
 	// author: dpunia@redhat.com
 	g.It("ROSA-ARO-OSD_CCS-Author:dpunia-Medium-10969-Create clusterip service", func() {
 		var (
-			name  = "ocp-10969-openshift"
-			image = "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83"
+			name            = "ocp-10969-openshift"
+			image           = "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83"
+			servicechkout   string
+			servicechkerror error
+			serviceIPaddr   string
 		)
 
 		g.By("1) Create new project required for this test execution")
@@ -2811,10 +2814,15 @@ spec:
 		//Generate random service ip from service ip range
 		serviceNetwork, serviceNetworkGetErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("networks", "cluster", `-o=jsonpath={.spec.serviceNetwork[0]}`).Output()
 		o.Expect(serviceNetworkGetErr).NotTo(o.HaveOccurred())
-		serviceIPv4, _, serviceipErr := net.ParseCIDR(fmt.Sprintf("%v", serviceNetwork))
+		serviceIP, _, serviceipErr := net.ParseCIDR(fmt.Sprintf("%v", serviceNetwork))
 		o.Expect(serviceipErr).NotTo(o.HaveOccurred())
-		randomServiceIP := serviceIPv4.To4()
-		randomServiceIP[3] = randomServiceIP[3] + byte(rand.Intn(254-1))
+		randomServiceIP := serviceIP.To4()
+		if randomServiceIP != nil {
+			randomServiceIP[3] = randomServiceIP[3] + byte(rand.Intn(254-1))
+		} else {
+			randomServiceIP = serviceIP.To16()
+			randomServiceIP[len(randomServiceIP)-1] = byte(rand.Intn(254 - 1))
+		}
 
 		g.By("4) Create clusterip service with --clusterip")
 		servicecreateout, servicecreateerror := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", namespace, "service", "clusterip", name, "--clusterip", fmt.Sprintf("%v", randomServiceIP), "--tcp", fmt.Sprintf("%v:8080", randomServicePort)).Output()
@@ -2822,7 +2830,12 @@ spec:
 		o.Expect(servicecreateout).Should(o.ContainSubstring(fmt.Sprintf("service/%v created", name)))
 
 		g.By("5) Check clusterip service running status")
-		servicechkout, servicechkerror := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", fmt.Sprintf("%v:%v", randomServiceIP, randomServicePort)).Output()
+		if serviceIP.To4() != nil {
+			serviceIPaddr = fmt.Sprintf("%v:%v", randomServiceIP, randomServicePort)
+		} else {
+			serviceIPaddr = fmt.Sprintf("[%v]:%v", randomServiceIP, randomServicePort)
+		}
+		servicechkout, servicechkerror = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", serviceIPaddr).Output()
 		o.Expect(servicechkerror).NotTo(o.HaveOccurred())
 		o.Expect(servicechkout).Should(o.ContainSubstring("Hello OpenShift"))
 		servicedelerror := oc.Run("delete").Args("-n", namespace, "svc", name).Execute()
@@ -2837,7 +2850,12 @@ spec:
 		serviceip, serviceipgetError := oc.WithoutNamespace().Run("get").Args("service", name, "-o=jsonpath={.spec.clusterIP}", "-n", namespace).Output()
 		o.Expect(serviceipgetError).NotTo(o.HaveOccurred())
 		serviceError := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-			servicechkout, servicechkerror = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", fmt.Sprintf("%v:%v", serviceip, randomServicePort)).Output()
+			if serviceIP.To4() != nil {
+				serviceIPaddr = fmt.Sprintf("%v:%v", serviceip, randomServicePort)
+			} else {
+				serviceIPaddr = fmt.Sprintf("[%v]:%v", serviceip, randomServicePort)
+			}
+			servicechkout, servicechkerror = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, name, "--", "curl", serviceIPaddr).Output()
 			if servicechkerror == nil {
 				o.Expect(servicechkout).Should(o.ContainSubstring("Hello OpenShift"))
 				e2e.Logf("Step 7, Test Passed: Service Accessible with allocated IP")
@@ -4118,7 +4136,7 @@ EOF`, dcpolicyrepo)
 
 		g.By("2. Check openshift-apiserver https api metrics endpoint URL")
 		metricsUrl := fmt.Sprintf(`https://%v:8443/metrics`, string(endpointIP))
-		metricsOut, metricsErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-apiserver", podName, "-c", "openshift-apiserver", "--", "curl", "-k", metricsUrl).Output()
+		metricsOut, metricsErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-apiserver", podName, "-c", "openshift-apiserver", "--", "curl", "-k", "--connect-timeout", "5", "--retry", "2", "-N", "-s", metricsUrl).Output()
 		o.Expect(metricsErr).NotTo(o.HaveOccurred())
 		o.Expect(metricsOut).ShouldNot(o.ContainSubstring("You are attempting to import a cert with the same issuer/serial as an existing cert, but that is not the same cert"))
 		o.Expect(metricsOut).Should(o.ContainSubstring("Forbidden"))
