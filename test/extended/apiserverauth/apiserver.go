@@ -4123,4 +4123,62 @@ EOF`, dcpolicyrepo)
 		o.Expect(metricsOut).ShouldNot(o.ContainSubstring("You are attempting to import a cert with the same issuer/serial as an existing cert, but that is not the same cert"))
 		o.Expect(metricsOut).Should(o.ContainSubstring("Forbidden"))
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("MicroShiftOnly-Author:rgangwar-Medium-54816-[Apiserver] Remove RoleBindingRestrictions API", func() {
+		g.By("1. Roles bindings restrictions should not work in microshift.")
+		roleOutput, roleErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("rolebinding.rbac").Output()
+		o.Expect(roleErr).NotTo(o.HaveOccurred())
+		o.Expect(roleOutput).ShouldNot(o.BeEmpty())
+		roleErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("rolebindingrestriction", "-A").Execute()
+		o.Expect(roleErr).To(o.HaveOccurred())
+
+		g.By("2. Check the removal of the RoleBindingRestrictions API endpoint by checking the OpenShift API endpoint documentation or running:")
+		roleOutput, roleErr = oc.AsAdmin().WithoutNamespace().Run("api-resources").Args().Output()
+		o.Expect(roleErr).NotTo(o.HaveOccurred())
+		o.Expect(roleOutput).ShouldNot(o.ContainSubstring("RoleBindingRestrictions"))
+
+		g.By("3. Create a ClusterRole")
+		clusterroleyaml := tmpdir + "/clusterroleyaml"
+		clusterroleCMD := fmt.Sprintf(`cat > %v << EOF
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: example-cluster-role-ocp54816
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]`, clusterroleyaml)
+		_, clusterrolecmdErr := exec.Command("bash", "-c", clusterroleCMD).Output()
+		o.Expect(clusterrolecmdErr).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete", "-f", clusterroleyaml).Args().Execute()
+		clusterroleErr := oc.AsAdmin().WithoutNamespace().Run("apply", "-f", clusterroleyaml).Args().Execute()
+		o.Expect(clusterroleErr).NotTo(o.HaveOccurred())
+
+		g.By("4. Created a ClusterRoleBinding to bind the ClusterRole to a service account")
+		clusterrolebindingyaml := tmpdir + "/clusterrolebindingyaml"
+		clusterrolebindingCMD := fmt.Sprintf(`cat > %v << EOF
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: example-cluster-role-binding-ocp54816
+subjects:
+- kind: ServiceAccount
+  name: example-service-account-ocp54816
+  namespace: example-namespace-ocp54816
+roleRef:
+  kind: ClusterRole
+  name: example-cluster-role-ocp54816
+  apiGroup: rbac.authorization.k8s.io`, clusterrolebindingyaml)
+		_, clusterrolebindingcmdErr := exec.Command("bash", "-c", clusterrolebindingCMD).Output()
+		o.Expect(clusterrolebindingcmdErr).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete", "-f", clusterrolebindingyaml).Args().Execute()
+		clusterrolebindingErr := oc.AsAdmin().WithoutNamespace().Run("apply", "-f", clusterrolebindingyaml).Args().Execute()
+		o.Expect(clusterrolebindingErr).NotTo(o.HaveOccurred())
+
+		g.By("5. Test the ClusterRole and ClusterRoleBinding by using oc to impersonate the service account and check access to pod")
+		saOutput, saErr := oc.AsAdmin().WithoutNamespace().Run("auth").Args("can-i", "get", "pods", "--as=system:serviceaccount:example-namespace-ocp54816:example-service-account-ocp54816").Output()
+		o.Expect(saErr).NotTo(o.HaveOccurred())
+		o.Expect(saOutput).Should(o.ContainSubstring("yes"))
+	})
 })
