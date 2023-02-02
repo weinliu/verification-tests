@@ -1,5 +1,5 @@
 [aos-devel-4.13]
 name=aos-devel-4.13
-baseurl=http://download.eng.bos.redhat.com/rcm-guest/puddles/RHAOS/plashets/4.13-el8/stream/building/x86_64/os/
+baseurl=https://ocp-artifacts.hosts.prod.psi.rdu2.redhat.com/pub/RHOCP/plashets/4.13/stream/el8/latest/x86_64/os/
 enabled=1
 gpgcheck=0

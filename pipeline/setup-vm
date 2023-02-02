@@ -127,41 +127,13 @@ fi
 #get opm client
 if echo $INSTALL_TOOLS | grep -i 'opm' > /dev/null; then
     echo "------------------get opm------------------------"
-    echo $KUBECONFIG
-    if [[ "x${http_proxy_tmp}x" != "xx" ]] || [[ "x${https_proxy_tmp}x" != "xx" ]]; then
-        echo "set env http_proxy https_proxy"
-        export http_proxy=${http_proxy_tmp}
-        export https_proxy=${https_proxy_tmp}
-    fi
-    oc extract secret/pull-secret -n openshift-config  --confirm
-    if cat .dockerconfigjson | grep 'registry.ci.openshift.org' > /dev/null; then
-        NIGHTLYVERSION=`oc get clusterversion | grep version | awk '{print $2}'`
-        if [ ${NIGHTLYVERSION}"null" == "null" ]; then
-            echo "get clusterversion failed"
-            exit 1
-        fi
-        ocpimaage=`oc adm release info registry.ci.openshift.org/ocp/release:${NIGHTLYVERSION} --image-for=operator-registry -a .dockerconfigjson`
-        echo ${ocpimaage}
-        unset http_proxy https_proxy
-        podman pull ${ocpimaage} --authfile  .dockerconfigjson
-        rm -f .dockerconfigjson
-        instanceID=`podman create ${ocpimaage}`
-        podman cp ${instanceID}:/bin/opm  $WORKDIR
-        podman cp ${instanceID}:/bin/initializer $WORKDIR
-        podman cp ${instanceID}:/bin/configmap-server $WORKDIR
-        podman cp ${instanceID}:/bin/registry-server $WORKDIR
-        podman rm  -a
-        podman rmi  -a
-    fi
-    if [ ! -f "$WORKDIR/opm" ]; then
-        echo "get latest opm"
-        unset http_proxy https_proxy
-        NIGHTLYVERSIOM=${NIGHTLYFLAG:0:1}.${NIGHTLYFLAG:1:${#NIGHTLYFLAG}}
-        curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/ocp-dev-preview/latest-$NIGHTLYVERSIOM/opm-linux.tar.gz -o opm-linux.tar.gz
-        tar -xzvf opm-linux.tar.gz
-        echo "get opm-linux.tar.gz successfully"
-        rm -f opm-linux.tar.gz
-    fi
+    echo "get latest opm"
+    echo "set env http_proxy https_proxy"
+    unset http_proxy https_proxy
+    curl -s -k -L https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/ocp-dev-preview/candidate/opm-linux.tar.gz -o opm-linux.tar.gz
+    tar -xzvf opm-linux.tar.gz
+    echo "get opm-linux.tar.gz successfully"
+    rm -f opm-linux.tar.gz
     echo "opm version:"
     opm version
     retVal=$?
