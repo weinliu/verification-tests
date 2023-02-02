@@ -4199,4 +4199,69 @@ roleRef:
 		o.Expect(saErr).NotTo(o.HaveOccurred())
 		o.Expect(saOutput).Should(o.ContainSubstring("yes"))
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("MicroShiftOnly-Author:rgangwar-Medium-53972-[Apiserver] Cluster Policy Controller integration", func() {
+		namespace := "tmpocp53792"
+		caseID := "ocp-53972"
+
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", namespace, "--ignore-not-found").Execute()
+
+		g.By("1.Create temporary namespace")
+		namespaceOutput, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("namespace", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(namespaceOutput).Should(o.ContainSubstring("namespace/"+namespace+" created"), namespace+" not created..")
+
+		// When a namespace is created, the cluster policy controller is in charge of adding SCC labels.
+		g.By("2.Check the scc annotations should have openshift.io to verify that the namespace added scc annotations Cluster Policy Controller integration")
+		namespaceOutput, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("ns", namespace, `-o=jsonpath={.metadata.annotations}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(namespaceOutput).Should(o.ContainSubstring("openshift.io/sa.scc"), "Scc annotations not have openshift.io")
+
+		// There are events in the openshift-kube-controller-manager that show the creation of these SCC labels
+		g.By("3.Check the events in the openshift-kube-controller-manager which show the creation of these SCC labels for e.g tempocp53792")
+		eventsOutput, eventErr := oc.AsAdmin().Run("get").Args("events", "-n", "openshift-kube-controller-manager").Output()
+		o.Expect(eventErr).NotTo(o.HaveOccurred())
+		if !strings.Contains(eventsOutput, "created SCC ranges for "+namespace+" namespace") {
+			e2e.Failf("Not created SCC ranges for " + namespace + " namespace...")
+		}
+
+		// Cluster policy controller does take care of the resourceQuota, verifying that the quota feature works properly after Cluster Policy Controller integration
+		g.By("4.Create quota to verify that the quota feature works properly after Cluster Policy Controller integration")
+		template := getTestDataFilePath("ocp9853-quota.yaml")
+		templateErr := oc.AsAdmin().Run("create").Args("-f", template, "-n", namespace).Execute()
+		o.Expect(templateErr).NotTo(o.HaveOccurred())
+
+		g.By("5.Create multiple secrets to test created ResourceQuota, expect failure for secrets creations that exceed quota limit")
+		secretCount, err := oc.Run("get").Args("-n", namespace, "resourcequota", "myquota", "-o", `jsonpath={.status.namespaces[*].status.used.secrets}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		usedCount, _ := strconv.Atoi(secretCount)
+		limits := 15
+		for i := usedCount; i <= limits; i++ {
+			secretName := fmt.Sprintf("%v-secret-%d", caseID, i)
+			output, err := oc.Run("create").Args("-n", namespace, "secret", "generic", secretName).Output()
+			g.By(fmt.Sprintf("5.%d) creating secret %s", i, secretName))
+			if i < limits {
+				o.Expect(err).NotTo(o.HaveOccurred())
+			} else {
+				o.Expect(output).To(o.MatchRegexp("secrets.*forbidden: exceeded quota"))
+			}
+		}
+
+		g.By("6. Create multiple Configmaps to test created ResourceQuota, expect failure for configmap creations that exceed quota limit")
+		configmapCount, cmerr := oc.Run("get").Args("-n", namespace, "resourcequota", "myquota", "-o", `jsonpath={.status.namespaces[*].status.used.configmaps}`).Output()
+		o.Expect(cmerr).NotTo(o.HaveOccurred())
+		usedcmCount, _ := strconv.Atoi(configmapCount)
+		limits = 13
+		for i := usedcmCount; i <= limits; i++ {
+			cmName := fmt.Sprintf("%v-cm-%d", caseID, i)
+			output, err := oc.Run("create").Args("-n", namespace, "cm", cmName).Output()
+			g.By(fmt.Sprintf("6.%d) creating configmaps %s", i, cmName))
+			if i < limits {
+				o.Expect(err).NotTo(o.HaveOccurred())
+			} else {
+				o.Expect(output).To(o.MatchRegexp("configmaps.*forbidden: exceeded quota"))
+			}
+		}
+	})
 })
