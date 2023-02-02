@@ -438,7 +438,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(registryOut).Should(
 			o.And(
-				o.ContainSubstring("mirror-by-digest-only = true"),
+				o.ContainSubstring(`pull-from-mirror = "digest-only"`),
 				o.ContainSubstring("example.com/example/ubi-minimal"),
 				o.ContainSubstring("example.io/example/ubi-minimal")))
 
@@ -884,11 +884,10 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		logger.Infof("stats output:\n %s", statsCmd)
 		statsOut, err := exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", statsCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(statsOut).Should(o.ContainSubstring("mcd_drain_err"))
 		o.Expect(statsOut).Should(o.ContainSubstring("mcd_host_os_and_version"))
 		o.Expect(statsOut).Should(o.ContainSubstring("mcd_kubelet_state"))
-		o.Expect(statsOut).Should(o.ContainSubstring("mcd_pivot_err"))
-		o.Expect(statsOut).Should(o.ContainSubstring("mcd_reboot_err"))
+		o.Expect(statsOut).Should(o.ContainSubstring("mcd_pivot_errors_total"))
+		o.Expect(statsOut).Should(o.ContainSubstring("mcd_reboots_failed_total"))
 		o.Expect(statsOut).Should(o.ContainSubstring("mcd_state"))
 		o.Expect(statsOut).Should(o.ContainSubstring("mcd_update_state"))
 		o.Expect(statsOut).Should(o.ContainSubstring("mcd_update_state"))
@@ -2632,7 +2631,7 @@ nulla pariatur.`
 			podTemplate       = generateTemplateAbsolutePath("create-pod.yaml")
 			mcName            = "test-file"
 			mcTemplate        = "add-mc-to-trigger-node-drain.yaml"
-			expectedAlertName = "MCDDrainError"
+			expectedAlertName = "MCCDrainError"
 		)
 		// Get the first node that will be updated
 		sortedWorkerNodes, sErr := mcp.GetSortedNodes()
