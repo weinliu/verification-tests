@@ -845,29 +845,32 @@ type kibanaStatus struct {
 // prometheusQueryResult the response of querying prometheus APIs
 type prometheusQueryResult struct {
 	Data struct {
-		Result []struct {
-			Metric struct {
-				Name              string `json:"__name__"`
-				Cluster           string `json:"cluster,omitempty"`
-				Container         string `json:"container,omitempty"`
-				ContainerName     string `json:"containername,omitempty"`
-				Endpoint          string `json:"endpoint,omitempty"`
-				Instance          string `json:"instance,omitempty"`
-				Job               string `json:"job,omitempty"`
-				Namespace         string `json:"namespace,omitempty"`
-				Path              string `json:"path,omitempty"`
-				Pod               string `json:"pod,omitempty"`
-				PodName           string `json:"podname,omitempty"`
-				Service           string `json:"service,omitempty"`
-				ExportedNamespace string `json:"exported_namespace,omitempty"`
-				State             string `json:"state,omitempty"`
-			} `json:"metric"`
-			Value []interface{} `json:"value"`
-		} `json:"result"`
-		ResultType string  `json:"resultType"`
-		Alerts     []alert `json:"alerts,omitempty"`
+		Result     []metric `json:"result"`
+		ResultType string   `json:"resultType"`
+		Alerts     []alert  `json:"alerts,omitempty"`
 	} `json:"data"`
 	Status string `json:"status"`
+}
+
+// metric the prometheus metric
+type metric struct {
+	Metric struct {
+		Name              string `json:"__name__"`
+		Cluster           string `json:"cluster,omitempty"`
+		Container         string `json:"container,omitempty"`
+		ContainerName     string `json:"containername,omitempty"`
+		Endpoint          string `json:"endpoint,omitempty"`
+		Instance          string `json:"instance,omitempty"`
+		Job               string `json:"job,omitempty"`
+		Namespace         string `json:"namespace,omitempty"`
+		Path              string `json:"path,omitempty"`
+		Pod               string `json:"pod,omitempty"`
+		PodName           string `json:"podname,omitempty"`
+		Service           string `json:"service,omitempty"`
+		ExportedNamespace string `json:"exported_namespace,omitempty"`
+		State             string `json:"state,omitempty"`
+	} `json:"metric"`
+	Value []interface{} `json:"value"`
 }
 
 // alert the pending/firing alert

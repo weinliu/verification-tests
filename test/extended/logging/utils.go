@@ -655,6 +655,45 @@ func queryPrometheus(oc *exutil.CLI, token string, path string, query string, ac
 	return &p, nil
 }
 
+func getMetric(oc *exutil.CLI, token, query string) ([]metric, error) {
+	res, err := queryPrometheus(oc, token, "/api/v1/query", query, "GET")
+	if err != nil {
+		return []metric{}, err
+	}
+	return res.Data.Result, nil
+}
+
+func getAlert(oc *exutil.CLI, token, alertSelector string) ([]alert, error) {
+	var al []alert
+	alerts, err := queryPrometheus(oc, token, "/api/v1/alerts", "", "GET")
+	if err != nil {
+		return al, err
+	}
+	for i := 0; i < len(alerts.Data.Alerts); i++ {
+		if alerts.Data.Alerts[i].Labels.AlertName == alertSelector {
+			al = append(al, alerts.Data.Alerts[i])
+		}
+	}
+	return al, nil
+}
+
+func checkAlert(oc *exutil.CLI, token, alertName, status string, timeInMinutes int) {
+	err := wait.Poll(1*time.Minute, time.Duration(timeInMinutes)*time.Minute, func() (bool, error) {
+		alerts, err := getAlert(oc, token, alertName)
+		if err != nil {
+			return false, err
+		}
+		for _, alert := range alerts {
+			if alert.State == status {
+				return true, nil
+			}
+		}
+		e2e.Logf("Waiting for alert %s to be in state %s...", alertName, status)
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s alert is not %s in %d minutes", alertName, status, timeInMinutes))
+}
+
 // WaitUntilPodsAreGone waits for pods selected with labelselector to be removed
 func WaitUntilPodsAreGone(oc *exutil.CLI, namespace string, labelSelector string) {
 	err := wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
@@ -2082,35 +2121,6 @@ func (gcl googleCloudLogging) removeLogs() error {
 		return err
 	}
 	return nil
-}
-
-func getAlert(oc *exutil.CLI, alertSelector string) (alert, error) {
-	var al alert
-	alerts, err := queryPrometheus(oc, "", "/api/v1/alerts", "", "GET")
-	if err != nil {
-		return al, err
-	}
-	for i := 0; i < len(alerts.Data.Alerts); i++ {
-		if alerts.Data.Alerts[i].Labels.AlertName == alertSelector {
-			return alerts.Data.Alerts[i], nil
-		}
-	}
-	return al, nil
-}
-
-func checkAlert(oc *exutil.CLI, alertName, status string, timeInMinutes int) {
-	err := wait.Poll(1*time.Minute, time.Duration(timeInMinutes)*time.Minute, func() (bool, error) {
-		alert, err := getAlert(oc, alertName)
-		if err != nil {
-			return false, err
-		}
-		if alert.State != status {
-			e2e.Logf("Waiting for alert %s to be in state %s...", alertName, status)
-			return false, nil
-		}
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s alert is not %s in %d minutes", alertName, status, timeInMinutes))
 }
 
 // getIndexImageTag retruns a tag of index image

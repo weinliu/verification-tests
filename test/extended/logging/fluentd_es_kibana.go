@@ -346,8 +346,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		// author qitang@redhat.com
 		g.It("CPaasrunOnly-Author:qitang-Medium-53997-Medium-54664-Fluentd: Container logs collection and metadata check.[Serial]", func() {
 			app := oc.Namespace()
+			// to test fix for LOG-3463, add labels to the app project
+			_, err := exutil.AddLabelsToSpecificResource(oc, "ns/"+app, "", "app=logging-apps", "app.kubernetes.io/instance=logging-apps-test", "app.test=test")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_non_json_log_template.json")
-			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app).Execute()
+			err = oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", app).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			clusterID, err := getClusterID(oc)
@@ -382,6 +385,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(log.Message == "ㄅㄉˇˋㄓˊ˙ㄚㄞㄢㄦㄆ 中国 883.317µs ā á ǎ à ō ó ▅ ▆ ▇ █ 々").Should(o.BeTrue())
 			o.Expect(log.OpenShift.ClusterID == clusterID).Should(o.BeTrue())
 			o.Expect(log.OpenShift.Sequence > 0).Should(o.BeTrue())
+			o.Expect(log.Kubernetes.NamespaceLabels["app_kubernetes_io/instance"] == "logging-apps-test").Should(o.BeTrue())
+			o.Expect(log.Kubernetes.NamespaceLabels["app_test"] == "test").Should(o.BeTrue())
 			infraLogs := searchDocByQuery(cloNS, podList.Items[0].Name, "infra-00", "")
 			o.Expect(infraLogs.Hits.DataHits[0].Source.OpenShift.ClusterID == clusterID).Should(o.BeTrue())
 			auditLogs := searchDocByQuery(cloNS, podList.Items[0].Name, "audit-00", "")
@@ -389,7 +394,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			for _, logType := range []string{"app", "infra", "audit"} {
 				for _, field := range []string{"@timestamp", "openshift.cluster_id", "openshift.sequence"} {
-					count, err := getDocCountByQuery(cloNS, podList.Items[0].Name, logType, "{\"query\": {\"bool\": {\"must_not\": {\"exists\": {\"field\": "+field+"}}}}}")
+					count, err := getDocCountByQuery(cloNS, podList.Items[0].Name, logType, "{\"query\": {\"bool\": {\"must_not\": {\"exists\": {\"field\": \""+field+"\"}}}}}")
 					o.Expect(err).NotTo(o.HaveOccurred())
 					o.Expect(count == 0).Should(o.BeTrue())
 				}

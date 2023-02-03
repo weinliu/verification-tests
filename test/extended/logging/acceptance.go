@@ -3,6 +3,7 @@ package logging
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -138,6 +139,44 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		exutil.AssertWaitPollNoErr(err, "audit logs are not found")
 		labels := lc.listLabels("audit", "", time.Now().Add(time.Duration(-1)*time.Hour), time.Now())
 		e2e.Logf("\nthe audit log labels are: %v\n", labels)
+
+		g.By("check metrics exposed by loki")
+		svcs, err := oc.AdminKubeClient().CoreV1().Services(ls.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/created-by=lokistack-controller"})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		for _, svc := range svcs.Items {
+			if !strings.Contains(svc.Name, "grpc") && !strings.Contains(svc.Name, "ring") {
+				err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+					result, err := getMetric(oc, token, "{job=\""+svc.Name+"\"}")
+					if err != nil {
+						return false, err
+					}
+					return len(result) > 0, nil
+				})
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can't find metrics exposed by svc/%s", svc.Name))
+			}
+		}
+		for _, metric := range []string{"loki_boltdb_shipper_compactor_running", "loki_distributor_bytes_received_total", "loki_inflight_requests", "workqueue_work_duration_seconds_bucket{namespace=\"openshift-operators-redhat\", job=\"loki-operator-controller-manager-metrics-service\"}", "loki_build_info", "loki_ingester_received_chunks"} {
+			result, err := getMetric(oc, token, metric)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(result) > 0).Should(o.BeTrue())
+		}
+
+		g.By("check metrics exposed by collector")
+		err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+			result, err := getMetric(oc, token, "{job=\"collector\"}")
+			if err != nil {
+				return false, err
+			}
+			return len(result) > 0, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Can't find metrics exposed by svc/collector")
+		for _, metric := range []string{"log_logged_bytes_total", "vector_component_received_events_total"} {
+			result, err := getMetric(oc, token, metric)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(result) > 0).Should(o.BeTrue())
+		}
+
 	})
 
 })

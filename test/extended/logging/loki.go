@@ -485,7 +485,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(len(res.Data.Result)).Should(o.BeZero())
 			e2e.Logf("Audit logs not found!")
 
-			svcs, err := oc.AdminKubeClient().CoreV1().Services(cloNS).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/created-by=lokistack-controller"})
+			svcs, err := oc.AdminKubeClient().CoreV1().Services(ls.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/created-by=lokistack-controller"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			g.By("query metrics in prometheus")
 			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
@@ -504,7 +504,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			for _, metric := range []string{"loki_boltdb_shipper_compactor_running", "loki_distributor_bytes_received_total", "loki_inflight_requests", "workqueue_work_duration_seconds_bucket{namespace=\"openshift-operators-redhat\", job=\"loki-operator-controller-manager-metrics-service\"}", "loki_build_info", "loki_ingester_received_chunks"} {
 				result, err := queryPrometheus(oc, token, "/api/v1/query", metric, "GET")
-				e2e.Logf("\n\nthe metric is: %v\n\n", result.Data.Result)
 				o.Expect(err).NotTo(o.HaveOccurred())
 				o.Expect(len(result.Data.Result) > 0).Should(o.BeTrue())
 			}
