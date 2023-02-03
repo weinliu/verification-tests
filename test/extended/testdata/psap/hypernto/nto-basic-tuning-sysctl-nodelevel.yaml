@@ -19,7 +19,7 @@ objects:
           - data: |
               [main]
               summary=Custom OpenShift profile
-              include=openshift-node
+              include=${INCLUDE}
               
               [sysctl]   # Section with minimum changes
               ${SYSCTLPARM}=${SYSCTLVALUE}
@@ -32,3 +32,4 @@ parameters:
 - name: SYSCTLPARM
 - name: SYSCTLVALUE  
 - name: PRIORITY
+- name: INCLUDE

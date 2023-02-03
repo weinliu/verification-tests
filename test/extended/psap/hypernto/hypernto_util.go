@@ -115,6 +115,7 @@ func assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc *exutil.CLI, n
 		expectedTunedName, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile", tunedNodeName, "-ojsonpath={.status.tunedProfile}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(expectedTunedName).NotTo(o.BeEmpty())
+		e2e.Logf("The profile name on each node is: \n %v ", expectedTunedName)
 		matchTunedProfile := strings.Contains(expectedTunedName, tunedName)
 
 		expectedAppliedStatus, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", namespace, "profile", tunedNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
