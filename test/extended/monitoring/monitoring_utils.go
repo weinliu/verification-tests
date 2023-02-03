@@ -242,7 +242,8 @@ func patchAndCheckBodySizeLimit(oc *exutil.CLI, limitValue string, checkValue st
 	exutil.AssertWaitPollNoErr(checkLimit, "failed to check limit")
 }
 
-func checkSig4Config(oc *exutil.CLI, ns string, podName string, checkValue string) {
+// check remote write config in the pod
+func checkRmtWrtConfig(oc *exutil.CLI, ns string, podName string, checkValue string) {
 	envCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
 		envOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, "-c", "prometheus", podName, "--", "bash", "-c", fmt.Sprintf(`cat /etc/prometheus/config_out/prometheus.env.yaml | grep '%s'`, checkValue)).Output()
 		if err != nil || !strings.Contains(envOutput, checkValue) {
@@ -250,7 +251,7 @@ func checkSig4Config(oc *exutil.CLI, ns string, podName string, checkValue strin
 		}
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(envCheck, "failed to check sig4 config")
+	exutil.AssertWaitPollNoErr(envCheck, "failed to check remote write config")
 }
 
 func checkAlertNotExist(oc *exutil.CLI, token, alertName string) {
