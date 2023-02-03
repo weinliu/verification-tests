@@ -11,10 +11,15 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/arn"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/efs"
+	"github.com/aws/aws-sdk-go/service/iam"
+	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -613,6 +618,249 @@ func rebootInstanceAndWaitSucceed(ac *ec2.EC2, instanceID string) {
 	err = ac.WaitUntilInstanceRunning(instancesInput)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("Reboot Instance:\"%+s\" Succeed", instanceID)
+}
+
+// Create aws backend session connection
+func newAwsSession(oc *exutil.CLI) *session.Session {
+	getCredentialFromCluster(oc)
+	return session.Must(session.NewSession())
+}
+
+// Init the aws kms svc client
+func newAwsKmsClient(awsSession *session.Session) *kms.KMS {
+	return kms.New(awsSession, aws.NewConfig().WithRegion(os.Getenv("AWS_REGION")))
+}
+
+// Creates aws customized customer managed kms key
+func createAwsCustomizedKmsKey(kmsSvc *kms.KMS, keyEncryptionAlgorithm string, keyUsage string) (kmsKeyResult *kms.CreateKeyOutput, err error) {
+	kmsKeyResult, err = kmsSvc.CreateKey(&kms.CreateKeyInput{
+		KeySpec:  aws.String(keyEncryptionAlgorithm),
+		KeyUsage: aws.String(keyUsage),
+		Tags: []*kms.Tag{
+			{
+				TagKey:   aws.String("Purpose"),
+				TagValue: aws.String("ocp-storage-qe-ci-test"),
+			},
+		},
+	})
+	e2e.Logf("Create kms key result info:\n%v", kmsKeyResult)
+	if err != nil {
+		e2e.Logf("Failed to create kms key: %v", err)
+		return kmsKeyResult, err
+	}
+	e2e.Logf("Create kms key:\"%+s\" Succeed", *kmsKeyResult.KeyMetadata.KeyId)
+	return kmsKeyResult, nil
+}
+
+// Creates aws customer managed symmetric KMS key for encryption and decryption
+func createAwsRsaKmsKey(kmsSvc *kms.KMS) *kms.CreateKeyOutput {
+	kmsKeyResult, err := createAwsCustomizedKmsKey(kmsSvc, "RSA_4096", "ENCRYPT_DECRYPT")
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return kmsKeyResult
+}
+
+// Creates aws customer managed asymmetric RSA KMS key for encryption and decryption
+func createAwsSymmetricKmsKey(kmsSvc *kms.KMS) *kms.CreateKeyOutput {
+	kmsKeyResult, err := createAwsCustomizedKmsKey(kmsSvc, "SYMMETRIC_DEFAULT", "ENCRYPT_DECRYPT")
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return kmsKeyResult
+}
+
+// Describes aws customer managed kms key info
+func describeAwsKmsKeyByID(kmsSvc *kms.KMS, kmsKeyID string) (describeResult *kms.DescribeKeyOutput, err error) {
+	describeResult, err = kmsSvc.DescribeKey(&kms.DescribeKeyInput{
+		KeyId: aws.String(kmsKeyID),
+	})
+	e2e.Logf("Describe kms key result is:\n%v", describeResult)
+	if err != nil {
+		e2e.Logf(`Failed to describe kms key "%s":\n%v`, kmsKeyID, err)
+	}
+	return describeResult, err
+}
+
+// Schedules aws customer managed kms key deletion by keyID
+func scheduleAwsKmsKeyDeletionByID(kmsSvc *kms.KMS, kmsKeyID string) error {
+	scheduleKeyDeletionResult, err := kmsSvc.ScheduleKeyDeletion(&kms.ScheduleKeyDeletionInput{
+		KeyId: aws.String(kmsKeyID),
+		// "PendingWindowInDays" value is optional. If you include a value, it must be between 7 and 30, inclusive.
+		// If you do not include a value, it defaults to 30.
+		PendingWindowInDays: aws.Int64(7),
+	})
+	e2e.Logf("Schedule kms key deletion result info:\n%v", scheduleKeyDeletionResult)
+	if err != nil {
+		e2e.Logf(`Failed to schedule kms key "%s" deletion: %v`, kmsKeyID, err)
+	}
+	return err
+}
+
+// Cancels aws customer managed kms key deletion by keyID
+func cancelAwsKmsKeyDeletionByID(kmsSvc *kms.KMS, kmsKeyID string) error {
+	scheduleKeyDeletionResult, err := kmsSvc.CancelKeyDeletion(&kms.CancelKeyDeletionInput{
+		KeyId: aws.String(kmsKeyID),
+	})
+	e2e.Logf("Cancels kms key deletion result info:\n%v", scheduleKeyDeletionResult)
+	if err != nil {
+		e2e.Logf(`Failed to cancel kms key "%s" deletion: %v`, kmsKeyID, err)
+	}
+	return err
+}
+
+// Enables aws customer managed kms key
+func enableAwsKmsKey(kmsSvc *kms.KMS, kmsKeyID string) error {
+	enableKeyResult, err := kmsSvc.EnableKey(&kms.EnableKeyInput{
+		KeyId: aws.String(kmsKeyID),
+	})
+	e2e.Logf("Enables kms key result info:\n%v", enableKeyResult)
+	if err != nil {
+		e2e.Logf(`Failed to enable kms key "%s": %v`, kmsKeyID, err)
+		describeAwsKmsKeyByID(kmsSvc, kmsKeyID)
+	}
+	return err
+}
+
+// Gets aws customer managed kms key policy
+func getAwsKmsKeyPolicy(kmsSvc *kms.KMS, kmsKeyID string) (getKeyPolicyResult *kms.GetKeyPolicyOutput, err error) {
+	getKeyPolicyResult, err = kmsSvc.GetKeyPolicy(&kms.GetKeyPolicyInput{
+		KeyId:      aws.String(kmsKeyID),
+		PolicyName: aws.String("default"),
+	})
+	e2e.Logf("Gets kms key default policy result info:\n%v", getKeyPolicyResult)
+	if err != nil {
+		e2e.Logf(`Failed to get kms key "%s" policy: %v`, kmsKeyID, err)
+	}
+	return getKeyPolicyResult, err
+}
+
+// Updates aws customer managed kms key policy
+func updateAwsKmsKeyPolicy(kmsSvc *kms.KMS, kmsKeyID string, policyContentStr string) error {
+	updateKeyPolicyResult, err := kmsSvc.PutKeyPolicy(&kms.PutKeyPolicyInput{
+		KeyId:      aws.String(kmsKeyID),
+		Policy:     aws.String(policyContentStr),
+		PolicyName: aws.String("default"),
+	})
+	e2e.Logf("Updates kms key policy result info:\n%v", updateKeyPolicyResult)
+	if err != nil {
+		e2e.Logf(`Failed to update kms key "%s" policy: %v`, kmsKeyID, err)
+		return err
+	}
+	return nil
+}
+
+// Adds the aws customer managed kms key user
+func addAwsKmsKeyUser(kmsSvc *kms.KMS, kmsKeyID string, userArn string) {
+	userPermissionPolicyTemplateByte := []byte(
+		`{
+			"Version": "2012-10-17",
+			"Id": "user-permission-key-policy-template",
+			"Statement": [
+				{
+					"Sid": "Enable IAM User Permissions",
+					"Effect": "Allow",
+					"Principal": {
+						"AWS": "arn:aws:iam::112233:root"
+					},
+					"Action": "kms:*",
+					"Resource": "*"
+				},
+				{
+					"Sid": "Allow use of the key",
+					"Effect": "Allow",
+					"Principal": {
+						"AWS": "arn:aws:iam::112233:user/myuser"
+					},
+					"Action": [
+						"kms:Encrypt",
+						"kms:Decrypt",
+						"kms:ReEncrypt*",
+						"kms:GenerateDataKey*",
+						"kms:DescribeKey"
+					],
+					"Resource": "*"
+				},
+				{
+					"Sid": "Allow attachment of persistent resources",
+					"Effect": "Allow",
+					"Principal": {
+						"AWS": "arn:aws:iam::112233:user/myuser"
+					},
+					"Action": [
+						"kms:CreateGrant",
+						"kms:ListGrants",
+						"kms:RevokeGrant"
+					],
+					"Resource": "*",
+					"Condition": {
+						"Bool": {
+							"kms:GrantIsForAWSResource": "true"
+						}
+					}
+				}
+			]
+		}`)
+	arnInfo, parseErr := arn.Parse(userArn)
+	o.Expect(parseErr).ShouldNot(o.HaveOccurred())
+	userPermissionPolicy, err := sjson.Set(string(userPermissionPolicyTemplateByte), `Statement.0.Principal.AWS`, "arn:aws:iam::"+arnInfo.AccountID+":root")
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	userPermissionPolicy, err = sjson.Set(userPermissionPolicy, `Statement.1.Principal.AWS`, userArn)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	userPermissionPolicy, err = sjson.Set(userPermissionPolicy, `Statement.2.Principal.AWS`, userArn)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	err = updateAwsKmsKeyPolicy(kmsSvc, kmsKeyID, userPermissionPolicy)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+}
+
+// Cancels aws customer managed kms key deletion and enables the kms key by keyID
+func cancelDeletionAndEnableAwsKmsKey(kmsSvc *kms.KMS, kmsKeyID string) {
+	o.Expect(cancelAwsKmsKeyDeletionByID(kmsSvc, kmsKeyID)).ShouldNot(o.HaveOccurred())
+	o.Expect(enableAwsKmsKey(kmsSvc, kmsKeyID)).ShouldNot(o.HaveOccurred())
+}
+
+// Init the aws resourcegroupstaggingapi client
+func newAwsResourceGroupsTaggingAPIClient(awsSession *session.Session) *resourcegroupstaggingapi.ResourceGroupsTaggingAPI {
+	return resourcegroupstaggingapi.New(awsSession, aws.NewConfig().WithRegion(os.Getenv("AWS_REGION")))
+}
+
+// Gets aws resources list by tags
+func getAwsResourcesListByTags(rgtAPI *resourcegroupstaggingapi.ResourceGroupsTaggingAPI, resourceTypes []string, tagFilters map[string][]string) (*resourcegroupstaggingapi.GetResourcesOutput, error) {
+	var finalTagFilters []*resourcegroupstaggingapi.TagFilter
+	for tagKey, tagValues := range tagFilters {
+		finalTagFilters = append(finalTagFilters, &resourcegroupstaggingapi.TagFilter{
+			Key:    aws.String(tagKey),
+			Values: aws.StringSlice(tagValues),
+		})
+	}
+	filtersResult, err := rgtAPI.GetResources(&resourcegroupstaggingapi.GetResourcesInput{
+		ResourcesPerPage:    aws.Int64(50),
+		ResourceTypeFilters: aws.StringSlice(resourceTypes),
+		TagFilters:          finalTagFilters,
+	})
+	e2e.Logf("FiltersResult result is:\n%v", filtersResult)
+	if err != nil {
+		e2e.Logf(`Failed to get resources by tagFilters "%s":\n%v`, tagFilters, err)
+		return filtersResult, err
+	}
+	return filtersResult, nil
+}
+
+// Gets aws user arn by name
+func getAwsUserArnByName(iamAPI *iam.IAM, userName string) (userArn string, err error) {
+	userInfo, err := iamAPI.GetUser(&iam.GetUserInput{
+		UserName: aws.String(userName),
+	})
+	e2e.Logf("Get user arn result is:\n%v", userInfo)
+	if err != nil {
+		e2e.Logf(`Failed to get user: "%s" arn by name\n%v`, userName, err)
+	}
+	return *userInfo.User.Arn, err
+}
+
+// Gets ebs-csi-driver user arn
+func getAwsEbsCsiDriverUserArn(oc *exutil.CLI, iamAPI *iam.IAM) (driverUserArn string) {
+	ebsCsiDriverUserName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-cloud-credential-operator", "credentialsrequest/aws-ebs-csi-driver-operator", "-o=jsonpath={.status.providerStatus.user}").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	driverUserArn, err = getAwsUserArnByName(iamAPI, ebsCsiDriverUserName)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	return driverUserArn
 }
 
 func getgcloudClient(oc *exutil.CLI) *exutil.Gcloud {

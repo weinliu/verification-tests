@@ -1,13 +1,16 @@
 package storage
 
 import (
+	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/aws/aws-sdk-go/service/iam"
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 )
 
 var _ = g.Describe("[sig-storage] STORAGE", func() {
@@ -104,4 +107,117 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pod.checkMountedVolumeHaveExecRight(oc)
 		})
 	}
+
+	// author: pewang@redhat.com
+	// OCP-57161-[AWS EBS CSI] [Snapshot] [Filesystem default] Provision volume with customer kms key, its snapshot restored volume should be encrypted with the same key
+	// https://issues.redhat.com/browse/OCPBUGS-5410
+	g.It("ROSA-OSD_CCS-Author:pewang-High-57161-[AWS EBS CSI] [Snapshot] [Filesystem default] Provision volume with customer kms key, its snapshot restored volume should be encrypted with the same key", func() {
+
+		// Check whether the test cluster satisfy the test scenario
+		// STS, C2S etc. profiles the credentials don't have permission to create customer managed kms key, skipped for these profiles
+		// TODO: For STS, C2S etc. profiles do some research try to use the CredentialsRequest
+		if !isSpecifiedResourceExist(oc, "secret/aws-creds", "kube-system") {
+			g.Skip("Skipped: the cluster not satisfy the test scenario")
+		}
+
+		// Set the resource objects definition for the scenario
+		var (
+			storageClass           = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner("ebs.csi.aws.com"))
+			pvcOri                 = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			podOri                 = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
+			presetVscName          = getPresetVolumesnapshotClassNameByProvisioner(cloudProvider, ebsCsiDriverProvisioner)
+			volumesnapshotTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
+			volumesnapshot         = newVolumeSnapshot(setVolumeSnapshotTemplate(volumesnapshotTemplate), setVolumeSnapshotSourcepvcname(pvcOri.name), setVolumeSnapshotVscname(presetVscName))
+			pvcRestore             = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimDataSourceName(volumesnapshot.name), setPersistentVolumeClaimCapacity(pvcOri.capacity))
+			podRestore             = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcRestore.name))
+			myAwsSession           = newAwsSession(oc)
+			awsKmsClient           = newAwsKmsClient(myAwsSession)
+			myKmsKeyArn            string
+		)
+
+		g.By("# Create or reuse test customer managed kms key for the scenario")
+		presetKeys, _ := getAwsResourcesListByTags(newAwsResourceGroupsTaggingAPIClient(myAwsSession), []string{"kms"}, map[string][]string{"Purpose": {"ocp-storage-qe-ci-test"}})
+		if len(presetKeys.ResourceTagMappingList) > 0 {
+			myKmsKeyArn = *presetKeys.ResourceTagMappingList[0].ResourceARN
+			if keyStatus, _ := describeAwsKmsKeyByID(awsKmsClient, myKmsKeyArn); keyStatus.KeyMetadata.DeletionDate != nil {
+				cancelDeletionAndEnableAwsKmsKey(awsKmsClient, myKmsKeyArn)
+				defer scheduleAwsKmsKeyDeletionByID(awsKmsClient, myKmsKeyArn)
+			}
+		} else {
+			myKmsKey, createKeyErr := createAwsCustomizedKmsKey(awsKmsClient, "SYMMETRIC_DEFAULT", "ENCRYPT_DECRYPT")
+			// Skipped for the test cluster's credential doesn't have enough permission
+			if strings.Contains(fmt.Sprint(createKeyErr), "AccessDeniedException") {
+				g.Skip("Skipped: the test cluster's credential doesn't have enough permission for the test scenario")
+			} else {
+				o.Expect(createKeyErr).ShouldNot(o.HaveOccurred())
+			}
+			defer scheduleAwsKmsKeyDeletionByID(awsKmsClient, *myKmsKey.KeyMetadata.KeyId)
+			myKmsKeyArn = *myKmsKey.KeyMetadata.Arn
+		}
+
+		g.By("# Add ebs-csi-driver user to test customer managed kms key")
+		oriKeyPolicy, getKeyPolicyErr := getAwsKmsKeyPolicy(awsKmsClient, myKmsKeyArn)
+		o.Expect(getKeyPolicyErr).ShouldNot(o.HaveOccurred())
+		defer updateAwsKmsKeyPolicy(awsKmsClient, myKmsKeyArn, *oriKeyPolicy.Policy)
+		addAwsKmsKeyUser(awsKmsClient, myKmsKeyArn, getAwsEbsCsiDriverUserArn(oc, iam.New(myAwsSession)))
+
+		g.By("# Create new project for the scenario")
+		oc.SetupProject()
+
+		g.By("# Create aws-ebs-csi storageclass with customer kmsKeyId")
+		extraKmsKeyParameter := map[string]interface{}{
+			"parameters":           map[string]string{"kmsKeyId": myKmsKeyArn},
+			"allowVolumeExpansion": true,
+		}
+		storageClass.createWithExtraParameters(oc, extraKmsKeyParameter)
+		defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not
+
+		g.By("# Create a pvc with the csi storageclass")
+		pvcOri.create(oc)
+		defer pvcOri.deleteAsAdmin(oc)
+
+		g.By("# Create pod with the created pvc and wait for the pod ready")
+		podOri.create(oc)
+		defer podOri.deleteAsAdmin(oc)
+		podOri.waitReady(oc)
+
+		g.By("# Check the pod volume can be read and write")
+		podOri.checkMountedVolumeCouldRW(oc)
+
+		g.By("# Check the pod volume have the exec right")
+		podOri.checkMountedVolumeHaveExecRight(oc)
+
+		g.By("# Check the pvc bound pv info on backend as expected")
+		volumeInfo, getInfoErr := getAwsVolumeInfoByVolumeID(pvcOri.getVolumeID(oc))
+		o.Expect(getInfoErr).NotTo(o.HaveOccurred())
+		o.Expect(gjson.Get(volumeInfo, `Volumes.0.Encrypted`).Bool()).Should(o.BeTrue())
+		o.Expect(gjson.Get(volumeInfo, `Volumes.0.KmsKeyId`).String()).Should(o.Equal(myKmsKeyArn))
+
+		// Create volumesnapshot with pre-defined volumesnapshotclass
+		g.By("Create volumesnapshot and wait for ready_to_use")
+		volumesnapshot.create(oc)
+		defer volumesnapshot.delete(oc)
+		volumesnapshot.waitReadyToUse(oc)
+
+		g.By("Create a restored pvc with the csi storageclass should be successful")
+		pvcRestore.scname = storageClass.name
+		pvcRestore.createWithSnapshotDataSource(oc)
+		defer pvcRestore.deleteAsAdmin(oc)
+
+		g.By("Create pod with the restored pvc and wait for the pod ready")
+		podRestore.create(oc)
+		defer podRestore.deleteAsAdmin(oc)
+		podRestore.waitReady(oc)
+
+		g.By("Check the file exist in restored volume and its exec permission correct")
+		podRestore.checkMountedVolumeDataExist(oc, true)
+		podRestore.checkMountedVolumeHaveExecRight(oc)
+
+		g.By("# Check the restored pvc bound pv info on backend as expected")
+		// The restored volume should be encrypted using the same customer kms key
+		volumeInfo, getInfoErr = getAwsVolumeInfoByVolumeID(pvcRestore.getVolumeID(oc))
+		o.Expect(getInfoErr).NotTo(o.HaveOccurred())
+		o.Expect(gjson.Get(volumeInfo, `Volumes.0.Encrypted`).Bool()).Should(o.BeTrue())
+		o.Expect(gjson.Get(volumeInfo, `Volumes.0.KmsKeyId`).String()).Should(o.Equal(myKmsKeyArn))
+	})
 })
