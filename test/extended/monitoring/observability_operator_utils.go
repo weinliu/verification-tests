@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -35,11 +36,14 @@ type monitoringStackDescription struct {
 
 const (
 	subName   = "observability-operator"
+	ogName    = "observability-operator-og"
+	csName    = "observability-operator-catalog"
 	namespace = "openshift-observability-operator"
 )
 
+var csvName string
+
 func checkSubscription(oc *exutil.CLI) (out string, err error) {
-	var csvName string
 	g.By("Check the state of Operator")
 	errCheck := wait.PollImmediate(3*time.Second, 30*time.Second, func() (bool, error) {
 		out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("subscription", subName, "-n", namespace, "-o=jsonpath={.status.state}").Output()
@@ -91,11 +95,11 @@ func createOperator(oc *exutil.CLI, csTemplate string, ogTemplate string, subTem
 	e2e.Logf("Output: %v", out)
 
 }
-func createObservabilityOperator(oc *exutil.CLI, baseDir string) {
-	csTemplate := filepath.Join(baseDir, "catalog-src.yaml")
-	ogTemplate := filepath.Join(baseDir, "operator-group.yaml")
-	subTemplate := filepath.Join(baseDir, "subscription.yaml")
-	nsTemplate := filepath.Join(baseDir, "namespace.yaml")
+func createObservabilityOperator(oc *exutil.CLI, oboBaseDir string) {
+	csTemplate := filepath.Join(oboBaseDir, "catalog-src.yaml")
+	ogTemplate := filepath.Join(oboBaseDir, "operator-group.yaml")
+	subTemplate := filepath.Join(oboBaseDir, "subscription.yaml")
+	nsTemplate := filepath.Join(oboBaseDir, "namespace.yaml")
 	g.By("Install Observability Operator")
 	createOperator(oc, csTemplate, ogTemplate, subTemplate, nsTemplate)
 }
@@ -141,17 +145,17 @@ func checkMonitoringStack(oc *exutil.CLI, msD monitoringStackDescription) (out s
 	out, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", msD.namespace, "-l", "app.kubernetes.io/part-of=hypershift-monitoring-stack").Output()
 	return out, err
 }
-func checkOperatorPods(oc *exutil.CLI, msD monitoringStackDescription) {
-	g.By("Check " + msD.namespace + " namespace pods liveliness")
+func checkOperatorPods(oc *exutil.CLI) {
+	g.By("Check " + namespace + " namespace pods liveliness")
 	errCheck := wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
-		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", msD.namespace, "-l", "app.kubernetes.io/part-of=observability-operator").Output()
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-o=jsonpath={.items[*].status.phase}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(out, "obo-prometheus-operator-") {
+		if strings.Compare(out, "Succeeded Running Running Running Running Running") == 0 {
 			return true, nil
 		}
 		return false, err
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v namespace does not contain pods", msD.namespace))
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v namespace does not contain pods", namespace))
 
 }
 func checkRemoteWriteConfig(oc *exutil.CLI, msD monitoringStackDescription) {
@@ -215,12 +219,179 @@ func checkMonitoringStackDetails(oc *exutil.CLI, msD monitoringStackDescription)
 	})
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("MonitoringStack %v reports invalid status in namespace %v", msD.name, msD.namespace))
 }
-func cleanResources(oc *exutil.CLI, msD monitoringStackDescription, secD monitoringStackSecretDescription) {
-	g.By("Removing MonitoringStack")
+func deleteMonitoringStack(oc *exutil.CLI, msD monitoringStackDescription, secD monitoringStackSecretDescription) {
+	g.By("Removing MonitoringStack " + msD.name)
 	errStack := oc.AsAdmin().WithoutNamespace().Run("delete").Args("monitoringstack", msD.name, "-n", msD.namespace).Execute()
-	g.By("Removing MonitoringStack Secret")
+	g.By("Removing MonitoringStack Secret " + secD.name)
 	errSecret := oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", secD.name, "-n", secD.namespace).Execute()
 	o.Expect(errStack).NotTo(o.HaveOccurred())
 	o.Expect(errSecret).NotTo(o.HaveOccurred())
+
+}
+func deleteOperator(oc *exutil.CLI) {
+
+	g.By("Removing ClusterServiceVersion " + csvName)
+	errCsv := oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterserviceversions", csvName, "-n", namespace).Execute()
+	g.By("Removing Subscription " + subName)
+	errSub := oc.AsAdmin().WithoutNamespace().Run("delete").Args("subscription", subName, "-n", namespace).Execute()
+	g.By("Removing OperatorGroup " + ogName)
+	errOg := oc.AsAdmin().WithoutNamespace().Run("delete").Args("operatorgroup", ogName, "-n", namespace).Execute()
+	g.By("Removing CatalogSource " + csName)
+	errCs := oc.AsAdmin().WithoutNamespace().Run("delete").Args("catalogsource", csName, "-n", namespace).Execute()
+	g.By("Removing Namespace " + namespace)
+	errNs := oc.AsAdmin().WithoutNamespace().Run("delete").Args("namespace", namespace).Execute()
+	o.Expect(errCsv).NotTo(o.HaveOccurred())
+	o.Expect(errSub).NotTo(o.HaveOccurred())
+	o.Expect(errOg).NotTo(o.HaveOccurred())
+	o.Expect(errCs).NotTo(o.HaveOccurred())
+	o.Expect(errNs).NotTo(o.HaveOccurred())
+
+}
+func checkRuleExists(oc *exutil.CLI, token, routeName, namespace, ruleName string) bool {
+	var rules []gjson.Result
+	errCheck := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+		path, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", routeName, "-n", namespace, "-o=jsonpath={.spec.path}").Output()
+		if err != nil {
+			return false, nil
+		}
+		host, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", routeName, "-n", namespace, "-o=jsonpath={.spec.host}").Output()
+		if err != nil {
+			return false, nil
+		}
+		ruleCmd := fmt.Sprintf("curl -G -s -k -H\"Authorization: Bearer %s\" https://%s%s/v1/rules", token, host, path)
+		out, err := exec.Command("bash", "-c", ruleCmd).Output()
+		if err != nil {
+			return false, nil
+		}
+		rules = gjson.ParseBytes(out).Get("data.groups.#.file").Array()
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, "Rules are not loaded")
+	for _, rule := range rules {
+		if strings.Contains(rule.String(), ruleName) {
+			return true
+		}
+	}
+	return false
+
+}
+func checkConfigMapExists(oc *exutil.CLI, namespace, configmapName, checkStr string) bool {
+	searchOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", configmapName, "-n", namespace, "-o=jsonpath={.data.config\\.yaml}").Output()
+	if err != nil {
+		return false
+	}
+	if strings.Contains(searchOutput, checkStr) {
+		return true
+	}
+	return false
+}
+func createConfig(oc *exutil.CLI, namespace, cmName, config string) {
+	if !checkConfigMapExists(oc, namespace, cmName, "enableUserWorkload: true") {
+		e2e.Logf("Create configmap: user-workload-monitoring-config")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", config).Output()
+		if err != nil {
+			if strings.Contains(output, "AlreadyExists") {
+				err = nil
+			}
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+func checkOperatorMonitoring(oc *exutil.CLI, oboBaseDir string) {
+	g.By("Get SA token")
+	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+	g.By("Check prometheus rules")
+	errCheck := wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheusrule", "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(out, "alertmanager-rules") && strings.Contains(out, "prometheus-operator-rules") && strings.Contains(out, "prometheus-rules") && strings.Contains(out, "observability-operator-rules") {
+			return true, nil
+		}
+		return false, nil
+
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Prometheus rules are not created in %v namespace", namespace))
+	g.By("Check if UWM exists")
+	uwMonitoringConfig := filepath.Join(oboBaseDir, "user-workload-monitoring-cm.yaml")
+	createConfig(oc, "openshift-monitoring", "cluster-monitoring-config", uwMonitoringConfig)
+	g.By("Check Observability Operator Alertmanager Rules")
+	errCheck = wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+		IsAlertManagerRule := checkRuleExists(oc, token, "thanos-querier", "openshift-monitoring", "openshift-observability-operator-observability-operator-alertmanager-rules")
+		g.By("Check Observability Operator Prometheus Operator Rules")
+		IsPrometheusOperatorRule := checkRuleExists(oc, token, "thanos-querier", "openshift-monitoring", "openshift-observability-operator-observability-operator-prometheus-operator-rules")
+		g.By("Check Observability Operator Prometheus Rules")
+		IsPrometheusRule := checkRuleExists(oc, token, "thanos-querier", "openshift-monitoring", "openshift-observability-operator-observability-operator-prometheus-rules")
+		g.By("Check Observability Operator Rules")
+		IsOperatorRule := checkRuleExists(oc, token, "thanos-querier", "openshift-monitoring", "openshift-observability-operator-observability-operator-rules")
+		if IsAlertManagerRule && IsPrometheusOperatorRule && IsPrometheusRule && IsOperatorRule {
+			return true, nil
+		}
+		return false, nil
+
+	})
+	exutil.AssertWaitPollNoErr(errCheck, "Observability operator rules are not loaded")
+	g.By("Check Observability Operator metrics")
+	checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query={__name__=~"controller_runtime_reconcile.*",job="observability-operator",namespace="openshift-observability-operator"}'`, token, "openshift-observability-operator", platformLoadTime)
+
+}
+func checkLabel(oc *exutil.CLI) {
+	var labelName = "network.openshift.io/policy-group=monitoring"
+	g.By("Check if the label" + labelName + "exists in the namespace" + namespace)
+	out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", namespace, "-o=jsonpath={.metadata.labels}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(strings.Contains(out, "monitoring")).To(o.BeTrue())
+}
+func checkPodHealth(oc *exutil.CLI) {
+
+	var (
+		actualLiveness  interface{}
+		actualReadiness interface{}
+		outputLiveness  = `{
+			"failureThreshold": 3,
+			"httpGet": {
+			  "path": "/healthz",
+			  "port": 8081,
+			  "scheme": "HTTP"
+			},
+			"periodSeconds": 10,
+			"successThreshold": 1,
+			"timeoutSeconds": 1
+		  }`
+		outputReadiness = `{
+			"failureThreshold": 3,
+			"httpGet": {
+			  "path": "/healthz",
+			  "port": 8081,
+			  "scheme": "HTTP"
+			},
+			"periodSeconds": 10,
+			"successThreshold": 1,
+			"timeoutSeconds": 1
+		  }`
+		expectedLiveness  = gjson.Parse(outputLiveness).Value()
+		expectedReadiness = gjson.Parse(outputReadiness).Value()
+	)
+
+	g.By("Check remote write config")
+	errCheck := wait.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
+		g.By("Get the observability operator pod")
+		podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-l", "app.kubernetes.io/name=observability-operator", "-oname").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Get the liveliness for " + podName)
+		livenessOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(podName, "-n", namespace, "-o=jsonpath={.spec.containers[].livenessProbe}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		readinessOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(podName, "-n", namespace, "-o=jsonpath={.spec.containers[].readinessProbe}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Live: %v", livenessOut)
+		e2e.Logf("Ready: %v", readinessOut)
+		actualLiveness = gjson.Parse(livenessOut).Value()
+		actualReadiness = gjson.Parse(readinessOut).Value()
+		if reflect.DeepEqual(actualLiveness, expectedLiveness) && reflect.DeepEqual(actualReadiness, expectedReadiness) {
+			return true, nil
+		}
+		return false, nil
+
+	})
+	exutil.AssertWaitPollNoErr(errCheck, "liveness/readiness probe not implemented correctly in observability operator pod")
 
 }
