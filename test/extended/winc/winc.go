@@ -393,16 +393,32 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-42516-byoh-Configure Windows instance with IP [Slow][Disruptive]", func() {
 		namespace := "winc-42516"
 		byohMachineSetName := getWindowsMachineSetName(oc, "byoh", iaasPlatform, zone)
+		defer waitWindowsNodesReady(oc, 2, 15*time.Minute)
 		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, byohMachineSetName, "-n", mcoNamespace).Output()
 		defer oc.WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
-		setBYOH(oc, iaasPlatform, "InternalIP", byohMachineSetName)
 		defer deleteProject(oc, namespace)
+
+		byohIP := setBYOH(oc, iaasPlatform, "InternalIP", byohMachineSetName)
 		createProject(oc, namespace)
 		createWindowsWorkload(oc, namespace, "windows_web_server_byoh.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
 		scaleDeployment(oc, windowsWorkloads, 5, namespace)
 		msg, err := oc.WithoutNamespace().Run("get").Args("pods", "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf(msg)
+
+		byohNode := getNodeNameFromIP(oc, byohIP[0], iaasPlatform)
+
+		// change version annotation on node
+		oc.WithoutNamespace().Run("annotate").Args("node", byohNode, "--overwrite", "windowsmachineconfig.openshift.io/version=invalidVersion").Output()
+		waitVersionAnnotationReady(oc, byohNode, 30*time.Second, 600*time.Second)
+		waitUntilWMCOStatusChanged(oc, "instance has been deconfigured")
+		waitWindowsNodeReady(oc, byohNode, 15*time.Minute)
+
+		// deleting the BYOH node
+		oc.WithoutNamespace().Run("delete").Args("node", byohNode).Output()
+		// wait the byoh node is back
+		waitUntilWMCOStatusChanged(oc, "transferring files")
+		waitWindowsNodeReady(oc, byohNode, 5*time.Minute)
 	})
 
 	// author rrasouli@redhat.com

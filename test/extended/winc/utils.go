@@ -63,6 +63,36 @@ func waitWindowsNodesReady(oc *exutil.CLI, expectedNodes int, timeout time.Durat
 	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Windows Nodes are not ready after waiting up to %v minutes ...", timeout))
 }
 
+func waitWindowsNodeReady(oc *exutil.CLI, windowsNodeName string, timeout time.Duration) {
+	nodeExists := false
+	pollErr := wait.Poll(10*time.Second, timeout, func() (bool, error) {
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", windowsNodeName, "--no-headers").Output()
+		if err != nil {
+			e2e.Logf("Error getting node %s: %v. Waiting 10 seconds more...", windowsNodeName, err)
+			return false, nil
+		}
+
+		nodesArray := strings.Fields(msg)
+		if !nodeExists {
+			nodeExists = true
+			e2e.Logf("Expected %s Windows node was found", windowsNodeName)
+		}
+
+		nodesReady := strings.EqualFold(nodesArray[1], "Ready")
+		if !nodesReady {
+			e2e.Logf("Expected %s Windows node is not ready yet. Waiting 10 seconds more ...", windowsNodeName)
+			return false, nil
+		}
+
+		e2e.Logf("Expected %s Windows node is ready", windowsNodeName)
+		return true, nil
+	})
+
+	if pollErr != nil {
+		e2e.Failf("Expected %s Windows node is not ready after waiting up to %v ...", windowsNodeName, timeout)
+	}
+}
+
 // This function returns the windows build e.g windows-build: '10.0.19041'
 func getWindowsBuildID(oc *exutil.CLI, nodeID string) (string, error) {
 	build, err := oc.WithoutNamespace().Run("get").Args("node", nodeID, "-o=jsonpath={.metadata.labels.node\\.kubernetes\\.io\\/windows-build}").Output()
