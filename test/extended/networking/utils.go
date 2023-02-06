@@ -2350,3 +2350,10 @@ func execCmdOnDebugNodeOfHostedCluster(oc *exutil.CLI, nodeName string, cmdOptio
 
 	return debugErr
 }
+
+// check the cronjobs in the openshift-multus namespace
+func getMultusCronJob(oc *exutil.CLI) string {
+	cronjobLog, cronjobErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("cronjobs", "-n", "openshift-multus").Output()
+	o.Expect(cronjobErr).NotTo(o.HaveOccurred())
+	return cronjobLog
+}
