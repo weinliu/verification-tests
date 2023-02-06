@@ -792,7 +792,7 @@ func forceWicdReconciliation(oc *exutil.CLI, winHostName string) {
 func getServiceTimeStamp(oc *exutil.CLI, winHostIP string, privateKey string, iaasPlatform string, status string, serviceName string) time.Time {
 
 	bastionHost := getSSHBastionHost(oc, iaasPlatform)
-	layout := "Monday January 02 2006 15:04:05 PM"
+	layout := "Monday January 2 2006 15:04:05 PM"
 	cmd := fmt.Sprintf("(Get-EventLog -LogName \\\"System\\\" -Source \\\"Service Control Manager\\\" -EntryType \\\"Information\\\" -Message \\\"*%v service *%v*\\\" -Newest 1).TimeGenerated", serviceName, status)
 	msg, err := runPSCommand(bastionHost, winHostIP, cmd, privateKey, iaasPlatform)
 	o.Expect(err).NotTo(o.HaveOccurred())
