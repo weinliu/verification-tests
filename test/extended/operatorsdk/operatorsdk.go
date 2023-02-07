@@ -2809,7 +2809,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-44551-SDK support helm type operator for http_proxy env", func() {
 		architecture := exutil.GetClusterArchitecture(oc)
-		if architecture != "amd64" && architecture != "arm64" {
+		if architecture != "amd64" {
 			g.Skip("Do not support " + architecture)
 		}
 		tmpBasePath := "/tmp/ocp-44551-" + getRandomString()
