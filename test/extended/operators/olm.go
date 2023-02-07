@@ -33,6 +33,37 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: jiazha@redhat.com
+	g.It("Author:jiazha-High-59422-package-server-manager does not stomp on changes made to packgeserver CSV", func() {
+		g.By("1) change the packageser CSV's securityContext")
+		packageserverCSVYaml, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o", "yaml").OutputToFile("ocp59422-csv.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.ModifyYamlFileContent(packageserverCSVYaml, []exutil.YamlReplace{
+			{
+				Path:  "spec.install.spec.deployments.0.spec.template.spec.containers.0.securityContext.allowPrivilegeEscalation",
+				Value: "true",
+			},
+			{
+				Path:  "spec.install.spec.deployments.0.spec.template.spec.securityContext.runAsNonRoot",
+				Value: "false",
+			},
+		})
+		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", packageserverCSVYaml, "-n", "openshift-operator-lifecycle-manager").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("2) check if the packageserver CSV's securityContext config reback")
+		allowPrivilegeEscalation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.spec.install.spec.deployments[0].spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if allowPrivilegeEscalation != "false" {
+			e2e.Failf("The packageserver CSV was not reset, allowPrivilegeEscalation is %s", allowPrivilegeEscalation)
+		}
+		runAsNonRoot, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o=jsonpath={.spec.install.spec.deployments[0].spec.template.spec.securityContext.runAsNonRoot}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if runAsNonRoot != "true" {
+			e2e.Failf("The packageserver CSV was not reset, runAsNonRoot is %s", runAsNonRoot)
+		}
+	})
+
+	// author: jiazha@redhat.com
 	g.It("Author:jiazha-Medium-53914-OLM controller plug-in for openshift-* namespace labelling [Serial]", func() {
 		// openshifttest-53914 without openshift- prefix
 		// openshift-test-53914 without the `security.openshift.io/scc.podSecurityLabelSync=true` label
