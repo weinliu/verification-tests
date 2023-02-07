@@ -30,6 +30,8 @@ const (
 	MapiMachine = "machines.machine.openshift.io"
 	//MapiMHC means the fullname of mapi machinehealthcheck
 	MapiMHC = "machinehealthchecks.machine.openshift.io"
+	//VsphereServer vSphere server hostname
+	VsphereServer = "vcenter.sddc-44-236-21-251.vmwarevmc.com"
 )
 
 // MachineSetDescription define fields to create machineset
@@ -371,4 +373,48 @@ func SkipForSNOCluster(oc *CLI) {
 	if len(masterNodes) == 1 && len(workerNodes) == 1 && masterNodes[0] == workerNodes[0] {
 		g.Skip("Skip for SNO cluster.")
 	}
+}
+
+// GetVsphereCredentialFromCluster retrieves vSphere credentials as env variables
+func GetVsphereCredentialFromCluster(oc *CLI) {
+
+	credential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/vsphere-creds", "-n", "kube-system", "-o", "json").Output()
+	// Skip for sts and c2s clusters.
+	if err != nil {
+		g.Skip("Did not get credential to access vSphere, skip the testing.")
+
+	}
+
+	// Scape the dots in the vsphere server hostname to access the json value
+	scapedVsphereName := strings.ReplaceAll(VsphereServer, ".", "\\.")
+	usernameBase64, passwordBase64 := gjson.Get(credential, `data.`+scapedVsphereName+`\.username`).String(), gjson.Get(credential, `data.`+scapedVsphereName+`\.password`).String()
+
+	username, err := base64.StdEncoding.DecodeString(usernameBase64)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	password, err := base64.StdEncoding.DecodeString(passwordBase64)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	os.Setenv("VSPHERE_USER", string(username))
+	os.Setenv("VSPHERE_PASSWORD", string(password))
+	os.Setenv("VSPHERE_SERVER", VsphereServer)
+
+}
+
+// GetGcpCredentialFromCluster retrieves vSphere credentials as env variables
+func GetGcpCredentialFromCluster(oc *CLI) {
+
+	credential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/gcp-credentials", "-n", "kube-system", "-o", "json").Output()
+	// Skip for sts and c2s clusters.
+	if err != nil {
+		g.Skip("Did not get credential to access GCP, skip the testing.")
+
+	}
+
+	serviceAccountBase64 := gjson.Get(credential, `data.service_account\.json`).String()
+
+	serviceAccount, err := base64.StdEncoding.DecodeString(serviceAccountBase64)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	os.Setenv("GOOGLE_CREDENTIALS", string(serviceAccount))
+
 }

@@ -243,6 +243,7 @@ func GetAzureCredentialFromCluster(oc *CLI) (string, error) {
 		AzureSubscriptionID string `json:"azure_subscription_id,omitempty"`
 		AzureTenantID       string `json:"azure_tenant_id,omitempty"`
 		AzureResourceGroup  string `json:"azure_resourcegroup,omitempty"`
+		AzureResourcePrefix string `json:"azure_resource_prefix,omitempty"`
 	}
 	azureCreds := azureCredentials{}
 	if err := json.Unmarshal([]byte(credential), &azureCreds); err != nil {
@@ -273,10 +274,16 @@ func GetAzureCredentialFromCluster(oc *CLI) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	azureResourcePrefix, err := base64.StdEncoding.DecodeString(azureCreds.AzureResourcePrefix)
+	if err != nil {
+		return "", err
+	}
 	os.Setenv("AZURE_CLIENT_ID", string(azureClientID))
 	os.Setenv("AZURE_CLIENT_SECRET", string(azureClientSecret))
 	os.Setenv("AZURE_SUBSCRIPTION_ID", string(azureSubscriptionID))
 	os.Setenv("AZURE_TENANT_ID", string(azureTenantID))
+	os.Setenv("AZURE_RESOURCE_PREFIX", string(azureResourcePrefix))
 	e2e.Logf("Azure credentials successfully loaded.")
 	return string(azureResourceGroup), nil
 }
