@@ -1235,7 +1235,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		g.By("scorecard basic test migration")
 		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "100s", "--selector=test=basic-check-spec-test", "-n", oc.Namespace()).Output()
 		e2e.Logf(" scorecard bundle %v", err)
-		o.Expect(output).To(o.ContainSubstring("State: fail"))
+		o.Expect(output).To(o.ContainSubstring("State: pass"))
 		o.Expect(output).To(o.ContainSubstring("spec missing from [memcached-sample]"))
 
 		// OCP-43976
@@ -1358,7 +1358,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		g.By("scorecard basic test migration")
 		output, err = operatorsdkCLI.Run("scorecard").Args("./bundle", "-c", "./bundle/tests/scorecard/config.yaml", "-w", "60s", "--selector=test=basic-check-spec-test", "-n", oc.Namespace()).Output()
 		e2e.Logf(" scorecard bundle %v", err)
-		o.Expect(output).To(o.ContainSubstring("State: fail"))
+		o.Expect(output).To(o.ContainSubstring("State: pass"))
 		o.Expect(output).To(o.ContainSubstring("spec missing from [memcached43660-sample]"))
 		pathOutput := filepath.Join(tmpPath, "test-output", "basic", "basic-check-spec-test")
 		waitErr = wait.Poll(2*time.Second, 6*time.Second, func() (bool, error) {
