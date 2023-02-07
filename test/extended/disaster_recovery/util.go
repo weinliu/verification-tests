@@ -279,3 +279,28 @@ func checkOperator(oc *exutil.CLI, operatorName string) {
 	})
 	exutil.AssertWaitPollNoErr(err, "clusteroperator abnormal")
 }
+
+func waitMachineDesiredStatus(oc *exutil.CLI, newMasterMachineName string, desiredState string) {
+	err := wait.Poll(60*time.Second, 480*time.Second, func() (bool, error) {
+		machineStatus, err := oc.AsAdmin().Run("get").Args("-n", "openshift-machine-api", exutil.MapiMachine, newMasterMachineName, "-o=jsonpath='{.status.phase}'").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if match, _ := regexp.MatchString(desiredState, machineStatus); match {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "sorry the machine is not in desired state")
+}
+
+func waitForDesiredStateOfCR(oc *exutil.CLI, desiredState string) {
+	err := wait.Poll(60*time.Second, 480*time.Second, func() (bool, error) {
+		statusOfCR, err := oc.AsAdmin().Run("get").Args("controlplanemachineset.machine.openshift.io", "cluster", "-n", "openshift-machine-api", "-o=jsonpath={.spec.state}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("statusOfCR is %v ", statusOfCR)
+		if statusOfCR == desiredState {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "sorry the CR is not in desired state")
+}

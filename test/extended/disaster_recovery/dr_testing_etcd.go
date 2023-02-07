@@ -321,4 +321,67 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 
 	})
 
+	// author: skundu@redhat.com
+	g.It("Longduration-Author:skundu-NonPreRelease-Critical-59377-etcd-operator should not scale-down when all members are healthy. [Disruptive]", func() {
+		g.By("etcd-operator should not scale-down when all members are healthy")
+
+		g.By("Make sure all the etcd pods are running")
+		defer o.Expect(checkEtcdPodStatus(oc)).To(o.BeTrue())
+		podAllRunning := checkEtcdPodStatus(oc)
+		if podAllRunning != true {
+			g.Skip("The ectd pods are not running")
+		}
+		g.By("Get all the master node name & count")
+		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
+		masterNodeCount := len(masterNodeList)
+		e2e.Logf("masterNodeCount is %v", masterNodeCount)
+
+		g.By("Get master machine name list")
+		output, errMachineConfig := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(errMachineConfig).NotTo(o.HaveOccurred())
+		masterMachineNameList := strings.Fields(output)
+
+		e2e.Logf("masterMachineNameList is %v", masterMachineNameList)
+		g.By("Delete the CR")
+		_, err := oc.AsAdmin().Run("delete").Args("-n", "openshift-machine-api", "controlplanemachineset.machine.openshift.io", "cluster").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForDesiredStateOfCR(oc, "Inactive")
+
+		g.By("delete machine of the master node")
+		errMachineDelete := oc.AsAdmin().Run("delete").Args("-n", "openshift-machine-api", "--wait=false", "machine", masterMachineNameList[0]).Execute()
+		o.Expect(errMachineDelete).NotTo(o.HaveOccurred())
+
+		machineStatusOutput, errStatus := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o", "jsonpath={.items[*].status.phase}").Output()
+		o.Expect(errStatus).NotTo(o.HaveOccurred())
+		masterMachineStatus := strings.Fields(machineStatusOutput)
+		e2e.Logf("masterMachineStatus after deletion is %v", masterMachineStatus)
+		waitMachineDesiredStatus(oc, masterMachineNameList[0], "Deleting")
+
+		g.By("enable the control plane machineset")
+		patch := `[{"op": "replace", "path": "/spec/state", "value": "Active"}]`
+		startErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", "openshift-machine-api", "controlplanemachineset.machine.openshift.io", "cluster", "--type=json", "-p", patch).Execute()
+		o.Expect(startErr).NotTo(o.HaveOccurred())
+		waitForDesiredStateOfCR(oc, "Active")
+
+		waitforDesiredMachineCount(oc, masterNodeCount+1)
+
+		g.By("Get all master machine name list after deletion is initiated")
+		output, errNewMachineConfig := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(errNewMachineConfig).NotTo(o.HaveOccurred())
+		newMasterMachineNameList := strings.Fields(output)
+
+		e2e.Logf("newMasterMachineNameList is %v", newMasterMachineNameList)
+
+		newMachineStatusOutput, errStatus := oc.AsAdmin().Run("get").Args(exutil.MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machine-role=master", "-o", "jsonpath={.items[*].status.phase}").Output()
+		o.Expect(errStatus).NotTo(o.HaveOccurred())
+		newMasterMachineStatus := strings.Fields(newMachineStatusOutput)
+		e2e.Logf("newMasterMachineStatus after deletion is %v", newMasterMachineStatus)
+
+		newMasterMachine := getNewMastermachine(newMasterMachineStatus, newMasterMachineNameList, "Provision")
+		g.By("Verify that the new machine is in running state.")
+		waitMachineStatusRunning(oc, newMasterMachine)
+		g.By("Make sure the old machine is deleted and goes away from the master machine list.")
+		waitforDesiredMachineCount(oc, masterNodeCount)
+
+	})
 })
