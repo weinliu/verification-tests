@@ -1219,6 +1219,7 @@ nulla pariatur.`
 	g.It("Author:sregidor-Longduration-NonPreRelease-High-46434-Mask service [Serial]", func() {
 		activeString := "Active: active (running)"
 		inactiveString := "Active: inactive (dead)"
+		maskedString := "Loaded: masked"
 
 		g.By("Validate that the chronyd service is active")
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
@@ -1262,6 +1263,7 @@ nulla pariatur.`
 		// So we dont check the error, only the output
 		o.Expect(svcMaskedOuput).ShouldNot(o.ContainSubstring(activeString))
 		o.Expect(svcMaskedOuput).Should(o.ContainSubstring(inactiveString))
+		o.Expect(svcMaskedOuput).Should(o.ContainSubstring(maskedString))
 
 		g.By("Patch the MachineConfig resource to unmaskd the svc")
 		// This part needs to be changed once we refactor MachineConfig to embed the Resource struct.
@@ -2779,6 +2781,50 @@ nulla pariatur.`
 			o.MatchJSON(expectedTlsCipherSuites),
 			"The configured tlsCipherSuites in /etc/kubernetes/kubelet.conf file are not the expected one")
 		logger.Infof("OK!\n")
+	})
+	g.It("Author:sregidor-NonPreRelease-Medium-56614-Create unit with content and mask=true[Disruptive]", func() {
+		var (
+			workerNode     = NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
+			maskedString   = "Loaded: masked"
+			inactiveString = "Active: inactive (dead)"
+			mcName         = "tc-56614-maks-and-contents"
+			svcName        = "tc-56614-maks-and-contents.service"
+			svcContents    = "[Unit]\nDescription=Just random content for test case 56614"
+			maskSvcConfig  = getMaskServiceWithContentsConfig(svcName, true, svcContents)
+		)
+
+		g.By("Create a MachineConfig resource to mask the chronyd service")
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
+		mc.parameters = []string{fmt.Sprintf("UNITS=[%s]", maskSvcConfig)}
+		defer mc.delete()
+
+		mc.create()
+		logger.Infof("OK!\n")
+
+		g.By("Wait until worker MachineConfigPool has finished the configuration")
+		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+		mcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		g.By("Validate that the service is masked")
+		output, _ := workerNode.DebugNodeWithChroot("systemctl", "status", svcName)
+		// Since the service is masked, the "systemctl status" command will return a value != 0 and an error will be reported
+		// So we dont check the error, only the output
+		o.Expect(output).Should(o.And(
+			o.ContainSubstring(inactiveString),
+			o.ContainSubstring(maskedString),
+		),
+			"Service %s should be inactive and masked, but it is not.", svcName)
+		logger.Infof("OK!\n")
+
+		g.By("Validate the content")
+		rf := NewRemoteFile(workerNode, "/etc/systemd/system/"+svcName)
+		rferr := rf.Fetch()
+		o.Expect(rferr).NotTo(o.HaveOccurred())
+		o.Expect(rf.GetSymLink()).Should(o.Equal(fmt.Sprintf("'/etc/systemd/system/%s' -> '/dev/null'", svcName)),
+			"The service is masked, so service's file should be a link to /dev/null")
+		logger.Infof("OK!\n")
+
 	})
 })
 

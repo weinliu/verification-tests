@@ -303,6 +303,12 @@ func getGzipFileJSONConfig(destinationPath, fileContent string) string {
 	return fileConfig
 }
 
+func getMaskServiceWithContentsConfig(name string, mask bool, unitContents string) string {
+	// Escape not valid characters in json from the file content
+	escapedContent := jsonEncode(unitContents)
+	return fmt.Sprintf(`{"name": "%s", "mask": %t, "contents": %s}`, name, mask, escapedContent)
+}
+
 func getMaskServiceConfig(name string, mask bool) string {
 	return fmt.Sprintf(`{"name": "%s", "mask": %t}`, name, mask)
 }
