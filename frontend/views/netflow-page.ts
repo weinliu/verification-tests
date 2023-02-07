@@ -1,7 +1,12 @@
 
 export const netflowPage = {
     visit: () => {
+        cy.intercept('**/backend/api/loki/topology*').as('call1')
         cy.visit('/netflow-traffic')
+        // wait for all calls to complete before checking due to bug
+        cy.wait('@call1', { timeout: 15000 }).wait('@call1')
+
+        cy.get('[data-test="filters"] > [data-test="clear-all-filters-button"]').should('exist').click()
 
         // set the page to auto refresh
         cy.byTestID(genSelectors.refreshDrop).then(btn => {
@@ -10,7 +15,8 @@ export const netflowPage = {
                 cy.get('[data-test="15s"]').should('exist').click()
             })
         })
-        cy.byTestID("table-composable").should('exist')
+        cy.byTestID('no-results-found').should('not.exist')
+        cy.get('#overview-container').should('exist')
     },
     toggleFullScreen: () => {
         cy.byTestID(genSelectors.moreOpts).should('exist').click().then(moreOpts => {
@@ -20,13 +26,16 @@ export const netflowPage = {
 }
 
 export const topologyPage = {
-    selectScopeGroup: (scope: string, group: any) => {
-        cy.byTestID("scope-dropdown").click().byTestID(scope).click()
-        if (group) {
-            cy.get('#options').click()
-            cy.byTestID("group-dropdown").click().byTestID(group).click()
-            cy.get(topologySelectors.optsClose).click()
+    selectScopeGroup: (scope: any, group: any) => {
+        cy.contains('Display options').should('exist').click()
+        if (scope) {
+            cy.byTestID("scope-dropdown").click().byTestID(scope).click()
         }
+        if (group) {
+            cy.wait(5000)
+            cy.byTestID("group-dropdown").click().byTestID(group).click()
+        }
+        cy.contains('Display options').should('exist').click()
     },
     isViewRendered: () => {
         cy.get('[data-surface="true"]').should('exist')
@@ -40,15 +49,12 @@ export namespace genSelectors {
     export const moreOpts = 'more-options-button'
     export const FullScreen = 'fullscreen-button'
     export const CSVExport = 'export-button'
-    export const compact = '[index="0"] > ul > :nth-child(1) > .pf-c-dropdown__menu-item'
-    export const normal = ':nth-child(2) > .pf-c-dropdown__menu-item'
-    export const large = ':nth-child(3) > .pf-c-dropdown__menu-item'
     export const exportCsv = '[index="1"] > ul > li > .pf-c-dropdown__menu-item'
     export const expand = '[index="2"] > ul > li > .pf-c-dropdown__menu-item'
 }
 
 export namespace colSelectors {
-    export const mColumns = 'manage-columns-button'
+    export const mColumns = '#view-options-dropdown > ul > section:nth-child(1) > ul > li > a'
     export const columnsModal = '.modal-content'
     export const save = 'columns-save-button'
     export const resetDefault = 'columns-reset-button'
@@ -88,7 +94,7 @@ export namespace topologySelectors {
     export const groupLayer = '[data-layer-id="groups"]'
     export const defaultLayer = '[data-layer-id="default"]'
     export const groupToggle = '[for="group-collapsed-switch"] > .pf-c-switch__toggle'
-    export const edgeToggle = '[for="edges-switch"] > .pf-c-switch__toggle'
-    export const labelToggle = '[for="edges-tag-switch"] > .pf-c-switch__toggle'
-    export const badgeToggle = '[for="badge-switch"] > .pf-c-switch__toggle'
+    export const edgeToggle = "#edges-switch"
+    export const labelToggle = '#edges-tag-switch'
+    export const badgeToggle = '#badge-switch'
 }

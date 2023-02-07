@@ -39,36 +39,26 @@ export class NetObserv {
         this.oc.apply_manifest(flowcollector)
     }
 }
-
 export const Operator = {
-    createCustomCatalog: (image: any, catalogSource = "netobserv-test") => {
-        cy.visit('k8s/cluster/config.openshift.io~v1~OperatorHub/cluster/sources')
-        if (catalogSource != "community-operators" && image == null) {
-            throw new Error("Operator catalog image must be specified for catalogSource other than community-operator");
+    name: () => {
+        if (Cypress.env('noo_catalog_src') == "upstream") {
+            return "NetObserv Operator"
         }
-
-        if (catalogSource != "community-operators") {
-            cy.byTestID('item-create').should('exist').click()
-            cy.byTestID('catalog-source-name').type(catalogSource)
-            cy.get('#catalog-source-display-name').type('NetObserv QE')
-            cy.get('#catalog-source-publisher').type('ocp-qe')
-            cy.byTestID('catalog-source-image').type(image)
-            cy.byTestID('save-changes').click()
+        else {
+            return "Network observability"
         }
-
-        cy.byTestID(catalogSource).should('exist')
-        cy.byTestID(catalogSource + '-status', { timeout: 60000 }).should('have.text', "READY")
     },
     install: (catalogSourceDisplayName: string) => {
         operatorHubPage.goTo()
         const catalogSourceSelectorCheckbox = `input[title="${catalogSourceDisplayName}"]`
         cy.get(catalogSourceSelectorCheckbox).check()
-        operatorHubPage.install("NetObserv Operator")
+        operatorHubPage.install(Operator.name())
     },
     createFlowcollector: (namespace: string) => {
         // this assumes Loki is already deployed in netobserv NS
         cy.visit('k8s/ns/openshift-operators/operators.coreos.com~v1alpha1~ClusterServiceVersion')
-        cy.get('[data-test-operator-row="NetObserv Operator"]').invoke('attr', 'href').then(href => {
+        const selector = '[data-test-operator-row="' + Operator.name() + '"]'
+        cy.get(selector).invoke('attr', 'href').then(href => {
             cy.visit(href)
         })
 
@@ -86,19 +76,12 @@ export const Operator = {
         cy.get('#root_spec_loki_url').clear().type(`http://loki.${namespace}.svc:3100/`)
         cy.get('#root_spec_namespace').clear().type(namespace)
         cy.byTestID('create-dynamic-form').click()
+        cy.byTestID('status-text').should('exist').should('have.text', 'Ready')
 
-        cy.byTestID('toast-action', { timeout: 60000 }).should('exist')
+        cy.byTestID('refresh-web-console', { timeout: 60000 }).should('exist')
+        // for OCP <= 4.12 refresh-web-console element doesn't exist, use toast-action instead.
+        // cy.byTestID('toast-action', { timeout: 60000 }).should('exist')
         cy.reload(true)
-
-        netflowPage.visit()
-        cy.byTestID(genSelectors.refreshDrop, { timeout: 30000 }).then(btn => {
-            expect(btn).to.exist
-            cy.wrap(btn).click().then(drop => {
-                cy.get('[data-test="15s"]').should('exist').click()
-            })
-        })
-
-        cy.byTestID("table-composable", { timeout: 120000 }).should('exist')
     },
     deleteFlowCollector: () => {
         cy.visit('k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion')
@@ -116,7 +99,7 @@ export const Operator = {
     uninstall: () => {
         cy.visit('k8s/all-namespaces/operators.coreos.com~v1alpha1~ClusterServiceVersion')
 
-        cy.contains('NetObserv Operator').should('exist').invoke('attr', 'href').then(href => {
+        cy.contains(Operator.name()).should('exist').invoke('attr', 'href').then(href => {
             cy.visit(href)
         })
         cy.get('.co-actions-menu > .pf-c-dropdown__toggle').should('exist').click()
@@ -125,7 +108,7 @@ export const Operator = {
     },
     deleteCatalogSource: (catalogSource: string) => {
         cy.visit('k8s/cluster/config.openshift.io~v1~OperatorHub/cluster/sources')
-        cy.byTestID(catalogSource).invoke('attr', 'href').then(href => {
+        cy.byTestID(catalogSource).should('exist').invoke('attr', 'href').then(href => {
             cy.visit(href)
         })
         cy.get('.co-actions-menu > .pf-c-dropdown__toggle').should('exist').click()
