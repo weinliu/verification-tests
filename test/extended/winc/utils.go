@@ -30,6 +30,7 @@ var (
 	defaultNamespace = "winc-test"
 	windowsWorkloads = "win-webserver"
 	linuxWorkloads   = "linux-webserver"
+	bastionKey       = "../internal/config/keys/openshift-qe.pem"
 )
 
 func createProject(oc *exutil.CLI, namespace string) {
@@ -212,8 +213,10 @@ func getBastionSSHUser(iaasPlatform string) (user string) {
 
 func runPSCommand(bastionHost string, windowsHost string, command string, privateKey string, iaasPlatform string) (result string, err error) {
 	windowsUser := getAdministratorNameByPlatform(iaasPlatform)
+	os.Chmod(bastionKey, 0600)
+	os.Chmod(privateKey, 0600)
 	command = "\"" + command + "\""
-	cmd := "chmod 600 " + privateKey + "; ssh -i " + privateKey + " -t -o StrictHostKeyChecking=no -o ProxyCommand=\"ssh -i " + privateKey + " -A -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -W %h:%p " + getBastionSSHUser(iaasPlatform) + "@" + bastionHost + "\" " + windowsUser + "@" + windowsHost + " 'powershell " + command + "'"
+	cmd := "ssh -i " + privateKey + " -t -o StrictHostKeyChecking=no -o ProxyCommand=\"ssh -i " + bastionKey + " -A -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -W %h:%p " + getBastionSSHUser(iaasPlatform) + "@" + bastionHost + "\" " + windowsUser + "@" + windowsHost + " 'powershell " + command + "'"
 	msg, err := exec.Command("bash", "-c", cmd).CombinedOutput()
 	return string(msg), err
 }

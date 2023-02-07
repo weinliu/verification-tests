@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -1387,6 +1388,69 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// A delay waiting for machine upgrade to be completed
 		waitUntilWMCOStatusChanged(oc, "\"unhealthy\":0")
+
+	})
+
+	// author rrasouli@redhat.com
+	g.It("Longduration-Author:rrasouli-NonPreRelease-Medium-44099-Secure Windows workers username annotation [Disruptive]", func() {
+		g.By(" Creating new BYOH node ")
+		byohMachineSetName := getWindowsMachineSetName(oc, "byoh", iaasPlatform, zone)
+
+		waitWindowsNodesReady(oc, 2, 3000*time.Second)
+		defer waitForMachinesetReady(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 45, 2)
+		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, byohMachineSetName, "-n", mcoNamespace).Output()
+		defer oc.WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
+		byohMachine := setBYOH(oc, iaasPlatform, "InternalIP", byohMachineSetName)
+		defer os.Remove("mykey")
+		defer os.Remove("mykey.pub")
+		oldPubKey, err := oc.WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0], iaasPlatform), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/pub-key-hash}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		oldUsernameHash, err := oc.WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0], iaasPlatform), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/username}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By(" Creating new SSL keys ")
+		cmd := "ssh-keygen  -N '' -C 'test' -f mykey"
+		_, err = exec.Command("bash", "-c", cmd).CombinedOutput()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By(" Open public key file ")
+		content, err := os.ReadFile("mykey.pub")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By(" Appending public key into BYOH node ssh administrators_authorized_keys ")
+		cmd = fmt.Sprintf("Add-Content -Value \\\"%q\\\" -Path C:\\ProgramData\\ssh\\administrators_authorized_keys", content)
+		bastionHost := getSSHBastionHost(oc, iaasPlatform)
+		_, err = runPSCommand(bastionHost, byohMachine[0], cmd, privateKey, iaasPlatform)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By(" Deleting the private key ")
+		defer oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", wmcoNamespace).Output()
+		_, err = oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By(" Replacing the private key with the a new one previously created ")
+		defer oc.WithoutNamespace().Run("delete").Args("secret", "cloud-private-key", "-n", wmcoNamespace).Output()
+		_, err = oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem=mykey", "-n", wmcoNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		waitUntilWMCOStatusChanged(oc, "\"unhealthy\":0")
+		g.By(" Comparing username public keys hash changed ")
+		newPubkey, err := oc.WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0], iaasPlatform), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/pub-key-hash}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newUsernameHash, err := oc.WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0], iaasPlatform), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/username}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(oldPubKey).ShouldNot(o.Equal(newPubkey), "Content of old pub key is similar as new pub key")
+		o.Expect(oldUsernameHash).ShouldNot(o.Equal(newUsernameHash), "Old username hash is similiar as new username hash")
+		myPrivateKey, err := filepath.Abs("./mykey")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By(" Checking that services are running on the BYOH node with the new private key ")
+		for _, svc := range svcs {
+			g.By(fmt.Sprintf("Check %v service is running in worker %v", svc, byohMachine[0]))
+			msg, err := runPSCommand(bastionHost, byohMachine[0], fmt.Sprintf("Get-Service %v", svc), myPrivateKey, iaasPlatform)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(msg, "Running") {
+				e2e.Failf("Failed to check %v service is running in %v: %s", svc, byohMachine[0], msg)
+			}
+		}
 
 	})
 
