@@ -4264,4 +4264,65 @@ roleRef:
 			}
 		}
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("MicroShiftBoth-Author:rgangwar-Medium-55394-[Apiserver] MicroShift enable SCC admission for pods", func() {
+		namespace := "test-scc-ocp55394"
+		testpod := "security-context-demo-ocp55394"
+		testpod2 := "security-context-demo-2-ocp55394"
+
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", namespace, "--ignore-not-found").Execute()
+
+		g.By("1.Create temporary namespace")
+		namespaceOutput, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("namespace", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(namespaceOutput).Should(o.ContainSubstring("namespace/"+namespace+" created"), namespace+" not created..")
+
+		// Set the security context for a Pod which set the user which is running with uid=1000 gid=3000 groups=200 and processes are running as user 1000, which is the value of runAsUser
+		g.By("2. Create one pod " + testpod + " with the specified security context.")
+		template := getTestDataFilePath("microshift-pods-security-context.yaml")
+		defer oc.AsAdmin().Run("delete").Args("-f", template, "-n", namespace).Execute()
+		templateErr := oc.AsAdmin().Run("create").Args("-f", template, "-n", namespace).Execute()
+		o.Expect(templateErr).NotTo(o.HaveOccurred())
+
+		g.By("3. Verify that the Pod's " + testpod + " Container is running")
+		exutil.AssertPodToBeReady(oc, testpod, namespace)
+
+		// Get a shell to the running Container, check output shows that the processes are running as user 1000, which is the value of runAsUser
+		g.By("4.1 Verify if the processes are running with the specified user ID 1000 in the pod.")
+		execCmdOuptut := ExecCommandOnPod(oc, testpod, namespace, "ps")
+		if match, _ := regexp.MatchString(`1000.*sleep 1h`, execCmdOuptut); match {
+			e2e.Logf("Processes are running on pod %v with user id 1000 :: %v", testpod, execCmdOuptut)
+		} else {
+			e2e.Failf("Not able find the processes which are running on pod %v as user 1000 :: %v", testpod, execCmdOuptut)
+		}
+
+		// Get a shell to the running Container, check output should shows that user which is running with uid=1000 gid=3000 groups=2000
+		g.By("4.2 Verify that user is running with specified uid=1000 gid=3000 groups=2000")
+		execCmdOuptut = ExecCommandOnPod(oc, testpod, namespace, "id")
+		if match, _ := regexp.MatchString(`uid=1000.*gid=3000.*groups=2000`, execCmdOuptut); match {
+			e2e.Logf("On pod %v User running with :: %v", testpod, execCmdOuptut)
+		} else {
+			e2e.Failf("Not able find the user which is running on pod %v with uid=1000 gid=3000 groups=2000 :: %v", testpod, execCmdOuptut)
+		}
+
+		// Set the security context again for a Pod which override the user value which is running with uid=1000 to 2000, which is the new value of runAsUser
+		g.By("5. Create one pod " + testpod2 + " with the specified security context.")
+		template = getTestDataFilePath("microshift-pods-security-context2.yaml")
+		defer oc.AsAdmin().Run("delete").Args("-f", template, "-n", namespace).Execute()
+		templateErr = oc.AsAdmin().Run("create").Args("-f", template, "-n", namespace).Execute()
+		o.Expect(templateErr).NotTo(o.HaveOccurred())
+
+		g.By("6. Verify that the Pod's " + testpod2 + " Container is running")
+		exutil.AssertPodToBeReady(oc, testpod2, namespace)
+
+		// Get a shell to the running Container, check output should shows that the processes are running as user 2000, which is the value of runAsUser
+		g.By("7. Verify that processes are running with the specified user ID 2000 in the pod.")
+		execCmdOuptut = ExecCommandOnPod(oc, testpod2, namespace, "ps aux")
+		if match, _ := regexp.MatchString(`2000.*ps aux`, execCmdOuptut); match {
+			e2e.Logf("Processes are running on pod %v with user id 2000 :: %v", testpod2, execCmdOuptut)
+		} else {
+			e2e.Failf("Not able find the processes which are running on pod %v as user 2000 :: %v", testpod2, execCmdOuptut)
+		}
+	})
 })

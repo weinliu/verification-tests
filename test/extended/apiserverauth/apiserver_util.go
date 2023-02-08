@@ -655,3 +655,21 @@ func CopyToFile(fromPath string, toFilename string) string {
 	}
 	return saveTo
 }
+
+func ExecCommandOnPod(oc *exutil.CLI, podname string, namespace string, command string) string {
+	var podOutput string
+	var execpodErr error
+	errExec := wait.Poll(15*time.Second, 300*time.Second, func() (bool, error) {
+		podOutput, execpodErr = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, podname, "--", "/bin/sh", "-c", command).Output()
+		podOutput = strings.TrimSpace(podOutput)
+		if execpodErr != nil {
+			return false, nil
+		} else if podOutput != "" {
+			return true, nil
+		} else {
+			return false, nil
+		}
+	})
+	exutil.AssertWaitPollNoErr(errExec, fmt.Sprintf("Not able to run command on pod %v :: %v :: %v :: %v", podname, command, podOutput, execpodErr))
+	return podOutput
+}
