@@ -148,14 +148,19 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 				e2e.Logf("The first disruption of openshift-apiserver occurred :: %v", timeFirstServiceDisruption.Format(time.RFC3339))
 				// Check if all apiservers are ready.
 				if getNodeError == nil && loginError == nil && getProjectError == nil {
-					serviceRecoveryTime := time.Now()
-					e2e.Logf("#### The cluster apiservers have been recovered at time :: %v ####\n", serviceRecoveryTime.Format("2006-01-02 15:04:05"))
-					diff := serviceRecoveryTime.Sub(timeFirstServiceDisruption)
-					e2e.Logf("#### Apiservers outage time(s) :: %f ####\n", diff.Seconds())
-					if int(diff.Seconds()) > expectedOutageTime {
-						e2e.Failf("The cluster apiservers outage time lasted %d longer than we expected %d", int(diff.Seconds()), expectedOutageTime)
+					_, getNodeError := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
+					_, loginError := oc.AsAdmin().WithoutNamespace().Run("login").Args("-u", "system:admin", "-n", "default").Output()
+					_, getProjectError := exec.Command("bash", "-c", "oc get project/openshift-apiserver 2>&1").Output()
+					if getNodeError == nil && loginError == nil && getProjectError == nil {
+						serviceRecoveryTime := time.Now()
+						e2e.Logf("#### The cluster apiservers have been recovered at time :: %v ####\n", serviceRecoveryTime.Format("2006-01-02 15:04:05"))
+						diff := serviceRecoveryTime.Sub(timeFirstServiceDisruption)
+						e2e.Logf("#### Apiservers outage time(s) :: %f ####\n", diff.Seconds())
+						if int(diff.Seconds()) > expectedOutageTime {
+							e2e.Failf("The cluster apiservers outage time lasted %d longer than we expected %d", int(diff.Seconds()), expectedOutageTime)
+						}
+						return true, nil
 					}
-					return true, nil
 				}
 			}
 			return false, nil
