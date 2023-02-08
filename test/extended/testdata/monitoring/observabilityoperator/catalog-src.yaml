@@ -6,6 +6,8 @@ metadata:
   name: observability-operator-catalog
   namespace: openshift-observability-operator
 spec:
+  grpcPodConfig: #from ocp4.13
+    securityContextConfig: restricted
   displayName: Observability Operator - Test
   image: quay.io/rhobs/observability-operator-catalog:latest
   publisher: Sunil Thaha
