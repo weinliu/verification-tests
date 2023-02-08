@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -1204,4 +1205,32 @@ func getTimeFromTimezone(oc *exutil.CLI) (string, string) {
 		e2e.Failf("Given zone name is %s", zoneName)
 	}
 	return schedule, timeZoneName
+}
+
+func getOauthAudit(mustgatherDir string) []string {
+	var files []string
+	filesUnderGather, err := ioutil.ReadDir(mustgatherDir)
+	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to read the must-gather dir")
+	dataDir := ""
+	for _, fileD := range filesUnderGather {
+		if matched, _ := regexp.MatchString("openshift", fileD.Name()); matched {
+			dataDir = fileD.Name()
+		}
+
+	}
+	destDir := mustgatherDir + "/" + dataDir + "/audit_logs/oauth-server/"
+	err = filepath.Walk(destDir,
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			file_size := info.Size()
+			// When the file_size is too little , the file maybe empty or too little records , so filter more than 1024
+			if !info.IsDir() && file_size > 1024 {
+				files = append(files, path)
+			}
+			return nil
+		})
+	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to read the destDir")
+	return files
 }

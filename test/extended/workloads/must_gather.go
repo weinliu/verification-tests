@@ -65,7 +65,6 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			defer wg.Done()
 			_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("--run-namespace", oc.Namespace(), "must-gather", "--source-dir=/must-gather/static-pods/", "--dest-dir=/tmp/must-gather-56929").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-
 		}()
 		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 			output, err1 := oc.AsAdmin().Run("get").Args("pod", "-n", oc.Namespace(), "-l", "app=must-gather", "-o=jsonpath={.items[0].status.phase}").Output()
@@ -94,5 +93,22 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Still find the must-gather pod in own namespace even wait for 10 mins"))
+	})
+	// author: yinzhou@redhat.com
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:yinzhou-Low-51697-Fetch audit logs of login attempts via oc commands [Slow]", func() {
+		g.By("run the must-gather")
+		defer exec.Command("bash", "-c", "rm -rf /tmp/must-gather-51697").Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--dest-dir=/tmp/must-gather-51697", "--", "/usr/bin/gather_audit_logs").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(msg, "audit_logs/oauth-server") {
+			e2e.Failf("Failed to gather the oauth audit logs")
+		}
+		g.By("check the must-gather result")
+		oauth_audit_files := getOauthAudit("/tmp/must-gather-51697")
+		for _, file := range oauth_audit_files {
+			headContent, err := exec.Command("bash", "-c", fmt.Sprintf("zcat %v | head -n 1", file)).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(headContent).To(o.ContainSubstring("auditID"), "Failed to read the oauth audit logs")
+		}
 	})
 })
