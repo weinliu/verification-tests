@@ -31,7 +31,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	oc := exutil.NewCLIWithoutNamespace(projectName)
 
 	//author: yanyang@redhat.com
-	g.It("NonHyperShiftHOST-Author:yanyang-High-56072-CVO pod should not crash", func() {
+	g.It("NonHyperShiftHOST-Author:yanyang-High-56072-CVO pod should not crash [Flaky]", func() {
 		g.By("Get CVO container status")
 		CVOStatus, err := getCVOPod(oc, ".status.containerStatuses[]")
 		o.Expect(err).NotTo(o.HaveOccurred())
