@@ -119,10 +119,10 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-37627-SDK run bundle upgrade test", func() {
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
-		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeoperator-bundle:v0.1", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeoperator-bundle:v0.1", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
-		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeoperator-bundle:v0.2", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeoperator-bundle:v0.2", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
 		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
@@ -143,7 +143,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-38054-SDK run bundle create pods and csv and registry image pod", func() {
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
-		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/podcsvcheck-bundle:v0.0.1", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/podcsvcheck-bundle:v0.0.1", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", oc.Namespace()).Output()
@@ -166,7 +166,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	g.It("ConnectedOnly-Author:jfan-High-38060-SDK run bundle detail message about failed", func() {
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
-		output, _ := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/etcd-bundle:0.0.1", "-n", oc.Namespace()).Output()
+		output, _ := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/etcd-bundle:0.0.1", "-n", oc.Namespace(), "--security-context-config=restricted").Output()
 		o.Expect(output).To(o.ContainSubstring("quay.io/olmqe/etcd-bundle:0.0.1: not found"))
 	})
 
@@ -210,7 +210,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		operatorsdkCLI.showInfo = true
 		oc.SetupProject()
 		namespace := oc.Namespace()
-		msg, _ := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/raffaelespazzoli-proactive-node-scaling-operator-bundle:latest-", "-n", namespace, "--timeout", "5m").Output()
+		msg, _ := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/raffaelespazzoli-proactive-node-scaling-operator-bundle:latest-", "-n", namespace, "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(msg).To(o.ContainSubstring("reated registry pod: raffaelespazzoli-proactive-node-scaling-operator-bundle-latest"))
 	})
 
@@ -222,7 +222,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		oc.SetupProject()
 		namespace := oc.Namespace()
 		// install the operator without og with installmode
-		msg, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/ownsingleallsupport-bundle:v4.11", "--install-mode", "OwnNamespace", "-n", namespace, "--timeout", "5m").Output()
+		msg, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/ownsingleallsupport-bundle:v4.11", "--install-mode", "OwnNamespace", "-n", namespace, "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("OLM has successfully installed"))
 		msg, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "operator-sdk-og", "-n", namespace, "-o=jsonpath={.spec.targetNamespaces}").Output()
@@ -244,7 +244,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", configFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		msg, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/ownsingleallsupport-bundle:v4.11", "--install-mode", "OwnNamespace", "-n", namespace, "--timeout", "5m").Output()
+		msg, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/ownsingleallsupport-bundle:v4.11", "--install-mode", "OwnNamespace", "-n", namespace, "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("OLM has successfully installed"))
 		output, _ = operatorsdkCLI.Run("cleanup").Args("ownsingleallsupport", "-n", namespace).Output()
@@ -259,7 +259,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("pod quay-io-olmqe-ownsingleallsupport-bundle can't be deleted in %s", namespace))
-		msg, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/ownsingleallsupport-bundle:v4.11", "-n", namespace, "--timeout", "5m").Output()
+		msg, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/ownsingleallsupport-bundle:v4.11", "-n", namespace, "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("OLM has successfully installed"))
 		output, _ = operatorsdkCLI.Run("cleanup").Args("ownsingleallsupport", "-n", namespace).Output()
@@ -277,7 +277,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("pod quay-io-olmqe-ownsingleallsupport-bundle can't be deleted in %s", namespace))
 		// install the operator without og and installmode, the csv support ownnamespace and singlenamespace
-		msg, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/ownsinglesupport-bundle:v4.11", "-n", namespace, "--timeout", "5m").Output()
+		msg, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/ownsinglesupport-bundle:v4.11", "-n", namespace, "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("OLM has successfully installed"))
 		msg, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "operator-sdk-og", "-n", namespace, "-o=jsonpath={.spec.targetNamespaces}").Output()
@@ -296,7 +296,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", "test-sdk-41064").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "test-sdk-41064").Execute()
-		msg, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/all1support-bundle:v4.11", "--install-mode", "SingleNamespace=test-sdk-41064", "-n", namespace, "--timeout", "5m").Output()
+		msg, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/all1support-bundle:v4.11", "--install-mode", "SingleNamespace=test-sdk-41064", "-n", namespace, "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("OLM has successfully installed"))
 		msg, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("og", "operator-sdk-og", "-n", namespace, "-o=jsonpath={.spec.targetNamespaces}").Output()
@@ -318,7 +318,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", configFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		msg, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/all1support-bundle:v4.11", "--install-mode", "SingleNamespace=test-sdk-41064", "-n", namespace, "--timeout", "5m").Output()
+		msg, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/all1support-bundle:v4.11", "--install-mode", "SingleNamespace=test-sdk-41064", "-n", namespace, "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("OLM has successfully installed"))
 		output, _ = operatorsdkCLI.Run("cleanup").Args("all1support", "-n", namespace).Output()
@@ -333,7 +333,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("pod quay-io-olmqe-all1support-bundle can't be deleted in %s", namespace))
-		msg, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/all1support-bundle:v4.11", "-n", namespace, "--timeout", "5m").Output()
+		msg, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/all1support-bundle:v4.11", "-n", namespace, "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("OLM has successfully installed"))
 		output, _ = operatorsdkCLI.Run("cleanup").Args("all1support", "-n", namespace).Output()
@@ -351,7 +351,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("pod quay-io-olmqe-all1support-bundle can't be deleted in %s", namespace))
 		// install the operator without og and installmode, the csv only support singlenamespace
-		msg, _ = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/singlesupport-bundle:v4.11", "-n", namespace, "--timeout", "5m").Output()
+		msg, _ = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/singlesupport-bundle:v4.11", "-n", namespace, "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(msg).To(o.ContainSubstring("AllNamespaces InstallModeType not supported"))
 		output, _ = operatorsdkCLI.Run("cleanup").Args("singlesupport", "-n", namespace).Output()
 		o.Expect(output).To(o.ContainSubstring("uninstalled"))
@@ -365,7 +365,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		oc.SetupProject()
 		namespace := oc.Namespace()
 		// install the operator without og with installmode all namespace
-		msg, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/all2support-bundle:v4.11", "--install-mode", "AllNamespaces", "-n", namespace, "--timeout", "5m").Output()
+		msg, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/all2support-bundle:v4.11", "--install-mode", "AllNamespaces", "-n", namespace, "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("OLM has successfully installed"))
 		defer operatorsdkCLI.Run("cleanup").Args("all2support").Output()
@@ -397,7 +397,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", configFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		msg, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/all2support-bundle:v4.11", "--install-mode", "AllNamespaces", "-n", namespace, "--timeout", "5m").Output()
+		msg, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/all2support-bundle:v4.11", "--install-mode", "AllNamespaces", "-n", namespace, "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("OLM has successfully installed"))
 		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
@@ -421,7 +421,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("pod quay-io-olmqe-all2support-bundle can't be deleted in %s", namespace))
-		msg, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/all2support-bundle:v4.11", "-n", namespace, "--timeout", "5m").Output()
+		msg, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/all2support-bundle:v4.11", "-n", namespace, "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("OLM has successfully installed"))
 		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
@@ -448,7 +448,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("pod quay-io-olmqe-all2support-bundle can't be deleted in %s", namespace))
 		// install the operator without og and installmode, the csv support allnamespace and ownnamespace
-		msg, _ = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/all2support-bundle:v4.11", "-n", namespace, "--timeout", "5m").Output()
+		msg, _ = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/all2support-bundle:v4.11", "-n", namespace, "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(msg).To(o.ContainSubstring("OLM has successfully installed"))
 		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
 			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", "openshift-operators").Output()
@@ -493,7 +493,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		})
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get csv upgradeindex.v0.0.1 %s", namespace))
 		// upgrade by operator-sdk
-		msg, err := operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeindex-bundle:v0.2", "-n", namespace, "--timeout", "5m").Output()
+		msg, err := operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeindex-bundle:v0.2", "-n", namespace, "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).To(o.ContainSubstring("Successfully upgraded to"))
 	})
@@ -714,7 +714,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		oc.SetupProject()
 		namespace := oc.Namespace()
 		defer operatorsdkCLI.Run("cleanup").Args("previoushelmbase", "-n", namespace).Output()
-		_, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/previoushelmbase-bundle:v4.11", "-n", namespace, "--timeout", "5m").Output()
+		_, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/previoushelmbase-bundle:v4.11", "-n", namespace, "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		createPreviousNginx, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", nginx, "-p", "NAME=previousnginx-sample").OutputToFile("config-42929.json")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1589,7 +1589,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		ns := oc.Namespace()
 
 		g.By("step: run bundle 1")
-		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/kubeturbo-bundle:v8.4.0", "-n", ns, "--timeout", "5m").Output()
+		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/kubeturbo-bundle:v8.4.0", "-n", ns, "--timeout", "5m", "--security-context-config=restricted").Output()
 		if err != nil {
 			logDebugInfo(oc, ns, "csv", "pod", "ip")
 		}
@@ -1633,7 +1633,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(output).To(o.ContainSubstring("operator-sdk-run-bundle"))
 
 		g.By("step: upgrade bundle")
-		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/kubeturbo-bundle:v8.5.0", "-n", ns, "--timeout", "5m").Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/kubeturbo-bundle:v8.5.0", "-n", ns, "--timeout", "5m", "--security-context-config=restricted").Output()
 		if err != nil {
 			logDebugInfo(oc, ns, "csv", "pod", "ip")
 		}
@@ -2142,7 +2142,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 				o.Expect(err).NotTo(o.HaveOccurred())
 			}
 		}()
-		output, err = operatorsdkCLI.Run("run").Args("bundle", bundleImage, "-n", ns, "--timeout", "5m").Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle", bundleImage, "-n", ns, "--timeout", "5m", "--security-context-config=restricted").Output()
 		if err != nil {
 			logDebugInfo(oc, ns, "csv", "pod", "ip")
 		}
@@ -2961,14 +2961,14 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		oc.SetupProject()
 		g.By("Run bundle without index")
 		defer operatorsdkCLI.Run("cleanup").Args("k8sevent", "-n", oc.Namespace()).Output()
-		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/k8sevent-bundle:v4.11", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/k8sevent-bundle:v4.11", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Generated a valid File-Based Catalog"))
 		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
 
 		g.By("Run bundle with FBC index")
 		defer operatorsdkCLI.Run("cleanup").Args("blacklist", "-n", oc.Namespace()).Output()
-		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/blacklist-bundle:v4.11", "--index-image", "quay.io/olmqe/nginxolm-operator-index:v1", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/blacklist-bundle:v4.11", "--index-image", "quay.io/olmqe/nginxolm-operator-index:v1", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(`Creating a File-Based Catalog of the bundle \"quay.io/olmqe/blacklist-bundle`))
 		o.Expect(output).To(o.ContainSubstring(`Rendering a File-Based Catalog of the Index Image \"quay.io/olmqe/nginxolm-operator-index:v1\"`))
@@ -2976,14 +2976,14 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		g.By("Run bundle with SQLite index")
 		defer operatorsdkCLI.Run("cleanup").Args("k8sstatus", "-n", oc.Namespace()).Output()
-		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/k8sstatus-bundle:v4.11", "--index-image", "quay.io/olmqe/ditto-index:50065", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/k8sstatus-bundle:v4.11", "--index-image", "quay.io/olmqe/ditto-index:50065", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("SQLite based index images are being deprecated and will be removed in a future release"))
 		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
 
 		g.By("Run bundle with index that contains the bundle message")
 		defer operatorsdkCLI.Run("cleanup").Args("upgradeindex", "-n", oc.Namespace()).Output()
-		_, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeindex-bundle:v0.1", "--index-image", "quay.io/olmqe/upgradeindex-index:v0.1", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		_, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeindex-bundle:v0.1", "--index-image", "quay.io/olmqe/upgradeindex-index:v0.1", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", oc.Namespace(), "quay-io-olmqe-upgradeindex-bundle-v0-1").Output()
 		if !strings.Contains(output, "Bundle quay.io/olmqe/upgradeindex-bundle:v0.1 already exists, Bundle already added that provides package and csv") {
@@ -2999,12 +2999,12 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		oc.SetupProject()
 		g.By("Run bundle with large FBC index (size >3M)")
 		defer operatorsdkCLI.Run("cleanup").Args("upgradefbc", "-n", oc.Namespace()).Output()
-		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradefbc-bundle:v0.1", "--index-image", "quay.io/operatorhubio/catalog:latest", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradefbc-bundle:v0.1", "--index-image", "quay.io/operatorhubio/catalog:latest", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
 
 		g.By("Run bundle with large FBC index (size >3M) that contains the bundle message")
-		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradefbc-bundle:v0.1", "--index-image", "quay.io/olmqe/largefbcindexwithupgradefbc:v4.11", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradefbc-bundle:v0.1", "--index-image", "quay.io/olmqe/largefbcindexwithupgradefbc:v4.11", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(`bundle \"upgradefbc.v0.0.1\" already exists in the index image`))
 
@@ -3017,12 +3017,12 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		oc.SetupProject()
 		g.By("Run bundle with large FBC index (size >3M)")
 		defer operatorsdkCLI.Run("cleanup").Args("upgradeindex", "-n", oc.Namespace()).Output()
-		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeindex-bundle:v0.1", "--index-image", "quay.io/olmqe/largefbcindexwithupgradefbc:v4.11", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeindex-bundle:v0.1", "--index-image", "quay.io/olmqe/largefbcindexwithupgradefbc:v4.11", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
 
 		g.By("Run bundle-upgrade operator")
-		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeindex-bundle:v0.2", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeindex-bundle:v0.2", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
 		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
@@ -3044,12 +3044,12 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		oc.SetupProject()
 		g.By("Run bundle install operator without index image v0.1")
 		defer operatorsdkCLI.Run("cleanup").Args("upgradeindex", "-n", oc.Namespace()).Output()
-		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeindex-bundle:v0.1", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeindex-bundle:v0.1", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
 
 		g.By("Run bundle-upgrade from the csv v.0.1->v0.2")
-		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeindex-bundle:v0.2", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeindex-bundle:v0.2", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Generated a valid Upgraded File-Based Catalog"))
 		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
@@ -3296,7 +3296,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
 		g.By("Run bundle-upgrade operator")
-		output, err := operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradefbc-bundle:v0.0.2", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		output, err := operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradefbc-bundle:v0.0.2", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
 		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
@@ -3388,7 +3388,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subfbc.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
 		g.By("Run bundle-upgrade operator")
-		output, err := operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradefbc-bundle:v0.0.2", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		output, err := operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradefbc-bundle:v0.0.2", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
 		waitErr := wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
@@ -3412,7 +3412,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subsqlite.installedCSV, "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
 		g.By("Run bundle-upgrade operator")
-		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeindex-bundle:v0.2", "-n", oc.Namespace(), "--timeout", "5m").Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeindex-bundle:v0.2", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Successfully upgraded to"))
 		waitErr = wait.Poll(15*time.Second, 360*time.Second, func() (bool, error) {
@@ -3556,7 +3556,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 		}()
 
-		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/memcached-operator-bundle@"+bundleImageDigest, "--index-image", "quay.io/olmqe/nginxolm-operator-index@sha256:ce0bc333f445c6aa83df5f3f9a1e74cd8ee22d70e99a4b808c28872579f5f4cf", "-n", ns, "--timeout", "5m").Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/memcached-operator-bundle@"+bundleImageDigest, "--index-image", "quay.io/olmqe/nginxolm-operator-index@sha256:ce0bc333f445c6aa83df5f3f9a1e74cd8ee22d70e99a4b808c28872579f5f4cf", "-n", ns, "--timeout", "5m", "--security-context-config=restricted").Output()
 		if err != nil {
 			logDebugInfo(oc, ns, "csv", "pod", "ip")
 		}
@@ -3754,7 +3754,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 		}()
 
-		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/memcached-operator-bundle@"+bundleImageDigest, "--index-image", "quay.io/olmqe/nginxolm-operator-index@sha256:ce0bc333f445c6aa83df5f3f9a1e74cd8ee22d70e99a4b808c28872579f5f4cf", "-n", ns, "--timeout", "5m").Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/memcached-operator-bundle@"+bundleImageDigest, "--index-image", "quay.io/olmqe/nginxolm-operator-index@sha256:ce0bc333f445c6aa83df5f3f9a1e74cd8ee22d70e99a4b808c28872579f5f4cf", "-n", ns, "--timeout", "5m", "--security-context-config=restricted").Output()
 		if err != nil {
 			logDebugInfo(oc, ns, "csv", "pod", "ip")
 		}
@@ -3957,7 +3957,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			}
 		}()
 
-		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/memcached-operator-bundle@"+bundleImageDigest, "--index-image", "quay.io/olmqe/nginxolm-operator-index@sha256:ce0bc333f445c6aa83df5f3f9a1e74cd8ee22d70e99a4b808c28872579f5f4cf", "-n", ns, "--timeout", "5m").Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/memcached-operator-bundle@"+bundleImageDigest, "--index-image", "quay.io/olmqe/nginxolm-operator-index@sha256:ce0bc333f445c6aa83df5f3f9a1e74cd8ee22d70e99a4b808c28872579f5f4cf", "-n", ns, "--timeout", "5m", "--security-context-config=restricted").Output()
 		if err != nil {
 			logDebugInfo(oc, ns, "csv", "pod", "ip")
 		}
