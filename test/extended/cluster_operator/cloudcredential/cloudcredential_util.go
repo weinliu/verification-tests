@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -182,7 +183,7 @@ func (cr *credentialsRequest) create(oc *exutil.CLI) {
 	exutil.ApplyNsResourceFromTemplate(oc, "openshift-cloud-credential-operator", "--ignore-unknown-parameters=true", "-f", cr.template, "-p", "NAME="+cr.name, "NAMESPACE="+cr.namespace, "PROVIDER="+cr.provider)
 }
 
-//Check if CCO conditions are health
+// Check if CCO conditions are health
 func checkCCOHealth(oc *exutil.CLI, mode string) {
 	availableStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "cloud-credential", `-o=jsonpath={.status.conditions[?(@.type=="Available")].status}`).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -203,5 +204,29 @@ func checkCCOHealth(oc *exutil.CLI, mode string) {
 		o.Expect(upgradeableReason).To(o.Equal("MissingUpgradeableAnnotation"))
 	} else {
 		o.Expect(upgradeableStatus).To(o.Equal("True"))
+	}
+}
+
+// check webhook pod securityContext
+func checkWebhookSecurityContext(oc *exutil.CLI, podnum int) {
+	webHookPodName := make([]string, podnum)
+	for i := 0; i < len(webHookPodName); i++ {
+		var err error
+		webHookPodName[i], err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app=pod-identity-webhook", "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.items["+strconv.Itoa(i)+"].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("webHookPodName is %s ", webHookPodName[i])
+		allowPrivilegeEscalation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", webHookPodName[i], "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.spec.containers[*].securityContext.allowPrivilegeEscalation}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(allowPrivilegeEscalation).NotTo(o.ContainSubstring("true"))
+		drop, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", webHookPodName[i], "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.spec.containers[*].securityContext.capabilities.drop}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		dropAllCount := strings.Count(drop, "ALL")
+		o.Expect(dropAllCount).To(o.Equal(1))
+		runAsNonRoot, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", webHookPodName[i], "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.spec.securityContext.runAsNonRoot}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(runAsNonRoot).To(o.Equal("true"))
+		seccompProfileType, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", webHookPodName[i], "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.spec.securityContext.seccompProfile.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(seccompProfileType).To(o.Equal("RuntimeDefault"))
 	}
 }
