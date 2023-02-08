@@ -2357,3 +2357,16 @@ func getMultusCronJob(oc *exutil.CLI) string {
 	o.Expect(cronjobErr).NotTo(o.HaveOccurred())
 	return cronjobLog
 }
+
+// get name of OVN egressIP object(s)
+func getOVNEgressIPObject(oc *exutil.CLI) []string {
+	var egressIPObjects = []string{}
+	egressIPObjectsAll, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("egressip", "-ojsonpath={.items..metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if len(egressIPObjectsAll) > 0 {
+		egressIPObjects = strings.Split(egressIPObjectsAll, " ")
+	}
+	e2e.Logf("egressIPObjects are  %v ", egressIPObjects)
+	return egressIPObjects
+
+}

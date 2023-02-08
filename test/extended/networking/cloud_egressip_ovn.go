@@ -1425,6 +1425,126 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Skip for not support scenarios!")
 		}
 	})
+
+	// author: jechen@redhat.com
+	g.It("NonPreRelease-PreChkUpgrade-Author:jechen-High-56875-OVN egressIP should still be functional post upgrade. [Disruptive]", func() {
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		statefulSetHelloPod := filepath.Join(buildPruningBaseDir, "statefulset-hello.yaml")
+		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+		ns := "56875-upgrade-ns"
+
+		g.By("1. Choose a node as EgressIP node, label the node to be egress assignable")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		egressNode := nodeList.Items[0].Name
+
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, egressNodeLabel, "true")
+
+		g.By("2. Create an egressip object")
+		freeIPs := findFreeIPs(oc, egressNode, 1)
+		o.Expect(len(freeIPs)).Should(o.Equal(1))
+		egressip1 := egressIPResource1{
+			name:          "egressip-56875",
+			template:      egressIP2Template,
+			egressIP1:     freeIPs[0],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "pink",
+		}
+		egressip1.createEgressIPObject2(oc)
+		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
+
+		g.By("3. Create a namespace, apply namespace label to it that matches the one defined in egressip object created in step 2.")
+		oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", ns).Execute()
+		exutil.SetNamespacePrivileged(oc, ns)
+
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("4. Create a pod in the namespace and apply pod label to the pod that matches the podLabel defined in egressip object created in step 2.")
+		createResourceFromFile(oc, ns, statefulSetHelloPod)
+		podErr := waitForPodWithLabelReady(oc, ns, "app=hello")
+		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
+		helloPodname := getPodName(oc, ns, "app=hello")
+
+		err = exutil.LabelPod(oc, ns, helloPodname[0], "color=pink")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("5. Check source IP is the assigned egress IP address")
+		var dstHost, primaryInf string
+		var infErr, snifErr error
+		var tcpdumpDS *tcpdumpDaemonSet
+		switch flag {
+		case "ipecho":
+			g.By(" Use IP-echo service to verify egressIP.")
+			e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
+			verifyEgressIPWithIPEcho(oc, ns, helloPodname[0], ipEchoURL, true, freeIPs[0])
+		case "tcpdump":
+			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
+			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
+			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
+			o.Expect(infErr).NotTo(o.HaveOccurred())
+			dstHost = nslookDomainName("ifconfig.me")
+			defer deleteTcpdumpDS(oc, "tcpdump-56875", ns)
+			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns, "tcpdump-56875", "tcpdump", "true", dstHost, primaryInf, 80)
+			o.Expect(snifErr).NotTo(o.HaveOccurred())
+			g.By("Verify from tcpDump that source IP is EgressIP")
+			egressErr := verifyEgressIPinTCPDump(oc, helloPodname[0], ns, freeIPs[0], dstHost, ns, tcpdumpDS.name, true)
+			o.Expect(egressErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to get expected egressip:%s", freeIPs[0]))
+		default:
+			g.Skip("Skip for not support scenarios!")
+		}
+	})
+
+	// author: jechen@redhat.com
+	g.It("NonPreRelease-PstChkUpgrade-Author:jechen-High-56875-OVN egressIP should still be functional post upgrade. [Disruptive]", func() {
+
+		ns := "56875-upgrade-ns"
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--ignore-not-found=true").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "hello-", "-n", ns, "--ignore-not-found=true").Execute()
+		defer removeResource(oc, true, true, "egressip", "all")
+
+		g.By("1. Check EgressIP in EIP object, sourceIP contains one IP. \n")
+		EIPObjects := getOVNEgressIPObject(oc)
+		o.Expect(len(EIPObjects) == 1).Should(o.BeTrue())
+		EIPObjectName := EIPObjects[0]
+		egressIPMaps := getAssignedEIPInEIPObject(oc, EIPObjectName)
+		o.Expect(len(egressIPMaps) == 1).Should(o.BeTrue())
+		egressNode := egressIPMaps[0]["node"]
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
+		exutil.SetNamespacePrivileged(oc, ns)
+		helloPodname := getPodName(oc, ns, "app=hello")
+
+		g.By("2. Check source IP is the assigned egress IP address")
+		var dstHost, primaryInf string
+		var infErr, snifErr error
+		var tcpdumpDS *tcpdumpDaemonSet
+		switch flag {
+		case "ipecho":
+			g.By(" Use IP-echo service to verify egressIP.")
+			e2e.Logf("\n ipEchoURL is %v\n", ipEchoURL)
+			verifyEgressIPWithIPEcho(oc, ns, helloPodname[0], ipEchoURL, true, egressIPMaps[0]["egressIP"])
+		case "tcpdump":
+			g.By(" Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump")
+			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, "tcpdump", "true")
+			primaryInf, infErr = getSnifPhyInf(oc, egressNode)
+			o.Expect(infErr).NotTo(o.HaveOccurred())
+			dstHost = nslookDomainName("ifconfig.me")
+			defer deleteTcpdumpDS(oc, "tcpdump-56875", ns)
+			tcpdumpDS, snifErr = createSnifferDaemonset(oc, ns, "tcpdump-56875", "tcpdump", "true", dstHost, primaryInf, 80)
+			o.Expect(snifErr).NotTo(o.HaveOccurred())
+			g.By("Verify from tcpDump that source IP is EgressIP")
+			egressErr := verifyEgressIPinTCPDump(oc, helloPodname[0], ns, egressIPMaps[0]["egressIP"], dstHost, ns, tcpdumpDS.name, true)
+			o.Expect(egressErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to get expected egressip:%s", egressIPMaps[0]["egressIP"]))
+		default:
+			g.Skip("Skip for not support scenarios!")
+		}
+	})
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {

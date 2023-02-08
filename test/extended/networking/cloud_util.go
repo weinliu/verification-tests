@@ -40,7 +40,7 @@ type tcpdumpDaemonSet struct {
 
 func (ds *tcpdumpDaemonSet) createTcpdumpDS(oc *exutil.CLI) error {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ds.template, "-p", "NAME="+ds.name, "NAMESPACE="+ds.namespace, "NODELABEL="+ds.nodeLabel, "LABELKEY="+ds.labelKey, "INF="+ds.phyInterface, "DSTPORT="+strconv.Itoa(ds.dstPort), "HOST="+ds.dstHost)
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ds.template, "-p", "NAME="+ds.name, "NAMESPACE="+ds.namespace, "NODELABEL="+ds.nodeLabel, "LABELKEY="+ds.labelKey, "INF="+ds.phyInterface, "DSTPORT="+strconv.Itoa(ds.dstPort), "HOST="+ds.dstHost)
 		if err1 != nil {
 			e2e.Logf("Tcpdump daemonset created failed :%v, and try next round", err1)
 			return false, nil
@@ -646,7 +646,7 @@ func createSnifferDaemonset(oc *exutil.CLI, ns, dsName, nodeLabel, labelKey, dst
 	buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 	tcpdumpDSTemplate := filepath.Join(buildPruningBaseDir, "tcpdump-daemonset-template.yaml")
 
-	_, err = runOcWithRetry(oc.AsAdmin(), "adm", "policy", "add-scc-to-user", "privileged", fmt.Sprintf("system:serviceaccount:%s:default", ns))
+	_, err = runOcWithRetry(oc.AsAdmin().WithoutNamespace(), "adm", "policy", "add-scc-to-user", "privileged", fmt.Sprintf("system:serviceaccount:%s:default", ns))
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	tcpdumpDS := tcpdumpDaemonSet{
