@@ -3056,6 +3056,39 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	})
 
+	// author: jitli@redhat.com
+	g.It("VMonly-ConnectedOnly-Author:jitli-High-51296-SDK-Run bundle-upgrade from bundle installation with index image", func() {
+
+		operatorsdkCLI.showInfo = true
+		oc.SetupProject()
+
+		g.By("Run bundle install operator with SQLite index image csv 0.1")
+		defer operatorsdkCLI.Run("cleanup").Args("upgradeoperator", "-n", oc.Namespace()).Output()
+		output, err := operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeoperator-bundle:v0.1", "--index-image", "quay.io/olmqe/upgradeindex-index:v0.1", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
+
+		g.By("Run bundle-upgrade from the csv v.0.1->v0.2")
+		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeoperator-bundle:v0.2", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Updated catalog source upgradeoperator-catalog"))
+		o.Expect(output).To(o.ContainSubstring("Successfully upgraded"))
+
+		g.By("Run bundle install operator with FBC index image")
+		defer operatorsdkCLI.Run("cleanup").Args("upgradeindex", "-n", oc.Namespace()).Output()
+		output, err = operatorsdkCLI.Run("run").Args("bundle", "quay.io/olmqe/upgradeindex-bundle:v0.1", "--index-image", "quay.io/olmqe/nginxolm-operator-index:v1", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Generated a valid File-Based Catalog"))
+		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
+
+		g.By("Run bundle-upgrade from the csv v.0.1->v0.2")
+		output, err = operatorsdkCLI.Run("run").Args("bundle-upgrade", "quay.io/olmqe/upgradeindex-bundle:v0.2", "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Generated a valid Upgraded File-Based Catalog"))
+		o.Expect(output).To(o.ContainSubstring("Successfully upgraded"))
+
+	})
+
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-High-44553-SDK support go type operator for http_proxy env [Slow]", func() {
 		architecture := exutil.GetClusterArchitecture(oc)
