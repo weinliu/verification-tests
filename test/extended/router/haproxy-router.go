@@ -77,6 +77,64 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		pollReadPodData(oc, "openshift-ingress", routername, "/usr/bin/env", `ROUTER_USE_PROXY_PROTOCOL=true`)
 	})
 
+	// author: shudili@redhat.com
+	g.It("Author:shudili-Medium-40679-The endpointPublishingStrategy parameter allow TCP/PROXY/empty definition for HostNetwork or NodePort type strategies", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-hn-PROXY.yaml")
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp40679",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+			ingctrlResource = "ingresscontroller/" + ingctrl.name
+		)
+
+		g.By("check whether there are more than two worker nodes present for testing hostnetwork")
+		workerNodeCount, _ := exactNodeDetails(oc)
+		if workerNodeCount <= 2 {
+			g.Skip("Skipping as we need more than two worker nodes")
+		}
+
+		g.By("Create a hostNetwork ingresscontroller with protocol PROXY set by the template")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("Check the router env to verify the PROXY variable is applied")
+		routerpod := getRouterPod(oc, "ocp40679")
+		pollReadPodData(oc, "openshift-ingress", routerpod, "/usr/bin/env", `ROUTER_USE_PROXY_PROTOCOL=true`)
+
+		g.By("Patch the hostNetwork ingresscontroller with protocol TCP")
+		patchPath := "{\"spec\":{\"endpointPublishingStrategy\":{\"hostNetwork\":{\"protocol\": \"TCP\"}}}}"
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchPath)
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
+
+		g.By("Check the configuration and router env for protocol TCP")
+		routerpod = getRouterPod(oc, "ocp40679")
+		cmd := fmt.Sprintf("/usr/bin/env | grep %s", `ROUTER_USE_PROXY_PROTOCOL`)
+		jsonPath := ".spec.endpointPublishingStrategy.hostNetwork.protocol"
+		output := fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jsonPath)
+		o.Expect(output).To(o.ContainSubstring("TCP"))
+		err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ingctrl.namespace, routerpod, "--", "bash", "-c", cmd).Execute()
+		o.Expect(err).To(o.HaveOccurred())
+
+		g.By("Patch the hostNetwork ingresscontroller with protocol empty")
+		patchPath = "{\"spec\":{\"endpointPublishingStrategy\":{\"hostNetwork\":{\"protocol\": \"\"}}}}"
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchPath)
+
+		g.By("Check the configuration and router env for protocol empty")
+		output = fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jsonPath)
+		o.Expect(output).To(o.BeEmpty())
+		err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ingctrl.namespace, routerpod, "--", "bash", "-c", cmd).Execute()
+		o.Expect(err).To(o.HaveOccurred())
+	})
+
 	// author: jechen@redhat.com
 	g.It("Author:jechen-Medium-42878-Errorfile stanzas and dummy default html files have been added to the router", func() {
 		g.By("Get pod (router) in openshift-ingress namespace")
