@@ -1,11 +1,16 @@
 package workloads
 
 import (
+	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
+	"sync"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -19,7 +24,7 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 	)
 
 	// author: yinzhou@redhat.com
-	g.It("NonHyperShiftHOST-ARO-Author:yinzhou-Medium-45694-Support to collect olm data in must-gather [Slow]", func() {
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-45694-Support to collect olm data in must-gather [Slow]", func() {
 		g.By("create new namespace")
 		oc.SetupProject()
 
@@ -46,5 +51,48 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			}
 		}
 	})
+	// author: yinzhou@redhat.com
+	g.It("NonHyperShiftHOST-ARO-Author:yinzhou-Medium-56929-run the must-gather command with own name space [Slow]", func() {
+		g.By("Set namespace as privileged namespace")
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		err := oc.AsAdmin().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", "system:serviceaccount:"+oc.Namespace()+":default").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer exec.Command("bash", "-c", "rm -rf /tmp/must-gather-56929").Output()
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer g.GinkgoRecover()
+			defer wg.Done()
+			_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("--run-namespace", oc.Namespace(), "must-gather", "--source-dir=/must-gather/static-pods/", "--dest-dir=/tmp/must-gather-56929").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
 
+		}()
+		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			output, err1 := oc.AsAdmin().Run("get").Args("pod", "-n", oc.Namespace(), "-l", "app=must-gather", "-o=jsonpath={.items[0].status.phase}").Output()
+			if err1 != nil {
+				e2e.Logf("the err:%v, and try next round", err1)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("Running", output); matched {
+				e2e.Logf("Check the must-gather pod running in own namespace\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot find the must-gather pod in own namespace"))
+		wg.Wait()
+		err = wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
+			output, err1 := oc.AsAdmin().Run("get").Args("pod", "-n", oc.Namespace()).Output()
+			if err1 != nil {
+				e2e.Logf("the err:%v, and try next round", err1)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString("must-gather", output); !matched {
+				e2e.Logf("Check the must-gather pod dispeared in own namespace\n")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Still find the must-gather pod in own namespace even wait for 10 mins"))
+	})
 })
