@@ -300,13 +300,11 @@ func deleteNamespace(oc *exutil.CLI, ns string) {
 }
 
 func (so *SubscriptionObjects) uninstallOperator(oc *exutil.CLI) {
-	//csv, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", so.Namespace, "sub/"+so.PackageName, "-ojsonpath={.status.installedCSV}").Output()
 	resource{"subscription", so.PackageName, so.Namespace}.clear(oc)
-	//_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", so.Namespace, "csv", csv).Execute()
 	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", so.Namespace, "csv", "-l", "operators.coreos.com/"+so.PackageName+"."+so.Namespace+"=").Execute()
 	// do not remove namespace openshift-logging and openshift-operators-redhat, and preserve the operatorgroup as there may have several operators deployed in one namespace
 	// for example: loki-operator and elasticsearch-operator
-	if so.Namespace != "openshift-logging" && so.Namespace != "openshift-operators-redhat" && !strings.HasPrefix(so.Namespace, "e2e-test-") {
+	if so.Namespace != "openshift-logging" && so.Namespace != "openshift-operators-redhat" && so.Namespace != "openshift-operators" && !strings.HasPrefix(so.Namespace, "e2e-test-") {
 		deleteNamespace(oc, so.Namespace)
 	}
 }

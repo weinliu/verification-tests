@@ -65,7 +65,7 @@ objects:
         kafkaConsumerQueueCapacity: 1000
         kafkaConsumerBatchSize: 10485760
       kafka:
-        address: "kafka-cluster-kafka-bootstrap.netobserv"
+        address: "${KAFKA_ADDRESS}"
         topic: network-flows
         tls:
           enable: false
@@ -85,7 +85,7 @@ objects:
           enable: "${{LOKI_TLS_ENABLE}}"
           caCert:
             type: configmap
-            name: "${{LOKI_CERT_NAME}}"
+            name: "${LOKI_CERT_NAME}"
             certFile: service-ca.crt
           insecureSkipVerify: false
         batchWait: 1s
@@ -150,3 +150,5 @@ parameters:
     value: "false"
   - name: LOKI_CERT_NAME
     value: "lokistack-gateway-ca-bundle"
+  - name: KAFKA_ADDRESS
+    value: "kafka-cluster-kafka-bootstrap.netobserv"

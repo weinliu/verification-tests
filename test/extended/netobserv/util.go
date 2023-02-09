@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"os/exec"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -18,13 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
-
-type flowlogsPipelineDescription struct {
-	serviceNs string
-	name      string
-	cmname    string
-	template  string
-}
 
 func getRandomString() string {
 	chars := "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -76,6 +66,52 @@ func processTemplate(oc *exutil.CLI, parameters ...string) (string, error) {
 	return configFile, err
 }
 
+// delete the objects in the cluster
+func (r resource) clear(oc *exutil.CLI) error {
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", r.namespace, r.kind, r.name).Output()
+	if err != nil {
+		errstring := fmt.Sprintf("%v", msg)
+		if strings.Contains(errstring, "NotFound") || strings.Contains(errstring, "the server doesn't have a resource type") {
+			return nil
+		}
+		return err
+	}
+	err = r.waitUntilResourceIsGone(oc)
+	return err
+}
+
+// expect: true means we want the resource contain/compare with the expectedContent, false means the resource is expected not to compare with/contain the expectedContent;
+// compare: true means compare the expectedContent with the resource content, false means check if the resource contains the expectedContent;
+// args are the arguments used to execute command `oc.AsAdmin.WithoutNamespace().Run("get").Args(args...).Output()`;
+func checkResource(oc *exutil.CLI, expect, compare bool, expectedContent string, args []string) {
+	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(args...).Output()
+		if err != nil {
+			if strings.Contains(output, "NotFound") {
+				return false, nil
+			}
+			return false, err
+		}
+		if compare {
+			res := strings.Compare(output, expectedContent)
+			if (res == 0 && expect) || (res != 0 && !expect) {
+				return true, nil
+			}
+			return false, nil
+		}
+		res := strings.Contains(output, expectedContent)
+		if (res && expect) || (!res && !expect) {
+			return true, nil
+		}
+		return false, nil
+	})
+	if expect {
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The content doesn't match/contain %s", expectedContent))
+	} else {
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The %s still exists in the resource", expectedContent))
+	}
+}
+
 // return the infrastructureName. For example:  anli922-jglp4
 func getInfrastructureName(oc *exutil.CLI) string {
 	infrastructureName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-o=jsonpath={.status.infrastructureName}").Output()
@@ -83,121 +119,9 @@ func getInfrastructureName(oc *exutil.CLI) string {
 	return infrastructureName
 }
 
-func (flowlogsPipeline *flowlogsPipelineDescription) create(oc *exutil.CLI, ns string, flowlogsPipelineDeploymenTemplate string) {
-	exutil.CreateClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", flowlogsPipelineDeploymenTemplate, "-p", "NAMESPACE="+ns)
-}
-
-func waitPodReady(oc *exutil.CLI, ns string, label string) {
-	podName := getFlowlogsPipelinePod(oc, ns, label)
-	exutil.AssertPodToBeReady(oc, podName, ns)
-}
-
 func patchResourceAsAdmin(oc *exutil.CLI, ns, resource, rsname, patch string) {
 	err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resource, rsname, "--type=json", "-p", patch, "-n", ns).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
-}
-
-func getFlowlogsPipelineCollector(oc *exutil.CLI, resource string) string {
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "-o=jsonpath={.items[0].metadata.name}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("get flowCollector: %v", output)
-	return output
-}
-
-// get name of flowlogsPipeline pod by label
-func getFlowlogsPipelinePod(oc *exutil.CLI, ns string, name string) string {
-	podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns, "-l", "app="+name, "-o=jsonpath={.items[0].metadata.name}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("the result of podname:%v", podName)
-	return podName
-}
-
-// Verify some key and deterministic fields and their values
-func verifyFlowRecord(podLog string) {
-	re := regexp.MustCompile(`{\"Bytes\":.*}`)
-	//e2e.Logf("the logs of flowlogs-pipeline pods are: %v", podLog)
-	flowRecords := re.FindAllString(podLog, -3)
-	//e2e.Logf("The flowRecords %v\n\n\n", flowRecords)
-	for i, flow := range flowRecords {
-		e2e.Logf("The %d th flow record is: %v\n\n\n", i, flow)
-		o.Expect(flow).Should(o.And(
-			o.MatchRegexp("Bytes.:[0-9]+"),
-			o.MatchRegexp("TimeFlowEndMs.:[1-9][0-9]+"),
-			o.MatchRegexp("TimeFlowStartMs.:[1-9][0-9]+"),
-			o.MatchRegexp("TimeReceived.:[1-9][0-9]+")))
-	}
-}
-
-// Verify metrics by doing curl commands
-func verifyCurl(oc *exutil.CLI, podName string, ns string, curlDest string, CertPath string) {
-	command := []string{"exec", "-n", ns, podName, "--", "curl", "-s", "-v", "-L", curlDest, "--cacert", CertPath}
-	output, err := oc.AsAdmin().WithoutNamespace().Run(command...).Args().OutputToFile("metrics.txt")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(output).NotTo(o.BeEmpty(), "No Metrics found")
-
-	// grep the HTTPS Code
-	metric1, _ := exec.Command("bash", "-c", "cat "+output+" | grep -o \"HTTP/2.*\"| tail -1 | awk '{print $2}'").Output()
-	httpCode := strings.TrimSpace(string(metric1))
-	e2e.Logf("The http code is : %v", httpCode)
-	o.Expect(httpCode).NotTo(o.BeEmpty(), "HTTP Code not found")
-
-	// grep the number of flows processed
-	metric2, _ := exec.Command("bash", "-c", "cat "+output+" | grep  -o \"ingest_flows_processed.*\" | tail -1 | awk '{print $2}'").Output()
-	flowLogsProcessed := strings.TrimSpace(string(metric2))
-	e2e.Logf("The number of flowslogs processed are : %v", flowLogsProcessed)
-	o.Expect(flowLogsProcessed).NotTo(o.BeEmpty(), "The number of flowlogs processed is empty")
-
-	// grep the number of loki records written
-	metric3, _ := exec.Command("bash", "-c", "cat "+output+" | grep -o \"records_written.*\" | tail -1 | awk '{print $2}'").Output()
-	lokiRecordsWritten := strings.TrimSpace(string(metric3))
-	e2e.Logf("The number of loki records written are : %v", lokiRecordsWritten)
-	o.Expect(lokiRecordsWritten).NotTo(o.BeEmpty(), "The number of loki records written is empty")
-
-	flowsProcessedInt, err := strconv.ParseInt(flowLogsProcessed, 10, 64)
-	if err == nil {
-		e2e.Logf("%d of type %T", flowsProcessedInt, flowsProcessedInt)
-	}
-
-	lokiRecordsWrittenInt, err := strconv.ParseInt(lokiRecordsWritten, 10, 64)
-	if err == nil {
-		e2e.Logf("%d of type %T", lokiRecordsWrittenInt, lokiRecordsWrittenInt)
-	}
-
-	// verify all the metrics
-	o.Expect(httpCode).To(o.Equal("200"))
-	o.Expect(flowsProcessedInt).Should(o.BeNumerically(">", 0))
-	o.Expect(lokiRecordsWrittenInt).Should(o.BeNumerically(">", 0))
-}
-
-func verifyTime(oc *exutil.CLI, namespace string, lokiStackName string, lokiStackNS string) {
-	var s string
-	bearerToken := getSAToken(oc, "flowlogs-pipeline", namespace)
-	route := "https://" + getRouteAddress(oc, lokiStackNS, lokiStackName)
-	lc := newLokiClient(route).withToken(bearerToken).retry(5)
-	res, err := lc.searchLogsInLoki("network", "{app=\"netobserv-flowcollector\"}")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if len(res.Data.Result) == 0 {
-		exutil.AssertWaitPollNoErr(err, "network logs are not found")
-	}
-
-	for _, r := range res.Data.Result {
-		e2e.Logf("\nlog is : %v\n", r.Values[0])
-		s = fmt.Sprint(r.Values[0])
-	}
-	l := strings.Split(s, " ")
-
-	ltime := strings.Replace(l[0], "[", "", 1)
-
-	logtime, err := strconv.ParseInt(ltime, 10, 64)
-	if err == nil {
-		e2e.Logf("%d of type %T", logtime, logtime)
-	}
-
-	now := time.Now().UnixNano()
-
-	timeminus := now - logtime
-	o.Expect(timeminus).Should(o.BeNumerically(">", 0))
-	o.Expect(timeminus).Should(o.BeNumerically("<=", 300000000000))
 }
 
 func (r resource) waitForResourceToAppear(oc *exutil.CLI) {
@@ -216,6 +140,21 @@ func (r resource) waitForResourceToAppear(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %s/%s is not appear", r.kind, r.name))
 }
 
+// WaitUntilResourceIsGone waits for the resource to be removed cluster
+func (r resource) waitUntilResourceIsGone(oc *exutil.CLI) error {
+	return wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", r.namespace, r.kind, r.name).Output()
+		if err != nil {
+			errstring := fmt.Sprintf("%v", output)
+			if strings.Contains(errstring, "NotFound") || strings.Contains(errstring, "the server doesn't have a resource type") || strings.Contains(errstring, "not found") {
+				return true, nil
+			}
+			return true, err
+		}
+		return false, nil
+	})
+}
+
 func (r resource) applyFromTemplate(oc *exutil.CLI, parameters ...string) error {
 	parameters = append(parameters, "-n", r.namespace)
 	file, err := processTemplate(oc, parameters...)
@@ -225,8 +164,13 @@ func (r resource) applyFromTemplate(oc *exutil.CLI, parameters ...string) error 
 	return err
 }
 
+func waitPodReady(oc *exutil.CLI, ns string, label string) {
+	podName := getFlowlogsPipelinePod(oc, ns, label)
+	exutil.AssertPodToBeReady(oc, podName, ns)
+}
+
 func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
-	err := wait.Poll(5*time.Second, 180*time.Second, func() (done bool, err error) {
+	err := wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
 		pods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		if err != nil {
 			return false, err
@@ -250,35 +194,6 @@ func waitForPodReadyWithLabel(oc *exutil.CLI, ns string, label string) {
 		return ready, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The pod with label %s is not availabile", label))
-}
-
-// WaitUntilResourceIsGone waits for the resource to be removed cluster
-func (r resource) waitUntilResourceIsGone(oc *exutil.CLI) error {
-	return wait.Poll(3*time.Second, 180*time.Second, func() (bool, error) {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", r.namespace, r.kind, r.name).Output()
-		if err != nil {
-			errstring := fmt.Sprintf("%v", output)
-			if strings.Contains(errstring, "NotFound") || strings.Contains(errstring, "the server doesn't have a resource type") {
-				return true, nil
-			}
-			return true, err
-		}
-		return false, nil
-	})
-}
-
-// delete the objects in the cluster
-func (r resource) clear(oc *exutil.CLI) error {
-	msg, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", r.namespace, r.kind, r.name).Output()
-	if err != nil {
-		errstring := fmt.Sprintf("%v", msg)
-		if strings.Contains(errstring, "NotFound") || strings.Contains(errstring, "the server doesn't have a resource type") {
-			return nil
-		}
-		return err
-	}
-	err = r.waitUntilResourceIsGone(oc)
-	return err
 }
 
 // WaitForDeploymentPodsToBeReady waits for the specific deployment to be ready
