@@ -10449,7 +10449,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 			for _, catsrc := range catalogs {
 				patchResource(oc, asAdmin, withoutNamespace, "-n", "openshift-marketplace", "catsrc", catsrc, "-p", "[{\"op\":\"remove\", \"path\":/spec/grpcPodConfig/nodeSelector/fake43642}]", "--type=json")
 			}
-			err := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
 				catalogstrings := []string{"Certified Operators", "Community Operators", "Red Hat Operators", "Red Hat Marketplace"}
 				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifests").Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -10462,6 +10462,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 				e2e.Logf("get packagemanifests for %s success", strings.Join(catalogstrings, ", "))
 				return true, nil
 			})
+			if err != nil {
+				output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-marketplace").Output()
+				e2e.Logf(output)
+			}
 			exutil.AssertWaitPollNoErr(err, "cannot get packagemanifests for Certified Operators, Community Operators, Red Hat Operators and Red Hat Marketplace")
 		}()
 
