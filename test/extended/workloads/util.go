@@ -8,6 +8,8 @@ import (
 	"regexp"
 
 	"math/rand"
+	"net/http"
+
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +20,7 @@ import (
 	"time"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -1233,4 +1236,19 @@ func getOauthAudit(mustgatherDir string) []string {
 		})
 	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to read the destDir")
 	return files
+}
+func getLatestMultiPayload() string {
+	url := "https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream/4-stable-multi/latest"
+	res, err := http.Get(url)
+	if err != nil {
+		e2e.Failf("unable to get http with error: %v", err)
+	}
+	body, err := ioutil.ReadAll(res.Body)
+	defer res.Body.Close()
+	if err != nil {
+		e2e.Failf("unable to parse the http result with error: %v", err)
+	}
+
+	pullSpec := gjson.Get(string(body), `pullSpec`).String()
+	return pullSpec
 }

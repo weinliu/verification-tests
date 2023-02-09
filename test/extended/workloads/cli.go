@@ -846,7 +846,40 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			}()
 		}
 		wg.Wait()
+	})
+	// author: yinzhou@redhat.com
+	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Medium-51018-oc adm release extract support manifest list", func() {
+		extractTmpDirName := "/tmp/case51018"
+		err := os.MkdirAll(extractTmpDirName, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(extractTmpDirName)
 
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", extractTmpDirName), "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		pullSpec := getLatestMultiPayload()
+		err = oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "extract", "-a", extractTmpDirName+"/.dockerconfigjson", "--command=oc", "--to="+extractTmpDirName, pullSpec).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Check oc executable to make sure match the platform")
+		_, err = exec.Command("bash", "-c", "/tmp/case51018/oc version").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "extract", "-a", extractTmpDirName+"/.dockerconfigjson", "--command=oc", "--to="+extractTmpDirName+"/mac", pullSpec, "--command-os=mac/amd64").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		macocheckcmd := "file /tmp/case51018/mac/oc"
+		output, err := exec.Command("bash", "-c", macocheckcmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Mach-O"))
+		err = oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "extract", "-a", extractTmpDirName+"/.dockerconfigjson", "--command=oc", "--to="+extractTmpDirName+"/macarm", pullSpec, "--command-os=mac/arm64").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		macocheckcmd = "file /tmp/case51018/macarm/oc"
+		output, err = exec.Command("bash", "-c", macocheckcmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Mach-O 64-bit arm64 executable"))
+		err = oc.WithoutNamespace().WithoutKubeconf().Run("adm").Args("release", "extract", "-a", extractTmpDirName+"/.dockerconfigjson", "--command=oc", "--to="+extractTmpDirName+"/windows", pullSpec, "--command-os=windows").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		windowocheckcmd := "file /tmp/case51018/windows/oc"
+		output, err = exec.Command("bash", "-c", windowocheckcmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Windows"))
 	})
 
 })
