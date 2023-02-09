@@ -4325,4 +4325,26 @@ roleRef:
 			e2e.Failf("Not able find the processes which are running on pod %v as user 2000 :: %v", testpod2, execCmdOuptut)
 		}
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("MicroShiftBoth-Author:rgangwar-Medium-55480-[Apiserver] Audit logs must be stored and persisted", func() {
+		g.By("1. Debug node and check the KAS audit log.")
+		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
+		o.Expect(masterErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNode).ShouldNot(o.BeEmpty())
+		kaslogfile := "ls -l /var/log/kube-apiserver/audit.log"
+		masterDebugNode, debugNodeErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=default"}, "bash", "-c", kaslogfile)
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+		o.Expect(masterDebugNode).ShouldNot(o.BeEmpty())
+		parts := strings.Fields(masterDebugNode)
+		permissions := parts[0]
+		owner := parts[2]
+		group := parts[3]
+
+		if strings.HasPrefix(permissions, "-rw") && strings.Contains(owner, "root") && strings.Contains(group, "root") {
+			e2e.Logf("Test Passed: The file has read & write permissions, owner and group owner is root :: %v", masterDebugNode)
+		} else {
+			e2e.Failf("Test Failed : The file does not have required permissions")
+		}
+	})
 })
