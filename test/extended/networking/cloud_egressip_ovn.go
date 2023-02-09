@@ -1506,7 +1506,7 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		ns := "56875-upgrade-ns"
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--ignore-not-found=true").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "hello-", "-n", ns, "--ignore-not-found=true").Execute()
-		defer removeResource(oc, true, true, "egressip", "all")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("egressip", "--all").Execute()
 
 		g.By("1. Check EgressIP in EIP object, sourceIP contains one IP. \n")
 		EIPObjects := getOVNEgressIPObject(oc)
