@@ -3491,4 +3491,61 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		output, _ = oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/ruby-27@sha256:8f71dd40e3f55d90662a63cb9f02b59e75ed7ac1e911c7919fd14fbfad431348", "ruby:latest", "--import-mode=invalid", "-n", oc.Namespace()).Output()
 		o.Expect(string(output)).To(o.ContainSubstring("valid ImportMode values are Legacy or PreserveOriginal"))
 	})
+
+	g.It("Author:xiuwang-Low-59388-Image registry is re-deployed swift storage when reconnect to openstack [Disruptive]", func() {
+		g.By("Skip test for non swift storage backend")
+		storagetype, _ := getRegistryStorageConfig(oc)
+		if storagetype != "swift" {
+			g.Skip("Skip for non-supported platform")
+		}
+
+		g.By("Get clouds.yaml file")
+		tempDataDir := filepath.Join("/tmp/", fmt.Sprintf("ir-%s", getRandomString()))
+		err := os.Mkdir(tempDataDir, 0o755)
+		if err != nil {
+			e2e.Failf("Fail to create directory: %v", err)
+		}
+		err = oc.AsAdmin().Run("extract").Args("secret/installer-cloud-credentials", "-n", "openshift-image-registry", "--confirm", "--to="+tempDataDir).Execute()
+		defer os.RemoveAll(tempDataDir)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		originCloudCred := filepath.Join(tempDataDir, "clouds.yaml")
+		if _, err := os.Stat(originCloudCred); os.IsNotExist(err) {
+			e2e.Logf("clouds credential get failed")
+		}
+		invalidCloudCred := filepath.Join(tempDataDir, "c-invalid.yaml")
+		copyFile(originCloudCred, invalidCloudCred)
+
+		_, err = exec.Command("bash", "-c", "sed -i '/password/d' "+invalidCloudCred).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = exec.Command("bash", "-c", "cat "+invalidCloudCred).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Set invalid credentials for openshift swift backend")
+		expectedStatus1 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		defer func() {
+			g.By("Set correct cloud credentials back")
+			err = oc.AsAdmin().WithoutNamespace().Run("set").Args("data", "secret/installer-cloud-credentials", "-n", "openshift-image-registry", "--from-file=clouds.yaml="+originCloudCred).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			container2, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.spec.storage.swift.container}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(container2).NotTo(o.BeEmpty())
+		}()
+		err = oc.AsAdmin().WithoutNamespace().Run("set").Args("data", "secret/installer-cloud-credentials", "-n", "openshift-image-registry", "--from-file=clouds.yaml="+invalidCloudCred).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", `--patch=[ {"op": "remove", "path": "/spec/storage"} ]`, "--type=json").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Don't set storage to use pvc, re-connect to openstack")
+		output, err := oc.WithoutNamespace().AsAdmin().Run("logs").Args("deploy/cluster-image-registry-operator", "--since=30s", "-n", "openshift-image-registry").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "unable to sync storage configuration") ||
+			!strings.Contains(output, "failed to authenticate against OpenStack") {
+			e2e.Failf("unable to sync storage configuration or failed to authenticate against OpenStack is not in logs.")
+		}
+		container1, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.status.storage.swift.container}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(container1).NotTo(o.BeEmpty())
+	})
 })

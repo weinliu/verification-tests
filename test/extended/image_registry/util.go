@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -1223,4 +1224,11 @@ func doPrometheusQuery(oc *exutil.CLI, token, url string) int {
 	count, err = strconv.Atoi(data.Data.Result[0].Value[1].(string))
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return count
+}
+
+func copyFile(source string, dest string) {
+	bytesRead, err := ioutil.ReadFile(source)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = ioutil.WriteFile(dest, bytesRead, 0644)
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
