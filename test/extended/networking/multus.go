@@ -2,10 +2,14 @@ package networking
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 var _ = g.Describe("[sig-networking] SDN", func() {
@@ -75,5 +79,50 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			cronjobLog3 := getMultusCronJob(oc)
 			return cronjobLog3
 		}, "90s", "10s").Should(o.ContainSubstring(stringInfo1), fmt.Sprintf("Failed to get correct multus cronjobs"))
+	})
+
+	// author: weliang@redhat.com
+	g.It("NonHyperShiftHOST-Author:weliang-High-57589-Whereabouts CNI timesout while iterating exclude range", func() {
+		//https://issues.redhat.com/browse/OCPBUGS-2948 : Whereabouts CNI timesout while iterating exclude range
+
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			netAttachDefFile1   = filepath.Join(buildPruningBaseDir, "multus/ipv6-excludes-largeranges-NAD.yaml")
+			multusPodTemplate   = filepath.Join(buildPruningBaseDir, "multinetworkpolicy/MultiNetworkPolicy-pod-template.yaml")
+		)
+
+		ns1 := oc.Namespace()
+
+		g.By("Get the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+
+		g.By("Create a custom resource network-attach-defintion in tested namespace")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", netAttachDefFile1, "-n", ns1).Execute()
+		netAttachDefErr := oc.AsAdmin().Run("create").Args("-f", netAttachDefFile1, "-n", ns1).Execute()
+		o.Expect(netAttachDefErr).NotTo(o.HaveOccurred())
+		netAttachDefOutput, netAttachDefOutputErr := oc.Run("get").Args("net-attach-def", "-n", ns1).Output()
+		o.Expect(netAttachDefOutputErr).NotTo(o.HaveOccurred())
+		o.Expect(netAttachDefOutput).To(o.ContainSubstring("nad-w-excludes"))
+
+		g.By("Create a multus pod to use above network-attach-defintion")
+		ns1MultusPod1 := testPodMultinetwork{
+			name:      "ns1-multuspod1",
+			namespace: ns1,
+			nodename:  nodeList.Items[0].Name,
+			nadname:   "nad-w-excludes",
+			labelname: "blue-multuspod",
+			template:  multusPodTemplate,
+		}
+		ns1MultusPod1.createTestPodMultinetwork(oc)
+		waitPodReady(oc, ns1MultusPod1.namespace, ns1MultusPod1.name)
+
+		g.By("check the created multus pod to get the right ipv6 CIDR")
+		multusPodIPv6 := getPodMultiNetworkIPv6(oc, ns1, ns1MultusPod1.name)
+		e2e.Logf("The v6 address of pod's second interface is: %v", multusPodIPv6)
+		o.Expect(strings.HasPrefix(multusPodIPv6, "fd43:11f1:3daa:bbaa::")).Should(o.BeTrue())
 	})
 })
