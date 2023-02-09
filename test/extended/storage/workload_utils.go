@@ -300,8 +300,14 @@ func (po *pod) checkMountedVolumeDataExist(oc *exutil.CLI, checkFlag bool) {
 
 // Check the pod mounted volume have exec right
 func (po *pod) checkMountedVolumeHaveExecRight(oc *exutil.CLI) {
-	o.Expect(execCommandInSpecificPod(oc, po.namespace, po.name, fmt.Sprintf("echo '#!/bin/bash\necho \"Hello OpenShift Storage\"' > %s && chmod +x %s ", po.mountPath+"/hello", po.mountPath+"/hello"))).Should(o.Equal(""))
-	o.Expect(execCommandInSpecificPod(oc, po.namespace, po.name, po.mountPath+"/hello")).To(o.ContainSubstring("Hello OpenShift Storage"))
+	if provisioner == "file.csi.azure.com" {
+		_, err := execCommandInSpecificPod(oc, po.namespace, po.name, "cp hello "+po.mountPath)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(execCommandInSpecificPod(oc, po.namespace, po.name, "ls -l "+po.mountPath+"/hello")).To(o.ContainSubstring("-rwxrwxrwx"))
+	} else {
+		o.Expect(execCommandInSpecificPod(oc, po.namespace, po.name, fmt.Sprintf("echo '#!/bin/bash\necho \"Hello OpenShift Storage\"' > %s && chmod +x %s ", po.mountPath+"/hello", po.mountPath+"/hello"))).Should(o.Equal(""))
+		o.Expect(execCommandInSpecificPod(oc, po.namespace, po.name, po.mountPath+"/hello")).To(o.ContainSubstring("Hello OpenShift Storage"))
+	}
 }
 
 // Check the pod mounted volume could write data into raw block volume
@@ -911,8 +917,14 @@ func (dep *deployment) checkPodMountedVolumeDataExist(oc *exutil.CLI, checkFlag 
 // Check the deployment mounted volume have exec right
 func (dep *deployment) checkPodMountedVolumeHaveExecRight(oc *exutil.CLI) {
 	for _, podinstance := range dep.getPodList(oc) {
-		o.Expect(execCommandInSpecificPod(oc, dep.namespace, podinstance, fmt.Sprintf("echo '#!/bin/bash\necho \"Hello OpenShift Storage\"' > %s && chmod +x %s ", dep.mpath+"/hello", dep.mpath+"/hello"))).Should(o.Equal(""))
-		o.Expect(execCommandInSpecificPod(oc, dep.namespace, podinstance, dep.mpath+"/hello")).To(o.ContainSubstring("Hello OpenShift Storage"))
+		if provisioner == "file.csi.azure.com" {
+			_, err := execCommandInSpecificPod(oc, dep.namespace, podinstance, "cp hello "+dep.mpath)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(execCommandInSpecificPod(oc, dep.namespace, podinstance, "ls -l "+dep.mpath+"/hello")).To(o.ContainSubstring("-rwxrwxrwx"))
+		} else {
+			o.Expect(execCommandInSpecificPod(oc, dep.namespace, podinstance, fmt.Sprintf("echo '#!/bin/bash\necho \"Hello OpenShift Storage\"' > %s && chmod +x %s ", dep.mpath+"/hello", dep.mpath+"/hello"))).Should(o.Equal(""))
+			o.Expect(execCommandInSpecificPod(oc, dep.namespace, podinstance, dep.mpath+"/hello")).To(o.ContainSubstring("Hello OpenShift Storage"))
+		}
 	}
 }
 
@@ -1281,8 +1293,14 @@ func (sts *statefulset) checkMountedVolumeHaveExecRight(oc *exutil.CLI) {
 	podList, err := getPodsListByLabel(oc, sts.namespace, "app="+sts.applabel)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	for _, podName := range podList {
-		o.Expect(execCommandInSpecificPod(oc, sts.namespace, podName, fmt.Sprintf("echo '#!/bin/bash\necho \"Hello OpenShift Storage\"' > %s && chmod +x %s ", sts.mpath+"/hello", sts.mpath+"/hello"))).Should(o.Equal(""))
-		o.Expect(execCommandInSpecificPod(oc, sts.namespace, podName, sts.mpath+"/hello")).To(o.ContainSubstring("Hello OpenShift Storage"))
+		if provisioner == "file.csi.azure.com" {
+			_, err := execCommandInSpecificPod(oc, sts.namespace, podName, "cp hello "+sts.mpath)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(execCommandInSpecificPod(oc, sts.namespace, podName, "ls -l "+sts.mpath+"/hello")).To(o.ContainSubstring("-rwxrwxrwx"))
+		} else {
+			o.Expect(execCommandInSpecificPod(oc, sts.namespace, podName, fmt.Sprintf("echo '#!/bin/bash\necho \"Hello OpenShift Storage\"' > %s && chmod +x %s ", sts.mpath+"/hello", sts.mpath+"/hello"))).Should(o.Equal(""))
+			o.Expect(execCommandInSpecificPod(oc, sts.namespace, podName, sts.mpath+"/hello")).To(o.ContainSubstring("Hello OpenShift Storage"))
+		}
 	}
 }
 

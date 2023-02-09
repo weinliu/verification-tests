@@ -57,7 +57,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
@@ -135,7 +135,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Use the framework created project as default, if use your own, exec the follow code setupProject
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 			// Get the present scName and check it is installed or no
@@ -188,7 +188,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 			// Get the present scName and check it is installed or no
@@ -268,7 +268,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
@@ -356,7 +356,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
@@ -435,7 +435,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 
 			if provisioner == "efs.csi.aws.com" {
 				SELinuxLabelValue = "nfs_t"
@@ -523,7 +523,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for raw block volume
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"))
@@ -581,7 +581,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the original
 			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
@@ -650,7 +650,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the original
 			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("1Gi"))
@@ -730,7 +730,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the original
 			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"))
@@ -792,7 +792,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the original
 			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimCapacity("1Gi"))
@@ -875,7 +875,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			func() {
 				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 				// Set the resource definition for the scenario
@@ -941,7 +941,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Use the framework created project as default, if use your own, exec the follow code setupProject
 		g.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassReclaimPolicy("Delete"), setStorageClassVolumeBindingMode("Immediate"))
@@ -1003,7 +1003,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Use the framework created project as default, if use your own, exec the follow code setupProject
 		g.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassReclaimPolicy("Retain"))
@@ -1122,7 +1122,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)))
@@ -1163,7 +1163,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
@@ -1210,7 +1210,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
@@ -1249,7 +1249,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)))
@@ -1282,7 +1282,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)))
@@ -1323,7 +1323,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
@@ -1370,7 +1370,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
@@ -1409,7 +1409,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimStorageClassName(getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)))
@@ -1443,7 +1443,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
 
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
@@ -1518,7 +1518,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the scenario
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
@@ -1601,7 +1601,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the original
 			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
@@ -1691,7 +1691,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the original
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
@@ -1790,7 +1790,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			// Set the resource definition for the original
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
@@ -1880,7 +1880,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		)
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
 			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"))
@@ -1962,7 +1962,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		)
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
 			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
@@ -2055,7 +2055,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		)
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
 			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
@@ -2138,7 +2138,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		)
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
 			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"))
@@ -2234,7 +2234,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
 
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			for _, volumeBindingMode := range volumeBindingModes {
 				g.By("****** volumeBindingMode: \"" + volumeBindingMode + "\" parameter test start ******")
@@ -2339,7 +2339,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 			// Get the present scName and check it is installed or no
@@ -2390,7 +2390,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 			// Set the resource definition for the scenario
@@ -2455,7 +2455,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		)
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
 			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
@@ -2522,7 +2522,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			g.By("Get the zone value with CSI topology key")
 			topologyPath := map[string]string{
@@ -2624,7 +2624,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			g.By("Get the zone value with CSI topology key")
 			topologyPath := map[string]string{
@@ -2727,7 +2727,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
 
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 			topologyKey := map[string]string{
@@ -2825,7 +2825,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		)
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
 			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
@@ -2935,7 +2935,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 			// Set the resource definition
@@ -3002,7 +3002,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 			// Set the resource definition
@@ -3095,7 +3095,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 			// Set the resource definition
@@ -3197,7 +3197,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			o.Expect(oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "default").Output()).Should(o.ContainSubstring("added"))
 		}
 
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			func() {
 				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 				// Set the resource definition for the scenario
@@ -3286,7 +3286,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			o.Expect(oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "default").Output()).Should(o.ContainSubstring("added"))
 		}
 
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			func() {
 				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 				// Set the resource definition for the scenario
@@ -3418,7 +3418,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			o.Expect(oc.AsAdmin().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "default").Output()).Should(o.ContainSubstring("added"))
 		}
 
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			func() {
 				g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 				// Set the resource definition for the scenario
@@ -3505,7 +3505,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 			// Get the present scName and check it is installed or no
@@ -3578,7 +3578,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
 			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name),
@@ -3661,7 +3661,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 			// Get the present scName and check it is installed or no
@@ -3725,7 +3725,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("0. Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 			if provisioner == "diskplugin.csi.alibabacloud.com" {
@@ -3868,7 +3868,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 			g.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
 			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("1Gi"))
@@ -3936,7 +3936,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
 
-		for _, provisioner := range supportProvisioners {
+		for _, provisioner = range supportProvisioners {
 
 			g.By("#. Create new project for the scenario")
 			oc.SetupProject() //create new project

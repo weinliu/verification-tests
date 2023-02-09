@@ -24,7 +24,7 @@ import (
 )
 
 // Define the global cloudProvider
-var cloudProvider string
+var cloudProvider, provisioner string
 
 // Define test waiting time const
 const (

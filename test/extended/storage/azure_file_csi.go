@@ -26,6 +26,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.BeforeEach(func() {
 		// Function to check optional enabled capabilities
 		checkOptionalCapability(oc, "Storage")
+		provisioner = "file.csi.azure.com"
 
 		cloudProvider = getCloudProvider(oc)
 		if !strings.Contains(cloudProvider, "azure") {
@@ -386,6 +387,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Set up a specified project share for all the phases
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
+
+		// Wrt nfs checkPodMountedVolumeHaveExecRight will get affected, so marking provisioner as dummy value
+		provisioner = "file.csi.azure.com-nfs"
 
 		// Set the resource definition for the scenario
 		storageClassParameters := map[string]string{
