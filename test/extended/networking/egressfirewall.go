@@ -331,4 +331,48 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			o.Expect(allow > denyRule).Should(o.BeTrue(), fmt.Sprintf("The allow rule priority is %v, the deny rule priority is %v.", allow, denyRule))
 		}
 	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-High-59709-No duplicate egressfirewall rules in the OVN Northbound database after restart OVN master pod. [Disruptive]", func() {
+		//This is from bug https://issues.redhat.com/browse/OCPBUGS-811
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			egressFWTemplate1   = filepath.Join(buildPruningBaseDir, "egressfirewall1-template.yaml")
+		)
+
+		g.By("Obtain the namespace \n")
+		ns1 := oc.Namespace()
+
+		g.By("Create egressfirewall rules under same namespace \n")
+		egressFW := egressFirewall1{
+			name:      "default",
+			namespace: ns1,
+			template:  egressFWTemplate1,
+		}
+		egressFW.createEgressFWObject1(oc)
+		defer egressFW.deleteEgressFWObject1(oc)
+		efErr := waitEgressFirewallApplied(oc, egressFW.name, ns1)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		g.By("Get the base number of egressfirewall rules\n")
+		ovnACLCmd := fmt.Sprintf("ovn-nbctl --format=table --no-heading  --columns=action,priority,match find acl external_ids=egressFirewall=%s", ns1)
+		ovnMasterPodName := getOVNLeaderPod(oc, "north")
+		listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, ovnACLCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The egressfirewall rules before restart ovn master pod: \n %s", listOutput)
+		baseCount := len(strings.Split(listOutput, "\n"))
+
+		g.By("Restart ovn master pod\n")
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", ovnMasterPodName, "-n", "openshift-ovn-kubernetes").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
+
+		g.By("Check the result, the number of egressfirewal rules should be same as before.")
+		ovnMasterPodName = getOVNLeaderPod(oc, "north")
+		listOutput, listErr = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, ovnACLCmd)
+		o.Expect(listErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The egressfirewall rules after restart ovn master pod: \n %s", listOutput)
+		resultCount := len(strings.Split(listOutput, "\n"))
+		o.Expect(resultCount).Should(o.Equal(baseCount))
+	})
 })
