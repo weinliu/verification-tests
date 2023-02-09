@@ -569,6 +569,63 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "param3: value3")
 			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "param4: value4")
 		})
+
+		//author: tagao@redhat.com
+		g.It("Author:tagao-Medium-47519-Platform prometheus operator should reconcile AlertmanagerConfig resources from user namespaces [Serial]", func() {
+			var (
+				enableAltmgrConfig = filepath.Join(monitoringBaseDir, "enableUserAlertmanagerConfig.yaml")
+				wechatConfig       = filepath.Join(monitoringBaseDir, "exampleAlertConfigAndSecret.yaml")
+			)
+			g.By("delete uwm-config/cm-config at the end of a serial case")
+			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+			g.By("enable alert manager config")
+			createResourceFromYaml(oc, "openshift-monitoring", enableAltmgrConfig)
+			exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
+
+			g.By("check the initial alertmanager configuration")
+			checkAlertmangerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "alertname = Watchdog", true)
+
+			g.By("create&check alertmanagerconfig under openshift-monitoring")
+			createResourceFromYaml(oc, "openshift-monitoring", wechatConfig)
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("alertmanagerconfig/config-example", "secret/wechat-config", "-n", "openshift-monitoring").Output()
+			o.Expect(output).To(o.ContainSubstring("config-example"))
+			o.Expect(output).To(o.ContainSubstring("wechat-config"))
+
+			g.By("check if the new created AlertmanagerConfig is reconciled in the Alertmanager configuration (should not)")
+			checkAlertmangerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "wechat", false)
+
+			g.By("delete the alertmanagerconfig/secret created under openshift-monitoring")
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("alertmanagerconfig/config-example", "secret/wechat-config", "-n", "openshift-monitoring").Execute()
+
+			g.By("create one new project, label the namespace and create the same AlertmanagerConfig")
+			oc.SetupProject()
+			ns := oc.Namespace()
+			oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", ns, "openshift.io/user-monitoring=false").Execute()
+
+			g.By("create&check alertmanagerconfig under the namespace")
+			createResourceFromYaml(oc, ns, wechatConfig)
+			output2, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("alertmanagerconfig/config-example", "secret/wechat-config", "-n", ns).Output()
+			o.Expect(output2).To(o.ContainSubstring("config-example"))
+			o.Expect(output2).To(o.ContainSubstring("wechat-config"))
+
+			g.By("check if the new created AlertmanagerConfig is reconciled in the Alertmanager configuration (should not)")
+			checkAlertmangerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "wechat", false)
+
+			g.By("update the label to true")
+			oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", ns, "openshift.io/user-monitoring=true", "--overwrite").Execute()
+
+			g.By("check if the new created AlertmanagerConfig is reconciled in the Alertmanager configuration")
+			checkAlertmangerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "wechat", true)
+
+			g.By("set enableUserAlertmanagerConfig to false")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("cm", "cluster-monitoring-config", "-p", `{"data": {"config.yaml": "alertmanagerMain:\n enableUserAlertmanagerConfig: false\n"}}`, "--type=merge", "-n", "openshift-monitoring").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("the AlertmanagerConfig from user project is removed")
+			checkAlertmangerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "wechat", false)
+		})
 	})
 
 	//author: tagao@redhat.com

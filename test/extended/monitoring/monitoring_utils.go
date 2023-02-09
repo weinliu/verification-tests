@@ -262,3 +262,24 @@ func checkAlertNotExist(oc *exutil.CLI, token, alertName string) {
 		e2e.Failf("Target alert found: %s", alertName)
 	}
 }
+
+// check alertmanger config in the pod
+func checkAlertmangerConfig(oc *exutil.CLI, ns string, podName string, checkValue string, expectExist bool) {
+	envCheck := wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		envOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, "-c", "alertmanager", podName, "--", "bash", "-c", fmt.Sprintf(`cat /etc/alertmanager/config_out/alertmanager.env.yaml | grep '%s'`, checkValue)).Output()
+		if expectExist {
+			if err != nil || !strings.Contains(envOutput, checkValue) {
+				return false, nil
+			}
+			return true, nil
+		}
+		if !expectExist {
+			if !strings.Contains(envOutput, checkValue) {
+				return true, nil
+			}
+			return false, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(envCheck, "failed to check alertmanager config")
+}
