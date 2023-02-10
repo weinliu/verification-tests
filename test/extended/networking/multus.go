@@ -125,4 +125,19 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		e2e.Logf("The v6 address of pod's second interface is: %v", multusPodIPv6)
 		o.Expect(strings.HasPrefix(multusPodIPv6, "fd43:11f1:3daa:bbaa::")).Should(o.BeTrue())
 	})
+
+	// author: weliang@redhat.com
+	g.It("NonHyperShiftHOST-Author:weliang-High-59875-Configure ignored namespaces into multus-admission-controller", func() {
+		//https://issues.redhat.com/browse/OCPBUGS-6499:Configure ignored namespaces into multus-admission-controller
+
+		ns1 := "openshift-multus"
+		expectedOutpu := "-ignore-namespaces"
+		g.By("Check multus-admission-controller is configured with ignore-namespaces")
+		multusOutput, multusErr := oc.AsAdmin().Run("get").Args("deployment.apps/multus-admission-controller", "-n", ns1, "-o=jsonpath={.spec.template.spec.containers[0].command[2]}").Output()
+		exutil.AssertWaitPollNoErr(multusErr, "The deployment.apps/multus-admission-controller is not created")
+		o.Expect(multusOutput).To(o.ContainSubstring(expectedOutpu))
+
+		g.By("Check all multus-additional-cni-plugins pods are Running well")
+		o.Expect(waitForPodWithLabelReady(oc, ns1, "app=multus-additional-cni-plugins")).NotTo(o.HaveOccurred())
+	})
 })
