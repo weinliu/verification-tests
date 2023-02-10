@@ -706,7 +706,14 @@ func IsSNOCluster(oc *CLI) bool {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(topologyTypeStdOut).NotTo(o.BeEmpty())
 	topologyType := strings.ToLower(topologyTypeStdOut)
-	return topologyType == "singlereplica"
+
+	//Skip one master with 1-N worker nodes senario
+	workerNodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker", "-oname").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(workerNodes).NotTo(o.BeEmpty())
+	workerNodesArr := strings.Split(workerNodes, "\n")
+	workerNums := len(workerNodesArr)
+	return topologyType == "singlereplica" && workerNums == 1
 }
 
 // CheckAllNodepoolReadyByHostedClusterName used for checking if all nodepool is ready
@@ -729,4 +736,37 @@ func CheckAllNodepoolReadyByHostedClusterName(oc *CLI, nodePoolName, hostedClust
 	})
 	AssertWaitPollNoErr(err, "The status of nodepool isn't ready")
 	return isMatch
+}
+
+// getLastWorkerNodeByOsID returns the cluster node by OS type, linux or windows
+func getLastWorkerNodeByOsType(oc *CLI, ostype string) (string, error) {
+	nodes, err := GetClusterNodesBy(oc, "worker")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(nodes).NotTo(o.BeEmpty())
+
+	totalNodeNum := len(nodes)
+
+	for i := totalNodeNum - 1; i >= 0; i-- {
+		//Skip the node that is work node and also is master node in the OCP with one master + [1-N] worker node
+		nodeLabels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node/"+nodes[i], "-o", "jsonpath={.metadata.labels}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeLabels).NotTo(o.BeEmpty())
+
+		regNodeLabls := regexp.MustCompile("control-plane|master")
+		isMaster := regNodeLabls.MatchString(nodeLabels)
+
+		stdout, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node/"+nodes[i], `-ojsonpath='{.metadata.labels.kubernetes\.io/os}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(stdout).NotTo(o.BeEmpty())
+
+		if strings.Trim(stdout, "'") == ostype && !isMaster {
+			return nodes[i], err
+		}
+	}
+	return "", err
+}
+
+// GetLastLinuxWorkerNode return last worker node
+func GetLastLinuxWorkerNode(oc *CLI) (string, error) {
+	return getLastWorkerNodeByOsType(oc, "linux")
 }

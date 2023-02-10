@@ -1026,8 +1026,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
 		}
 
-		//Use the first worker node as labeled node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		//Use the last worker node as labeled node
+		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Get the tuned pod name in the same node that labeled node
@@ -1112,8 +1112,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		//Use the first worker node as labeled node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		//Use the last worker node as labeled node
+		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Get the tuned pod name in the same node that labeled node
@@ -1191,8 +1191,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "performance-patch", "-n", ntoNamespace, "--ignore-not-found").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("PerformanceProfile", "performance", "--ignore-not-found").Execute()
 
-		//Use the first worker node as labeled node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		//Use the last worker node as labeled node
+		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Get the tuned pod name in the same node that labeled node
@@ -1253,7 +1253,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, paoPerformancePatchFile)
 
 		g.By("Assert if the MCP worker-cnf is ready after node rebooted ...")
-		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-cnf", 600)
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-cnf", 720)
 
 		g.By("Check if new profile performance-patch in rendered tuned")
 		renderCheck, err = getTunedRender(oc, ntoNamespace)
@@ -1301,7 +1301,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//otherwise the mcp will keep degrade state, it will affected other test case that use mcp
 		g.By("Delete custom MC and MCP by following right way...")
 		oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-cnf-").Execute()
-		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-cnf", "worker-cnf", 5)
+		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-cnf", "worker-cnf", 8)
 	})
 
 	g.It("Longduration-NonPreRelease-Author:liqcui-Medium-45686-NTO Creating tuned profile with references to not yet existing Performance Profile configuration.[Disruptive] [Slow]", func() {
@@ -1327,12 +1327,12 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			exutil.InstallPAO(oc, paoNamespace)
 		}
 
-		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-optimize", "worker-optimize", 5)
+		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-optimize", "worker-optimize", 6)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "include-performance-profile", "-n", ntoNamespace, "--ignore-not-found").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("PerformanceProfile", "optimize", "--ignore-not-found").Execute()
 
-		//Use the first worker node as labeled node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		//Use the last worker node as labeled node
+		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Get the tuned pod name in the labeled node
@@ -1425,7 +1425,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		//otherwise the mcp will keep degrade state, it will affected other test case that use mcp
 		g.By("Delete custom MC and MCP by following right way...")
 		oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-optimize-").Execute()
-		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-optimize", "worker-optimize", 5)
+		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-optimize", "worker-optimize", 8)
 	})
 
 	g.It("Author:liqcui-Medium-36152-NTO Get metrics and alerts", func() {
@@ -1459,8 +1459,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		//Use the first worker node as labeled node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		//Use the last worker node as labeled node
+		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("The tuned node name is: \n%v", tunedNodeName)
 
@@ -1567,8 +1567,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed or it's Single Node Cluster- skipping test ...")
 		}
 
-		//Use the first worker node as labeled node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		//Use the last worker node as labeled node
+		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//Get the tuned pod name in the same node that labeled node
@@ -1648,7 +1648,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("The right way to delete custom MC and MCP...")
 		oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-hp-").Execute()
-		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-hp", "worker-hp", 5)
+		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-hp", "worker-hp", 8)
 	})
 
 	g.It("NonPreRelease-Author:liqcui-Medium-49439-NTO can start and stop stalld when relying on Tuned '[service]' plugin.[Disruptive]", func() {
@@ -2189,8 +2189,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		defer exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-pao", "worker-pao", 8)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("performanceprofile", "pao-baseprofile", "--ignore-not-found").Execute()
 
-		//Use the first worker node as labeled node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		//Use the last worker node as labeled node
+		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
 

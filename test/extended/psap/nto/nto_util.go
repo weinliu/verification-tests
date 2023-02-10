@@ -677,14 +677,39 @@ func assertNTOPodLogsLastLines(oc *exutil.CLI, namespace string, ntoPod string, 
 
 // getServiceENDPoint
 func getServiceENDPoint(oc *exutil.CLI, namespace string) string {
+	var endPointIP string
+	ipFamilyPolicy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "service/node-tuning-operator", "-ojsonpath={.spec.ipFamilyPolicy}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(ipFamilyPolicy).NotTo(o.BeEmpty())
 
 	serviceOutput, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", namespace, "service/node-tuning-operator").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(serviceOutput).NotTo(o.BeEmpty())
+
 	endPointReg, _ := regexp.Compile(".*Endpoints.*")
 	endPointIPStr := endPointReg.FindString(serviceOutput)
-	endPointIPStrNoSpace := strings.ReplaceAll(endPointIPStr, " ", "")
-	endPointIPArr := strings.Split(endPointIPStrNoSpace, ":")
-	endPointIP := endPointIPArr[1] + ":" + endPointIPArr[2]
+	o.Expect(endPointIPStr).NotTo(o.BeEmpty())
+
+	if ipFamilyPolicy == "SingleStack" {
+		endPointStr := strings.ReplaceAll(endPointIPStr, "         ", ",")
+		o.Expect(endPointStr).NotTo(o.BeEmpty())
+
+		endPointStrArr := strings.Split(endPointStr, ",")
+		o.Expect(endPointStrArr).NotTo(o.BeEmpty())
+
+		endPointStrArrLen := len(endPointStrArr)
+		endPointIP = endPointStrArr[endPointStrArrLen-1]
+
+	} else {
+		endPointIPStrNoSpace := strings.ReplaceAll(endPointIPStr, " ", "")
+		o.Expect(endPointIPStrNoSpace).NotTo(o.BeEmpty())
+
+		endPointIPArr := strings.Split(endPointIPStrNoSpace, ":")
+		o.Expect(endPointIPArr).NotTo(o.BeEmpty())
+
+		endPointIP = endPointIPArr[1] + ":" + endPointIPArr[2]
+	}
+
 	return endPointIP
 }
 
