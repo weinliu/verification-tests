@@ -846,6 +846,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
+			uuid, err := oc.WithoutNamespace().Run("get").Args("project", appProj, "-ojsonpath={.metadata.uid}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			cw.selNamespacesUUID = []string{uuid}
 
 			g.By("create clusterlogforwarder/instance")
 			s := resource{"secret", cw.secretName, cw.secretNamespace}

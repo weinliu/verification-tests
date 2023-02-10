@@ -19,10 +19,7 @@ objects:
           name: ${SECRETNAME}
     pipelines:
       - name: to-cloudwatch
-        inputRefs:
-          - infrastructure
-          - application
-          - audit
+        inputRefs: ${{INPUT_REFS}}
         outputRefs:
           - cw
 parameters:
@@ -34,3 +31,5 @@ parameters:
   value: "us-east-2"
 - name: GROUPTYPE
   value: "logType"
+- name: INPUT_REFS
+  value: "[\"infrastructure\", \"audit\", \"application\"]"

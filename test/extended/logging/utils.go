@@ -1234,7 +1234,7 @@ type cloudwatchSpec struct {
 	awsKeyID          string   // aws_access_key_id file
 	awsKey            string   // aws_access_key file
 	awsRegion         string   // `default: "us-east-2"` //aws region
-	selNamespacesUUID []string // The app namespaces should be collected
+	selNamespacesUUID []string // The UUIDs of all app namespaces should be collected
 	//disNamespacesUUID []string // The app namespaces should not be collected
 	//Generical variables
 	nodes            []string // Cluster Nodes Names
@@ -1242,7 +1242,7 @@ type cloudwatchSpec struct {
 	logTypes         []string //`default: "['infrastructure','application', 'audit']"` // logTypes in {"application","infrastructure","audit"}
 	selAppNamespaces []string //The app namespaces should be collected and verified
 	//selInfraNamespaces []string //The infra namespaces should be collected and verified
-	//disAppNamespaces   []string //The namespaces should not be collected and verified
+	disAppNamespaces []string //The namespaces should not be collected and verified
 	//selInfraPods       []string // The infra pods should be collected and verified.
 	//selAppPods         []string // The app pods should be collected and verified
 	//disAppPods         []string // The pods shouldn't be collected and verified
@@ -1348,7 +1348,6 @@ func (cw cloudwatchSpec) getGroupNames(client *cloudwatchlogs.Client, groupPrefi
 	for _, group := range logGroupDesc.LogGroups {
 		groupNames = append(groupNames, *group.LogGroupName)
 	}
-
 	e2e.Logf("Found cloudWatchLog groupNames %v", groupNames)
 	return groupNames
 }
@@ -1620,7 +1619,6 @@ func (cw cloudwatchSpec) auditLogsFound(client *cloudwatchlogs.Client, strict bo
 //	uuid-.0471c739-e38c-4590-8a96-fdd5298d47ae,uuid-.audit,uuid-.infrastructure
 func (cw cloudwatchSpec) applicationLogsFoundUUID(client *cloudwatchlogs.Client) bool {
 	var appLogGroupNames []string
-	var logFound bool = true
 	if len(cw.selNamespacesUUID) == 0 {
 		logGroupNames := cw.getGroupNames(client, cw.groupPrefix)
 		for _, e := range logGroupNames {
@@ -1645,10 +1643,10 @@ func (cw cloudwatchSpec) applicationLogsFoundUUID(client *cloudwatchlogs.Client)
 		logGroupNames := cw.getGroupNames(client, cw.groupPrefix+"."+projectUUID)
 		if len(logGroupNames) == 0 {
 			e2e.Logf("Warn: Can not find groupnames for project " + projectUUID)
-			logFound = false
+			return false
 		}
 	}
-	return logFound
+	return true
 }
 
 // In this function, we verify the pod's groupNames can be found in cloudwatch
@@ -1656,9 +1654,8 @@ func (cw cloudwatchSpec) applicationLogsFoundUUID(client *cloudwatchlogs.Client)
 //
 //	prefix.aosqe-log-json-1638788875,prefix.audit,prefix.infrastructure
 func (cw cloudwatchSpec) applicationLogsFoundNamespaceName(client *cloudwatchlogs.Client) bool {
-	var appLogGroupNames []string
-	var logFoundAll bool = true
 	if len(cw.selAppNamespaces) == 0 {
+		var appLogGroupNames []string
 		logGroupNames := cw.getGroupNames(client, cw.groupPrefix)
 		for _, e := range logGroupNames {
 			r1, _ := regexp.Compile(`.*\.infrastructure$`)
@@ -1682,10 +1679,10 @@ func (cw cloudwatchSpec) applicationLogsFoundNamespaceName(client *cloudwatchlog
 		logGroupNames := cw.getGroupNames(client, cw.groupPrefix+"."+projectName)
 		if len(logGroupNames) == 0 {
 			e2e.Logf("Warn: Can not find groupnames for project " + projectName)
-			logFoundAll = false
+			return false
 		}
 	}
-	return logFoundAll
+	return true
 }
 
 // In this function, verify the logStream can be found under application groupName
@@ -1701,7 +1698,6 @@ func (cw cloudwatchSpec) applicationLogsFoundNamespaceName(client *cloudwatchlog
 //	kubernetes.var.log.pods.openshift-image-registry_image-registry-7f5dbdbc69-vwddg_425a4fbc-6a20-4919-8cd2-8bebd5d9b5cd.registry.0.log
 //	pods.
 func (cw cloudwatchSpec) applicationLogsFoundLogType(client *cloudwatchlogs.Client) bool {
-	var logFoundAll bool = true
 	var appLogGroupNames []string
 
 	logGroupNames := cw.getGroupNames(client, "")
@@ -1713,9 +1709,8 @@ func (cw cloudwatchSpec) applicationLogsFoundLogType(client *cloudwatchlogs.Clie
 			appLogGroupNames = append(appLogGroupNames, e)
 		}
 	}
-	// Retrun false if can not find app group
+	// Return false if can not find app group
 	if len(appLogGroupNames) == 0 {
-		e2e.Logf("Warn: Can not find app groupnames")
 		return false
 	}
 
@@ -1726,29 +1721,33 @@ func (cw cloudwatchSpec) applicationLogsFoundLogType(client *cloudwatchlogs.Clie
 	}
 	e2e.Logf("Found logGroup", appLogGroupNames[0])
 
-	//Return true, if no selNamespaces is pre-defined, Else search the defined namespaces
+	//Return true if no selNamespaces is pre-defined, else search the defined namespaces
 	if len(cw.selAppNamespaces) == 0 {
 		return true
 	}
 
 	logStreams := cw.getStreamNames(client, appLogGroupNames[0], "")
-	for _, projectName := range cw.selAppNamespaces {
-		var streamFields []string
-		var projectFound bool = false
-		for _, e := range logStreams {
-			streamFields = strings.Split(e, "_")
-			if streamFields[1] == projectName {
-				projectFound = true
-			}
-		}
-		if !projectFound {
-			logFoundAll = false
-			e2e.Logf("Warn: Can not find the logStream for project " + projectName)
-
+	var projects []string
+	for i := 0; i < len(logStreams); i++ {
+		// kubernetes.var.log.pods.e2e-test-vector-cloudwatch-9vvg5_logging-centos-logtest-xwzb5_b437565e-e60b-471a-a5f8-0d1bf72d6206.logging-centos-logtest.0.log
+		streamFields := strings.Split(strings.Split(logStreams[i], "_")[0], ".")
+		projects = append(projects, streamFields[len(streamFields)-1])
+	}
+	for _, appProject := range cw.selAppNamespaces {
+		if !contain(projects, appProject) {
+			e2e.Logf("Can not find the logStream for project %s, found projects %v", appProject, projects)
+			return false
 		}
 	}
-	// TBD: disSelAppNamespaces, select by pod, containers ....
-	return logFoundAll
+
+	//disSelAppNamespaces, select by pod, containers ....
+	for i := 0; i < len(cw.disAppNamespaces); i++ {
+		if contain(projects, cw.disAppNamespaces[i]) {
+			e2e.Logf("Find logs from project %s, logs from this project shouldn't be collected!!!", cw.disAppNamespaces[i])
+			return false
+		}
+	}
+	return true
 }
 
 // The index to find application logs
