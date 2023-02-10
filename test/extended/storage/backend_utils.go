@@ -88,12 +88,18 @@ func getCredentialFromCluster(oc *exutil.CLI) {
 	case "vsphere":
 		e2e.Logf("Get %s backend credential is under development", cloudProvider)
 	case "gcp":
-		dirname := "/tmp/" + oc.Namespace() + "-creds"
-		err := os.MkdirAll(dirname, 0777)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/gcp-filestore-cloud-credentials", "-n", "openshift-cluster-csi-drivers", "--to="+dirname, "--confirm").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", dirname+"/service_account.json")
+		// Currently on gcp platform only completed get the gcp filestore credentials,
+		// so it's not suitable for the test clusters without installed the gcp filestore csi driver operator
+		if checkCSIDriverInstalled(oc, []string{"filestore.csi.storage.gke.io"}) {
+			dirname := "/tmp/" + oc.Namespace() + "-creds"
+			err := os.MkdirAll(dirname, 0777)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/gcp-filestore-cloud-credentials", "-n", "openshift-cluster-csi-drivers", "--to="+dirname, "--confirm").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", dirname+"/service_account.json")
+		} else {
+			e2e.Logf("GCP filestore csi driver operator is not installed")
+		}
 	case "azure":
 		e2e.Logf("Get %s backend credential is under development", cloudProvider)
 	case "openstack":
