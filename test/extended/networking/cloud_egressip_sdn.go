@@ -546,8 +546,8 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		sdnPodName, getPodErr := exutil.GetPodName(oc, "openshift-sdn", "app=sdn", nonEgressNode)
 		o.Expect(getPodErr).NotTo(o.HaveOccurred())
 		o.Expect(sdnPodName).NotTo(o.BeEmpty())
-		podlogs, podLogErr := exutil.WaitAndGetSpecificPodLogs(oc, "openshift-sdn", "sdn", sdnPodName, `egressip`)
-		o.Expect(podLogErr).NotTo(o.HaveOccurred())
+		podlogs, logErr := oc.AsAdmin().Run("logs").Args(sdnPodName, "-n", "openshift-sdn", "-c", "sdn").Output()
+		o.Expect(logErr).NotTo(o.HaveOccurred())
 		countBaseline := strings.Count(podlogs, `may be offline`)
 
 		g.By("3. Get subnet from egressIP node, add egressCIDRs to both egressIP nodes")
@@ -576,9 +576,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		waitPodReady(oc, podns.namespace, podns.name)
 
 		g.By("6.Check SDN pod log of the non-egress node again, there should be no new 'may be offline' error log ")
-		podlogs, err = exutil.WaitAndGetSpecificPodLogs(oc, "openshift-sdn", "sdn", sdnPodName, `egressip`)
-		countCurrent := strings.Count(podlogs, `may be offline`)
-		o.Expect(countCurrent-countBaseline).Should(o.Equal(0), "get additional `may be offline` error log")
+		o.Consistently(func() int {
+			podlogs, _ := oc.AsAdmin().Run("logs").Args(sdnPodName, "-n", "openshift-sdn", "-c", "sdn").Output()
+			return strings.Count(podlogs, `may be offline`)
+		}, 60*time.Second, 10*time.Second).Should(o.Equal(countBaseline))
 
 		g.By("7.Check source IP from the test pod for 10 times, it should use either egressIP address as its sourceIP")
 		var dstHost, primaryInf string
