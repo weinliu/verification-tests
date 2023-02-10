@@ -375,4 +375,78 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		resultCount := len(strings.Split(listOutput, "\n"))
 		o.Expect(resultCount).Should(o.Equal(baseCount))
 	})
+
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:huirwang-High-43464-EgressFirewall works with IPv6 address.", func() {
+		// Note: this case focuses on Egressfirewall working with IPv6 address, as ipv6 single cluster with proxy where egressfirewall cannot work, so only test it on dual stack.
+		// Currently only on the UPI packet dualstack cluster, the pod can access public website with IPv6 address.
+		ipStackType := checkIPStackType(oc)
+		platform := exutil.CheckPlatform(oc)
+		acceptedPlatform := strings.Contains(platform, "none")
+		if !acceptedPlatform || ipStackType != "dualstack" {
+			g.Skip("This case should be run on UPI packet dualstack cluster, skip other platform or network stack type.")
+		}
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall2-template.yaml")
+
+		g.By("create new namespace")
+		oc.SetupProject()
+		ns := oc.Namespace()
+
+		g.By("Create an EgressFirewall object with rule deny.")
+		egressFW2 := egressFirewall2{
+			name:      "default",
+			namespace: ns,
+			ruletype:  "Deny",
+			cidr:      "::/0",
+			template:  egressFWTemplate,
+		}
+		egressFW2.createEgressFW2Object(oc)
+		defer egressFW2.deleteEgressFW2Object(oc)
+		errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressfirewall.k8s.ovn.org/default", "-n", ns, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"::/0\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}}]}}", "--type=merge").Execute()
+		o.Expect(errPatch).NotTo(o.HaveOccurred())
+		efErr := waitEgressFirewallApplied(oc, egressFW2.name, ns)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		g.By("Create a pod ")
+		pod1 := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+		defer pod1.deletePingPod(oc)
+
+		g.By("Check both ipv6 and ipv4 are blocked")
+		_, err := e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -6 www.google.com --connect-timeout 5 -I")
+		o.Expect(err).To(o.HaveOccurred())
+		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -4 www.google.com --connect-timeout 5 -I")
+		o.Expect(err).To(o.HaveOccurred())
+
+		g.By("Remove egressfirewall object")
+		egressFW2.deleteEgressFW2Object(oc)
+
+		g.By("Create an EgressFirewall object with rule allow.")
+		egressFW2 = egressFirewall2{
+			name:      "default",
+			namespace: ns,
+			ruletype:  "Allow",
+			cidr:      "::/0",
+			template:  egressFWTemplate,
+		}
+		egressFW2.createEgressFW2Object(oc)
+		errPatch = oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressfirewall.k8s.ovn.org/default", "-n", ns, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Allow\",\"to\":{\"cidrSelector\":\"::/0\"}},{\"type\":\"Allow\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}}]}}", "--type=merge").Execute()
+		o.Expect(errPatch).NotTo(o.HaveOccurred())
+		efErr = waitEgressFirewallApplied(oc, egressFW2.name, ns)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		g.By("Check both ipv4 and ipv6 destination can be accessed")
+		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -6 www.google.com --connect-timeout 5 -I")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -4 www.google.com --connect-timeout 5 -I")
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 })
