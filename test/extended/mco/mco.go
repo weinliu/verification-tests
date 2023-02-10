@@ -2743,8 +2743,8 @@ nulla pariatur.`
 			mcp        = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 			workerNode = NewNodeList(oc.AsAdmin()).GetAllLinuxWorkerNodesOrFail()[0]
 
-			expectedTlsMinVersion   = `"VersionTLS11"`
-			expectedTlsCipherSuites = `[
+			expectedTLSMinVersion   = `"VersionTLS11"`
+			expectedTLSCipherSuites = `[
 						    "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
 						    "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
 						    "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
@@ -2773,12 +2773,12 @@ nulla pariatur.`
 		jsonConfig := JSON(rf.GetTextContent())
 		logger.Infof("Verifying tlsMinVersion")
 		o.Expect(jsonConfig.Get("tlsMinVersion")).To(
-			o.MatchJSON(expectedTlsMinVersion),
+			o.MatchJSON(expectedTLSMinVersion),
 			"The configured tlsMinVersion in /etc/kubernetes/kubelet.conf file is not the expected one")
 
 		logger.Infof("Verifying tlsCipherSuites")
 		o.Expect(jsonConfig.Get("tlsCipherSuites")).To(
-			o.MatchJSON(expectedTlsCipherSuites),
+			o.MatchJSON(expectedTLSCipherSuites),
 			"The configured tlsCipherSuites in /etc/kubernetes/kubelet.conf file are not the expected one")
 		logger.Infof("OK!\n")
 	})
@@ -2825,6 +2825,52 @@ nulla pariatur.`
 			"The service is masked, so service's file should be a link to /dev/null")
 		logger.Infof("OK!\n")
 
+	})
+
+	g.It("Author:sregidor-NonPreRelease-Medium-57595-Use empty pull-secret[Disruptive]", func() {
+		var (
+			pullSecret = GetPullSecret(oc.AsAdmin())
+			wMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			mMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+		)
+
+		// If the cluster is using extensions, empty pull-secret will break the pools because images' validation is mandatory
+		skipTestIfExtensionsAreUsed(oc.AsAdmin())
+		// If RT kernel is enabled, empty pull-secrets will break the pools because the image's validation is mandatory
+		skipTestIfRTKernel(oc.AsAdmin())
+
+		g.By("Capture the current pull-secret value")
+		// We don't use the pullSecret resource directly, instead we use auxiliary functions that will
+		// extract and restore the secret's values using a file. Like that we can recover the value of the pull-secret
+		// if our execution goes wrong, without printing it in the logs (for security reasons).
+		secretFile, err := getPullSecret(oc)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the pull-secret")
+		logger.Debugf("Pull-secret content stored in file %s", secretFile)
+		defer func() {
+			logger.Infof("Start defer func")
+			logger.Infof("Restoring initial pull-secret value")
+			output, err := setDataForPullSecret(oc, secretFile)
+			if err != nil {
+				logger.Errorf("Error restoring the pull-secret's value. Error: %s\nOutput: %s", err, output)
+			}
+			wMcp.waitForComplete()
+			mMcp.waitForComplete()
+			logger.Infof("End defer func")
+		}()
+		logger.Infof("OK!\n")
+
+		g.By("Set an empty pull-secret")
+		o.Expect(pullSecret.SetDataValue(".dockerconfigjson", "{}")).To(o.Succeed(),
+			"Error setting an empty pull-secret value")
+
+		logger.Infof("OK!\n")
+
+		g.By("Wait for machine config poools to be udated")
+		logger.Infof("Wait for worker pool to be updated")
+		wMcp.waitForComplete()
+		logger.Infof("Wait for master pool to be updated")
+		mMcp.waitForComplete()
+		logger.Infof("OK!\n")
 	})
 })
 

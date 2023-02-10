@@ -78,3 +78,7 @@ func (mc *MachineConfig) delete() {
 	mcp := NewMachineConfigPool(mc.oc, mc.pool)
 	mcp.waitForComplete()
 }
+
+func (mc *MachineConfig) GetExtensions() (string, error) {
+	return mc.Get(`{.spec.extensions}`)
+}

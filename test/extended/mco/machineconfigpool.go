@@ -377,3 +377,26 @@ func (mcp *MachineConfigPool) RecoverFromDegraded() error {
 
 	return nil
 }
+
+// IsRealTimeKernel returns true if the pool is using a realtime kernel
+func (mcp *MachineConfigPool) IsRealTimeKernel() (bool, error) {
+	nodes, err := mcp.GetNodes()
+	if err != nil {
+		logger.Errorf("Error getting the nodes in pool %s", mcp.GetName())
+		return false, err
+	}
+
+	return nodes[0].IsRealTimeKernel()
+}
+
+// GetConfiguredMachineConfig return the MachineConfig currently configured in the pool
+func (mcp *MachineConfigPool) GetConfiguredMachineConfig() (*MachineConfig, error) {
+	currentMcName, err := mcp.Get("{.status.configuration.name}")
+	if err != nil {
+		logger.Errorf("Error getting the currently configured MC in pool %s: %s", mcp.GetName(), err)
+		return nil, err
+	}
+
+	logger.Debugf("The currently configured MC in pool %s is: %s", mcp.GetName(), currentMcName)
+	return NewMachineConfig(mcp.oc, currentMcName, mcp.GetName()), nil
+}

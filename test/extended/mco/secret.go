@@ -7,6 +7,7 @@ import (
 	"time"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -62,6 +63,21 @@ func (s Secret) Extract() (string, error) {
 	directory := filepath.Join(e2e.TestContext.OutputDir, fmt.Sprintf("%s-%s-secret-%s", s.GetNamespace(), s.GetName(), time.Now().Format(layout)))
 	os.MkdirAll(directory, os.ModePerm)
 	return directory, s.ExtractToDir(directory)
+}
+
+// GetDataValue gets the value stored in the secret's key
+func (s Secret) GetDataValue(key string) (string, error) {
+	templateArg := fmt.Sprintf(`--template={{index .data "%s" | base64decode}}`, key)
+	return s.oc.AsAdmin().WithoutNamespace().Run("get").Args(s.GetKind(), s.GetName(), "-n", s.GetNamespace(), templateArg).Output()
+}
+
+// SetDataValue sets a key/value to store in the secret
+func (s Secret) SetDataValue(key, value string) error {
+	logger.Debugf("Secret %s -n %s. Setting value: %s=%s", s.GetName(), s.GetNamespace(), key, value)
+	// command example: oc secret pull-secret -n openshift-config set data .dockerconfigjson={}
+	return s.oc.AsAdmin().WithoutNamespace().Run("set").Args("data", s.GetKind(), s.GetName(),
+		"-n", s.GetNamespace(),
+		fmt.Sprintf("%s=%s", key, value)).Execute()
 }
 
 // GetPullSecret returns the cluster's pull secret

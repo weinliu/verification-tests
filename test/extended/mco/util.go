@@ -572,10 +572,49 @@ func skipTestIfSupportedPlatformNotMatched(oc *exutil.CLI, supported ...string) 
 	}
 }
 
+// skipTestIfRTKernel skips the current test if the cluster is using real time kernel
+func skipTestIfRTKernel(oc *exutil.CLI) {
+	wMcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+	mMcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+
+	isWorkerRT, err := wMcp.IsRealTimeKernel()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error trying to know if realtime kernel is active worker pool")
+
+	isMasterRT, err := mMcp.IsRealTimeKernel()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error trying to know if realtime kernel is active master pool")
+
+	if isWorkerRT || isMasterRT {
+		g.Skip("Pools are using real time kernel configuration. This test cannot be executed if the cluster is using RT kernel.")
+	}
+}
+
+// skipTestIfExtensionsAreUsed skips the current test if any extension has been deployed in the nodes
+func skipTestIfExtensionsAreUsed(oc *exutil.CLI) {
+	wMcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+	mMcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+
+	wCurrentMC, err := wMcp.GetConfiguredMachineConfig()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error trying to get the current MC configured in worker pool")
+
+	mCurrentMC, err := mMcp.GetConfiguredMachineConfig()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error trying to get the current MC configured in master pool")
+
+	wExtensions, err := wCurrentMC.GetExtensions()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error trying to get the extensions configured in MC: %s", wCurrentMC.GetName())
+
+	mExtensions, err := mCurrentMC.GetExtensions()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error trying to get the extensions configured in MC: %s", mCurrentMC.GetName())
+
+	if wExtensions != "[]" || mExtensions != "[]" {
+		g.Skip("Current cluster is using extensions. This test cannot be execute in a cluster using extensions")
+	}
+
+}
+
 // GetCurrentTestPolarionIDNumber inspects the name of the test case and return the number of the polarion ID linked to this automated test case. It returns an empty string if no ID found.
 func GetCurrentTestPolarionIDNumber() string {
 	name := g.CurrentSpecReport().FullText()
 
-	r, _ := regexp.Compile(`\d+`)
+	r := regexp.MustCompile(`\d+`)
 	return r.FindString(name)
 }

@@ -94,7 +94,7 @@ const (
 	// AzurePlatform value used to identify azure infrastructure
 	AzurePlatform = "azure"
 
-	//Expiration label in Dockerfile
+	// ExpirationDokerfileLabel Expiration label in Dockerfile
 	ExpirationDokerfileLabel = `LABEL maintainer="mco-qe-team" quay.expires-after=2h`
 
 	layeringImagestreamNamespace = "layering-tests-imagestreams"
