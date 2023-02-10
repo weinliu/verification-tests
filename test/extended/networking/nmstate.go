@@ -685,6 +685,8 @@ var _ = g.Describe("[sig-networking] SDN nmstate", func() {
 			ifacename:  "dummyst",
 			descr:      "remove static ip and route",
 			state:      "absent",
+			ipaddrv4:   ipAddrV4,
+			ipaddrv6:   ipAddrV6,
 			template:   policyTemplate,
 		}
 		configErr1 := stIPRoutePolicy.configNNCP(oc)

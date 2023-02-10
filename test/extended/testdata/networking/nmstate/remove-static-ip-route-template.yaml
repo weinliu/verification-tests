@@ -42,8 +42,4 @@ parameters:
 - name: DESCR
 - name: STATE
 - name: IPADDRV4
-- name: DESTADDRV4
-- name: NEXTHOPADDRV4
 - name: IPADDRV6
-- name: DESTADDRV6
-- name: NEXTHOPADDRV6
