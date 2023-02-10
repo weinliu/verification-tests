@@ -1758,7 +1758,13 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		var storageclient string
 		switch storagetype {
 		case "azure":
-			storageclient = "blob.core.windows.net"
+			cloudName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("config.image", "cluster", "-o=jsonpath={.spec.storage.azure.cloudName}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if cloudName == "AzureStackCloud" {
+				storageclient = "blob.mtcazs.wwtatc.com"
+			} else {
+				storageclient = "blob.core.windows.net"
+			}
 		case "gcs":
 			storageclient = "storage.googleapis.com"
 		case "ibmocs":
