@@ -66,7 +66,7 @@ class SummaryClient:
                 if os.path.exists('/root/rp.key'):
                     with open('/root/rp.key', 'r') as outfile:
                         data = json.load(outfile)
-                        token =data["ginkgo_rp_mmtoken"]
+                        token =data["ginkgo_rp_prow_token"]
         if not token:
             raise BaseException("ERROR: token is empty, please input the token using -t")
 
