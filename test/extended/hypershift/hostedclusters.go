@@ -653,6 +653,8 @@ func (h *hostedCluster) pollCheckNodepoolRollingUpgradeIntermediateStatus(name s
 
 func (h *hostedCluster) checkNodepoolRollingUpgradeIntermediateStatus(name string) bool {
 	// check machinedeployment UNAVAILABLE nodes should not be zero
+	infraID, err := h.getInfraID()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
 	cond := `-ojsonpath={.status.unavailableReplicas}`
 	unavailableNum, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace+"-"+h.name, "machinedeployment", name, cond, "--ignore-not-found").Output()
 	o.Expect(err).ShouldNot(o.HaveOccurred())
@@ -665,7 +667,7 @@ func (h *hostedCluster) checkNodepoolRollingUpgradeIntermediateStatus(name strin
 
 	// get machinesets.cluster.x-k8s.io according to nodepool
 	machinesetCAPI := "machinesets.cluster.x-k8s.io"
-	labelFilter := "cluster.x-k8s.io/cluster-name=" + h.name
+	labelFilter := "cluster.x-k8s.io/cluster-name=" + infraID
 	format := `-ojsonpath={.items[?(@.metadata.annotations.hypershift\.openshift\.io/nodePool=="%s/%s")].metadata.name}`
 	cond = fmt.Sprintf(format, h.namespace, name)
 	machinesets, err := h.oc.AsAdmin().WithoutNamespace().Run(OcpGet).Args("-n", h.namespace+"-"+h.name, machinesetCAPI, "-l", labelFilter, cond, "--ignore-not-found").Output()
