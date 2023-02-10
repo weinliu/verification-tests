@@ -2379,3 +2379,21 @@ func getPodMultiNetworkIPv6(oc *exutil.CLI, namespace string, podName string) st
 	MultiNetworkIPv6 := strings.TrimSpace(podIPv6)
 	return MultiNetworkIPv6
 }
+
+// get name of OVN egressIP object(s)
+func getHostsubnetByEIP(oc *exutil.CLI, expectedEIP string) string {
+	var nodeHostsEIP string
+	nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	for i, v := range nodeList.Items {
+		ip, err := getEgressIPByKind(oc, "hostsubnet", nodeList.Items[i].Name, 1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if ip[0] == expectedEIP {
+			e2e.Logf("Found node %v host egressip %v ", v.Name)
+			nodeHostsEIP = nodeList.Items[i].Name
+			break
+		}
+	}
+	return nodeHostsEIP
+}
