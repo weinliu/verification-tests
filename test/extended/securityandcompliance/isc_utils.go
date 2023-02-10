@@ -497,8 +497,6 @@ func createOperator(oc *exutil.CLI, subD subscriptionDescription, ogD operatorGr
 	e2e.Logf("err %v, msg %v", err, msg)
 	msg, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", subD.namespace, "openshift.io/cluster-monitoring=true", "--overwrite").Output()
 	e2e.Logf("err %v, msg %v", err, msg)
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", subD.namespace, "security.openshift.io/scc.podSecurityLabelSync=false", "--overwrite").Output()
-	e2e.Logf("err %v, msg %v", err, msg)
 
 	g.By("Create operatorGroup !!!")
 	ogFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ogD.template, "-p", "NAME="+ogD.name, "NAMESPACE="+ogD.namespace, "-n", ogD.namespace).OutputToFile(getRandomString() + "og.json")
