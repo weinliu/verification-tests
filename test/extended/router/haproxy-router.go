@@ -3,6 +3,7 @@ package router
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -1269,6 +1270,77 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		output, err2 = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", jsonPath, "--type=merge", "-n", ingctrlhp.namespace).Output()
 		o.Expect(err2).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Invalid value: -12936"))
+	})
+
+	// author: shudili@redhat.com
+	g.It("Author:shudili-High-50819-Routers with hostnetwork endpoint strategy with same http/https/stat port numbers cannot be deployed on the same worker node", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-hostnetwork-only.yaml")
+			ingctrlhp1          = ingctrlHostPortDescription{
+				name:      "ocp50819one",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				httpport:  10080,
+				httpsport: 10443,
+				statsport: 10936,
+				template:  customTemp,
+			}
+
+			ingctrlhp2 = ingctrlHostPortDescription{
+				name:      "ocp50819two",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				httpport:  10080,
+				httpsport: 10433,
+				statsport: 10936,
+				template:  customTemp,
+			}
+		)
+
+		g.By("Pre-flight check for the platform type and number of worker nodes in the environment")
+		platformtype := exutil.CheckPlatform(oc)
+		platforms := map[string]bool{
+			// ‘None’ also for Baremetal
+			"none":      true,
+			"baremetal": true,
+			"vsphere":   true,
+			"openstack": true,
+			"nutanix":   true,
+		}
+		if !platforms[platformtype] {
+			g.Skip("Skip for non-supported platform")
+		}
+		workerNodeCount, _ := exactNodeDetails(oc)
+		if workerNodeCount < 1 {
+			g.Skip("Skipping as we atleast need  one worker node")
+		}
+
+		g.By("Create one custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrlhp1.domain = ingctrlhp1.name + "." + baseDomain
+		ingctrlhp2.domain = ingctrlhp2.name + "." + baseDomain
+
+		defer ingctrlhp1.delete(oc)
+		ingctrlhp1.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrlhp1.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrlhp1.name))
+
+		g.By("Patch the first custom IC with max replicas, so each node has a custom router pod ")
+		jpath := ".status.readyReplicas"
+		if workerNodeCount > 1 {
+			ingctrl1Resource := "ingresscontrollers/" + ingctrlhp1.name
+			patchResourceAsAdmin(oc, ingctrlhp1.namespace, ingctrl1Resource, "{\"spec\":{\"replicas\":"+strconv.Itoa(workerNodeCount)+"}}")
+			waitForOutput(oc, "openshift-ingress", "deployment/router-"+ingctrlhp1.name, jpath, strconv.Itoa(workerNodeCount))
+		}
+
+		g.By("Try to create another custom IC with the same http/https/stat port numbers as the first custom IC")
+		jpath = ".status.conditions[?(@.type==\"PodsScheduled\")].message"
+		ingctrl2Resource := "ingresscontrollers/" + ingctrlhp2.name
+		defer ingctrlhp2.delete(oc)
+		ingctrlhp2.create(oc)
+		value := fetchJSONPathValue(oc, ingctrlhp2.namespace, ingctrl2Resource, jpath)
+		o.Expect(value).To(o.ContainSubstring("node(s) didn't have free ports for the requested pod ports"))
 	})
 
 	// author: shudili@redhat.com
