@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -212,12 +211,14 @@ func checkWebhookSecurityContext(oc *exutil.CLI, podnum int) {
 	webHookPodName := make([]string, podnum)
 	for i := 0; i < len(webHookPodName); i++ {
 		var err error
-		webHookPodName[i], err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app=pod-identity-webhook", "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.items["+strconv.Itoa(i)+"].metadata.name}").Output()
+		webHookPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app=pod-identity-webhook", "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		webHookPodName = strings.Split(strings.TrimSpace(webHookPod), " ")
+		o.Expect(len(webHookPodName)).To(o.BeNumerically(">", 0))
 		e2e.Logf("webHookPodName is %s ", webHookPodName[i])
 		allowPrivilegeEscalation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", webHookPodName[i], "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.spec.containers[*].securityContext.allowPrivilegeEscalation}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(allowPrivilegeEscalation).NotTo(o.ContainSubstring("true"))
+		o.Expect(allowPrivilegeEscalation).To(o.Equal("false"))
 		drop, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", webHookPodName[i], "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.spec.containers[*].securityContext.capabilities.drop}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		dropAllCount := strings.Count(drop, "ALL")
