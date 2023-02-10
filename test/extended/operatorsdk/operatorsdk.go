@@ -4649,4 +4649,22 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		}
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("hybird test: No memcachedbackup-sample in project %s", nsOperator))
 	})
+
+	// author: jitli@redhat.com
+	g.It("VMonly-Author:jitli-Critical-49884-Add support for external bundle validators", func() {
+
+		tmpBasePath := exutil.FixturePath("testdata", "operatorsdk", "ocp-49960-data")
+		g.By("Get the external bundle validator")
+		exvalidator := filepath.Join("/home", "cloud-user", "testdata", "validator-poc")
+
+		g.By("bundle validate with external validater")
+		output, _ := operatorsdkCLI.Run("bundle").Args("validate", tmpBasePath+"/bundle", "--alpha-select-external", exvalidator).Output()
+		o.Expect(output).To(o.ContainSubstring("csv.Spec.Icon elements should contain both data and mediatype"))
+
+		g.By("bundle validate with 2 external validater")
+		output, _ = operatorsdkCLI.Run("bundle").Args("validate", tmpBasePath+"/bundle", "--alpha-select-external", exvalidator+":"+exvalidator).Output()
+		o.Expect(output).To(o.ContainSubstring("csv.Spec.Icon elements should contain both data and mediatype"))
+
+	})
+
 })
