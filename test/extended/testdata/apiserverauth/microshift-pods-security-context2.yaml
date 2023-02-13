@@ -10,7 +10,7 @@ spec:
           type: RuntimeDefault
   containers:
   - name: sec-ctx-demo-2-ocp55394
-    image: gcr.io/google-samples/node-hello:1.0
+    image: quay.io/openshifttest/hello-openshift:multiarch
     securityContext:
       runAsUser: 2000
       allowPrivilegeEscalation: false

@@ -673,3 +673,98 @@ func ExecCommandOnPod(oc *exutil.CLI, podname string, namespace string, command 
 	exutil.AssertWaitPollNoErr(errExec, fmt.Sprintf("Not able to run command on pod %v :: %v :: %v :: %v", podname, command, podOutput, execpodErr))
 	return podOutput
 }
+
+// clusterHealthcheck do cluster health check like pod, node and operators
+func clusterHealthcheck(oc *exutil.CLI, dirname string) error {
+	err := clusterNodesHealthcheck(oc, 600, dirname)
+	if err != nil {
+		return fmt.Errorf("Cluster nodes health check failed")
+	}
+	err = clusterOperatorHealthcheck(oc, 1500, dirname)
+	if err != nil {
+		return fmt.Errorf("Cluster operators health check failed")
+	}
+	err = clusterPodsHealthcheck(oc, 600, dirname)
+	if err != nil {
+		return fmt.Errorf("Cluster pods health check failed")
+	}
+	return nil
+}
+
+// clusterOperatorHealthcheck check abnormal operators
+func clusterOperatorHealthcheck(oc *exutil.CLI, waitTime int, dirname string) error {
+	e2e.Logf("Check the abnormal operators")
+	errCo := wait.Poll(10*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+		coLogFile, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--no-headers").OutputToFile(dirname)
+		if err == nil {
+			cmd := fmt.Sprintf(`cat %v | grep -v '.True.*False.*False' || true`, coLogFile)
+			coLogs, err := exec.Command("bash", "-c", cmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if len(coLogs) > 0 {
+				return false, nil
+			}
+		} else {
+			return false, nil
+		}
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("No abnormality found in cluster operators...")
+		return true, nil
+	})
+	if errCo != nil {
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	exutil.AssertWaitPollNoErr(errCo, "Abnormality found in cluster operators.")
+	return errCo
+}
+
+// clusterPodsHealthcheck check abnormal pods.
+func clusterPodsHealthcheck(oc *exutil.CLI, waitTime int, dirname string) error {
+	e2e.Logf("Check the abnormal pods")
+	var podLogs []byte
+	errPod := wait.Poll(5*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+		podLogFile, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile(dirname)
+		if err == nil {
+			cmd := fmt.Sprintf(`cat %v | grep -ivE 'Running|Completed|namespace|installer' || true`, podLogFile)
+			podLogs, err = exec.Command("bash", "-c", cmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if len(podLogs) > 0 {
+				return false, nil
+			}
+		} else {
+			return false, nil
+		}
+		e2e.Logf("No abnormality found in pods...")
+		return true, nil
+	})
+	if errPod != nil {
+		e2e.Logf("%s", podLogs)
+	}
+	exutil.AssertWaitPollNoErr(errPod, "Abnormality found in pods.")
+	return errPod
+}
+
+// clusterNodesHealthcheck check abnormal nodes
+func clusterNodesHealthcheck(oc *exutil.CLI, waitTime int, dirname string) error {
+	errNode := wait.Poll(5*time.Second, time.Duration(waitTime)*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
+		if err == nil {
+			if strings.Contains(output, "NotReady") || strings.Contains(output, "SchedulingDisabled") {
+				return false, nil
+			}
+		} else {
+			return false, nil
+		}
+		e2e.Logf("Nodes are normal...")
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		return true, nil
+	})
+	if errNode != nil {
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	exutil.AssertWaitPollNoErr(errNode, "Abnormality found in nodes.")
+	return errNode
+}

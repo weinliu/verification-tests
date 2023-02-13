@@ -15,7 +15,7 @@ spec:
     emptyDir: {}
   containers:
   - name: sec-ctx-demo-ocp55394
-    image: busybox:1.28
+    image: quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f
     command: [ "sh", "-c", "sleep 1h" ]
     volumeMounts:
     - name: sec-ctx-vol

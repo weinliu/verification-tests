@@ -733,7 +733,7 @@ spec:
 	// author: rgangwar@redhat.com
 	// It is destructive case, probably cause the system OOM, so adding [Disruptive].Workload loading costs more than 15mins, so adding [Slow]
 	// For the Jira issue https://issues.redhat.com/browse/OCPQE-9541, we need provide a good solution for the provision of adequate stress for the load of the environment
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PreChkUpgrade-NonPreRelease-Author:rgangwar-Critical-40667-Prepare Upgrade cluster under stress with API Priority and Fairness feature [Slow][Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PreChkUpgrade-NonPreRelease-ConnectedOnly-Author:rgangwar-Critical-40667-Prepare Upgrade cluster under stress with API Priority and Fairness feature [Slow][Disruptive]", func() {
 		var (
 			dirname    = "/tmp/-OCP-40667/"
 			exceptions = "panicked: false"
@@ -743,6 +743,15 @@ spec:
 		exutil.SkipARM64(oc)
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Cluster should be healthy before running case.")
+		err = clusterHealthcheck(oc, "OCP-40667/log")
+		if err == nil {
+			e2e.Logf("Cluster health check passed before running case")
+		} else {
+			e2e.Failf("Cluster health check failed before running case :: %s ", err)
+		}
+
 		g.By("Check the configuration of priority level")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "workload-low", "-o", `jsonpath={.spec.limited.assuredConcurrencyShares}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -4266,7 +4275,7 @@ roleRef:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("MicroShiftBoth-Author:rgangwar-Medium-55394-[Apiserver] MicroShift enable SCC admission for pods", func() {
+	g.It("MicroShiftBoth-ConnectedOnly-Author:rgangwar-Medium-55394-[Apiserver] MicroShift enable SCC admission for pods", func() {
 		namespace := "test-scc-ocp55394"
 		testpod := "security-context-demo-ocp55394"
 		testpod2 := "security-context-demo-2-ocp55394"
@@ -4345,6 +4354,72 @@ roleRef:
 			e2e.Logf("Test Passed: The file has read & write permissions, owner and group owner is root :: %v", masterDebugNode)
 		} else {
 			e2e.Failf("Test Failed : The file does not have required permissions")
+		}
+	})
+
+	g.It("MicroShiftBoth-Author:rgangwar-Medium-55677-[Apiserver] MicroShift enable CRDs validation", func() {
+		namespace := "test-scc-ocp55677"
+		crontab := "my-new-cron-object-ocp55677"
+		crontabNew := "my-new-cron-object-ocp55677-2"
+
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", namespace, "--ignore-not-found").Execute()
+
+		g.By("1.Create temporary namespace")
+		namespaceOutput, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("namespace", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(namespaceOutput).Should(o.ContainSubstring("namespace/"+namespace+" created"), namespace+" not created..")
+
+		g.By("2. Create a CustomResourceDefinition")
+		template := getTestDataFilePath("ocp55677-crd.yaml")
+		defer oc.AsAdmin().Run("delete").Args("-f", template, "-n", namespace).Execute()
+		templateErr := oc.AsAdmin().Run("create").Args("-f", template, "-n", namespace).Execute()
+		o.Expect(templateErr).NotTo(o.HaveOccurred())
+
+		g.By("3. Create custom crontab " + crontab + " object")
+		mycrontabyaml := tmpdir + "/my-ocp55677-crontab.yaml"
+		mycrontabCMD := fmt.Sprintf(`cat > %v << EOF
+apiVersion: "ms.qe.com/v1"
+kind: CronTab
+metadata:
+  name: %v
+  namespace: %v
+spec:
+  cronSpec: "* * * * */5"
+  image: my-awesome-cron-image`, mycrontabyaml, crontab, namespace)
+		_, myCrontabCmdErr := exec.Command("bash", "-c", mycrontabCMD).Output()
+		o.Expect(myCrontabCmdErr).NotTo(o.HaveOccurred())
+		mycrontabErr := oc.AsAdmin().WithoutNamespace().Run("apply", "-f", mycrontabyaml).Args().Execute()
+		o.Expect(mycrontabErr).NotTo(o.HaveOccurred())
+
+		g.By("4. Check the created crontab :: " + crontab)
+		crontabOutput, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("crontab", "-n", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(crontabOutput).Should(o.ContainSubstring(crontab), crontab+" not created..")
+
+		g.By("5. Create new custom " + crontabNew + " object with unknown field.")
+		mycrontabPruneYaml := tmpdir + "/my-ocp55677-prune-crontab.yaml"
+		mycrontabPruneCMD := fmt.Sprintf(`cat > %v << EOF
+apiVersion: "ms.qe.com/v1"
+kind: CronTab
+metadata:
+  name: %v
+  namespace: %v
+spec:
+  cronSpec: "* * * * */5"
+  image: my-awesome-cron-image
+  someRandomField: 42`, mycrontabPruneYaml, crontabNew, namespace)
+		_, myCrontabPruneCmdErr := exec.Command("bash", "-c", mycrontabPruneCMD).Output()
+		o.Expect(myCrontabPruneCmdErr).NotTo(o.HaveOccurred())
+		mycrontabNewErr := oc.AsAdmin().WithoutNamespace().Run("create", "--validate=false", "-f", mycrontabPruneYaml).Args().Execute()
+		o.Expect(mycrontabNewErr).NotTo(o.HaveOccurred())
+
+		g.By("5. Check the unknown field pruning in " + crontabNew + " crontab object")
+		crontabOutput, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("crontab", crontabNew, "-n", namespace, "-o", `jsonpath={.spec}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(crontabOutput, "someRandomField") {
+			e2e.Logf("Test case Passed :: Unknown field is pruned crontab object\n :: %v", crontabOutput)
+		} else {
+			e2e.Logf("Test case Failed:: Unknown field is not pruned in crontab object\n :: %v", crontabOutput)
 		}
 	})
 })
