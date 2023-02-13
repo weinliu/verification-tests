@@ -64,6 +64,40 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
+	g.It("ConnectedOnly-Author:jiazha-High-59416-Revert Catalog PSA decisions for 4.12", func() {
+		g.By("step 1 -> check openshift-marketplace project labels")
+		labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "openshift-marketplace", "--show-labels").Output()
+		if err != nil {
+			e2e.Failf("fail to get openshift-marketplace project labels, error:%v", err)
+		}
+		if !strings.Contains(labels, "pod-security.kubernetes.io/enforce=baseline") {
+			e2e.Failf("openshift-marketplace project PSA is not baseline: %s", labels)
+		}
+		g.By("step 2 -> deploy two catalog sources with old index images, both of them should work well without the restricted SCC")
+		dr := make(describerResrouce)
+		itName := g.CurrentSpecReport().FullText()
+		dr.addIr(itName)
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
+		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-without-scc.yaml")
+
+		indexImages := []string{"quay.io/olmqe/ditto-index:test-xzha-1", "quay.io/olmqe/etcd-index:v1"}
+		for i, indexImage := range indexImages {
+			cs := catalogSourceDescription{
+				name:        fmt.Sprintf("cs-59416-%d", i),
+				namespace:   "openshift-marketplace",
+				displayName: "QE Operators",
+				publisher:   "QE",
+				sourceType:  "grpc",
+				address:     indexImage,
+				template:    csImageTemplate,
+			}
+			defer cs.delete(itName, dr)
+			cs.createWithCheck(oc, itName, dr)
+		}
+	})
+
+	// author: jiazha@redhat.com
 	g.It("Author:jiazha-Medium-53914-OLM controller plug-in for openshift-* namespace labelling [Serial]", func() {
 		// openshifttest-53914 without openshift- prefix
 		// openshift-test-53914 without the `security.openshift.io/scc.podSecurityLabelSync=true` label
