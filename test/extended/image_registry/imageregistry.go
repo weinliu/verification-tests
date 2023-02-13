@@ -3443,6 +3443,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 				namespace: "",
 				name:      "54172-negative",
 				image:     "quay.io/openshifttest/ociimage@sha256:d58e3e003ddec723dd14f72164beaa609d24c5e5e366579e23bc8b34b9a58324",
+				policy:    "Source",
 				mode:      "",
 				template:  isImportFile,
 			}

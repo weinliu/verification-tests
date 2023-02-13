@@ -1170,12 +1170,13 @@ type isImportSource struct {
 	name      string
 	namespace string
 	image     string
+	policy    string
 	mode      string
 	template  string
 }
 
 func (issrc *isImportSource) create(oc *exutil.CLI) {
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", issrc.template, "-p", "NAME="+issrc.name, "NAMESPACE="+issrc.namespace, "IMAGE="+issrc.image, "MODE="+issrc.mode)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", issrc.template, "-p", "NAME="+issrc.name, "NAMESPACE="+issrc.namespace, "IMAGE="+issrc.image, "POLICY="+issrc.policy, "MODE="+issrc.mode)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

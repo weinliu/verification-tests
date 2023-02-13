@@ -489,6 +489,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 				namespace: "",
 				name:      "",
 				image:     "",
+				policy:    "Source",
 				mode:      "",
 				template:  isImportFile,
 			}
@@ -547,5 +548,89 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		imageCount := strings.Count(imageOut, shortimage[2])
 		o.Expect(imageCount).To(o.Equal(num[2]))
+	})
+
+	g.It("Author:wewang-High-56210-High-56209-High-56366-image manifest list blobs can be deleted after hard prune [Serial]", func() {
+		g.By("Create ImageStreamImport with docker multiarch image")
+		var (
+			isImportFile = filepath.Join(imageRegistryBaseDir, "imagestream-import-oci.yaml")
+			isimportsrc  = isImportSource{
+				namespace: "",
+				name:      "",
+				image:     "",
+				policy:    "Local",
+				mode:      "",
+				template:  isImportFile,
+			}
+		)
+		isarr := [2]string{"ociapp", "dockerapp"}
+		imagearr := [2]string{"quay.io/openshifttest/ociimage@sha256:d58e3e003ddec723dd14f72164beaa609d24c5e5e366579e23bc8b34b9a58324", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f"}
+		amdid := [2]string{"sha256:97923994fdc1c968eed6bdcb64be8e70d5356b88cfab0481cb6b73a4849361b7", "0415f56ccc05526f2af5a7ae8654baec97d4a614f24736e8eef41a4591f08019"}
+		armid := [2]string{"sha256:bd0be70569d8b18321d7d3648d51925e22865df760c5379b69762f302cacd30d", "sha256:bf920ca7f146b802e1c9a8aab1fba3a3fe601c56b075ecef90834c13b90bb5bb"}
+		isimportsrc.namespace = oc.Namespace()
+		isimportsrc.mode = "PreserveOriginal"
+
+		g.By("Add the system:image-pruner role")
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "system:image-pruner", "system:serviceaccount:openshift-image-registry:registry").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "system:image-pruner", "system:serviceaccount:openshift-image-registry:registry").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Get cluster architecture")
+		architecture := exutil.GetClusterArchitecture(oc)
+
+		g.By("Could pull a sub-manifest of manifest list via pullthrough and manifest list blobs can delete via hard prune")
+		for i := 0; i < 2; i++ {
+			shaarr := strings.Split(imagearr[i], "@")
+			blobarr := strings.Split(imagearr[i], ":")
+			isimportsrc.name = isarr[i]
+			isimportsrc.image = imagearr[i]
+			isimportsrc.create(oc)
+			imagename := "image-registry.openshift-image-registry.svc:5000/" + oc.Namespace() + "/" + isarr[i] + ":latest"
+			err = oc.AsAdmin().WithoutNamespace().Run("run").Args(isarr[i], "--image", imagename, `--overrides={"spec":{"securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}}}`, "-n", oc.Namespace(), "--command", "--", "/bin/sleep", "300").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			g.By("Check the pod is running")
+			checkPodsRunningWithLabel(oc, oc.Namespace(), "run="+isarr[i], 1)
+
+			g.By("Get architecture from node of pod for multi-arch cluster")
+			if architecture == "Multi-Arch" {
+				podnode, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod/"+isarr[i], "-o=jsonpath={.spec.nodeName}", "-n", oc.Namespace()).Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				architecture, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("node/"+podnode, "-o=jsonpath={.items[*].status.nodeInfo.architecture}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+
+			g.By("Check the pod's image and image id")
+			out, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("pod/"+isarr[i], "-n", oc.Namespace()).Output()
+			if architecture == "amd64" {
+				o.Expect(out).To(o.ContainSubstring(isarr[i] + ":latest"))
+				o.Expect(out).To(o.ContainSubstring(amdid[i]))
+			} else if architecture == "arm64" {
+				o.Expect(out).To(o.ContainSubstring(isarr[i] + ":latest"))
+				o.Expect(out).To(o.ContainSubstring(armid[i]))
+			} else {
+				e2e.Logf("will support new archifecture cluster later")
+			}
+
+			g.By("Delete pod and imagestream, then hard prune the registry")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod/"+isarr[i], "-n", oc.Namespace()).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			out, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod/"+isarr[i], "-n", oc.Namespace()).Output()
+			o.Expect(out).To(o.ContainSubstring("not found"))
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("is/"+isarr[i], "-n", oc.Namespace()).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			out, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("is/"+isarr[i], "-n", oc.Namespace()).Output()
+			o.Expect(out).To(o.ContainSubstring("not found"))
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("image/" + shaarr[1]).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			out, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("image/" + shaarr[1]).Output()
+			o.Expect(out).To(o.ContainSubstring("not found"))
+
+			g.By("Check manifest list deleted")
+			output, err := oc.AsAdmin().WithoutNamespace().Run("rsh").Args("-n", "openshift-image-registry", "deployment.apps/image-registry", "/usr/bin/dockerregistry", "-prune=delete").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.ContainSubstring("Deleting blob:"))
+			o.Expect(output).To(o.ContainSubstring(blobarr[1]))
+		}
+
 	})
 })

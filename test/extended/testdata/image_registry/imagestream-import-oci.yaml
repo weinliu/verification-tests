@@ -17,11 +17,12 @@ objects:
       to:
         name: latest
       referencePolicy:
-        type: Source
+        type: "${POLICY}"
       importPolicy:
         importMode: "${MODE}"
 parameters:
   - name: NAME
   - name: NAMESPACE
   - name: IMAGE
+  - name: POLICY
   - name: MODE
