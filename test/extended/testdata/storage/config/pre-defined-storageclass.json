@@ -23,9 +23,8 @@
     {
       "name": "vsphere",
       "storageclass": {
-        "default_sc": "thin",
+        "default_sc": "thin-csi",
         "pre_defined_sc": [
-          "thin",
           "thin-csi"
         ]
       }
