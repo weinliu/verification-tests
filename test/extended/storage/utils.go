@@ -37,16 +37,20 @@ const (
 // Kubeadmin user use oc client apply yaml template
 func applyResourceFromTemplateAsAdmin(oc *exutil.CLI, parameters ...string) error {
 	var configFile string
-	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
-		output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + "config.json")
-		if err != nil {
-			e2e.Logf("the err:%v, and try next round", err)
-			return false, nil
-		}
-		configFile = output
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("as admin fail to process %v", parameters))
+	if isSpecifiedAPIExist(oc, "template.openshift.io/v1") {
+		err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().Run("process").Args(parameters...).OutputToFile(getRandomString() + "config.json")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			configFile = output
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("as admin fail to process %v", parameters))
+	} else {
+		configFile = parameterizedTemplateByReplaceToFile(oc, parameters...)
+	}
 
 	e2e.Logf("the file of resource is %s", configFile)
 	jsonOutput, _ := ioutil.ReadFile(configFile)
@@ -57,21 +61,48 @@ func applyResourceFromTemplateAsAdmin(oc *exutil.CLI, parameters ...string) erro
 // Common user use oc client apply yaml template
 func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 	var configFile string
-	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
-		output, err := oc.Run("process").Args(parameters...).OutputToFile(getRandomString() + "config.json")
-		if err != nil {
-			e2e.Logf("the err:%v, and try next round", err)
-			return false, nil
-		}
-		configFile = output
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to process %v", parameters))
-
+	if isSpecifiedAPIExist(oc, "template.openshift.io/v1") {
+		err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+			output, err := oc.Run("process").Args(parameters...).OutputToFile(getRandomString() + "config.json")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			configFile = output
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to process %v", parameters))
+	} else {
+		configFile = parameterizedTemplateByReplaceToFile(oc, parameters...)
+	}
 	e2e.Logf("the file of resource is %s", configFile)
 	jsonOutput, _ := ioutil.ReadFile(configFile)
 	debugLogf("The file content is: \n%s", jsonOutput)
 	return oc.WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
+}
+
+// parameterizedTemplateByReplaceToFile parameterize template to new file
+func parameterizedTemplateByReplaceToFile(oc *exutil.CLI, parameters ...string) string {
+	isParameterExist, pIndex := exutil.StringsSliceElementsHasPrefix(parameters, "-f", true)
+	o.Expect(isParameterExist).Should(o.BeTrue())
+	templateFileName := parameters[pIndex+1]
+	templateContentByte, readFileErr := ioutil.ReadFile(templateFileName)
+	o.Expect(readFileErr).ShouldNot(o.HaveOccurred())
+	templateContentStr := string(templateContentByte)
+	isParameterExist, pIndex = exutil.StringsSliceElementsHasPrefix(parameters, "-p", true)
+	o.Expect(isParameterExist).Should(o.BeTrue())
+	for i := pIndex + 1; i < len(parameters); i++ {
+		if strings.Contains(parameters[i], "=") {
+			tempSlice := strings.Split(parameters[i], "=")
+			o.Expect(tempSlice).Should(o.HaveLen(2))
+			templateContentStr = strings.ReplaceAll(templateContentStr, "${"+tempSlice[0]+"}", tempSlice[1])
+		}
+	}
+	templateContentJSON, convertErr := yaml.YAMLToJSON([]byte(templateContentStr))
+	o.Expect(convertErr).NotTo(o.HaveOccurred())
+	configFile := filepath.Join(e2e.TestContext.OutputDir, oc.Namespace()+"-"+getRandomString()+"config.json")
+	o.Expect(ioutil.WriteFile(configFile, pretty.Pretty(templateContentJSON), 0644)).ShouldNot(o.HaveOccurred())
+	return configFile
 }
 
 // Get a random string of 8 byte
@@ -229,7 +260,7 @@ func jsonAddExtraParametersToFile(jsonInput string, extraParameters map[string]i
 		jsonPath string
 		err      error
 	)
-	if interfaceToString(extraParameters["jsonPath"]) == "" {
+	if _, ok := extraParameters["jsonPath"]; !ok && gjson.Get(jsonInput, `items.0`).Exists() {
 		jsonPath = `items.0.`
 	} else {
 		jsonPath = interfaceToString(extraParameters["jsonPath"])
@@ -289,18 +320,25 @@ func jsonDeletePathsToFile(jsonInput string, deletePaths []string) (string, erro
 
 // Kubeadmin user use oc client apply yaml template delete parameters
 func applyResourceFromTemplateDeleteParametersAsAdmin(oc *exutil.CLI, deletePaths []string, parameters ...string) error {
-	var configFile string
-	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
-		output, err := oc.AsAdmin().Run("process").Args(parameters...).Output()
-		if err != nil {
-			e2e.Logf("the err:%v, and try next round", err)
-			return false, nil
-		}
-		configFile, _ = jsonDeletePathsToFile(output, deletePaths)
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("as admin fail to process %v", parameters))
+	var configFile, tempJSONOutput string
+	if isSpecifiedAPIExist(oc, "template.openshift.io/v1") {
+		err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().Run("process").Args(parameters...).Output()
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			tempJSONOutput = output
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("as admin fail to process %v", parameters))
+	} else {
+		tempByte, readErr := ioutil.ReadFile(parameterizedTemplateByReplaceToFile(oc, parameters...))
+		o.Expect(readErr).NotTo(o.HaveOccurred())
+		tempJSONOutput = string(tempByte)
+	}
 
+	configFile, _ = jsonDeletePathsToFile(tempJSONOutput, deletePaths)
 	e2e.Logf("the file of resource is %s", configFile)
 	jsonOutput, _ := ioutil.ReadFile(configFile)
 	debugLogf("The file content is: \n%s", jsonOutput)
@@ -309,18 +347,24 @@ func applyResourceFromTemplateDeleteParametersAsAdmin(oc *exutil.CLI, deletePath
 
 // Kubeadmin user use oc client apply yaml template with extra parameters
 func applyResourceFromTemplateWithExtraParametersAsAdmin(oc *exutil.CLI, extraParameters map[string]interface{}, parameters ...string) error {
-	var configFile string
-	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
-		output, err := oc.AsAdmin().Run("process").Args(parameters...).Output()
-		if err != nil {
-			e2e.Logf("the err:%v, and try next round", err)
-			return false, nil
-		}
-		configFile, _ = jsonAddExtraParametersToFile(output, extraParameters)
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("as admin fail to process %v", parameters))
-
+	var configFile, tempJSONOutput string
+	if isSpecifiedAPIExist(oc, "template.openshift.io/v1") {
+		err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().Run("process").Args(parameters...).Output()
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			tempJSONOutput = output
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("as admin fail to process %v", parameters))
+	} else {
+		tempByte, readErr := ioutil.ReadFile(parameterizedTemplateByReplaceToFile(oc, parameters...))
+		o.Expect(readErr).NotTo(o.HaveOccurred())
+		tempJSONOutput = string(tempByte)
+	}
+	configFile, _ = jsonAddExtraParametersToFile(tempJSONOutput, extraParameters)
 	e2e.Logf("the file of resource is %s", configFile)
 	jsonOutput, _ := ioutil.ReadFile(configFile)
 	debugLogf("The file content is: \n%s", jsonOutput)
@@ -329,18 +373,25 @@ func applyResourceFromTemplateWithExtraParametersAsAdmin(oc *exutil.CLI, extraPa
 
 // Use oc client apply yaml template with multi extra parameters
 func applyResourceFromTemplateWithMultiExtraParameters(oc *exutil.CLI, jsonPathsAndActions []map[string]string, multiExtraParameters []map[string]interface{}, parameters ...string) (string, error) {
-	var configFile string
-	err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
-		output, err := oc.AsAdmin().Run("process").Args(parameters...).Output()
-		if err != nil {
-			e2e.Logf("the err:%v, and try next round", err)
-			return false, nil
-		}
-		configFile, _ = jsonPathsBatchProcessToFile(output, jsonPathsAndActions, multiExtraParameters)
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("as admin fail to process %v", parameters))
+	var configFile, tempJSONOutput string
+	if isSpecifiedAPIExist(oc, "template.openshift.io/v1") {
+		err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().Run("process").Args(parameters...).Output()
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			tempJSONOutput = output
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("as admin fail to process %v", parameters))
+	} else {
+		tempByte, readErr := ioutil.ReadFile(parameterizedTemplateByReplaceToFile(oc, parameters...))
+		o.Expect(readErr).NotTo(o.HaveOccurred())
+		tempJSONOutput = string(tempByte)
+	}
 
+	configFile, _ = jsonPathsBatchProcessToFile(tempJSONOutput, jsonPathsAndActions, multiExtraParameters)
 	e2e.Logf("the file of resource is %s", configFile)
 	jsonOutput, _ := ioutil.ReadFile(configFile)
 	debugLogf("The file content is: \n%s", jsonOutput)
@@ -844,4 +895,17 @@ func isSpecifiedResourceExist(oc *exutil.CLI, resourceKindAndName string, resour
 // expectSpecifiedResourceExist one-time checks whether the specified resource exist or not, case will fail if it is not expected
 func expectSpecifiedResourceExist(oc *exutil.CLI, resourceKindAndName string, resourceNamespace string, checkFlag bool) {
 	o.Expect(isSpecifiedResourceExist(oc, resourceKindAndName, resourceNamespace)).Should(o.Equal(checkFlag))
+}
+
+// isSpecifiedAPIExist checks whether the specified api exist, returns bool
+func isSpecifiedAPIExist(oc *exutil.CLI, apiNameAndVersion string) bool {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("api-resources").Args().Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Contains(output, apiNameAndVersion)
+}
+
+// isMicroShiftCluster judges whether the test cluster is microshift cluster
+// TODO: It's not a precise judgment, just a temp solution, need to do more research and enhance later
+func isMicroshiftCluster(oc *exutil.CLI) bool {
+	return !isSpecifiedAPIExist(oc, "template.openshift.io/v1")
 }

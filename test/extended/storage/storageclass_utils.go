@@ -137,6 +137,13 @@ func (sc *storageClass) createWithExtraParameters(oc *exutil.CLI, extraParameter
 	return err
 }
 
+// GetFieldByJSONPath gets its field value by JSONPath
+func (sc *storageClass) getFieldByJSONPath(oc *exutil.CLI, JSONPath string) string {
+	fieldValue, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass/"+sc.name, "-o", "jsonpath="+JSONPath).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return fieldValue
+}
+
 // getParametersFromTemplate gets the storageClass parameters from yaml template
 func (sc *storageClass) getParametersFromTemplate() *storageClass {
 	output, err := ioutil.ReadFile(sc.template)

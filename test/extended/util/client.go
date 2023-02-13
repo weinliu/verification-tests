@@ -393,6 +393,18 @@ func (c *CLI) TeardownProject() {
 	}
 }
 
+// CreateSpecifiedNamespaceAsAdmin creates specified name namespace.
+func (c *CLI) CreateSpecifiedNamespaceAsAdmin(namespace string) {
+	err := c.AsAdmin().WithoutNamespace().Run("create").Args("namespace", namespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to create namespace/%s", namespace))
+}
+
+// DeleteSpecifiedNamespaceAsAdmin deletes specified name namespace.
+func (c *CLI) DeleteSpecifiedNamespaceAsAdmin(namespace string) {
+	err := c.AsAdmin().WithoutNamespace().Run("delete").Args("namespace", namespace).Execute()
+	e2e.Logf("Deleted namespace/%s, err: %v", namespace, err)
+}
+
 // Verbose turns on printing verbose messages when executing OpenShift commands
 func (c *CLI) Verbose() *CLI {
 	c.verbose = true
