@@ -670,6 +670,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			"host_service_logs/windows/log_files/kubelet/",
 			"host_service_logs/windows/log_files/kubelet/kubelet.log",
 			"host_service_logs/windows/log_files/containerd/containerd.log",
+			"host_service_logs/windows/log_files/wicd/windows-instance-config-daemon.exe.ERROR",
+			"host_service_logs/windows/log_files/wicd/windows-instance-config-daemon.exe.INFO",
+			"host_service_logs/windows/log_files/wicd/windows-instance-config-daemon.exe.WARNING",
 		}
 		for _, v := range checkMessage {
 			if !strings.Contains(mustGather, v) {
