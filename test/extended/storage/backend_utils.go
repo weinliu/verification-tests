@@ -887,3 +887,13 @@ func getFilestoreInstanceFromGCP(oc *exutil.CLI, pvID string, region string) map
 	json.Unmarshal([]byte(filestoreInfo), &filestoreJSONMap)
 	return filestoreJSONMap
 }
+
+// isAzureStackCluster judges whether the test cluster is on azure stack platform
+func isAzureStackCluster(oc *exutil.CLI) bool {
+	if cloudProvider != "azure" {
+		return false
+	}
+	azureCloudType, errMsg := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+	o.Expect(errMsg).NotTo(o.HaveOccurred())
+	return strings.EqualFold(azureCloudType, "AzureStackCloud")
+}

@@ -494,9 +494,11 @@ func getSupportProvisionersByCloudProvider(oc *exutil.CLI) []string {
 		supportProvisioners = deleteElement(supportProvisioners, "efs.csi.aws.com")
 		e2e.Logf("***%s \"AWS-EFS CSI Driver\" not installed, updating support provisioners to: %v***", cloudProvider, supportProvisioners)
 	}
-	if cloudProvider == "azure" && checkFips(oc) {
+	// AzureStack test clusters don't support azure file storage
+	// Ref: https://learn.microsoft.com/en-us/azure-stack/user/azure-stack-acs-differences?view=azs-2108
+	if cloudProvider == "azure" && (isAzureStackCluster(oc) || checkFips(oc)) {
+		e2e.Logf("***%s \"Azure-file CSI Driver\" don't support AzureStackCluster or FIPS enabled env, updating support provisioners to: %v***", cloudProvider, supportProvisioners)
 		supportProvisioners = deleteElement(supportProvisioners, "file.csi.azure.com")
-		e2e.Logf("***%s \"Azure-file CSI Driver\" don't support FIPS enabled env, updating support provisioners to: %v***", cloudProvider, supportProvisioners)
 	}
 	return supportProvisioners
 }

@@ -43,6 +43,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		// Define the supported skuname
 		skunames := []string{"Premium_LRS", "StandardSSD_LRS", "Standard_LRS"}
+		// Azure stack doesn't support azureDisk - StandardSSD_LRS
+		if isAzureStackCluster(oc) {
+			skunames = deleteElement(skunames, "StandardSSD_LRS")
+		}
 
 		for _, skuname := range skunames {
 			g.By("******" + " The skuname: " + skuname + " test phase start " + "******")
@@ -173,6 +177,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-49366 - [Azure-Disk-CSI-Driver] support shared disk to mount to different nodes
 	// https://github.com/kubernetes-sigs/azuredisk-csi-driver/tree/master/deploy/example/sharedisk
 	g.It("ARO-Author:wduan-High-49366-[Azure-Disk-CSI-Driver] support shared disks to mount to different nodes", func() {
+		// Azure stack doesn't support azureDisk shared disk
+		if isAzureStackCluster(oc) {
+			g.Skip("The test cluster is on Azure stack platform which doesn't support azureDisk shared disk")
+		}
 		schedulableLinuxWorkers := getSchedulableLinuxWorkers(getAllNodesInfo(oc))
 		if len(schedulableLinuxWorkers) < 2 || checkNodeZoned(oc) {
 			g.Skip("No enough schedulable node or the cluster is not zoned")

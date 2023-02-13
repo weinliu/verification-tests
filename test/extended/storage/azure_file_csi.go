@@ -33,8 +33,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			g.Skip("Skip for non-supported cloud provider: *" + cloudProvider + "* !!!")
 		}
 
-		if checkFips(oc) {
-			g.Skip("Azure-file CSI Driver don't support FIPS enabled env, skip!!!")
+		if isAzureStackCluster(oc) || checkFips(oc) {
+			g.Skip("Azure-file CSI Driver don't support AzureStackCluster or FIPS enabled env, skip!!!")
 		}
 		storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
 		storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
