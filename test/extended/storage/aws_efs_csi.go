@@ -103,8 +103,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: ropatil@redhat.com
-	// OCP-51206 - [AWS EFS CSI Driver] [Dynamic PV] [block volume] should not support
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-51206-[AWS EFS CSI Driver] [Dynamic PV] [block volume] should not support", func() {
+	// OCP-51206 - [AWS-EFS-CSI Driver] [Dynamic PV] [block volume] should not support
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:ropatil-Medium-51206-[AWS-EFS-CSI Driver] [Dynamic PV] [block volume] should not support", func() {
 
 		g.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
