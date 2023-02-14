@@ -286,9 +286,6 @@ type prometheusQueryResult struct {
 // Hive Configurations
 const (
 	HiveNamespace           = "hive" //Hive Namespace
-	OCP49ReleaseImage       = "quay.io/openshift-release-dev/ocp-release:4.9.0-rc.6-x86_64"
-	OCP410ReleaseImage      = "quay.io/openshift-release-dev/ocp-release:4.10.20-x86_64"
-	OCP411ReleaseImage      = "quay.io/openshift-release-dev/ocp-release:4.11.0-x86_64"
 	PullSecret              = "pull-secret"
 	PrometheusURL           = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
 	ClusterInstallTimeout   = 3600
@@ -1216,14 +1213,13 @@ func getHiveadmissionPod(oc *exutil.CLI, namespace string) string {
 	return podArray[0]
 }
 
-// Get OCP Image for Hive testing
+// Get OCP Image for Hive testing, default is 4.13-nightly image for now and if not exist, fail the test
 func getTestOCPImage() string {
-	//get the latest 4-stable image for Hive testing
-	testOCPImage, err := exutil.GetLatest4StableImage()
+	//get the latest 4.13-nightly image for Hive testing
+	testOCPImage, err := exutil.GetLatestNightlyImage("4.13")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if testOCPImage == "" {
-		e2e.Logf("Can't get the latest 4-stable image, use 4.11.0 for testing")
-		testOCPImage = OCP411ReleaseImage
+		e2e.Fail("Can't get the latest 4.13-nightly image")
 	}
 	return testOCPImage
 }
