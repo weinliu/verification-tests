@@ -753,10 +753,10 @@ spec:
 		}
 
 		g.By("Check the configuration of priority level")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "workload-low", "-o", `jsonpath={.spec.limited.assuredConcurrencyShares}`).Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "workload-low", "-o", `jsonpath={.spec.limited.nominalConcurrencyShares}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.Equal(`100`))
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "global-default", "-o", `jsonpath={.spec.limited.assuredConcurrencyShares}`).Output()
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "global-default", "-o", `jsonpath={.spec.limited.nominalConcurrencyShares}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.Equal(`20`))
 
@@ -898,10 +898,10 @@ spec:
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Check the configuration of priority level")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "workload-low", "-o", `jsonpath={.spec.limited.assuredConcurrencyShares}`).Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "workload-low", "-o", `jsonpath={.spec.limited.nominalConcurrencyShares}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.Equal(`100`))
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "global-default", "-o", `jsonpath={.spec.limited.assuredConcurrencyShares}`).Output()
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "global-default", "-o", `jsonpath={.spec.limited.nominalConcurrencyShares}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.Equal(`20`))
 
@@ -1026,10 +1026,10 @@ spec:
 		defer os.RemoveAll(dirName)
 
 		g.By("Check the configuration of priority level")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "workload-low", "-o", `jsonpath={.spec.limited.assuredConcurrencyShares}`).Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "workload-low", "-o", `jsonpath={.spec.limited.nominalConcurrencyShares}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.Equal(`100`))
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "global-default", "-o", `jsonpath={.spec.limited.assuredConcurrencyShares}`).Output()
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("prioritylevelconfiguration", "global-default", "-o", `jsonpath={.spec.limited.nominalConcurrencyShares}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.Equal(`20`))
 
