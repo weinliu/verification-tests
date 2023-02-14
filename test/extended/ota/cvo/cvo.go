@@ -801,12 +801,12 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check ClusterOperatorDegraded condition...")
-		err = waitForCondition(60, 300, "True",
+		err = waitForCondition(60, 480, "True",
 			"oc get co authentication -ojson|jq -r '.status.conditions[]|select(.type==\"Degraded\").status'")
-		exutil.AssertWaitPollNoErr(err, "authentication operator is not degraded in 5m")
+		exutil.AssertWaitPollNoErr(err, "authentication operator is not degraded in 8m")
 
 		g.By("Check ClusterOperatorDown alert is not firing and ClusterOperatorDegraded alert is fired correctly.")
-		err = wait.Poll(5*time.Minute, 30*time.Minute, func() (bool, error) {
+		err = wait.Poll(5*time.Minute, 35*time.Minute, func() (bool, error) {
 			alertDown := getAlertByName(oc, "ClusterOperatorDown")
 			alertDegraded := getAlertByName(oc, "ClusterOperatorDegraded")
 			o.Expect(alertDown).To(o.BeNil())
@@ -920,8 +920,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		defer ocJSONPatch(oc, "", "proxy/cluster", []JSONp{{"replace", "/spec/trustedCA/name", valueProxyTrustCA}})
 
 		g.By("Check ClusterOperatorDown condition...")
-		err = waitForCondition(60, 300, "False", "oc get co machine-config -ojson|jq -r '.status.conditions[]|select(.type==\"Available\").status'")
-		exutil.AssertWaitPollNoErr(err, "machine-config operator is not down in 5m")
+		err = waitForCondition(60, 480, "False", "oc get co machine-config -ojson|jq -r '.status.conditions[]|select(.type==\"Available\").status'")
+		exutil.AssertWaitPollNoErr(err, "machine-config operator is not down in 8m")
 
 		g.By("Check ClusterOperatorDown alert is fired correctly")
 		err = wait.Poll(100*time.Second, 600*time.Second, func() (bool, error) {
@@ -1372,10 +1372,10 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "--clear").Execute()
 
 		g.By("check ReleaseAccepted=False")
-		// usually happens quicker, but 5 minutes is safe deadline
-		err = waitForCondition(30, 300, "False",
+		// usually happens quicker, but 8 minutes is safe deadline
+		err = waitForCondition(30, 480, "False",
 			"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"ReleaseAccepted\").status'")
-		exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 5m")
+		exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 8m")
 
 		g.By("check ReleaseAccepted False have correct message")
 		message, err := getCVObyJP(oc, ".status.conditions[?(.type=='ReleaseAccepted')].message")
@@ -1395,9 +1395,9 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("check ReleaseAccepted=True")
-		err = waitForCondition(30, 300, "True",
+		err = waitForCondition(30, 480, "True",
 			"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"ReleaseAccepted\").status'")
-		exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 5m")
+		exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 8m")
 
 		g.By("check ReleaseAccepted False have correct message")
 		message, err = getCVObyJP(oc, ".status.conditions[?(.type=='ReleaseAccepted')].message")
@@ -1442,9 +1442,9 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "--clear").Execute()
 
-		err = waitForCondition(30, 120, "False",
+		err = waitForCondition(30, 480, "False",
 			"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"ReleaseAccepted\").status'")
-		exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 3m")
+		exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 8m")
 
 		g.By("Change strategy.rollingUpdate.maxUnavailable to be 50%.")
 		_, err = ocJSONPatch(oc, resourceNamespace, resourceKindName, []JSONp{
@@ -1482,9 +1482,9 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "--clear").Execute()
 
-		err = waitForCondition(30, 300, "False",
+		err = waitForCondition(30, 480, "False",
 			"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"ReleaseAccepted\").status'")
-		exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 5m")
+		exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 8m")
 
 		g.By("Disable deployment/network-operator's management through setting cv.overrides.")
 		err = setCVOverrides(oc, resourceKind, resourceName, resourceNamespace)

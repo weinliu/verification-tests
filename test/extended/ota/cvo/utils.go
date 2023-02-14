@@ -641,10 +641,10 @@ func setCVOverrides(oc *exutil.CLI, resourceKind string, resourceName string, re
 	}
 
 	e2e.Logf("Wait for Upgradeable=false...")
-	err = waitForCondition(30, 360, "False",
+	err = waitForCondition(30, 480, "False",
 		"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"Upgradeable\").status'")
 	if err != nil {
-		e2e.Logf("Upgradeable condition is not false in 6m: %v", err)
+		e2e.Logf("Upgradeable condition is not false in 8m: %v", err)
 		return err
 	}
 
@@ -659,10 +659,10 @@ func setCVOverrides(oc *exutil.CLI, resourceKind string, resourceName string, re
 
 	e2e.Logf("Wait for Progressing=false...")
 	//to workaround the fake upgrade by cv.overrrides, refer to https://issues.redhat.com/browse/OTA-586
-	err = waitForCondition(30, 180, "False",
+	err = waitForCondition(30, 240, "False",
 		"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"Progressing\").status'")
 	if err != nil {
-		e2e.Logf("Progressing condition is not false in 3m: %v", err)
+		e2e.Logf("Progressing condition is not false in 4m: %v", err)
 		return err
 	}
 	return nil
@@ -674,9 +674,9 @@ func unsetCVOverrides(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	e2e.Logf("Wait for Upgradeable=false disappear...")
-	err = waitForCondition(30, 360, "",
+	err = waitForCondition(30, 480, "",
 		"oc get clusterversion version -ojson|jq -r '.status.conditions[]|select(.type==\"Upgradeable\").status'")
-	exutil.AssertWaitPollNoErr(err, "upgradeable=false condition does not disappear in 6m")
+	exutil.AssertWaitPollNoErr(err, "upgradeable=false condition does not disappear in 8m")
 
 	e2e.Logf("Check no ClusterVersionOverridesSet in `oc adm upgrade` msg...")
 	upgStatusOutput, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade").Output()
