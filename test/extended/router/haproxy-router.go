@@ -1733,4 +1733,68 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		g.By("Recheck the reachability of the insecure route")
 		waitForCurl(oc, "hello-pod", baseDomain, "echoenv-statefulset-service-"+project1+"."+"ocp57404.", "HTTP/1.1 200 OK", custContIP)
 	})
+
+	// author: mjoseph@redhat.com
+	g.It("Author:mjoseph-Critical-59951-IngressController option to use PROXY protocol with IBM Cloud load-balancers - TCP, PROXY and omitted", func() {
+		// This test case is only for IBM cluster
+		exutil.SkipIfPlatformTypeNot(oc, "IBMCloud")
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-IBMproxy.yaml")
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp59951",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+			ingctrlResource = "ingresscontrollers/" + ingctrl.name
+		)
+
+		g.By("create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		g.By("check the value of .status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol, which should be PROXY")
+		jpath := ".status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol"
+		protocol := fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jpath)
+		o.Expect(protocol).To(o.ContainSubstring("PROXY"))
+
+		g.By("check the ROUTER_USE_PROXY_PROTOCOL env, which should be true")
+		routerpod := getRouterPod(oc, ingctrl.name)
+		pollReadPodData(oc, "openshift-ingress", routerpod, "/usr/bin/env", `ROUTER_USE_PROXY_PROTOCOL=true`)
+
+		g.By("Ensure the proxy-protocol annotation is added to the LB service")
+		findAnnotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("svc", "router-ocp59951", "-n", "openshift-ingress", "-o=jsonpath={.metadata.annotations}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(findAnnotation).To(o.ContainSubstring(`"service.kubernetes.io/ibm-load-balancer-cloud-provider-enable-features":"proxy-protocol"`))
+
+		g.By("patch the custom ingresscontroller with protocol option TCP")
+		patchPath := "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"ibm\":{\"protocol\":\"TCP\"}}}}}}"
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchPath)
+		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+routerpod))
+
+		g.By("check the value of .status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol, which should be TCP")
+		jpath = ".status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol"
+		protocol = fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jpath)
+		o.Expect(protocol).To(o.ContainSubstring("TCP"))
+
+		g.By("check the ROUTER_USE_PROXY_PROTOCOL env, which should not present")
+		routerpod = getRouterPod(oc, ingctrl.name)
+		proxyEnv, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "/usr/bin/env | grep ROUTER_USE_PROXY_PROTOCOL").Output()
+		o.Expect(proxyEnv).NotTo(o.ContainSubstring("ROUTER_USE_PROXY_PROTOCOL"))
+
+		g.By("patch the custom ingresscontroller with protocol option omitted")
+		patchPath = "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"ibm\":{\"protocol\":\"\"}}}}}}"
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchPath)
+
+		g.By(`check the value of .status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm.protocol, which should be ""`)
+		jpath = ".status.endpointPublishingStrategy.loadBalancer.providerParameters.ibm"
+		protocol = fetchJSONPathValue(oc, ingctrl.namespace, ingctrlResource, jpath)
+		o.Expect(protocol).To(o.ContainSubstring(`{}`))
+	})
 })
