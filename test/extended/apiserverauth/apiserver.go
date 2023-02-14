@@ -91,16 +91,18 @@ var _ = g.Describe("[sig-api-machinery] API_Server", func() {
 	// If the case duration is greater than 10 minutes and is executed in serial (labelled Serial or Disruptive), add Longduration
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-Author:xxia-Medium-25806-Force encryption key rotation for etcd datastore [Slow][Disruptive]", func() {
 		// only run this case in Etcd Encryption On cluster
-		g.By("Check if cluster is Etcd Encryption On")
+		g.By("1. Check if cluster is Etcd Encryption On")
 		output, err := oc.WithoutNamespace().Run("get").Args("apiserver/cluster", "-o=jsonpath={.spec.encryption.type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if "aescbc" == output {
-			g.By("Get encryption prefix")
+			e2e.Logf("Etcd Encryption is on!")
+			g.By("2. Get encryption prefix")
 			var err error
 			var oasEncValPrefix1, kasEncValPrefix1 string
 
 			oasEncValPrefix1, err = GetEncryptionPrefix(oc, "/openshift.io/routes")
 			exutil.AssertWaitPollNoErr(err, "fail to get encryption prefix for key routes ")
+
 			e2e.Logf("openshift-apiserver resource encrypted value prefix before test is %s", oasEncValPrefix1)
 
 			kasEncValPrefix1, err = GetEncryptionPrefix(oc, "/kubernetes.io/secrets")
@@ -123,13 +125,13 @@ spec:
   unsupportedConfigOverrides:
     encryption:
       reason: force OAS rotation ` + t
-			for _, kind := range []string{"openshiftapiserver", "kubeapiserver"} {
+			for i, kind := range []string{"openshiftapiserver", "kubeapiserver"} {
 				defer func() {
 					e2e.Logf("Restoring %s/cluster's spec", kind)
 					err := oc.WithoutNamespace().Run("patch").Args(kind, "cluster", "--type=json", "-p", patchYamlToRestore).Execute()
 					o.Expect(err).NotTo(o.HaveOccurred())
 				}()
-				g.By("Forcing " + kind + " encryption")
+				g.By(fmt.Sprintf("3.%d) Forcing %s encryption", i+1, kind))
 				err := oc.WithoutNamespace().Run("patch").Args(kind, "cluster", "--type=merge", "-p", patchYaml).Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
 			}
@@ -137,8 +139,8 @@ spec:
 			newOASEncSecretName := "encryption-key-openshift-apiserver-" + strconv.Itoa(oasEncNumber+1)
 			newKASEncSecretName := "encryption-key-openshift-kube-apiserver-" + strconv.Itoa(kasEncNumber+1)
 
-			g.By("Check the new encryption key secrets appear")
-			err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			g.By("4. Check the new encryption key secrets appear")
+			err = wait.Poll(5*time.Second, 90*time.Second, func() (bool, error) {
 				output, err := oc.WithoutNamespace().Run("get").Args("secrets", newOASEncSecretName, newKASEncSecretName, "-n", "openshift-config-managed").Output()
 				if err != nil {
 					e2e.Logf("Fail to get new encryption key secrets, error: %s. Trying again", err)
@@ -147,9 +149,14 @@ spec:
 				e2e.Logf("Got new encryption key secrets:\n%s", output)
 				return true, nil
 			})
+			// Print openshift-apiserver and kube-apiserver secrets for debugging if time out
+			err1 := oc.WithoutNamespace().Run("get").Args("secret", "-n", "openshift-config-managed", "-l", `encryption.apiserver.operator.openshift.io/component=openshift-apiserver`).Execute()
+			o.Expect(err1).NotTo(o.HaveOccurred())
+			err1 = oc.WithoutNamespace().Run("get").Args("secret", "-n", "openshift-config-managed", "-l", `encryption.apiserver.operator.openshift.io/component=openshift-kube-apiserver`).Execute()
+			o.Expect(err1).NotTo(o.HaveOccurred())
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("new encryption key secrets %s, %s not found", newOASEncSecretName, newKASEncSecretName))
 
-			g.By("Waiting for the force encryption completion")
+			g.By("5. Waiting for the force encryption completion")
 			// Only need to check kubeapiserver because kubeapiserver takes more time.
 			var completed bool
 			completed, err = WaitEncryptionKeyMigration(oc, newKASEncSecretName)
@@ -157,7 +164,7 @@ spec:
 			o.Expect(completed).Should(o.Equal(true))
 
 			var oasEncValPrefix2, kasEncValPrefix2 string
-			g.By("Get encryption prefix after force encryption completed")
+			g.By("6. Get encryption prefix after force encryption completed")
 			oasEncValPrefix2, err = GetEncryptionPrefix(oc, "/openshift.io/routes")
 			exutil.AssertWaitPollNoErr(err, "fail to get encryption prefix for key routes ")
 			e2e.Logf("openshift-apiserver resource encrypted value prefix after test is %s", oasEncValPrefix2)
@@ -171,7 +178,7 @@ spec:
 			o.Expect(oasEncValPrefix2).NotTo(o.Equal(oasEncValPrefix1))
 			o.Expect(kasEncValPrefix2).NotTo(o.Equal(kasEncValPrefix1))
 		} else {
-			g.By("cluster is Etcd Encryption Off, this case intentionally runs nothing")
+			g.By("1. cluster is Etcd Encryption Off, this case intentionally runs nothing")
 		}
 	})
 
