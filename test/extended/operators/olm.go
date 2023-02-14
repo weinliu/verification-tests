@@ -33,6 +33,35 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 
 	// author: jiazha@redhat.com
+	g.It("ConnectedOnly-Author:jiazha-High-59413-Default CatalogSource aren't created in restricted mode [Serial]", func() {
+		defaultCatalogSources := []string{"certified-operators", "community-operators", "redhat-marketplace", "redhat-operators"}
+		g.By("step 1 -> check if the SCC is restricted")
+		for _, cs := range defaultCatalogSources {
+			SCC, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", cs, "-o=jsonpath={.spec.grpcPodConfig.securityContextConfig}", "-n", "openshift-marketplace").Output()
+			if err != nil {
+				e2e.Failf("fail to get %s's SCC, error:%v", cs, err)
+			}
+			if SCC != "restricted" {
+				e2e.Failf("%s's SCC is not restricted!", cs)
+			}
+		}
+		g.By("step 2 -> change the default SCC to legacy")
+		for _, cs := range defaultCatalogSources {
+			patchResource(oc, asAdmin, withoutNamespace, "-n", "openshift-marketplace", "catalogsource", cs, "-p", "{\"spec\":{\"grpcPodConfig\": {\"securityContextConfig\": \"legacy\"}}}", "--type=merge")
+		}
+		g.By("step 3 -> check if SCC reset the restricted")
+		for _, cs := range defaultCatalogSources {
+			SCC, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", cs, "-o=jsonpath={.spec.grpcPodConfig.securityContextConfig}", "-n", "openshift-marketplace").Output()
+			if err != nil {
+				e2e.Failf("fail to get %s's SCC, error:%v", cs, err)
+			}
+			if SCC != "restricted" {
+				e2e.Failf("%s's SCC is not restricted!", cs)
+			}
+		}
+	})
+
+	// author: jiazha@redhat.com
 	g.It("Author:jiazha-High-59422-package-server-manager does not stomp on changes made to packgeserver CSV", func() {
 		g.By("1) change the packageser CSV's securityContext")
 		packageserverCSVYaml, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o", "yaml").OutputToFile("ocp59422-csv.yaml")
