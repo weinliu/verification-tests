@@ -384,4 +384,35 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		waitforDesiredMachineCount(oc, masterNodeCount)
 
 	})
+
+	// author: skundu@redhat.com
+	g.It("Longduration-Author:skundu-NonPreRelease-Critical-53767-cluster-backup.sh exits with a non-zero code in case Etcd backup fails. [Disruptive]", func() {
+		g.By("Test for case OCP-53767 - cluster-backup.sh exits with a non-zero code in case Etcd backup fails.")
+
+		g.By("select all the master node")
+		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
+
+		g.By("Check etcd oprator status")
+		checkOperator(oc, "etcd")
+		g.By("Check kube-apiserver oprator status")
+		checkOperator(oc, "kube-apiserver")
+
+		g.By("Run the backup")
+		masterN, etcdDb := runDRBackup(oc, strings.Fields(masterNodeList[0]))
+
+		defer func() {
+			_, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterN, []string{"-q"}, "rm", "-rf", "/home/core/assets/backup")
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		g.By("Corrupt the etcd db file ")
+		_, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterN, []string{"-q"}, "truncate", "-s", "126k", etcdDb)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Run the restore")
+		output, _ := exutil.DebugNodeWithOptionsAndChroot(oc, masterN, []string{"-q"}, "/usr/local/bin/cluster-restore.sh", "/home/core/assets/backup")
+		o.Expect(strings.Contains(output, "Backup appears corrupted. Aborting!")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "non-zero exit code")).To(o.BeTrue())
+	})
+
 })
