@@ -122,8 +122,6 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	g.It("HyperShiftMGMT-Author:rioliu-Longduration-NonPreRelease-High-55356-hypershift Honor MaxUnavailable for inplace upgrades [Disruptive]", func() {
 
-		// tip: for this test, 4.12 hosted cluster is required. e.g. hypershift create cluster aws ... --release-image quay.io/openshift-release-dev/ocp-release:4.12.0-ec.5-x86_64
-		skipTestIfHostedClusterVersionIsNotMatched(oc, "4.12")
 		// create node pool with replica=3
 		// destroy node pool then delete config map
 		defer ht.DeleteMcConfigMap()
@@ -527,12 +525,8 @@ func (ht *HypershiftTest) CheckMcAnnotationsOnNode() {
 	kubeconf := ht.StrValue(TestCtxKeyKubeConfig)
 	npName := ht.StrValue(HypershiftCrNodePool)
 	ht.oc.SetGuestKubeconf(kubeconf)
-	workerList := NewNodeList(ht.oc.AsAdmin().AsGuestKubeconf())
-	workerList.ByLabel(fmt.Sprintf("%s=%s", "hypershift.openshift.io/nodePool", npName))
-	allNpWorkerNodes, listNpWorkerErr := workerList.GetAll()
-	o.Expect(listNpWorkerErr).NotTo(o.HaveOccurred(), "list all workers in new nodepool error")
-	o.Expect(allNpWorkerNodes).NotTo(o.BeEmpty(), "no worker node found for new nodepool")
-	workerNode := allNpWorkerNodes[0]
+	np := NewHypershiftNodePool(ht.oc.AsAdmin().AsGuestKubeconf(), ht.clusterNS, npName)
+	workerNode := np.GetAllLinuxNodesOrFail()[0]
 
 	// get machine config name
 	secrets := NewNamespacedResourceList(ht.oc.AsAdmin(), "secrets", fmt.Sprintf("%s-%s", ht.clusterNS, clusterName))
@@ -585,8 +579,10 @@ func (ht *HypershiftTest) VerifyFileContent() {
 	g.By("check whether the test file content is matched ")
 	filePath := ht.StrValue(TestCtxKeyFilePath)
 	kubeconf := ht.StrValue(TestCtxKeyKubeConfig)
+	npName := ht.StrValue(HypershiftCrNodePool)
 	ht.oc.SetGuestKubeconf(kubeconf)
-	workerNode := NewNodeList(ht.oc.AsAdmin().AsGuestKubeconf()).GetAllLinuxWorkerNodesOrFail()[0]
+	np := NewHypershiftNodePool(ht.oc.AsAdmin().AsGuestKubeconf(), ht.clusterNS, npName)
+	workerNode := np.GetAllLinuxNodesOrFail()[0]
 	// when we call oc debug with guest kubeconfig, temp namespace oc.Namespace()
 	// cannot be found in hosted cluster.
 	// copy node object to change namespace to default
@@ -596,17 +592,4 @@ func (ht *HypershiftTest) VerifyFileContent() {
 	o.Expect(rf.Fetch()).NotTo(o.HaveOccurred(), "fetch remote file failed")
 	o.Expect(rf.GetTextContent()).Should(o.ContainSubstring("hello world"), "file content does not match machine config setting")
 
-}
-
-func skipTestIfHostedClusterVersionIsNotMatched(oc *exutil.CLI, version string) {
-
-	// in CI env, there is a preinstalled hostedcluster, get release image info from the 1st one
-	imageVersion := NewNamespacedResource(oc.AsAdmin(),
-		HypershiftHostedCluster,
-		exutil.GetHyperShiftHostedClusterNameSpace(oc),
-		getFirstHostedCluster(oc)).GetOrFail("{.status.version.history[0].version}")
-	logger.Infof("hosted cluster is running with version %s", imageVersion)
-	if !strings.Contains(imageVersion, version) {
-		g.Skip(fmt.Sprintf("skip this test, hosted cluster is not running with %s image", version))
-	}
 }

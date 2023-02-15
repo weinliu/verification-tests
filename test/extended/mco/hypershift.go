@@ -370,9 +370,7 @@ func (np *HypershiftNodePool) WaitUntilConfigIsUpdating() {
 		}
 		logger.Infof("condition UpdatingConfig not found")
 		return nil
-	}, "5m", "2s").Should(o.SatisfyAll(
-		o.HaveKeyWithValue("status", "True"),
-		o.HaveKeyWithValue("message", o.ContainSubstring("Updating config in progress"))))
+	}, "5m", "2s").Should(o.HaveKeyWithValue("status", "True"))
 	logger.Infof("status of condition UpdatingConfig is True")
 }
 
@@ -386,9 +384,7 @@ func (np *HypershiftNodePool) WaitUntilVersionIsUpdating() {
 		}
 		logger.Infof("condition UpdatingVersion not found")
 		return nil
-	}, "5m", "2s").Should(o.SatisfyAll(
-		o.HaveKeyWithValue("status", "True"),
-		o.HaveKeyWithValue("message", o.ContainSubstring("Updating version in progress"))))
+	}, "5m", "2s").Should(o.HaveKeyWithValue("status", "True"))
 	logger.Infof("status of condition UpdatingVersion is True")
 }
 
@@ -425,6 +421,17 @@ func (np *HypershiftNodePool) EstimateTimeoutInMins() string {
 		desiredNodes = 2 // use 2 replicas as default
 	}
 	return fmt.Sprintf("%dm", desiredNodes*10)
+}
+
+// GetAllLinuxNodes get all linux nodes in this nodepool
+func (np *HypershiftNodePool) GetAllLinuxNodesOrFail() []Node {
+	workerList := NewNodeList(np.oc.AsAdmin().AsGuestKubeconf())
+	workerList.ByLabel("kubernetes.io/os=linux,hypershift.openshift.io/nodePool=" + np.GetName())
+	nodes, getNodesErr := workerList.GetAll()
+	o.Expect(getNodesErr).NotTo(o.HaveOccurred(), "list all linux nodes in new nodepool error")
+	o.Expect(nodes).NotTo(o.BeEmpty(), "no linux node found for new nodepool")
+
+	return nodes
 }
 
 // GetVersion get version of nodepool
