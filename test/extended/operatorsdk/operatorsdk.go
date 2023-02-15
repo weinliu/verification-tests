@@ -4651,6 +4651,66 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: jitli@redhat.com
+	g.It("VMonly-Author:jitli-High-40964-migrate packagemanifest to bundle", func() {
+
+		var (
+			tmpBasePath           = "/tmp/ocp-40964-" + getRandomString()
+			pacakagemanifestsPath = exutil.FixturePath("testdata", "operatorsdk", "ocp-40964-data", "manifests", "etcd")
+			quayCLI               = container.NewQuayCLI()
+			containerCLI          = container.NewPodmanCLI()
+			bundleImage           = "quay.io/olmqe/etcd-operatorsdk:0.9.4"
+			bundleImageTag        = "quay.io/olmqe/etcd-operatorsdk:0.9.4-" + getRandomString()
+		)
+		oc.SetupProject()
+		operatorsdkCLI.showInfo = true
+		defer os.RemoveAll(tmpBasePath)
+		err := os.MkdirAll(tmpBasePath, 0o755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		operatorsdkCLI.ExecCommandPath = tmpBasePath
+
+		g.By("transfer the packagemanifest to bundle dir")
+		output, err := operatorsdkCLI.Run("pkgman-to-bundle").Args(pacakagemanifestsPath, "--output-dir=test-40964-bundle").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Bundle metadata generated successfully"))
+
+		bundleDir := filepath.Join(tmpBasePath, "test-40964-bundle", "bundle-0.9.4", "bundle")
+		if _, err := os.Stat(bundleDir); os.IsNotExist(err) {
+			e2e.Failf("bundle dir not found")
+		}
+
+		g.By("generate the bundle image")
+		output, err = operatorsdkCLI.Run("pkgman-to-bundle").Args(pacakagemanifestsPath, "--image-tag-base", "quay.io/olmqe/etcd-operatorsdk", "--output-dir=test-40964-bundle-image").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Successfully built image quay.io/olmqe/etcd-operatorsdk:0.9.4"))
+
+		g.By("run the generated bundle")
+		defer quayCLI.DeleteTag(strings.Replace(bundleImageTag, "quay.io/", "", 1))
+		defer containerCLI.RemoveImage(bundleImage)
+
+		if output, err := containerCLI.Run("tag").Args(bundleImage, bundleImageTag).Output(); err != nil {
+			e2e.Logf(output)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		if output, err = containerCLI.Run("push").Args(bundleImageTag).Output(); err != nil {
+			e2e.Logf(output)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		defer func() {
+			output, err := operatorsdkCLI.Run("cleanup").Args("etcd").Output()
+			if err != nil {
+				e2e.Logf(output)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}()
+
+		output, _ = operatorsdkCLI.Run("run").Args("bundle", bundleImageTag, "-n", oc.Namespace(), "--timeout", "5m", "--security-context-config=restricted").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("OLM has successfully installed"))
+
+	})
+
+	// author: jitli@redhat.com
 	g.It("VMonly-Author:jitli-Critical-49884-Add support for external bundle validators", func() {
 
 		tmpBasePath := exutil.FixturePath("testdata", "operatorsdk", "ocp-49960-data")
