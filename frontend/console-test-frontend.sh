@@ -1,5 +1,7 @@
 #!/bin/bash
 
+TESTS_TO_RUN=$1
+
 set -euo pipefail
 
 ARTIFACT_DIR=${ARTIFACT_DIR:=/tmp/artifacts}
@@ -8,13 +10,13 @@ mkdir -p $ARTIFACT_DIR
 SCREENSHOTS_DIR=gui_test_screenshots
 
 function copyArtifacts {
-  yarn merge-reports
-  python3 parse-xml.py
-  if [ -d "$ARTIFACT_DIR" ] && [ -d "$SCREENSHOTS_DIR" ]; then
-    echo "Copying artifacts from $(pwd)..."
-    cp console-cypress.xml "$SCREENSHOTS_DIR"
-    cp -r "$SCREENSHOTS_DIR" "${ARTIFACT_DIR}/gui_test_screenshots"
-  fi
+    yarn merge-reports
+    python3 parse-xml.py
+    if [ -d "$ARTIFACT_DIR" ] && [ -d "$SCREENSHOTS_DIR" ]; then
+        echo "Copying artifacts from $(pwd)..."
+        cp console-cypress.xml "$SCREENSHOTS_DIR"
+        cp -r "$SCREENSHOTS_DIR" "${ARTIFACT_DIR}/gui_test_screenshots"
+    fi
 }
 
 ## Add IDP for testing
@@ -22,10 +24,9 @@ function copyArtifacts {
 users=""
 htpass_file=/tmp/users.htpasswd
 
-for i in $(seq 1 5);
-do
+for i in $(seq 1 5); do
     username="uiauto-test-${i}"
-    password=$(< /dev/urandom tr -dc 'a-z0-9' | fold -w 12 | head -n 1 || true)
+    password=$(tr </dev/urandom -dc 'a-z0-9' | fold -w 12 | head -n 1 || true)
     users+="${username}:${password},"
     if [ -f "${htpass_file}" ]; then
         htpasswd -B -b ${htpass_file} "${username}" "${password}"
@@ -39,13 +40,12 @@ gen=$(oc get deployment oauth-openshift -n openshift-authentication -o jsonpath=
 
 # add users to cluster
 oc create secret generic uiauto-htpass-secret --from-file=htpasswd=${htpass_file} -n openshift-config
-oc patch oauth cluster --type='json'  -p='[{"op": "add", "path": "/spec/identityProviders", "value": [{"type": "HTPasswd", "name": "uiauto-htpasswd-idp", "mappingMethod": "claim", "htpasswd":{"fileData":{"name": "uiauto-htpass-secret"}}}]}]'
+oc patch oauth cluster --type='json' -p='[{"op": "add", "path": "/spec/identityProviders", "value": [{"type": "HTPasswd", "name": "uiauto-htpasswd-idp", "mappingMethod": "claim", "htpasswd":{"fileData":{"name": "uiauto-htpass-secret"}}}]}]'
 
 ## wait for oauth-openshift to rollout
 wait_auth=true
 expected_replicas=$(oc get deployment oauth-openshift -n openshift-authentication -o jsonpath='{.spec.replicas}')
-while $wait_auth;
-do
+while $wait_auth; do
     available_replicas=$(oc get deployment oauth-openshift -n openshift-authentication -o jsonpath='{.status.availableReplicas}')
     new_gen=$(oc get deployment oauth-openshift -n openshift-authentication -o jsonpath='{.metadata.generation}')
     if [[ $expected_replicas == "$available_replicas" && $((new_gen)) -gt $((gen)) ]]; then
@@ -59,7 +59,7 @@ trap copyArtifacts EXIT
 
 # clone upstream console repo and create soft link
 set -x
-git clone -b master https://github.com/openshift/console.git upstream_console && cd upstream_console/frontend && yarn install 
+git clone -b master https://github.com/openshift/console.git upstream_console && cd upstream_console/frontend && yarn install
 cd ../../
 ln -s ./upstream_console/frontend/packages/integration-tests-cypress upstream
 
@@ -77,4 +77,8 @@ export CYPRESS_LOGIN_UP_PAIR=$users
 ls -ltr
 echo "triggering tests"
 set -x
-yarn run test-cypress-console-headless
+if [[ ${TESTS_TO_RUN} == '--spec' ]]; then
+    node --max-old-space-size=4096 ./node_modules/.bin/cypress run $@
+else
+    yarn run test-cypress-console-headless
+fi
