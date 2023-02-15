@@ -1177,10 +1177,13 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		scaleDeployment(oc, wmcoDeployment, 0, wmcoNamespace)
 		_, err = oc.WithoutNamespace().Run("delete").Args("configmap", windowsServicesCM, "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		setConfigmap(oc, "wicd_configmap.yaml", map[string]string{"<version>": "8.8.8-55657c8"})
-		setConfigmap(oc, "wicd_configmap.yaml", map[string]string{"<version>": "0.0.1-55657c8"})
+		err = createManifestFile(oc, "wicd_configmap.yaml", map[string]string{"<version>": "8.8.8-55657c8"})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = createManifestFile(oc, "wicd_configmap.yaml", map[string]string{"<version>": "0.0.1-55657c8"})
+		o.Expect(err).NotTo(o.HaveOccurred())
 		// Create also one with the same id as the existing
-		setConfigmap(oc, "wicd_configmap.yaml", map[string]string{"<version>": wmcoLogVersion})
+		err = createManifestFile(oc, "wicd_configmap.yaml", map[string]string{"<version>": wmcoLogVersion})
+		o.Expect(err).NotTo(o.HaveOccurred())
 		scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
 		waitForServicesCM(oc, windowsServicesCM)
 
@@ -1295,7 +1298,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			forceWicdReconciliation(oc, winHostName)
 
 			// Ensure that the binPath command was restored
-			time.Sleep(15 * time.Second) // Give time to WICD to reconcile
+			time.Sleep(60 * time.Second) // Give time to WICD to reconcile
 			cmd = fmt.Sprintf("Get-WmiObject win32_service | Where-Object { $_.Name -eq \\\"%v\\\" } | select -ExpandProperty PathName", targetService)
 			msg, _ = runPSCommand(bastionHost, winhost, cmd, privateKey, iaasPlatform)
 			listOut = strings.Split(msg, "\r\n")
@@ -1468,6 +1471,36 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			}
 		}
 
+	})
+
+	// author jfrancoa@redhat.com
+	g.It("Longduration-Author:jfrancoa-NonPreRelease-Medium-37086-Install wmco in a namespace other than recommended [Disruptive]", func() {
+
+		customNamespace := "winc-namespace-test"
+
+		g.By("Scalling down the machineset to 0")
+		defer waitWindowsNodesReady(oc, 2, 3000*time.Second)
+		defer scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 30, 2, false)
+		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 20, 0, false)
+
+		subsSource, err := oc.WithoutNamespace().Run("get").Args("subscription", "-n", wmcoNamespace, "-o=jsonpath={.items[?(@.spec.name=='"+wmcoDeployment+"')].spec.source}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By(fmt.Sprintf("Uninstall WMCO from current namespace %v", wmcoNamespace))
+		defer installWMCO(oc, wmcoNamespace, subsSource, privateKey)
+		uninstallWMCO(oc, wmcoNamespace)
+
+		g.By(fmt.Sprintf("Install WMCO in new namespace %v", customNamespace))
+		defer uninstallWMCO(oc, customNamespace)
+		installWMCO(oc, customNamespace, subsSource, privateKey)
+
+		defer scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 20, 0, false)
+		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 30, 2, false)
+		waitWindowsNodesReady(oc, 2, 3000*time.Second)
+
+		g.By("Scalling workloads to 10")
+		defer scaleDeployment(oc, windowsWorkloads, 5, defaultNamespace)
+		scaleDeployment(oc, windowsWorkloads, 10, defaultNamespace)
 	})
 
 })

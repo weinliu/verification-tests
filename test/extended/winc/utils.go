@@ -27,6 +27,7 @@ import (
 var (
 	winVersion       = "2019"
 	wmcoNamespace    = "openshift-windows-machine-config-operator"
+	wmcoDeployment   = "windows-machine-config-operator"
 	defaultNamespace = "winc-test"
 	windowsWorkloads = "win-webserver"
 	linuxWorkloads   = "linux-webserver"
@@ -565,16 +566,17 @@ func ip4or6(s string) string {
 	return "unknown"
 }
 
-func setConfigmap(oc *exutil.CLI, configMapFile string, replacement map[string]string) error {
-	configmap := getFileContent("winc", configMapFile)
+func createManifestFile(oc *exutil.CLI, manifestFile string, replacement map[string]string) error {
+	manifest := getFileContent("winc", manifestFile)
 	for rep, value := range replacement {
-		configmap = strings.ReplaceAll(configmap, rep, value)
+		manifest = strings.ReplaceAll(manifest, rep, value)
 	}
 	ts := time.Now().UTC().Format(time.RFC3339)
-	cmFileName := "configMapFile" + strings.Replace(ts, ":", "", -1) // get rid of offensive colons
-	defer os.Remove(cmFileName)
-	os.WriteFile(cmFileName, []byte(configmap), 0644)
-	_, err := oc.WithoutNamespace().Run("create").Args("-f", cmFileName).Output()
+	splitFileName := strings.Split(manifestFile, ".")
+	manifestFileName := splitFileName[0] + strings.Replace(ts, ":", "", -1) + "." + splitFileName[1] // get rid of offensive colons
+	defer os.Remove(manifestFileName)
+	os.WriteFile(manifestFileName, []byte(manifest), 0644)
+	_, err := oc.WithoutNamespace().Run("create").Args("-f", manifestFileName).Output()
 	return err
 }
 
@@ -707,7 +709,8 @@ func setBYOH(oc *exutil.CLI, iaasPlatform string, addressType string, machineset
 	createMachineset(oc, MSFileName)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	addressesArray := fetchAddress(oc, addressType, machinesetName)
-	setConfigmap(oc, "config-map.yaml", map[string]string{"<address>": addressesArray[0], "<username>": user})
+	err = createManifestFile(oc, "config-map.yaml", map[string]string{"<address>": addressesArray[0], "<username>": user})
+	o.Expect(err).NotTo(o.HaveOccurred())
 	waitForMachinesetReady(oc, machinesetName, 15, 1)
 	return addressesArray
 }
@@ -833,4 +836,49 @@ func getMetricsFromCluster(oc *exutil.CLI, metric string) string {
 	}
 
 	return strconv.Itoa(retValue)
+}
+
+func uninstallWMCO(oc *exutil.CLI, namespace string) {
+
+	defer func() {
+		oc.WithoutNamespace().Run("delete").Args("project", namespace, "--ignore-not-found").Execute()
+		// do not assert the above deletions, and depends on the finally getting deployment to assert the result.
+		// check that the deployment does not exist anymore
+		err := oc.WithoutNamespace().Run("get").Args("deployment", wmcoDeployment, "-n", namespace).Execute()
+		o.Expect(err).To(o.HaveOccurred())
+	}()
+	// Make sure CSV exists
+	csvName, err := oc.WithoutNamespace().Run("get").Args("subscription", wmcoDeployment, "-n", namespace, "-o=jsonpath={.status.installedCSV}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	//  do not assert the following deletions, and depends on the finally getting deployment to assert the result.
+	oc.WithoutNamespace().Run("delete").Args("subscription", "-n", namespace, wmcoDeployment, "--ignore-not-found").Execute()
+	oc.WithoutNamespace().Run("delete").Args("csv", "-n", namespace, csvName).Execute()
+	oc.WithoutNamespace().Run("delete").Args("operatorgroup", "-n", namespace, wmcoDeployment, "--ignore-not-found").Execute()
+
+}
+
+func installWMCO(oc *exutil.CLI, namespace string, source string, privateKey string) {
+	// create new namespace
+	err := createManifestFile(oc, "namespace.yaml", map[string]string{"<namespace>": namespace})
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// add private key to new namespace
+	_, err = oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem="+privateKey, "-n", namespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// create new operatorgroup
+	err = createManifestFile(oc, "operatorgroup.yaml", map[string]string{"<namespace>": namespace})
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// create subscription
+	err = createManifestFile(oc, "subscription.yaml", map[string]string{"<namespace>": namespace, "<source>": source})
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	poolErr := wait.Poll(20*time.Second, 5*time.Minute, func() (bool, error) {
+		return checkWorkloadCreated(oc, wmcoDeployment, namespace, 1), nil
+	})
+	if poolErr != nil {
+		e2e.Failf("WMCO deployment did not start up after waiting up to 5 minutes ...")
+	}
 }
