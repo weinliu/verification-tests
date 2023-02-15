@@ -108,7 +108,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 				patchstr = `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"flavor":"invalid"}}}}}}`
 		*/
 		case "vsphere":
-			patchstr = `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"workspace":{"folder":"/SDDC-Datacenter/vm/invalid"}}}}}}}`
+			patchstr = `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"template":"invalid"}}}}}}`
 		default:
 			e2e.Logf("Not support cloud provider for the case for now.")
 			g.Skip("Not support cloud provider for the case for now.")
