@@ -2597,24 +2597,22 @@ nulla pariatur.`
 		auditRuleFile := "/etc/audit/rules.d/mco-audit-quiet-containers.rules"
 		auditLogFile := "/var/log/audit/audit.log"
 
-		g.By("log into any cluster node to check audit rule file exists or not")
-		worker := NewNodeList(oc.AsAdmin()).GetAllLinuxWorkerNodesOrFail()[0]
-		o.Expect(worker.DebugNodeWithChroot("stat", auditRuleFile)).ShouldNot(
-			o.ContainSubstring("No such file or directory"),
-			"The audit rules file %s should exist in the nodes", auditRuleFile)
+		allCoreOsNodes := NewNodeList(oc.AsAdmin()).GetAllCoreOsNodesOrFail()
+		for _, node := range allCoreOsNodes {
+			g.By(fmt.Sprintf("log into node %s to check audit rule file exists or not", node.GetName()))
+			o.Expect(node.DebugNodeWithChroot("stat", auditRuleFile)).ShouldNot(
+				o.ContainSubstring("No such file or directory"),
+				"The audit rules file %s should exist in the nodes", auditRuleFile)
 
-		grepOut, _ := worker.DebugNodeWithOptions([]string{"--quiet"}, "chroot", "/host", "bash", "-c", fmt.Sprintf("grep -E 'NETFILTER_CFG|ANOM_PROMISCUOUS' %s", auditRuleFile))
-		o.Expect(grepOut).NotTo(o.BeEmpty(), "expected excluded audit log msgtype not found")
-		o.Expect(grepOut).Should(o.And(
-			o.ContainSubstring("NETFILTER_CFG"),
-			o.ContainSubstring("ANOM_PROMISCUOUS"),
-		), "audit log rules does not have excluded msstype NETFILTER_CFG and ANOM_PROMISCUOUS")
+			g.By("check expected msgtype in audit log rule file")
+			grepOut, _ := node.DebugNodeWithOptions([]string{"--quiet"}, "chroot", "/host", "bash", "-c", fmt.Sprintf("grep -E 'NETFILTER_CFG|ANOM_PROMISCUOUS' %s", auditRuleFile))
+			o.Expect(grepOut).NotTo(o.BeEmpty(), "expected excluded audit log msgtype not found")
+			o.Expect(grepOut).Should(o.And(
+				o.ContainSubstring("NETFILTER_CFG"),
+				o.ContainSubstring("ANOM_PROMISCUOUS"),
+			), "audit log rules does not have excluded msstype NETFILTER_CFG and ANOM_PROMISCUOUS")
 
-		g.By("check audit log to make sure no msg types NETFILTER_CFG and ANOM_PROMISCUOUS")
-		allLinuxNodes, getLinuxNodeErr := NewNodeList(oc.AsAdmin()).GetAllLinux()
-		o.Expect(getLinuxNodeErr).NotTo(o.HaveOccurred(), "get all linux nodes failed")
-		for _, node := range allLinuxNodes {
-			logger.Infof("checking audit log on node %s", node.GetName())
+			g.By(fmt.Sprintf("check audit log on node %s, make sure msg types NETFILTER_CFG and ANOM_PROMISCUOUS are excluded", node.GetName()))
 			filteredLog, _ := node.DebugNodeWithChroot("bash", "-c", fmt.Sprintf("grep -E 'NETFILTER_CFG|ANOM_PROMISCUOUS' %s", auditLogFile))
 			o.Expect(filteredLog).ShouldNot(o.Or(
 				o.ContainSubstring("NETFILTER_CFG"),

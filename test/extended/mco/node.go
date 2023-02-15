@@ -587,6 +587,15 @@ func (nl NodeList) GetAllCoreOsWokerNodesOrFail() []Node {
 	return workers
 }
 
+// GetAllCoreOsNodesOrFail returns a list with all CoreOs nodes including master and workers. Fail the test case if an error happens
+func (nl NodeList) GetAllCoreOsNodesOrFail() []Node {
+	nl.ByLabel("node.openshift.io/os_id=rhcos")
+
+	allRhcos, err := nl.GetAll()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return allRhcos
+}
+
 // GetTaintedNodes returns a list with all tainted nodes in the cluster. Fail the test if an error happens.
 func (nl *NodeList) GetTaintedNodes() []Node {
 	allNodes, err := nl.GetAll()
