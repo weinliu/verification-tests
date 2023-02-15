@@ -3555,4 +3555,60 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(container1).NotTo(o.BeEmpty())
 	})
+
+	g.It("Author:xiuwang-High-57230-Import manifest list image using oc import-image", func() {
+
+		manifestList := "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83"
+		g.By("Create ImageStreamImport with manifest list image with import-mode")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("import-image").Args("57230:latest", "--from="+manifestList, "--import-mode=PreserveOriginal", "--reference-policy=local", "--confirm", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "Manifests") ||
+			!strings.Contains(output, "prefer registry pullthrough when referencing this tag") {
+			e2e.Failf("import-mode with pullthrough failed to import image")
+		}
+
+		g.By("Update imagestream to update periodically with import-mode")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("57230:latest", "--from="+manifestList, "--import-mode=PreserveOriginal", "--scheduled=true", "--insecure=true", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "Manifests") ||
+			!strings.Contains(output, "updates automatically from registry") ||
+			!strings.Contains(output, "will use insecure HTTPS or HTTP connections") {
+			e2e.Failf("Could update imagestream periodically and insecured")
+		}
+
+		g.By("Update imagestream to Legacy import Mode")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("57230:latest", "--from="+manifestList, "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "Manifests") {
+			e2e.Failf("Legacy import-mode is failed to import image")
+		}
+
+		g.By("Update imagestream back to PreserveOriginal import Mode")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("57230:latest", "--from="+manifestList, "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, "Manifests") {
+			e2e.Failf("Can't update PreserveOriginal back")
+		}
+
+		g.By("Import image with 'Legacy' import Mode")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("57230:single", "--from="+manifestList, "--import-mode=Legacy", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "Manifests") {
+			e2e.Failf("Legacy import-mode is failed to import image")
+		}
+
+		g.By("Import image with empty import Mode")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("57230:empty", "--from="+manifestList, "--import-mode=", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "Manifests") {
+			e2e.Failf("Legacy import-mode is failed to import image")
+		}
+
+		g.By("Import image with invalid import Mode")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("57230:invalid", "--from="+manifestList, "--import-mode=test", "-n", oc.Namespace()).Output()
+		o.Expect(err).To(o.HaveOccurred())
+		if !strings.Contains(output, "error: valid ImportMode values are Legacy or PreserveOriginal") {
+			e2e.Failf("invalid importMode value shouldn't work")
+		}
+	})
 })
