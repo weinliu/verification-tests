@@ -480,7 +480,7 @@ func waitForMachinesetReady(oc *exutil.CLI, machinesetName string, deadTime int,
 func getNodeNameFromIP(oc *exutil.CLI, nodeIP string, iaasPlatform string) string {
 	// Azure and AWS indexes for IP addresses are different
 	index := "0"
-	if iaasPlatform == "azure" {
+	if iaasPlatform == "azure" || iaasPlatform == "vsphere" {
 		index = "1"
 	}
 	nodeName, err := oc.WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[?(@.status.addresses["+index+"].address==\""+nodeIP+"\")].metadata.name}").Output()

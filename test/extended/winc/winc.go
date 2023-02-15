@@ -683,6 +683,12 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	// author: rrasouli@redhat.com
 	g.It("Smokerun-Author:rrasouli-NonPreRelease-High-33794-Watch cloud private key secret [Slow][Disruptive]", func() {
+		// vSphere contains a builtin private and public key with it's template, currently changing its private key is super challenging
+		// it implies generating a new template with a different key.
+		if iaasPlatform == "vsphere" {
+			g.Skip("vSphere does not support key replacement, skipping")
+		}
+
 		g.By("Scale WMCO to 0")
 		defer scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
 		scaleDeployment(oc, wmcoDeployment, 0, wmcoNamespace)
@@ -1356,7 +1362,11 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	// author rrasouli@redhat.com
 	g.It("Longduration-Author:rrasouli-NonPreRelease-High-39640-Replace private key during Windows machine configuration [Slow][Serial][Disruptive]", func() {
-
+		// vSphere contains a builtin private and public key with it's template, currently changing its private key is super challenging
+		// it implies generating a new template with a different key.
+		if iaasPlatform == "vsphere" {
+			g.Skip("vSphere does not support key replacement, skipping")
+		}
 		g.By("Scalling down the machineset to 1")
 		// defer
 		defer scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 45, 2, false)
@@ -1404,6 +1414,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		defer oc.WithoutNamespace().Run("delete").Args(exutil.MapiMachineset, byohMachineSetName, "-n", mcoNamespace).Output()
 		defer oc.WithoutNamespace().Run("delete").Args("configmap", "windows-instances", "-n", wmcoNamespace).Output()
 		byohMachine := setBYOH(oc, iaasPlatform, "InternalIP", byohMachineSetName)
+		waitWindowsNodesReady(oc, 3, 1000*time.Second)
 		defer os.Remove("mykey")
 		defer os.Remove("mykey.pub")
 		oldPubKey, err := oc.WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0], iaasPlatform), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/pub-key-hash}").Output()
@@ -1434,7 +1445,9 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		_, err = oc.WithoutNamespace().Run("create").Args("secret", "generic", "cloud-private-key", "--from-file=private-key.pem=mykey", "-n", wmcoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		waitUntilWMCOStatusChanged(oc, "\"unhealthy\":0")
+		if iaasPlatform != "vsphere" {
+			waitUntilWMCOStatusChanged(oc, "\"unhealthy\":0")
+		}
 		g.By(" Comparing username public keys hash changed ")
 		newPubkey, err := oc.WithoutNamespace().Run("get").Args("node", getNodeNameFromIP(oc, byohMachine[0], iaasPlatform), "-o=jsonpath={.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/pub-key-hash}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
