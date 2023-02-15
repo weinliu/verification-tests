@@ -2373,7 +2373,7 @@ func getOVNEgressIPObject(oc *exutil.CLI) []string {
 // Pod's seconary interface can be assigned with ipv4 only, ipv6 only or dualstack address. getPodMultiNetwork can get ipv4 only and dualstack address but not ipv6 only address
 // getPodMultiNetworkIPv6 will defined to get ipv6 only address.
 func getPodMultiNetworkIPv6(oc *exutil.CLI, namespace string, podName string) string {
-	cmd1 := "ip a sho net1 | awk 'NR==3{print $2}' |grep -Po '([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}'"
+	cmd1 := "ip a sho net1 | awk 'NR==3{print $2}' |grep -Eo '([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}'"
 	podIPv6, err1 := e2e.RunHostCmd(namespace, podName, cmd1)
 	o.Expect(err1).NotTo(o.HaveOccurred())
 	MultiNetworkIPv6 := strings.TrimSpace(podIPv6)
