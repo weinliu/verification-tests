@@ -23,7 +23,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:zhsun-High-51061-Enable cluster API with feature gate [Disruptive]", func() {
 		g.By("Check if cluster api on this platform is supported")
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp")
 		g.By("Check if cluster api is deployed, if no, enable it")
 		capi, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "-n", clusterAPINamespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -76,7 +76,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("NonHyperShiftHOST-Author:zhsun-medium-51088-[CAPI] Prevent users from deleting providers [Disruptive]", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "gcp")
 		skipForCAPINotExist(oc)
 
 		g.By("Delete coreprovider and infrastructureprovider")
@@ -88,7 +88,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-Medium-51141-[CAPI] worker-user-data secret should be synced up [Disruptive]", func() {
-		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp", "vsphere")
+		exutil.SkipTestIfSupportedPlatformNotMatched(oc, "aws", "azure", "gcp")
 		skipForCAPINotExist(oc)
 
 		g.By("Delete worker-user-data in openshift-cluster-api namespace")
