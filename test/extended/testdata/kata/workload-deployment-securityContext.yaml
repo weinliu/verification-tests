@@ -19,7 +19,7 @@ objects:
             app: httpd-app
         spec:
           replicas: 1
-          runtimeClassName: kata
+          runtimeClassName: "${RUNTIMECLASSNAME}"
           containers:
             - image: registry.redhat.io/rhscl/httpd-24-rhel7
               imagePullPolicy: IfNotPresent
@@ -40,4 +40,6 @@ parameters:
     value: "none"
   - name: REPLICAS
     value: "1"
+  - name: RUNTIMECLASSNAME
+    value: "kata"
   - name: NAMESPACE

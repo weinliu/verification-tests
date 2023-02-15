@@ -45,6 +45,11 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		featureLabel         = "feature.node.kubernetes.io/runtime.kata=true"
 		workerLabel          = "node-role.kubernetes.io/worker"
 		customLabel          = "custom-label=test"
+		runtimeClassName     = "kata"
+		enablePeerPods       = "false"
+		// runtimeClassName     = "kata-remote-cc" // DEBUG
+		// enablePeerPods       = "true" // DEBUG
+
 	)
 
 	subscription := subscriptionDescription{
@@ -188,7 +193,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			}
 		}
 
-		msg, err = createKataConfig(oc, kataconfig, subscription)
+		msg, err = createKataConfig(oc, kataconfig, subscription, enablePeerPods)
 		e2e.Logf("---------- kataconfig %v create succeeded %v\n %v %v", commonKataConfigName, msg, err)
 	})
 
@@ -239,7 +244,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		podNs := oc.Namespace()
 
 		g.By("Deploying pod with kata runtime and verify it")
-		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, runtimeClassName)
 		defer deleteKataPod(oc, podNs, newPodName)
 		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
@@ -289,7 +294,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		podNs := oc.Namespace()
 
 		g.By("Deploying pod with kata runtime and verify it")
-		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, runtimeClassName)
 		defer deleteKataPod(oc, podNs, newPodName)
 		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 
@@ -317,7 +322,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		podNs := oc.Namespace()
 
 		g.By("Deploying pod with kata runtime and verify it")
-		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, runtimeClassName)
 		defer deleteKataPod(oc, podNs, newPodName)
 
 		/* checkKataPodStatus prints the pods with the podNs and validates if
@@ -346,7 +351,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		podNs := oc.Namespace()
 
 		g.By("Deploying pod with kata runtime and verify it")
-		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, runtimeClassName)
 		defer deleteKataPod(oc, podNs, newPodName)
 		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
@@ -376,7 +381,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		)
 
 		g.By("Deploy a pod with kata runtime")
-		podName = createKataPod(oc, podNs, defaultPod, "admtop")
+		podName = createKataPod(oc, podNs, defaultPod, "admtop", runtimeClassName)
 		defer deleteKataPod(oc, podNs, podName)
 		checkKataPodStatus(oc, podNs, podName, podRunState)
 
@@ -420,7 +425,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		e2e.Logf("kataconfig %v was deleted\n--------- %v %v", commonKataConfigName, msg, err)
 
 		g.By("Recreating kataconfig in 43523 for the remaining test cases")
-		msg, err = createKataConfig(oc, kataconfig, subscription)
+		msg, err = createKataConfig(oc, kataconfig, subscription, enablePeerPods)
 		e2e.Logf("recreated kataconfig %v: %v %v", commonKataConfigName, msg, err)
 
 		g.By("SUCCESS")
@@ -434,7 +439,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		podNs := oc.Namespace()
 
 		g.By("Deploying pod with kata runtime and verify it")
-		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName)
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, runtimeClassName)
 		checkKataPodStatus(oc, podNs, newPodName, podRunState)
 		e2e.Logf("Pod (with Kata runtime) with name -  %v , is installed", newPodName)
 		deleteKataPod(oc, podNs, newPodName)
@@ -445,7 +450,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("SUCCESSS - build acceptance passed")
 
 		g.By("Recreating kataconfig for the remaining test cases")
-		msg, err = createKataConfig(oc, kataconfig, subscription)
+		msg, err = createKataConfig(oc, kataconfig, subscription, enablePeerPods)
 		e2e.Logf("recreated kataconfig %v: %v %v", commonKataConfigName, msg, err)
 	})
 
@@ -489,7 +494,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		)
 
 		g.By("Create deployment config from template")
-		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName).OutputToFile(getRandomString() + "dep-common.json")
+		configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName, "-p", "RUNTIMECLASSNAME="+runtimeClassName).OutputToFile(getRandomString() + "dep-common.json")
 		if err != nil {
 			e2e.Logf("Could not create configFile %v %v", configFile, err)
 		}
@@ -508,8 +513,9 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(msg).NotTo(o.BeEmpty())
 
+		// If the deployment is ready, pod will be.  Might not need this
 		g.By("Wait for pods to be ready")
-		errCheck := wait.Poll(10*time.Second, 200*time.Second, func() (bool, error) {
+		errCheck := wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", podNs, "--no-headers").Output()
 			if !strings.Contains(msg, "No resources found") {
 				return true, nil
@@ -652,7 +658,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		exit status 1
 		*/
 		errCheck := wait.Poll(10*time.Second, 360*time.Second, func() (bool, error) {
-			deployConfigFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName, "-p", "NAMESPACE="+podNs, "-p", "REPLICAS="+fmt.Sprintf("%v", nodeWorkerCount)).OutputToFile(deploymentFile)
+			deployConfigFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", defaultDeployment, "-p", "NAME="+deployName, "-p", "NAMESPACE="+podNs, "-p", "REPLICAS="+fmt.Sprintf("%v", nodeWorkerCount), "-p", "RUNTIMECLASSNAME="+runtimeClassName).OutputToFile(deploymentFile)
 			if strings.Contains(deployConfigFile, deploymentFile) {
 				return true, nil
 			}

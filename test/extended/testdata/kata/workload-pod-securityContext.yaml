@@ -10,7 +10,7 @@ objects:
         app: httpd
       name: "${NAME}"
     spec:
-      runtimeClassName: kata
+      runtimeClassName: "${RUNTIMECLASSNAME}"
       containers:
         - image: registry.redhat.io/rhscl/httpd-24-rhel7
           imagePullPolicy: IfNotPresent
@@ -27,4 +27,6 @@ objects:
               type: RuntimeDefault
 
 parameters:
+  - name: RUNTIMECLASSNAME
+    value: "kata"
   - name: NAME

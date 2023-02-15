@@ -11,6 +11,7 @@ objects:
       checkNodeEligibility: ${{ELIGIBILITY}}
       kataMonitorImage: "${MONITOR}"
       logLevel: "${LOGLEVEL}"
+      enablePeerPods: ${{PEERPODS}}
       kataConfigPoolSelector:
         matchLabels:
           custom-label: test
@@ -24,3 +25,5 @@ parameters:
     value: "registry.redhat.io/openshift-sandboxed-containers/osc-monitor-rhel8:1.2.0"
   - name: LOGLEVEL
     value: "info"
+  - name: PEERPODS
+    value: "false"

@@ -51,7 +51,7 @@ type testrunConfigmap struct {
 var (
 	snooze     time.Duration = 2400
 	kataSnooze time.Duration = 5400 // Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
-	podSnooze  time.Duration = 100
+	podSnooze  time.Duration = 600  // Peer Pods take longer than 2 minutes
 )
 
 // author: tbuskey@redhat.com,abhbaner@redhat.com
@@ -102,7 +102,7 @@ func subscribeFromTemplate(oc *exutil.CLI, sub subscriptionDescription, subTempl
 }
 
 // author: tbuskey@redhat.com, abhbaner@redhat.com
-func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub subscriptionDescription) (msg string, err error) {
+func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub subscriptionDescription, enablePeerPods string) (msg string, err error) {
 	// If this is used, label the caller with [Disruptive][Serial][Slow]
 	// If kataconfig already exists, this must not error
 	var (
@@ -125,7 +125,7 @@ func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub subscr
 
 	g.By("(2) Create kataconfig file")
 	configFile, err = oc.AsAdmin().WithoutNamespace().Run("process").Args("--ignore-unknown-parameters=true", "-f", kataconf.template,
-		"-p", "NAME="+kataconf.name, "MONITOR="+kataconf.kataMonitorImageName, "LOGLEVEL="+kataconf.logLevel, "ELIGIBILITY="+strconv.FormatBool(kataconf.eligibility),
+		"-p", "NAME="+kataconf.name, "MONITOR="+kataconf.kataMonitorImageName, "LOGLEVEL="+kataconf.logLevel, "PEERPODS="+enablePeerPods, "ELIGIBILITY="+strconv.FormatBool(kataconf.eligibility),
 		"-n", sub.namespace).OutputToFile(getRandomString() + "kataconfig-common.json")
 	if err != nil || configFile == "" {
 		_, configFileExists := os.Stat(configFile)
@@ -162,18 +162,42 @@ func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub subscr
 }
 
 // author: abhbaner@redhat.com
-func createKataPod(oc *exutil.CLI, podNs, commonPod, commonPodName string) string {
-	//Team - creating unique pod names to avoid pod name clash (named "example") for parallel test execution; pod name eg: e3ytylt9example
-	newPodName := getRandomString() + commonPodName
-	configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", commonPod, "-p", "NAME="+newPodName).OutputToFile(getRandomString() + "Pod-common.json")
+func createKataPod(oc *exutil.CLI, podNs, commonPod, commonPodName, runtimeClassName string) string {
+	var (
+		msg        string
+		err        error
+		newPodName string
+		configFile string
+	)
+
+	newPodName = getRandomString() + commonPodName
+	configFile, err = oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", commonPod, "-p", "NAME="+newPodName, "-p", "RUNTIMECLASSNAME="+runtimeClassName).OutputToFile(getRandomString() + "Pod-common.json")
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", podNs).Execute()
-
-	g.By("(2) validating kata runtime")
-	podsRuntime, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", newPodName, "-n", podNs, "-o=jsonpath={.spec.runtimeClassName}").Output()
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile, "-n", podNs).Output()
+	if msg == "" || err != nil {
+		e2e.Logf("Could not apply configFile %v: %v %v", configFile, msg, err)
+	}
 	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(podsRuntime).To(o.ContainSubstring("kata"))
+	o.Expect(msg).NotTo(o.BeEmpty())
+
+	msg = fmt.Sprintf("Checking for %v runtime of pod %v", runtimeClassName, newPodName)
+	g.By(msg)
+	errCheck := wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", newPodName, "-n", podNs, "-o=jsonpath={.spec.runtimeClassName}").Output()
+		if err == nil {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Creating pod %v with %v failed: %v %v", newPodName, configFile, msg, err))
+
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", newPodName, "-n", podNs, "-o=jsonpath={.spec.runtimeClassName}").Output()
+	if msg != runtimeClassName || err != nil {
+		e2e.Logf("pod %v has wrong runtime %v %v, expecting %v %v", newPodName, msg, err, runtimeClassName)
+	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(msg).To(o.ContainSubstring(runtimeClassName))
 	return newPodName
 }
 
