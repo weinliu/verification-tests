@@ -3188,6 +3188,8 @@ spec:
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", "opa-validating-webhook", "--ignore-not-found").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding.rbac.authorization.k8s.io/opa-viewer", "--ignore-not-found").Execute()
 
+		// Skipped case on arm64 cluster
+		exutil.SkipARM64(oc)
 		g.By("1. Create certificates with SAN.")
 		opensslCMD := fmt.Sprintf("openssl genrsa -out %v 2048", caKeypem)
 		_, caKeyErr := exec.Command("bash", "-c", opensslCMD).Output()
