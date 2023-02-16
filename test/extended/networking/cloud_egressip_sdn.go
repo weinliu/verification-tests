@@ -36,6 +36,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 			g.Skip("Test cases should be run on AWS, GCP, Azure, OpenStack, vSphere, IPI BM cluster with Openshift-SDN network plugin, skip for other platforms or other network plugin!!")
 		}
 
+		if checkProxy(oc) {
+			g.Skip("This cluster has proxy, skip the test.")
+		}
+
 		switch platform {
 		case "aws":
 			e2e.Logf("\n AWS is detected, running the case on AWS\n")
