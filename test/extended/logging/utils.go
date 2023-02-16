@@ -2141,3 +2141,12 @@ func getIndexImageTag(oc *exutil.CLI) (string, error) {
 	}
 	return major + "." + strconv.Itoa(newMinor-1), nil
 }
+
+func getExtLokiSecret(oc *exutil.CLI) (string, string, error) {
+	glokiUser := os.Getenv("GLOKIUSER")
+	glokiPwd := os.Getenv("GLOKIPWD")
+	if glokiUser == "" || glokiPwd == "" {
+		return "", "", fmt.Errorf("GLOKIUSER or GLOKIPWD environment variable is not set")
+	}
+	return glokiUser, glokiPwd, nil
+}

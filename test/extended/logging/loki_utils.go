@@ -603,6 +603,13 @@ func (c *lokiClient) withToken(bearerToken string) *lokiClient {
 	return &nc
 }
 
+func (c *lokiClient) withBasicAuth(username string, password string) *lokiClient {
+	nc := *c
+	nc.username = username
+	nc.password = password
+	return &nc
+}
+
 /*
 func (c *lokiClient) withTokenFile(bearerTokenFile string) *lokiClient {
 	nc := *c
