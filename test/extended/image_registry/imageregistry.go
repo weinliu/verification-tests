@@ -3611,4 +3611,34 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			e2e.Failf("invalid importMode value shouldn't work")
 		}
 	})
+
+	g.It("Author:wewang-High-59399-Add OS/arch information to image stream status", func() {
+		g.By("Create ImageStreamImport with multiarch image")
+		var (
+			isImportFile = filepath.Join(imageRegistryBaseDir, "imagestream-import-oci.yaml")
+			isimportsrc  = isImportSource{
+				namespace: "",
+				name:      "",
+				image:     "",
+				policy:    "Local",
+				mode:      "",
+				template:  isImportFile,
+			}
+		)
+		isarr := [2]string{"ociapp", "dockerapp"}
+		imagearr := [2]string{"quay.io/openshifttest/ociimage@sha256:d58e3e003ddec723dd14f72164beaa609d24c5e5e366579e23bc8b34b9a58324", "quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f"}
+		archstr := [2]string{"amd64 arm arm64 ppc64le riscv64 s390x", "amd64 arm arm arm arm64 386 mips64le ppc64le s390x"}
+		isimportsrc.namespace = oc.Namespace()
+		isimportsrc.mode = "PreserveOriginal"
+
+		g.By("Get OS/architectures from an image stream tag")
+		for i := 0; i < 2; i++ {
+			isimportsrc.name = isarr[i]
+			isimportsrc.image = imagearr[i]
+			isimportsrc.create(oc)
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("istag/"+isarr[i]+":latest", "-o=jsonpath={range .image.dockerImageManifests[*]}{.architecture}{\" \"}{end}", "-n", oc.Namespace()).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).To(o.Equal(archstr[i]))
+		}
+	})
 })
