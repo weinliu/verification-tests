@@ -4653,6 +4653,10 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	// author: jitli@redhat.com
 	g.It("VMonly-Author:jitli-High-40964-migrate packagemanifest to bundle", func() {
 
+		architecture := exutil.GetClusterArchitecture(oc)
+		if architecture != "amd64" {
+			g.Skip("Do not support " + architecture)
+		}
 		var (
 			tmpBasePath           = "/tmp/ocp-40964-" + getRandomString()
 			pacakagemanifestsPath = exutil.FixturePath("testdata", "operatorsdk", "ocp-40964-data", "manifests", "etcd")
