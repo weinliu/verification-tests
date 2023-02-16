@@ -96,7 +96,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	// It will cover test case: OCP-34388 & OCP-27760 , author: xiyuan@redhat.com
-	g.It("ConnectedOnly-ARO-Author:xiyuan-Critical-34388-High-27760-check file-integrity-operator could report failure and persist the failure logs on to a ConfigMap [Serial]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-ARO-Author:xiyuan-Critical-34388-High-27760-check file-integrity-operator could report failure and persist the failure logs on to a ConfigMap [Serial]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
@@ -142,7 +142,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("ARO-Author:xiyuan-Medium-31979-the enabling debug flag of the logcollector should work [Serial]", func() {
+	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-Medium-31979-the enabling debug flag of the logcollector should work [Serial]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
@@ -177,7 +177,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("ARO-Author:xiyuan-Medium-31933-the disabling debug flag of the logcollector should work [Serial]", func() {
+	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-Medium-31933-the disabling debug flag of the logcollector should work [Serial]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
@@ -212,7 +212,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("ARO-Author:xiyuan-Medium-31873-check the gracePeriod is configurable [Serial]", func() {
+	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-Medium-31873-check the gracePeriod is configurable [Serial]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
@@ -261,7 +261,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("ARO-Author:xiyuan-Medium-28524-adding invalid configuration should report failure [Serial]", func() {
+	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-Medium-28524-adding invalid configuration should report failure [Serial]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
@@ -302,7 +302,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("ARO-Author:xiyuan-Medium-33177-only one long-running daemonset should be created by FIO [Serial]", func() {
+	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-Medium-33177-only one long-running daemonset should be created by FIO [Serial]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
@@ -335,7 +335,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("ARO-ConnectedOnly-Author:xiyuan-Medium-33853-check whether aide will not reinit when a fileintegrity recreated after deleted [Serial]", func() {
+	g.It("NonHyperShiftHOST-ARO-ConnectedOnly-Author:xiyuan-Medium-33853-check whether aide will not reinit when a fileintegrity recreated after deleted [Serial]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
@@ -408,7 +408,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("ARO-Author:xiyuan-Medium-33332-The fileintegritynodestatuses should show status summary for FIO [Serial]", func() {
+	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-Medium-33332-The fileintegritynodestatuses should show status summary for FIO [Serial]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
@@ -443,7 +443,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("ARO-Author:xiyuan-High-33226-enable configuring tolerations in FileIntegrities [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-High-33226-enable configuring tolerations in FileIntegrities [Disruptive]", func() {
 		skipForSingleNodeCluster(oc)
 
 		var itName = g.CurrentSpecReport().FullText()
@@ -507,7 +507,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("ARO-Author:xiyuan-Medium-33254-enable configuring tolerations in FileIntegrities when there is more than one taint on one node [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-Medium-33254-enable configuring tolerations in FileIntegrities when there is more than one taint on one node [Disruptive]", func() {
 		skipForSingleNodeCluster(oc)
 
 		var itName = g.CurrentSpecReport().FullText()
@@ -550,7 +550,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("ARO-Author:xiyuan-Medium-27755-check nodeSelector works for operator file-integrity-operator [Serial]", func() {
+	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-Medium-27755-check nodeSelector works for operator file-integrity-operator [Serial]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
@@ -594,7 +594,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("ARO-Author:xiyuan-Medium-31862-check whether aide config change from non-empty to empty will trigger a re-initialization of the aide database or not [Serial]", func() {
+	g.It("NonHyperShiftHOST-ARO-Author:xiyuan-Medium-31862-check whether aide config change from non-empty to empty will trigger a re-initialization of the aide database or not [Serial]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
@@ -628,7 +628,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("ConnectedOnly-ARO-Author:xiyuan-High-42026-aide config change will trigger a re-initialization of the aide database [Serial]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-ARO-Author:xiyuan-High-42026-aide config change will trigger a re-initialization of the aide database [Serial]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
@@ -696,7 +696,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: pdhamdhe@redhat.com
-	g.It("ConnectedOnly-ARO-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-High-29782-check md5 algorithm could not work for a fips enabled cluster while working well for a fips disabled cluster [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-ARO-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-High-29782-check md5 algorithm could not work for a fips enabled cluster while working well for a fips disabled cluster [Serial][Slow]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
@@ -755,7 +755,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance an end user handle FIO wit
 	})
 
 	//author: pdhamdhe@redhat.com
-	g.It("ConnectedOnly-ARO-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-High-43136-Check FIO metrics and alerting [Serial][Slow]", func() {
+	g.It("NonHyperShiftHOST-ConnectedOnly-ARO-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-High-43136-Check FIO metrics and alerting [Serial][Slow]", func() {
 		var itName = g.CurrentSpecReport().FullText()
 		oc.SetupProject()
 		og.namespace = oc.Namespace()
