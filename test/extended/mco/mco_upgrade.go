@@ -10,7 +10,7 @@ import (
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 )
 
-var _ = g.Describe("[sig-mco] MCO", func() {
+var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 	defer g.GinkgoRecover()
 
 	var (

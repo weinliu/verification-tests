@@ -14,7 +14,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
-var _ = g.Describe("[sig-mco] MCO", func() {
+var _ = g.Describe("[sig-mco] MCO hypershift", func() {
 
 	defer g.GinkgoRecover()
 
