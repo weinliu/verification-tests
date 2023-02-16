@@ -2992,7 +2992,7 @@ spec:
 		exutil.AssertPodToBeReady(oc, podName, namespace)
 	})
 
-	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-High-11138-[origin_platformexp_407] [Apiserver] Deploy will fail with incorrently formed pull secrets", func() {
+	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:zxiao-High-11138-[origin_platformexp_407] [Apiserver] Deploy will fail with incorrently formed pull secrets", func() {
 		g.By("1) Create a new project required for this test execution")
 		oc.SetupProject()
 
