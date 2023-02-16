@@ -3700,6 +3700,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ssb", ssbCis, "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ss", ss.name, "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("tp", tprofileForCustomMcp, "-n", subD.namespace, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", "99-wrscan-generated-kubelet", "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("kubeletconfig", "compliance-operator-kubelet-wrscan", "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", "75-ocp4-cis-node-wrscan-kubelet-enable-protect-kernel-sysctl", "-n", subD.namespace, "--ignore-not-found").Execute()
 			checkMachineConfigPoolStatus(oc, "worker")
@@ -3742,8 +3743,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"ocp4-cis-node-wrscan-kubelet-enable-protect-kernel-defaults", "-n", subD.namespace, "-o=jsonpath={.status.applicationState}"}).check(oc)
 
 		g.By("Check rules status and remediation status !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "compliance-operator-kubelet-wrscan", ok, []string{"kubeletconfig", "-n", subD.namespace,
-			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "75-ocp4-cis-node-wrscan-kubelet-enable-protect-kernel-sysctl", ok, []string{"mc", "-n", subD.namespace,
 			"--selector=compliance.openshift.io/suite=" + ssbCis, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
@@ -3820,6 +3819,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ssb", ssbPci, "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ss", ss.name, "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("tp", tprofileForCustomMcp, "-n", subD.namespace, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", "99-wrscan-generated-kubelet", "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("kubeletconfig", "compliance-operator-kubelet-wrscan", "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", "75-ocp4-pci-dss-node-wrscan-kubelet-enable-protect-kernel-sysctl", "-n", subD.namespace, "--ignore-not-found").Execute()
 			checkMachineConfigPoolStatus(oc, "worker")
@@ -3864,8 +3864,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"ocp4-pci-dss-node-wrscan-kubelet-enable-protect-kernel-defaults", "-n", subD.namespace, "-o=jsonpath={.status.applicationState}"}).check(oc)
 
 		g.By("Check rules status and remediation status !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "compliance-operator-kubelet-wrscan", ok, []string{"kubeletconfig", "-n", subD.namespace,
-			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "75-ocp4-pci-dss-node-wrscan-kubelet-enable-protect-kernel-sysctl", ok, []string{"mc", "-n", subD.namespace,
 			"--selector=compliance.openshift.io/suite=" + ssbPci, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
@@ -3942,6 +3940,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ssb", ssbHigh, "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ss", ss.name, "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("tp", tprofileForCustomMcp, "-n", subD.namespace, "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", "99-wrscan-generated-kubelet", "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("kubeletconfig", "compliance-operator-kubelet-wrscan", "-n", subD.namespace, "--ignore-not-found").Execute()
 			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mc", "75-ocp4-high-node-wrscan-kubelet-enable-protect-kernel-sysctl", "-n", subD.namespace, "--ignore-not-found").Execute()
 			checkMachineConfigPoolStatus(oc, "worker")
@@ -3984,8 +3983,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator au
 			"ocp4-high-node-wrscan-kubelet-enable-protect-kernel-defaults", "-n", subD.namespace, "-o=jsonpath={.status.applicationState}"}).check(oc)
 
 		g.By("Check rules status and remediation status !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "compliance-operator-kubelet-wrscan", ok, []string{"kubeletconfig", "-n", subD.namespace,
-			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "75-ocp4-high-node-wrscan-kubelet-enable-protect-kernel-sysctl", ok, []string{"mc", "-n", subD.namespace,
 			"--selector=compliance.openshift.io/suite=" + ssbHigh, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
