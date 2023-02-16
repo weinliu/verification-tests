@@ -30,7 +30,7 @@ func GetLatestNightlyImage(release string) (string, error) {
 	case "4.13", "4.12", "4.11", "4.10", "4.9", "4.8", "4.7", "4.6":
 		url = "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/" + release + ".0-0.nightly/latest"
 	default:
-		e2e.Logf("Inputted release version %s is not supported. Only versions 4.11 to 4.6 are supported.", release)
+		e2e.Logf("Inputted release version %s is not supported. Only versions from 4.13 to 4.6 are supported.", release)
 		return "", errors.New("not supported version of payload")
 	}
 	outputCmd, err := exec.Command("bash", "-c", "curl -s -k "+url).Output()
