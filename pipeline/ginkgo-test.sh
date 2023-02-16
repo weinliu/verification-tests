@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-env
+env|grep -v -E "GLOKIPWD"
 
 function run {
   if [ "${SCENARIO}" == "" ] ; then
