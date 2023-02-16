@@ -336,34 +336,31 @@ func machineconfigStatus(oc *exutil.CLI) error {
 
 func checkPodmanCrictlVersion(oc *exutil.CLI) error {
 	return wait.Poll(1*time.Second, 10*time.Second, func() (bool, error) {
-		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-o=jsonpath={.items[*].metadata.name}").Output()
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-o=jsonpath={.items[0].metadata.name}", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("\nNode Names are %v", nodeName)
-		node := strings.Fields(nodeName)
+		nodeStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", fmt.Sprintf("%s", nodeName), "-o=jsonpath={.status.conditions[3].type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\nNode %s Status is %s\n", nodeName, nodeStatus)
 
-		for _, v := range node {
-			nodeStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", fmt.Sprintf("%s", v), "-o=jsonpath={.status.conditions[3].type}").Output()
+		if nodeStatus == "Ready" {
+			podmanver, err := exutil.DebugNodeWithChroot(oc, fmt.Sprintf("%s", nodeName), "podman", "--version")
 			o.Expect(err).NotTo(o.HaveOccurred())
-			e2e.Logf("\nNode %s Status is %s\n", v, nodeStatus)
+			e2e.Logf("Podman version is:\n %v\n", podmanver)
+			crictlver, err1 := exutil.DebugNodeWithChroot(oc, fmt.Sprintf("%s", nodeName), "crictl", "version")
+			o.Expect(err1).NotTo(o.HaveOccurred())
+			e2e.Logf("Crictl version is:\n %v\n", crictlver)
+			e2e.Logf(`NODE NAME IS :` + fmt.Sprintf("%s", nodeName))
 
-			if nodeStatus == "Ready" {
-				podmanver, err := exutil.DebugNodeWithChroot(oc, fmt.Sprintf("%s", v), "podman", "--version")
-				o.Expect(err).NotTo(o.HaveOccurred())
-				e2e.Logf("Podman version is:\n %v\n", podmanver)
-				crictlver, err1 := exutil.DebugNodeWithChroot(oc, fmt.Sprintf("%s", v), "crictl", "version")
-				o.Expect(err1).NotTo(o.HaveOccurred())
-				e2e.Logf("Crictl version is:\n %v\n", crictlver)
-				e2e.Logf(`NODE NAME IS :` + fmt.Sprintf("%s", v))
-
-				if strings.Contains(string(podmanver), "podman version 4.") && strings.Contains(string(crictlver), "RuntimeVersion:  1.2") {
-					e2e.Logf("\n Podman and crictl is on latest version %s %s", podmanver, crictlver)
-				} else {
-					e2e.Logf("\nPodman and crictl version are NOT Updated")
-					return false, nil
-				}
+			if strings.Contains(string(podmanver), "podman version 4.") && strings.Contains(string(crictlver), "RuntimeVersion:  1.2") {
+				e2e.Logf("\n Podman and crictl is on latest version")
 			} else {
-				e2e.Logf("\n NODES ARE NOT READY\n ")
+				e2e.Logf("\nPodman and crictl version are NOT Updated")
+				return false, nil
 			}
+		} else {
+			e2e.Logf("\n NODES ARE NOT READY\n ")
+			return false, nil
 		}
 		return true, nil
 	})
