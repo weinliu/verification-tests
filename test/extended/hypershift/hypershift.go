@@ -717,4 +717,23 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(hostedcluster.checkNodepoolHostedClusterNodeInstanceType(npName)).Should(o.BeTrue())
 	})
 
+	// author: liangli@redhat.com
+	g.It("HyperShiftMGMT-Author:liangli-Critical-54284-Hypershift creates extra EC2 instances", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 54284 is for AWS - skipping test ...")
+		}
+
+		autoCreatedForInfra := doOcpReq(oc, OcpGet, true, "nodepool", "-n", hostedcluster.namespace, fmt.Sprintf(`-ojsonpath={.items[?(@.spec.clusterName=="%s")].metadata.labels.hypershift\.openshift\.io/auto-created-for-infra}`, hostedcluster.name))
+		e2e.Logf("autoCreatedForInfra:" + autoCreatedForInfra)
+
+		nodepoolName := doOcpReq(oc, OcpGet, true, "nodepool", "-n", hostedcluster.namespace, fmt.Sprintf(`-ojsonpath={.items[?(@.spec.clusterName=="%s")].metadata.name}`, hostedcluster.name))
+		e2e.Logf("nodepoolName:" + nodepoolName)
+
+		additionalTags := doOcpReq(oc, OcpGet, true, "awsmachinetemplate", "-n", hostedcluster.namespace+"-"+hostedcluster.name, nodepoolName, fmt.Sprintf(`-ojsonpath={.spec.template.spec.additionalTags.kubernetes\.io/cluster/%s}`, autoCreatedForInfra))
+		o.Expect(additionalTags).Should(o.ContainSubstring("owned"))
+
+		generation := doOcpReq(oc, OcpGet, true, "awsmachinetemplate", "-n", hostedcluster.namespace+"-"+hostedcluster.name, nodepoolName, `-ojsonpath={.metadata.generation}`)
+		o.Expect(generation).Should(o.Equal("1"))
+	})
+
 })
