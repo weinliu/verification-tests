@@ -1519,6 +1519,10 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		exutil.SetNamespacePrivileged(oc, ns)
 		helloPodname := getPodName(oc, ns, "app=hello")
 
+		// pod needs to be re-labelled after upgrade
+		err := exutil.LabelPod(oc, ns, helloPodname[0], "color=pink")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		g.By("2. Check source IP is the assigned egress IP address")
 		var dstHost, primaryInf string
 		var infErr, snifErr error
