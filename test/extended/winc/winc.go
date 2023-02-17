@@ -827,6 +827,10 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			g.Skip("vSphere does not support Load balancer, skipping")
 		}
 		namespace := "winc-38186"
+		// defer cancel to avoid leaving a zombie goroutine
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
 		createWindowsWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{"<windows_container_image>": getConfigMapData(oc, "primary_windows_container_image")}, true)
@@ -837,9 +841,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		time.Sleep(100 * time.Second)
 		g.By("Test LB " + externalIP + " connectivity")
 		// Execute checkConnectivity(externalIP, 5) in the background
-		ctx, cancel := context.WithCancel(context.Background())
-		// defer cancel to avoid leaving a zombie goroutine
-		defer cancel()
 		runInBackground(ctx, cancel, checkConnectivity, externalIP, 5)
 
 		g.By("2 Windows node + N Windows pods, N >= 2 and Windows pods should be landed on different nodes, we scale to 5 Windows workloads")
