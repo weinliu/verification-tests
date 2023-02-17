@@ -4146,18 +4146,30 @@ EOF`, dcpolicyrepo)
 
 	// author : dpunia@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PstChkUpgrade-NonPreRelease-Author:dpunia-Medium-56934-[Apiserver] bug Ensure unique CA serial numbers, after enable automated service CA rotation", func() {
+		g.By("Check openshift-apiserver operator before executing test.")
+		output, err := oc.WithoutNamespace().Run("get").Args("co/openshift-apiserver").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		matched, _ := regexp.MatchString("True.*False.*False", output)
+		o.Expect(matched).Should(o.Equal(true))
+
 		g.By("1. Get openshift-apiserver pods and endpoints ip & port")
-		podName, podGetErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-apiserver", "pod", "-o", "jsonpath={.items[1].metadata.name}").Output()
+		podName, podGetErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-apiserver", "pod", "--field-selector=status.phase=Running", "-o", "jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(podGetErr).NotTo(o.HaveOccurred())
-		endpointIP, epGetErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-apiserver", "endpoints", "api", "-o", "jsonpath={.subsets[*].addresses[1].ip}").Output()
+		endpointIP, epGetErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-apiserver", "endpoints", "api", "-o", fmt.Sprintf(`jsonpath={.subsets[*].addresses[?(@.targetRef.name=="%v")].ip}`, podName)).Output()
 		o.Expect(epGetErr).NotTo(o.HaveOccurred())
 
-		g.By("2. Check openshift-apiserver https api metrics endpoint URL")
-		metricsUrl := fmt.Sprintf(`https://%v:8443/metrics`, string(endpointIP))
-		metricsOut, metricsErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-apiserver", podName, "-c", "openshift-apiserver", "--", "curl", "-k", "--connect-timeout", "5", "--retry", "2", "-N", "-s", metricsUrl).Output()
-		o.Expect(metricsErr).NotTo(o.HaveOccurred())
-		o.Expect(metricsOut).ShouldNot(o.ContainSubstring("You are attempting to import a cert with the same issuer/serial as an existing cert, but that is not the same cert"))
-		o.Expect(metricsOut).Should(o.ContainSubstring("Forbidden"))
+		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			g.By("2. Check openshift-apiserver https api metrics endpoint URL")
+			metricsUrl := fmt.Sprintf(`https://%v:8443/metrics`, string(endpointIP))
+			metricsOut, metricsErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-apiserver", podName, "-c", "openshift-apiserver", "--", "curl", "-k", "--connect-timeout", "5", "--retry", "2", "-N", "-s", metricsUrl).Output()
+			if metricsErr == nil {
+				o.Expect(metricsOut).ShouldNot(o.ContainSubstring("You are attempting to import a cert with the same issuer/serial as an existing cert, but that is not the same cert"))
+				o.Expect(metricsOut).Should(o.ContainSubstring("Forbidden"))
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Test Failed")
 	})
 
 	// author: rgangwar@redhat.com
