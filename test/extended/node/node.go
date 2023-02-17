@@ -27,6 +27,22 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		podUserNSTemp        = filepath.Join(buildPruningBaseDir, "pod-user-namespace.yaml")
 		ctrcfgOverlayTemp    = filepath.Join(buildPruningBaseDir, "containerRuntimeConfig-overlay.yaml")
 		podHelloTemp         = filepath.Join(buildPruningBaseDir, "pod-hello.yaml")
+		podWkloadCpuTemp     = filepath.Join(buildPruningBaseDir, "pod-workload-cpu.yaml")
+		podWkloadCpuNoAnTemp = filepath.Join(buildPruningBaseDir, "pod-workload-cpu-without-anotation.yaml")
+
+		podWkloadCpu52326 = podWkloadCpuDescription{
+			name:        "",
+			namespace:   "",
+			workloadcpu: "",
+			template:    podWkloadCpuTemp,
+		}
+
+		podWkloadCpu52329 = podWkloadCpuNoAnotation{
+			name:        "",
+			namespace:   "",
+			workloadcpu: "",
+			template:    podWkloadCpuNoAnTemp,
+		}
 
 		podHello = podHelloDescription{
 			name:      "",
@@ -441,6 +457,68 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		g.By("Check pod run in user namespace")
 		err = podUserNS47663.podRunInUserNS(oc)
 		exutil.AssertWaitPollNoErr(err, "pod not run in user namespace")
+	})
+
+	// author: minmli@redhat.com
+	g.It("NonPreRelease-Longduration-Author:minmli-High-52326-High-52329-set workload resource usage from pod level : pod can override defaults and pod should not be set if annotation not specified [Disruptive][Slow]", func() {
+		oc.SetupProject()
+		g.By("Test for case OCP-52326 and OCP-52329")
+
+		g.By("Create a machine config for workload setting")
+		mcCpuOverride := filepath.Join(buildPruningBaseDir, "machineconfig-cpu-override.yaml")
+		defer func() {
+			mcpName := "worker"
+			err := checkMachineConfigPoolStatus(oc, mcpName)
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + mcCpuOverride).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + mcCpuOverride).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check mcp finish rolling out")
+		mcpName := "worker"
+		err = checkMachineConfigPoolStatus(oc, mcpName)
+		exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+
+		g.By("Check workload setting is as expected")
+		wkloadConfig := []string{"crio.runtime.workloads.management", "activation_annotation = \"io.openshift.manager\"", "annotation_prefix = \"io.openshift.workload.manager\"", "crio.runtime.workloads.management.resources", "cpushares = 512", "cpuset = \"0\""}
+		configPath := "/etc/crio/crio.conf.d/01-workload.conf"
+		err = crioConfigExist(oc, wkloadConfig, configPath)
+		exutil.AssertWaitPollNoErr(err, "workload setting is not set as expected")
+
+		g.By("Create a pod override the default workload setting by annotation")
+		podWkloadCpu52326.name = "wkloadcpu-52326"
+		podWkloadCpu52326.namespace = oc.Namespace()
+		podWkloadCpu52326.workloadcpu = "{\"cpuset\": \"0-1\", \"cpushares\": 200}"
+		podWkloadCpu52326.create(oc)
+
+		g.By("Check pod status")
+		err = podStatus(oc)
+		exutil.AssertWaitPollNoErr(err, "pod is not running")
+
+		g.By("Check the pod override the default workload setting")
+		cpuset := "0-1"
+		cpushare := "200"
+		err = overrideWkloadCpu(oc, cpuset, cpushare, podWkloadCpu52326.namespace)
+		exutil.AssertWaitPollNoErr(err, "the pod not override the default workload setting")
+		podWkloadCpu52326.delete(oc)
+
+		g.By("Create a pod without annotation but with prefix")
+		defer podWkloadCpu52329.delete(oc)
+		podWkloadCpu52329.name = "wkloadcpu-52329"
+		podWkloadCpu52329.namespace = oc.Namespace()
+		podWkloadCpu52329.workloadcpu = "{\"cpuset\": \"0-1\", \"cpushares\": 1800}"
+		podWkloadCpu52329.create(oc)
+
+		g.By("Check pod status")
+		err = podStatus(oc)
+		exutil.AssertWaitPollNoErr(err, "pod is not running")
+
+		g.By("Check the pod keep default workload setting")
+		cpuset = "0-1"
+		cpushare = "1800"
+		err = defaultWkloadCpu(oc, cpuset, cpushare, podWkloadCpu52329.namespace)
+		exutil.AssertWaitPollNoErr(err, "the pod not keep efault workload setting")
 	})
 
 	// author: minmli@redhat.com

@@ -1,0 +1,31 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: pod-workload-cpu
+objects:
+- kind: Pod
+  apiVersion: v1
+  metadata:
+    name: "${NAME}"
+    namespace: "${NAMESPACE}"
+    annotations:
+      io.openshift.manager: "true"
+      io.openshift.workload.manager/cpu-workload-override: "${WORKLOADCPU}"
+  spec:
+    securityContext:
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
+    containers:
+    - name: cpu-workload-override
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
+      image: freeipa/freeipa-server:fedora-31
+      command: ["sleep", "3601"]
+parameters:
+- name: NAME
+- name: NAMESPACE
+- name: WORKLOADCPU
