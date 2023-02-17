@@ -35,13 +35,17 @@ type monitoringStackDescription struct {
 }
 
 const (
-	subName   = "observability-operator"
-	ogName    = "observability-operator-og"
-	csName    = "observability-operator-catalog"
-	namespace = "openshift-observability-operator"
+	subName    = "observability-operator"
+	ogName     = "observability-operator-og"
+	csName     = "observability-operator-catalog"
+	namespace  = "openshift-observability-operator"
+	monSvcName = "hypershift-monitoring-stack-prometheus"
 )
 
-var csvName string
+var (
+	csvName string
+	targets = []string{"catalog-operator", "cluster-version-operator", "etcd", "kube-apiserver", "kube-controller-manager", "monitor-multus-admission-controller", "monitor-ovn-master-metrics", "node-tuning-operator", "olm-operator", "openshift-apiserver", "openshift-controller-manager", "openshift-route-controller-manager"}
+)
 
 func checkSubscription(oc *exutil.CLI) (out string, err error) {
 	g.By("Check the state of Operator")
@@ -394,4 +398,36 @@ func checkPodHealth(oc *exutil.CLI) {
 	})
 	exutil.AssertWaitPollNoErr(errCheck, "liveness/readiness probe not implemented correctly in observability operator pod")
 
+}
+func checkHCPTargets(oc *exutil.CLI) {
+	g.By("Get SA token")
+	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+	g.By("Check whether the scrape targets are present")
+	for _, target := range targets {
+		checkMetric(oc, fmt.Sprintf(`http://%s.%s.svc.cluster.local:9090/api/v1/query --data-urlencode 'query=prometheus_sd_discovered_targets{config=~".*%s.*"}' `, monSvcName, namespace, target), token, target, platformLoadTime)
+	}
+
+}
+func checkIfMetricValueExists(oc *exutil.CLI, token, url string, timeout time.Duration) {
+	var (
+		res string
+		err error
+	)
+	getCmd := "curl -G -k -s -H \"Authorization:Bearer " + token + "\" " + url
+	err = wait.Poll(3*time.Second, timeout*time.Second, func() (bool, error) {
+		res, err = exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", getCmd)
+		val := gjson.Parse(res).Get("data.result.#.value").Array()
+		if err != nil || len(val) == 0 {
+			return false, nil
+		}
+		return true, err
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The metric %s doesnot contain any value", res))
+
+}
+func checkMetricValue(oc *exutil.CLI) {
+	g.By("Get SA token")
+	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+	g.By("Check the metrics exists and contain value")
+	checkIfMetricValueExists(oc, token, fmt.Sprintf(`http://%s.%s.svc.cluster.local:9090/api/v1/query --data-urlencode 'query=topk(1,cluster_version{type="cluster"})' `, monSvcName, namespace), platformLoadTime)
 }

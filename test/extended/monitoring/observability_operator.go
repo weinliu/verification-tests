@@ -70,5 +70,13 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 		g.By("Check liveliness/readiness probes implemented in observability operator pod")
 		checkPodHealth(oc)
 	})
+	g.It("HyperShiftMGMT-ROSA-Author:Vibhu-High-59383-verify OBO discovered and collected metrics of HCP", func() {
+		if exutil.IsROSA() {
+			g.By("Check scrape targets")
+			checkHCPTargets(oc)
+			g.By("Check metric along with value")
+			checkMetricValue(oc)
+		}
+	})
 
 })
