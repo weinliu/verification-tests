@@ -10,7 +10,7 @@ spec:
           type: RuntimeDefault
   containers:
   - name: sec-ctx-demo-2-ocp55394
-    image: quay.io/openshifttest/hello-openshift:multiarch
+    image: quay.io/openshifttest/hello-openshift@sha256:1e70b596c05f46425c39add70bf749177d78c1e98b2893df4e5ae3883c2ffb5e
     securityContext:
       runAsUser: 2000
       allowPrivilegeEscalation: false

@@ -4284,7 +4284,7 @@ roleRef:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("MicroShiftBoth-ConnectedOnly-Author:rgangwar-Medium-55394-[Apiserver] MicroShift enable SCC admission for pods", func() {
+	g.It("MicroShiftBoth-Author:rgangwar-Medium-55394-[Apiserver] MicroShift enable SCC admission for pods", func() {
 		namespace := "test-scc-ocp55394"
 		testpod := "security-context-demo-ocp55394"
 		testpod2 := "security-context-demo-2-ocp55394"
