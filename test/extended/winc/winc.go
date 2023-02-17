@@ -121,7 +121,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			},
 			{
 				folder:   "/payload/powershell",
-				expected: "gcp-get-hostname.ps1 hns.psm1",
+				expected: "gcp-get-hostname.ps1 hns.psm1 windows-defender-exclusion.ps1",
 			},
 			{
 				folder:   "/payload/generated",
@@ -1247,7 +1247,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	g.It("Author:jfrancoa-Medium-56354-Stop dependent services before stopping a service in WICD [Disruptive]", func() {
 
-		targetService := "kubelet"
+		targetService := "containerd"
 
 		g.By("Check configmap services running on Windows workers")
 		windowsServicesCM, err := popItemFromList(oc, "cm", "windows-services", wmcoNamespace)
@@ -1288,8 +1288,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			listOut := strings.Split(msg, "\r\n")
 			initialBinPath := strings.TrimSpace(listOut[len(listOut)-2])
 
-			// Add --log-file-max-size 2000 as argument to kubelet service
-			cmd = fmt.Sprintf("sc.exe config %v binPath=\\\"%v --log-file-max-size 2000\\\"", targetService, initialBinPath)
+			// Add --service-name containerd as argument to containerd service
+			cmd = fmt.Sprintf("sc.exe config %v binPath=\\\"%v --service-name containerd\\\"", targetService, initialBinPath)
 			msg, _ = runPSCommand(bastionHost, winhost, cmd, privateKey, iaasPlatform)
 			o.Expect(msg).Should(o.ContainSubstring("SUCCESS"))
 
@@ -1299,7 +1299,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			forceWicdReconciliation(oc, winHostName)
 
 			// Ensure that the binPath command was restored
-			time.Sleep(60 * time.Second) // Give time to WICD to reconcile
+			time.Sleep(90 * time.Second) // Give time to WICD to reconcile
 			cmd = fmt.Sprintf("Get-WmiObject win32_service | Where-Object { $_.Name -eq \\\"%v\\\" } | select -ExpandProperty PathName", targetService)
 			msg, _ = runPSCommand(bastionHost, winhost, cmd, privateKey, iaasPlatform)
 			listOut = strings.Split(msg, "\r\n")
@@ -1307,14 +1307,18 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 			o.Expect(afterReconciliationBinPath).Should(o.Equal(initialBinPath))
 
-			g.By(fmt.Sprintf("Verifying that dependant services got stopped first for node %v", winHostName))
-			// kube-proxy stopped < hybrid-overlay-node stopped < kubelet stopped
+			g.By(fmt.Sprintf("Verifying that dependant services got restarted first for node %v", winHostName))
+			// kube-proxy running > hybrid-overlay-node running > kubelet running > containerd running
 			var previousTS time.Time = time.Time{}
 			for i, svc := range deps {
-				serviceTimeStamp := getServiceTimeStamp(oc, winhost, privateKey, iaasPlatform, "stopped", svc)
+				// using the string "running" instead of "stopped" because in GCP
+				// the Windows event of stopping containerd doesn't seem to be logged.
+				// However, the event "running" for containerd it is logged, so using
+				// that instead.
+				serviceTimeStamp := getServiceTimeStamp(oc, winhost, privateKey, iaasPlatform, "running", svc)
 				if !previousTS.IsZero() {
-					if serviceTimeStamp.Before(previousTS) {
-						e2e.Failf("Service %v was stopped before service %v", svc, deps[i-1])
+					if serviceTimeStamp.After(previousTS) {
+						e2e.Failf("Service %v was started before service %v", svc, deps[i-1])
 					}
 				}
 				previousTS = serviceTimeStamp

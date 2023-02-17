@@ -784,6 +784,8 @@ func forceWicdReconciliation(oc *exutil.CLI, winHostName string) {
 	// Set the desired-version annotation to any string, for example: "anything"
 	_, err = oc.WithoutNamespace().Run("patch").Args("nodes", winHostName, "-p", `{"metadata":{"annotations":{"windowsmachineconfig.openshift.io/desired-version": "anything"}}}`).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	// Give time to WMCO to assimilate the change.
+	time.Sleep(15 * time.Second)
 	// And now, replace it back to the original value initalDV
 	_, err = oc.WithoutNamespace().Run("patch").Args("nodes", winHostName, "-p", `{"metadata":{"annotations":{"windowsmachineconfig.openshift.io/desired-version": "`+strings.Trim(strings.TrimSpace(initialDV), "'")+`"}}}`).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -803,7 +805,9 @@ func getServiceTimeStamp(oc *exutil.CLI, winHostIP string, privateKey string, ia
 	msg, err := runPSCommand(bastionHost, winHostIP, cmd, privateKey, iaasPlatform)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	outSplitted := strings.Split(msg, "\r\n")
-	timeStamp, err := time.Parse(layout, strings.ReplaceAll(strings.TrimSpace(outSplitted[len(outSplitted)-4]), ",", ""))
+	tsFromOutput := strings.ReplaceAll(strings.TrimSpace(outSplitted[len(outSplitted)-4]), ",", "")
+	e2e.Logf("Sevice %v %v at %v", serviceName, status, tsFromOutput)
+	timeStamp, err := time.Parse(layout, tsFromOutput)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	return timeStamp
