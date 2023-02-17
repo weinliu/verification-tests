@@ -256,7 +256,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Create clusterautoscaler")
 		clusterAutoscaler.minCore = 8
-		clusterAutoscaler.maxCore = 33
+		clusterAutoscaler.maxCore = 23
 		defer clusterAutoscaler.deleteClusterAutoscaler(oc)
 		clusterAutoscaler.createClusterAutoscaler(oc)
 
@@ -264,7 +264,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		machineAutoscaler = machineAutoscalerDescription{
 			name:           "machineautoscaler-44051",
 			namespace:      "openshift-machine-api",
-			maxReplicas:    3,
+			maxReplicas:    10,
 			minReplicas:    1,
 			template:       machineAutoscalerTemplate,
 			machineSetName: machinesetName,
@@ -275,21 +275,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create workload")
 		defer workLoad.deleteWorkLoad(oc)
 		workLoad.createWorkLoad(oc)
-
-		g.By("Check if this cluster could trigger alert ClusterAutoscalerUnableToScaleCPULimitReached")
-		autoscalerPodName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "cluster-autoscaler", "-o=jsonpath={.items[0].metadata.name}", "-n", machineAPINamespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(5*time.Second, 5*time.Minute, func() (bool, error) {
-			autoscalerPodLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(autoscalerPodName, "-n", machineAPINamespace).Output()
-			if err != nil {
-				return false, nil
-			}
-			if strings.Contains(autoscalerPodLogs, "max cluster cpu limit reached") {
-				g.Skip("This instanceType with cpu min/max=8/33 couldn't trigger scale up")
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "This instanceType with cpu min/max=8/33 couldn't trigger scale up")
 
 		g.By("Check alert ClusterAutoscalerUnableToScaleCPULimitReached is raised")
 		checkAlertRaised(oc, "ClusterAutoscalerUnableToScaleCPULimitReached")
@@ -307,7 +292,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 
 		g.By("Create clusterautoscaler")
 		clusterAutoscaler.minMemory = 4
-		clusterAutoscaler.maxMemory = 130
+		clusterAutoscaler.maxMemory = 50
 		defer clusterAutoscaler.deleteClusterAutoscaler(oc)
 		clusterAutoscaler.createClusterAutoscaler(oc)
 
@@ -315,7 +300,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		machineAutoscaler = machineAutoscalerDescription{
 			name:           "machineautoscaler-44211",
 			namespace:      "openshift-machine-api",
-			maxReplicas:    3,
+			maxReplicas:    10,
 			minReplicas:    1,
 			template:       machineAutoscalerTemplate,
 			machineSetName: machinesetName,
@@ -326,21 +311,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		g.By("Create workload")
 		defer workLoad.deleteWorkLoad(oc)
 		workLoad.createWorkLoad(oc)
-
-		g.By("Check if this cluster could trigger alert ClusterAutoscalerUnableToScaleMemoryLimitReached")
-		autoscalerPodName, err := oc.AsAdmin().Run("get").Args("pods", "-l", "cluster-autoscaler", "-o=jsonpath={.items[0].metadata.name}", "-n", machineAPINamespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(5*time.Second, 5*time.Minute, func() (bool, error) {
-			autoscalerPodLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(autoscalerPodName, "-n", machineAPINamespace).Output()
-			if err != nil {
-				return false, nil
-			}
-			if strings.Contains(autoscalerPodLogs, "max cluster memory limit reached") {
-				g.Skip("This instanceType with memory min/max=4/130 couldn't trigger scale up")
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "This instanceType with memory min/max=4/130 couldn't trigger scale up")
 
 		g.By("Check alert ClusterAutoscalerUnableToScaleMemoryLimitReached is raised")
 		checkAlertRaised(oc, "ClusterAutoscalerUnableToScaleMemoryLimitReached")
