@@ -232,8 +232,9 @@ type LogEntity struct {
 	TimeStamp string `json:"@timestamp"`
 	File      string `json:"file,omitempty"`
 	OpenShift struct {
-		ClusterID string `json:"cluster_id,omitempty"`
-		Sequence  int64  `json:"sequence"`
+		ClusterID string            `json:"cluster_id,omitempty"`
+		Sequence  int64             `json:"sequence"`
+		Labels    map[string]string `json:"labels,omitempty"`
 	} `json:"openshift,omitempty"`
 	PipelineMetadata struct {
 		Collector struct {

@@ -1837,13 +1837,49 @@ func (cw cloudwatchSpec) logsFound() bool {
 	return false
 }
 
-func getDataFromKafkaConsumerPod(oc *exutil.CLI, ns string, consumerName string) (string, error) {
-	consumerPods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: "job-name=" + consumerName})
+func getDataFromKafkaConsumerPod(oc *exutil.CLI, kafkaNS, consumerPod string) ([]LogEntity, error) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", kafkaNS, consumerPod, "--since=30s", "--tail=30").Output()
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("get error when checking data in kafka consumer: %v", err)
 	}
-	output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ns, consumerPods.Items[0].Name, "--since=30s", "--tail=30").Output()
-	return output, err
+	var logs []LogEntity
+	for _, line := range strings.Split(strings.TrimSuffix(output, "\n"), "\n") {
+		var log LogEntity
+		err = json.Unmarshal([]byte(line), &log)
+		if err != nil {
+			return nil, nil
+		}
+		logs = append(logs, log)
+	}
+	return logs, nil
+}
+
+func getDataFromKafkaByLogType(oc *exutil.CLI, kafkaNS, consumerPod, logType string) ([]LogEntity, error) {
+	data, err := getDataFromKafkaConsumerPod(oc, kafkaNS, consumerPod)
+	if err != nil {
+		return nil, err
+	}
+	var logs []LogEntity
+	for _, log := range data {
+		if log.LogType == logType {
+			logs = append(logs, log)
+		}
+	}
+	return logs, nil
+}
+
+func getDataFromKafkaByNamespace(oc *exutil.CLI, kafkaNS, consumerPod, namespace string) ([]LogEntity, error) {
+	data, err := getDataFromKafkaConsumerPod(oc, kafkaNS, consumerPod)
+	if err != nil {
+		return nil, err
+	}
+	var logs []LogEntity
+	for _, log := range data {
+		if log.Kubernetes.NamespaceName == namespace {
+			logs = append(logs, log)
+		}
+	}
+	return logs, nil
 }
 
 type kafka struct {

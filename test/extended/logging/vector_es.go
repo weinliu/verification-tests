@@ -1265,6 +1265,103 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(len(flatLabelsInLoki) == 0).Should(o.BeTrue())
 		})
 
+		// author qitang@redhat.com
+		g.It("CPaasrunOnly-Author:qitang-High-48724-Vector ClusterLogForwarder Message label with multiple log stores.[Serial][Slow]", func() {
+			g.By("Deploy a pod to generate some logs")
+			appNS := oc.Namespace()
+			jsonLogFile := exutil.FixturePath("testdata", "logging", "generatelog", "container_json_log_template.json")
+			err := oc.WithoutNamespace().Run("new-app").Args("-f", jsonLogFile, "-n", appNS).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Create Loki project and deploy Loki Server")
+			oc.SetupProject()
+			lokiNS := oc.Namespace()
+			loki := externalLoki{"loki-server", lokiNS}
+			defer loki.remove(oc)
+			loki.deployLoki(oc)
+
+			g.By("Deploy zookeeper")
+			kafka := kafka{
+				namespace:      cloNS,
+				kafkasvcName:   "kafka",
+				zoosvcName:     "zookeeper",
+				authtype:       "sasl-plaintext",
+				pipelineSecret: "vector-kafka",
+				collectorType:  "vector",
+				loggingNS:      cloNS,
+			}
+			defer kafka.removeZookeeper(oc)
+			kafka.deployZookeeper(oc)
+			g.By("Deploy kafka")
+			defer kafka.removeKafka(oc)
+			kafka.deployKafka(oc)
+			kafkaEndpoint := "http://" + kafka.kafkasvcName + "." + kafka.namespace + ".svc.cluster.local:9092/clo-topic"
+
+			g.By("Create clusterlogforwarder/instance")
+			clfTemplate := exutil.FixturePath("testdata", "logging", "clusterlogforwarder", "48724.yaml")
+			clf := resource{"clusterlogforwarder", "instance", cloNS}
+			defer clf.clear(oc)
+			err = clf.applyFromTemplate(oc, "-n", clf.namespace, "-f", clfTemplate, "-p", "KAFKA_SECRET_NAME="+kafka.pipelineSecret, "KAFKA_URL="+kafkaEndpoint, "NAMESPACE="+clf.namespace, "LOKI_URL=http://"+loki.name+"."+loki.namespace+".svc:3100")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			g.By("Deploy logging pods")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-template.yaml")
+			cl := resource{"clusterlogging", "instance", cloNS}
+			defer cl.deleteClusterLogging(oc)
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "COLLECTOR=vector", "-p", "NAMESPACE="+cl.namespace)
+			WaitForECKPodsToBeReady(oc, cl.namespace)
+
+			g.By("check data in ES")
+			esPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", cl.namespace, "-l", "es-node-master=true", "-ojsonpath={.items[0].metadata.name}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, logType := range []string{"audit", "infra", "app"} {
+				waitForIndexAppear(cl.namespace, esPod, logType)
+				logs := searchDocByQuery(cl.namespace, esPod, logType, "")
+				o.Expect(logs.Hits.DataHits[0].Source.OpenShift.Labels["logtype"] == "all" && logs.Hits.DataHits[0].Source.OpenShift.Labels["logstore"] == "default").To(o.BeTrue(), "labels in CLF are not added to %s logs", logType)
+			}
+
+			g.By("Check app logs in kafka consumer pod")
+			var logsInKafka []LogEntity
+			consumerPods, err := oc.AdminKubeClient().CoreV1().Pods(kafka.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "component=kafka-consumer"})
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
+				logsInKafka, err = getDataFromKafkaByNamespace(oc, kafka.namespace, consumerPods.Items[0].Name, appNS)
+				if err != nil {
+					return false, err
+				}
+				return len(logsInKafka) > 0, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "can't find application logs in Kafka")
+			o.Expect(logsInKafka[0].OpenShift.Labels["logtype"] == "app-logs" && logsInKafka[0].OpenShift.Labels["logstore"] == "kafka").To(o.BeTrue())
+
+			g.By("check data in Loki")
+			route := "http://" + getRouteAddress(oc, loki.namespace, loki.name)
+			lc := newLokiClient(route)
+			for _, logType := range []string{"infrastructure", "audit"} {
+				err = wait.Poll(30*time.Second, 180*time.Second, func() (done bool, err error) {
+					res, err := lc.searchByKey("", "log_type", logType)
+					if err != nil {
+						e2e.Logf("\ngot err while querying %s logs: %v\n", logType, err)
+						return false, err
+					}
+					if len(res.Data.Result) > 0 {
+						e2e.Logf("%s logs found\n", logType)
+						return true, nil
+					}
+					return false, nil
+				})
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s logs are not found", logType))
+			}
+			auditLogsInLoki, _ := lc.searchByKey("", "log_type", "audit")
+			auditLogs := extractLogEntities(auditLogsInLoki)
+			o.Expect(auditLogs[0].OpenShift.Labels["logtype"] == "audit-and-infra-logs" && auditLogs[0].OpenShift.Labels["logstore"] == "loki").To(o.BeTrue())
+
+			infraLogsInLoki, _ := lc.searchByKey("", "log_type", "infrastructure")
+			infraLogs := extractLogEntities(infraLogsInLoki)
+			o.Expect(infraLogs[0].OpenShift.Labels["logtype"] == "audit-and-infra-logs" && infraLogs[0].OpenShift.Labels["logstore"] == "loki").To(o.BeTrue())
+
+		})
+
 	})
 
 	g.Context("JSON log tests", func() {

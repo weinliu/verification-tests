@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -75,14 +74,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
-				consumerPodLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(consumerPodPodName, "-n", kafka.namespace).Output()
+				appLogs, err := getDataFromKafkaByNamespace(oc, kafka.namespace, consumerPodPodName, appProj)
 				if err != nil {
 					return false, err
 				}
-				if strings.Contains(consumerPodLogs, appProj) {
-					return true, nil
-				}
-				return false, nil
+				return len(appLogs) > 0, nil
 			})
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", kafka.namespace, consumerPodPodName))
 		})
@@ -130,14 +126,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
-				consumerPodLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(consumerPodPodName, "-n", kafka.namespace).Output()
+				appLogs, err := getDataFromKafkaByNamespace(oc, kafka.namespace, consumerPodPodName, appProj)
 				if err != nil {
 					return false, err
 				}
-				if strings.Contains(consumerPodLogs, appProj) {
-					return true, nil
-				}
-				return false, nil
+				return len(appLogs) > 0, nil
 			})
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", kafka.namespace, consumerPodPodName))
 		})
@@ -185,14 +178,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
-				consumerPodLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(consumerPodPodName, "-n", kafka.namespace).Output()
+				appLogs, err := getDataFromKafkaByNamespace(oc, kafka.namespace, consumerPodPodName, appProj)
 				if err != nil {
 					return false, err
 				}
-				if strings.Contains(consumerPodLogs, appProj) {
-					return true, nil
-				}
-				return false, nil
+				return len(appLogs) > 0, nil
 			})
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", kafka.namespace, consumerPodPodName))
 		})
@@ -276,26 +266,39 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 			g.By("check data in kafka")
 			//application logs
+			consumerPods, err := oc.AdminKubeClient().CoreV1().Pods(amqNS).List(context.Background(), metav1.ListOptions{LabelSelector: "job-name=topic-logging-app-consumer"})
+			o.Expect(err).NotTo(o.HaveOccurred())
 			err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
-				logs, err := getDataFromKafkaConsumerPod(oc, amqNS, "topic-logging-app-consumer")
+				logs, err := getDataFromKafkaConsumerPod(oc, amqNS, consumerPods.Items[0].Name)
 				if err != nil {
 					return false, err
 				}
-				return strings.Contains(logs, appProj), nil
+				for _, log := range logs {
+					if log.Kubernetes.NamespaceName == appProj {
+						return true, nil
+					}
+				}
+				return false, nil
 			})
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can't find app logs in %s/topic-logging-app-consumer", amqNS))
 			e2e.Logf("find app logs \n")
 
 			//infrastructure logs
-			logs, err := getDataFromKafkaConsumerPod(oc, amqNS, "topic-logging-infra-consumer")
+			infraConsumerPods, err := oc.AdminKubeClient().CoreV1().Pods(amqNS).List(context.Background(), metav1.ListOptions{LabelSelector: "job-name=topic-logging-infra-consumer"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(logs).Should(o.ContainSubstring("infrastructure"))
+			infraLogs, err := getDataFromKafkaConsumerPod(oc, amqNS, infraConsumerPods.Items[0].Name)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(infraLogs) > 0).Should(o.BeTrue())
+			o.Expect(infraLogs[0].LogType == "infrastructure").Should(o.BeTrue())
 			e2e.Logf("find infra logs \n")
 
 			//audit logs
-			logs, err = getDataFromKafkaConsumerPod(oc, amqNS, "topic-logging-audit-consumer")
+			auditConsumerPods, err := oc.AdminKubeClient().CoreV1().Pods(amqNS).List(context.Background(), metav1.ListOptions{LabelSelector: "job-name=topic-logging-audit-consumer"})
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(logs).Should(o.ContainSubstring("audit"))
+			auditLogs, err := getDataFromKafkaConsumerPod(oc, amqNS, auditConsumerPods.Items[0].Name)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(auditLogs) > 0).Should(o.BeTrue())
+			o.Expect(auditLogs[0].LogType == "audit").Should(o.BeTrue())
 			e2e.Logf("find audit logs \n")
 		})
 
@@ -383,13 +386,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("check data in kafka")
 			for _, consumer := range []resource{{"job", topicName + "-consumer", amqNs1}, {"job", topicName + "-consumer", amqNs2}} {
 				waitForPodReadyWithLabel(oc, consumer.namespace, "job-name="+consumer.name)
+				consumerPods, err := oc.AdminKubeClient().CoreV1().Pods(consumer.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "job-name=" + consumer.name})
+				o.Expect(err).NotTo(o.HaveOccurred())
 				err = wait.Poll(10*time.Second, 180*time.Second, func() (done bool, err error) {
-					logs, err := getDataFromKafkaConsumerPod(oc, consumer.namespace, consumer.name)
+					logs, err := getDataFromKafkaConsumerPod(oc, consumer.namespace, consumerPods.Items[0].Name)
 					if err != nil {
 						return false, err
 					}
-					if strings.Contains(logs, appProj) {
-						return true, nil
+					for _, log := range logs {
+						if log.Kubernetes.NamespaceName == appProj {
+							return true, nil
+						}
 					}
 					return false, nil
 				})
