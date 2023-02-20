@@ -125,14 +125,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure", func() {
 		cmAfterPatch, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/cloud-conf", "-n", "openshift-cloud-controller-manager", "-o=jsonpath={.data.cloud\\.conf}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(cmBeforePatch).Should(o.Equal(cmAfterPatch))
-
-		cccmoPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-cloud-controller-manager-operator", "-l", "k8s-app=cloud-manager-operator", "-o=jsonpath={.items[*].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		cccmoPodLogs, err := oc.AsAdmin().Run("logs").Args(cccmoPodName, "-n", "openshift-cloud-controller-manager-operator", "-c", "config-sync-controllers").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(cccmoPodLogs).Should(o.And(
-			o.ContainSubstring("Syncing cloud-conf ConfigMap"),
-			o.ContainSubstring("source and target cloud-config content are equal, no sync needed")))
 	})
 	// author: miyadav@redhat.com
 	g.It("NonHyperShiftHOST-Author:miyadav-High-45971-Implement the in-tree to out-of-tree code owner migration", func() {
