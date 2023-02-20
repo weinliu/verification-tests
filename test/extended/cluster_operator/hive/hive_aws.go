@@ -40,9 +40,6 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		testDataDir = exutil.FixturePath("testdata", "cluster_operator/hive")
 		installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)
 
-		//Enable hive Metric
-		exportMetric(oc, enable)
-
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
 		if iaasPlatform != "aws" {

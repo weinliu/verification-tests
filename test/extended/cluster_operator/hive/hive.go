@@ -32,10 +32,6 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		//Install Hive operator if not
 		testDataDir = exutil.FixturePath("testdata", "cluster_operator/hive")
 		installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)
-
-		//Enable hive Metric
-		exportMetric(oc, enable)
-
 	})
 
 	//author: lwan@redhat.com
