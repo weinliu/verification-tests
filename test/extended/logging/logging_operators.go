@@ -128,7 +128,31 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease cluster-loggin
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		data, _ := os.ReadFile(filepath.Join(TestDataPath, "fluent.conf"))
-		o.Expect(string(data)).Should(o.ContainSubstring("read_lines_limit 50"))
+		o.Expect(strings.Contains(string(data), "read_lines_limit 50")).Should(o.BeTrue())
+	})
+
+	// author qitang@redhat.com
+	g.It("CPaasrunOnly-Author:qitang-Medium-53221-Expose more fluentd knobs to support optimizing fluentd for different environments[Serial]", func() {
+		g.By("Create Cluster Logging instance")
+		sc, err := getStorageClassName(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-fluentd-buffer.yaml")
+		cl := resource{"clusterlogging", "instance", cloNS}
+		defer cl.deleteClusterLogging(oc)
+		cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc,
+			"-p", "TOTAL_LIMIT_SIZE=64m", "-p", "RETRY_TIMEOUT=30m", "-p", "CHUNK_LIMIT_SIZE=16m", "-p", "FLUSH_INTERVAL=5s", "-p", "FLUSH_THREAD_COUNT=3",
+			"-p", "OVERFLOW_ACTION=throw_exception", "-p", "RETRY_MAX_INTERVAL=100s", "-p", "RETRY_TYPE=periodic", "-p", "RETRY_WAIT=2s")
+		g.By("Waiting for logging pods to be ready...")
+		WaitForECKPodsToBeReady(oc, cloNS)
+
+		g.By("check configurations in fluent.conf")
+		fluentConf, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/collector", "-n", cl.namespace, `-ojsonpath={.data.fluent\.conf}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		expectedConfigs := []string{"flush_interval 5s", "flush_thread_count 3", "retry_type periodic",
+			"retry_wait 2s", "retry_max_interval 100s", "retry_timeout 30m", "total_limit_size 64m", "chunk_limit_size 16m", "overflow_action throw_exception"}
+		for i := 0; i < len(expectedConfigs); i++ {
+			o.Expect(strings.Contains(fluentConf, expectedConfigs[i])).Should(o.BeTrue(), fmt.Sprintf("can't find config %s in fluent.conf\n", expectedConfigs[i]))
+		}
 	})
 
 })

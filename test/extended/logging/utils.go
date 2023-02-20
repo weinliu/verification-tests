@@ -678,7 +678,7 @@ func getAlert(oc *exutil.CLI, token, alertSelector string) ([]alert, error) {
 }
 
 func checkAlert(oc *exutil.CLI, token, alertName, status string, timeInMinutes int) {
-	err := wait.Poll(1*time.Minute, time.Duration(timeInMinutes)*time.Minute, func() (bool, error) {
+	err := wait.Poll(30*time.Second, time.Duration(timeInMinutes)*time.Minute, func() (bool, error) {
 		alerts, err := getAlert(oc, token, alertName)
 		if err != nil {
 			return false, err

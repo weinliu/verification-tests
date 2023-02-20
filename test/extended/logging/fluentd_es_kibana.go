@@ -85,10 +85,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By(" Create a Cluster Logging instance with Fluentd buffer retryTimeout set to 1 minute.")
 			sc, err := getStorageClassName(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "43065.yaml")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-fluentd-buffer.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
-			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "ES_NODE_COUNT=1", "-p", "REDUNDANCY_POLICY=ZeroRedundancy", "-p", "FLUENTD_BUFFER_RETRYTIMEOUT=1m")
+			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "ES_NODE_COUNT=1", "-p", "REDUNDANCY_POLICY=ZeroRedundancy", "-p", "RETRY_TIMEOUT=1m")
 
 			g.By("Waiting for the EFK pods to be ready...")
 			WaitForECKPodsToBeReady(oc, cloNS)
@@ -256,7 +256,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			g.By("Create Cluster Logging instance with totalLimitSize which is more than the available space")
 			sc, err := getStorageClassName(oc)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "46423.yaml")
+			instance := exutil.FixturePath("testdata", "logging", "clusterlogging", "cl-fluentd-buffer.yaml")
 			cl := resource{"clusterlogging", "instance", cloNS}
 			defer cl.deleteClusterLogging(oc)
 			cl.createClusterLogging(oc, "-n", cl.namespace, "-f", instance, "-p", "NAMESPACE="+cl.namespace, "-p", "STORAGE_CLASS="+sc, "-p", "ES_NODE_COUNT=1", "-p", "REDUNDANCY_POLICY=ZeroRedundancy", "-p", "TOTAL_LIMIT_SIZE=1000G")
