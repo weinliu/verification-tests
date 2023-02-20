@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -769,4 +770,80 @@ func getLastWorkerNodeByOsType(oc *CLI, ostype string) (string, error) {
 // GetLastLinuxWorkerNode return last worker node
 func GetLastLinuxWorkerNode(oc *CLI) (string, error) {
 	return getLastWorkerNodeByOsType(oc, "linux")
+}
+
+// ValidHypershiftAndGetGuestKubeConf4SecondHostedCluster check if it is hypershift env and get kubeconf of the hosted cluster
+// the first return is hosted cluster name
+// the second return is the file of kubeconfig of the hosted cluster
+// the third return is the hostedcluster namespace in mgmt cluster which contains the generated resources
+// if it is not hypershift env, it will skip test.
+func ValidHypershiftAndGetGuestKubeConf4SecondHostedCluster(oc *CLI) (string, string, string) {
+	if IsROSA() {
+		e2e.Logf("there is a ROSA env")
+		hostedClusterName, hostedclusterKubeconfig, hostedClusterNs := ROSAValidHypershiftAndGetGuestKubeConf(oc)
+		if len(hostedClusterName) == 0 || len(hostedclusterKubeconfig) == 0 || len(hostedClusterNs) == 0 {
+			g.Skip("there is a ROSA env, but the env is problematic, skip test run")
+		}
+		return hostedClusterName, hostedclusterKubeconfig, hostedClusterNs
+	}
+	operatorNS := GetHyperShiftOperatorNameSpace(oc)
+	if len(operatorNS) <= 0 {
+		g.Skip("there is no hypershift operator on host cluster, skip test run")
+	}
+
+	hostedclusterNS := GetHyperShiftHostedClusterNameSpace(oc)
+	if len(hostedclusterNS) <= 0 {
+		g.Skip("there is no hosted cluster NS in mgmt cluster, skip test run")
+	}
+
+	clusterNamesStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+		"-n", hostedclusterNS, "hostedclusters", "-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	clusterNames := strings.Split(clusterNamesStr, " ")
+	e2e.Logf(fmt.Sprintf("clusterNames is: %v", clusterNames))
+	if len(clusterNames) < 2 {
+		g.Skip("there is no second hosted cluster, skip test run")
+	}
+
+	hypersfhitPodStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+		"-n", operatorNS, "pod", "-o=jsonpath={.items[0].status.phase}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(hypersfhitPodStatus).To(o.ContainSubstring("Running"))
+
+	//get second hosted cluster to run test
+	e2e.Logf("the hosted cluster names: %s, and will select the second", clusterNames)
+	clusterName := clusterNames[1]
+
+	var hostedClusterKubeconfigFile string
+	hostedClusterKubeconfigFile = "/tmp/guestcluster-kubeconfig-" + clusterName + "-" + getRandomString()
+	output, err := exec.Command("bash", "-c", fmt.Sprintf("hypershift create kubeconfig --name %s --namespace %s > %s",
+		clusterName, hostedclusterNS, hostedClusterKubeconfigFile)).Output()
+	e2e.Logf("the cmd output: %s", string(output))
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf(fmt.Sprintf("create a new hosted cluster kubeconfig: %v", hostedClusterKubeconfigFile))
+	e2e.Logf("if you want hostedcluster controlplane namespace, you could get it by combining %s and %s with -", hostedclusterNS, clusterName)
+	return clusterName, hostedClusterKubeconfigFile, hostedclusterNS
+}
+
+// Is3MasterNoDedicatedWorkerNode reture if the OCP have three master/worker node, but no dedicated worker node.
+func Is3MasterNoDedicatedWorkerNode(oc *CLI) bool {
+	// Only 1 master, 1 worker node and with the same hostname.
+	masterNodes, err := GetClusterNodesBy(oc, "master")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	workerNodes, err := GetClusterNodesBy(oc, "worker")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if len(masterNodes) != 3 || len(workerNodes) != 3 {
+		return false
+	}
+
+	matchCount := 0
+	for i := 0; i < len(workerNodes); i++ {
+		for j := 0; j < len(masterNodes); j++ {
+			if workerNodes[i] == masterNodes[j] {
+				matchCount++
+			}
+		}
+	}
+	return matchCount == 3
 }

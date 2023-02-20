@@ -19,29 +19,36 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		tunedWithNodeLevelProfileName  string
 		tunedWithKernelBootProfileName string
 		isNTO                          bool
+		isNTO2                         bool
 		guestClusterName               string
 		guestClusterNS                 string
 		guestClusterKube               string
 		hostedClusterNS                string
+		guestClusterName2              string
+		guestClusterNS2                string
+		guestClusterKube2              string
+		hostedClusterNS2               string
 		iaasPlatform                   string
 		firstNodePoolName              string
 		secondNodePoolName             string
 	)
 
 	g.BeforeEach(func() {
+		//First Hosted Cluster
 		guestClusterName, guestClusterKube, hostedClusterNS = exutil.ValidHypershiftAndGetGuestKubeConf(oc)
 		e2e.Logf("%s, %s, %s", guestClusterName, guestClusterKube, hostedClusterNS)
+
+		guestClusterNS = hostedClusterNS + "-" + guestClusterName
+		e2e.Logf("HostedClusterControlPlaneNS: %v", guestClusterNS)
+		// ensure NTO operator is installed
+		isNTO = isHyperNTOPodInstalled(oc, guestClusterNS)
+
 		oc.SetGuestKubeconf(guestClusterKube)
 		tunedWithSameProfileName = exutil.FixturePath("testdata", "psap", "hypernto", "tuned-with-sameprofilename.yaml")
 		tunedWithDiffProfileName = exutil.FixturePath("testdata", "psap", "hypernto", "tuned-with-diffprofilename.yaml")
 		tunedWithInvalidProfileName = exutil.FixturePath("testdata", "psap", "hypernto", "nto-basic-tuning-sysctl-invalid.yaml")
 		tunedWithNodeLevelProfileName = exutil.FixturePath("testdata", "psap", "hypernto", "nto-basic-tuning-sysctl-nodelevel.yaml")
 		tunedWithKernelBootProfileName = exutil.FixturePath("testdata", "psap", "hypernto", "nto-basic-tuning-kernel-boot.yaml")
-		// ensure NTO operator is installed
-
-		guestClusterNS = hostedClusterNS + "-" + guestClusterName
-		e2e.Logf("HostedClusterControlPlaneNS: %v", guestClusterNS)
-		isNTO = isHyperNTOPodInstalled(oc, guestClusterNS)
 
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
@@ -1278,5 +1285,215 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		g.By("Check if the custom tuned profile removed from worker nodes of nodepool, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, nodePoolName, "openshift-node")
+	})
+
+	g.It("NonPreRelease-HyperShiftMGMT-Author:liqcui-Medium-53880-NTO apply one configmap that reference to two separated hosted clusters on hypershift. [Disruptive]", func() {
+
+		//Second Hosted Cluster
+		guestClusterName2, guestClusterKube2, hostedClusterNS2 = exutil.ValidHypershiftAndGetGuestKubeConf4SecondHostedCluster(oc)
+		e2e.Logf("%s, %s, %s", guestClusterName2, guestClusterKube2, hostedClusterNS2)
+
+		guestClusterNS2 = hostedClusterNS2 + "-" + guestClusterName2
+		e2e.Logf("HostedClusterControlPlaneNS: %v", guestClusterNS2)
+		// ensure NTO operator is installed
+		isNTO2 = isHyperNTOPodInstalled(oc, guestClusterNS2)
+
+		// test requires NTO to be installed
+		if !isNTO || !isNTO2 {
+			g.Skip("NTO is not installed - skipping test ...")
+		}
+
+		// currently test is only supported on AWS, GCP, and Azure
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
+		}
+
+		//Delete configmap in clusters namespace
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "hc-nodepool-vmdratio", "-n", hostedClusterNS, "--ignore-not-found").Execute()
+
+		//Create configmap, it will create custom tuned profile based on this configmap
+		g.By("Create configmap hc-nodepool-vmdratio in management cluster")
+		exutil.ApplyNsResourceFromTemplate(oc, hostedClusterNS, "--ignore-unknown-parameters=true", "-f", tunedWithNodeLevelProfileName, "-p", "TUNEDPROFILENAME=hc-nodepool-vmdratio", "SYSCTLPARM=vm.dirty_ratio", "SYSCTLVALUE=56", "PRIORITY=20", "INCLUDE=openshift-node")
+		configmapsInMgmtClusters, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", hostedClusterNS).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(configmapsInMgmtClusters).NotTo(o.BeEmpty())
+		o.Expect(configmapsInMgmtClusters).To(o.ContainSubstring("hc-nodepool-vmdratio"))
+
+		g.By("Ge the default nodepool in hosted cluster as first nodepool")
+		firstNodePoolName = getNodePoolNamebyHostedClusterName(oc, guestClusterName, hostedClusterNS)
+		o.Expect(firstNodePoolName).NotTo(o.BeEmpty())
+
+		g.By("Ge the default nodepool in hosted cluster as second nodepool")
+		secondNodePoolName = getNodePoolNamebyHostedClusterName(oc, guestClusterName2, hostedClusterNS2)
+		o.Expect(secondNodePoolName).NotTo(o.BeEmpty())
+
+		g.By("Pick one worker node in default node pool of first hosted cluster")
+		oc.SetGuestKubeconf(guestClusterKube)
+		workerNodeNameInFirstNodepool, err := exutil.GetFirstWorkerNodeByNodePoolNameInHostedCluster(oc, firstNodePoolName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(workerNodeNameInFirstNodepool).NotTo(o.BeEmpty())
+		e2e.Logf("Worker node in nodepool in first hosted cluster: %v", workerNodeNameInFirstNodepool)
+
+		defer assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeNameInFirstNodepool, "openshift-node")
+		defer oc.SetGuestKubeconf(guestClusterKube)
+
+		oc.SetGuestKubeconf(guestClusterKube2)
+		g.By("Pick one worker node in default node pool of second hosted cluster")
+		workerNodeNameInSecondNodepool, err := exutil.GetFirstWorkerNodeByNodePoolNameInHostedCluster(oc, secondNodePoolName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(workerNodeNameInSecondNodepool).NotTo(o.BeEmpty())
+		e2e.Logf("Worker node in nodepool in second hosted cluster: %v", workerNodeNameInSecondNodepool)
+
+		defer assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc.SetGuestKubeconf(guestClusterKube2), ntoNamespace, workerNodeNameInSecondNodepool, "openshift-node")
+		defer oc.SetGuestKubeconf(guestClusterKube2)
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-"+firstNodePoolName, "-n", guestClusterNS, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-"+secondNodePoolName, "-n", guestClusterNS2, "--ignore-not-found").Execute()
+
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", firstNodePoolName, "-n", hostedClusterNS, "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[]}}").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", secondNodePoolName, "-n", hostedClusterNS2, "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[]}}").Execute()
+
+		//Apply the tuned profile in first nodepool {firstNodePoolName}
+		g.By("Apply the tuned profile in default nodepool {firstNodePoolName} in management cluster")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", firstNodePoolName, "-n", hostedClusterNS, "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[{\"name\": \"hc-nodepool-vmdratio\"}]}}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		oc.SetGuestKubeconf(guestClusterKube)
+		g.By("Check if the configmap tuned-{firstNodePoolName} created in corresponding hosted ns in management cluster")
+		configMaps := getTuningConfigMapNameWithRetry(oc, guestClusterNS, "tuned-"+firstNodePoolName)
+		o.Expect(configMaps).NotTo(o.BeEmpty())
+		o.Expect(configMaps).To(o.ContainSubstring("tuned-" + firstNodePoolName))
+
+		g.By("Check if the tuned hc-nodepool-vmdratio-xxxxxx is created in hosted cluster nodepool")
+		tunedNameList, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("tuned", "-n", ntoNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNameList).NotTo(o.BeEmpty())
+		e2e.Logf("The list of tuned tunedNameList is: \n%v", tunedNameList)
+		o.Expect(tunedNameList).To(o.ContainSubstring("hc-nodepool-vmdratio"))
+
+		g.By("Check if the tuned rendered contain hc-nodepool-vmdratio")
+		renderCheck, err := getTunedRenderInHostedCluster(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).NotTo(o.BeEmpty())
+		o.Expect(renderCheck).To(o.ContainSubstring("hc-nodepool-vmdratio"))
+
+		g.By("Get the tuned pod name that running on first custom nodepool worker node")
+		tunedPodNameInFirstNodePool, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeNameInFirstNodepool)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedPodNameInFirstNodePool).NotTo(o.BeEmpty())
+		e2e.Logf("Tuned Pod: %v", tunedPodNameInFirstNodePool)
+
+		g.By("Check if the tuned profile applied to first custom nodepool worker nodes")
+		assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeNameInFirstNodepool, "hc-nodepool-vmdratio")
+
+		g.By("Check if the tuned profile applied to all worker node in the first nodepool.")
+		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "hc-nodepool-vmdratio")
+
+		g.By("Assert active and recommended profile (hc-nodepool-vmdratio) match in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "2", 300, `active and recommended profile \(hc-nodepool-vmdratio\) match|static tuning from profile 'hc-nodepool-vmdratio' applied`)
+
+		g.By("Check if the setting of sysctl vm.dirty_ratio applied to worker nodes in first hosted cluster, expected value is 56")
+		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, firstNodePoolName, "sysctl", "vm.dirty_ratio", "56")
+
+		//Compare the sysctl vm.dirty_ratio not equal to 56
+		g.By("Set second kubeconfig to access second hosted cluster")
+		oc.SetGuestKubeconf(guestClusterKube2)
+
+		g.By("Check if the setting of sysctl vm.dirty_ratio shouldn't applied to worker nodes in the second nodepool, expected value is default value, not equal 56")
+		assertMisMatchTunedSystemSettingsByParamNameOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "sysctl", "vm.dirty_ratio", "56")
+
+		//Apply the tuned profile in second nodepool
+		g.By("Apply the tuned profile in second nodepool of second hosted cluster in management cluster")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", secondNodePoolName, "-n", hostedClusterNS2, "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[{\"name\": \"hc-nodepool-vmdratio\"}]}}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check if the tuned hc-nodepool-vmdratio-xxxxxx is created in hosted cluster nodepool")
+		tunedNameList, err = oc.AsAdmin().AsGuestKubeconf().Run("get").Args("tuned", "-n", ntoNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNameList).NotTo(o.BeEmpty())
+		e2e.Logf("The list of tuned tunedNameList is: \n%v", tunedNameList)
+		o.Expect(tunedNameList).To(o.ContainSubstring("hc-nodepool-vmdratio"))
+
+		g.By("Check if the tuned rendered contain hc-nodepool-vmdratio")
+		renderCheck, err = getTunedRenderInHostedCluster(oc, ntoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(renderCheck).NotTo(o.BeEmpty())
+		o.Expect(renderCheck).To(o.ContainSubstring("hc-nodepool-vmdratio"))
+
+		g.By("Get the tuned pod name that running on first custom nodepool worker node")
+		tunedPodNameInSecondNodePool, err := exutil.GetPodNameInHostedCluster(oc, ntoNamespace, "", workerNodeNameInSecondNodepool)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedPodNameInSecondNodePool).NotTo(o.BeEmpty())
+		e2e.Logf("Tuned Pod: %v", tunedPodNameInSecondNodePool)
+
+		g.By("Check if the tuned profile applied to second nodepool worker nodes in second hosted cluster")
+		assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeNameInSecondNodepool, "hc-nodepool-vmdratio")
+
+		g.By("Check if the tuned profile applied to all worker node in in second hosted cluster.")
+		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "hc-nodepool-vmdratio")
+
+		g.By("Assert active and recommended profile (hc-nodepool-vmdratio) match in tuned pod log")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "2", 300, `active and recommended profile \(hc-nodepool-vmdratio\) match|static tuning from profile 'hc-nodepool-vmdratio' applied`)
+
+		g.By("Check if the setting of sysctl vm.dirty_ratio applied to worker nodes of default nodepool in second hosted cluster, expected value is 56")
+		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, secondNodePoolName, "sysctl", "vm.dirty_ratio", "56")
+
+		g.By("Remove the custom tuned profile from the nodepool in first hosted cluster ...")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", firstNodePoolName, "-n", hostedClusterNS, "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[]}}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Set first kubeconfig to access first hosted cluster")
+		oc.SetGuestKubeconf(guestClusterKube)
+		//Compare the sysctl vm.dirty_ratio not equal to 56
+		g.By("Check if the setting of sysctl vm.dirty_ratio shouldn't applied to worker nodes in the first hosted cluster, expected value is default value, not equal 56")
+		assertMisMatchTunedSystemSettingsByParamNameOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "sysctl", "vm.dirty_ratio", "56")
+
+		g.By("Set second kubeconfig to access second hosted cluster")
+		oc.SetGuestKubeconf(guestClusterKube2)
+
+		g.By("Check if the setting of sysctl vm.dirty_ratio applied to worker nodes in the second hosted cluster, no impact with removing vm.dirty_ratio setting in first hosted cluster")
+		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, secondNodePoolName, "sysctl", "vm.dirty_ratio", "56")
+
+		g.By("Remove the custom tuned profile from the nodepool in second hosted cluster ...")
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("nodepool", secondNodePoolName, "-n", hostedClusterNS, "--type", "merge", "-p", "{\"spec\":{\"tuningConfig\":[]}}").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Set first kubeconfig to access first hosted cluster")
+		oc.SetGuestKubeconf(guestClusterKube)
+
+		//Compare the sysctl vm.dirty_ratio not equal to 56
+		g.By("Check if the setting of sysctl vm.dirty_ratio shouldn't applied to worker nodes in the first hosted cluster, expected value is default value, not equal 56")
+		assertMisMatchTunedSystemSettingsByParamNameOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "sysctl", "vm.dirty_ratio", "56")
+
+		g.By("Set second kubeconfig to access second hosted cluster")
+		oc.SetGuestKubeconf(guestClusterKube2)
+		//Compare the sysctl vm.dirty_ratio not equal to 56
+		g.By("Check if the setting of sysctl vm.dirty_ratio shouldn't applied to worker nodes in the second hosted cluster, expected value is default value, not equal 56")
+		assertMisMatchTunedSystemSettingsByParamNameOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "sysctl", "vm.dirty_ratio", "56")
+
+		//Clean up all left resrouce/settings
+		g.By("Remove configmap from management cluster")
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "hc-nodepool-vmdratio", "-n", hostedClusterNS).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-"+firstNodePoolName, "-n", guestClusterNS, "--ignore-not-found").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-"+secondNodePoolName, "-n", guestClusterNS2, "--ignore-not-found").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Set first kubeconfig to access first hosted cluster")
+		oc.SetGuestKubeconf(guestClusterKube)
+		g.By("Assert active and recommended profile (openshift-node) match in tuned pod log in first hosted")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "3", 300, `active and recommended profile \(openshift-node\) match`)
+		g.By("Check if the custom tuned profile removed from worker nodes of nodepool in first hosted cluster, default openshift-node applied to worker node")
+		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "openshift-node")
+
+		g.By("Set second kubeconfig to access second hosted cluster")
+		oc.SetGuestKubeconf(guestClusterKube2)
+		g.By("Assert active and recommended profile (openshift-node) match in tuned pod log in second hosted")
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "3", 300, `active and recommended profile \(openshift-node\) match`)
+		g.By("Check if the custom tuned profile removed from worker nodes of nodepool in second hosted cluster, default openshift-node applied to worker node")
+		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "openshift-node")
 	})
 })

@@ -146,6 +146,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		}()
 
 		isSNO := exutil.IsSNOCluster(oc)
+		is3Master := exutil.Is3MasterNoDedicatedWorkerNode(oc)
 		var profileCheck string
 
 		g.By("Create logging namespace")
@@ -184,7 +185,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(logsCheck).NotTo(o.ContainSubstring("nf-conntrack-max"))
 
-		if isSNO {
+		if isSNO || is3Master {
 			profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(profileCheck).To(o.Equal("openshift-control-plane"))
@@ -235,6 +236,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(renderCheck).To(o.ContainSubstring("nf-conntrack-max"))
 
+		g.By("Assert nf-conntrack-max applied to the node that web application run on it.")
 		assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "nf-conntrack-max")
 
 		profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
@@ -307,7 +309,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(renderCheck).NotTo(o.ContainSubstring("nf-conntrack-max"))
 
-		if isSNO {
+		if isSNO || is3Master {
 			assertIfTunedProfileApplied(oc, ntoNamespace, tunedPodName, "openshift-control-plane")
 			profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1112,9 +1114,24 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
+		is3Master := exutil.Is3MasterNoDedicatedWorkerNode(oc)
+		var (
+			tunedNodeName string
+			err           error
+		)
+
 		//Use the last worker node as labeled node
-		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		//Support 3 master/worker node, no dedicated worker nodes.
+		if is3Master {
+			tunedNodeName, err = exutil.GetFirstLinuxWorkerNode(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		} else {
+			tunedNodeName, err = exutil.GetLastLinuxWorkerNode(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(tunedNodeName).NotTo(o.BeEmpty())
+		}
+		e2e.Logf("tunedNodeName is:\n%v", tunedNodeName)
 
 		//Get the tuned pod name in the same node that labeled node
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
@@ -2050,12 +2067,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		}
 
 		isSNO := exutil.IsSNOCluster(oc)
+		is3Master := exutil.Is3MasterNoDedicatedWorkerNode(oc)
+
 		//NTO will provides two default tuned, one is openshift-control-plane, another is openshift-node
 		g.By("Check the default tuned profile list per nodes")
 		profileOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("profile", "-n", ntoNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileOutput).NotTo(o.BeEmpty())
-		if isSNO {
+		if isSNO || is3Master {
 			o.Expect(profileOutput).To(o.ContainSubstring("openshift-control-plane"))
 		} else {
 			o.Expect(profileOutput).To(o.ContainSubstring("openshift-control-plane"))
