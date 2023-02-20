@@ -117,7 +117,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			},
 			{
 				folder:   "/payload/kube-node",
-				expected: "kube-proxy.exe kubelet.exe",
+				expected: "kube-log-runner.exe kube-proxy.exe kubelet.exe",
 			},
 			{
 				folder:   "/payload/powershell",
@@ -600,28 +600,28 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	// author: sgao@redhat.com
 	g.It("Smokerun-Author:sgao-Critical-33779-Retrieving Windows node logs", func() {
 		g.By("Check a cluster-admin can retrieve kubelet logs")
-		msg, err := oc.WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=kubelet/kubelet.log").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
 		windowsHostNames := getWindowsHostNames(oc)
 		for _, winHostName := range windowsHostNames {
 			e2e.Logf("Retrieve kubelet log on: " + winHostName)
-			if !strings.Contains(string(msg), winHostName+" Log file created at:") {
+			msg, err := oc.WithoutNamespace().Run("adm").Args("node-logs", winHostName, "--path=kubelet/kubelet.log").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(string(msg), "Running kubelet as a Windows service!") {
 				e2e.Failf("Failed to retrieve kubelet log on: " + winHostName)
 			}
 		}
 
 		g.By("Check a cluster-admin can retrieve kube-proxy logs")
-		msg, err = oc.WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=kube-proxy/kube-proxy.exe.WARNING").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, winHostName := range windowsHostNames {
 			e2e.Logf("Retrieve kube-proxy log on: " + winHostName)
-			if !strings.Contains(string(msg), winHostName+" Log file created at:") {
+			msg, err := oc.WithoutNamespace().Run("adm").Args("node-logs", winHostName, "--path=kube-proxy/kube-proxy.log").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(string(msg), "Running kube-proxy as a Windows service!") {
 				e2e.Failf("Failed to retrieve kube-proxy log on: " + winHostName)
 			}
 		}
 
 		g.By("Check a cluster-admin can retrieve hybrid-overlay logs")
-		msg, err = oc.WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=hybrid-overlay/hybrid-overlay.log").Output()
+		msg, err := oc.WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=hybrid-overlay/hybrid-overlay.log").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, winHostName := range windowsHostNames {
 			e2e.Logf("Retrieve hybrid-overlay log on: " + winHostName)
@@ -664,9 +664,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			"host_service_logs/windows/log_files/hybrid-overlay/",
 			"host_service_logs/windows/log_files/hybrid-overlay/hybrid-overlay.log",
 			"host_service_logs/windows/log_files/kube-proxy/",
-			"host_service_logs/windows/log_files/kube-proxy/kube-proxy.exe.ERROR",
-			"host_service_logs/windows/log_files/kube-proxy/kube-proxy.exe.INFO",
-			"host_service_logs/windows/log_files/kube-proxy/kube-proxy.exe.WARNING",
+			"host_service_logs/windows/log_files/kube-proxy/kube-proxy.log",
 			"host_service_logs/windows/log_files/kubelet/",
 			"host_service_logs/windows/log_files/kubelet/kubelet.log",
 			"host_service_logs/windows/log_files/containerd/containerd.log",
