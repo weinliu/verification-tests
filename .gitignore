@@ -11,4 +11,4 @@ kubeadmin-password
 /.vscode
 /.idea
 .DS_Store
-/vendor/*
+vendor/*
