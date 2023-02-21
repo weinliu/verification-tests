@@ -28,10 +28,11 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		g.By("create new namespace")
 		oc.SetupProject()
 
-		g.By("Check if logging operator installed or not")
-		err := oc.AsAdmin().Run("get").Args("project", "openshift-logging").Execute()
-		if err != nil {
-			g.Skip("Skip for no logging operator installed")
+		g.By("Check if operator installed or not")
+		out, err := oc.AsAdmin().Run("get").Args("sub", "-A").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if matched, _ := regexp.MatchString("No resources found", out); matched {
+			g.Skip("Skip for no operator installed")
 		}
 
 		g.By("run the must-gather")
@@ -40,10 +41,10 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		mustGather := string(msg)
 		checkMessage := []string{
-			"namespaces/openshift-logging/operators.coreos.com/installplans",
-			"namespaces/openshift-logging/operators.coreos.com/operatorconditions",
-			"namespaces/openshift-logging/operators.coreos.com/operatorgroups",
-			"namespaces/openshift-logging/operators.coreos.com/subscriptions",
+			"operators.coreos.com/installplans",
+			"operators.coreos.com/operatorconditions",
+			"operators.coreos.com/operatorgroups",
+			"operators.coreos.com/subscriptions",
 		}
 		for _, v := range checkMessage {
 			if !strings.Contains(mustGather, v) {
