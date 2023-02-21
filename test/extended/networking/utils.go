@@ -2380,7 +2380,7 @@ func getPodMultiNetworkIPv6(oc *exutil.CLI, namespace string, podName string) st
 	return MultiNetworkIPv6
 }
 
-// get name of OVN egressIP object(s)
+// get node that hosts the egressIP
 func getHostsubnetByEIP(oc *exutil.CLI, expectedEIP string) string {
 	var nodeHostsEIP string
 	nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
@@ -2396,4 +2396,23 @@ func getHostsubnetByEIP(oc *exutil.CLI, expectedEIP string) string {
 		}
 	}
 	return nodeHostsEIP
+}
+
+// find the ovn-K master pod
+func getOVNKMasterPod(oc *exutil.CLI) string {
+	leaderNodeName, leaderNodeLogerr := oc.AsAdmin().WithoutNamespace().Run("get").Args("lease", "-n", "openshift-ovn-kubernetes", "-o=jsonpath={.items[*].spec.holderIdentity}").Output()
+	o.Expect(leaderNodeLogerr).NotTo(o.HaveOccurred())
+	var ovnKMasterPod string
+	ovnMasterPods := getPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-master")
+	for _, ovnPod := range ovnMasterPods {
+		getNodeName, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-ovn-kubernetes", "pod", ovnPod, "-o=jsonpath={.spec.nodeName}").Output()
+		o.Expect(podErr).NotTo(o.HaveOccurred())
+		e2e.Logf("nodeName for the pod %v is: %v", ovnPod, getNodeName)
+		if getNodeName == leaderNodeName {
+			ovnKMasterPod = ovnPod
+			e2e.Logf("The leader ovn master pod is %s", ovnKMasterPod)
+			break
+		}
+	}
+	return ovnKMasterPod
 }

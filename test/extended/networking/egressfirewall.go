@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -448,5 +449,39 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = e2e.RunHostCmd(pod1.namespace, pod1.name, "curl -4 www.google.com --connect-timeout 5 -I")
 		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	// author: jechen@redhat.com
+	g.It("NonHyperShiftHOST-ConnectedOnly-Author:jechen-High-44940-No segmentation error occurs in ovnkube-master after egressfirewall resource that referencing a DNS name is deleted.", func() {
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall1-template.yaml")
+
+		g.By("1. Create a new namespace, create an EgressFirewall object with references a DNS name in the namespace.")
+		ns := oc.Namespace()
+
+		egressFW1 := egressFirewall1{
+			name:      "default",
+			namespace: ns,
+			template:  egressFWTemplate,
+		}
+
+		defer egressFW1.deleteEgressFWObject1(oc)
+		egressFW1.createEgressFWObject1(oc)
+		efErr := waitEgressFirewallApplied(oc, egressFW1.name, ns)
+		o.Expect(efErr).NotTo(o.HaveOccurred())
+
+		g.By("2. Delete the EgressFirewall, check logs of ovnkube-master pod for error, there should be no segementation error.")
+		removeResource(oc, true, true, "egressfirewall", egressFW1.name, "-n", egressFW1.namespace)
+
+		ovnKMasterPod := getOVNKMasterPod(oc)
+		o.Expect(ovnKMasterPod).ShouldNot(o.BeEmpty())
+		e2e.Logf("\n ovnKMasterPod: %v\n", ovnKMasterPod)
+
+		o.Consistently(func() int {
+			podlogs, _ := oc.AsAdmin().Run("logs").Args(ovnKMasterPod, "-n", "openshift-ovn-kubernetes", "-c", "ovnkube-master").Output()
+			return strings.Count(podlogs, `SIGSEGV: segmentation violation`)
+		}, 60*time.Second, 10*time.Second).Should(o.Equal(0))
+
 	})
 })
