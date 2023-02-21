@@ -390,13 +390,13 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 				e2e.Logf("Can't get alerts, error: %s. Trying again", err)
 				return false, nil
 			}
-			if matched, _ := regexp.MatchString("etcd-guard-pdb", output); matched {
-				e2e.Logf("Check the PodDisruptionBudgetAtLimit alert succeed\n")
+			if matched, _ := regexp.MatchString("KubePodNotReady", output); matched {
+				e2e.Logf("Verify that kubepodnotready alert has been triggered\n")
 				return true, nil
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get alert PodDisruptionBudgetAtLimit via prometheus"))
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get kubepodnotready alert via prometheus"))
 	})
 
 	// author: knarra@redhat.com
