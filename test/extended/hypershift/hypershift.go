@@ -717,6 +717,14 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 		o.Expect(hostedcluster.checkNodepoolHostedClusterNodeInstanceType(npName)).Should(o.BeTrue())
 	})
 
+	// author: mihuang@redhat.com
+	g.It("HyperShiftMGMT-Author:mihuang-Critical-48936-Test HyperShift cluster Infrastructure TopologyMode", func() {
+		controllerAvailabilityPolicy := doOcpReq(oc, OcpGet, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-ojsonpath={.spec.controllerAvailabilityPolicy}")
+		e2e.Logf("controllerAvailabilityPolicy is: %s", controllerAvailabilityPolicy)
+		o.Expect(doOcpReq(oc, OcpGet, true, "infrastructure", "-ojsonpath={.items[*].status.controlPlaneTopology}")).Should(o.Equal(controllerAvailabilityPolicy))
+		o.Expect(doOcpReq(oc, OcpGet, true, "infrastructure", "-ojsonpath={.items[*].status.controlPlaneTopology}", "--kubeconfig="+hostedcluster.hostedClustersKubeconfigFile)).Should(o.Equal("External"))
+	})
+
 	// author: liangli@redhat.com
 	g.It("HyperShiftMGMT-Author:liangli-Critical-54284-Hypershift creates extra EC2 instances", func() {
 		if iaasPlatform != "aws" {
