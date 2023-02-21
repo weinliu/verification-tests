@@ -633,6 +633,54 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			g.By("the AlertmanagerConfig from user project is removed")
 			checkAlertmangerConfig(oc, "openshift-monitoring", "alertmanager-main-0", "wechat", false)
 		})
+
+		g.It("Author:tagao-Medium-49404-Medium-49176-Expose Authorization settings for remote write in the CMO configuration, Add the relabel config to all user-supplied remote_write configurations [Serial]", func() {
+			var (
+				authClusterCM = filepath.Join(monitoringBaseDir, "auth-cluster-monitoring-cm.yaml")
+				authUwmCM     = filepath.Join(monitoringBaseDir, "auth-uwm-monitoring-cm.yaml")
+				authSecret    = filepath.Join(monitoringBaseDir, "auth-secret.yaml")
+				authSecretUWM = filepath.Join(monitoringBaseDir, "auth-secret-uwm.yaml")
+			)
+			g.By("delete secret/cm at the end of case")
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "rw-auth", "-n", "openshift-user-workload-monitoring").Execute()
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "rw-auth", "-n", "openshift-monitoring").Execute()
+			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+			g.By("Create auth secret under openshift-monitoring")
+			createResourceFromYaml(oc, "openshift-monitoring", authSecret)
+
+			g.By("Configure remote write auth and enable user workload monitoring")
+			createResourceFromYaml(oc, "openshift-monitoring", authClusterCM)
+
+			g.By("Check auth config under openshift-monitoring")
+			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "url: https://remote-write.endpoint")
+			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "target_label: __tmp_openshift_cluster_id__")
+			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "url: https://basicAuth.remotewrite.com/api/write")
+			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "username: basic_user")
+			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "password: basic_pass")
+			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "url: https://authorization.remotewrite.com/api/write")
+			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "__tmp_openshift_cluster_id__")
+			checkRmtWrtConfig(oc, "openshift-monitoring", "prometheus-k8s-0", "target_label: cluster_id")
+
+			g.By("Create auth secret under openshift-user-workload-monitoring")
+			createResourceFromYaml(oc, "openshift-user-workload-monitoring", authSecretUWM)
+
+			g.By("Configure remote write auth setting for user workload monitoring")
+			createResourceFromYaml(oc, "openshift-user-workload-monitoring", authUwmCM)
+
+			g.By("Check auth config under openshift-user-workload-monitoring")
+			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "url: https://remote-write.endpoint")
+			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "target_label: __tmp_openshift_cluster_id__")
+			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "url: https://basicAuth.remotewrite.com/api/write")
+			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "username: basic_user")
+			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "password: basic_pass")
+			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "url: https://bearerTokenFile.remotewrite.com/api/write")
+			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "url: https://authorization.remotewrite.com/api/write")
+			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "__tmp_openshift_cluster_id__")
+			checkRmtWrtConfig(oc, "openshift-user-workload-monitoring", "prometheus-user-workload-0", "target_label: cluster_id_1")
+		})
+
 	})
 
 	//author: tagao@redhat.com
