@@ -3699,8 +3699,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: ropatil@redhat.com
 	// https://bugzilla.redhat.com/show_bug.cgi?id=2076671
-	// OCP-52338 - [CSI Driver][Dynamic PV][Filesystem] should not auto provision for smaller PVCs
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:ropatil-High-52338-[CSI Driver][Dynamic PV][Filesystem] should not auto provision for smaller PVCs", func() {
+	// OCP-52338 - [CSI Driver][Dynamic PV][Filesystem] volumeSizeAutoAvailable: false should not auto provision for smaller PVCs
+	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:ropatil-High-52338-[CSI Driver][Dynamic PV][Filesystem] volumeSizeAutoAvailable: false should not auto provision for smaller PVCs", func() {
 		// Define the test scenario support provisioners, Need to add values for ibm cloud
 		scenarioSupportProvisioners := []string{"diskplugin.csi.alibabacloud.com"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc))
