@@ -158,6 +158,34 @@ func getIfaddrFromNode(nodeName string, oc *exutil.CLI) string {
 	return ifaddr
 }
 
+func getPrimaryIfaddrFromBMNode(oc *exutil.CLI, nodeName string) (string, string) {
+	primaryIfaddr, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.metadata.annotations.k8s\\.ovn\\.org/node-primary-ifaddr}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The primaryIfaddr is %v for node %s", primaryIfaddr, nodeName)
+	var ipv4Ifaddr, ipv6Ifaddr string
+	tempSlice := strings.Split(primaryIfaddr, "\"")
+	ipStackType := checkIPStackType(oc)
+	switch ipStackType {
+	case "ipv4single":
+		o.Expect(len(tempSlice) > 3).Should(o.BeTrue())
+		ipv4Ifaddr = tempSlice[3]
+		e2e.Logf("The ipv4 subnet of node %s is %v .", nodeName, ipv4Ifaddr)
+	case "dualstack":
+		o.Expect(len(tempSlice) > 7).Should(o.BeTrue())
+		ipv4Ifaddr = tempSlice[3]
+		ipv6Ifaddr = tempSlice[7]
+		e2e.Logf("The ipv4 subnet of node %s is %v, ipv6 subnet is :%v", nodeName, ipv4Ifaddr, ipv6Ifaddr)
+	case "ipv6single":
+		o.Expect(len(tempSlice) > 3).Should(o.BeTrue())
+		ipv6Ifaddr = tempSlice[3]
+		e2e.Logf("The ipv6 subnet of node %s is %v .", nodeName, ipv6Ifaddr)
+	default:
+		e2e.Logf("Get ipStackType as %s", ipStackType)
+		g.Skip("Skip for not supported IP stack type!! ")
+	}
+	return ipv4Ifaddr, ipv6Ifaddr
+}
+
 func findUnUsedIPsOnNode(oc *exutil.CLI, nodeName, cidr string, number int) []string {
 	ipRange, _ := Hosts(cidr)
 	var ipUnused = []string{}
@@ -199,18 +227,42 @@ func findUnUsedIPsOnNode(oc *exutil.CLI, nodeName, cidr string, number int) []st
 func findFreeIPs(oc *exutil.CLI, nodeName string, number int) []string {
 	var freeIPs []string
 	platform := exutil.CheckPlatform(oc)
-	if strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") {
+	if strings.Contains(platform, "vsphere") {
 		sub1, err := getDefaultSubnet(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		freeIPs = findUnUsedIPs(oc, sub1, number)
+
+	} else if strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") {
+		ipv4Sub, _ := getPrimaryIfaddrFromBMNode(oc, nodeName)
+		tempSlice := strings.Split(ipv4Sub, "/")
+		o.Expect(len(tempSlice) > 1).Should(o.BeTrue())
+		preFix, err := strconv.Atoi(tempSlice[1])
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if preFix > 29 {
+			g.Skip("There might be no enough free IPs in current subnet, skip the test!!")
+		}
+		freeIPs = findUnUsedIPsOnNode(oc, nodeName, ipv4Sub, number)
 
 	} else {
 		sub1 := getIfaddrFromNode(nodeName, oc)
 		freeIPs = findUnUsedIPsOnNode(oc, nodeName, sub1, number)
 	}
-
 	return freeIPs
+}
 
+func findFreeIPv6s(oc *exutil.CLI, nodeName string, number int) []string {
+	var freeIPs []string
+	_, ipv6Sub := getPrimaryIfaddrFromBMNode(oc, nodeName)
+	tempSlice := strings.Split(ipv6Sub, "/")
+	o.Expect(len(tempSlice) > 1).Should(o.BeTrue())
+	preFix, err := strconv.Atoi(tempSlice[1])
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if preFix > 126 {
+		g.Skip("There might be no enough free IPs in current subnet, skip the test!!")
+	}
+	freeIPs, err = findUnUsedIPv6(oc, ipv6Sub, number)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return freeIPs
 }
 
 func execCommandInOVNPodOnNode(oc *exutil.CLI, nodeName, command string) (string, error) {

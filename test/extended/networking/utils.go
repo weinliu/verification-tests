@@ -724,15 +724,18 @@ func findUnUsedIPv6(oc *exutil.CLI, cidr string, number int) ([]string, error) {
 			continue
 		}
 		//Start to detect the IPv6 adress is used or not
-		pingCmd := "ping -c4 -t1 -6 " + ip.String()
-		_, err := execCommandInNetworkingPod(oc, pingCmd)
-		if err != nil && i < number {
-			e2e.Logf("%s is not used!\n", ip)
-			ips = append(ips, ip.String())
-		} else if i >= number {
+		if i < number {
+			pingCmd := "ping -c4 -t1 -6 " + ip.String()
+			_, err := execCommandInNetworkingPod(oc, pingCmd)
+			if err != nil {
+				e2e.Logf("%s is not used!\n", ip)
+				ips = append(ips, ip.String())
+				i++
+			}
+		} else {
 			break
 		}
-		i++
+
 	}
 
 	return ips, nil

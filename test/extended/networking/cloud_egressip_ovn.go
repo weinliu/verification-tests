@@ -2011,6 +2011,121 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		o.Expect(outPut).NotTo(o.ContainSubstring("172.30"), fmt.Sprintf("The output of tcpdump is %s", outPut))
 	})
 
+	// author: huirwang@redhat.com
+	g.It("NonHyperShiftHOST-Author:huirwang-High-49161-High-43465-Service IP should be reachable when egressIP set to the namespace. [Serial]", func() {
+		e2e.Logf("This case is from customer bug: https://bugzilla.redhat.com/show_bug.cgi?id=2014202")
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
+			pingPodTemplate        = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
+			egressIPTemplate       = filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
+		)
+
+		g.By(" Get list of nodes \n")
+		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Apply EgressLabel Key to one node. \n")
+		egessNode := nodeList.Items[0].Name
+		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egessNode, egressNodeLabel)
+		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egessNode, egressNodeLabel, "true")
+		ipStackType := checkIPStackType(oc)
+		// For dual stack cluster, it needs two nodes holding IPv4 and IPv6 seperately.
+		if ipStackType == "dualstack" {
+			if len(nodeList.Items) < 2 {
+				g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+			}
+			defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, egressNodeLabel)
+			e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, egressNodeLabel, "true")
+		}
+
+		g.By("Get namespace\n")
+		ns1 := oc.Namespace()
+
+		g.By("create 1st hello pod in ns1")
+		pod1 := pingPodResource{
+			name:      "hello-pod1",
+			namespace: ns1,
+			template:  pingPodTemplate,
+		}
+		pod1.createPingPod(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod1.name, "-n", pod1.namespace).Execute()
+		waitPodReady(oc, ns1, pod1.name)
+
+		g.By("Create a test service which is in front of the above pods")
+		svc := genericServiceResource{
+			servicename:           "test-service",
+			namespace:             ns1,
+			protocol:              "TCP",
+			selector:              "hello-pod",
+			serviceType:           "ClusterIP",
+			ipFamilyPolicy:        "",
+			internalTrafficPolicy: "Cluster",
+			externalTrafficPolicy: "", //This no value parameter will be ignored
+			template:              genericServiceTemplate,
+		}
+		if ipStackType == "dualstack" {
+			svc.ipFamilyPolicy = "PreferDualStack"
+		} else {
+			svc.ipFamilyPolicy = "SingleStack"
+		}
+		svc.createServiceFromParams(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", svc.servicename, "-n", svc.namespace).Execute()
+
+		g.By("Apply label to namespace\n")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("6. Create an egressip object\n")
+		var freeIPs []string
+		switch ipStackType {
+		case "ipv4single":
+			freeIPs = findFreeIPs(oc, egessNode, 2)
+			o.Expect(len(freeIPs)).Should(o.Equal(2))
+		case "dualstack":
+			//Get one IPv6 address for second node
+			freeIPv6s := findFreeIPv6s(oc, nodeList.Items[1].Name, 1)
+			o.Expect(len(freeIPv6s)).Should(o.Equal(1))
+			//Get one IPv4 address
+			freeIPs = findFreeIPs(oc, egessNode, 1)
+			o.Expect(len(freeIPs)).Should(o.Equal(1))
+			freeIPs = append(freeIPs, freeIPv6s[0])
+		case "ipv6single":
+			freeIPs = findFreeIPv6s(oc, egessNode, 2)
+			o.Expect(len(freeIPs)).Should(o.Equal(2))
+		default:
+			e2e.Logf("Get ipStackType as %s", ipStackType)
+			g.Skip("Skip for not supported IP stack type!! ")
+		}
+
+		egressip1 := egressIPResource1{
+			name:      "egressip-49161",
+			template:  egressIPTemplate,
+			egressIP1: freeIPs[0],
+			egressIP2: freeIPs[1],
+		}
+		defer egressip1.deleteEgressIPObject1(oc)
+		egressip1.createEgressIPObject1(oc)
+
+		//Get one non-egress node
+		masterNode, errNode := exutil.GetFirstMasterNode(oc)
+		o.Expect(errNode).NotTo(o.HaveOccurred())
+		g.By("verify egressIP object was applied to egress node.")
+		if ipStackType == "dualstack" {
+			verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 2)
+			// This is to cover case OCP-43465
+			msg, errOutput := oc.WithoutNamespace().AsAdmin().Run("get").Args("egressip", egressip1.name, "-o=jsonpath={.status.items[*]}").Output()
+			o.Expect(errOutput).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(msg, freeIPs[0]) && strings.Contains(msg, freeIPs[1])).To(o.BeTrue())
+		} else {
+			verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+		}
+
+		g.By("curl from egress node to service:port")
+		CurlNode2SvcPass(oc, nodeList.Items[0].Name, ns1, svc.servicename)
+		g.By("curl from non egress node to service:port")
+		CurlNode2SvcPass(oc, masterNode, ns1, svc.servicename)
+	})
+
 })
 
 var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {

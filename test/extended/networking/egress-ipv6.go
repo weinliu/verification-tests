@@ -1,16 +1,13 @@
 package networking
 
 import (
-	"fmt"
 	"path/filepath"
 	"strings"
-	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
@@ -83,74 +80,6 @@ var _ = g.Describe("[sig-networking] SDN", func() {
 		o.Expect(strings.Contains(msg, ips[0]) || strings.Contains(msg, ips[1])).To(o.BeTrue())
 
 		g.By("EgressIP works well with IPv6. ")
-
-	})
-
-	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-Author:huirwang-High-43465-Both ipv4 and ipv6 addresses can be configured on dualstack as egressip. [Serial]", func() {
-		ipStackType := checkIPStackType(oc)
-		if ipStackType != "dualstack" {
-			g.Skip("Current env is not dualstack cluster, skip this case!!!")
-		}
-		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
-
-		g.By("create new namespace")
-		oc.SetupProject()
-
-		g.By("Label two EgressIP nodes")
-		var EgressNodeLabel = "k8s.ovn.org/egress-assignable"
-		nodeList, err := e2enode.GetReadySchedulableNodes(oc.KubeFramework().ClientSet)
-		if err != nil {
-			e2e.Logf("Unexpected error occurred: %v", err)
-		}
-		g.By("Apply EgressLabel Key for this test on one node.")
-		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, EgressNodeLabel, "true")
-		e2e.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, EgressNodeLabel, "true")
-		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[0].Name, EgressNodeLabel)
-		defer e2e.RemoveLabelOffNode(oc.KubeFramework().ClientSet, nodeList.Items[1].Name, EgressNodeLabel)
-
-		g.By("Apply label to namespace")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", oc.Namespace(), "name=test").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", oc.Namespace(), "name-").Output()
-
-		g.By("Create an egressip object")
-
-		g.By("Find unsued ipv4 address")
-		subIpv4, _ := getDefaultSubnet(oc)
-		ipv4s := findUnUsedIPs(oc, subIpv4, 1)
-
-		g.By("Find unsued ipv6 address")
-		subIpv6, _ := getDefaultIPv6Subnet(oc)
-		ipv6s, _ := findUnUsedIPv6(oc, subIpv6, 1)
-
-		egressip1 := egressIPResource1{
-			name:      "egressip-43465",
-			template:  egressIPTemplate,
-			egressIP1: ipv6s[0],
-			egressIP2: ipv4s[0],
-		}
-		egressip1.createEgressIPObject1(oc)
-		defer egressip1.deleteEgressIPObject1(oc)
-
-		g.By("Wait for egressip deployed.")
-		err = wait.Poll(10*time.Second, 10*time.Second, func() (bool, error) {
-			msg1, err1 := oc.WithoutNamespace().AsAdmin().Run("get").Args("egressip", egressip1.name).Output()
-			if err1 != nil {
-				e2e.Logf("the err:%v, wait for egressip %v to be deployed.", err1, egressip1.name)
-				return false, nil
-			}
-			e2e.Logf("The egressip is :\n %v", msg1)
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("egressip %v is not ready", egressip1.name))
-
-		g.By("Check EgressIP object status includes both IPv4 and IPv6")
-		msg, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("egressip", egressip1.name, "-o=jsonpath={.status.items[*]}").Output()
-		o.Expect(strings.Contains(msg, ipv6s[0]) && strings.Contains(msg, ipv4s[0])).To(o.BeTrue())
-
-		g.By("Both ipv4 and ipv6 addresses can be configured on dualstack as egressip. !!!!")
 
 	})
 })
