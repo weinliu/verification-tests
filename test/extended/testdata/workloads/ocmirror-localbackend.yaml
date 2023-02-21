@@ -5,8 +5,8 @@ storageConfig:
     path: /tmp/46770test
 mirror:
   operators:
-    - catalog: quay.io/olmqe/cockroachdb-index:5.0.4-30206
+    - catalog: quay.io/olmqe/nginx-ok-index:v1399-fbc
       packages:
-        - name: cockroachdb
+        - name: nginx-ok1-1399
           channels:
           - name: alpha
