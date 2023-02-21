@@ -9903,6 +9903,162 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		e2e.Logf("Found all warnings:")
 	})
 
+	// It will cover test case: OCP-60114, author: kuiwang@redhat.com
+	g.It("ConnectedOnly-Author:kuiwang-Medium-60114-olm serves an api to discover all versions of an operator", func() {
+		var (
+			itName              = g.CurrentSpecReport().FullText()
+			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
+			catsrc              = catalogSourceDescription{
+				name:        "catsrc-run1399-operator",
+				namespace:   "",
+				displayName: "Test Catsrc RUN1399 Operators",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "",
+				template:    catsrcImageTemplate,
+			}
+		)
+
+		catsrc.namespace = oc.Namespace()
+
+		ok1AlphaAssertion := func(entries string) {
+			o.Expect(entries).To(o.ContainSubstring("nginx-ok1-1399.v0.0.4"))
+			o.Expect(entries).To(o.ContainSubstring("nginx-ok1-1399.v0.0.2"))
+			o.Expect(entries).To(o.ContainSubstring("nginx-ok1-1399.v0.0.1"))
+			o.Expect(entries).NotTo(o.ContainSubstring("nginx-ok1-1399.v0.0.5"))
+			o.Expect(entries).NotTo(o.ContainSubstring("nginx-ok1-1399.v0.0.3"))
+			o.Expect(entries).To(o.ContainSubstring("\"version\":\"0.0.4\""))
+			o.Expect(entries).To(o.ContainSubstring("\"version\":\"0.0.2\""))
+			o.Expect(entries).To(o.ContainSubstring("\"version\":\"0.0.1\""))
+			o.Expect(entries).NotTo(o.ContainSubstring("\"version\":\"0.0.5\""))
+			o.Expect(entries).NotTo(o.ContainSubstring("\"version\":\"0.0.3\""))
+		}
+		ok1BetaAssertion := func(entries string) {
+			o.Expect(entries).To(o.ContainSubstring("nginx-ok1-1399.v0.0.5"))
+			o.Expect(entries).To(o.ContainSubstring("nginx-ok1-1399.v0.0.3"))
+			o.Expect(entries).To(o.ContainSubstring("nginx-ok1-1399.v0.0.1"))
+			o.Expect(entries).NotTo(o.ContainSubstring("nginx-ok1-1399.v0.0.4"))
+			o.Expect(entries).NotTo(o.ContainSubstring("nginx-ok1-1399.v0.0.2"))
+			o.Expect(entries).To(o.ContainSubstring("\"version\":\"0.0.5\""))
+			o.Expect(entries).To(o.ContainSubstring("\"version\":\"0.0.3\""))
+			o.Expect(entries).To(o.ContainSubstring("\"version\":\"0.0.1\""))
+			o.Expect(entries).NotTo(o.ContainSubstring("\"version\":\"0.0.4\""))
+			o.Expect(entries).NotTo(o.ContainSubstring("\"version\":\"0.0.2\""))
+		}
+		ok2AlphaNoDepAssertion := func(entries string) {
+			o.Expect(entries).To(o.ContainSubstring("nginx-ok2-1399.v0.0.4"))
+			o.Expect(entries).To(o.ContainSubstring("nginx-ok2-1399.v0.0.2"))
+			o.Expect(entries).To(o.ContainSubstring("nginx-ok2-1399.v0.0.1"))
+			o.Expect(entries).NotTo(o.ContainSubstring("nginx-ok2-1399.v0.0.5"))
+			o.Expect(entries).NotTo(o.ContainSubstring("nginx-ok2-1399.v0.0.3"))
+			o.Expect(entries).To(o.ContainSubstring("\"version\":\"0.0.4\""))
+			o.Expect(entries).To(o.ContainSubstring("\"version\":\"0.0.2\""))
+			o.Expect(entries).To(o.ContainSubstring("\"version\":\"0.0.1\""))
+			o.Expect(entries).NotTo(o.ContainSubstring("\"version\":\"0.0.5\""))
+			o.Expect(entries).NotTo(o.ContainSubstring("\"version\":\"0.0.3\""))
+		}
+		ok2BetaAssertion := func(entries string) {
+			o.Expect(entries).To(o.ContainSubstring("nginx-ok2-1399.v0.0.5"))
+			o.Expect(entries).To(o.ContainSubstring("nginx-ok2-1399.v0.0.3"))
+			o.Expect(entries).NotTo(o.ContainSubstring("nginx-ok2-1399.v0.0.4"))
+			o.Expect(entries).NotTo(o.ContainSubstring("nginx-ok2-1399.v0.0.2"))
+			o.Expect(entries).NotTo(o.ContainSubstring("nginx-ok2-1399.v0.0.1"))
+			o.Expect(entries).To(o.ContainSubstring("\"version\":\"0.0.5\""))
+			o.Expect(entries).To(o.ContainSubstring("\"version\":\"0.0.3\""))
+			o.Expect(entries).NotTo(o.ContainSubstring("\"version\":\"0.0.4\""))
+			o.Expect(entries).NotTo(o.ContainSubstring("\"version\":\"0.0.2\""))
+			o.Expect(entries).NotTo(o.ContainSubstring("\"version\":\"0.0.1\""))
+		}
+
+		g.By("fbc based image without deprecated bundle")
+		catsrc.address = "quay.io/olmqe/nginx-ok-index:v1399-fbc"
+		catsrc.createWithCheck(oc, itName, dr)
+		entries := getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok1-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"alpha\")].entries}")
+		ok1AlphaAssertion(entries)
+
+		entries = getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok1-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"beta\")].entries}")
+		ok1BetaAssertion(entries)
+
+		entries = getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok2-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"alpha\")].entries}")
+		ok2AlphaNoDepAssertion(entries)
+
+		entries = getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok2-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"beta\")].entries}")
+		ok2BetaAssertion(entries)
+
+		catsrc.delete(itName, dr)
+
+		g.By("ffbc based image with deprecated bundle made by properties.yaml")
+		catsrc.address = "quay.io/olmqe/nginx-ok-index:v1399-fbc-deprecate-nomigrate"
+		catsrc.createWithCheck(oc, itName, dr)
+		entries = getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok1-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"alpha\")].entries}")
+		ok1AlphaAssertion(entries)
+
+		entries = getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok1-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"beta\")].entries}")
+		ok1BetaAssertion(entries)
+
+		entries = getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok2-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"alpha\")].entries}")
+		o.Expect(entries).To(o.ContainSubstring("nginx-ok2-1399.v0.0.4"))
+		o.Expect(entries).NotTo(o.ContainSubstring("nginx-ok2-1399.v0.0.2"))
+		o.Expect(entries).To(o.ContainSubstring("nginx-ok2-1399.v0.0.1"))
+		o.Expect(entries).NotTo(o.ContainSubstring("nginx-ok2-1399.v0.0.5"))
+		o.Expect(entries).NotTo(o.ContainSubstring("nginx-ok2-1399.v0.0.3"))
+		o.Expect(entries).To(o.ContainSubstring("\"version\":\"0.0.4\""))
+		o.Expect(entries).NotTo(o.ContainSubstring("\"version\":\"0.0.2\""))
+		o.Expect(entries).To(o.ContainSubstring("\"version\":\"0.0.1\""))
+		o.Expect(entries).NotTo(o.ContainSubstring("\"version\":\"0.0.5\""))
+		o.Expect(entries).NotTo(o.ContainSubstring("\"version\":\"0.0.3\""))
+
+		entries = getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok2-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"beta\")].entries}")
+		ok2BetaAssertion(entries)
+
+		catsrc.delete(itName, dr)
+
+		g.By("sqlite based image without deprecated bundle")
+		catsrc.address = "quay.io/olmqe/nginx-ok-index:v1399-sql"
+		defer exutil.RecoverNamespaceRestricted(oc, oc.Namespace())
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		catsrc.createWithCheck(oc, itName, dr)
+		entries = getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok1-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"alpha\")].entries}")
+		ok1AlphaAssertion(entries)
+
+		entries = getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok1-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"beta\")].entries}")
+		ok1BetaAssertion(entries)
+
+		entries = getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok2-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"alpha\")].entries}")
+		ok2AlphaNoDepAssertion(entries)
+
+		entries = getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok2-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"beta\")].entries}")
+		ok2BetaAssertion(entries)
+
+		catsrc.delete(itName, dr)
+
+		g.By("sqlite based image with deprecated bundle made by deprecatetruncate")
+		catsrc.address = "quay.io/olmqe/nginx-ok-index:v1399-sql-deprecate"
+		catsrc.createWithCheck(oc, itName, dr)
+		entries = getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok1-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"alpha\")].entries}")
+		ok1AlphaAssertion(entries)
+
+		entries = getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok1-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"beta\")].entries}")
+		ok1BetaAssertion(entries)
+
+		entries = getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok2-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"alpha\")].entries}")
+		o.Expect(entries).To(o.ContainSubstring("nginx-ok2-1399.v0.0.4"))
+		o.Expect(entries).NotTo(o.ContainSubstring("nginx-ok2-1399.v0.0.2"))
+		o.Expect(entries).NotTo(o.ContainSubstring("nginx-ok2-1399.v0.0.1"))
+		o.Expect(entries).NotTo(o.ContainSubstring("nginx-ok2-1399.v0.0.5"))
+		o.Expect(entries).NotTo(o.ContainSubstring("nginx-ok2-1399.v0.0.3"))
+		o.Expect(entries).To(o.ContainSubstring("\"version\":\"0.0.4\""))
+		o.Expect(entries).NotTo(o.ContainSubstring("\"version\":\"0.0.2\""))
+		o.Expect(entries).NotTo(o.ContainSubstring("\"version\":\"0.0.1\""))
+		o.Expect(entries).NotTo(o.ContainSubstring("\"version\":\"0.0.5\""))
+		o.Expect(entries).NotTo(o.ContainSubstring("\"version\":\"0.0.3\""))
+
+		entries = getResourceNoEmpty(oc, asAdmin, withoutNamespace, "packagemanifest", "nginx-ok2-1399", "-n", catsrc.namespace, "-o=jsonpath={.status.channels[?(@.name==\"beta\")].entries}")
+		ok2BetaAssertion(entries)
+
+	})
+
 })
 
 var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func() {
