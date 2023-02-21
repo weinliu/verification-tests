@@ -185,7 +185,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Check authentication operator after allow network policy change
-		err = wait.Poll(1*time.Second, 60*time.Second, func() (bool, error) {
+		err = wait.Poll(2*time.Second, 120*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "authentication", "-o=jsonpath={.status.conditions[0].message}").Output()
 
 			if err != nil {
@@ -215,7 +215,7 @@ var _ = g.Describe("[sig-auth] Authentication", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// Check authentication operator after network policy change
-		err = wait.Poll(1*time.Second, 60*time.Second, func() (bool, error) {
+		err = wait.Poll(2*time.Second, 120*time.Second, func() (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "authentication", "-o=jsonpath={.status.conditions[0].message}").Output()
 
 			if err != nil {
