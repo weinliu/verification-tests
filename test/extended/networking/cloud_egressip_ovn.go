@@ -2239,7 +2239,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 
 	})
 
-	g.It("NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Author:jechen-High-54647-No stale or duplicated SNAT on gateway router after egressIP failover to new egress node. [Disruptive]", func() {
+	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jechen-High-54647-No stale or duplicated SNAT on gateway router after egressIP failover to new egress node. [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		statefulSetPodTemplate := filepath.Join(buildPruningBaseDir, "statefulset-hello.yaml")
@@ -2344,7 +2344,8 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 
 		g.By("9. Check egress node in egress object again, egressIP should fail to the second egressNode.\n")
 		egressIPMaps1 = getAssignedEIPInEIPObject(oc, egressip1.name)
-		e2e.Logf("new egressNode that hosts the egressIP is:%v", egressIPMaps1[0]["node"])
+		newEgressIPHostNode := egressIPMaps1[0]["node"]
+		e2e.Logf("new egressNode that hosts the egressIP is:%v", newEgressIPHostNode)
 		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
 		o.Expect(egressIPMaps1[0]["node"]).Should(o.Equal(hostLeft[0]))
 
@@ -2360,6 +2361,23 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 
 		// Make sure the rebooted node is back to Ready state
 		checkNodeStatus(oc, egressIPMaps1[0]["node"], "Ready")
+
+		g.By("11. Check SNAT on all other unassigned nodes, it should be no stale NAT on all other unassigned nodes.\n")
+		var unassignedNodes []string
+		for i := 0; i < len(nodeList.Items); i++ {
+			if nodeList.Items[i].Name != newEgressIPHostNode {
+				unassignedNodes = append(unassignedNodes, nodeList.Items[i].Name)
+			}
+		}
+		e2e.Logf("unassigned nodes are:%v", unassignedNodes)
+
+		for i := 0; i < len(unassignedNodes); i++ {
+			routerID, routerErr := getRouterID(oc, unassignedNodes[i])
+			o.Expect(routerErr).NotTo(o.HaveOccurred())
+			snatIP, snatErr = getSNATofEgressIP(oc, routerID, freeIPs[0])
+			o.Expect(snatErr).To(o.HaveOccurred())
+			o.Expect(snatIP).Should(o.Equal(""))
+		}
 	})
 
 })

@@ -2077,14 +2077,15 @@ func getSNATofEgressIP(oc *exutil.CLI, routerID, egressIP string) (string, error
 
 		// Command output always has first line as: Defaulted container "northd" out of: northd, nbdb, kube-rbac-proxy, sbdb, ovnkube-master, ovn-dbchecker
 		// Take result from the second line
-		cmdOutputLines := strings.Split(cmdOutput, "\n")
-		if len(cmdOutputLines) >= 2 {
-			snatIP = cmdOutputLines[1]
-			return true, nil
+		if cmdOutput != "" {
+			cmdOutputLines := strings.Split(cmdOutput, "\n")
+			if len(cmdOutputLines) >= 2 {
+				snatIP = cmdOutputLines[1]
+				return true, nil
+			}
 		}
 		e2e.Logf("%v,Waiting for expected result to be synced, try again ...")
 		return false, nil
-
 	})
 	if checkOVNDbErr != nil {
 		e2e.Logf("The command check result in ovndb is not expected ! See below output \n %s ", cmdOutput)
