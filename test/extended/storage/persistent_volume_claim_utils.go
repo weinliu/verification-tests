@@ -112,6 +112,17 @@ func (pvc *persistentVolumeClaim) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// Create new PersistentVolumeClaim with customized parameters to expect Error to occur
+func (pvc *persistentVolumeClaim) createToExpectError(oc *exutil.CLI) string {
+	if pvc.namespace == "" {
+		pvc.namespace = oc.Namespace()
+	}
+	output, err := applyResourceFromTemplateWithOutput(oc, "--ignore-unknown-parameters=true", "-f", pvc.template, "-p", "PVCNAME="+pvc.name, "PVCNAMESPACE="+pvc.namespace, "SCNAME="+pvc.scname,
+		"ACCESSMODE="+pvc.accessmode, "VOLUMEMODE="+pvc.volumemode, "PVCCAPACITY="+pvc.capacity)
+	o.Expect(err).Should(o.HaveOccurred())
+	return output
+}
+
 // Create a new PersistentVolumeClaim with clone dataSource parameters
 func (pvc *persistentVolumeClaim) createWithCloneDataSource(oc *exutil.CLI) {
 	if pvc.namespace == "" {
@@ -163,12 +174,16 @@ func (pvc *persistentVolumeClaim) createWithSpecifiedPV(oc *exutil.CLI, pvName s
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-// Create a new PersistentVolumeClaim without specifying storaheclass name
+// Create a new PersistentVolumeClaim without specifying storageClass name
 func (pvc *persistentVolumeClaim) createWithoutStorageclassname(oc *exutil.CLI) {
 	if pvc.namespace == "" {
 		pvc.namespace = oc.Namespace()
 	}
+
 	deletePaths := []string{`items.0.spec.storageClassName`}
+	if isMicroshiftCluster(oc) {
+		deletePaths = []string{`spec.storageClassName`}
+	}
 	err := applyResourceFromTemplateDeleteParametersAsAdmin(oc, deletePaths, "--ignore-unknown-parameters=true", "-f", pvc.template, "-p", "PVCNAME="+pvc.name, "PVCNAMESPACE="+pvc.namespace, "SCNAME="+pvc.scname,
 		"ACCESSMODE="+pvc.accessmode, "VOLUMEMODE="+pvc.volumemode, "PVCCAPACITY="+pvc.capacity)
 	o.Expect(err).NotTo(o.HaveOccurred())

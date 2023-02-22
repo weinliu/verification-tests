@@ -306,3 +306,22 @@ func getNetworkFromStorageClass(oc *exutil.CLI, scName string) string {
 	e2e.Logf("The network Id is %s", networkID)
 	return networkID
 }
+
+// Set specified storage class as a default one
+func setSpecifiedStorageClassAsDefault(oc *exutil.CLI, scName string) {
+	patchResourceAsAdmin(oc, "", "sc/"+scName, `{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}`, "merge")
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", scName, "-o=jsonpath={.metadata.annotations.storageclass\\.kubernetes\\.io\\/is-default-class}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(output).To(o.Equal("true"))
+	e2e.Logf("Changed the storage class %v to be default one successfully", scName)
+
+}
+
+// Set specified storage class as a non-default one
+func setSpecifiedStorageClassAsNonDefault(oc *exutil.CLI, scName string) {
+	patchResourceAsAdmin(oc, "", "sc/"+scName, `{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}`, "merge")
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", scName, "-o=jsonpath={.metadata.annotations.storageclass\\.kubernetes\\.io\\/is-default-class}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(output).To(o.Equal("false"))
+	e2e.Logf("Changed the storage class %v to be non-default one successfully", scName)
+}

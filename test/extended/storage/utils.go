@@ -81,6 +81,30 @@ func applyResourceFromTemplate(oc *exutil.CLI, parameters ...string) error {
 	return oc.WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
 }
 
+// Common user use oc client apply yaml template and return output
+func applyResourceFromTemplateWithOutput(oc *exutil.CLI, parameters ...string) (string, error) {
+	var configFile string
+	if isSpecifiedAPIExist(oc, "template.openshift.io/v1") {
+		err := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+			output, err := oc.Run("process").Args(parameters...).OutputToFile(getRandomString() + "config.json")
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			configFile = output
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to process %v", parameters))
+	} else {
+		configFile = parameterizedTemplateByReplaceToFile(oc, parameters...)
+	}
+
+	e2e.Logf("the file of resource is %s", configFile)
+	jsonOutput, _ := ioutil.ReadFile(configFile)
+	debugLogf("The file content is: \n%s", jsonOutput)
+	return oc.WithoutNamespace().Run("apply").Args("-f", configFile).Output()
+}
+
 // parameterizedTemplateByReplaceToFile parameterize template to new file
 func parameterizedTemplateByReplaceToFile(oc *exutil.CLI, parameters ...string) string {
 	isParameterExist, pIndex := exutil.StringsSliceElementsHasPrefix(parameters, "-f", true)
