@@ -112,4 +112,18 @@ var _ = g.Describe("[sig-cli] Workloads", func() {
 			o.Expect(headContent).To(o.ContainSubstring("auditID"), "Failed to read the oauth audit logs")
 		}
 	})
+	// author: yinzhou@redhat.com
+	g.It("NonPreRelease-Author:yinzhou-Medium-60213-oc adm must-gather with node name option should run successfully on hypershift hosted cluster", func() {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures.config.openshift.io", "cluster", "-o=jsonpath={.status.controlPlaneTopology}").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		if matched, _ := regexp.MatchString("External", output); !matched {
+			g.Skip("Non hypershift hosted cluster, skip test run")
+		}
+		nodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "hypershift.openshift.io/managed=true", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		nodeName := strings.Split(nodes, " ")[0]
+		defer exec.Command("bash", "-c", "rm -rf /tmp/must-gather-60213").Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--node-name", nodeName, "--dest-dir=/tmp/must-gather-60213").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+	})
 })
