@@ -4486,4 +4486,110 @@ spec:
 		o.Expect(nodeStatusErr).NotTo(o.HaveOccurred())
 		o.Expect(nodeStatus).Should(o.ContainSubstring("Ready"))
 	})
+
+	// author: rgangwar@redhat.com
+	g.It("MicroShiftOnly-ConnectedOnly-Author:rgangwar-High-56229-[Apiserver] Complete Route API compatibility", func() {
+		namespace := "test-ocp56229"
+		routeName := "hello-microshift-ocp56229"
+
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", namespace, "--ignore-not-found").Execute()
+		g.By("1.Create temporary namespace")
+		namespaceOutput, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("namespace", namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(namespaceOutput).Should(o.ContainSubstring("namespace/"+namespace+" created"), "Failed to create namesapce "+namespace)
+
+		g.By("2. Create a Route without spec.host and spec.to.kind")
+		routeYaml := tmpdir + "/hellomicroshift-56229.yaml"
+		routetmpYaml := `apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: hello-microshift-ocp56229
+  namespace: test-ocp56229
+spec:
+ to:
+  kind: ""
+  name: hello-microshift-ocp56229`
+		f, err := os.Create(routeYaml)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer f.Close()
+		w := bufio.NewWriter(f)
+		_, err = fmt.Fprintf(w, "%s", routetmpYaml)
+		w.Flush()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete", "-f", routeYaml).Args().Execute()
+		routeErr := oc.AsAdmin().WithoutNamespace().Run("apply", "-f", routeYaml).Args().Execute()
+		o.Expect(routeErr).NotTo(o.HaveOccurred())
+		routeOutput, routeErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", routeName, "-n", namespace, "-o", "json").Output()
+		o.Expect(routeErr).NotTo(o.HaveOccurred())
+		routeJsonOutput := gjson.Parse(routeOutput).String()
+		routeType := gjson.Get(routeJsonOutput, `status.ingress.0.conditions.0.type`).String()
+		o.Expect(routeType).Should(o.ContainSubstring("Admitted"), routeName+" type is not set Admitted")
+		routeStatus := gjson.Get(routeJsonOutput, `status.ingress.0.conditions.0.status`).String()
+		o.Expect(routeStatus).Should(o.ContainSubstring("True"), routeStatus+" status is not set True")
+		routeHost := gjson.Get(routeJsonOutput, `spec.host`).String()
+		o.Expect(routeHost).Should(o.ContainSubstring(routeName+"-"+namespace+".apps.example.com"), routeName+" host is not set with default hostname")
+		routeKind := gjson.Get(routeJsonOutput, `spec.to.kind`).String()
+		o.Expect(routeKind).Should(o.ContainSubstring("Service"), routeName+" kind type is not set with default value :: Service")
+		routeWildCardPolicy := gjson.Get(routeJsonOutput, `status.ingress.0.wildcardPolicy`).String()
+		o.Expect(routeWildCardPolicy).Should(o.ContainSubstring("None"), routeName+" wildcardpolicy is not set with default value :: None")
+		routeWeight := gjson.Get(routeJsonOutput, `spec.to.weight`).String()
+		o.Expect(routeWeight).Should(o.ContainSubstring("100"), routeName+" weight is not set with default value :: 100")
+		e2e.Logf("Route %v created with default host %v and route kind type :: %v, type :: %v with status :: %v and wildcardpolicy :: %v and weight :: %v", routeName, routeHost, routeKind, routeType, routeStatus, routeWildCardPolicy, routeWeight)
+
+		g.By("3.Check spec.wildcardPolicy can't be change")
+		routewildpolicyYaml := tmpdir + "/hellomicroshift-56229-wildcard.yaml"
+		routewildpolicytmpYaml := `apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: hello-microshift-ocp56229
+  namespace: test-ocp56229
+spec:
+ to:
+   kind: Service
+   name: hello-microshift-ocp56229
+ wildcardPolicy: "Subdomain"`
+		f, err = os.Create(routewildpolicyYaml)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer f.Close()
+		w = bufio.NewWriter(f)
+		_, err = fmt.Fprintf(w, "%s", routewildpolicytmpYaml)
+		w.Flush()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		routewildpolicyErr := oc.AsAdmin().WithoutNamespace().Run("apply", "-f", routewildpolicyYaml, "--server-side", "--force-conflicts").Args().Execute()
+		o.Expect(routewildpolicyErr).To(o.HaveOccurred())
+
+		g.By("4.Check weight policy can be changed")
+		routeWeightYaml := "/tmp/hellomicroshift-56229-weight.yaml"
+		routeWeighttmpYaml := `apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: hello-microshift-ocp56229
+  namespace: test-ocp56229
+spec:
+  to:
+   kind: Service
+   name: hello-microshift-ocp56229
+   weight: 10`
+		f, err = os.Create(routeWeightYaml)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer f.Close()
+		w = bufio.NewWriter(f)
+		_, err = fmt.Fprintf(w, "%s", routeWeighttmpYaml)
+		w.Flush()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		routeweightErr := oc.AsAdmin().WithoutNamespace().Run("apply", "-f", routeWeightYaml, "--server-side", "--force-conflicts").Args().Execute()
+		o.Expect(routeweightErr).NotTo(o.HaveOccurred())
+		routeWeight, routeErr = oc.AsAdmin().WithoutNamespace().Run("get").Args("route", routeName, "-n", namespace, `-o=jsonpath={.spec.to.weight}`).Output()
+		o.Expect(routeErr).NotTo(o.HaveOccurred())
+		o.Expect(routeWeight).Should(o.ContainSubstring("10"), routeName+" weight is not set with default value :: 10")
+
+		g.By("5. Create ingresss routes")
+		template := getTestDataFilePath("ocp-56229-ingress.yaml")
+		defer oc.AsAdmin().Run("delete").Args("-f", template, "-n", namespace).Execute()
+		templateErr := oc.AsAdmin().Run("create").Args("-f", template, "-n", namespace).Execute()
+		o.Expect(templateErr).NotTo(o.HaveOccurred())
+	})
 })
