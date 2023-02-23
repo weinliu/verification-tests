@@ -718,6 +718,51 @@ var _ = g.Describe("[sig-hypershift] Hypershift", func() {
 	})
 
 	// author: mihuang@redhat.com
+	g.It("HyperShiftMGMT-NonPreRelease-Longduration-Author:mihuang-Critical-48673-Unblock node deletion-draining timeout[Serial]", func() {
+		if iaasPlatform != "aws" {
+			g.Skip("IAAS platform is " + iaasPlatform + " while 48673 is for AWS - skipping test ...")
+		}
+
+		g.By("create aws nodepool with replica 1")
+		npName := "48673np-" + strings.ToLower(exutil.RandStrDefault())
+		replica := 1
+		releaseImage := doOcpReq(oc, OcpGet, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-ojsonpath={.spec.release.image}")
+		defer func() {
+			hostedcluster.deleteNodePool(npName)
+			o.Eventually(hostedcluster.pollCheckDeletedNodePool(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), "in defer check deleted nodepool error")
+		}()
+		NewAWSNodePool(npName, hostedcluster.name, hostedcluster.namespace).
+			WithNodeCount(&replica).
+			WithReleaseImage(releaseImage).
+			CreateAWSNodePool()
+		o.Eventually(hostedcluster.pollCheckHostedClustersNodePoolReady(npName), LongTimeout, LongTimeout/10).Should(o.BeTrue(), fmt.Sprintf("nodepool %s ready error", npName))
+
+		g.By("Get the awsmachines name")
+		awsMachines := doOcpReq(oc, OcpGet, true, "awsmachines", "-n", hostedcluster.namespace+"-"+hostedcluster.name, fmt.Sprintf(`-ojsonpath='{.items[?(@.metadata.annotations.hypershift\.openshift\.io/nodePool=="%s/%s")].metadata.name}'`, hostedcluster.namespace, npName))
+		e2e.Logf("awsMachines: %s", awsMachines)
+
+		g.By("Set nodeDrainTimeout to 1m")
+		defer doOcpReq(oc, OcpPatch, true, "nodepools", npName, "-n", hostedcluster.namespace, "-p", `{"spec":{"nodeDrainTimeout":"0s"}}`, "--type=merge")
+		doOcpReq(oc, OcpPatch, true, "nodepools", npName, "-n", hostedcluster.namespace, "-p", `{"spec":{"nodeDrainTimeout":"1m"}}`, "--type=merge")
+
+		g.By("Check the awsmachines are changed")
+		o.Eventually(func() bool {
+			o.Expect(doOcpReq(oc, OcpGet, true, "awsmachines", "-n", hostedcluster.namespace+"-"+hostedcluster.name, fmt.Sprintf(`-ojsonpath='{.items[?(@.metadata.annotations.hypershift\.openshift\.io/nodePool=="%s/%s")].metadata.name}'`, hostedcluster.namespace, npName))).ShouldNot(o.ContainSubstring(awsMachines))
+			return true
+		}, LongTimeout, LongTimeout/10).Should(o.BeTrue(), "awsmachines are not changed")
+
+		g.By("Check the guestcluster podDisruptionBudget are not be deleted")
+		pdbNameSpaces := []string{"openshift-console", "openshift-image-registry", "openshift-ingress", "openshift-monitoring", "openshift-operator-lifecycle-manager"}
+		for _, pdbNameSpace := range pdbNameSpaces {
+			o.Expect(doOcpReq(oc, OcpGet, true, "podDisruptionBudget", "-n", pdbNameSpace, "--kubeconfig="+hostedcluster.hostedClustersKubeconfigFile)).ShouldNot(o.BeEmpty())
+		}
+
+		g.By("Scale the nodepool to 0")
+		doOcpReq(oc, OcpScale, true, "nodepool", npName, "-n", hostedcluster.namespace, "--replicas=0")
+		o.Eventually(hostedcluster.pollGetHostedClusterReadyNodeCount(npName), LongTimeout, LongTimeout/10).Should(o.Equal(0), fmt.Sprintf("nodepool are not scale down to 0 in hostedcluster %s", hostedcluster.name))
+	})
+
+	// author: mihuang@redhat.com
 	g.It("HyperShiftMGMT-Author:mihuang-Critical-48936-Test HyperShift cluster Infrastructure TopologyMode", func() {
 		controllerAvailabilityPolicy := doOcpReq(oc, OcpGet, true, "hostedcluster", hostedcluster.name, "-n", hostedcluster.namespace, "-ojsonpath={.spec.controllerAvailabilityPolicy}")
 		e2e.Logf("controllerAvailabilityPolicy is: %s", controllerAvailabilityPolicy)
