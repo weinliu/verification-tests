@@ -17,7 +17,7 @@ class SummaryClient:
                 "STORAGE":"@storage-qe-team",
                 "Developer_Experience":"",
                 "User_Interface":"@yapei",
-                "PerfScale":"@perfscale-qe-team", 
+                "PerfScale":"@perfscale-qe-team",
                 "Service_Development_B":"",
                 "NODE":"@node-qe-team",
                 "Logging":"@logging-qe-team",
@@ -139,7 +139,11 @@ class SummaryClient:
         try:
             r = self.session.get(url=filter_url)
             if (r.status_code != 200):
-                raise Exception("get launch error: {0}".format(r.text))
+                if (r.status_code == 403):
+                    error_msg = "Got response code 403, which indicate an invalid URL ({0}), please make sure the run id is correct". format(filter_url, launchID)
+                else:
+                    error_msg = "get launch error: {0}".format(r.text)
+                raise Exception(error_msg)
             ids = []
             #print(json.dumps(r.json(), indent=4, sort_keys=True))
             if not self.launchID:
@@ -151,14 +155,14 @@ class SummaryClient:
                     launchs[idOutput] = dict()
                     launchs[idOutput]["name"] = ret["name"]
                     launchs[idOutput]["description"] = ret["description"]
-                    launchs[idOutput]["number"] = ret["number"]    
+                    launchs[idOutput]["number"] = ret["number"]
             else:
                 ret = r.json()
                 idOutput = ret["id"]
                 launchs[idOutput] = dict()
                 launchs[idOutput]["name"] = ret["name"]
                 launchs[idOutput]["description"] = ret["description"]
-                launchs[idOutput]["number"] = ret["number"]  
+                launchs[idOutput]["number"] = ret["number"]
             if not launchs:
                 raise Exception("ERROR: no Launch is found".format(ids))
             #print(launchs)
@@ -216,7 +220,7 @@ class SummaryClient:
                 result[launchID]["caseResult"][subTeam] = failCase[subTeam]
         #print(result)
         return result
-        
+
 
     def notifyToSlack(self, notificationList=[]):
         try:
@@ -227,12 +231,12 @@ class SummaryClient:
             r = self.session.post(url=self.slack_url, json=msg)
             if (r.status_code != 200) and (r.status_code != 201):
                 raise Exception("send slack message error: {0}".format(r.text))
-            return r.status_code 
+            return r.status_code
         except BaseException as e:
             print(e)
             print("\n")
             return None
-        
+
     def collectResultToSlack(self, launchID):
         result = self.collectResult(launchID)
         for testrun in result.keys():
@@ -257,7 +261,7 @@ class SummaryClient:
                 notificationList.append("\n".join(notificationSub))
                 if subteam.replace("_cucushift", "") in self.SUBTEAM_OWNER.keys():
                     if self.SUBTEAM_OWNER[subteam.replace("_cucushift", "")] not in faildTeamOwner:
-                        faildTeamOwner = faildTeamOwner + self.SUBTEAM_OWNER[subteam.replace("_cucushift", "")]+" " 
+                        faildTeamOwner = faildTeamOwner + self.SUBTEAM_OWNER[subteam.replace("_cucushift", "")]+" "
             notificationEnd = []
             self.number = self.number+1
             if not self.silence:
@@ -296,6 +300,6 @@ if __name__ == "__main__":
 
     sclient = SummaryClient(args)
     sclient.collectAllResultToSlack()
-    
+
     exit(0)
 
