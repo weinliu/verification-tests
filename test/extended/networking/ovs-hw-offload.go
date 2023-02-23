@@ -19,8 +19,16 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 
 	var (
 		oc        = exutil.NewCLI("ovsoffload-"+getRandomString(), exutil.KubeConfigPath())
-		deviceID  = "1017"
+		deviceID  = "101d"
+		vendorID  = "15b3"
 		sriovOpNs = "openshift-sriov-network-operator"
+
+		networkBaseDir       string
+		sriovBaseDir         string
+		iperfServerTmp       string
+		iperfClientTmp       string
+		iperfNormalServerTmp string
+		iperfNormalClientTmp string
 	)
 	g.BeforeEach(func() {
 		// for now skip sriov cases in temp in order to avoid cases always show failed in CI since sriov operator is not setup . will add install operator function after that
@@ -33,11 +41,15 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		if !checkDeviceIDExist(oc, sriovOpNs, deviceID) {
 			g.Skip("the cluster do not contain the sriov card. skip this testing!")
 		}
+		networkBaseDir = exutil.FixturePath("testdata", "networking")
+		sriovBaseDir = filepath.Join(networkBaseDir, "sriov")
+		iperfServerTmp = filepath.Join(sriovBaseDir, "iperf-server-template.json")
+		iperfClientTmp = filepath.Join(sriovBaseDir, "iperf-rc-template.json")
+		iperfNormalServerTmp = filepath.Join(sriovBaseDir, "iperf-server-normal-template.json")
+		iperfNormalClientTmp = filepath.Join(sriovBaseDir, "iperf-rc-normal-template.json")
 	})
 	g.It("NonPreRelease-Longduration-Author:yingwang-Medium-45390-pod to pod traffic in different hosts can work well with ovs hw offload as default network [Disruptive]", func() {
 		var (
-			networkBaseDir     = exutil.FixturePath("testdata", "networking")
-			sriovBaseDir       = filepath.Join(networkBaseDir, "sriov")
 			sriovNetPolicyName = "sriovoffloadpolicy"
 			sriovNetDeviceName = "sriovoffloadnetattchdef"
 			//pfName             = "ens1f0"
@@ -46,6 +58,8 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		)
 
 		oc.SetupProject()
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+
 		sriovNetPolicyTmpFile := filepath.Join(sriovBaseDir, "sriovoffloadpolicy-template.yaml")
 		sriovNetPolicy := sriovNetResource{
 			name:      sriovNetPolicyName,
@@ -63,9 +77,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		}
 
 		defaultOffloadNet := oc.Namespace() + "/" + sriovNetwork.name
-		defaultNormalNet := "default"
 		offloadNetType := "v1.multus-cni.io/default-network"
-		normalNetType := "k8s.ovn.org/pod-networks"
 
 		g.By("1) ####### Check openshift-sriov-network-operator is running well ##########")
 		chkSriovOperatorStatus(oc, sriovOpNs)
@@ -73,7 +85,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		g.By("2) ####### Check sriov network policy ############")
 		//check if sriov network policy is created or not. If not, create one.
 		if !sriovNetPolicy.chkSriovPolicy(oc) {
-			sriovNetPolicy.create(oc, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
+			sriovNetPolicy.create(oc, "DEVICEID="+deviceID, "VENDOR="+vendorID, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
 			defer rmSriovNetworkPolicy(oc, sriovNetPolicy.name, sriovNetPolicy.namespace)
 		}
 		waitForSriovPolicyReady(oc, sriovNetPolicy.namespace)
@@ -85,7 +97,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		defer sriovNetwork.delete(oc)
 
 		g.By("4) ########### Create iperf Server and client Pod on same host and attach sriov VF as default interface ##########")
-		iperfServerTmp := filepath.Join(sriovBaseDir, "iperf-server-template.json")
+
 		iperfServerPod := sriovNetResource{
 			name:      "iperf-server",
 			namespace: oc.Namespace(),
@@ -100,7 +112,6 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 
 		iperfServerIP := getPodIPv4(oc, oc.Namespace(), iperfServerPod.name)
 
-		iperfClientTmp := filepath.Join(sriovBaseDir, "iperf-rc-template.json")
 		iperfClientPod := sriovNetResource{
 			name:      "iperf-rc",
 			namespace: oc.Namespace(),
@@ -118,14 +129,15 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		exutil.AssertWaitPollNoErr(errPodRdy2, fmt.Sprintf("iperf client pod isn't ready"))
 
 		g.By("5) ########### Create iperf Pods with normal default interface ##########")
+
 		iperfServerPod1 := sriovNetResource{
 			name:      "iperf-server-normal",
 			namespace: oc.Namespace(),
-			tempfile:  iperfServerTmp,
+			tempfile:  iperfNormalServerTmp,
 			kind:      "pod",
 		}
 		//create iperf server pod with normal default interface on worker0
-		iperfServerPod1.create(oc, "PODNAME="+iperfServerPod1.name, "NAMESPACE="+iperfServerPod1.namespace, "NETNAME="+defaultNormalNet, "NETTYPE="+normalNetType, "NODENAME="+workerNodeList[0])
+		iperfServerPod1.create(oc, "PODNAME="+iperfServerPod1.name, "NAMESPACE="+iperfServerPod1.namespace, "NODENAME="+workerNodeList[0])
 		defer iperfServerPod1.delete(oc)
 		errPodRdy3 := waitForPodWithLabelReady(oc, oc.Namespace(), "name=iperf-server-normal")
 		exutil.AssertWaitPollNoErr(errPodRdy3, fmt.Sprintf("iperf server pod isn't ready"))
@@ -135,12 +147,11 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		iperfClientPod1 := sriovNetResource{
 			name:      "iperf-rc-normal",
 			namespace: oc.Namespace(),
-			tempfile:  iperfClientTmp,
+			tempfile:  iperfNormalClientTmp,
 			kind:      "pod",
 		}
 		//create iperf client pod with normal default interface on worker1
-		iperfClientPod1.create(oc, "PODNAME="+iperfClientPod1.name, "NAMESPACE="+iperfClientPod1.namespace, "NETNAME="+defaultNormalNet, "NODENAME="+workerNodeList[1],
-			"NETTYPE="+normalNetType)
+		iperfClientPod1.create(oc, "PODNAME="+iperfClientPod1.name, "NAMESPACE="+iperfClientPod1.namespace, "NODENAME="+workerNodeList[1])
 		defer iperfClientPod1.delete(oc)
 		iperfClientName1, err := exutil.GetPodName(oc, oc.Namespace(), "name=iperf-rc-normal", workerNodeList[1])
 		iperfClientPod1.name = iperfClientName1
@@ -177,6 +188,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		)
 
 		oc.SetupProject()
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		sriovNetPolicyTmpFile := filepath.Join(sriovBaseDir, "sriovoffloadpolicy-template.yaml")
 		sriovNetPolicy := sriovNetResource{
 			name:      sriovNetPolicyName,
@@ -202,7 +214,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		g.By("2) ####### Check sriov network policy ############")
 		//check if sriov network policy is created or not. If not, create one.
 		if !sriovNetPolicy.chkSriovPolicy(oc) {
-			sriovNetPolicy.create(oc, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
+			sriovNetPolicy.create(oc, "DEVICEID="+deviceID, "VENDOR="+vendorID, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
 			defer rmSriovNetworkPolicy(oc, sriovNetPolicy.name, sriovNetPolicy.namespace)
 		}
 
@@ -299,6 +311,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		)
 
 		oc.SetupProject()
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		sriovNetPolicyTmpFile := filepath.Join(sriovBaseDir, "sriovoffloadpolicy-template.yaml")
 		sriovNetPolicy := sriovNetResource{
 			name:      sriovNetPolicyName,
@@ -316,9 +329,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		}
 
 		defaultOffloadNet := oc.Namespace() + "/" + sriovNetwork.name
-		defaultNormalNet := "default"
 		offloadNetType := "v1.multus-cni.io/default-network"
-		normalNetType := "k8s.ovn.org/pod-networks"
 
 		g.By("1) ####### Check openshift-sriov-network-operator is running well ##########")
 		chkSriovOperatorStatus(oc, sriovOpNs)
@@ -326,7 +337,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		g.By("2) ####### Check sriov network policy ############")
 		//check if sriov network policy is created or not. If not, create one.
 		if !sriovNetPolicy.chkSriovPolicy(oc) {
-			sriovNetPolicy.create(oc, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
+			sriovNetPolicy.create(oc, "DEVICEID="+deviceID, "VENDOR="+vendorID, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
 			defer rmSriovNetworkPolicy(oc, sriovNetPolicy.name, sriovNetPolicy.namespace)
 		}
 
@@ -394,11 +405,11 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		iperfSvcPod1 := sriovNetResource{
 			name:      "iperf-server-normal",
 			namespace: oc.Namespace(),
-			tempfile:  iperfServerTmp,
+			tempfile:  iperfNormalServerTmp,
 			kind:      "pod",
 		}
 		//create iperf server pod with normal default interface on worker0 and create clusterip service
-		iperfSvcPod1.create(oc, "PODNAME="+iperfSvcPod1.name, "NAMESPACE="+iperfSvcPod1.namespace, "NETNAME="+defaultOffloadNet, "NETTYPE="+offloadNetType, "NODENAME="+workerNodeList[0])
+		iperfSvcPod1.create(oc, "PODNAME="+iperfSvcPod1.name, "NAMESPACE="+iperfSvcPod1.namespace, "NODENAME="+workerNodeList[0])
 		defer iperfSvcPod.delete(oc)
 		iperfSvc1.create(oc, "SVCTYPE="+"ClusterIP", "SVCNAME="+iperfSvc1.name, "PODNAME="+iperfSvcPod1.name, "NAMESPACE="+iperfSvc1.namespace)
 		defer iperfSvc1.delete(oc)
@@ -410,12 +421,11 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		iperfClientPod1 := sriovNetResource{
 			name:      "iperf-rc-normal",
 			namespace: oc.Namespace(),
-			tempfile:  iperfClientTmp,
+			tempfile:  iperfNormalClientTmp,
 			kind:      "pod",
 		}
 		//create iperf client pod with normal default interface on worker1
-		iperfClientPod1.create(oc, "PODNAME="+iperfClientPod1.name, "NAMESPACE="+iperfClientPod1.namespace, "NETNAME="+defaultNormalNet, "NODENAME="+workerNodeList[1],
-			"NETTYPE="+normalNetType)
+		iperfClientPod1.create(oc, "PODNAME="+iperfClientPod1.name, "NAMESPACE="+iperfClientPod1.namespace, "NODENAME="+workerNodeList[1])
 		defer iperfClientPod1.delete(oc)
 		iperfClientName1, err := exutil.GetPodName(oc, oc.Namespace(), "name=iperf-rc-normal", workerNodeList[1])
 		iperfClientPod1.name = iperfClientName1
@@ -486,6 +496,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		)
 
 		oc.SetupProject()
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		sriovNetPolicyTmpFile := filepath.Join(sriovBaseDir, "sriovoffloadpolicy-template.yaml")
 		sriovNetPolicy := sriovNetResource{
 			name:      sriovNetPolicyName,
@@ -511,7 +522,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		g.By("2) ####### Check sriov network policy ############")
 		//check if sriov network policy is created or not. If not, create one.
 		if !sriovNetPolicy.chkSriovPolicy(oc) {
-			sriovNetPolicy.create(oc, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
+			sriovNetPolicy.create(oc, "DEVICEID="+deviceID, "VENDOR="+vendorID, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
 			defer rmSriovNetworkPolicy(oc, sriovNetPolicy.name, sriovNetPolicy.namespace)
 		}
 
@@ -615,6 +626,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		)
 
 		oc.SetupProject()
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		sriovNetPolicyTmpFile := filepath.Join(sriovBaseDir, "sriovoffloadpolicy-template.yaml")
 		sriovNetPolicy := sriovNetResource{
 			name:      sriovNetPolicyName,
@@ -640,7 +652,7 @@ var _ = g.Describe("[sig-networking] SDN ovs hardware offload", func() {
 		g.By("2) ####### Check sriov network policy ############")
 		//check if sriov network policy is created or not. If not, create one.
 		if !sriovNetPolicy.chkSriovPolicy(oc) {
-			sriovNetPolicy.create(oc, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
+			sriovNetPolicy.create(oc, "DEVICEID="+deviceID, "VENDOR="+vendorID, "PFNAME="+pfName, "SRIOVNETPOLICY="+sriovNetPolicy.name)
 			defer rmSriovNetworkPolicy(oc, sriovNetPolicy.name, sriovNetPolicy.namespace)
 		}
 
