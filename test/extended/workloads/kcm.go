@@ -141,8 +141,16 @@ var _ = g.Describe("[sig-apps] Workloads", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Get the rs references")
-		refer, err := oc.WithoutNamespace().Run("get").Args("rs", "-o=jsonpath={.items[0].metadata.ownerReferences}", "-n", "p43092-1").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		var refer string
+		err = wait.Poll(2*time.Second, 20*time.Second, func() (bool, error) {
+			refer, err = oc.WithoutNamespace().Run("get").Args("rs", "-o=jsonpath={.items[0].metadata.ownerReferences}", "-n", "p43092-1").Output()
+			if err != nil {
+				e2e.Logf("Fail to get rs, error: %s. Trying again", err)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "RS not found")
 
 		g.By("Create the second namespace")
 		err = oc.WithoutNamespace().Run("new-project").Args("p43092-2").Execute()
