@@ -14,10 +14,11 @@ import (
 
 func getHWoffloadPF(oc *exutil.CLI, nodename string) string {
 	pfName := "ens1f0"
-	nmConnection, err := oc.AsAdmin().Run("debug").Args(`node/`+fmt.Sprintf("%s", nodename), "--", "chroot", "/host", "cat", "/etc/NetworkManager/system-connections/ovs-if-phys0.nmconnection").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if !strings.Contains(nmConnection, "No such file or directory") {
-		re := regexp.MustCompile(`interface-name=(\w+)`)
+	nmConnection, checkLogFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, nodename, []string{"-q"}, "nmcli", "-g", "connection.interface-name", "c", "show", "ovs-if-phys0")
+	o.Expect(checkLogFileErr).NotTo(o.HaveOccurred())
+
+	if !strings.Contains(nmConnection, "no such connection profile") {
+		re := regexp.MustCompile(`(ens\w+)`)
 		match := re.FindStringSubmatch(nmConnection)
 		e2e.Logf("The match result is %v", match)
 		pfName = match[1]
