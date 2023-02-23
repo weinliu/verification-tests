@@ -200,6 +200,8 @@ class SummaryClient:
                                 else:
                                     caseAuthor = ""
                                 FailedCase[subteamOut].append(caseids[0][4:]+"-"+caseAuthor)
+                        else:
+                            FailedCase[subteamOut].append(ret["name"])
             return FailedCase
         except BaseException as e:
             print(e)
@@ -212,6 +214,7 @@ class SummaryClient:
             failCase = self.getFailCaseID(launchID)
             for subTeam in failCase.keys():
                 result[launchID]["caseResult"][subTeam] = failCase[subTeam]
+        #print(result)
         return result
         
 
@@ -254,9 +257,7 @@ class SummaryClient:
                 notificationList.append("\n".join(notificationSub))
                 if subteam.replace("_cucushift", "") in self.SUBTEAM_OWNER.keys():
                     if self.SUBTEAM_OWNER[subteam.replace("_cucushift", "")] not in faildTeamOwner:
-                        faildTeamOwner = faildTeamOwner + self.SUBTEAM_OWNER[subteam.replace("_cucushift", "")]+" "
-            if faildTeamOwner=="":
-                continue 
+                        faildTeamOwner = faildTeamOwner + self.SUBTEAM_OWNER[subteam.replace("_cucushift", "")]+" " 
             notificationEnd = []
             self.number = self.number+1
             if not self.silence:
